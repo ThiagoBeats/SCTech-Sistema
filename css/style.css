@@ -1,0 +1,207 @@
+:root {
+    --primary: #2A5C82; --accent: #4A90E2; --dark: #2C3E50;
+    --light: #F5F7FA; --border: #E4E7EB; --white: #FFFFFF;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+body { background-color: var(--light); display: flex; height: 100vh; color: var(--dark); overflow: hidden; }
+
+/* Sidebar Compartilhada */
+.sidebar { width: 250px; background-color: var(--white); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+.logo { padding: 20px; text-align: center; border-bottom: 1px solid var(--border); }
+.logo-box { width: 50px; height: 50px; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; border-radius: 8px; margin: 0 auto 10px; font-size: 20px;}
+.nav-item { padding: 15px 20px; cursor: pointer; border-left: 4px solid transparent; font-weight: 500; text-decoration: none; color: var(--dark); display: block; }
+.nav-item:hover { background-color: var(--light); }
+.nav-item.active { border-left-color: var(--primary); color: var(--primary); background-color: var(--light); }
+
+/* Área Principal */
+.main { flex: 1; display: flex; flex-direction: column; overflow-y: auto; padding: 20px 30px; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+
+/* Elementos Visuais */
+.card { background: var(--white); padding: 20px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 20px; }
+.btn { padding: 8px 16px; border-radius: 6px; cursor: pointer; border: none; font-weight: bold; color: white; background: var(--primary); text-decoration: none; display: inline-block; }
+.btn-success { background: #27ae60; }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--dark); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px;}
+.form-group { display: flex; flex-direction: column; }
+.form-group label { font-size: 12px; font-weight: bold; color: #666; margin-bottom: 5px; }
+.form-group input, .form-group select { padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+
+/* Tabelas e Tags */
+table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+th { background: #f8fafc; padding: 12px; border-bottom: 2px solid var(--border); color: #555; }
+td { padding: 12px; border-bottom: 1px solid var(--border); }
+.status-tag { padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; white-space: nowrap; }
+.st-orcamento  { background: #fef9c3; color: #854d0e; }
+.st-medicao    { background: #e0e7ff; color: #3730a3; }
+.st-aguardando { background: #fef3c7; color: #92400e; }
+.st-costura    { background: #dbeafe; color: #1e40af; }
+.st-pronto     { background: #d1fae5; color: #065f46; }
+.st-faturado   { background: #dcfce7; color: #166534; }
+
+/* Botão aprovar (verde) */
+.btn-aprovar { background: #059669; color: white; padding: 4px 10px; font-size: 12px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; margin-right: 4px; }
+.btn-aprovar:hover { background: #047857; }
+
+/* Botões de tamanho reduzido e variante danger */
+.btn-sm { padding: 4px 10px; font-size: 12px; margin-right: 4px; }
+.btn-danger { background: transparent; border: 1px solid #dc2626; color: #dc2626; }
+.btn-danger:hover { background: #dc2626; color: white; }
+
+/* Caixa de breakdown do cálculo */
+.breakdown-box { background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; padding: 15px 20px; margin-bottom: 15px; }
+.breakdown-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; font-size: 14px; border-bottom: 1px solid #eef0f2; }
+.breakdown-row:last-child { border-bottom: none; }
+.breakdown-row.destaque { font-weight: bold; color: var(--primary); font-size: 16px; padding-top: 10px; }
+.breakdown-row .label { color: #555; }
+
+/* Separador de seção */
+.section-divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+/* Tag de info inline */
+.info-tag { font-size: 12px; color: #888; font-weight: normal; margin-left: 6px; }
+
+/* Estilos da proposta (tela e impressão) */
+.proposta-wrapper { max-width: 800px; margin: 30px auto; background: white; padding: 40px; box-shadow: 0 2px 20px rgba(0,0,0,0.12); border-radius: 4px; }
+.proposta-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid var(--primary); }
+.proposta-logo { display: flex; align-items: center; gap: 15px; }
+.proposta-logo .logo-box { width: 50px; height: 50px; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; border-radius: 8px; font-size: 20px; }
+.proposta-info { text-align: right; }
+.proposta-info h2 { color: var(--primary); margin-bottom: 4px; }
+.proposta-info p { font-size: 13px; color: #555; line-height: 1.6; }
+.proposta-cliente { margin-bottom: 25px; padding: 15px; background: #f8fafc; border-radius: 6px; border-left: 4px solid var(--primary); }
+.proposta-cliente h3 { font-size: 11px; text-transform: uppercase; color: #888; margin-bottom: 6px; }
+.proposta-cliente p { font-size: 14px; line-height: 1.7; }
+.proposta-tabela { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; }
+.proposta-tabela th { background: var(--primary); color: white; padding: 10px 14px; text-align: left; }
+.proposta-tabela td { padding: 12px 14px; border-bottom: 1px solid #eee; vertical-align: top; }
+.proposta-tabela small { color: #777; line-height: 1.7; display: block; margin-top: 3px; }
+.proposta-totais { max-width: 360px; margin-left: auto; margin-bottom: 30px; }
+.proposta-linha { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; border-bottom: 1px solid #eee; }
+.proposta-linha.proposta-total { font-size: 18px; font-weight: bold; color: var(--primary); border-bottom: none; padding-top: 12px; margin-top: 4px; }
+.proposta-termos { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; }
+.proposta-termos h4 { font-size: 12px; text-transform: uppercase; color: #888; margin-bottom: 8px; }
+.proposta-termos ul { padding-left: 18px; font-size: 13px; color: #555; line-height: 2; }
+.proposta-aprovacao { margin-top: 50px; padding-top: 20px; border-top: 1px solid #ccc; font-size: 13px; color: #555; }
+
+/* ── KANBAN PCP ─────────────────────────────────────── */
+.aviso-orcamentos { background: #fef9c3; border: 1px solid #fde047; border-radius: 6px; padding: 10px 16px; margin-bottom: 16px; display: none; justify-content: space-between; align-items: center; font-size: 14px; gap: 12px; }
+.kanban-board { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 16px; align-items: flex-start; }
+.kanban-col { min-width: 220px; flex: 0 0 220px; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+.kanban-col-header { color: white; padding: 10px 14px; font-size: 13px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+.kanban-count { background: rgba(255,255,255,0.28); border-radius: 12px; padding: 1px 8px; font-size: 12px; }
+.kanban-col-body { padding: 10px; min-height: 180px; }
+.kanban-card { background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 11px 12px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+.kanban-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+.kanban-card-id { font-size: 11px; color: #6b7280; font-weight: bold; }
+.kanban-card-age { font-size: 11px; color: #9ca3af; background: #f3f4f6; padding: 1px 6px; border-radius: 10px; }
+.kanban-card-cliente { font-weight: bold; font-size: 14px; color: var(--dark); margin-bottom: 1px; }
+.kanban-card-amb { font-size: 13px; color: #374151; margin-bottom: 6px; }
+.kanban-card-info { font-size: 12px; color: #6b7280; line-height: 1.6; margin-bottom: 8px; border-top: 1px solid #f3f4f6; padding-top: 6px; }
+.kanban-card-actions { display: flex; justify-content: space-between; align-items: center; }
+.kanban-empty { color: #9ca3af; font-size: 13px; text-align: center; padding: 24px 8px; font-style: italic; }
+.kanban-nav-ph { display: inline-block; width: 35px; }
+
+/* ── ORDEM DE SERVIÇO ───────────────────────────────── */
+.os-wrapper { max-width: 800px; margin: 30px auto; background: white; padding: 40px; box-shadow: 0 2px 20px rgba(0,0,0,0.12); border-radius: 4px; }
+.os-header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 18px; border-bottom: 3px solid #1f2937; margin-bottom: 22px; }
+.os-empresa { font-size: 18px; font-weight: bold; color: var(--primary); margin-bottom: 4px; display: flex; align-items: center; }
+.os-titulo { font-size: 17px; font-weight: bold; color: #1f2937; letter-spacing: 0.4px; margin-bottom: 4px; }
+.os-aviso { font-size: 11px; color: #dc2626; font-weight: bold; }
+.os-meta { text-align: right; }
+.os-meta-item { display: flex; justify-content: flex-end; gap: 10px; font-size: 13px; padding: 2px 0; }
+.os-meta-item span { color: #6b7280; }
+.os-section { margin-bottom: 18px; }
+.os-section-title { font-size: 11px; text-transform: uppercase; font-weight: bold; color: #6b7280; letter-spacing: 0.8px; background: #f3f4f6; padding: 5px 10px; border-radius: 3px 3px 0 0; }
+.os-table { width: 100%; border-collapse: collapse; font-size: 14px; border: 1px solid #e5e7eb; border-top: none; }
+.os-table td { padding: 9px 12px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+.os-table tr:last-child td { border-bottom: none; }
+.os-th { background: #f9fafb; font-weight: bold; color: #374151; width: 18%; white-space: nowrap; }
+.os-destaque { background: #1f2937; color: white; padding: 13px 18px; font-size: 16px; text-align: center; margin: 10px 0; border-radius: 4px; }
+.os-obs-box { border: 1px solid #e5e7eb; border-top: none; min-height: 64px; border-radius: 0 0 3px 3px; }
+.os-assinaturas { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
+.os-assinatura-item small { font-size: 11px; color: #9ca3af; }
+.os-linha-assinatura { border-bottom: 1px solid #374151; margin: 28px 0 6px; }
+
+/* ── DASHBOARD: filtro e ordenação ─────────────────── */
+.filter-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+.filter-bar input  { flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+.filter-bar input:focus { outline: none; border-color: var(--primary); }
+.filter-bar select { padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+.pedidos-counter { font-size: 13px; color: #6b7280; white-space: nowrap; margin-left: 4px; }
+.th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.th-sort:hover { background: #edf2f7; }
+.th-sort-ativo { color: var(--primary); background: #eef6ff !important; }
+.sort-icon { font-size: 10px; opacity: 0.6; margin-left: 3px; }
+.th-sort-ativo .sort-icon { opacity: 1; }
+
+/* ── ESTOQUE ────────────────────────────────────────── */
+.alertas-ponto-pedido { background: #fff1f2; border: 1px solid #fca5a5; border-radius: 6px; padding: 12px 16px; margin-bottom: 16px; display: none; }
+.alerta-item { font-size: 14px; color: #991b1b; padding: 3px 0; }
+.estoque-grupo { background: #f1f5f9; }
+.estoque-grupo td { padding: 10px 14px; font-size: 14px; border-bottom: 2px solid var(--border); }
+.badge-alerta { background: #fee2e2; color: #991b1b; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; margin-left: 8px; }
+.badge-esgotado { background: #f3f4f6; color: #9ca3af; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+.rolo-esgotado td { color: #9ca3af; font-style: italic; }
+.progresso-bar { width: 80px; height: 6px; background: #e5e7eb; border-radius: 3px; display: inline-block; vertical-align: middle; margin-right: 6px; }
+.progresso-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+.baixa-form-cell { background: #f0fdf4; padding: 12px 20px !important; font-size: 14px; }
+.badge-sem-estoque { background: #fee2e2; color: #991b1b; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
+.badge-lote { background: #fef3c7; color: #92400e; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
+
+/* Dashboard: alerta inline */
+.dashboard-alertas { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; padding: 10px 16px; margin-bottom: 16px; display: none; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 14px; color: #9a3412; }
+.alerta-inline { background: #ffedd5; border-radius: 10px; padding: 2px 10px; font-size: 13px; }
+
+/* Alerta de lote no formulário de pedido */
+.alerta-lote-pedido { background: #fef3c7; border: 1px solid #fde047; border-radius: 6px; padding: 10px 14px; font-size: 13px; color: #92400e; gap: 8px; align-items: center; margin-top: 8px; }
+
+/* ── MÉTRICAS DO DASHBOARD ───────────────────────────── */
+.metrics-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.metric-card { background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; border-top: 3px solid var(--primary); }
+.metric-card-alerta { border-top-color: #dc2626; }
+.metric-label { font-size: 11px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+.metric-value { font-size: 22px; font-weight: bold; color: var(--dark); }
+
+/* ── FORMULÁRIO MULTI-AMBIENTE ───────────────────────── */
+.ambiente-card { border-left: 3px solid var(--primary); }
+.ambiente-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+
+/* ── ABAS (TABS) ─────────────────────────────────────── */
+.tab-nav { display: flex; gap: 2px; border-bottom: 2px solid var(--border); margin-bottom: 20px; }
+.tab-btn { padding: 10px 22px; border: none; background: transparent; cursor: pointer; font-size: 14px; font-weight: 600; color: #6b7280; border-bottom: 3px solid transparent; margin-bottom: -2px; border-radius: 4px 4px 0 0; transition: color 0.15s; }
+.tab-btn:hover { color: var(--primary); background: var(--light); }
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Badge de baixa de estoque realizada */
+.badge-baixa { background: #d1fae5; color: #065f46; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; margin-left: 6px; }
+
+/* Badges de pagamento */
+.badge-pago     { background: #d1fae5; color: #065f46; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
+.badge-parcial  { background: #fef3c7; color: #92400e; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
+.badge-pendente { background: #fee2e2; color: #991b1b; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
+
+/* Badges de prazo de entrega */
+.badge-atrasado { background: #fee2e2; color: #991b1b; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
+.badge-hoje     { background: #fef9c3; color: #713f12; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
+.badge-urgente  { background: #fef3c7; color: #92400e; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
+.badge-entrega  { background: #eff6ff; color: #1e40af; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
+
+/* Kanban: card com entrega atrasada */
+.kanban-card-atrasado { border-left: 3px solid #dc2626 !important; }
+
+/* ── HISTÓRICO DE MOVIMENTAÇÕES ─────────────────── */
+.mov-badge { font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; display: inline-block; white-space: nowrap; }
+.mov-entrada      { background: #d1fae5; color: #065f46; }
+.mov-baixa-pedido { background: #dbeafe; color: #1e40af; }
+.mov-baixa-manual { background: #fef3c7; color: #92400e; }
+.mov-ajuste-pos   { background: #e0e7ff; color: #3730a3; }
+.mov-ajuste-neg   { background: #fee2e2; color: #991b1b; }
+
+@media print {
+    .no-print { display: none !important; }
+    body { background: white; }
+    .proposta-wrapper, .os-wrapper { box-shadow: none; margin: 0; padding: 22px; }
+}

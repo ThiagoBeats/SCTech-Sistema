@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Ordem de Serviço - SCTech</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        body { background: #e8ecf0; display: block; overflow: auto; }
+        .topbar { background: var(--white); border-bottom: 1px solid var(--border); padding: 12px 30px; display: flex; justify-content: space-between; align-items: center; }
+        .topbar a { color: var(--primary); text-decoration: none; font-weight: 500; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="topbar no-print">
+        <a href="javascript:window.close()">← Fechar</a>
+        <button class="btn btn-outline" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+    </div>
+
+    <div class="os-wrapper">
+        <div id="os-container">
+            <p style="text-align:center;color:#999;padding:40px;">Carregando OS...</p>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Novo Pedido - SCTech</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="logo"><div class="logo-box">SC</div><h2>SCTech</h2></div>
+        <a href="index.html"    class="nav-item">📋 Dashboard</a>
+        <a href="pcp.html"      class="nav-item">🏭 Produção (PCP)</a>
+        <a href="estoque.html"  class="nav-item">📦 Estoque</a>
+        <a href="clientes.html" class="nav-item">👥 Clientes</a>
+        <a href="catalogo.html" class="nav-item">📚 Catálogo</a>
+    </aside>
+    <main class="main">
+        <div class="header">
+            <h2 id="titulo-pagina-pedido">Emissão de Pedido</h2>
+            <a href="index.html" class="btn btn-outline">Cancelar</a>
+        </div>
+
+        <!-- SEÇÃO 1: DADOS DO PEDIDO -->
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 20px;">1. Dados do Pedido</h3>
+            <div class="grid">
+                <div class="form-group">
+                    <label>Cliente</label>
+                    <select id="ped-cliente"></select>
+                </div>
+                <div class="form-group">
+                    <label>Mão de Obra / Instalação (R$)</label>
+                    <input type="number" id="ped-mao" value="150" step="10" oninput="atualizarTotalPedido()">
+                </div>
+                <div class="form-group">
+                    <label>Status do Pedido</label>
+                    <select id="ped-status">
+                        <option value="Orçamento">Orçamento (Aguardando Aprovação)</option>
+                        <option value="Medição">Aprovado → Aguardando Medição Fina</option>
+                        <option value="Aguardando Tecido">Aguardando Chegada de Tecido</option>
+                        <option value="Na Costura">Na Costura</option>
+                        <option value="Pronto p/ Instalação">Pronto para Instalação</option>
+                        <option value="Instalado">Instalado / Faturado</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Data de Entrega Prometida</label>
+                    <input type="date" id="ped-entrega">
+                </div>
+            </div>
+            <div class="form-group" style="margin-top:10px">
+                <label>Observações</label>
+                <textarea id="ped-obs" rows="3" placeholder="Ex: instalação só sábado, acabamento especial, cliente tem pet…" style="padding:10px;border:1px solid #ccc;border-radius:4px;resize:vertical;font-family:inherit;font-size:14px;width:100%"></textarea>
+            </div>
+        </div>
+
+        <!-- SEÇÃO 2: AMBIENTES (gerados dinamicamente pelo JS) -->
+        <div id="ambientes-container"></div>
+
+        <!-- BOTÃO ADICIONAR AMBIENTE -->
+        <div style="text-align: center; margin-bottom: 20px;">
+            <button class="btn btn-outline" onclick="adicionarAmbiente()">+ Adicionar Ambiente</button>
+        </div>
+
+        <!-- SEÇÃO 3: MATERIAIS E ACESSÓRIOS -->
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 20px;">3. Materiais e Acessórios</h3>
+
+            <!-- Aplicar kit -->
+            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
+                <div class="form-group" style="flex:1;min-width:200px">
+                    <label>Aplicar Kit Pronto</label>
+                    <select id="ped-kit"></select>
+                </div>
+                <button class="btn" style="margin-bottom:0" onclick="aplicarKit()">Aplicar Kit</button>
+            </div>
+
+            <!-- Tabela de itens já adicionados -->
+            <table style="margin-bottom:14px">
+                <thead>
+                    <tr>
+                        <th>Material</th>
+                        <th style="width:90px">Qtd</th>
+                        <th style="width:70px">Unidade</th>
+                        <th style="width:100px">R$/un</th>
+                        <th style="width:100px">Subtotal</th>
+                        <th style="width:50px"></th>
+                    </tr>
+                </thead>
+                <tbody id="tb-itens-pedido"></tbody>
+            </table>
+
+            <!-- Adicionar item avulso -->
+            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:14px">
+                <div class="form-group" style="flex:1;min-width:200px">
+                    <label>Adicionar Item Avulso</label>
+                    <select id="ped-item-mat"></select>
+                </div>
+                <div class="form-group" style="width:110px">
+                    <label>Quantidade</label>
+                    <input type="number" id="ped-item-qtd" value="1" step="0.01" min="0.01">
+                </div>
+                <button class="btn btn-outline" style="margin-bottom:0" onclick="adicionarItemPedido()">+ Adicionar</button>
+            </div>
+        </div>
+
+        <!-- SEÇÃO 4: RESUMO E SALVAR -->
+        <div class="card">
+            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 24px; flex-wrap: wrap;">
+                <div style="text-align: right; font-size: 13px; color: #555; line-height: 2;">
+                    <div>Total Materiais (tecido): R$ <strong id="ped-total-mat">0.00</strong></div>
+                    <div>Total Acessórios: R$ <strong id="ped-total-itens">0.00</strong></div>
+                    <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;margin-top:2px">
+                        Desconto:
+                        <input type="number" id="ped-desconto" value="0" step="0.5" min="0" max="100" oninput="atualizarTotalPedido()" style="width:58px;padding:3px 6px;border:1px solid #ccc;border-radius:4px;font-size:13px;text-align:right">
+                        % &nbsp;= − R$ <strong id="ped-desconto-val" style="color:#dc2626">0.00</strong>
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <label style="display:block;font-size:12px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">Valor Recebido (R$)</label>
+                    <input type="number" id="ped-valor-recebido" value="0" step="0.01" min="0" oninput="atualizarTotalPedido()" style="width:160px;padding:8px 10px;border:1px solid #ccc;border-radius:4px;text-align:right;font-size:14px">
+                    <div style="margin-top:5px;font-size:13px;color:#059669;font-weight:700">Saldo: R$ <span id="ped-saldo">0.00</span></div>
+                </div>
+                <h2 style="color: var(--dark);">Valor Final: R$ <span id="ped-total-final">0.00</span></h2>
+                <button class="btn btn-success" onclick="salvarPedido()">Salvar Pedido</button>
+            </div>
+        </div>
+    </main>
+    <script src="js/app.js"></script>
+</body>
+</html>

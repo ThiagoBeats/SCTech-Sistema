@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Estoque - SCTech</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="logo"><div class="logo-box">SC</div><h2>SCTech</h2></div>
+        <a href="index.html"    class="nav-item">📋 Dashboard</a>
+        <a href="pcp.html"      class="nav-item">🏭 Produção (PCP)</a>
+        <a href="estoque.html"  class="nav-item active">📦 Estoque</a>
+        <a href="clientes.html" class="nav-item">👥 Clientes</a>
+        <a href="catalogo.html" class="nav-item">📚 Catálogo</a>
+    </aside>
+    <main class="main">
+        <div class="header">
+            <h2>Gestão de Estoque</h2>
+        </div>
+
+        <!-- Navegação por abas -->
+        <div class="tab-nav">
+            <button class="tab-btn active" data-tab="tecidos"   onclick="mostrarTabEstoque('tecidos')">🧵 Tecidos</button>
+            <button class="tab-btn"        data-tab="materiais" onclick="mostrarTabEstoque('materiais')">🔩 Materiais e Acessórios</button>
+            <button class="tab-btn"        data-tab="kits"      onclick="mostrarTabEstoque('kits')">📦 Kits</button>
+            <button class="tab-btn"        data-tab="historico" onclick="mostrarTabEstoque('historico')">📋 Histórico</button>
+        </div>
+
+        <!-- ══════════════ ABA: TECIDOS ══════════════ -->
+        <div id="tab-tecidos" class="tab-panel active">
+
+            <!-- Alertas de ponto de pedido -->
+            <div id="alertas-ponto-pedido" class="alertas-ponto-pedido"></div>
+
+            <!-- Registrar entrada de rolo -->
+            <div class="card">
+                <h3 style="margin-bottom:16px">Registrar Entrada de Rolo</h3>
+                <div class="grid">
+                    <div class="form-group">
+                        <label>Tecido</label>
+                        <select id="est-tecido"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Nº do Lote / Banho de Cor</label>
+                        <input type="text" id="est-lote" placeholder="Ex: L2024-03 ou Banho #7">
+                    </div>
+                    <div class="form-group">
+                        <label>Metragem do Rolo (m)</label>
+                        <input type="number" id="est-metros" placeholder="Ex: 50.00" step="0.01" min="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>Data de Entrada</label>
+                        <input type="date" id="est-data">
+                    </div>
+                </div>
+                <button class="btn btn-success" onclick="salvarEntradaEstoque()">Registrar Entrada</button>
+            </div>
+
+            <!-- Tabela de rolos -->
+            <div class="card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Lote / Banho</th>
+                            <th>Metragem Inicial</th>
+                            <th>Disponível</th>
+                            <th>Ocupação</th>
+                            <th>Entrada</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-estoque"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ══════════════ ABA: MATERIAIS ══════════════ -->
+        <div id="tab-materiais" class="tab-panel">
+
+            <!-- Alertas de estoque mínimo -->
+            <div id="alertas-mat-min" class="alertas-ponto-pedido"></div>
+
+            <!-- Cadastrar novo material -->
+            <div class="card">
+                <h3 style="margin-bottom:16px">Cadastrar Material / Acessório</h3>
+                <div class="grid">
+                    <div class="form-group" style="grid-column:1/-1">
+                        <label>Nome do Material</label>
+                        <input type="text" id="mat-nome" placeholder="Ex: Trilho Suíço, Suporte de Parede, Gancho…">
+                    </div>
+                    <div class="form-group">
+                        <label>Unidade de Medida</label>
+                        <select id="mat-unidade">
+                            <option value="un">un (unidade)</option>
+                            <option value="m">m (metro)</option>
+                            <option value="cm">cm (centímetro)</option>
+                            <option value="kg">kg</option>
+                            <option value="cj">cj (conjunto)</option>
+                            <option value="cx">cx (caixa)</option>
+                            <option value="par">par</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Preço Unitário (R$)</label>
+                        <input type="number" id="mat-preco" placeholder="Ex: 12.50" step="0.01" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Estoque Mínimo</label>
+                        <input type="number" id="mat-min" placeholder="Ex: 20" step="1" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Quantidade Inicial em Estoque</label>
+                        <input type="number" id="mat-qtd" placeholder="Ex: 100" step="0.01" min="0">
+                    </div>
+                </div>
+                <button class="btn btn-success" onclick="salvarMaterial()">Cadastrar Material</button>
+            </div>
+
+            <!-- Tabela de materiais -->
+            <div class="card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Material</th>
+                            <th>Unidade</th>
+                            <th>Preço Unit.</th>
+                            <th>Estoque Atual</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-materiais"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ══════════════ ABA: KITS ══════════════ -->
+        <div id="tab-kits" class="tab-panel">
+
+            <!-- Criar novo kit -->
+            <div class="card">
+                <h3 style="margin-bottom:16px">Criar Kit</h3>
+                <div class="grid">
+                    <div class="form-group" style="grid-column:1/-1">
+                        <label>Nome do Kit</label>
+                        <input type="text" id="kit-nome" placeholder="Ex: Kit Trilho 2m, Kit Instalação Padrão…">
+                    </div>
+                    <div class="form-group" style="grid-column:1/-1">
+                        <label>Descrição (opcional)</label>
+                        <input type="text" id="kit-desc" placeholder="Breve descrição do kit">
+                    </div>
+                </div>
+
+                <h4 style="margin-bottom:10px;color:#555">Itens do Kit</h4>
+                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+                    <div class="form-group" style="flex:1;min-width:200px">
+                        <label>Material</label>
+                        <select id="kit-item-mat"></select>
+                    </div>
+                    <div class="form-group" style="width:120px">
+                        <label>Quantidade</label>
+                        <input type="number" id="kit-item-qtd" placeholder="Ex: 2" step="0.01" min="0.01" value="1">
+                    </div>
+                    <button class="btn btn-outline" style="margin-bottom:0" onclick="adicionarItemAoKit()">+ Adicionar Item</button>
+                </div>
+
+                <!-- Preview dos itens do kit em criação -->
+                <div style="margin-bottom:14px">
+                    <table>
+                        <thead>
+                            <tr><th>Material</th><th>Quantidade</th><th style="width:60px"></th></tr>
+                        </thead>
+                        <tbody id="tb-kit-draft"></tbody>
+                    </table>
+                </div>
+
+                <button class="btn btn-success" onclick="salvarKit()">Salvar Kit</button>
+            </div>
+
+            <!-- Kits cadastrados -->
+            <div class="card">
+                <h3 style="margin-bottom:16px">Kits Cadastrados</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Composição</th>
+                            <th style="width:80px">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-kits"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ══════════════ ABA: HISTÓRICO ══════════════ -->
+        <div id="tab-historico" class="tab-panel">
+            <div class="card">
+                <h3 style="margin-bottom:16px">Movimentações de Estoque</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:130px">Data / Hora</th>
+                            <th style="width:120px">Tipo</th>
+                            <th>Item</th>
+                            <th style="width:110px">Quantidade</th>
+                            <th style="width:120px">Referência</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-historico"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+    <script src="js/app.js"></script>
+</body>
+</html>
