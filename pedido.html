@@ -13,6 +13,16 @@
         <a href="estoque.html"  class="nav-item">📦 Estoque</a>
         <a href="clientes.html" class="nav-item">👥 Clientes</a>
         <a href="catalogo.html" class="nav-item">📚 Catálogo</a>
+        <a href="relatorios.html" class="nav-item">📊 Relatórios</a>
+        <a href="vendedores.html" class="nav-item">👤 Vendedores</a>
+        <a href="fornecedores.html" class="nav-item">🏭 Fornecedores</a>
+        <div class="sidebar-footer">
+            <div class="sidebar-user-info">
+                <span class="sidebar-user-name" id="sidebar-user-name">—</span>
+                <span class="sidebar-user-role">SCTech</span>
+            </div>
+            <button class="btn-logout" onclick="logout()">Sair</button>
+        </div>
     </aside>
     <main class="main">
         <div class="header">
@@ -26,6 +36,7 @@
             <div class="grid">
                 <div class="form-group">
                     <label>Cliente</label>
+                    <input type="text" id="ped-cliente-busca" placeholder="Buscar por nome ou CPF…" oninput="filtrarClientes()" autocomplete="off" style="margin-bottom:6px">
                     <select id="ped-cliente"></select>
                 </div>
                 <div class="form-group">
@@ -40,12 +51,17 @@
                         <option value="Aguardando Tecido">Aguardando Chegada de Tecido</option>
                         <option value="Na Costura">Na Costura</option>
                         <option value="Pronto p/ Instalação">Pronto para Instalação</option>
+                        <option value="Aguardando Pagamento">Aguardando Pagamento</option>
                         <option value="Instalado">Instalado / Faturado</option>
                     </select>
                 </div>
                 <div class="form-group">
                     <label>Data de Entrega Prometida</label>
                     <input type="date" id="ped-entrega">
+                </div>
+                <div class="form-group">
+                    <label>Vendedor / Responsável</label>
+                    <select id="ped-vendedor" onchange="atualizarTotalPedido()"></select>
                 </div>
             </div>
             <div class="form-group" style="margin-top:10px">
@@ -110,6 +126,9 @@
                 <div style="text-align: right; font-size: 13px; color: #555; line-height: 2;">
                     <div>Total Materiais (tecido): R$ <strong id="ped-total-mat">0.00</strong></div>
                     <div>Total Acessórios: R$ <strong id="ped-total-itens">0.00</strong></div>
+                    <div id="ped-comissao-row" style="display:none;color:#92400e">
+                        Comissão (<span id="ped-comissao-pct">0</span>%): R$ <strong id="ped-comissao-val">0.00</strong>
+                    </div>
                     <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;margin-top:2px">
                         Desconto:
                         <input type="number" id="ped-desconto" value="0" step="0.5" min="0" max="100" oninput="atualizarTotalPedido()" style="width:58px;padding:3px 6px;border:1px solid #ccc;border-radius:4px;font-size:13px;text-align:right">

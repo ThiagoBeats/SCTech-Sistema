@@ -13,6 +13,16 @@
         <a href="estoque.html"  class="nav-item">📦 Estoque</a>
         <a href="clientes.html" class="nav-item">👥 Clientes</a>
         <a href="catalogo.html" class="nav-item">📚 Catálogo</a>
+        <a href="relatorios.html" class="nav-item">📊 Relatórios</a>
+        <a href="vendedores.html" class="nav-item">👤 Vendedores</a>
+        <a href="fornecedores.html" class="nav-item">🏭 Fornecedores</a>
+        <div class="sidebar-footer">
+            <div class="sidebar-user-info">
+                <span class="sidebar-user-name" id="sidebar-user-name">—</span>
+                <span class="sidebar-user-role">SCTech</span>
+            </div>
+            <button class="btn-logout" onclick="logout()">Sair</button>
+        </div>
     </aside>
     <main class="main" style="overflow-x: hidden;">
         <div class="header">
@@ -20,9 +30,18 @@
             <a href="pedido.html" class="btn btn-success">+ Novo Pedido</a>
         </div>
 
-        <div id="aviso-orcamentos" class="aviso-orcamentos"></div>
+        <div class="tab-nav" style="margin-bottom:0">
+            <button class="tab-btn active" id="tab-btn-kanban" onclick="mostrarViewPCP('kanban')">📋 Kanban</button>
+            <button class="tab-btn" id="tab-btn-agenda" onclick="mostrarViewPCP('agenda')">📅 Agenda de Instalações</button>
+        </div>
 
-        <div id="kanban-board" class="kanban-board"></div>
+        <div id="pcp-view-kanban">
+            <div id="aviso-orcamentos" class="aviso-orcamentos"></div>
+            <div id="kanban-board" class="kanban-board"></div>
+        </div><!-- end pcp-view-kanban -->
+        <div id="pcp-view-agenda" style="display:none">
+            <div id="agenda-container"></div>
+        </div>
     </main>
     <script src="js/app.js"></script>
 </body>

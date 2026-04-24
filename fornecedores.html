@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Fornecedores - SCTech</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="logo"><div class="logo-box">SC</div><h2>SCTech</h2></div>
+        <a href="index.html"      class="nav-item">📋 Dashboard</a>
+        <a href="pcp.html"        class="nav-item">🏭 Produção (PCP)</a>
+        <a href="estoque.html"    class="nav-item">📦 Estoque</a>
+        <a href="clientes.html"   class="nav-item">👥 Clientes</a>
+        <a href="catalogo.html"   class="nav-item">📚 Catálogo</a>
+        <a href="relatorios.html" class="nav-item">📊 Relatórios</a>
+        <a href="vendedores.html" class="nav-item">👤 Vendedores</a>
+        <a href="fornecedores.html" class="nav-item active">🏭 Fornecedores</a>
+        <div class="sidebar-footer">
+            <div class="sidebar-user-info">
+                <span class="sidebar-user-name" id="sidebar-user-name">—</span>
+                <span class="sidebar-user-role">SCTech</span>
+            </div>
+            <button class="btn-logout" onclick="logout()">Sair</button>
+        </div>
+    </aside>
+    <main class="main">
+        <div class="header"><h2>Fornecedores e Pedidos de Compra</h2></div>
+
+        <div class="tab-nav">
+            <button class="tab-btn forn-tab-btn active" data-tab="lista"   onclick="mostrarTabFornecedores('lista')">🏭 Fornecedores</button>
+            <button class="tab-btn forn-tab-btn"        data-tab="pedidos" onclick="mostrarTabFornecedores('pedidos')">📋 Pedidos de Compra</button>
+            <button class="tab-btn forn-tab-btn"        data-tab="novo"    onclick="mostrarTabFornecedores('novo')">+ Novo Pedido</button>
+        </div>
+
+        <!-- TAB: FORNECEDORES -->
+        <div id="tab-forn-lista" class="tab-panel active">
+            <div class="card">
+                <h3 id="forn-form-titulo">Cadastrar Fornecedor</h3>
+                <div class="grid" style="margin-top:15px">
+                    <div class="form-group">
+                        <label>Nome / Razão Social <span style="color:#dc2626">*</span></label>
+                        <input type="text" id="forn-nome" placeholder="Ex: Tecidos Brasil Ltda">
+                    </div>
+                    <div class="form-group">
+                        <label>CNPJ / CPF</label>
+                        <input type="text" id="forn-cnpj" placeholder="00.000.000/0000-00">
+                    </div>
+                    <div class="form-group">
+                        <label>Telefone / WhatsApp</label>
+                        <input type="text" id="forn-tel" placeholder="(11) 99999-9999">
+                    </div>
+                    <div class="form-group">
+                        <label>E-mail</label>
+                        <input type="email" id="forn-email" placeholder="contato@fornecedor.com">
+                    </div>
+                </div>
+                <div class="grid" style="grid-template-columns:1fr 1fr">
+                    <div class="form-group">
+                        <label>Endereço</label>
+                        <textarea id="forn-end" rows="2" placeholder="Rua, número, cidade, estado" style="padding:10px;border:1px solid #ccc;border-radius:4px;resize:vertical;font-family:inherit;font-size:14px;width:100%"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Observações</label>
+                        <textarea id="forn-obs" rows="2" placeholder="Prazo de entrega, condições, etc." style="padding:10px;border:1px solid #ccc;border-radius:4px;resize:vertical;font-family:inherit;font-size:14px;width:100%"></textarea>
+                    </div>
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+                    <button class="btn" id="forn-btn-salvar" onclick="salvarFornecedor()">Salvar Fornecedor</button>
+                    <button class="btn btn-outline" id="forn-btn-cancelar" style="display:none" onclick="cancelarEdicaoFornecedor()">Cancelar</button>
+                </div>
+            </div>
+            <div class="card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome / Razão Social</th>
+                            <th>CNPJ / CPF</th>
+                            <th>Telefone</th>
+                            <th>E-mail</th>
+                            <th>Vínculos</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-fornecedores"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: PEDIDOS DE COMPRA -->
+        <div id="tab-forn-pedidos" class="tab-panel">
+            <div class="card">
+                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+                    <div class="form-group" style="flex:1;min-width:180px;margin-bottom:0">
+                        <label>Fornecedor</label>
+                        <select id="filtro-pc-forn" onchange="renderListaPedidosCompra()">
+                            <option value="">Todos os fornecedores</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="min-width:160px;margin-bottom:0">
+                        <label>Status</label>
+                        <select id="filtro-pc-status" onchange="renderListaPedidosCompra()">
+                            <option value="">Todos</option>
+                            <option>Rascunho</option>
+                            <option>Enviado</option>
+                            <option>Recebido</option>
+                        </select>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Fornecedor</th>
+                            <th>Data</th>
+                            <th style="text-align:center">Itens</th>
+                            <th>Valor Est.</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-pedidos-compra"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: NOVO PEDIDO -->
+        <div id="tab-forn-novo" class="tab-panel">
+            <div class="card">
+                <h3 style="color:var(--primary);margin-bottom:20px">Novo Pedido de Compra</h3>
+                <div class="grid" style="grid-template-columns:1fr">
+                    <div class="form-group">
+                        <label>Fornecedor <span style="color:#dc2626">*</span></label>
+                        <select id="pc-fornecedor">
+                            <option value="">— Selecione o fornecedor —</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:14px;margin-top:10px">
+                    <div class="form-group" style="min-width:140px;margin-bottom:0">
+                        <label>Tipo</label>
+                        <select id="pc-item-tipo" onchange="atualizarSelectItemPC()">
+                            <option value="material">Material</option>
+                            <option value="tecido">Tecido</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
+                        <label>Item</label>
+                        <select id="pc-item-id"></select>
+                    </div>
+                    <div class="form-group" style="width:110px;margin-bottom:0">
+                        <label>Quantidade</label>
+                        <input type="number" id="pc-item-qtd" value="1" step="0.01" min="0.01">
+                    </div>
+                    <button class="btn btn-outline" style="margin-bottom:0" onclick="adicionarItemPC()">+ Adicionar</button>
+                </div>
+                <table style="margin-top:14px;margin-bottom:14px">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th style="width:110px">Quantidade</th>
+                            <th style="width:60px">Un.</th>
+                            <th style="width:110px">Subtotal</th>
+                            <th style="width:50px"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-pc-draft"></tbody>
+                </table>
+                <div class="form-group">
+                    <label>Observações</label>
+                    <textarea id="pc-obs" rows="3" placeholder="Condições de pagamento, prazo de entrega, referências..." style="padding:10px;border:1px solid #ccc;border-radius:4px;resize:vertical;font-family:inherit;font-size:14px;width:100%"></textarea>
+                </div>
+                <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px">
+                    <button class="btn btn-success" onclick="salvarPedidoCompra()">💾 Salvar Pedido de Compra</button>
+                </div>
+            </div>
+        </div>
+    </main>
+    <script src="js/app.js"></script>
+</body>
+</html>

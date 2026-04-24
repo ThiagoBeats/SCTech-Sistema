@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatórios - SCTech</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="logo"><div class="logo-box">SC</div><h2>SCTech</h2></div>
+        <a href="index.html"       class="nav-item">📋 Dashboard</a>
+        <a href="pcp.html"         class="nav-item">🏭 Produção (PCP)</a>
+        <a href="estoque.html"     class="nav-item">📦 Estoque</a>
+        <a href="clientes.html"    class="nav-item">👥 Clientes</a>
+        <a href="catalogo.html"    class="nav-item">📚 Catálogo</a>
+        <a href="relatorios.html"  class="nav-item active">📊 Relatórios</a>
+        <a href="vendedores.html"  class="nav-item">👤 Vendedores</a>
+        <a href="fornecedores.html" class="nav-item">🏭 Fornecedores</a>
+        <div class="sidebar-footer">
+            <div class="sidebar-user-info">
+                <span class="sidebar-user-name" id="sidebar-user-name">—</span>
+                <span class="sidebar-user-role">SCTech</span>
+            </div>
+            <button class="btn-logout" onclick="logout()">Sair</button>
+        </div>
+    </aside>
+    <main class="main">
+        <div class="header"><h2>Relatórios</h2></div>
+
+        <div class="tab-nav">
+            <button class="tab-btn active" data-tab="faturamento" onclick="mostrarTabRel('faturamento')">📈 Faturamento Mensal</button>
+            <button class="tab-btn" data-tab="recebiveis"  onclick="mostrarTabRel('recebiveis')">💳 Contas a Receber</button>
+            <button class="tab-btn" data-tab="vendedores"  onclick="mostrarTabRel('vendedores')">👤 Por Vendedor</button>
+        </div>
+
+        <!-- Faturamento Mensal -->
+        <div id="tab-rel-faturamento" class="tab-panel active">
+            <div class="card">
+                <h3 style="margin-bottom:16px">Faturamento dos Últimos 6 Meses</h3>
+                <table>
+                    <thead><tr>
+                        <th>Mês</th>
+                        <th style="text-align:center">Pedidos Instalados</th>
+                        <th>Faturamento</th>
+                        <th>Valor Recebido</th>
+                        <th>Ticket Médio</th>
+                    </tr></thead>
+                    <tbody id="tb-rel-fat"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Contas a Receber -->
+        <div id="tab-rel-recebiveis" class="tab-panel">
+            <div class="card">
+                <h3 style="margin-bottom:16px">Contas a Receber</h3>
+                <table>
+                    <thead><tr>
+                        <th>ID</th>
+                        <th>Cliente</th>
+                        <th>Valor Total</th>
+                        <th>Saldo Devedor</th>
+                        <th>Status</th>
+                        <th>Aging</th>
+                    </tr></thead>
+                    <tbody id="tb-rel-rec"></tbody>
+                    <tfoot id="tfoot-rel-rec"></tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- Por Vendedor -->
+        <div id="tab-rel-vendedores" class="tab-panel">
+            <div class="card">
+                <h3 style="margin-bottom:16px">Performance por Vendedor</h3>
+                <table>
+                    <thead><tr>
+                        <th>Vendedor</th>
+                        <th style="text-align:center">Total Pedidos</th>
+                        <th style="text-align:center">Instalados</th>
+                        <th>Volume Total</th>
+                        <th>Faturado</th>
+                    </tr></thead>
+                    <tbody id="tb-rel-vend"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+    <script src="js/app.js"></script>
+</body>
+</html>

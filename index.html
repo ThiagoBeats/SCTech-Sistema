@@ -13,6 +13,16 @@
         <a href="estoque.html"  class="nav-item">📦 Estoque</a>
         <a href="clientes.html" class="nav-item">👥 Clientes</a>
         <a href="catalogo.html" class="nav-item">📚 Catálogo</a>
+        <a href="relatorios.html" class="nav-item">📊 Relatórios</a>
+        <a href="vendedores.html" class="nav-item">👤 Vendedores</a>
+        <a href="fornecedores.html" class="nav-item">🏭 Fornecedores</a>
+        <div class="sidebar-footer">
+            <div class="sidebar-user-info">
+                <span class="sidebar-user-name" id="sidebar-user-name">—</span>
+                <span class="sidebar-user-role">SCTech</span>
+            </div>
+            <button class="btn-logout" onclick="logout()">Sair</button>
+        </div>
     </aside>
     <main class="main">
         <div class="header">
@@ -26,11 +36,11 @@
                 <div class="metric-label">Faturamento do Mês</div>
                 <div class="metric-value" id="met-fat-mes">—</div>
             </div>
-            <div class="metric-card">
+            <div class="metric-card metric-card-link" onclick="filtrarMetrica('em_producao')">
                 <div class="metric-label">Em Produção</div>
                 <div class="metric-value" id="met-producao">—</div>
             </div>
-            <div class="metric-card">
+            <div class="metric-card metric-card-link" onclick="filtrarMetrica('Orçamento')">
                 <div class="metric-label">Orçamentos Abertos</div>
                 <div class="metric-value" id="met-orcamentos">—</div>
             </div>
@@ -42,11 +52,11 @@
                 <div class="metric-label">Estoque Crítico</div>
                 <div class="metric-value" id="met-estoque-critico">—</div>
             </div>
-            <div class="metric-card metric-card-alerta">
+            <div class="metric-card metric-card-alerta metric-card-link" onclick="filtrarMetrica('atrasados')">
                 <div class="metric-label">Entregas Atrasadas</div>
                 <div class="metric-value" id="met-atrasados">—</div>
             </div>
-            <div class="metric-card">
+            <div class="metric-card metric-card-link" onclick="filtrarMetrica('a_receber')">
                 <div class="metric-label">A Receber (Total)</div>
                 <div class="metric-value" id="met-a-receber">—</div>
             </div>
@@ -63,6 +73,11 @@
                     <option value="Na Costura">Na Costura</option>
                     <option value="Pronto p/ Instalação">Pronto p/ Instalação</option>
                     <option value="Instalado">Instalado</option>
+                    <optgroup label="Filtros especiais">
+                        <option value="em_producao">Em Produção (todos ativos)</option>
+                        <option value="atrasados">Entregas Atrasadas</option>
+                        <option value="a_receber">Com Saldo a Receber</option>
+                    </optgroup>
                 </select>
                 <span id="pedidos-counter" class="pedidos-counter"></span>
             </div>

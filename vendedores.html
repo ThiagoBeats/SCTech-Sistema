@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Vendedores - SCTech</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="logo"><div class="logo-box">SC</div><h2>SCTech</h2></div>
+        <a href="index.html"      class="nav-item">📋 Dashboard</a>
+        <a href="pcp.html"        class="nav-item">🏭 Produção (PCP)</a>
+        <a href="estoque.html"    class="nav-item">📦 Estoque</a>
+        <a href="clientes.html"   class="nav-item">👥 Clientes</a>
+        <a href="catalogo.html"   class="nav-item">📚 Catálogo</a>
+        <a href="relatorios.html" class="nav-item">📊 Relatórios</a>
+        <a href="vendedores.html" class="nav-item active">👤 Vendedores</a>
+        <a href="fornecedores.html" class="nav-item">🏭 Fornecedores</a>
+        <div class="sidebar-footer">
+            <div class="sidebar-user-info">
+                <span class="sidebar-user-name" id="sidebar-user-name">—</span>
+                <span class="sidebar-user-role">SCTech</span>
+            </div>
+            <button class="btn-logout" onclick="logout()">Sair</button>
+        </div>
+    </aside>
+    <main class="main">
+        <div class="header"><h2>Vendedores e Comissões</h2></div>
+
+        <div class="tab-nav">
+            <button class="tab-btn vend-tab-btn active" data-tab="lista"     onclick="mostrarTabVendedores('lista')">👤 Vendedores</button>
+            <button class="tab-btn vend-tab-btn"        data-tab="pendentes" onclick="mostrarTabVendedores('pendentes')">⏳ Comissões Pendentes</button>
+            <button class="tab-btn vend-tab-btn"        data-tab="historico" onclick="mostrarTabVendedores('historico')">✅ Histórico de Pagamentos</button>
+        </div>
+
+        <!-- TAB: VENDEDORES -->
+        <div id="tab-vend-lista" class="tab-panel active">
+            <div class="card">
+                <h3 id="vend-form-titulo">Cadastrar Vendedor</h3>
+                <div class="grid" style="margin-top:15px">
+                    <div class="form-group">
+                        <label>Nome</label>
+                        <input type="text" id="vend-nome" placeholder="Nome do vendedor">
+                    </div>
+                    <div class="form-group">
+                        <label>Comissão (%)</label>
+                        <input type="number" id="vend-comissao" value="0" step="0.5" min="0" max="100" placeholder="Ex: 5">
+                    </div>
+                    <div class="form-group">
+                        <label>Telefone / WhatsApp</label>
+                        <input type="text" id="vend-tel" placeholder="Ex: (11) 99999-9999">
+                    </div>
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+                    <button class="btn" id="vend-btn-salvar" onclick="salvarVendedor()">Salvar Vendedor</button>
+                    <button class="btn btn-outline" id="vend-btn-cancelar" style="display:none" onclick="cancelarEdicaoVendedor()">Cancelar</button>
+                </div>
+            </div>
+            <div class="card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th style="width:110px;text-align:center">Comissão</th>
+                            <th>Telefone</th>
+                            <th style="width:80px;text-align:center">Pedidos</th>
+                            <th>Situação / Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-vendedores"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: COMISSÕES PENDENTES -->
+        <div id="tab-vend-pendentes" class="tab-panel">
+            <div class="card">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+                    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                        <select id="filtro-vend-pendente" onchange="renderComissoesPendentes()" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;min-width:180px">
+                            <option value="">Todos os vendedores</option>
+                        </select>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                        <span style="font-size:14px;color:#555">Total pendente: <strong id="total-comissoes-pendentes" style="color:#dc2626">R$ 0,00</strong></span>
+                        <button class="btn btn-success" onclick="pagarTodasFiltradas()">✓ Pagar Todas (filtradas)</button>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Pedido</th>
+                            <th>Cliente</th>
+                            <th>Vendedor</th>
+                            <th>Valor Pedido</th>
+                            <th>Comissão</th>
+                            <th style="width:100px">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-comissoes-pendentes"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: HISTÓRICO DE PAGAMENTOS -->
+        <div id="tab-vend-historico" class="tab-panel">
+            <div class="card">
+                <div style="margin-bottom:14px">
+                    <select id="filtro-vend-hist" onchange="renderHistoricoComissoes()" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;min-width:180px">
+                        <option value="">Todos os vendedores</option>
+                    </select>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Data Pgto</th>
+                            <th>Pedido</th>
+                            <th>Cliente</th>
+                            <th>Vendedor</th>
+                            <th>Valor Pedido</th>
+                            <th>Comissão Paga</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-hist-comissoes"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+    <script src="js/app.js"></script>
+</body>
+</html>
