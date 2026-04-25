@@ -6,16 +6,17 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <aside class="sidebar">
+    <aside class="sidebar sidebar-collapsed" id="main-sidebar">
         <div class="logo"><div class="logo-box">SC</div><h2>SCTech</h2></div>
-        <a href="index.html"    class="nav-item">📋 Dashboard</a>
-        <a href="pcp.html"      class="nav-item active">🏭 Produção (PCP)</a>
-        <a href="estoque.html"  class="nav-item">📦 Estoque</a>
-        <a href="clientes.html" class="nav-item">👥 Clientes</a>
-        <a href="catalogo.html" class="nav-item">📚 Catálogo</a>
-        <a href="relatorios.html" class="nav-item">📊 Relatórios</a>
-        <a href="vendedores.html" class="nav-item">👤 Vendedores</a>
-        <a href="fornecedores.html" class="nav-item">🏭 Fornecedores</a>
+        <button class="pcp-sidebar-toggle" id="sidebar-toggle-btn" onclick="toggleSidebar()" title="Expandir sidebar">→</button>
+        <a href="index.html"    class="nav-item">📋 <span class="nav-text">Página Inicial</span></a>
+        <a href="pcp.html"      class="nav-item active">🏭 <span class="nav-text">Produção</span></a>
+        <a href="estoque.html"  class="nav-item">📦 <span class="nav-text">Estoque</span></a>
+        <a href="clientes.html" class="nav-item">👥 <span class="nav-text">Clientes</span></a>
+        <a href="catalogo.html" class="nav-item">📚 <span class="nav-text">Catálogo</span></a>
+        <a href="relatorios.html" class="nav-item">📊 <span class="nav-text">Relatórios</span></a>
+        <a href="vendedores.html" class="nav-item">👤 <span class="nav-text">Vendedores</span></a>
+        <a href="fornecedores.html" class="nav-item">🏭 <span class="nav-text">Fornecedores</span></a>
         <div class="sidebar-footer">
             <div class="sidebar-user-info">
                 <span class="sidebar-user-name" id="sidebar-user-name">—</span>
@@ -31,7 +32,7 @@
         </div>
 
         <div class="tab-nav" style="margin-bottom:0">
-            <button class="tab-btn active" id="tab-btn-kanban" onclick="mostrarViewPCP('kanban')">📋 Kanban</button>
+            <button class="tab-btn active" id="tab-btn-kanban" onclick="mostrarViewPCP('kanban')">📋 Status dos pedidos</button>
             <button class="tab-btn" id="tab-btn-agenda" onclick="mostrarViewPCP('agenda')">📅 Agenda de Instalações</button>
         </div>
 

@@ -2,20 +2,20 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Catálogo - SCTech</title>
+    <title>Cadastro - Catálogo e Preços - SCTech</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <aside class="sidebar">
+    <aside class="sidebar" id="main-sidebar">
         <div class="logo"><div class="logo-box">SC</div><h2>SCTech</h2></div>
-        <a href="index.html"    class="nav-item">📋 Dashboard</a>
-        <a href="pcp.html"      class="nav-item">🏭 Produção (PCP)</a>
-        <a href="estoque.html"  class="nav-item">📦 Estoque</a>
-        <a href="clientes.html" class="nav-item">👥 Clientes</a>
-        <a href="catalogo.html" class="nav-item active">📚 Catálogo</a>
-        <a href="relatorios.html" class="nav-item">📊 Relatórios</a>
-        <a href="vendedores.html" class="nav-item">👤 Vendedores</a>
-        <a href="fornecedores.html" class="nav-item">🏭 Fornecedores</a>
+        <a href="index.html"    class="nav-item">📋 <span class="nav-text">Página Inicial</span></a>
+        <a href="pcp.html"      class="nav-item">🏭 <span class="nav-text">Produção</span></a>
+        <a href="estoque.html"  class="nav-item">📦 <span class="nav-text">Estoque</span></a>
+        <a href="clientes.html" class="nav-item">👥 <span class="nav-text">Clientes</span></a>
+        <a href="catalogo.html" class="nav-item active">📚 <span class="nav-text">Catálogo</span></a>
+        <a href="relatorios.html" class="nav-item">📊 <span class="nav-text">Relatórios</span></a>
+        <a href="vendedores.html" class="nav-item">👤 <span class="nav-text">Vendedores</span></a>
+        <a href="fornecedores.html" class="nav-item">🏭 <span class="nav-text">Fornecedores</span></a>
         <div class="sidebar-footer">
             <div class="sidebar-user-info">
                 <span class="sidebar-user-name" id="sidebar-user-name">—</span>
@@ -25,10 +25,14 @@
         </div>
     </aside>
     <main class="main">
-        <div class="header"><h2>Catálogo e Preços</h2></div>
+        <div class="header"><h2>Cadastro — Catálogo e Preços</h2></div>
         <div class="card">
             <h3>Novo Tecido / Material</h3>
             <div class="grid" style="margin-top: 15px;">
+                <div class="form-group">
+                    <label>Referência <span class="info-tag">código único do tecido</span></label>
+                    <input type="text" id="cat-ref" placeholder="Ex: LB-001 ou LINHO-BEL" oninput="autoFillCatalogoPorReferencia()">
+                </div>
                 <div class="form-group">
                     <label>Nome do Tecido / Material</label>
                     <input type="text" id="cat-nome" placeholder="Ex: Linho Belga Importado">
@@ -40,10 +44,6 @@
                 <div class="form-group">
                     <label>Largura do Rolo (m) <span class="info-tag">padrão: 2.80</span></label>
                     <input type="number" id="cat-largura" placeholder="2.80" value="2.80" step="0.01">
-                </div>
-                <div class="form-group">
-                    <label>Rapport / Repetição de Estampa (cm) <span class="info-tag">0 = liso</span></label>
-                    <input type="number" id="cat-rapport" placeholder="0" value="0" step="1">
                 </div>
                 <div class="form-group">
                     <label>Estoque Mínimo (m) <span class="info-tag">0 = sem alerta</span></label>
@@ -61,9 +61,9 @@
                 <thead>
                     <tr>
                         <th>Material</th>
+                        <th>Referência</th>
                         <th>Preço (R$/m)</th>
                         <th>Largura do Rolo</th>
-                        <th>Rapport</th>
                         <th>Estoque Mín.</th>
                         <th>Em Estoque</th>
                         <th>Fornecedor</th>

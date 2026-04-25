@@ -227,21 +227,34 @@ function salvarCatalogo() {
     const nome = document.getElementById('cat-nome').value.trim();
     const preco = parseFloat(document.getElementById('cat-preco').value);
     const largura_rolo = parseFloat(document.getElementById('cat-largura').value) || 2.80;
-    const rapport = parseFloat(document.getElementById('cat-rapport').value) || 0;
+    const referencia = document.getElementById('cat-ref')?.value.trim() || '';
     const min_estoque = parseFloat(document.getElementById('cat-min').value) || 0;
     if (!nome || !preco) return alert('Preencha o nome e o preço do material');
     const dup = db.catalogo.find(c => c.nome.trim().toLowerCase() === nome.toLowerCase());
     if (dup) return alert(`Já existe um tecido com o nome "${dup.nome}" no catálogo.`);
     const forn_id_cat  = parseInt(document.getElementById('cat-fornecedor')?.value) || null;
     const forn_obj_cat = forn_id_cat ? db.fornecedores.find(f => f.id === forn_id_cat) : null;
-    db.catalogo.push({ id: Date.now(), nome, preco, largura_rolo, rapport, min_estoque, fornecedor_id: forn_id_cat, fornecedor_nome: forn_obj_cat ? forn_obj_cat.nome : '' });
+    db.catalogo.push({ id: Date.now(), nome, preco, largura_rolo, rapport: 0, referencia, min_estoque, fornecedor_id: forn_id_cat, fornecedor_nome: forn_obj_cat ? forn_obj_cat.nome : '' });
     salvarERecarregar('Tecido cadastrado no catálogo!');
+}
+
+function autoFillCatalogoPorReferencia() {
+    const ref = document.getElementById('cat-ref')?.value.trim();
+    if (!ref) return;
+    const existing = db.catalogo.find(c => c.referencia && c.referencia.toLowerCase() === ref.toLowerCase());
+    if (!existing) return;
+    document.getElementById('cat-nome').value = existing.nome || '';
+    document.getElementById('cat-preco').value = existing.preco || '';
+    document.getElementById('cat-largura').value = existing.largura_rolo || 2.80;
+    document.getElementById('cat-min').value = existing.min_estoque || 0;
+    const fornSel = document.getElementById('cat-fornecedor');
+    if (fornSel && existing.fornecedor_id) fornSel.value = existing.fornecedor_id;
 }
 
 function excluirCatalogo(id) {
     const emUso = db.pedidos.find(p => {
         if (normalizarStatus(p.status) === 'Instalado') return false;
-        return normalizarAmbientes(p).some(a => a.tecidoId == id);
+        return normalizarAmbientes(p).some(a => (a.tecidos||[]).some(t => t.tecidoId == id));
     });
     if (emUso) {
         const cli = db.clientes.find(c => c.id == emUso.clienteId);
@@ -264,18 +277,34 @@ function normalizarStatus(status) {
 }
 
 function normalizarAmbientes(ped) {
-    if (ped.ambientes && ped.ambientes.length) return ped.ambientes;
+    if (ped.ambientes && ped.ambientes.length) {
+        return ped.ambientes.map(a => {
+            if (a.tecidos && a.tecidos.length) return a;
+            return {
+                ...a,
+                tecidos: [{
+                    tecidoId: a.tecidoId || null, tecidoNome: a.tecidoNome || '',
+                    largura_rolo: a.largura_rolo || 2.80, rapport_cm: a.rapport_cm || 0,
+                    acrescimo_rapport_m: a.acrescimo_rapport_m || 0, num_panos: a.num_panos || 0,
+                    alt_corte: a.alt_corte || 0, consumo_linear: a.consumo_linear || 0,
+                    total_material: a.total_material || 0
+                }]
+            };
+        });
+    }
     if (ped.tecidoId || ped.largura) {
         return [{
             id: 1, calculado: true,
             amb: ped.amb || '', prega: ped.prega || 'Americana', fixacao: ped.fixacao || 'Trilho Suico',
             largura: ped.largura || 0, altura: ped.altura || 0, fator: ped.fator || 2.5,
             bainha_cm: ped.bainha_cm || 15, cabecote_cm: ped.cabecote_cm || 10,
-            tecidoId: ped.tecidoId, tecidoNome: ped.tecidoNome || '',
-            largura_rolo: ped.largura_rolo || 2.80, rapport_cm: ped.rapport_cm || 0,
-            acrescimo_rapport_m: ped.acrescimo_rapport_m || 0, num_panos: ped.num_panos || 0,
-            alt_corte: ped.alt_corte || 0, consumo_linear: ped.consumo_linear || 0,
-            total_material: ped.total_material || Math.max(0, (ped.valor || 0) - (ped.maoObra || 0))
+            tecidos: [{
+                tecidoId: ped.tecidoId, tecidoNome: ped.tecidoNome || '',
+                largura_rolo: ped.largura_rolo || 2.80, rapport_cm: ped.rapport_cm || 0,
+                acrescimo_rapport_m: ped.acrescimo_rapport_m || 0, num_panos: ped.num_panos || 0,
+                alt_corte: ped.alt_corte || 0, consumo_linear: ped.consumo_linear || 0,
+                total_material: ped.total_material || Math.max(0, (ped.valor || 0) - (ped.maoObra || 0))
+            }]
         }];
     }
     return [];
@@ -317,23 +346,24 @@ function realizarBaixaEstoque(ped) {
     const ambientes = normalizarAmbientes(ped);
     const pedRef = ped.id ? `Pedido #${String(ped.id).slice(-6)}` : 'Pedido';
 
-    // Baixa de tecido (FIFO por data de entrada)
     for (const a of ambientes) {
-        if (!a.tecidoId || !(a.consumo_linear > 0)) continue;
-        let restante = a.consumo_linear;
-        let totalBaixado = 0;
-        const rolos = db.estoque
-            .filter(r => r.tecido_id == a.tecidoId && r.metragem_atual > 0)
-            .sort((x, y) => x.id - y.id);
-        for (const r of rolos) {
-            if (restante <= 0) break;
-            const baixar = Math.min(r.metragem_atual, restante);
-            r.metragem_atual = Math.round((r.metragem_atual - baixar) * 1000) / 1000;
-            restante         = Math.round((restante - baixar)          * 1000) / 1000;
-            totalBaixado    += baixar;
+        for (const t of (a.tecidos || [])) {
+            if (!t.tecidoId || !(t.consumo_linear > 0)) continue;
+            let restante = t.consumo_linear;
+            let totalBaixado = 0;
+            const rolos = db.estoque
+                .filter(r => r.tecido_id == t.tecidoId && r.metragem_atual > 0)
+                .sort((x, y) => x.id - y.id);
+            for (const r of rolos) {
+                if (restante <= 0) break;
+                const baixar = Math.min(r.metragem_atual, restante);
+                r.metragem_atual = Math.round((r.metragem_atual - baixar) * 1000) / 1000;
+                restante         = Math.round((restante - baixar)          * 1000) / 1000;
+                totalBaixado    += baixar;
+            }
+            if (totalBaixado > 0)
+                registrarMovimento('Baixa Pedido', t.tecidoNome || 'Tecido', 'tecido', totalBaixado, 'm', pedRef);
         }
-        if (totalBaixado > 0)
-            registrarMovimento('Baixa Pedido', a.tecidoNome || 'Tecido', 'tecido', totalBaixado, 'm', pedRef);
     }
 
     // Baixa de materiais/acessórios
@@ -527,7 +557,14 @@ function renderDashboard() {
     const statusFiltro = document.getElementById('filtro-status')?.value || '';
 
     let pedidos = db.pedidos.map(p => ({ ...p, _status: normalizarStatus(p.status) }));
-    if (texto)       pedidos = pedidos.filter(p => String(p.id).slice(-6).includes(texto) || p.clienteNome.toLowerCase().includes(texto) || (p.amb || '').toLowerCase().includes(texto));
+    if (texto)       pedidos = pedidos.filter(p => {
+        const cpfBusca = texto.replace(/\D/g,'');
+        const cli = cpfBusca.length >= 3 ? db.clientes.find(c => c.id == p.clienteId) : null;
+        return String(p.id).slice(-6).includes(texto)
+            || p.clienteNome.toLowerCase().includes(texto)
+            || (p.amb || '').toLowerCase().includes(texto)
+            || (cli && cli.cpf && cli.cpf.replace(/\D/g,'').includes(cpfBusca));
+    });
     if (statusFiltro === 'em_producao') {
         pedidos = pedidos.filter(p => p._status !== 'Orçamento' && p._status !== 'Instalado');
     } else if (statusFiltro === 'atrasados') {
@@ -575,18 +612,18 @@ function renderDashboard() {
             ? `<span class="${entregaInf.cls}">${entregaInf.label}</span>`
             : `<span style="color:#9ca3af;font-size:12px">—</span>`;
         return `<tr>
-            <td>#${String(p.id).slice(-6)}</td>
+            <td><span style="cursor:pointer;color:var(--primary);font-weight:bold;text-decoration:underline" onclick="editarPedido(${p.id})" title="Editar pedido">#${String(p.id).slice(-6)}</span></td>
             <td>${escapeHtml(p.clienteNome||'')}</td>
             <td>${escapeHtml(p.amb||'')}</td>
             <td>R$ ${p.valor.toFixed(2)}${pagBadge}</td>
             <td>${entregaCell}</td>
             <td><span class="status-tag ${colorClass}">${p._status}</span> ${baixaTag}</td>
             <td>
-                <button class="btn btn-outline btn-sm" onclick="gerarProposta(${p.id})">📄</button>
-                <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})">📋</button>
+                <button class="btn btn-outline btn-sm" onclick="gerarProposta(${p.id})" title="Gerar proposta PDF">📄</button>
+                <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})" title="Ver Ordem de Serviço">📋</button>
                 ${btnAprovar}
-                <button class="btn btn-outline btn-sm" onclick="editarPedido(${p.id})">✏️</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirPedido(${p.id})">🗑️</button>
+                <button class="btn btn-outline btn-sm" onclick="editarPedido(${p.id})" title="Editar pedido">✏️</button>
+                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirPedido(${p.id})" title="Excluir pedido">🗑️</button>
             </td>
         </tr>`;
     }).join('');
@@ -628,17 +665,26 @@ function verificarConflitoDeLote(tecidoId, metrosNecessarios) {
 
 // --- ESTOQUE DE TECIDO: CRUD ---
 function salvarEntradaEstoque() {
-    const tecidoId = parseInt(document.getElementById('est-tecido').value);
-    const lote     = document.getElementById('est-lote').value.trim();
-    const metros   = parseFloat(document.getElementById('est-metros').value);
-    const data     = document.getElementById('est-data').value;
-    if (!tecidoId)           return alert('Selecione o tecido.');
-    if (!lote)               return alert('Informe o número do lote/banho.');
+    const referencia = document.getElementById('est-lote').value.trim();
+    const tecidoId   = parseInt(document.getElementById('est-tecido').value);
+    const metros     = parseFloat(document.getElementById('est-metros').value);
+    const data       = document.getElementById('est-data').value;
+    if (!referencia)            return alert('Informe a referência do rolo.');
+    if (!tecidoId)              return alert('Selecione o tecido.');
     if (!metros || metros <= 0) return alert('Informe a metragem do rolo.');
-    db.estoque.push({ id: Date.now(), tecido_id: tecidoId, lote, metragem_inicial: metros, metragem_atual: metros, data_entrada: data });
+    db.estoque.push({ id: Date.now(), tecido_id: tecidoId, lote: referencia, metragem_inicial: metros, metragem_atual: metros, data_entrada: data });
     const nomeTec = db.catalogo.find(t => t.id === tecidoId)?.nome || 'Tecido';
-    registrarMovimento('Entrada', `${nomeTec} — Lote ${lote}`, 'tecido', metros, 'm', lote);
+    registrarMovimento('Entrada', `${nomeTec} — Ref. ${referencia}`, 'tecido', metros, 'm', referencia);
     salvarERecarregar('Entrada registrada!');
+}
+
+function autoFillTecidoPorReferencia() {
+    const ref = document.getElementById('est-lote')?.value.trim();
+    if (!ref || ref.length < 2) return;
+    const existing = db.estoque.find(r => r.lote && r.lote.toLowerCase() === ref.toLowerCase());
+    if (!existing) return;
+    const sel = document.getElementById('est-tecido');
+    if (sel) sel.value = String(existing.tecido_id);
 }
 
 function mostrarBaixaForm(roloId) {
@@ -657,7 +703,7 @@ function confirmarBaixa(roloId) {
     if (qtd > rolo.metragem_atual) return alert(`Quantidade maior que o saldo disponível (${rolo.metragem_atual.toFixed(3)} m).`);
     rolo.metragem_atual = Math.round((rolo.metragem_atual - qtd) * 1000) / 1000;
     const nomeTecBaixa = db.catalogo.find(t => t.id === rolo.tecido_id)?.nome || 'Tecido';
-    registrarMovimento('Baixa Manual', `${nomeTecBaixa} — Lote ${rolo.lote}`, 'tecido', qtd, 'm', '');
+    registrarMovimento('Baixa Manual', `${nomeTecBaixa} — Ref. ${rolo.lote}`, 'tecido', qtd, 'm', '');
     salvarERecarregar('Baixa de estoque registrada!');
 }
 function removerRolo(id) {
@@ -710,7 +756,7 @@ function renderEstoque() {
             </tr>
             <tr id="baixa-${r.id}" class="baixa-form" style="display:none">
                 <td colspan="6" class="baixa-form-cell">
-                    <strong>Baixar do lote ${r.lote}</strong> — saldo: <strong>${r.metragem_atual.toFixed(3)} m</strong> &emsp;
+                    <strong>Baixar ref. ${r.lote}</strong> — saldo: <strong>${r.metragem_atual.toFixed(3)} m</strong> &emsp;
                     <input type="number" id="baixa-qtd-${r.id}" placeholder="Metros a baixar" step="0.001" min="0.001" max="${r.metragem_atual}" style="width:160px;padding:5px 8px;border:1px solid #ccc;border-radius:4px">
                     <button class="btn btn-sm" style="background:#d97706" onclick="confirmarBaixa(${r.id})">Confirmar Baixa</button>
                     <button class="btn btn-outline btn-sm" onclick="cancelarBaixa()">Cancelar</button>
@@ -806,9 +852,9 @@ function renderMateriais() {
             </td>
             <td style="font-size:12px;color:#555">${escapeHtml(m.fornecedor_nome || '—')}</td>
             <td>
-                <button class="btn btn-outline btn-sm" onclick="mostrarAjusteForm(${m.id})">± Ajustar</button>
+                <button class="btn btn-outline btn-sm" onclick="mostrarAjusteForm(${m.id})" title="Ajustar estoque">± Ajustar</button>
                 <button class="btn btn-outline btn-sm" onclick="pedirMaterial(${m.id})" title="Criar pedido de compra">🛒</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirMaterial(${m.id})">🗑️</button>
+                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirMaterial(${m.id})" title="Excluir material">🗑️</button>
             </td>
         </tr>
         <tr id="ajuste-${m.id}" class="ajuste-form" style="display:none">
@@ -946,58 +992,100 @@ let pedidoDraft = { ambientes: [], itens: [] };
 let _ambienteCounter = 0;
 
 function onPregaAmbiente(id) {
-    const fatoresSugeridos = { 'Wave': '2.0', 'Americana': '2.5', 'Macho-Femea': '2.0', 'Painel': '1.0' };
+    const fatoresSugeridos = {
+        'Americana': '2.5', 'Americana-Tradicional': '2.5', 'Franzido': '2.5',
+        'Wave': '2.0', 'Wave Botao': '2.0', 'Wave Plus': '2.0',
+        'Macho-Femea': '2.0', 'Painel': '1.5'
+    };
     const prega = document.getElementById(`a-prega-${id}`)?.value;
     const fatorEl = document.getElementById(`a-fator-${id}`);
     if (fatorEl && prega) fatorEl.value = fatoresSugeridos[prega] || '2.5';
 }
 
 function renderAmbienteBreakdown(a) {
-    const dispTotal   = estoqueDisponivel(a.tecidoId);
-    const temConflito = verificarConflitoDeLote(a.tecidoId, a.consumo_linear);
-    const stockColor  = dispTotal >= a.consumo_linear ? '#059669' : '#dc2626';
-    const alt_bruta   = (a.altura || 0) + (a.bainha_cm || 15) / 100 + (a.cabecote_cm || 10) / 100;
-    return `
-        <div class="breakdown-box" style="margin-top:15px">
-            <div class="breakdown-row"><span class="label">Largura total tecido (vão × fator)</span><span><strong>${((a.largura||0)*(a.fator||1)).toFixed(2)}</strong> m</span></div>
-            <div class="breakdown-row"><span class="label">Largura do rolo do tecido</span><span><strong>${(a.largura_rolo||2.80).toFixed(2)}</strong> m</span></div>
-            <div class="breakdown-row"><span class="label">Número de panos necessários</span><span><strong>${a.num_panos}</strong> pano(s)</span></div>
-            <div class="breakdown-row"><span class="label">Altura bruta (vão + bainha + cabeçote)</span><span><strong>${alt_bruta.toFixed(3)}</strong> m</span></div>
-            ${a.rapport_cm > 0 ? `<div class="breakdown-row"><span class="label">Acréscimo por rapport</span><span>+ <strong>${((a.acrescimo_rapport_m||0)*100).toFixed(1)}</strong> cm/pano</span></div>` : ''}
-            <div class="breakdown-row"><span class="label">Altura de corte por pano (final)</span><span><strong>${(a.alt_corte||0).toFixed(3)}</strong> m</span></div>
-            <div class="breakdown-row destaque"><span>Consumo total</span><span><strong>${(a.consumo_linear||0).toFixed(2)}</strong> m lineares</span></div>
-            <div class="breakdown-row"><span class="label">Estoque disponível</span><span style="color:${stockColor}"><strong>${dispTotal.toFixed(2)} m</strong></span></div>
-            <div class="breakdown-row"><span class="label">Total de materiais</span><span>R$ <strong>${(a.total_material||0).toFixed(2)}</strong></span></div>
-        </div>
-        ${temConflito ? `<div class="alerta-lote-pedido" style="display:flex;margin-top:8px">⚠ <strong style="margin:0 4px">Atenção:</strong> consumo pode exigir lotes/banhos diferentes — risco de variação de tonalidade.</div>` : ''}`;
+    if (!a.calculado) return '';
+    const tecidos = a.tecidos || [];
+    if (!tecidos.length) return '';
+    const alt_bruta = (a.altura||0) + (a.bainha_cm||15)/100 + (a.cabecote_cm||10)/100;
+    const totalMat = tecidos.reduce((s,t)=>s+(t.total_material||0),0);
+    const parts = tecidos.map((t, tidx) => {
+        if (!t.tecidoId) return '';
+        const disp = estoqueDisponivel(t.tecidoId);
+        const stockColor = disp < (t.consumo_linear||0) ? '#dc2626' : '#059669';
+        const temConflito = verificarConflitoDeLote(t.tecidoId, t.consumo_linear||0);
+        const titulo = tecidos.length > 1 ? `<div class="breakdown-row" style="font-weight:bold;color:var(--primary);padding-bottom:6px;border-bottom:1px solid #dde">Tecido ${tidx+1}: ${escapeHtml(t.tecidoNome||'')}</div>` : '';
+        return `<div class="breakdown-box" style="margin-top:10px">
+            ${titulo}
+            <div class="breakdown-row"><span class="label">Largura total (parede × fator)</span><span><strong>${((a.largura||0)*(a.fator||1)).toFixed(2)}</strong> m</span></div>
+            <div class="breakdown-row"><span class="label">Largura do rolo</span><span><strong>${(t.largura_rolo||2.80).toFixed(2)}</strong> m</span></div>
+            <div class="breakdown-row"><span class="label">Número de panos</span><span><strong>${t.num_panos}</strong> pano(s)</span></div>
+            <div class="breakdown-row"><span class="label">Altura bruta (parede + barra + cabeçote)</span><span><strong>${alt_bruta.toFixed(3)}</strong> m</span></div>
+            ${t.rapport_cm > 0 ? `<div class="breakdown-row"><span class="label">Acréscimo por rapport</span><span>+ <strong>${((t.acrescimo_rapport_m||0)*100).toFixed(1)}</strong> cm/pano</span></div>` : ''}
+            <div class="breakdown-row"><span class="label">Altura de corte por pano</span><span><strong>${(t.alt_corte||0).toFixed(3)}</strong> m</span></div>
+            <div class="breakdown-row destaque"><span>Consumo total</span><span><strong>${(t.consumo_linear||0).toFixed(2)}</strong> m lineares</span></div>
+            <div class="breakdown-row"><span class="label">Estoque disponível</span><span style="color:${stockColor}"><strong>${disp.toFixed(2)} m</strong></span></div>
+            <div class="breakdown-row"><span class="label">Valor do tecido</span><span>R$ <strong>${(t.total_material||0).toFixed(2)}</strong></span></div>
+            ${temConflito ? `<div class="alerta-lote-pedido" style="display:flex;margin-top:4px">⚠ <strong style="margin:0 4px">Atenção:</strong> pode exigir múltiplos lotes — risco de variação de tonalidade.</div>` : ''}
+        </div>`;
+    }).join('');
+    const totalRow = tecidos.length > 1 ? `<div class="breakdown-box" style="margin-top:6px"><div class="breakdown-row destaque"><span>Total combinado (${tecidos.length} tecidos)</span><span>R$ <strong>${totalMat.toFixed(2)}</strong></span></div></div>` : '';
+    return parts + totalRow;
 }
 
 function renderAmbientes() {
     const container = document.getElementById('ambientes-container');
     if (!container) return;
-    const FATORES = ['1.0','1.5','2.0','2.5','3.0'];
+    const FATORES = ['1.0','1.5','2.0','2.5','3.0','3.5','4.0'];
     container.innerHTML = pedidoDraft.ambientes.map((a, idx) => {
         const n = idx + 1;
         const pregaOpts = [
-            {v:'Americana',l:'Americana (fator 2.5x)'},{v:'Wave',l:'Wave (fator 2.0x)'},
-            {v:'Macho-Femea',l:'Macho-Fêmea (fator 2.0x)'},{v:'Painel',l:'Painel / Sem Prega (fator 1.0x)'}
+            {v:'Americana',l:'Prega Americana (2.5x)'},
+            {v:'Americana-Tradicional',l:'Americana Tradicional (2.5x)'},
+            {v:'Wave',l:'Wave (2.0x)'},
+            {v:'Wave Botao',l:'Wave Botão (2.0x)'},
+            {v:'Wave Plus',l:'Wave Plus/Flex (2.0x)'},
+            {v:'Franzido',l:'Franzido (2.5x)'},
+            {v:'Macho-Femea',l:'Prega Macho-Fêmea (2.0x)'},
+            {v:'Painel',l:'Painel / Sem Prega (1.5x)'}
         ].map(o=>`<option value="${o.v}"${a.prega===o.v?' selected':''}>${o.l}</option>`).join('');
         const fixacaoOpts = [
-            {v:'Trilho Suico',l:'Trilho Suíço'},{v:'Tubo/Varao',l:'Tubo / Varão'},
-            {v:'Trilho Binet',l:'Trilho Binet'},{v:'Sobrepor',l:'Sobrepor (Grampo)'}
+            {v:'Trilho Suico',l:'Trilho Suíço'},
+            {v:'Trilho Motorizado',l:'Trilho Motorizado'},
+            {v:'Varao Aluminio Comum',l:'Varão Alumínio Comum'},
+            {v:'Varao Aluminio Ilhos',l:'Varão Alumínio (Ilhós)'},
+            {v:'Varao Suico Wave',l:'Varão Suíço/Wave'},
+            {v:'Trilho Binet',l:'Trilho Binet'},
+            {v:'Sobrepor',l:'Sobrepor (Grampo)'},
+            {v:'Tubo/Varao',l:'Tubo / Varão'}
         ].map(o=>`<option value="${o.v}"${a.fixacao===o.v?' selected':''}>${o.l}</option>`).join('');
         const fatorOpts = FATORES.map(f=>`<option value="${f}"${String(a.fator||2.5)===f?' selected':''}>${f}x</option>`).join('');
-        const tecOpts = '<option value="">— Selecione o Tecido —</option>' + db.catalogo.map(c => {
+        const tecidos = a.tecidos || [];
+        const buildTecOpts = (selId) => '<option value="">— Selecione o Tecido —</option>' + db.catalogo.map(c => {
             const disp = estoqueDisponivel(c.id);
-            const stockInfo = db.estoque.some(r=>r.tecido_id==c.id) ? ` · estoque: ${disp.toFixed(1)} m` : '';
-            return `<option value="${c.id}"${a.tecidoId==c.id?' selected':''}>${c.nome} — R$ ${c.preco.toFixed(2)}/m (rolo ${(c.largura_rolo||2.80).toFixed(2)}m${c.rapport?', rapport '+c.rapport+'cm':''}${stockInfo})</option>`;
+            const stockInfo = db.estoque.some(r=>r.tecido_id==c.id) ? ` · est: ${disp.toFixed(1)} m` : '';
+            return `<option value="${c.id}"${selId==c.id?' selected':''}>${c.nome}${c.referencia?' ['+c.referencia+']':''} — R$ ${c.preco.toFixed(2)}/m${stockInfo}</option>`;
         }).join('');
-        const removeBtn = pedidoDraft.ambientes.length > 1
-            ? `<button class="btn btn-outline btn-sm btn-danger" onclick="removerAmbiente(${a.id})">Remover</button>` : '';
+        const tecidosHTML = tecidos.map((t, tidx) => {
+            const removeBtn = tecidos.length > 1
+                ? `<button class="btn btn-outline btn-sm btn-danger" onclick="removerTecidoDoAmbiente(${a.id},${tidx})" title="Remover este tecido" style="flex-shrink:0">×</button>`
+                : '';
+            return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+                <div class="form-group" style="flex:1;margin:0">
+                    <label>${tecidos.length > 1 ? 'Tecido '+(tidx+1) : 'Tecido'}</label>
+                    <select id="a-tecido-${a.id}-${tidx}">${buildTecOpts(t.tecidoId)}</select>
+                </div>
+                ${removeBtn}
+            </div>`;
+        }).join('');
+        const addTecBtn = tecidos.length < 3
+            ? `<button class="btn btn-outline btn-sm" onclick="adicionarTecidoAoAmbiente(${a.id})" style="margin-bottom:10px;font-size:12px">+ Adicionar Tecido</button>`
+            : '';
+        const removeAmb = pedidoDraft.ambientes.length > 1
+            ? `<button class="btn btn-outline btn-sm btn-danger" onclick="removerAmbiente(${a.id})" title="Remover ambiente">Remover</button>` : '';
         return `
 <div class="card ambiente-card" id="amb-card-${a.id}">
     <div class="ambiente-card-header">
-        <h4 style="margin:0;color:var(--primary)">Ambiente ${n}</h4>${removeBtn}
+        <h4 style="margin:0;color:var(--primary)">Ambiente ${n}</h4>${removeAmb}
     </div>
     <div class="grid" style="margin-top:15px">
         <div class="form-group" style="grid-column:1/-1"><label>Nome do Ambiente</label>
@@ -1005,18 +1093,17 @@ function renderAmbientes() {
     </div>
     <div class="grid">
         <div class="form-group"><label>Tipo de Prega</label><select id="a-prega-${a.id}" onchange="onPregaAmbiente(${a.id})">${pregaOpts}</select></div>
-        <div class="form-group"><label>Modelo de Fixação</label><select id="a-fixacao-${a.id}">${fixacaoOpts}</select></div>
         <div class="form-group"><label>Fator de Franzimento <span class="info-tag">auto</span></label><select id="a-fator-${a.id}">${fatorOpts}</select></div>
+        <div class="form-group"><label>Material de Instalação</label><select id="a-fixacao-${a.id}">${fixacaoOpts}</select></div>
     </div>
     <div class="grid">
-        <div class="form-group"><label>Largura do Vão (m)</label><input type="number" id="a-larg-${a.id}" value="${a.largura||''}" placeholder="Ex: 2.40" step="0.01"></div>
-        <div class="form-group"><label>Altura do Vão (m)</label><input type="number" id="a-alt-${a.id}" value="${a.altura||''}" placeholder="Ex: 2.60" step="0.01"></div>
-        <div class="form-group"><label>Bainha Inferior (cm) <span class="info-tag">padrão: 15</span></label><input type="number" id="a-bainha-${a.id}" value="${a.bainha_cm||15}" step="1"></div>
-        <div class="form-group"><label>Cabeçote (cm) <span class="info-tag">padrão: 10</span></label><input type="number" id="a-cabecote-${a.id}" value="${a.cabecote_cm||10}" step="1"></div>
+        <div class="form-group"><label>Largura da Parede (m)</label><input type="number" id="a-larg-${a.id}" value="${a.largura||''}" placeholder="Ex: 2.40" step="0.01"></div>
+        <div class="form-group"><label>Altura da Parede (m)</label><input type="number" id="a-alt-${a.id}" value="${a.altura||''}" placeholder="Ex: 2.60" step="0.01"></div>
+        <div class="form-group"><label>Barra (cm) <span class="info-tag">padrão: 15</span></label><input type="number" id="a-bainha-${a.id}" value="${a.bainha_cm||15}" step="1"></div>
+        <div class="form-group"><label>Cabeçote/Entretela (cm) <span class="info-tag">padrão: 10</span></label><input type="number" id="a-cabecote-${a.id}" value="${a.cabecote_cm||10}" step="1"></div>
     </div>
-    <div class="grid">
-        <div class="form-group" style="grid-column:1/-1"><label>Tecido</label><select id="a-tecido-${a.id}">${tecOpts}</select></div>
-    </div>
+    ${tecidosHTML}
+    ${addTecBtn}
     <div style="text-align:right;margin-top:5px">
         <button class="btn" onclick="calcularAmbiente(${a.id})">Calcular Consumo &rarr;</button>
     </div>
@@ -1030,10 +1117,27 @@ function adicionarAmbiente() {
     pedidoDraft.ambientes.push({
         id: _ambienteCounter, calculado: false, amb: '', prega: 'Americana', fixacao: 'Trilho Suico',
         largura: null, altura: null, fator: 2.5, bainha_cm: 15, cabecote_cm: 10,
-        tecidoId: null, tecidoNome: '', largura_rolo: 2.80, rapport_cm: 0,
-        acrescimo_rapport_m: 0, num_panos: 0, alt_corte: 0, consumo_linear: 0, total_material: 0
+        tecidos: [{ tecidoId: null, tecidoNome: '', largura_rolo: 2.80, rapport_cm: 0, acrescimo_rapport_m: 0, num_panos: 0, alt_corte: 0, consumo_linear: 0, total_material: 0 }],
+        total_material: 0
     });
     renderAmbientes();
+}
+
+function adicionarTecidoAoAmbiente(ambId) {
+    const a = pedidoDraft.ambientes.find(x => x.id === ambId);
+    if (!a || (a.tecidos || []).length >= 3) return;
+    if (!a.tecidos) a.tecidos = [];
+    a.tecidos.push({ tecidoId: null, tecidoNome: '', largura_rolo: 2.80, rapport_cm: 0, acrescimo_rapport_m: 0, num_panos: 0, alt_corte: 0, consumo_linear: 0, total_material: 0 });
+    a.calculado = false;
+    renderAmbientes();
+}
+
+function removerTecidoDoAmbiente(ambId, tidx) {
+    const a = pedidoDraft.ambientes.find(x => x.id === ambId);
+    if (!a || !a.tecidos || a.tecidos.length <= 1) return;
+    a.tecidos.splice(tidx, 1);
+    a.calculado = false;
+    renderAmbientes(); atualizarTotalPedido();
 }
 
 function removerAmbiente(id) {
@@ -1049,29 +1153,40 @@ function calcularAmbiente(id) {
     const fator      = parseFloat(document.getElementById(`a-fator-${id}`)?.value);
     const bainha_cm  = parseFloat(document.getElementById(`a-bainha-${id}`)?.value) || 15;
     const cabecote_cm = parseFloat(document.getElementById(`a-cabecote-${id}`)?.value) || 10;
-    const tecidoId   = document.getElementById(`a-tecido-${id}`)?.value;
-    if (!larg || larg <= 0) return alert('Informe a largura do vão.');
-    if (!alt  || alt  <= 0) return alert('Informe a altura do vão.');
-    if (!fator || fator <= 0) return alert('Informe um fator de enfolamento válido (ex: 2.0).');
-    if (!tecidoId)           return alert('Selecione um tecido.');
-    const tecido = db.catalogo.find(t => t.id == tecidoId);
-    if (!tecido) return;
+    if (!larg || larg <= 0) return alert('Informe a largura da parede.');
+    if (!alt  || alt  <= 0) return alert('Informe a altura da parede.');
+    if (!fator || fator <= 0) return alert('Informe um fator de franzimento válido (ex: 2.0).');
     a.amb = document.getElementById(`a-amb-${id}`)?.value.trim() || '';
     a.prega = document.getElementById(`a-prega-${id}`)?.value || 'Americana';
     a.fixacao = document.getElementById(`a-fixacao-${id}`)?.value || 'Trilho Suico';
     a.fator = fator; a.largura = larg; a.altura = alt; a.bainha_cm = bainha_cm; a.cabecote_cm = cabecote_cm;
-    a.tecidoId = tecido.id; a.tecidoNome = tecido.nome; a.largura_rolo = tecido.largura_rolo || 2.80; a.rapport_cm = tecido.rapport || 0;
     const alt_bruta = alt + bainha_cm / 100 + cabecote_cm / 100;
-    let acrescimo_rapport_m = 0, alt_corte = alt_bruta;
-    if (a.rapport_cm > 0) {
-        const rapport_m = a.rapport_cm / 100;
-        alt_corte = Math.ceil(alt_bruta / rapport_m) * rapport_m;
-        acrescimo_rapport_m = alt_corte - alt_bruta;
+    const tecidos = a.tecidos || [];
+    if (!tecidos.length) return alert('Adicione pelo menos um tecido ao ambiente.');
+    let totalMat = 0;
+    for (let tidx = 0; tidx < tecidos.length; tidx++) {
+        const tecidoId = document.getElementById(`a-tecido-${id}-${tidx}`)?.value;
+        if (!tecidoId) return alert(`Selecione o tecido${tecidos.length > 1 ? ' '+(tidx+1) : ''} do ambiente.`);
+        const tecido = db.catalogo.find(t => t.id == tecidoId);
+        if (!tecido) return;
+        const t = tecidos[tidx];
+        t.tecidoId = tecido.id; t.tecidoNome = tecido.nome;
+        t.largura_rolo = tecido.largura_rolo || 2.80; t.rapport_cm = tecido.rapport || 0;
+        let acrescimo_rapport_m = 0, alt_corte = alt_bruta;
+        if (t.rapport_cm > 0) {
+            const rapport_m = t.rapport_cm / 100;
+            alt_corte = Math.ceil(alt_bruta / rapport_m) * rapport_m;
+            acrescimo_rapport_m = alt_corte - alt_bruta;
+        }
+        const num_panos = Math.ceil((larg * fator) / t.largura_rolo);
+        const consumo_linear = num_panos * alt_corte;
+        t.acrescimo_rapport_m = acrescimo_rapport_m; t.alt_corte = alt_corte;
+        t.num_panos = num_panos; t.consumo_linear = consumo_linear;
+        t.total_material = consumo_linear * tecido.preco;
+        totalMat += t.total_material;
     }
-    const num_panos = Math.ceil((larg * fator) / a.largura_rolo);
-    const consumo_linear = num_panos * alt_corte;
-    a.acrescimo_rapport_m = acrescimo_rapport_m; a.alt_corte = alt_corte; a.num_panos = num_panos;
-    a.consumo_linear = consumo_linear; a.total_material = consumo_linear * tecido.preco; a.calculado = true;
+    a.total_material = totalMat;
+    a.calculado = true;
     renderAmbientes(); atualizarTotalPedido();
 }
 
@@ -1135,7 +1250,7 @@ function aplicarKit() {
 }
 
 function atualizarTotalPedido() {
-    const totalMat    = pedidoDraft.ambientes.filter(a=>a.calculado).reduce((s,a)=>s+(a.total_material||0),0);
+    const totalMat    = pedidoDraft.ambientes.filter(a=>a.calculado).reduce((s,a)=>s+(a.tecidos||[]).reduce((ts,t)=>ts+(t.total_material||0),0),0);
     const totalItens  = pedidoDraft.itens.reduce((s,i)=>s+(i.subtotal||0),0);
     const mao         = parseFloat(document.getElementById('ped-mao')?.value) || 0;
     const bruto       = totalMat + totalItens + mao;
@@ -1190,7 +1305,7 @@ function salvarPedido() {
     });
     const cliente         = db.clientes.find(c => c.id == clienteId);
     const maoObra         = parseFloat(document.getElementById('ped-mao')?.value) || 0;
-    const total_material   = pedidoDraft.ambientes.reduce((s,a)=>s+(a.total_material||0),0);
+    const total_material   = pedidoDraft.ambientes.reduce((s,a)=>s+(a.tecidos||[]).reduce((ts,t)=>ts+(t.total_material||0),0),0);
     const total_acessorios = pedidoDraft.itens.reduce((s,i)=>s+(i.subtotal||0),0);
     const bruto            = total_material + total_acessorios + maoObra;
     const desconto_pct     = parseFloat(document.getElementById('ped-desconto')?.value) || 0;
@@ -1263,7 +1378,10 @@ function carregarPedidoParaEdicao(id) {
     if (vendedorEl) vendedorEl.value = String(ped.vendedor_id || '');
     const ambientes = normalizarAmbientes(ped);
     _ambienteCounter = ambientes.length;
-    pedidoDraft.ambientes = ambientes.map((a, i) => ({ ...a, id: i + 1 }));
+    pedidoDraft.ambientes = ambientes.map((a, i) => ({
+        ...a, id: i + 1,
+        tecidos: (a.tecidos || []).map(t => ({...t}))
+    }));
     pedidoDraft.itens = (ped.itens || []).map(i => ({ ...i }));
     renderAmbientes(); renderItensPedido(); atualizarTotalPedido();
 }
@@ -1291,44 +1409,63 @@ function renderKanban() {
     board.innerHTML = COLUNAS.map(col => {
         const pedidosCol = db.pedidos.filter(p => normalizarStatus(p.status) === col.status);
         const idx = STATUS_PIPELINE.indexOf(col.status);
+        const isInstalado = col.status === 'Instalado';
         const cards = pedidosCol.length === 0 ? `<div class="kanban-empty">Nenhum pedido nesta etapa</div>`
             : pedidosCol.map(p => {
                 const dataRef      = p.data_producao || p.id;
                 const dias         = Math.floor((Date.now() - dataRef) / (1000 * 60 * 60 * 24));
                 const ambientes    = normalizarAmbientes(p);
-                const totalConsumo = ambientes.reduce((s,a)=>s+(a.consumo_linear||0),0);
-                const totalPanos   = ambientes.reduce((s,a)=>s+(a.num_panos||0),0);
-                const tecidoNomes  = [...new Set(ambientes.map(a=>a.tecidoNome).filter(Boolean))];
-                const pregaTipos   = [...new Set(ambientes.map(a=>a.prega).filter(Boolean))];
                 const podeVoltar   = idx > 1;
                 const podeAvancar  = idx < STATUS_PIPELINE.length - 1;
+                const obsBadge     = p.observacoes ? `<span title="${escapeHtml(p.observacoes)}" style="cursor:help;margin-left:4px">💬</span>` : '';
+                const cardAtrasado = statusEntrega(p)?.cls === 'badge-atrasado' ? ' kanban-card-atrasado' : '';
+                if (isInstalado) {
+                    const dataInst = p.data_instalado ? new Date(p.data_instalado).toLocaleDateString('pt-BR') : (dias + 'd atrás');
+                    return `<div class="kanban-card${cardAtrasado}" style="padding:8px 10px">
+                        <div class="kanban-card-top">
+                            <span class="kanban-card-id" style="cursor:pointer;text-decoration:underline" onclick="editarPedido(${p.id})" title="Editar pedido">#${String(p.id).slice(-6)}</span>
+                            <span class="kanban-card-age">${dataInst}</span>
+                        </div>
+                        <div class="kanban-card-cliente" style="font-size:13px">${escapeHtml(p.clienteNome||'')}${obsBadge}</div>
+                        <div style="font-size:12px;color:#6b7280">${escapeHtml(p.amb||'')}</div>
+                        <div class="kanban-card-actions" style="margin-top:6px">
+                            <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})" title="Ver Ordem de Serviço">📋 OS</button>
+                            ${podeVoltar ? `<button class="btn btn-outline btn-sm" onclick="moverStatus(${p.id},-1)" title="Voltar status">←</button>` : ''}
+                        </div>
+                    </div>`;
+                }
+                const totalConsumo = ambientes.reduce((s,a)=>s+(a.tecidos||[]).reduce((ts,t)=>ts+(t.consumo_linear||0),0),0);
+                const totalPanos   = ambientes.reduce((s,a)=>s+(a.tecidos||[]).reduce((ts,t)=>ts+(t.num_panos||0),0),0);
+                const tecidoNomes  = [...new Set(ambientes.flatMap(a=>(a.tecidos||[]).map(t=>t.tecidoNome).filter(Boolean)))];
+                const pregaTipos   = [...new Set(ambientes.map(a=>a.prega).filter(Boolean))];
                 let badgeEst = '';
                 for (const a of ambientes) {
-                    if (!a.tecidoId) continue;
-                    const disp = estoqueDisponivel(a.tecidoId);
-                    if (disp < (a.consumo_linear||0)) { badgeEst = `<span class="badge-sem-estoque">⚠ Sem estoque</span>`; break; }
-                    else if (!badgeEst && verificarConflitoDeLote(a.tecidoId, a.consumo_linear||0)) badgeEst = `<span class="badge-lote">⚠ Múltiplos lotes</span>`;
+                    for (const t of (a.tecidos||[])) {
+                        if (!t.tecidoId) continue;
+                        const disp = estoqueDisponivel(t.tecidoId);
+                        if (disp < (t.consumo_linear||0)) { badgeEst = `<span class="badge-sem-estoque">⚠ Sem estoque</span>`; break; }
+                        else if (!badgeEst && verificarConflitoDeLote(t.tecidoId, t.consumo_linear||0)) badgeEst = `<span class="badge-lote">⚠ Múltiplos lotes</span>`;
+                    }
+                    if (badgeEst.includes('Sem estoque')) break;
                 }
                 const badgeBaixa   = p.baixa_realizada ? `<span class="badge-baixa">✔ Baixa OK</span>` : '';
                 const entregaInf   = statusEntrega(p);
                 const entregaBadge = entregaInf ? `<span class="${entregaInf.cls}">${entregaInf.label}</span>` : '';
-                const obsBadge     = p.observacoes ? `<span title="${escapeHtml(p.observacoes)}" style="cursor:help;margin-left:4px">💬</span>` : '';
-                const cardAtrasado = entregaInf?.cls === 'badge-atrasado' ? ' kanban-card-atrasado' : '';
                 return `<div class="kanban-card${cardAtrasado}">
                     <div class="kanban-card-top">
-                        <span class="kanban-card-id">#${String(p.id).slice(-6)}</span>
+                        <span class="kanban-card-id" style="cursor:pointer;text-decoration:underline" onclick="editarPedido(${p.id})" title="Editar pedido">#${String(p.id).slice(-6)}</span>
                         <span class="kanban-card-age">${dias === 0 ? 'hoje' : dias + 'd'}</span>
                     </div>
-                    <div class="kanban-card-cliente">${p.clienteNome}${obsBadge}</div>
-                    <div class="kanban-card-amb">${p.amb}</div>
+                    <div class="kanban-card-cliente">${escapeHtml(p.clienteNome||'')}${obsBadge}</div>
+                    <div class="kanban-card-amb">${escapeHtml(p.amb||'')}</div>
                     ${entregaBadge ? `<div style="margin:3px 0 5px">${entregaBadge}</div>` : ''}
                     <div class="kanban-card-info">${pregaTipos.join(', ')||'—'} · ${tecidoNomes.join(', ')||'—'}<br>${totalPanos} pano(s) · ${totalConsumo.toFixed(2)} m</div>
                     ${badgeEst||badgeBaixa ? `<div style="margin-bottom:6px">${badgeEst}${badgeBaixa}</div>` : ''}
                     <div class="kanban-card-actions">
-                        <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})">📋 OS</button>
+                        <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})" title="Ver Ordem de Serviço">📋 OS</button>
                         <div style="display:flex;gap:4px">
-                            ${podeVoltar  ? `<button class="btn btn-outline btn-sm" onclick="moverStatus(${p.id},-1)">←</button>` : `<span class="kanban-nav-ph"></span>`}
-                            ${podeAvancar ? `<button class="btn btn-sm" onclick="moverStatus(${p.id},1)">→</button>` : ''}
+                            ${podeVoltar  ? `<button class="btn btn-outline btn-sm" onclick="moverStatus(${p.id},-1)" title="Voltar etapa">←</button>` : `<span class="kanban-nav-ph"></span>`}
+                            ${podeAvancar ? `<button class="btn btn-sm" onclick="moverStatus(${p.id},1)" title="Avançar etapa">→</button>` : ''}
                         </div>
                     </div>
                 </div>`;
@@ -1349,21 +1486,30 @@ function renderOS() {
     const ambientes = normalizarAmbientes(ped);
     const cliente   = db.clientes.find(c => c.id == ped.clienteId);
     const hoje      = new Date().toLocaleDateString('pt-BR');
-    const ambientesHTML = ambientes.map((a, idx) => `
+    const ambientesHTML = ambientes.map((a, idx) => {
+        const tecidos = a.tecidos || [];
+        const totalConsumo = tecidos.reduce((s,t)=>s+(t.consumo_linear||0),0);
+        const tecidoRows = tecidos.map((t, tidx) => {
+            const label = tecidos.length > 1 ? `Tecido ${tidx+1}` : 'Tecido';
+            return `<tr><td class="os-th">${label}</td><td><strong>${t.tecidoNome||'—'}</strong></td><td class="os-th">Rapport</td><td>${t.rapport_cm>0?t.rapport_cm+' cm':'Liso'}</td></tr>
+                <tr><td class="os-th">Panos</td><td>${t.num_panos||'—'}</td><td class="os-th">Alt. Corte</td><td>${t.alt_corte?t.alt_corte.toFixed(3):'—'} m</td></tr>
+                <tr><td class="os-th">Consumo</td><td colspan="3"><strong>${(t.consumo_linear||0).toFixed(2)} m lineares</strong></td></tr>`;
+        }).join('');
+        return `
         <div class="os-section">
             <div class="os-section-title">Ambiente ${idx+1}${a.amb ? ': '+a.amb : ''}</div>
             <table class="os-table">
-                <tr><td class="os-th">Tipo de Prega</td><td><strong>${a.prega||'—'}</strong></td><td class="os-th">Fixação</td><td><strong>${a.fixacao||'—'}</strong></td></tr>
-                <tr><td class="os-th">Tecido</td><td><strong>${a.tecidoNome||'—'}</strong></td><td class="os-th">Rapport</td><td>${a.rapport_cm>0?a.rapport_cm+' cm':'Liso'}</td></tr>
+                <tr><td class="os-th">Tipo de Prega</td><td><strong>${a.prega||'—'}</strong></td><td class="os-th">Mat. Instalação</td><td><strong>${a.fixacao||'—'}</strong></td></tr>
             </table>
             <table class="os-table" style="margin-top:8px">
-                <tr><td class="os-th">Largura do vão</td><td>${a.largura} m</td><td class="os-th">Altura do vão</td><td>${a.altura||'—'} m</td></tr>
+                <tr><td class="os-th">Largura da parede</td><td>${a.largura} m</td><td class="os-th">Altura da parede</td><td>${a.altura||'—'} m</td></tr>
                 <tr><td class="os-th">Fator franzimento</td><td>${a.fator}x</td><td class="os-th">Largura total</td><td>${((a.largura||0)*(a.fator||1)).toFixed(2)} m</td></tr>
-                <tr><td class="os-th">Bainha inferior</td><td>${a.bainha_cm||15} cm</td><td class="os-th">Cabeçote</td><td>${a.cabecote_cm||10} cm</td></tr>
-                ${a.rapport_cm>0?`<tr><td class="os-th">Acréscimo rapport</td><td>${((a.acrescimo_rapport_m||0)*100).toFixed(1)} cm/pano</td><td></td><td></td></tr>`:''}
+                <tr><td class="os-th">Barra</td><td>${a.bainha_cm||15} cm</td><td class="os-th">Cabeçote/Entretela</td><td>${a.cabecote_cm||10} cm</td></tr>
             </table>
-            <div class="os-destaque"><strong>${a.num_panos||'—'} pano(s)</strong> × <strong>${a.alt_corte?a.alt_corte.toFixed(3):'—'} m</strong> = <strong>${(a.consumo_linear||0).toFixed(2)} m lineares</strong></div>
-        </div>`).join('');
+            <table class="os-table" style="margin-top:8px">${tecidoRows}</table>
+            ${tecidos.length > 1 ? `<div class="os-destaque">Total: <strong>${totalConsumo.toFixed(2)} m lineares</strong> (${tecidos.length} tecidos)</div>` : ''}
+        </div>`;
+    }).join('');
     const itensHTML = ped.itens && ped.itens.length ? `
         <div class="os-section">
             <div class="os-section-title">Materiais e Acessórios</div>
@@ -1412,18 +1558,21 @@ function renderProposta() {
     const cliente      = db.clientes.find(c => c.id == ped.clienteId);
     const hoje         = new Date().toLocaleDateString('pt-BR');
     const validade     = new Date(Date.now() + 15*24*60*60*1000).toLocaleDateString('pt-BR');
-    const totalConsumo = ambientes.reduce((s,a)=>s+(a.consumo_linear||((a.largura||0)*(a.fator||1))),0);
+    const totalConsumo = ambientes.reduce((s,a)=>s+(a.tecidos||[]).reduce((ts,t)=>ts+(t.consumo_linear||0),0),0);
     const totalMat     = ped.total_material || ambientes.reduce((s,a)=>s+(a.total_material||0),0);
     const totalAcess   = ped.total_acessorios || 0;
     const ambRows = ambientes.map(a => {
-        const consumo  = a.consumo_linear || ((a.largura||0)*(a.fator||1));
-        const altCorte = a.alt_corte ? a.alt_corte.toFixed(3) : '—';
+        const tecidos = a.tecidos || [];
+        const consumoAmb = tecidos.reduce((s,t)=>s+(t.consumo_linear||0),0);
+        const totalMatAmb = tecidos.reduce((s,t)=>s+(t.total_material||0),0);
+        const descTecidos = tecidos.map(t => t.tecidoNome).filter(Boolean).join(' + ') || 'Tecido selecionado';
+        const primTec = tecidos[0] || {};
         return `<tr>
             <td><strong>${a.amb||'—'}</strong></td>
-            <td><strong>${a.prega?'Cortina Prega '+a.prega:'Cortina'}</strong> em ${a.tecidoNome||'Tecido selecionado'}${a.fixacao?' — '+a.fixacao:''}
-                <small>Vão: ${a.largura}m × ${a.altura||'—'}m | Fator: ${a.fator}x | ${a.num_panos||'—'} pano(s) de ${altCorte}m${a.rapport_cm>0?' | Rapport: '+a.rapport_cm+'cm':''}</small>
+            <td><strong>${a.prega?'Cortina '+a.prega:'Cortina'}</strong> em ${descTecidos}${a.fixacao?' — '+a.fixacao:''}
+                <small>Parede: ${a.largura}m × ${a.altura||'—'}m | Fator: ${a.fator}x | ${(primTec.num_panos||'—')} pano(s) de ${primTec.alt_corte?primTec.alt_corte.toFixed(3):'—'}m${tecidos.length>1?' | '+tecidos.length+' tecidos':''}</small>
             </td>
-            <td>${consumo.toFixed(2)} m</td><td>R$ ${(a.total_material||0).toFixed(2)}</td>
+            <td>${consumoAmb.toFixed(2)} m</td><td>R$ ${totalMatAmb.toFixed(2)}</td>
         </tr>`;
     }).join('');
     const acessRows = ped.itens && ped.itens.length ? ped.itens.map(i =>
@@ -1689,8 +1838,8 @@ function renderTabelaVendedores() {
             <td style="text-align:center">${pedidos.length}</td>
             <td>
                 ${pendente > 0.01 ? `<span class="badge-comissao-pendente">R$ ${pendente.toFixed(2)} pendente</span>` : '<span class="badge-comissao-paga">Em dia</span>'}
-                <button class="btn btn-outline btn-sm" onclick="editarVendedor(${v.id})" style="margin-left:6px">✏️</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirVendedor(${v.id})">🗑️</button>
+                <button class="btn btn-outline btn-sm" onclick="editarVendedor(${v.id})" style="margin-left:6px" title="Editar vendedor">✏️</button>
+                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirVendedor(${v.id})" title="Excluir vendedor">🗑️</button>
             </td>
         </tr>`;
     }).join('');
@@ -1872,8 +2021,8 @@ function renderTabelaFornecedores() {
             <td style="font-size:12px;color:#555">${vinc}</td>
             <td>
                 <button class="btn btn-outline btn-sm" onclick="criarPCParaFornecedor(${f.id})" title="Novo pedido de compra">🛒</button>
-                <button class="btn btn-outline btn-sm" onclick="editarFornecedor(${f.id})">✏️</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirFornecedor(${f.id})">🗑️</button>
+                <button class="btn btn-outline btn-sm" onclick="editarFornecedor(${f.id})" title="Editar fornecedor">✏️</button>
+                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirFornecedor(${f.id})" title="Excluir fornecedor">🗑️</button>
             </td>
         </tr>`;
     }).join('');
@@ -2170,6 +2319,18 @@ function renderAgenda() {
     }).join('');
 }
 
+// --- SIDEBAR COLLAPSE (PCP) ---
+function toggleSidebar() {
+    const sidebar = document.getElementById('main-sidebar');
+    if (!sidebar) return;
+    const isCollapsed = sidebar.classList.toggle('sidebar-collapsed');
+    const btn = document.getElementById('sidebar-toggle-btn');
+    if (btn) {
+        btn.title = isCollapsed ? 'Expandir sidebar' : 'Recolher sidebar';
+        btn.textContent = isCollapsed ? '→' : '← Recolher';
+    }
+}
+
 // --- PCP VIEW TOGGLE ---
 function mostrarViewPCP(view) {
     document.getElementById('pcp-view-kanban').style.display = view === 'kanban' ? '' : 'none';
@@ -2207,9 +2368,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const disp = estoqueDisponivel(c.id);
             const dispTxt = db.estoque.some(r=>r.tecido_id==c.id) ? `${disp.toFixed(2)} m` : '—';
             const alertMin = c.min_estoque>0&&disp<c.min_estoque ? `<span class="badge-alerta" style="margin-left:6px">⚠</span>` : '';
-            return `<tr><td>${c.nome}</td><td>R$ ${c.preco.toFixed(2)}</td><td>${(c.largura_rolo||2.80).toFixed(2)} m</td><td>${c.rapport?c.rapport+' cm':'—'}</td><td>${c.min_estoque?c.min_estoque+' m':'—'}</td><td>${dispTxt}${alertMin}</td><td style="font-size:12px;color:#555">${escapeHtml(c.fornecedor_nome||'—')}</td><td>
+            return `<tr><td>${escapeHtml(c.nome)}</td><td style="font-size:12px;color:#555">${escapeHtml(c.referencia||'—')}</td><td>R$ ${c.preco.toFixed(2)}</td><td>${(c.largura_rolo||2.80).toFixed(2)} m</td><td>${c.min_estoque?c.min_estoque+' m':'—'}</td><td>${dispTxt}${alertMin}</td><td style="font-size:12px;color:#555">${escapeHtml(c.fornecedor_nome||'—')}</td><td>
                 <button class="btn btn-outline btn-sm" onclick="pedirTecido(${c.id})" title="Criar pedido de compra">🛒</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirCatalogo(${c.id})">Remover</button>
+                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirCatalogo(${c.id})" title="Remover do catálogo">Remover</button>
             </td></tr>`;
         }).join('');
         document.getElementById('tb-catalogo').innerHTML = rows || '<tr><td colspan="8" style="text-align:center;color:#999;padding:20px;">Catálogo vazio.</td></tr>';
