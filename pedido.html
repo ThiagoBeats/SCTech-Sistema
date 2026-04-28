@@ -12,10 +12,11 @@
         <a href="pcp.html"      class="nav-item">🏭 <span class="nav-text">Produção</span></a>
         <a href="estoque.html"  class="nav-item">📦 <span class="nav-text">Estoque</span></a>
         <a href="clientes.html" class="nav-item">👥 <span class="nav-text">Clientes</span></a>
-        <a href="catalogo.html" class="nav-item">📚 <span class="nav-text">Catálogo</span></a>
+        <a href="catalogo.html" class="nav-item">📚 <span class="nav-text">Cadastro/Catálogo</span></a>
         <a href="relatorios.html" class="nav-item">📊 <span class="nav-text">Relatórios</span></a>
         <a href="vendedores.html" class="nav-item">👤 <span class="nav-text">Vendedores</span></a>
         <a href="fornecedores.html" class="nav-item">🏭 <span class="nav-text">Fornecedores</span></a>
+        <a href="financeiro.html"   class="nav-item">💰 <span class="nav-text">Financeiro</span></a>
         <div class="sidebar-footer">
             <div class="sidebar-user-info">
                 <span class="sidebar-user-name" id="sidebar-user-name">—</span>
@@ -120,7 +121,32 @@
             </div>
         </div>
 
-        <!-- SEÇÃO 4: RESUMO E SALVAR -->
+        <!-- SEÇÃO 4: PARCELAMENTO E COMISSÃO -->
+        <div class="card">
+            <h3 style="color: var(--primary); margin-bottom: 20px;">4. Parcelamento e Comissão (RT)</h3>
+            <div class="grid">
+                <div class="form-group">
+                    <label>Plano de Pagamento</label>
+                    <select id="ped-tipo-pagamento">
+                        <option value="50_50">50% Entrada + 50% na Instalação</option>
+                        <option value="avista">À Vista (100% na aprovação)</option>
+                        <option value="30_70">30% Entrada + 70% na Instalação</option>
+                        <option value="40_60">40% Entrada + 60% na Instalação</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Arquiteto / Designer Parceiro <span class="info-tag">RT</span></label>
+                    <input type="text" id="ped-arquiteto" placeholder="Nome do arquiteto ou designer">
+                </div>
+                <div class="form-group">
+                    <label>Comissão RT (%) <span class="info-tag">0 = sem comissão</span></label>
+                    <input type="number" id="ped-rt" value="0" step="0.5" min="0" max="20" placeholder="Ex: 10">
+                </div>
+            </div>
+            <p style="font-size:12px;color:#888;margin-top:4px">As parcelas são geradas automaticamente no módulo <a href="financeiro.html" style="color:var(--primary)">Financeiro</a> ao aprovar o pedido (status ≠ Orçamento). A RT só é lançada para pagamento após o cliente quitar 100% do pedido.</p>
+        </div>
+
+        <!-- SEÇÃO 5: RESUMO E SALVAR -->
         <div class="card">
             <div style="display: flex; justify-content: flex-end; align-items: center; gap: 24px; flex-wrap: wrap;">
                 <div style="text-align: right; font-size: 13px; color: #555; line-height: 2;">

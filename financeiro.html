@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Financeiro - SCTech</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <aside class="sidebar" id="main-sidebar">
+        <div class="logo"><div class="logo-box">SC</div><h2>SCTech</h2></div>
+        <a href="index.html"        class="nav-item">📋 <span class="nav-text">Página Inicial</span></a>
+        <a href="pcp.html"          class="nav-item">🏭 <span class="nav-text">Produção</span></a>
+        <a href="estoque.html"      class="nav-item">📦 <span class="nav-text">Estoque</span></a>
+        <a href="clientes.html"     class="nav-item">👥 <span class="nav-text">Clientes</span></a>
+        <a href="catalogo.html"     class="nav-item">📚 <span class="nav-text">Cadastro/Catálogo</span></a>
+        <a href="relatorios.html"   class="nav-item">📊 <span class="nav-text">Relatórios</span></a>
+        <a href="vendedores.html"   class="nav-item">👤 <span class="nav-text">Vendedores</span></a>
+        <a href="fornecedores.html" class="nav-item">🏭 <span class="nav-text">Fornecedores</span></a>
+        <a href="financeiro.html"   class="nav-item active">💰 <span class="nav-text">Financeiro</span></a>
+        <div class="sidebar-footer">
+            <div class="sidebar-user-info">
+                <span class="sidebar-user-name" id="sidebar-user-name">—</span>
+                <span class="sidebar-user-role">SCTech</span>
+            </div>
+            <button class="btn-logout" onclick="logout()">Sair</button>
+        </div>
+    </aside>
+    <main class="main">
+        <div class="header"><h2>Controle Financeiro</h2></div>
+
+        <div class="tab-nav">
+            <button class="tab-btn fin-tab-btn active" data-tab="dashboard" onclick="mostrarTabFinanceiro('dashboard')">📊 Visão Geral</button>
+            <button class="tab-btn fin-tab-btn"        data-tab="receber"   onclick="mostrarTabFinanceiro('receber')">📥 A Receber</button>
+            <button class="tab-btn fin-tab-btn"        data-tab="pagar"     onclick="mostrarTabFinanceiro('pagar')">📤 A Pagar</button>
+            <button class="tab-btn fin-tab-btn"        data-tab="fixas"     onclick="mostrarTabFinanceiro('fixas')">🔁 Despesas Fixas</button>
+            <button class="tab-btn fin-tab-btn"        data-tab="dre"       onclick="mostrarTabFinanceiro('dre')">📈 DRE por Pedido</button>
+        </div>
+
+        <!-- TAB: VISÃO GERAL -->
+        <div id="fin-dashboard" class="fin-panel active">
+            <div id="fin-kpis" class="fin-kpi-grid"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+                <div class="card">
+                    <h3 style="margin-bottom:14px">📥 Próximos Recebimentos</h3>
+                    <table>
+                        <thead><tr><th>Vencimento</th><th>Cliente</th><th>Descrição</th><th style="text-align:right">Valor</th><th>Status</th></tr></thead>
+                        <tbody id="fin-dash-receber"></tbody>
+                    </table>
+                </div>
+                <div class="card">
+                    <h3 style="margin-bottom:14px">📤 Próximos Pagamentos</h3>
+                    <table>
+                        <thead><tr><th>Vencimento</th><th>Credor</th><th>Descrição</th><th style="text-align:right">Valor</th><th>Status</th></tr></thead>
+                        <tbody id="fin-dash-pagar"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: A RECEBER -->
+        <div id="fin-receber" class="fin-panel">
+            <div class="card">
+                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+                    <div class="form-group" style="min-width:160px;margin-bottom:0">
+                        <label>Status</label>
+                        <select id="cr-filtro-status" onchange="renderContasReceber()">
+                            <option value="">Todos</option>
+                            <option>Pendente</option>
+                            <option>Atrasado</option>
+                            <option>Pago</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
+                        <label>Cliente / Descrição</label>
+                        <input type="text" id="cr-filtro-cliente" placeholder="Buscar…" oninput="renderContasReceber()">
+                    </div>
+                    <div id="cr-resumo" style="margin-bottom:0;display:flex;gap:16px;align-items:center;font-size:13px;flex-wrap:wrap"></div>
+                </div>
+                <table>
+                    <thead><tr>
+                        <th>Vencimento</th><th>Cliente</th><th>Descrição</th>
+                        <th style="text-align:right">Valor</th><th>Status</th><th>Ações</th>
+                    </tr></thead>
+                    <tbody id="tb-contas-receber"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: A PAGAR -->
+        <div id="fin-pagar" class="fin-panel">
+            <div class="card">
+                <h3 style="margin-bottom:16px">Lançar Conta a Pagar</h3>
+                <div class="grid">
+                    <div class="form-group" style="grid-column:span 2">
+                        <label>Descrição <span style="color:#dc2626">*</span></label>
+                        <input type="text" id="cp-nova-descricao" placeholder="Ex: Compra de tecido, salário costureira…">
+                    </div>
+                    <div class="form-group">
+                        <label>Credor / Fornecedor</label>
+                        <input type="text" id="cp-nova-credor" placeholder="Nome do credor">
+                    </div>
+                    <div class="form-group">
+                        <label>Valor (R$) <span style="color:#dc2626">*</span></label>
+                        <input type="number" id="cp-nova-valor" step="0.01" min="0" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Vencimento <span style="color:#dc2626">*</span></label>
+                        <input type="date" id="cp-nova-vencimento">
+                    </div>
+                    <div class="form-group">
+                        <label>Categoria</label>
+                        <select id="cp-nova-categoria">
+                            <option value="tecido">Tecido / Material</option>
+                            <option value="instalador">Instalador</option>
+                            <option value="costureira">Costureira</option>
+                            <option value="aluguel">Aluguel</option>
+                            <option value="salario">Salário</option>
+                            <option value="conta">Conta (luz, internet…)</option>
+                            <option value="comissao_rt">Comissão RT</option>
+                            <option value="outro">Outro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Vincular a Pedido</label>
+                        <select id="cp-nova-pedido"></select>
+                    </div>
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                    <button class="btn btn-success" onclick="adicionarContaPagarManual()">Lançar Conta a Pagar</button>
+                    <button class="btn btn-outline" onclick="gerarContasPagarDoMes()" title="Gera os lançamentos das despesas fixas para o mês atual">🔁 Gerar Despesas Fixas do Mês</button>
+                </div>
+            </div>
+            <div class="card">
+                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+                    <div class="form-group" style="min-width:150px;margin-bottom:0">
+                        <label>Tipo</label>
+                        <select id="cp-filtro-tipo" onchange="renderContasPagar()">
+                            <option value="">Todos</option>
+                            <option value="variavel">Variável</option>
+                            <option value="fixo">Fixo</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="min-width:150px;margin-bottom:0">
+                        <label>Status</label>
+                        <select id="cp-filtro-status" onchange="renderContasPagar()">
+                            <option value="">Todos</option>
+                            <option>Pendente</option>
+                            <option>Atrasado</option>
+                            <option>Pago</option>
+                        </select>
+                    </div>
+                    <div id="cp-resumo" style="margin-bottom:0;display:flex;gap:16px;align-items:center;font-size:13px;flex-wrap:wrap"></div>
+                </div>
+                <table>
+                    <thead><tr>
+                        <th>Vencimento</th><th>Descrição</th><th>Credor</th>
+                        <th style="text-align:right">Valor</th><th>Tipo</th><th>Status</th><th>Ações</th>
+                    </tr></thead>
+                    <tbody id="tb-contas-pagar"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: DESPESAS FIXAS -->
+        <div id="fin-fixas" class="fin-panel">
+            <div class="card">
+                <h3 style="margin-bottom:16px">Cadastrar Despesa Fixa Recorrente</h3>
+                <div class="grid">
+                    <div class="form-group" style="grid-column:span 2">
+                        <label>Descrição <span style="color:#dc2626">*</span></label>
+                        <input type="text" id="df-descricao" placeholder="Ex: Aluguel da loja, Internet, Salário fixo…">
+                    </div>
+                    <div class="form-group">
+                        <label>Valor Mensal (R$) <span style="color:#dc2626">*</span></label>
+                        <input type="number" id="df-valor" step="0.01" min="0" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Dia de Vencimento</label>
+                        <input type="number" id="df-dia" value="10" min="1" max="28">
+                    </div>
+                    <div class="form-group">
+                        <label>Categoria</label>
+                        <select id="df-categoria">
+                            <option value="aluguel">Aluguel</option>
+                            <option value="salario">Salário</option>
+                            <option value="conta">Conta (luz, internet…)</option>
+                            <option value="outro">Outro</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="btn btn-success" onclick="salvarDespesaFixa()">Cadastrar Despesa Fixa</button>
+            </div>
+            <div class="card">
+                <h3 style="margin-bottom:16px">Despesas Fixas Cadastradas</h3>
+                <table>
+                    <thead><tr>
+                        <th>Descrição</th><th>Categoria</th><th>Vencimento</th><th>Valor Mensal</th><th>Ações</th>
+                    </tr></thead>
+                    <tbody id="tb-despesas-fixas"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: DRE -->
+        <div id="fin-dre" class="fin-panel">
+            <div class="card">
+                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+                    <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
+                        <label>Filtrar por Cliente</label>
+                        <input type="text" id="dre-filtro-cliente" placeholder="Nome do cliente…" oninput="renderDRE()">
+                    </div>
+                </div>
+                <p style="font-size:12px;color:#888;margin-bottom:12px">Receita vs. custos por pedido. Custos de material e mão de obra vêm do pedido; comissão RT é gerada automaticamente após quitação. Verde ≥ 30% · Amarelo ≥ 15% · Vermelho &lt; 15%.</p>
+                <table>
+                    <thead><tr>
+                        <th>Pedido</th><th>Cliente</th>
+                        <th style="text-align:right">Receita</th>
+                        <th style="text-align:right">Mat./Acess.</th>
+                        <th style="text-align:right">M.O.</th>
+                        <th style="text-align:right">RT</th>
+                        <th style="text-align:right">Lucro Líq.</th>
+                        <th style="text-align:center">Margem</th>
+                    </tr></thead>
+                    <tbody id="tb-dre"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+    <script src="js/app.js"></script>
+</body>
+</html>

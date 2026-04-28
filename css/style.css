@@ -254,7 +254,8 @@ body.login-page { display: flex; align-items: center; justify-content: center; b
 
 /* ── SIDEBAR COLLAPSE ─────────────────────────── */
 .sidebar { transition: width 0.2s ease; overflow: hidden; }
-.nav-item { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.nav-item { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 20px; }
+.nav-text { font-size: 13px; }
 .sidebar-collapsed { width: 52px !important; }
 .sidebar-collapsed .logo h2 { display: none; }
 .sidebar-collapsed .logo-box { margin: 0 auto; }
@@ -279,3 +280,24 @@ body.login-page { display: flex; align-items: center; justify-content: center; b
     body { background: white; }
     .proposta-wrapper, .os-wrapper { box-shadow: none; margin: 0; padding: 22px; }
 }
+
+/* ── MÓDULO FINANCEIRO ────────────────────────── */
+.fin-kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.fin-kpi { border-radius: 8px; padding: 20px 22px; color: white; }
+.fin-kpi-green  { background: linear-gradient(135deg, #059669, #047857); }
+.fin-kpi-blue   { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
+.fin-kpi-orange { background: linear-gradient(135deg, #d97706, #b45309); }
+.fin-kpi-red    { background: linear-gradient(135deg, #dc2626, #b91c1c); }
+.fin-kpi-gray   { background: linear-gradient(135deg, #6b7280, #4b5563); }
+.fin-kpi-label  { font-size: 12px; opacity: 0.85; margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+.fin-kpi-value  { font-size: 22px; font-weight: 700; }
+.fin-kpi-sub    { font-size: 11px; opacity: 0.75; margin-top: 4px; }
+.fin-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.fin-badge-pending { background: #fef3c7; color: #d97706; }
+.fin-badge-red     { background: #fee2e2; color: #dc2626; }
+.fin-badge-gray    { background: #f3f4f6; color: #6b7280; }
+.fin-badge-blue    { background: #dbeafe; color: #2563eb; }
+.fin-atrasado { background: #fff5f5 !important; }
+.fin-atrasado td { color: #dc2626 !important; }
+.fin-panel { display: none; }
+.fin-panel.active { display: block; }

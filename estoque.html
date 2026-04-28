@@ -12,10 +12,11 @@
         <a href="pcp.html"      class="nav-item">🏭 <span class="nav-text">Produção</span></a>
         <a href="estoque.html"  class="nav-item active">📦 <span class="nav-text">Estoque</span></a>
         <a href="clientes.html" class="nav-item">👥 <span class="nav-text">Clientes</span></a>
-        <a href="catalogo.html" class="nav-item">📚 <span class="nav-text">Catálogo</span></a>
+        <a href="catalogo.html" class="nav-item">📚 <span class="nav-text">Cadastro/Catálogo</span></a>
         <a href="relatorios.html" class="nav-item">📊 <span class="nav-text">Relatórios</span></a>
         <a href="vendedores.html" class="nav-item">👤 <span class="nav-text">Vendedores</span></a>
         <a href="fornecedores.html" class="nav-item">🏭 <span class="nav-text">Fornecedores</span></a>
+        <a href="financeiro.html"   class="nav-item">💰 <span class="nav-text">Financeiro</span></a>
         <div class="sidebar-footer">
             <div class="sidebar-user-info">
                 <span class="sidebar-user-name" id="sidebar-user-name">—</span>
@@ -32,7 +33,7 @@
         <!-- Navegação por abas -->
         <div class="tab-nav">
             <button class="tab-btn active" data-tab="tecidos"   onclick="mostrarTabEstoque('tecidos')">🧵 Tecidos</button>
-            <button class="tab-btn"        data-tab="materiais" onclick="mostrarTabEstoque('materiais')">🔩 Materiais e Acessórios</button>
+            <button class="tab-btn"        data-tab="materiais" onclick="mostrarTabEstoque('materiais')">🔩 Materiais</button>
             <button class="tab-btn"        data-tab="kits"      onclick="mostrarTabEstoque('kits')">📦 Kits</button>
             <button class="tab-btn"        data-tab="historico" onclick="mostrarTabEstoque('historico')">📋 Histórico</button>
             <button class="tab-btn" data-tab="backup" onclick="mostrarTabEstoque('backup')">💾 Backup</button>
@@ -92,58 +93,42 @@
             <!-- Alertas de estoque mínimo -->
             <div id="alertas-mat-min" class="alertas-ponto-pedido"></div>
 
-            <!-- Cadastrar novo material -->
+            <!-- Registrar entrada de material -->
             <div class="card">
-                <h3 style="margin-bottom:16px">Cadastrar Material / Acessório</h3>
+                <h3 style="margin-bottom:16px">Registrar Entrada de Material / Acessório</h3>
                 <div class="grid">
-                    <div class="form-group" style="grid-column:1/-1">
-                        <label>Nome do Material</label>
-                        <input type="text" id="mat-nome" placeholder="Ex: Trilho Suíço, Suporte de Parede, Gancho…">
+                    <div class="form-group">
+                        <label>Referência <span class="info-tag">código do material</span></label>
+                        <input type="text" id="est-mat-ref" placeholder="Ex: TRILHO-SU-01" oninput="autoFillEntradaMaterialPorRef()">
+                    </div>
+                    <div class="form-group" style="grid-column:span 2">
+                        <label>Material</label>
+                        <select id="est-mat-id"></select>
                     </div>
                     <div class="form-group">
-                        <label>Unidade de Medida</label>
-                        <select id="mat-unidade">
-                            <option value="un">un (unidade)</option>
-                            <option value="m">m (metro)</option>
-                            <option value="cm">cm (centímetro)</option>
-                            <option value="kg">kg</option>
-                            <option value="cj">cj (conjunto)</option>
-                            <option value="cx">cx (caixa)</option>
-                            <option value="par">par</option>
-                        </select>
+                        <label>Quantidade</label>
+                        <input type="number" id="est-mat-qtd" placeholder="Ex: 50" step="0.01" min="0.01">
                     </div>
                     <div class="form-group">
-                        <label>Preço Unitário (R$)</label>
-                        <input type="number" id="mat-preco" placeholder="Ex: 12.50" step="0.01" min="0">
-                    </div>
-                    <div class="form-group">
-                        <label>Estoque Mínimo</label>
-                        <input type="number" id="mat-min" placeholder="Ex: 20" step="1" min="0">
-                    </div>
-                    <div class="form-group">
-                        <label>Quantidade Inicial em Estoque</label>
-                        <input type="number" id="mat-qtd" placeholder="Ex: 100" step="0.01" min="0">
-                    </div>
-                    <div class="form-group">
-                        <label>Fornecedor</label>
-                        <select id="mat-fornecedor"><option value="">— Sem fornecedor —</option></select>
+                        <label>Data de Entrada</label>
+                        <input type="date" id="est-mat-data">
                     </div>
                 </div>
-                <button class="btn btn-success" onclick="salvarMaterial()">Cadastrar Material</button>
+                <button class="btn btn-success" onclick="salvarEntradaMaterial()">Registrar Entrada</button>
             </div>
 
-            <!-- Tabela de materiais -->
+            <!-- Tabela de estoque de materiais -->
             <div class="card">
                 <table>
                     <thead><tr>
-                        <th class="th-sort-mat" onclick="sortMateriais('nome')">Material <span class="sort-icon">⇅</span></th>
+                        <th>Material</th>
+                        <th>Referência</th>
                         <th>Unidade</th>
-                        <th class="th-sort-mat" onclick="sortMateriais('preco')">Preço Unit. <span class="sort-icon">⇅</span></th>
-                        <th class="th-sort-mat" onclick="sortMateriais('estoque')">Estoque Atual <span class="sort-icon">⇅</span></th>
-                        <th>Fornecedor</th>
+                        <th>Estoque Atual</th>
+                        <th>Estoque Mín.</th>
                         <th>Ações</th>
                     </tr></thead>
-                    <tbody id="tb-materiais"></tbody>
+                    <tbody id="tb-estoque-mat"></tbody>
                 </table>
             </div>
         </div>

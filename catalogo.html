@@ -8,14 +8,15 @@
 <body>
     <aside class="sidebar" id="main-sidebar">
         <div class="logo"><div class="logo-box">SC</div><h2>SCTech</h2></div>
-        <a href="index.html"    class="nav-item">📋 <span class="nav-text">Página Inicial</span></a>
-        <a href="pcp.html"      class="nav-item">🏭 <span class="nav-text">Produção</span></a>
-        <a href="estoque.html"  class="nav-item">📦 <span class="nav-text">Estoque</span></a>
-        <a href="clientes.html" class="nav-item">👥 <span class="nav-text">Clientes</span></a>
-        <a href="catalogo.html" class="nav-item active">📚 <span class="nav-text">Catálogo</span></a>
+        <a href="index.html"      class="nav-item">📋 <span class="nav-text">Página Inicial</span></a>
+        <a href="pcp.html"        class="nav-item">🏭 <span class="nav-text">Produção</span></a>
+        <a href="estoque.html"    class="nav-item">📦 <span class="nav-text">Estoque</span></a>
+        <a href="clientes.html"   class="nav-item">👥 <span class="nav-text">Clientes</span></a>
+        <a href="catalogo.html"   class="nav-item active">📚 <span class="nav-text">Cadastro/Catálogo</span></a>
         <a href="relatorios.html" class="nav-item">📊 <span class="nav-text">Relatórios</span></a>
         <a href="vendedores.html" class="nav-item">👤 <span class="nav-text">Vendedores</span></a>
         <a href="fornecedores.html" class="nav-item">🏭 <span class="nav-text">Fornecedores</span></a>
+        <a href="financeiro.html"   class="nav-item">💰 <span class="nav-text">Financeiro</span></a>
         <div class="sidebar-footer">
             <div class="sidebar-user-info">
                 <span class="sidebar-user-name" id="sidebar-user-name">—</span>
@@ -26,52 +27,124 @@
     </aside>
     <main class="main">
         <div class="header"><h2>Cadastro — Catálogo e Preços</h2></div>
-        <div class="card">
-            <h3>Novo Tecido / Material</h3>
-            <div class="grid" style="margin-top: 15px;">
-                <div class="form-group">
-                    <label>Referência <span class="info-tag">código único do tecido</span></label>
-                    <input type="text" id="cat-ref" placeholder="Ex: LB-001 ou LINHO-BEL" oninput="autoFillCatalogoPorReferencia()">
-                </div>
-                <div class="form-group">
-                    <label>Nome do Tecido / Material</label>
-                    <input type="text" id="cat-nome" placeholder="Ex: Linho Belga Importado">
-                </div>
-                <div class="form-group">
-                    <label>Preço por Metro Linear (R$)</label>
-                    <input type="number" id="cat-preco" placeholder="Ex: 85.00" step="0.01">
-                </div>
-                <div class="form-group">
-                    <label>Largura do Rolo (m) <span class="info-tag">padrão: 2.80</span></label>
-                    <input type="number" id="cat-largura" placeholder="2.80" value="2.80" step="0.01">
-                </div>
-                <div class="form-group">
-                    <label>Estoque Mínimo (m) <span class="info-tag">0 = sem alerta</span></label>
-                    <input type="number" id="cat-min" placeholder="0" value="0" step="0.5">
-                </div>
-                <div class="form-group">
-                    <label>Fornecedor</label>
-                    <select id="cat-fornecedor"><option value="">— Sem fornecedor —</option></select>
-                </div>
-            </div>
-            <button class="btn" onclick="salvarCatalogo()">Salvar no Catálogo</button>
+
+        <div class="tab-nav">
+            <button class="tab-btn active" data-tab="cat-tecidos"   onclick="mostrarTabCatalogo('tecidos')">📚 Tecidos</button>
+            <button class="tab-btn"        data-tab="cat-materiais" onclick="mostrarTabCatalogo('materiais')">🔩 Materiais e Acessórios</button>
         </div>
-        <div class="card">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Material</th>
+
+        <!-- ══════════════ ABA: TECIDOS ══════════════ -->
+        <div id="tab-cat-tecidos" class="tab-panel active">
+            <div class="card">
+                <h3>Cadastrar Tecido</h3>
+                <div class="grid" style="margin-top: 15px;">
+                    <div class="form-group">
+                        <label>Referência <span class="info-tag">código único do tecido</span></label>
+                        <input type="text" id="cat-ref" placeholder="Ex: LB-001 ou LINHO-BEL" oninput="autoFillCatalogoPorReferencia()">
+                    </div>
+                    <div class="form-group">
+                        <label>Nome do Tecido</label>
+                        <input type="text" id="cat-nome" placeholder="Ex: Linho Belga Importado">
+                    </div>
+                    <div class="form-group">
+                        <label>Preço por Metro Linear (R$)</label>
+                        <input type="number" id="cat-preco" placeholder="Ex: 85.00" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>Largura do Rolo (m) <span class="info-tag">padrão: 2.80</span></label>
+                        <input type="number" id="cat-largura" placeholder="2.80" value="2.80" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>Estoque Mínimo (m) <span class="info-tag">0 = sem alerta</span></label>
+                        <input type="number" id="cat-min" placeholder="0" value="0" step="0.5">
+                    </div>
+                    <div class="form-group">
+                        <label>Fornecedor</label>
+                        <select id="cat-fornecedor"><option value="">— Sem fornecedor —</option></select>
+                    </div>
+                </div>
+                <button class="btn" onclick="salvarCatalogo()">Salvar no Catálogo</button>
+            </div>
+            <div class="card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Tecido</th>
+                            <th>Referência</th>
+                            <th>Preço (R$/m)</th>
+                            <th>Largura do Rolo</th>
+                            <th>Estoque Mín.</th>
+                            <th>Em Estoque</th>
+                            <th>Fornecedor</th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-catalogo"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ══════════════ ABA: MATERIAIS E ACESSÓRIOS ══════════════ -->
+        <div id="tab-cat-materiais" class="tab-panel">
+            <div id="alertas-mat-min" class="alertas-ponto-pedido"></div>
+
+            <div class="card">
+                <h3 style="margin-bottom:16px">Cadastrar Material / Acessório</h3>
+                <div class="grid">
+                    <div class="form-group">
+                        <label>Referência <span class="info-tag">código único</span></label>
+                        <input type="text" id="mat-ref" placeholder="Ex: TRILHO-SU-01" oninput="autoFillMaterialPorReferencia()">
+                    </div>
+                    <div class="form-group" style="grid-column:span 3">
+                        <label>Nome do Material</label>
+                        <input type="text" id="mat-nome" placeholder="Ex: Trilho Suíço, Suporte de Parede, Gancho…">
+                    </div>
+                    <div class="form-group">
+                        <label>Unidade de Medida</label>
+                        <select id="mat-unidade">
+                            <option value="un">un (unidade)</option>
+                            <option value="m">m (metro)</option>
+                            <option value="cm">cm (centímetro)</option>
+                            <option value="kg">kg</option>
+                            <option value="cj">cj (conjunto)</option>
+                            <option value="cx">cx (caixa)</option>
+                            <option value="par">par</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Preço Unitário (R$)</label>
+                        <input type="number" id="mat-preco" placeholder="Ex: 12.50" step="0.01" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Estoque Mínimo</label>
+                        <input type="number" id="mat-min" placeholder="Ex: 20" step="1" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Estoque Inicial <span class="info-tag">opcional</span></label>
+                        <input type="number" id="mat-qtd" placeholder="0" step="0.01" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Fornecedor</label>
+                        <select id="mat-fornecedor"><option value="">— Sem fornecedor —</option></select>
+                    </div>
+                </div>
+                <button class="btn btn-success" onclick="salvarMaterial()">Cadastrar Material</button>
+            </div>
+
+            <div class="card">
+                <table>
+                    <thead><tr>
+                        <th class="th-sort-mat" onclick="sortMateriais('nome')">Material <span class="sort-icon">⇅</span></th>
                         <th>Referência</th>
-                        <th>Preço (R$/m)</th>
-                        <th>Largura do Rolo</th>
-                        <th>Estoque Mín.</th>
-                        <th>Em Estoque</th>
+                        <th>Unidade</th>
+                        <th class="th-sort-mat" onclick="sortMateriais('preco')">Preço Unit. <span class="sort-icon">⇅</span></th>
+                        <th class="th-sort-mat" onclick="sortMateriais('estoque')">Estoque Atual <span class="sort-icon">⇅</span></th>
                         <th>Fornecedor</th>
-                        <th>Ação</th>
-                    </tr>
-                </thead>
-                <tbody id="tb-catalogo"></tbody>
-            </table>
+                        <th>Ações</th>
+                    </tr></thead>
+                    <tbody id="tb-materiais"></tbody>
+                </table>
+            </div>
         </div>
     </main>
     <script src="js/app.js"></script>

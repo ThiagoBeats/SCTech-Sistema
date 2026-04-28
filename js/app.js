@@ -11,7 +11,10 @@ let db = {
     movimentos:  JSON.parse(localStorage.getItem('sc_mov'))  || [],
     vendedores:  JSON.parse(localStorage.getItem('sc_vend')) || [],
     fornecedores:    JSON.parse(localStorage.getItem('sc_forn')) || [],
-    pedidos_compra:  JSON.parse(localStorage.getItem('sc_pc'))   || []
+    pedidos_compra:  JSON.parse(localStorage.getItem('sc_pc'))   || [],
+    contas_receber:  JSON.parse(localStorage.getItem('sc_cr'))   || [],
+    contas_pagar:    JSON.parse(localStorage.getItem('sc_cp'))   || [],
+    despesas_fixas:  JSON.parse(localStorage.getItem('sc_df'))   || []
 };
 
 function syncDB() {
@@ -25,6 +28,9 @@ function syncDB() {
     localStorage.setItem('sc_vend', JSON.stringify(db.vendedores));
     localStorage.setItem('sc_forn', JSON.stringify(db.fornecedores));
     localStorage.setItem('sc_pc',   JSON.stringify(db.pedidos_compra));
+    localStorage.setItem('sc_cr',   JSON.stringify(db.contas_receber));
+    localStorage.setItem('sc_cp',   JSON.stringify(db.contas_pagar));
+    localStorage.setItem('sc_df',   JSON.stringify(db.despesas_fixas));
 }
 
 function registrarMovimento(tipo, item_nome, item_tipo, quantidade, unidade, referencia) {
@@ -492,6 +498,7 @@ function moverStatus(id, direcao) {
     }
 
     ped.status = STATUS_PIPELINE[novoIdx];
+    if (idx === 0) gerarFinanceiroPedido(ped);
     if (novoIdx === 1 && !ped.data_producao)  ped.data_producao  = Date.now();
     if (STATUS_PIPELINE[novoIdx] === 'Instalado' && !ped.data_instalado) ped.data_instalado = Date.now();
     toastReload('Status atualizado!');
@@ -678,6 +685,15 @@ function salvarEntradaEstoque() {
     salvarERecarregar('Entrada registrada!');
 }
 
+function autoFillTecidoNoAmbiente(ambId, tidx) {
+    const ref = document.getElementById(`a-tec-ref-${ambId}-${tidx}`)?.value.trim();
+    if (!ref || ref.length < 2) return;
+    const tec = db.catalogo.find(c => c.referencia && c.referencia.toLowerCase() === ref.toLowerCase());
+    if (!tec) return;
+    const sel = document.getElementById(`a-tecido-${ambId}-${tidx}`);
+    if (sel) sel.value = String(tec.id);
+}
+
 function autoFillTecidoPorReferencia() {
     const ref = document.getElementById('est-lote')?.value.trim();
     if (!ref || ref.length < 2) return;
@@ -769,6 +785,7 @@ function renderEstoque() {
 
 // --- MATERIAIS (acessórios, ferragens, trilhos, etc.) ---
 function salvarMaterial() {
+    const referencia = document.getElementById('mat-ref')?.value.trim() || '';
     const nome = document.getElementById('mat-nome')?.value.trim();
     const unidade = document.getElementById('mat-unidade')?.value || 'un';
     const preco = parseFloat(document.getElementById('mat-preco')?.value) || 0;
@@ -777,11 +794,32 @@ function salvarMaterial() {
     if (!nome) return alert('Informe o nome do material.');
     const dup = db.materiais.find(m => m.nome.trim().toLowerCase() === nome.toLowerCase());
     if (dup) return alert(`Já existe um material com o nome "${dup.nome}" no estoque.`);
+    if (referencia) {
+        const dupRef = db.materiais.find(m => m.referencia && m.referencia.toLowerCase() === referencia.toLowerCase());
+        if (dupRef) return alert(`Já existe um material com a referência "${dupRef.referencia}" (${dupRef.nome}).`);
+    }
     const forn_id_mat  = parseInt(document.getElementById('mat-fornecedor')?.value) || null;
     const forn_obj_mat = forn_id_mat ? db.fornecedores.find(f => f.id === forn_id_mat) : null;
-    db.materiais.push({ id: Date.now(), nome, unidade, preco, min_estoque, estoque_atual: estoque_inicial, fornecedor_id: forn_id_mat, fornecedor_nome: forn_obj_mat ? forn_obj_mat.nome : '' });
+    db.materiais.push({ id: Date.now(), referencia, nome, unidade, preco, min_estoque, estoque_atual: estoque_inicial, fornecedor_id: forn_id_mat, fornecedor_nome: forn_obj_mat ? forn_obj_mat.nome : '' });
     if (estoque_inicial > 0) registrarMovimento('Entrada', nome, 'material', estoque_inicial, unidade, 'Estoque inicial');
     salvarERecarregar('Material cadastrado!');
+}
+
+function autoFillMaterialPorReferencia() {
+    const ref = document.getElementById('mat-ref')?.value.trim();
+    if (!ref || ref.length < 2) return;
+    const existing = db.materiais.find(m => m.referencia && m.referencia.toLowerCase() === ref.toLowerCase());
+    if (!existing) return;
+    const nomeEl = document.getElementById('mat-nome');
+    if (nomeEl) nomeEl.value = existing.nome || '';
+    const unEl = document.getElementById('mat-unidade');
+    if (unEl) unEl.value = existing.unidade || 'un';
+    const precoEl = document.getElementById('mat-preco');
+    if (precoEl) precoEl.value = existing.preco || '';
+    const minEl = document.getElementById('mat-min');
+    if (minEl) minEl.value = existing.min_estoque || 0;
+    const fornSel = document.getElementById('mat-fornecedor');
+    if (fornSel && existing.fornecedor_id) fornSel.value = existing.fornecedor_id;
 }
 
 function excluirMaterial(id) {
@@ -827,7 +865,7 @@ function renderMateriais() {
     }
 
     if (!db.materiais.length) {
-        tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;padding:24px;">Nenhum material cadastrado.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:24px;">Nenhum material cadastrado.</td></tr>';
         return;
     }
 
@@ -845,6 +883,7 @@ function renderMateriais() {
         return `
         <tr>
             <td><strong>${m.nome}</strong>${abaixoMin ? `<span class="badge-alerta" style="margin-left:8px">⚠</span>` : ''}</td>
+            <td style="font-size:12px;color:#555">${escapeHtml(m.referencia || '—')}</td>
             <td>${m.unidade}</td>
             <td>R$ ${(m.preco || 0).toFixed(2)}</td>
             <td style="color:${corEstoque}"><strong>${(m.estoque_atual || 0).toFixed(2)}</strong>
@@ -858,7 +897,7 @@ function renderMateriais() {
             </td>
         </tr>
         <tr id="ajuste-${m.id}" class="ajuste-form" style="display:none">
-            <td colspan="6" class="baixa-form-cell">
+            <td colspan="7" class="baixa-form-cell">
                 <strong>${m.nome}</strong> — saldo: <strong>${(m.estoque_atual||0).toFixed(2)} ${m.unidade}</strong> &emsp;
                 Quantidade (+ entrada / − saída):
                 <input type="number" id="ajuste-qtd-${m.id}" placeholder="Ex: +10 ou -3" step="0.01" style="width:130px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;margin:0 8px">
@@ -993,8 +1032,8 @@ let _ambienteCounter = 0;
 
 function onPregaAmbiente(id) {
     const fatoresSugeridos = {
-        'Americana': '2.5', 'Americana-Tradicional': '2.5', 'Franzido': '2.5',
-        'Wave': '2.0', 'Wave Botao': '2.0', 'Wave Plus': '2.0',
+        'Americana': '2.5', 'Franzido': '2.5',
+        'Wave Botao': '2.0', 'Wave Plus': '2.0',
         'Macho-Femea': '2.0', 'Painel': '1.5'
     };
     const prega = document.getElementById(`a-prega-${id}`)?.value;
@@ -1035,28 +1074,25 @@ function renderAmbienteBreakdown(a) {
 function renderAmbientes() {
     const container = document.getElementById('ambientes-container');
     if (!container) return;
-    const FATORES = ['1.0','1.5','2.0','2.5','3.0','3.5','4.0'];
+    const FATORES = ['1.0','1.5','2.0','2.5','2.7', '3.0','3.5','4.0'];
     container.innerHTML = pedidoDraft.ambientes.map((a, idx) => {
         const n = idx + 1;
         const pregaOpts = [
-            {v:'Americana',l:'Prega Americana (2.5x)'},
-            {v:'Americana-Tradicional',l:'Americana Tradicional (2.5x)'},
-            {v:'Wave',l:'Wave (2.0x)'},
-            {v:'Wave Botao',l:'Wave Botão (2.0x)'},
-            {v:'Wave Plus',l:'Wave Plus/Flex (2.0x)'},
-            {v:'Franzido',l:'Franzido (2.5x)'},
-            {v:'Macho-Femea',l:'Prega Macho-Fêmea (2.0x)'},
-            {v:'Painel',l:'Painel / Sem Prega (1.5x)'}
+            {v:'Americana',l:'Prega Americana'},
+            {v:'Wave Botao',l:'Wave Botão'},
+            {v:'Wave Plus',l:'Wave Plus/Flex'},
+            {v:'Franzido',l:'Franzido'},
+            {v:'Macho-Femea',l:'Prega Macho-Fêmea'},
+            {v:'Painel',l:'Painel / Sem Prega'}
         ].map(o=>`<option value="${o.v}"${a.prega===o.v?' selected':''}>${o.l}</option>`).join('');
         const fixacaoOpts = [
-            {v:'Trilho Suico',l:'Trilho Suíço'},
-            {v:'Trilho Motorizado',l:'Trilho Motorizado'},
-            {v:'Varao Aluminio Comum',l:'Varão Alumínio Comum'},
-            {v:'Varao Aluminio Ilhos',l:'Varão Alumínio (Ilhós)'},
-            {v:'Varao Suico Wave',l:'Varão Suíço/Wave'},
-            {v:'Trilho Binet',l:'Trilho Binet'},
-            {v:'Sobrepor',l:'Sobrepor (Grampo)'},
-            {v:'Tubo/Varao',l:'Tubo / Varão'}
+            {v:'Trilho Suico Simples',l:'Trilho Suíço Simples'},
+            {v:'Trilho Suíço Duplo',l:'Trilho Suíço Duplo'},
+            {v:'Trilho Suíço Duplo Com Espaço',l:'Trilho Suíço Duplo Com Espaço'},
+            {v:'Trilho Suíço Triplo',l:'Trilho Suíço Triplo'},
+            {v:'Trilho Motorizador',l:'Trilho Motorizador'},
+            {v:'Varão Aluminio Comum',l:'Varão Aluminio Comum'},
+            {v:'Varão Suíço/Wave',l:'Varão Suíço/Wave'}
         ].map(o=>`<option value="${o.v}"${a.fixacao===o.v?' selected':''}>${o.l}</option>`).join('');
         const fatorOpts = FATORES.map(f=>`<option value="${f}"${String(a.fator||2.5)===f?' selected':''}>${f}x</option>`).join('');
         const tecidos = a.tecidos || [];
@@ -1070,6 +1106,10 @@ function renderAmbientes() {
                 ? `<button class="btn btn-outline btn-sm btn-danger" onclick="removerTecidoDoAmbiente(${a.id},${tidx})" title="Remover este tecido" style="flex-shrink:0">×</button>`
                 : '';
             return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+                <div class="form-group" style="width:130px;flex-shrink:0;margin:0">
+                    <label style="font-size:11px">Ref. Tecido</label>
+                    <input type="text" id="a-tec-ref-${a.id}-${tidx}" placeholder="Código" oninput="autoFillTecidoNoAmbiente(${a.id},${tidx})" style="font-size:12px">
+                </div>
                 <div class="form-group" style="flex:1;margin:0">
                     <label>${tecidos.length > 1 ? 'Tecido '+(tidx+1) : 'Tecido'}</label>
                     <select id="a-tecido-${a.id}-${tidx}">${buildTecOpts(t.tecidoId)}</select>
@@ -1294,6 +1334,9 @@ function filtrarClientes() {
 }
 
 function salvarPedido() {
+    const statusAnterior = editandoIdPedido
+        ? normalizarStatus(db.pedidos.find(p => p.id == editandoIdPedido)?.status || 'Orçamento')
+        : 'Orçamento';
     const clienteId = document.getElementById('ped-cliente')?.value;
     if (!clienteId) return alert('Selecione o cliente.');
     if (!pedidoDraft.ambientes.length) return alert('Adicione pelo menos um ambiente.');
@@ -1328,7 +1371,10 @@ function salvarPedido() {
         vendedor_id:    vendedor_id_sel,
         vendedor_nome:  vendedor_obj ? vendedor_obj.nome : '',
         comissao_pct,
-        comissao_valor
+        comissao_valor,
+        arquiteto_nome: document.getElementById('ped-arquiteto')?.value.trim() || '',
+        rt_pct: parseFloat(document.getElementById('ped-rt')?.value) || 0,
+        tipo_pagamento: document.getElementById('ped-tipo-pagamento')?.value || '50_50'
     };
     if (editandoIdPedido) {
         const index = db.pedidos.findIndex(p => p.id == editandoIdPedido);
@@ -1339,6 +1385,8 @@ function salvarPedido() {
             dadosPedido.baixa_realizada   = db.pedidos[index].baixa_realizada;
             dadosPedido.comissao_paga     = db.pedidos[index].comissao_paga     || false;
             dadosPedido.comissao_data_pgto = db.pedidos[index].comissao_data_pgto || null;
+            dadosPedido.financeiro_gerado  = db.pedidos[index].financeiro_gerado  || false;
+            dadosPedido.rt_gerado          = db.pedidos[index].rt_gerado          || false;
             if (dadosPedido.status === 'Na Costura' && !dadosPedido.baixa_realizada) {
                 realizarBaixaEstoque(dadosPedido);
             }
@@ -1350,6 +1398,9 @@ function salvarPedido() {
             realizarBaixaEstoque(dadosPedido);
         }
         db.pedidos.push(dadosPedido);
+    }
+    if (statusAnterior === 'Orçamento' && normalizarStatus(dadosPedido.status) !== 'Orçamento') {
+        gerarFinanceiroPedido(dadosPedido);
     }
     syncDB();
     localStorage.removeItem('sc_editando_id');
@@ -1376,6 +1427,12 @@ function carregarPedidoParaEdicao(id) {
     if (descontoEl) descontoEl.value = ped.desconto_pct || 0;
     const vendedorEl = document.getElementById('ped-vendedor');
     if (vendedorEl) vendedorEl.value = String(ped.vendedor_id || '');
+    const arquitetoEl = document.getElementById('ped-arquiteto');
+    if (arquitetoEl) arquitetoEl.value = ped.arquiteto_nome || '';
+    const rtEl = document.getElementById('ped-rt');
+    if (rtEl) rtEl.value = ped.rt_pct || 0;
+    const pagEl = document.getElementById('ped-tipo-pagamento');
+    if (pagEl) pagEl.value = ped.tipo_pagamento || '50_50';
     const ambientes = normalizarAmbientes(ped);
     _ambienteCounter = ambientes.length;
     pedidoDraft.ambientes = ambientes.map((a, i) => ({
@@ -1623,7 +1680,8 @@ function exportarDados() {
         clientes: db.clientes, catalogo: db.catalogo, pedidos: db.pedidos,
         estoque: db.estoque, materiais: db.materiais, kits: db.kits,
         movimentos: db.movimentos, vendedores: db.vendedores,
-        fornecedores: db.fornecedores, pedidos_compra: db.pedidos_compra
+        fornecedores: db.fornecedores, pedidos_compra: db.pedidos_compra,
+        contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, despesas_fixas: db.despesas_fixas
     };
     const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
@@ -1652,6 +1710,9 @@ function importarDados(event) {
             db.vendedores    = dados.vendedores    || [];
             db.fornecedores  = dados.fornecedores  || [];
             db.pedidos_compra = dados.pedidos_compra || [];
+            db.contas_receber = dados.contas_receber || [];
+            db.contas_pagar   = dados.contas_pagar   || [];
+            db.despesas_fixas = dados.despesas_fixas || [];
             syncDB();
             toastReload('Dados importados com sucesso!', 'info');
             window.location.reload();
@@ -2427,7 +2488,17 @@ document.addEventListener('DOMContentLoaded', () => {
         renderEstoque();
     }
 
-    // Estoque (aba de materiais)
+    // Estoque (aba de entrada de materiais)
+    if (document.getElementById('tb-estoque-mat')) {
+        const matSel = document.getElementById('est-mat-id');
+        if (matSel) matSel.innerHTML = '<option value="">— Selecione o Material —</option>' +
+            db.materiais.map(m => `<option value="${m.id}">${escapeHtml(m.nome)} (${m.unidade})</option>`).join('');
+        const dataEl = document.getElementById('est-mat-data');
+        if (dataEl) dataEl.value = new Date().toISOString().split('T')[0];
+        renderEstoqueMateriais();
+    }
+
+    // Catálogo (aba de materiais)
     if (document.getElementById('tb-materiais')) {
         const matFornSel = document.getElementById('mat-fornecedor');
         if (matFornSel) matFornSel.innerHTML = '<option value="">— Sem fornecedor —</option>' +
@@ -2491,4 +2562,431 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (document.getElementById('pedido-compra-container')) renderPedidoCompraDoc();
+
+    if (document.getElementById('fin-kpis')) {
+        atualizarStatusVencimentos();
+        mostrarTabFinanceiro('dashboard');
+    }
 });
+
+// =============================================
+// CATÁLOGO — TABS
+// =============================================
+
+function mostrarTabCatalogo(tab) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-cat-' + tab)?.classList.add('active');
+    document.querySelector(`.tab-btn[data-tab="cat-${tab}"]`)?.classList.add('active');
+    if (tab === 'materiais') renderMateriais();
+}
+
+// =============================================
+// ESTOQUE — ENTRADA DE MATERIAL
+// =============================================
+
+function autoFillEntradaMaterialPorRef() {
+    const ref = document.getElementById('est-mat-ref')?.value.trim();
+    if (!ref || ref.length < 2) return;
+    const mat = db.materiais.find(m => m.referencia && m.referencia.toLowerCase() === ref.toLowerCase());
+    if (!mat) return;
+    const sel = document.getElementById('est-mat-id');
+    if (sel) sel.value = String(mat.id);
+}
+
+function salvarEntradaMaterial() {
+    const matId = parseInt(document.getElementById('est-mat-id')?.value);
+    const qtd   = parseFloat(document.getElementById('est-mat-qtd')?.value);
+    const data  = document.getElementById('est-mat-data')?.value;
+    if (!matId) return alert('Selecione o material.');
+    if (!qtd || qtd <= 0) return alert('Informe uma quantidade válida.');
+    const mat = db.materiais.find(m => m.id === matId);
+    if (!mat) return;
+    mat.estoque_atual = Math.round(((mat.estoque_atual || 0) + qtd) * 1000) / 1000;
+    const ref = data ? `Entrada ${new Date(data + 'T12:00:00').toLocaleDateString('pt-BR')}` : 'Entrada manual';
+    registrarMovimento('Entrada', mat.nome, 'material', qtd, mat.unidade, ref);
+    salvarERecarregar('Entrada de material registrada!');
+}
+
+function renderEstoqueMateriais() {
+    const alertBox = document.getElementById('alertas-mat-min');
+    if (alertBox) {
+        const criticos = db.materiais.filter(m => m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque);
+        alertBox.innerHTML = criticos.length
+            ? criticos.map(m => `<div class="alerta-item">⚠ <strong>${escapeHtml(m.nome)}</strong>: ${(m.estoque_atual||0).toFixed(2)} ${m.unidade} — mínimo: ${m.min_estoque} ${m.unidade}</div>`).join('')
+            : '';
+        alertBox.style.display = criticos.length ? 'block' : 'none';
+    }
+    const tb = document.getElementById('tb-estoque-mat');
+    if (!tb) return;
+    if (!db.materiais.length) {
+        tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;padding:24px">Nenhum material cadastrado. <a href="catalogo.html">Cadastre em Catálogo</a>.</td></tr>';
+        return;
+    }
+    let lista = [...db.materiais];
+    const { col: mc, dir: md } = matSortState;
+    lista.sort((a,b) => {
+        const va = mc==='nome'?a.nome.toLowerCase():mc==='preco'?(a.preco||0):mc==='estoque'?(a.estoque_atual||0):0;
+        const vb = mc==='nome'?b.nome.toLowerCase():mc==='preco'?(b.preco||0):mc==='estoque'?(b.estoque_atual||0):0;
+        return va<vb?-md:va>vb?md:0;
+    });
+    tb.innerHTML = lista.map(m => {
+        const abaixoMin = m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque;
+        const cor = abaixoMin ? '#dc2626' : '#059669';
+        return `<tr>
+            <td><strong>${escapeHtml(m.nome)}</strong>${abaixoMin?`<span class="badge-alerta" style="margin-left:8px">⚠</span>`:''}</td>
+            <td style="font-size:12px;color:#555">${escapeHtml(m.referencia||'—')}</td>
+            <td>${m.unidade}</td>
+            <td style="color:${cor}"><strong>${(m.estoque_atual||0).toFixed(2)}</strong>${m.min_estoque>0?`<span style="color:#888;font-size:12px"> / mín: ${m.min_estoque}</span>`:''}</td>
+            <td style="font-size:12px;color:#555">${escapeHtml(m.fornecedor_nome||'—')}</td>
+            <td>
+                <button class="btn btn-outline btn-sm" onclick="mostrarAjusteForm(${m.id})" title="Ajustar estoque">± Ajustar</button>
+                <button class="btn btn-outline btn-sm" onclick="pedirMaterial(${m.id})" title="Criar pedido de compra">🛒</button>
+            </td>
+        </tr>
+        <tr id="ajuste-${m.id}" class="ajuste-form" style="display:none">
+            <td colspan="6" class="baixa-form-cell">
+                <strong>${escapeHtml(m.nome)}</strong> — saldo: <strong>${(m.estoque_atual||0).toFixed(2)} ${m.unidade}</strong> &emsp;
+                Quantidade (+ entrada / − saída):
+                <input type="number" id="ajuste-qtd-${m.id}" placeholder="Ex: +10 ou -3" step="0.01" style="width:130px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;margin:0 8px">
+                <button class="btn btn-sm" style="background:#059669" onclick="confirmarAjuste(${m.id})">Confirmar</button>
+                <button class="btn btn-outline btn-sm" onclick="cancelarAjuste()">Cancelar</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+// =============================================
+// MÓDULO FINANCEIRO
+// =============================================
+
+const PLANOS_PAGAMENTO = {
+    'avista': [{ descricao: 'Pagamento à vista', pct: 100, dias: 0 }],
+    '50_50':  [{ descricao: 'Entrada (50%)', pct: 50, dias: 0 }, { descricao: 'Saldo na instalação (50%)', pct: 50, dias: -1 }],
+    '30_70':  [{ descricao: 'Entrada (30%)', pct: 30, dias: 0 }, { descricao: 'Saldo na instalação (70%)', pct: 70, dias: -1 }],
+    '40_60':  [{ descricao: 'Entrada (40%)', pct: 40, dias: 0 }, { descricao: 'Saldo na instalação (60%)', pct: 60, dias: -1 }],
+};
+
+function gerarFinanceiroPedido(ped) {
+    if (ped.financeiro_gerado) return;
+    const plano = PLANOS_PAGAMENTO[ped.tipo_pagamento || '50_50'] || PLANOS_PAGAMENTO['50_50'];
+    const hoje = new Date();
+    plano.forEach((parcela, i) => {
+        const valor = Math.round(ped.valor * parcela.pct / 100 * 100) / 100;
+        let vencimento;
+        if (parcela.dias === -1) {
+            vencimento = ped.data_entrega || new Date(hoje.getTime() + 30 * 86400000).toISOString().split('T')[0];
+        } else {
+            vencimento = new Date(hoje.getTime() + parcela.dias * 86400000).toISOString().split('T')[0];
+        }
+        db.contas_receber.push({
+            id: Date.now() + i,
+            pedido_id: ped.id,
+            cliente_nome: ped.clienteNome || '',
+            descricao: `${parcela.descricao} — Pedido #${String(ped.id).slice(-6)}`,
+            valor,
+            data_vencimento: vencimento,
+            data_pagamento: null,
+            status: 'Pendente'
+        });
+    });
+    ped.financeiro_gerado = true;
+}
+
+function atualizarStatusVencimentos() {
+    const hoje = new Date().toISOString().split('T')[0];
+    let changed = false;
+    [...db.contas_receber, ...db.contas_pagar].forEach(item => {
+        if (item.status === 'Pendente' && item.data_vencimento < hoje) {
+            item.status = 'Atrasado';
+            changed = true;
+        }
+    });
+    if (changed) syncDB();
+}
+
+function marcarCRPago(id) {
+    const cr = db.contas_receber.find(x => x.id == id);
+    if (!cr) return;
+    const dataStr = prompt('Data de recebimento (AAAA-MM-DD):', new Date().toISOString().split('T')[0]);
+    if (!dataStr) return;
+    cr.data_pagamento = dataStr;
+    cr.status = 'Pago';
+    if (cr.pedido_id) {
+        const ped = db.pedidos.find(p => p.id == cr.pedido_id);
+        const todas = db.contas_receber.filter(x => x.pedido_id === cr.pedido_id);
+        const todasPagas = todas.every(x => x.status === 'Pago' || x.id == id);
+        if (todasPagas && ped && (ped.arquiteto_nome || '').trim() && (ped.rt_pct || 0) > 0 && !ped.rt_gerado) {
+            const rtValor = Math.round(ped.valor * ped.rt_pct / 100 * 100) / 100;
+            db.contas_pagar.push({
+                id: Date.now() + 1,
+                pedido_id: ped.id, tipo: 'variavel', categoria: 'comissao_rt',
+                descricao: `RT ${ped.rt_pct}% — ${ped.arquiteto_nome} — Ped. #${String(ped.id).slice(-6)}`,
+                credor_nome: ped.arquiteto_nome,
+                valor: rtValor,
+                data_vencimento: dataStr, data_pagamento: null, status: 'Pendente'
+            });
+            ped.rt_gerado = true;
+        }
+    }
+    salvarERecarregar('Recebimento registrado!');
+}
+
+function excluirCR(id) {
+    if (!confirm('Remover este lançamento a receber?')) return;
+    db.contas_receber = db.contas_receber.filter(x => x.id != id);
+    salvarERecarregar('Lançamento removido.');
+}
+
+function marcarCPPago(id) {
+    const cp = db.contas_pagar.find(x => x.id == id);
+    if (!cp) return;
+    const dataStr = prompt('Data de pagamento (AAAA-MM-DD):', new Date().toISOString().split('T')[0]);
+    if (!dataStr) return;
+    cp.data_pagamento = dataStr;
+    cp.status = 'Pago';
+    salvarERecarregar('Pagamento registrado!');
+}
+
+function excluirCP(id) {
+    if (!confirm('Remover este lançamento a pagar?')) return;
+    db.contas_pagar = db.contas_pagar.filter(x => x.id != id);
+    salvarERecarregar('Lançamento removido.');
+}
+
+function salvarDespesaFixa() {
+    const descricao = document.getElementById('df-descricao')?.value.trim();
+    const valor = parseFloat(document.getElementById('df-valor')?.value) || 0;
+    const dia = parseInt(document.getElementById('df-dia')?.value) || 1;
+    const categoria = document.getElementById('df-categoria')?.value || 'outro';
+    if (!descricao) return alert('Informe a descrição da despesa.');
+    if (!valor) return alert('Informe o valor da despesa.');
+    db.despesas_fixas.push({ id: Date.now(), descricao, valor, dia_vencimento: dia, categoria, ativo: true });
+    salvarERecarregar('Despesa fixa cadastrada!');
+}
+
+function excluirDespesaFixa(id) {
+    if (!confirm('Remover esta despesa fixa recorrente?')) return;
+    db.despesas_fixas = db.despesas_fixas.filter(x => x.id != id);
+    salvarERecarregar('Despesa removida.');
+}
+
+function gerarContasPagarDoMes() {
+    const hoje = new Date();
+    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+    const ano = hoje.getFullYear();
+    let geradas = 0;
+    db.despesas_fixas.filter(df => df.ativo).forEach(df => {
+        const vencStr = `${ano}-${mes}-${String(df.dia_vencimento).padStart(2, '0')}`;
+        const jaExiste = db.contas_pagar.some(cp => !cp.pedido_id && cp.data_vencimento === vencStr && cp.descricao === df.descricao);
+        if (!jaExiste) {
+            db.contas_pagar.push({
+                id: Date.now() + geradas, pedido_id: null,
+                tipo: 'fixo', categoria: df.categoria,
+                descricao: df.descricao, credor_nome: '',
+                valor: df.valor, data_vencimento: vencStr,
+                data_pagamento: null, status: 'Pendente'
+            });
+            geradas++;
+        }
+    });
+    if (geradas) salvarERecarregar(`${geradas} despesa(s) gerada(s) para o mês!`);
+    else alert('Todas as despesas fixas do mês já foram geradas (ou nenhuma cadastrada).');
+}
+
+function adicionarContaPagarManual() {
+    const descricao = document.getElementById('cp-nova-descricao')?.value.trim();
+    const credor    = document.getElementById('cp-nova-credor')?.value.trim() || '';
+    const valor     = parseFloat(document.getElementById('cp-nova-valor')?.value) || 0;
+    const vencimento = document.getElementById('cp-nova-vencimento')?.value;
+    const categoria = document.getElementById('cp-nova-categoria')?.value || 'outro';
+    const pedidoId  = document.getElementById('cp-nova-pedido')?.value || '';
+    if (!descricao)  return alert('Informe a descrição.');
+    if (!valor)      return alert('Informe o valor.');
+    if (!vencimento) return alert('Informe a data de vencimento.');
+    db.contas_pagar.push({
+        id: Date.now(), pedido_id: pedidoId ? parseInt(pedidoId) : null,
+        tipo: 'variavel', categoria, descricao, credor_nome: credor,
+        valor, data_vencimento: vencimento, data_pagamento: null, status: 'Pendente'
+    });
+    salvarERecarregar('Conta a pagar registrada!');
+}
+
+function mostrarTabFinanceiro(tab) {
+    document.querySelectorAll('.fin-tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.fin-panel').forEach(p => p.classList.remove('active'));
+    document.querySelector(`.fin-tab-btn[data-tab="${tab}"]`)?.classList.add('active');
+    document.getElementById(`fin-${tab}`)?.classList.add('active');
+    if (tab === 'dashboard') renderDashboardFinanceiro();
+    else if (tab === 'receber') renderContasReceber();
+    else if (tab === 'pagar')   renderContasPagar();
+    else if (tab === 'fixas')   renderDespesasFixas();
+    else if (tab === 'dre')     renderDRE();
+}
+
+function renderDashboardFinanceiro() {
+    atualizarStatusVencimentos();
+    const hoje = new Date();
+    const em30 = new Date(hoje.getTime() + 30 * 86400000).toISOString().split('T')[0];
+    const mesStr = hoje.toISOString().substring(0, 7);
+
+    const receitaMes   = db.contas_receber.filter(cr => cr.status === 'Pago' && (cr.data_pagamento||'').startsWith(mesStr)).reduce((s,cr)=>s+cr.valor,0);
+    const aReceberProx = db.contas_receber.filter(cr => cr.status !== 'Pago' && cr.data_vencimento <= em30).reduce((s,cr)=>s+cr.valor,0);
+    const aPagarProx   = db.contas_pagar.filter(cp => cp.status !== 'Pago' && cp.data_vencimento <= em30).reduce((s,cp)=>s+cp.valor,0);
+    const atRec = db.contas_receber.filter(cr => cr.status === 'Atrasado').length;
+    const atPag = db.contas_pagar.filter(cp => cp.status === 'Atrasado').length;
+
+    const kpiEl = document.getElementById('fin-kpis');
+    if (kpiEl) kpiEl.innerHTML = `
+        <div class="fin-kpi fin-kpi-green"><div class="fin-kpi-label">Recebido este mês</div><div class="fin-kpi-value">R$ ${receitaMes.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div>
+        <div class="fin-kpi fin-kpi-blue"><div class="fin-kpi-label">A receber (30 dias)</div><div class="fin-kpi-value">R$ ${aReceberProx.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div>
+        <div class="fin-kpi fin-kpi-orange"><div class="fin-kpi-label">A pagar (30 dias)</div><div class="fin-kpi-value">R$ ${aPagarProx.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div>
+        <div class="fin-kpi ${atRec+atPag>0?'fin-kpi-red':'fin-kpi-gray'}"><div class="fin-kpi-label">Em atraso</div><div class="fin-kpi-value">${atRec+atPag}</div><div class="fin-kpi-sub">${atRec} a receber · ${atPag} a pagar</div></div>`;
+
+    const proxRec = db.contas_receber.filter(cr=>cr.status!=='Pago').sort((a,b)=>a.data_vencimento.localeCompare(b.data_vencimento)).slice(0,6);
+    const tbRec = document.getElementById('fin-dash-receber');
+    if (tbRec) tbRec.innerHTML = proxRec.length ? proxRec.map(cr=>{
+        const at=cr.status==='Atrasado';
+        return `<tr class="${at?'fin-atrasado':''}">
+            <td>${new Date(cr.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR')}</td>
+            <td>${escapeHtml(cr.cliente_nome)}</td>
+            <td>${escapeHtml(cr.descricao)}</td>
+            <td style="text-align:right"><strong>R$ ${cr.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
+            <td><span class="fin-badge fin-badge-${at?'red':'pending'}">${cr.status}</span></td>
+        </tr>`;
+    }).join('') : '<tr><td colspan="5" style="text-align:center;color:#999;padding:16px">Nenhum recebimento pendente.</td></tr>';
+
+    const proxPag = db.contas_pagar.filter(cp=>cp.status!=='Pago').sort((a,b)=>a.data_vencimento.localeCompare(b.data_vencimento)).slice(0,6);
+    const tbPag = document.getElementById('fin-dash-pagar');
+    if (tbPag) tbPag.innerHTML = proxPag.length ? proxPag.map(cp=>{
+        const at=cp.status==='Atrasado';
+        return `<tr class="${at?'fin-atrasado':''}">
+            <td>${new Date(cp.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR')}</td>
+            <td>${escapeHtml(cp.credor_nome||cp.categoria)}</td>
+            <td>${escapeHtml(cp.descricao)}</td>
+            <td style="text-align:right"><strong>R$ ${cp.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
+            <td><span class="fin-badge fin-badge-${at?'red':'pending'}">${cp.status}</span></td>
+        </tr>`;
+    }).join('') : '<tr><td colspan="5" style="text-align:center;color:#999;padding:16px">Nenhum pagamento pendente.</td></tr>';
+}
+
+function renderContasReceber() {
+    atualizarStatusVencimentos();
+    const tb = document.getElementById('tb-contas-receber');
+    if (!tb) return;
+    const filtroStatus  = document.getElementById('cr-filtro-status')?.value || '';
+    const filtroCliente = (document.getElementById('cr-filtro-cliente')?.value||'').toLowerCase().trim();
+    let lista = db.contas_receber.filter(cr => {
+        if (filtroStatus && cr.status !== filtroStatus) return false;
+        if (filtroCliente && !cr.cliente_nome.toLowerCase().includes(filtroCliente) && !cr.descricao.toLowerCase().includes(filtroCliente)) return false;
+        return true;
+    }).sort((a,b) => a.data_vencimento.localeCompare(b.data_vencimento));
+    const totPend = lista.filter(cr=>cr.status!=='Pago').reduce((s,cr)=>s+cr.valor,0);
+    const totRec  = lista.filter(cr=>cr.status==='Pago').reduce((s,cr)=>s+cr.valor,0);
+    const res = document.getElementById('cr-resumo');
+    if (res) res.innerHTML = `<span style="color:#059669">✓ Recebido: <strong>R$ ${totRec.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>&nbsp;&nbsp;<span style="color:#d97706">⏳ Pendente: <strong>R$ ${totPend.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>`;
+    if (!lista.length) { tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:#999;padding:24px">Nenhum registro encontrado.</td></tr>'; return; }
+    tb.innerHTML = lista.map(cr => {
+        const at=cr.status==='Atrasado', pago=cr.status==='Pago';
+        return `<tr class="${at?'fin-atrasado':''}">
+            <td>${new Date(cr.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR')}</td>
+            <td><strong>${escapeHtml(cr.cliente_nome)}</strong></td>
+            <td>${escapeHtml(cr.descricao)}</td>
+            <td style="text-align:right"><strong>R$ ${cr.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
+            <td>${pago?`<span style="color:#059669;font-size:12px">✓ ${new Date(cr.data_pagamento+'T12:00:00').toLocaleDateString('pt-BR')}</span>`:`<span class="fin-badge fin-badge-${at?'red':'pending'}">${cr.status}</span>`}</td>
+            <td>${!pago?`<button class="btn btn-sm btn-success" onclick="marcarCRPago(${cr.id})" title="Confirmar recebimento">✓ Recebido</button>`:''}<button class="btn btn-outline btn-sm btn-danger" onclick="excluirCR(${cr.id})" title="Excluir" style="margin-left:4px">🗑️</button></td>
+        </tr>`;
+    }).join('');
+}
+
+function renderContasPagar() {
+    atualizarStatusVencimentos();
+    const tb = document.getElementById('tb-contas-pagar');
+    if (!tb) return;
+    const filtroTipo   = document.getElementById('cp-filtro-tipo')?.value || '';
+    const filtroStatus = document.getElementById('cp-filtro-status')?.value || '';
+    let lista = db.contas_pagar.filter(cp => {
+        if (filtroTipo && cp.tipo !== filtroTipo) return false;
+        if (filtroStatus && cp.status !== filtroStatus) return false;
+        return true;
+    }).sort((a,b) => a.data_vencimento.localeCompare(b.data_vencimento));
+    const totPend = lista.filter(cp=>cp.status!=='Pago').reduce((s,cp)=>s+cp.valor,0);
+    const totPago = lista.filter(cp=>cp.status==='Pago').reduce((s,cp)=>s+cp.valor,0);
+    const res = document.getElementById('cp-resumo');
+    if (res) res.innerHTML = `<span style="color:#dc2626">↑ Pago: <strong>R$ ${totPago.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>&nbsp;&nbsp;<span style="color:#d97706">⏳ A pagar: <strong>R$ ${totPend.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>`;
+    if (!lista.length) { tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:#999;padding:24px">Nenhum registro encontrado.</td></tr>'; return; }
+    tb.innerHTML = lista.map(cp => {
+        const at=cp.status==='Atrasado', pago=cp.status==='Pago', isRT=cp.categoria==='comissao_rt';
+        const tipoTag = cp.tipo==='fixo' ? '<span class="fin-badge fin-badge-gray">Fixo</span>' : '<span class="fin-badge fin-badge-blue">Variável</span>';
+        return `<tr class="${at?'fin-atrasado':''}">
+            <td>${new Date(cp.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR')}</td>
+            <td>${escapeHtml(cp.descricao)}${isRT?' <span title="Comissão RT — gerada após quitação total do pedido" style="cursor:help">🏛️</span>':''}</td>
+            <td>${escapeHtml(cp.credor_nome||'—')}</td>
+            <td style="text-align:right"><strong>R$ ${cp.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
+            <td>${tipoTag}</td>
+            <td>${pago?`<span style="color:#059669;font-size:12px">✓ ${new Date(cp.data_pagamento+'T12:00:00').toLocaleDateString('pt-BR')}</span>`:`<span class="fin-badge fin-badge-${at?'red':'pending'}">${cp.status}</span>`}</td>
+            <td>${!pago?`<button class="btn btn-sm btn-success" onclick="marcarCPPago(${cp.id})" title="Confirmar pagamento">✓ Pagar</button>`:''}<button class="btn btn-outline btn-sm btn-danger" onclick="excluirCP(${cp.id})" title="Excluir" style="margin-left:4px">🗑️</button></td>
+        </tr>`;
+    }).join('');
+    const pedSel = document.getElementById('cp-nova-pedido');
+    if (pedSel) pedSel.innerHTML = '<option value="">— Sem vínculo de pedido —</option>' +
+        db.pedidos.filter(p=>normalizarStatus(p.status)!=='Orçamento')
+        .map(p=>`<option value="${p.id}">#${String(p.id).slice(-6)} ${escapeHtml(p.clienteNome||'')}</option>`).join('');
+}
+
+function renderDespesasFixas() {
+    const tb = document.getElementById('tb-despesas-fixas');
+    if (!tb) return;
+    if (!db.despesas_fixas.length) { tb.innerHTML='<tr><td colspan="5" style="text-align:center;color:#999;padding:24px">Nenhuma despesa fixa cadastrada.</td></tr>'; return; }
+    tb.innerHTML = db.despesas_fixas.map(df=>`
+        <tr>
+            <td><strong>${escapeHtml(df.descricao)}</strong></td>
+            <td>${escapeHtml(df.categoria)}</td>
+            <td>Todo dia ${df.dia_vencimento}</td>
+            <td>R$ ${(df.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+            <td><button class="btn btn-outline btn-sm btn-danger" onclick="excluirDespesaFixa(${df.id})" title="Excluir">🗑️</button></td>
+        </tr>`).join('');
+}
+
+function renderDRE() {
+    const tb = document.getElementById('tb-dre');
+    if (!tb) return;
+    const filtroCliente = (document.getElementById('dre-filtro-cliente')?.value||'').toLowerCase().trim();
+    let pedidos = db.pedidos.filter(p => normalizarStatus(p.status) !== 'Orçamento');
+    if (filtroCliente) pedidos = pedidos.filter(p=>(p.clienteNome||'').toLowerCase().includes(filtroCliente));
+    pedidos = pedidos.sort((a,b)=>b.id-a.id).slice(0,50);
+    if (!pedidos.length) { tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:#999;padding:24px">Nenhum pedido aprovado encontrado.</td></tr>'; return; }
+    let totRec=0, totCusto=0, totLucro=0;
+    const rows = pedidos.map(p=>{
+        const receita   = p.valor||0;
+        const custoMat  = (p.total_material||0)+(p.total_acessorios||0);
+        const custoMao  = p.maoObra||0;
+        const custoRT   = db.contas_pagar.filter(cp=>cp.pedido_id===p.id&&cp.categoria==='comissao_rt').reduce((s,cp)=>s+cp.valor,0);
+        const custoExtra= db.contas_pagar.filter(cp=>cp.pedido_id===p.id&&cp.categoria!=='comissao_rt').reduce((s,cp)=>s+cp.valor,0);
+        const custo     = custoMat+custoMao+custoRT+custoExtra;
+        const lucro     = receita-custo;
+        const margem    = receita>0?(lucro/receita*100):0;
+        const cor       = margem>=30?'#059669':margem>=15?'#d97706':'#dc2626';
+        totRec+=receita; totCusto+=custo; totLucro+=lucro;
+        return `<tr>
+            <td style="font-size:12px;color:#888">#${String(p.id).slice(-6)}</td>
+            <td>${escapeHtml(p.clienteNome||'—')}</td>
+            <td style="text-align:right">R$ ${receita.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+            <td style="text-align:right;color:#888">R$ ${custoMat.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+            <td style="text-align:right;color:#888">R$ ${custoMao.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+            <td style="text-align:right;color:#888">R$ ${custoRT.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+            <td style="text-align:right"><strong style="color:${cor}">R$ ${lucro.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
+            <td style="text-align:center"><strong style="color:${cor}">${margem.toFixed(1)}%</strong></td>
+        </tr>`;
+    });
+    const totM = totRec>0?(totLucro/totRec*100):0;
+    const corT = totM>=30?'#059669':totM>=15?'#d97706':'#dc2626';
+    tb.innerHTML = rows.join('') + `
+        <tr style="border-top:2px solid #374151;background:#f9fafb;font-weight:700">
+            <td colspan="2">TOTAL (${pedidos.length} pedidos)</td>
+            <td style="text-align:right">R$ ${totRec.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+            <td colspan="3" style="text-align:right;color:#888">Custos: R$ ${totCusto.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+            <td style="text-align:right"><strong style="color:${corT}">R$ ${totLucro.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
+            <td style="text-align:center"><strong style="color:${corT}">${totM.toFixed(1)}%</strong></td>
+        </tr>`;
+}
