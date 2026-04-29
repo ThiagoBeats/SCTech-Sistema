@@ -44,9 +44,36 @@ function registrarMovimento(tipo, item_nome, item_tipo, quantidade, unidade, ref
 let editandoIdCliente  = null;
 let editandoIdVendedor = null;
 let editandoIdFornecedor = null;
+let editandoCatalogoId = null;
+let editandoMaterialId = null;
 let pcDraftItens = [];
 const matSortState = { col: 'nome', dir: 1 };
 const cliSortState = { col: 'nome', dir: 1 };
+
+let _prevTabEstoque = null, _curTabEstoque = 'tecidos';
+let _prevTabCatalogo = null, _curTabCatalogo = 'tecidos';
+let _prevTabRel = null, _curTabRel = 'faturamento';
+let _prevTabVend = null, _curTabVend = 'lista';
+let _prevTabForn = null, _curTabForn = 'lista';
+let _prevTabFin = null, _curTabFin = 'dashboard';
+
+function _tabBackBtn(navSel, prevTab, goBackFn) {
+    const nav = document.querySelector(navSel);
+    if (!nav) return;
+    let btn = nav.querySelector('.tab-back-btn');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.className = 'tab-btn tab-back-btn';
+        nav.prepend(btn);
+    }
+    if (prevTab) {
+        btn.textContent = '← Voltar';
+        btn.style.display = '';
+        btn.onclick = goBackFn;
+    } else {
+        btn.style.display = 'none';
+    }
+}
 
 // --- TOAST ---
 function toast(msg, tipo = 'success', ms = 3000) {
@@ -235,13 +262,32 @@ function salvarCatalogo() {
     const largura_rolo = parseFloat(document.getElementById('cat-largura').value) || 2.80;
     const referencia = document.getElementById('cat-ref')?.value.trim() || '';
     const min_estoque = parseFloat(document.getElementById('cat-min').value) || 0;
-    if (!nome || !preco) return alert('Preencha o nome e o preço do material');
-    const dup = db.catalogo.find(c => c.nome.trim().toLowerCase() === nome.toLowerCase());
-    if (dup) return alert(`Já existe um tecido com o nome "${dup.nome}" no catálogo.`);
+    if (!nome || !preco) return alert('Preencha o nome e o preço do tecido');
     const forn_id_cat  = parseInt(document.getElementById('cat-fornecedor')?.value) || null;
     const forn_obj_cat = forn_id_cat ? db.fornecedores.find(f => f.id === forn_id_cat) : null;
-    db.catalogo.push({ id: Date.now(), nome, preco, largura_rolo, rapport: 0, referencia, min_estoque, fornecedor_id: forn_id_cat, fornecedor_nome: forn_obj_cat ? forn_obj_cat.nome : '' });
-    salvarERecarregar('Tecido cadastrado no catálogo!');
+    if (editandoCatalogoId !== null) {
+        const c = db.catalogo.find(x => x.id == editandoCatalogoId);
+        if (c) {
+            const dupNome = db.catalogo.find(x => x.id != editandoCatalogoId && x.nome.trim().toLowerCase() === nome.toLowerCase());
+            if (dupNome) return alert(`Já existe outro tecido com o nome "${dupNome.nome}".`);
+            if (referencia) {
+                const dupRef = db.catalogo.find(x => x.id != editandoCatalogoId && x.referencia && x.referencia.toLowerCase() === referencia.toLowerCase());
+                if (dupRef) return alert(`Referência "${referencia}" já usada por "${dupRef.nome}".`);
+            }
+            Object.assign(c, { nome, preco, largura_rolo, referencia, min_estoque, fornecedor_id: forn_id_cat, fornecedor_nome: forn_obj_cat ? forn_obj_cat.nome : '' });
+        }
+        editandoCatalogoId = null;
+        salvarERecarregar('Tecido atualizado!');
+    } else {
+        const dup = db.catalogo.find(c => c.nome.trim().toLowerCase() === nome.toLowerCase());
+        if (dup) return alert(`Já existe um tecido com o nome "${dup.nome}" no catálogo.`);
+        if (referencia) {
+            const dupRef = db.catalogo.find(c => c.referencia && c.referencia.toLowerCase() === referencia.toLowerCase());
+            if (dupRef) return alert(`Referência "${referencia}" já usada por "${dupRef.nome}".`);
+        }
+        db.catalogo.push({ id: Date.now(), nome, preco, largura_rolo, rapport: 0, referencia, min_estoque, fornecedor_id: forn_id_cat, fornecedor_nome: forn_obj_cat ? forn_obj_cat.nome : '' });
+        salvarERecarregar('Tecido cadastrado no catálogo!');
+    }
 }
 
 function autoFillCatalogoPorReferencia() {
@@ -269,6 +315,22 @@ function excluirCatalogo(id) {
     if (!confirm('Remover este tecido do catálogo?')) return;
     db.catalogo = db.catalogo.filter(c => c.id != id);
     salvarERecarregar('Tecido removido.');
+}
+
+function editarCatalogo(id) {
+    const c = db.catalogo.find(x => x.id == id);
+    if (!c) return;
+    editandoCatalogoId = id;
+    document.getElementById('cat-ref').value = c.referencia || '';
+    document.getElementById('cat-nome').value = c.nome || '';
+    document.getElementById('cat-preco').value = c.preco || '';
+    document.getElementById('cat-largura').value = c.largura_rolo || 2.80;
+    document.getElementById('cat-min').value = c.min_estoque || 0;
+    const fornSel = document.getElementById('cat-fornecedor');
+    if (fornSel) fornSel.value = c.fornecedor_id || '';
+    const btn = document.querySelector('button[onclick="salvarCatalogo()"]');
+    if (btn) btn.textContent = 'Atualizar Tecido';
+    document.getElementById('cat-ref').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // --- PIPELINE DE STATUS ---
@@ -697,10 +759,12 @@ function autoFillTecidoNoAmbiente(ambId, tidx) {
 function autoFillTecidoPorReferencia() {
     const ref = document.getElementById('est-lote')?.value.trim();
     if (!ref || ref.length < 2) return;
-    const existing = db.estoque.find(r => r.lote && r.lote.toLowerCase() === ref.toLowerCase());
-    if (!existing) return;
     const sel = document.getElementById('est-tecido');
-    if (sel) sel.value = String(existing.tecido_id);
+    if (!sel) return;
+    const tec = db.catalogo.find(c => c.referencia && c.referencia.toLowerCase() === ref.toLowerCase());
+    if (tec) { sel.value = String(tec.id); return; }
+    const existing = db.estoque.find(r => r.lote && r.lote.toLowerCase() === ref.toLowerCase());
+    if (existing) sel.value = String(existing.tecido_id);
 }
 
 function mostrarBaixaForm(roloId) {
@@ -792,17 +856,32 @@ function salvarMaterial() {
     const min_estoque = parseFloat(document.getElementById('mat-min')?.value) || 0;
     const estoque_inicial = parseFloat(document.getElementById('mat-qtd')?.value) || 0;
     if (!nome) return alert('Informe o nome do material.');
-    const dup = db.materiais.find(m => m.nome.trim().toLowerCase() === nome.toLowerCase());
-    if (dup) return alert(`Já existe um material com o nome "${dup.nome}" no estoque.`);
-    if (referencia) {
-        const dupRef = db.materiais.find(m => m.referencia && m.referencia.toLowerCase() === referencia.toLowerCase());
-        if (dupRef) return alert(`Já existe um material com a referência "${dupRef.referencia}" (${dupRef.nome}).`);
-    }
     const forn_id_mat  = parseInt(document.getElementById('mat-fornecedor')?.value) || null;
     const forn_obj_mat = forn_id_mat ? db.fornecedores.find(f => f.id === forn_id_mat) : null;
-    db.materiais.push({ id: Date.now(), referencia, nome, unidade, preco, min_estoque, estoque_atual: estoque_inicial, fornecedor_id: forn_id_mat, fornecedor_nome: forn_obj_mat ? forn_obj_mat.nome : '' });
-    if (estoque_inicial > 0) registrarMovimento('Entrada', nome, 'material', estoque_inicial, unidade, 'Estoque inicial');
-    salvarERecarregar('Material cadastrado!');
+    if (editandoMaterialId !== null) {
+        const m = db.materiais.find(x => x.id == editandoMaterialId);
+        if (m) {
+            const dupNome = db.materiais.find(x => x.id != editandoMaterialId && x.nome.trim().toLowerCase() === nome.toLowerCase());
+            if (dupNome) return alert(`Já existe outro material com o nome "${dupNome.nome}".`);
+            if (referencia) {
+                const dupRef = db.materiais.find(x => x.id != editandoMaterialId && x.referencia && x.referencia.toLowerCase() === referencia.toLowerCase());
+                if (dupRef) return alert(`Referência "${referencia}" já usada por "${dupRef.nome}".`);
+            }
+            Object.assign(m, { referencia, nome, unidade, preco, min_estoque, fornecedor_id: forn_id_mat, fornecedor_nome: forn_obj_mat ? forn_obj_mat.nome : '' });
+        }
+        editandoMaterialId = null;
+        salvarERecarregar('Material atualizado!');
+    } else {
+        const dup = db.materiais.find(m => m.nome.trim().toLowerCase() === nome.toLowerCase());
+        if (dup) return alert(`Já existe um material com o nome "${dup.nome}".`);
+        if (referencia) {
+            const dupRef = db.materiais.find(m => m.referencia && m.referencia.toLowerCase() === referencia.toLowerCase());
+            if (dupRef) return alert(`Referência "${referencia}" já usada por "${dupRef.nome}".`);
+        }
+        db.materiais.push({ id: Date.now(), referencia, nome, unidade, preco, min_estoque, estoque_atual: estoque_inicial, fornecedor_id: forn_id_mat, fornecedor_nome: forn_obj_mat ? forn_obj_mat.nome : '' });
+        if (estoque_inicial > 0) registrarMovimento('Entrada', nome, 'material', estoque_inicial, unidade, 'Estoque inicial');
+        salvarERecarregar('Material cadastrado!');
+    }
 }
 
 function autoFillMaterialPorReferencia() {
@@ -827,6 +906,24 @@ function excluirMaterial(id) {
     db.materiais = db.materiais.filter(m => m.id != id);
     db.kits.forEach(k => { k.itens = k.itens.filter(i => i.materialId != id); });
     salvarERecarregar('Material removido.');
+}
+
+function editarMaterial(id) {
+    const m = db.materiais.find(x => x.id == id);
+    if (!m) return;
+    editandoMaterialId = id;
+    document.getElementById('mat-ref').value = m.referencia || '';
+    document.getElementById('mat-nome').value = m.nome || '';
+    document.getElementById('mat-unidade').value = m.unidade || 'un';
+    document.getElementById('mat-preco').value = m.preco || '';
+    document.getElementById('mat-min').value = m.min_estoque || 0;
+    const qtdEl = document.getElementById('mat-qtd');
+    if (qtdEl) qtdEl.value = '';
+    const fornSel = document.getElementById('mat-fornecedor');
+    if (fornSel) fornSel.value = m.fornecedor_id || '';
+    const btn = document.querySelector('button[onclick="salvarMaterial()"]');
+    if (btn) btn.textContent = 'Atualizar Material';
+    document.getElementById('mat-ref').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function mostrarAjusteForm(id) {
@@ -891,6 +988,7 @@ function renderMateriais() {
             </td>
             <td style="font-size:12px;color:#555">${escapeHtml(m.fornecedor_nome || '—')}</td>
             <td>
+                <button class="btn btn-outline btn-sm" onclick="editarMaterial(${m.id})" title="Editar">✏️ Editar</button>
                 <button class="btn btn-outline btn-sm" onclick="mostrarAjusteForm(${m.id})" title="Ajustar estoque">± Ajustar</button>
                 <button class="btn btn-outline btn-sm" onclick="pedirMaterial(${m.id})" title="Criar pedido de compra">🛒</button>
                 <button class="btn btn-outline btn-sm btn-danger" onclick="excluirMaterial(${m.id})" title="Excluir material">🗑️</button>
@@ -1019,10 +1117,12 @@ function limparFiltrosHistorico() {
 
 // Troca de aba no estoque
 function mostrarTabEstoque(tab) {
+    if (_curTabEstoque !== tab) { _prevTabEstoque = _curTabEstoque; _curTabEstoque = tab; }
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('tab-' + tab)?.classList.add('active');
     document.querySelector(`.tab-btn[data-tab="${tab}"]`)?.classList.add('active');
+    _tabBackBtn('.tab-nav', _prevTabEstoque, () => mostrarTabEstoque(_prevTabEstoque));
 }
 
 // --- FORMULÁRIO DE PEDIDO (MULTI-AMBIENTE + ACESSÓRIOS) ---
@@ -1069,6 +1169,24 @@ function renderAmbienteBreakdown(a) {
     }).join('');
     const totalRow = tecidos.length > 1 ? `<div class="breakdown-box" style="margin-top:6px"><div class="breakdown-row destaque"><span>Total combinado (${tecidos.length} tecidos)</span><span>R$ <strong>${totalMat.toFixed(2)}</strong></span></div></div>` : '';
     return parts + totalRow;
+}
+
+function syncAmbientesFromDOM() {
+    pedidoDraft.ambientes.forEach(a => {
+        const v = id => document.getElementById(id)?.value;
+        const amb = v(`a-amb-${a.id}`); if (amb !== undefined) a.amb = amb.trim();
+        const prega = v(`a-prega-${a.id}`); if (prega) a.prega = prega;
+        const fator = parseFloat(v(`a-fator-${a.id}`)); if (!isNaN(fator)) a.fator = fator;
+        const fixacao = v(`a-fixacao-${a.id}`); if (fixacao) a.fixacao = fixacao;
+        const larg = parseFloat(v(`a-larg-${a.id}`)); if (!isNaN(larg)) a.largura = larg;
+        const alt = parseFloat(v(`a-alt-${a.id}`)); if (!isNaN(alt)) a.altura = alt;
+        const bainha = parseFloat(v(`a-bainha-${a.id}`)); if (!isNaN(bainha)) a.bainha_cm = bainha;
+        const cab = parseFloat(v(`a-cabecote-${a.id}`)); if (!isNaN(cab)) a.cabecote_cm = cab;
+        (a.tecidos || []).forEach((t, tidx) => {
+            const sel = document.getElementById(`a-tecido-${a.id}-${tidx}`);
+            if (sel && sel.value) t.tecidoId = parseInt(sel.value) || null;
+        });
+    });
 }
 
 function renderAmbientes() {
@@ -1153,6 +1271,7 @@ function renderAmbientes() {
 }
 
 function adicionarAmbiente() {
+    syncAmbientesFromDOM();
     _ambienteCounter++;
     pedidoDraft.ambientes.push({
         id: _ambienteCounter, calculado: false, amb: '', prega: 'Americana', fixacao: 'Trilho Suico',
@@ -1164,6 +1283,7 @@ function adicionarAmbiente() {
 }
 
 function adicionarTecidoAoAmbiente(ambId) {
+    syncAmbientesFromDOM();
     const a = pedidoDraft.ambientes.find(x => x.id === ambId);
     if (!a || (a.tecidos || []).length >= 3) return;
     if (!a.tecidos) a.tecidos = [];
@@ -1173,6 +1293,7 @@ function adicionarTecidoAoAmbiente(ambId) {
 }
 
 function removerTecidoDoAmbiente(ambId, tidx) {
+    syncAmbientesFromDOM();
     const a = pedidoDraft.ambientes.find(x => x.id === ambId);
     if (!a || !a.tecidos || a.tecidos.length <= 1) return;
     a.tecidos.splice(tidx, 1);
@@ -1181,6 +1302,7 @@ function removerTecidoDoAmbiente(ambId, tidx) {
 }
 
 function removerAmbiente(id) {
+    syncAmbientesFromDOM();
     pedidoDraft.ambientes = pedidoDraft.ambientes.filter(a => a.id !== id);
     renderAmbientes(); atualizarTotalPedido();
 }
@@ -1812,6 +1934,7 @@ function renderRelVendedores() {
     </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:#999;padding:20px">Nenhum dado.</td></tr>';
 }
 function mostrarTabRel(tab) {
+    if (_curTabRel !== tab) { _prevTabRel = _curTabRel; _curTabRel = tab; }
     document.querySelectorAll('#tab-rel-faturamento,#tab-rel-recebiveis,#tab-rel-vendedores').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('[data-tab]').forEach(btn => { if (['faturamento','recebiveis','vendedores'].includes(btn.dataset.tab)) btn.classList.remove('active'); });
     document.getElementById(`tab-rel-${tab}`)?.classList.add('active');
@@ -1819,6 +1942,7 @@ function mostrarTabRel(tab) {
     if (tab === 'faturamento') renderRelFaturamento();
     if (tab === 'recebiveis')  renderRelRecebiveis();
     if (tab === 'vendedores')  renderRelVendedores();
+    _tabBackBtn('.tab-nav', _prevTabRel, () => mostrarTabRel(_prevTabRel));
 }
 
 // --- VENDEDORES ---
@@ -1982,6 +2106,7 @@ function pagarTodasFiltradas() {
 }
 
 function mostrarTabVendedores(tab) {
+    if (_curTabVend !== tab) { _prevTabVend = _curTabVend; _curTabVend = tab; }
     document.querySelectorAll('#tab-vend-lista,#tab-vend-pendentes,#tab-vend-historico').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.vend-tab-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('tab-vend-' + tab)?.classList.add('active');
@@ -1989,6 +2114,7 @@ function mostrarTabVendedores(tab) {
     if (tab === 'lista')     renderTabelaVendedores();
     if (tab === 'pendentes') renderComissoesPendentes();
     if (tab === 'historico') renderHistoricoComissoes();
+    _tabBackBtn('.tab-nav', _prevTabVend, () => mostrarTabVendedores(_prevTabVend));
 }
 
 // --- FORNECEDORES ---
@@ -2252,6 +2378,7 @@ function pedirTecido(tecidoId) {
 }
 
 function mostrarTabFornecedores(tab) {
+    if (_curTabForn !== tab) { _prevTabForn = _curTabForn; _curTabForn = tab; }
     document.querySelectorAll('#tab-forn-lista,#tab-forn-pedidos,#tab-forn-novo').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.forn-tab-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('tab-forn-' + tab)?.classList.add('active');
@@ -2259,6 +2386,7 @@ function mostrarTabFornecedores(tab) {
     if (tab === 'lista')   renderTabelaFornecedores();
     if (tab === 'pedidos') renderListaPedidosCompra();
     if (tab === 'novo')    atualizarSelectItemPC();
+    _tabBackBtn('.tab-nav', _prevTabForn, () => mostrarTabFornecedores(_prevTabForn));
 }
 
 // --- PEDIDO DE COMPRA (documento imprimível) ---
@@ -2393,12 +2521,15 @@ function toggleSidebar() {
 }
 
 // --- PCP VIEW TOGGLE ---
+let _prevViewPCP = null, _curViewPCP = 'kanban';
 function mostrarViewPCP(view) {
+    if (_curViewPCP !== view) { _prevViewPCP = _curViewPCP; _curViewPCP = view; }
     document.getElementById('pcp-view-kanban').style.display = view === 'kanban' ? '' : 'none';
     document.getElementById('pcp-view-agenda').style.display = view === 'agenda' ? '' : 'none';
     document.getElementById('tab-btn-kanban').className = 'tab-btn' + (view==='kanban'?' active':'');
     document.getElementById('tab-btn-agenda').className = 'tab-btn' + (view==='agenda'?' active':'');
     if (view === 'agenda') renderAgenda();
+    _tabBackBtn('.tab-nav', _prevViewPCP, () => mostrarViewPCP(_prevViewPCP));
 }
 
 // --- INICIALIZAÇÃO ---
@@ -2430,6 +2561,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const dispTxt = db.estoque.some(r=>r.tecido_id==c.id) ? `${disp.toFixed(2)} m` : '—';
             const alertMin = c.min_estoque>0&&disp<c.min_estoque ? `<span class="badge-alerta" style="margin-left:6px">⚠</span>` : '';
             return `<tr><td>${escapeHtml(c.nome)}</td><td style="font-size:12px;color:#555">${escapeHtml(c.referencia||'—')}</td><td>R$ ${c.preco.toFixed(2)}</td><td>${(c.largura_rolo||2.80).toFixed(2)} m</td><td>${c.min_estoque?c.min_estoque+' m':'—'}</td><td>${dispTxt}${alertMin}</td><td style="font-size:12px;color:#555">${escapeHtml(c.fornecedor_nome||'—')}</td><td>
+                <button class="btn btn-outline btn-sm" onclick="editarCatalogo(${c.id})" title="Editar">✏️ Editar</button>
                 <button class="btn btn-outline btn-sm" onclick="pedirTecido(${c.id})" title="Criar pedido de compra">🛒</button>
                 <button class="btn btn-outline btn-sm btn-danger" onclick="excluirCatalogo(${c.id})" title="Remover do catálogo">Remover</button>
             </td></tr>`;
@@ -2574,11 +2706,13 @@ document.addEventListener('DOMContentLoaded', () => {
 // =============================================
 
 function mostrarTabCatalogo(tab) {
+    if (_curTabCatalogo !== tab) { _prevTabCatalogo = _curTabCatalogo; _curTabCatalogo = tab; }
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('tab-cat-' + tab)?.classList.add('active');
     document.querySelector(`.tab-btn[data-tab="cat-${tab}"]`)?.classList.add('active');
     if (tab === 'materiais') renderMateriais();
+    _tabBackBtn('.tab-nav', _prevTabCatalogo, () => mostrarTabCatalogo(_prevTabCatalogo));
 }
 
 // =============================================
@@ -2813,6 +2947,7 @@ function adicionarContaPagarManual() {
 }
 
 function mostrarTabFinanceiro(tab) {
+    if (_curTabFin !== tab) { _prevTabFin = _curTabFin; _curTabFin = tab; }
     document.querySelectorAll('.fin-tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.fin-panel').forEach(p => p.classList.remove('active'));
     document.querySelector(`.fin-tab-btn[data-tab="${tab}"]`)?.classList.add('active');
@@ -2822,6 +2957,7 @@ function mostrarTabFinanceiro(tab) {
     else if (tab === 'pagar')   renderContasPagar();
     else if (tab === 'fixas')   renderDespesasFixas();
     else if (tab === 'dre')     renderDRE();
+    _tabBackBtn('.tab-nav', _prevTabFin, () => mostrarTabFinanceiro(_prevTabFin));
 }
 
 function renderDashboardFinanceiro() {
