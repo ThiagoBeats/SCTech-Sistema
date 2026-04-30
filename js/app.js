@@ -521,10 +521,9 @@ async function aprovarPedido(id) {
 }
 
 // --- BAIXA AUTOMÁTICA DE ESTOQUE ---
-function realizarBaixaEstoque(ped) {
+function realizarBaixaTecidos(ped) {
     const ambientes = normalizarAmbientes(ped);
     const pedRef = ped.id ? `Pedido #${String(ped.id).slice(-6)}` : 'Pedido';
-
     for (const a of ambientes) {
         for (const t of (a.tecidos || [])) {
             if (!t.tecidoId || !(t.consumo_linear > 0)) continue;
@@ -544,8 +543,11 @@ function realizarBaixaEstoque(ped) {
                 registrarMovimento('Baixa Pedido', t.tecidoNome || 'Tecido', 'tecido', totalBaixado, 'm', pedRef);
         }
     }
+    ped.baixa_tecido_realizada = true;
+}
 
-    // Baixa de materiais/acessórios
+function realizarBaixaMateriais(ped) {
+    const pedRef = ped.id ? `Pedido #${String(ped.id).slice(-6)}` : 'Pedido';
     for (const item of (ped.itens || [])) {
         const mat = db.materiais.find(m => m.id == item.materialId);
         if (mat) {
@@ -553,7 +555,12 @@ function realizarBaixaEstoque(ped) {
             registrarMovimento('Baixa Pedido', mat.nome, 'material', item.quantidade, mat.unidade, pedRef);
         }
     }
+    ped.baixa_mat_realizada = true;
+}
 
+function realizarBaixaEstoque(ped) {
+    realizarBaixaTecidos(ped);
+    realizarBaixaMateriais(ped);
     ped.baixa_realizada = true;
 }
 
@@ -613,43 +620,58 @@ async function moverStatus(id, direcao) {
     const novoIdx = idx + direcao;
     if (novoIdx < 0 || novoIdx >= STATUS_PIPELINE.length) return;
 
-    // Confirmar e executar baixa ao entrar em Na Costura
-    if (STATUS_PIPELINE[novoIdx] === 'Na Costura' && !ped.baixa_realizada) {
+    // ── Aguardando Tecido → Na Costura: verificar e baixar tecidos
+    if (STATUS_PIPELINE[novoIdx] === 'Na Costura' && !ped.baixa_tecido_realizada && !ped.baixa_realizada) {
         const ambientes = normalizarAmbientes(ped);
-
-        // Validar estoque antes de prosseguir
-        const insuficientes = [];
-        ambientes.filter(a => a.tecidoId && a.consumo_linear > 0).forEach(a => {
-            const disp = estoqueDisponivel(a.tecidoId);
-            if (disp < a.consumo_linear) {
-                const tec = db.catalogo.find(t => t.id == a.tecidoId);
-                insuficientes.push(`• ${tec?.nome || 'Tecido'}${a.amb ? ' (' + a.amb + ')' : ''}: necessário ${a.consumo_linear.toFixed(2)} m, disponível ${disp.toFixed(2)} m`);
+        const insufTec = [];
+        for (const a of ambientes) {
+            for (const t of (a.tecidos || [])) {
+                if (!t.tecidoId || !(t.consumo_linear > 0)) continue;
+                const disp = estoqueDisponivel(t.tecidoId);
+                if (disp < t.consumo_linear) {
+                    const tec = db.catalogo.find(c => c.id == t.tecidoId);
+                    insufTec.push(`• ${tec?.nome || 'Tecido'}${a.amb ? ' (' + a.amb + ')' : ''}: necessário ${t.consumo_linear.toFixed(2)} m, disponível ${disp.toFixed(2)} m`);
+                }
             }
-        });
-        (ped.itens || []).forEach(i => {
-            const mat = db.materiais.find(m => m.id == i.materialId);
-            const estAtual = mat ? (mat.estoque_atual || 0) : 0;
-            if (estAtual < i.quantidade) {
-                insuficientes.push(`• ${i.nome}: necessário ${i.quantidade} ${i.unidade}, disponível ${estAtual.toFixed(2)} ${i.unidade}`);
-            }
-        });
-        if (insuficientes.length) {
-            await showAlert(`Não é possível avançar para "Na Costura": estoque insuficiente para os seguintes itens:\n\n${insuficientes.join('\n')}`, '🚫');
+        }
+        if (insufTec.length) {
+            await showAlert(`Não é possível avançar para "Na Costura".\n\nTecidos insuficientes em estoque:\n\n${insufTec.join('\n')}`, '🚫');
             return;
         }
-
-        const linhas = [];
-        ambientes.filter(a => a.tecidoId && a.consumo_linear > 0).forEach(a => {
-            const tec = db.catalogo.find(t => t.id == a.tecidoId);
-            linhas.push(`• ${tec?.nome || 'Tecido'}${a.amb ? ' (' + a.amb + ')' : ''}: ${a.consumo_linear.toFixed(2)} m`);
-        });
-        (ped.itens || []).forEach(i => linhas.push(`• ${i.nome}: ${i.quantidade} ${i.unidade}`));
-
-        const msg = linhas.length
-            ? `Dar baixa no estoque e avançar para "Na Costura"?\n\n${linhas.join('\n')}`
+        const linhasTec = [];
+        for (const a of ambientes)
+            for (const t of (a.tecidos || []))
+                if (t.tecidoId && t.consumo_linear > 0) {
+                    const tec = db.catalogo.find(c => c.id == t.tecidoId);
+                    linhasTec.push(`• ${tec?.nome || 'Tecido'}${a.amb ? ' (' + a.amb + ')' : ''}: ${t.consumo_linear.toFixed(2)} m`);
+                }
+        const msgTec = linhasTec.length
+            ? `Dar baixa nos tecidos e avançar para "Na Costura"?\n\n${linhasTec.join('\n')}`
             : `Avançar pedido #${String(id).slice(-6)} para "Na Costura"?`;
-        if (!await showConfirm(msg, '📦', 'Confirmar Baixa')) return;
-        realizarBaixaEstoque(ped);
+        if (!await showConfirm(msgTec, '🧵', 'Confirmar Baixa', 'Cancelar')) return;
+        realizarBaixaTecidos(ped);
+    }
+
+    // ── Na Costura → Pronto p/ Instalação: verificar e baixar materiais/acessórios
+    if (STATUS_PIPELINE[idx] === 'Na Costura' && STATUS_PIPELINE[novoIdx] === 'Pronto p/ Instalação'
+        && !ped.baixa_mat_realizada && !ped.baixa_realizada) {
+        const itensPed = ped.itens || [];
+        const insufMat = [];
+        for (const i of itensPed) {
+            const mat = db.materiais.find(m => m.id == i.materialId);
+            const estAtual = mat ? (mat.estoque_atual || 0) : 0;
+            if (estAtual < i.quantidade)
+                insufMat.push(`• ${i.nome}: necessário ${i.quantidade} ${i.unidade}, disponível ${estAtual.toFixed(2)} ${i.unidade}`);
+        }
+        if (insufMat.length) {
+            await showAlert(`Não é possível avançar para "Pronto p/ Instalação".\n\nMateriais/acessórios insuficientes em estoque:\n\n${insufMat.join('\n')}`, '🚫');
+            return;
+        }
+        if (itensPed.length) {
+            const linhasMat = itensPed.map(i => `• ${i.nome}: ${i.quantidade} ${i.unidade}`);
+            if (!await showConfirm(`Dar baixa nos materiais e avançar para "Pronto p/ Instalação"?\n\n${linhasMat.join('\n')}`, '🔩', 'Confirmar Baixa', 'Cancelar')) return;
+            realizarBaixaMateriais(ped);
+        }
     }
 
     // Intercept: avançar de "Pronto p/ Instalação" ou "Aguardando Pagamento" → verificar pagamento
