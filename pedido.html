@@ -7,7 +7,7 @@
 </head>
 <body>
     <aside class="sidebar" id="main-sidebar">
-        <div class="logo"><div class="logo-box">SC</div><h2>SCTech</h2></div>
+        <div class="logo"><img src="images/logo.png" alt="SCTech" class="sidebar-logo-img"><h2>SCTech</h2></div>
         <a href="index.html"    class="nav-item">📋 <span class="nav-text">Página Inicial</span></a>
         <a href="pcp.html"      class="nav-item">🏭 <span class="nav-text">Produção</span></a>
         <a href="estoque.html"  class="nav-item">📦 <span class="nav-text">Estoque</span></a>
@@ -42,7 +42,7 @@
                 </div>
                 <div class="form-group">
                     <label>Mão de Obra / Instalação (R$)</label>
-                    <input type="number" id="ped-mao" value="150" step="10" oninput="atualizarTotalPedido()">
+                    <input type="number" id="ped-mao" value="0" step="10" min="0" placeholder="Ex: 150" oninput="atualizarTotalPedido()">
                 </div>
                 <div class="form-group">
                     <label>Status do Pedido</label>

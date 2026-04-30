@@ -75,6 +75,112 @@ function _tabBackBtn(navSel, prevTab, goBackFn) {
     }
 }
 
+// --- HISTÓRICO DE NAVEGAÇÃO ENTRE PÁGINAS ---
+const _PAGE_NAMES = {
+    'index.html': 'Página Inicial', 'pcp.html': 'Produção',
+    'estoque.html': 'Estoque', 'clientes.html': 'Clientes',
+    'catalogo.html': 'Cadastro/Catálogo', 'relatorios.html': 'Relatórios',
+    'vendedores.html': 'Vendedores', 'fornecedores.html': 'Fornecedores',
+    'financeiro.html': 'Financeiro', 'pedido.html': 'Pedido',
+};
+
+function _getNavHistory() {
+    try { return JSON.parse(sessionStorage.getItem('sc_nav_history') || '[]'); } catch { return []; }
+}
+function _saveNavHistory(hist) {
+    sessionStorage.setItem('sc_nav_history', JSON.stringify(hist.slice(-30)));
+}
+
+function initPageNavigation() {
+    const sidebar = document.getElementById('main-sidebar');
+    if (!sidebar) return;
+
+    const currentFile = window.location.pathname.split('/').pop() || 'index.html';
+
+    // Intercept sidebar nav clicks: push current page to history before leaving
+    sidebar.querySelectorAll('a.nav-item').forEach(link => {
+        link.addEventListener('click', () => {
+            const dest = (link.getAttribute('href') || '').split('?')[0];
+            if (dest && dest !== currentFile) {
+                const hist = _getNavHistory();
+                hist.push(window.location.href);
+                _saveNavHistory(hist);
+            }
+        });
+    });
+
+    // Inject back button if there's a previous page
+    const hist = _getNavHistory();
+    if (!hist.length) return;
+
+    const prevUrl  = hist[hist.length - 1];
+    const prevFile = prevUrl.split('/').pop().split('?')[0];
+    const prevName = _PAGE_NAMES[prevFile] || prevFile;
+
+    const btn = document.createElement('button');
+    btn.className = 'sidebar-page-back-btn';
+    btn.innerHTML = `&#8592; ${prevName}`;
+    btn.title = `Voltar para ${prevName}`;
+    btn.onclick = () => {
+        const h = _getNavHistory();
+        const url = h.pop();
+        _saveNavHistory(h);
+        if (url) window.location.href = url;
+    };
+
+    const logo = sidebar.querySelector('.logo');
+    if (logo) logo.insertAdjacentElement('afterend', btn);
+}
+
+// --- MODAIS INTERNOS ---
+function _getModal() {
+    let o = document.getElementById('sc-modal-overlay');
+    if (!o) {
+        o = document.createElement('div');
+        o.id = 'sc-modal-overlay';
+        o.className = 'sc-modal-overlay';
+        o.innerHTML = `<div class="sc-modal-box">
+            <div class="sc-modal-icon" id="sc-modal-icon"></div>
+            <p class="sc-modal-msg" id="sc-modal-msg"></p>
+            <div class="sc-modal-btns" id="sc-modal-btns"></div>
+        </div>`;
+        document.body.appendChild(o);
+    }
+    return o;
+}
+function showAlert(msg, icon = 'ℹ️') {
+    return new Promise(resolve => {
+        const o = _getModal();
+        document.getElementById('sc-modal-icon').textContent = icon;
+        document.getElementById('sc-modal-msg').textContent = msg;
+        const btns = document.getElementById('sc-modal-btns');
+        btns.innerHTML = '<button class="btn" id="sc-modal-ok">OK</button>';
+        o.style.display = 'flex';
+        const ok = document.getElementById('sc-modal-ok');
+        const close = () => { o.style.display = 'none'; document.removeEventListener('keydown', esc); resolve(); };
+        const esc = e => { if (e.key === 'Escape') close(); };
+        ok.addEventListener('click', close, { once: true });
+        document.addEventListener('keydown', esc);
+        ok.focus();
+    });
+}
+function showConfirm(msg, icon = '❓', okLabel = 'Confirmar', cancelLabel = 'Cancelar') {
+    return new Promise(resolve => {
+        const o = _getModal();
+        document.getElementById('sc-modal-icon').textContent = icon;
+        document.getElementById('sc-modal-msg').textContent = msg;
+        const btns = document.getElementById('sc-modal-btns');
+        btns.innerHTML = `<button class="btn btn-outline" id="sc-modal-cancel">${cancelLabel}</button><button class="btn btn-success" id="sc-modal-ok">${okLabel}</button>`;
+        o.style.display = 'flex';
+        const close = val => { o.style.display = 'none'; document.removeEventListener('keydown', esc); resolve(val); };
+        const esc = e => { if (e.key === 'Escape') close(false); };
+        document.getElementById('sc-modal-ok').addEventListener('click', () => close(true), { once: true });
+        document.getElementById('sc-modal-cancel').addEventListener('click', () => close(false), { once: true });
+        document.addEventListener('keydown', esc);
+        document.getElementById('sc-modal-ok').focus();
+    });
+}
+
 // --- TOAST ---
 function toast(msg, tipo = 'success', ms = 3000) {
     let c = document.getElementById('sc-toast-wrap');
@@ -129,9 +235,9 @@ function escapeHtml(s) {
 }
 
 // --- CLIENTES ---
-function salvarCliente() {
+async function salvarCliente() {
     const nome  = document.getElementById('cli-nome').value.trim();
-    if (!nome) return alert('Digite o nome do cliente');
+    if (!nome) { await showAlert('Digite o nome do cliente', '⚠️'); return; }
     const cpf   = document.getElementById('cli-cpf')?.value.trim()   || '';
     const tel   = document.getElementById('cli-tel')?.value.trim()   || '';
     const email = document.getElementById('cli-email')?.value.trim() || '';
@@ -139,7 +245,7 @@ function salvarCliente() {
     if (cpf) {
         const cpfNorm = cpf.replace(/\D/g, '');
         const dup = db.clientes.find(c => c.cpf && c.cpf.replace(/\D/g, '') === cpfNorm && c.id != editandoIdCliente);
-        if (dup) return alert(`CPF já cadastrado.\nCliente existente: ${dup.nome}`);
+        if (dup) { await showAlert(`CPF já cadastrado.\nCliente existente: ${dup.nome}`, '⚠️'); return; }
     }
     if (editandoIdCliente) {
         const idx = db.clientes.findIndex(c => c.id == editandoIdCliente);
@@ -179,12 +285,12 @@ function cancelarEdicaoCliente() {
     if (btn) btn.textContent = 'Salvar Cliente';
     if (cnc) cnc.style.display = 'none';
 }
-function excluirCliente(id) {
+async function excluirCliente(id) {
     const c = db.clientes.find(x => x.id == id);
     if (!c) return;
     const ativos = db.pedidos.filter(p => p.clienteId == id && normalizarStatus(p.status) !== 'Instalado');
-    if (ativos.length) return alert(`Não é possível excluir: ${escapeHtml(c.nome)} possui ${ativos.length} pedido(s) ativo(s).`);
-    if (!confirm(`Excluir o cliente "${c.nome}"? Os pedidos concluídos deste cliente serão mantidos.`)) return;
+    if (ativos.length) { await showAlert(`Não é possível excluir: ${escapeHtml(c.nome)} possui ${ativos.length} pedido(s) ativo(s).`, '🚫'); return; }
+    if (!await showConfirm(`Excluir o cliente "${c.nome}"?\nOs pedidos concluídos serão mantidos.`, '🗑️', 'Excluir')) return;
     db.clientes = db.clientes.filter(x => x.id != id);
     salvarERecarregar('Cliente excluído.');
 }
@@ -256,36 +362,38 @@ function renderTabelaClientes(lista) {
 }
 
 // --- CATÁLOGO ---
-function salvarCatalogo() {
+async function salvarCatalogo() {
     const nome = document.getElementById('cat-nome').value.trim();
-    const preco = parseFloat(document.getElementById('cat-preco').value);
     const largura_rolo = parseFloat(document.getElementById('cat-largura').value) || 2.80;
     const referencia = document.getElementById('cat-ref')?.value.trim() || '';
     const min_estoque = parseFloat(document.getElementById('cat-min').value) || 0;
-    if (!nome || !preco) return alert('Preencha o nome e o preço do tecido');
+    if (!nome) { await showAlert('Preencha o nome do tecido', '⚠️'); return; }
     const forn_id_cat  = parseInt(document.getElementById('cat-fornecedor')?.value) || null;
     const forn_obj_cat = forn_id_cat ? db.fornecedores.find(f => f.id === forn_id_cat) : null;
     if (editandoCatalogoId !== null) {
         const c = db.catalogo.find(x => x.id == editandoCatalogoId);
         if (c) {
+            const preco = parseFloat(document.getElementById('cat-preco')?.value) || c.preco || 0;
             const dupNome = db.catalogo.find(x => x.id != editandoCatalogoId && x.nome.trim().toLowerCase() === nome.toLowerCase());
-            if (dupNome) return alert(`Já existe outro tecido com o nome "${dupNome.nome}".`);
+            if (dupNome) { await showAlert(`Já existe outro tecido com o nome "${dupNome.nome}".`, '⚠️'); return; }
             if (referencia) {
                 const dupRef = db.catalogo.find(x => x.id != editandoCatalogoId && x.referencia && x.referencia.toLowerCase() === referencia.toLowerCase());
-                if (dupRef) return alert(`Referência "${referencia}" já usada por "${dupRef.nome}".`);
+                if (dupRef) { await showAlert(`Referência "${referencia}" já usada por "${dupRef.nome}".`, '⚠️'); return; }
             }
             Object.assign(c, { nome, preco, largura_rolo, referencia, min_estoque, fornecedor_id: forn_id_cat, fornecedor_nome: forn_obj_cat ? forn_obj_cat.nome : '' });
         }
         editandoCatalogoId = null;
+        const precoGroup = document.getElementById('cat-preco-group');
+        if (precoGroup) precoGroup.style.display = 'none';
         salvarERecarregar('Tecido atualizado!');
     } else {
         const dup = db.catalogo.find(c => c.nome.trim().toLowerCase() === nome.toLowerCase());
-        if (dup) return alert(`Já existe um tecido com o nome "${dup.nome}" no catálogo.`);
+        if (dup) { await showAlert(`Já existe um tecido com o nome "${dup.nome}" no catálogo.`, '⚠️'); return; }
         if (referencia) {
             const dupRef = db.catalogo.find(c => c.referencia && c.referencia.toLowerCase() === referencia.toLowerCase());
-            if (dupRef) return alert(`Referência "${referencia}" já usada por "${dupRef.nome}".`);
+            if (dupRef) { await showAlert(`Referência "${referencia}" já usada por "${dupRef.nome}".`, '⚠️'); return; }
         }
-        db.catalogo.push({ id: Date.now(), nome, preco, largura_rolo, rapport: 0, referencia, min_estoque, fornecedor_id: forn_id_cat, fornecedor_nome: forn_obj_cat ? forn_obj_cat.nome : '' });
+        db.catalogo.push({ id: Date.now(), nome, preco: 0, largura_rolo, rapport: 0, referencia, min_estoque, fornecedor_id: forn_id_cat, fornecedor_nome: forn_obj_cat ? forn_obj_cat.nome : '' });
         salvarERecarregar('Tecido cadastrado no catálogo!');
     }
 }
@@ -296,23 +404,22 @@ function autoFillCatalogoPorReferencia() {
     const existing = db.catalogo.find(c => c.referencia && c.referencia.toLowerCase() === ref.toLowerCase());
     if (!existing) return;
     document.getElementById('cat-nome').value = existing.nome || '';
-    document.getElementById('cat-preco').value = existing.preco || '';
     document.getElementById('cat-largura').value = existing.largura_rolo || 2.80;
     document.getElementById('cat-min').value = existing.min_estoque || 0;
     const fornSel = document.getElementById('cat-fornecedor');
     if (fornSel && existing.fornecedor_id) fornSel.value = existing.fornecedor_id;
 }
 
-function excluirCatalogo(id) {
+async function excluirCatalogo(id) {
     const emUso = db.pedidos.find(p => {
         if (normalizarStatus(p.status) === 'Instalado') return false;
         return normalizarAmbientes(p).some(a => (a.tecidos||[]).some(t => t.tecidoId == id));
     });
     if (emUso) {
         const cli = db.clientes.find(c => c.id == emUso.clienteId);
-        return alert(`Não é possível remover: este tecido está em uso no pedido #${String(emUso.id).slice(-6)} (${cli?.nome || 'cliente'}).`);
+        await showAlert(`Não é possível remover: este tecido está em uso no pedido #${String(emUso.id).slice(-6)} (${cli?.nome || 'cliente'}).`, '🚫'); return;
     }
-    if (!confirm('Remover este tecido do catálogo?')) return;
+    if (!await showConfirm('Remover este tecido do catálogo?', '🗑️', 'Remover')) return;
     db.catalogo = db.catalogo.filter(c => c.id != id);
     salvarERecarregar('Tecido removido.');
 }
@@ -323,11 +430,15 @@ function editarCatalogo(id) {
     editandoCatalogoId = id;
     document.getElementById('cat-ref').value = c.referencia || '';
     document.getElementById('cat-nome').value = c.nome || '';
-    document.getElementById('cat-preco').value = c.preco || '';
     document.getElementById('cat-largura').value = c.largura_rolo || 2.80;
     document.getElementById('cat-min').value = c.min_estoque || 0;
     const fornSel = document.getElementById('cat-fornecedor');
     if (fornSel) fornSel.value = c.fornecedor_id || '';
+    const precoGroup = document.getElementById('cat-preco-group');
+    if (precoGroup) {
+        precoGroup.style.display = '';
+        document.getElementById('cat-preco').value = c.preco || 0;
+    }
     const btn = document.querySelector('button[onclick="salvarCatalogo()"]');
     if (btn) btn.textContent = 'Atualizar Tecido';
     document.getElementById('cat-ref').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -384,8 +495,8 @@ function editarPedido(id) {
     window.location.href = 'pedido.html';
 }
 
-function excluirPedido(id) {
-    if (!confirm('Excluir este pedido permanentemente?')) return;
+async function excluirPedido(id) {
+    if (!await showConfirm('Excluir este pedido permanentemente?\nEsta ação não pode ser desfeita.', '🗑️', 'Excluir')) return;
     db.pedidos = db.pedidos.filter(p => p.id != id);
     salvarERecarregar('Pedido excluído.');
 }
@@ -400,10 +511,10 @@ function abrirOS(id) {
     window.open('os.html', '_blank');
 }
 
-function aprovarPedido(id) {
+async function aprovarPedido(id) {
     const ped = db.pedidos.find(p => p.id == id);
     if (!ped) return;
-    if (!confirm(`Aprovar pedido #${String(id).slice(-6)} e enviar para produção?`)) return;
+    if (!await showConfirm(`Aprovar pedido #${String(id).slice(-6)} e enviar para produção?`, '✅', 'Aprovar')) return;
     ped.status = 'Medição';
     ped.data_producao = Date.now();
     salvarERecarregar('Pedido aprovado!');
@@ -495,7 +606,7 @@ function mostrarModalPagamento(ped, callback) {
     overlay.querySelector('#mpg-cancel').onclick = () => { document.body.removeChild(overlay); callback(null); };
 }
 
-function moverStatus(id, direcao) {
+async function moverStatus(id, direcao) {
     const ped = db.pedidos.find(p => p.id == id);
     if (!ped) return;
     const idx    = STATUS_PIPELINE.indexOf(normalizarStatus(ped.status));
@@ -523,7 +634,7 @@ function moverStatus(id, direcao) {
             }
         });
         if (insuficientes.length) {
-            alert(`Não é possível avançar para "Na Costura": estoque insuficiente para os seguintes itens:\n\n${insuficientes.join('\n')}`);
+            await showAlert(`Não é possível avançar para "Na Costura": estoque insuficiente para os seguintes itens:\n\n${insuficientes.join('\n')}`, '🚫');
             return;
         }
 
@@ -537,7 +648,7 @@ function moverStatus(id, direcao) {
         const msg = linhas.length
             ? `Dar baixa no estoque e avançar para "Na Costura"?\n\n${linhas.join('\n')}`
             : `Avançar pedido #${String(id).slice(-6)} para "Na Costura"?`;
-        if (!confirm(msg)) return;
+        if (!await showConfirm(msg, '📦', 'Confirmar Baixa')) return;
         realizarBaixaEstoque(ped);
     }
 
@@ -733,15 +844,32 @@ function verificarConflitoDeLote(tecidoId, metrosNecessarios) {
 }
 
 // --- ESTOQUE DE TECIDO: CRUD ---
-function salvarEntradaEstoque() {
+function calcularPrecoVendaTecido() {
+    const custo  = parseFloat(document.getElementById('est-preco-custo')?.value) || 0;
+    const markup = parseFloat(document.getElementById('est-markup')?.value) || 0;
+    const venda  = custo > 0 ? custo * (1 + markup / 100) : 0;
+    const display = document.getElementById('est-preco-venda-display');
+    if (display) display.textContent = 'R$ ' + venda.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function salvarEntradaEstoque() {
     const referencia = document.getElementById('est-lote').value.trim();
     const tecidoId   = parseInt(document.getElementById('est-tecido').value);
     const metros     = parseFloat(document.getElementById('est-metros').value);
     const data       = document.getElementById('est-data').value;
-    if (!referencia)            return alert('Informe a referência do rolo.');
-    if (!tecidoId)              return alert('Selecione o tecido.');
-    if (!metros || metros <= 0) return alert('Informe a metragem do rolo.');
+    const custo      = parseFloat(document.getElementById('est-preco-custo')?.value) || 0;
+    const markup     = parseFloat(document.getElementById('est-markup')?.value) || 0;
+    if (!referencia)            { await showAlert('Informe a referência do rolo.', '⚠️'); return; }
+    if (!tecidoId)              { await showAlert('Selecione o tecido.', '⚠️'); return; }
+    if (!metros || metros <= 0) { await showAlert('Informe a metragem do rolo.', '⚠️'); return; }
     db.estoque.push({ id: Date.now(), tecido_id: tecidoId, lote: referencia, metragem_inicial: metros, metragem_atual: metros, data_entrada: data });
+    if (custo > 0) {
+        const tec = db.catalogo.find(t => t.id === tecidoId);
+        if (tec) {
+            tec.preco_custo = custo;
+            tec.preco = Math.round(custo * (1 + markup / 100) * 100) / 100;
+        }
+    }
     const nomeTec = db.catalogo.find(t => t.id === tecidoId)?.nome || 'Tecido';
     registrarMovimento('Entrada', `${nomeTec} — Ref. ${referencia}`, 'tecido', metros, 'm', referencia);
     salvarERecarregar('Entrada registrada!');
@@ -775,19 +903,19 @@ function mostrarBaixaForm(roloId) {
 function cancelarBaixa() {
     document.querySelectorAll('.baixa-form').forEach(el => { el.style.display = 'none'; });
 }
-function confirmarBaixa(roloId) {
+async function confirmarBaixa(roloId) {
     const rolo = db.estoque.find(r => r.id == roloId);
     if (!rolo) return;
     const qtd = parseFloat(document.getElementById('baixa-qtd-' + roloId).value);
-    if (!qtd || qtd <= 0) return alert('Informe a quantidade a baixar.');
-    if (qtd > rolo.metragem_atual) return alert(`Quantidade maior que o saldo disponível (${rolo.metragem_atual.toFixed(3)} m).`);
+    if (!qtd || qtd <= 0) { await showAlert('Informe a quantidade a baixar.', '⚠️'); return; }
+    if (qtd > rolo.metragem_atual) { await showAlert(`Quantidade maior que o saldo disponível (${rolo.metragem_atual.toFixed(3)} m).`, '⚠️'); return; }
     rolo.metragem_atual = Math.round((rolo.metragem_atual - qtd) * 1000) / 1000;
     const nomeTecBaixa = db.catalogo.find(t => t.id === rolo.tecido_id)?.nome || 'Tecido';
     registrarMovimento('Baixa Manual', `${nomeTecBaixa} — Ref. ${rolo.lote}`, 'tecido', qtd, 'm', '');
     salvarERecarregar('Baixa de estoque registrada!');
 }
-function removerRolo(id) {
-    if (!confirm('Remover este rolo do estoque?')) return;
+async function removerRolo(id) {
+    if (!await showConfirm('Remover este rolo do estoque?', '🗑️', 'Remover', 'Cancelar')) return;
     db.estoque = db.estoque.filter(r => r.id != id);
     salvarERecarregar('Rolo removido.');
 }
@@ -848,38 +976,38 @@ function renderEstoque() {
 }
 
 // --- MATERIAIS (acessórios, ferragens, trilhos, etc.) ---
-function salvarMaterial() {
+async function salvarMaterial() {
     const referencia = document.getElementById('mat-ref')?.value.trim() || '';
     const nome = document.getElementById('mat-nome')?.value.trim();
     const unidade = document.getElementById('mat-unidade')?.value || 'un';
-    const preco = parseFloat(document.getElementById('mat-preco')?.value) || 0;
     const min_estoque = parseFloat(document.getElementById('mat-min')?.value) || 0;
-    const estoque_inicial = parseFloat(document.getElementById('mat-qtd')?.value) || 0;
-    if (!nome) return alert('Informe o nome do material.');
+    if (!nome) { await showAlert('Informe o nome do material.', '⚠️'); return; }
     const forn_id_mat  = parseInt(document.getElementById('mat-fornecedor')?.value) || null;
     const forn_obj_mat = forn_id_mat ? db.fornecedores.find(f => f.id === forn_id_mat) : null;
     if (editandoMaterialId !== null) {
         const m = db.materiais.find(x => x.id == editandoMaterialId);
         if (m) {
+            const preco = parseFloat(document.getElementById('mat-preco')?.value) || m.preco || 0;
             const dupNome = db.materiais.find(x => x.id != editandoMaterialId && x.nome.trim().toLowerCase() === nome.toLowerCase());
-            if (dupNome) return alert(`Já existe outro material com o nome "${dupNome.nome}".`);
+            if (dupNome) { await showAlert(`Já existe outro material com o nome "${dupNome.nome}".`, '⚠️'); return; }
             if (referencia) {
                 const dupRef = db.materiais.find(x => x.id != editandoMaterialId && x.referencia && x.referencia.toLowerCase() === referencia.toLowerCase());
-                if (dupRef) return alert(`Referência "${referencia}" já usada por "${dupRef.nome}".`);
+                if (dupRef) { await showAlert(`Referência "${referencia}" já usada por "${dupRef.nome}".`, '⚠️'); return; }
             }
             Object.assign(m, { referencia, nome, unidade, preco, min_estoque, fornecedor_id: forn_id_mat, fornecedor_nome: forn_obj_mat ? forn_obj_mat.nome : '' });
         }
         editandoMaterialId = null;
+        const precoGroup = document.getElementById('mat-preco-group');
+        if (precoGroup) precoGroup.style.display = 'none';
         salvarERecarregar('Material atualizado!');
     } else {
         const dup = db.materiais.find(m => m.nome.trim().toLowerCase() === nome.toLowerCase());
-        if (dup) return alert(`Já existe um material com o nome "${dup.nome}".`);
+        if (dup) { await showAlert(`Já existe um material com o nome "${dup.nome}".`, '⚠️'); return; }
         if (referencia) {
             const dupRef = db.materiais.find(m => m.referencia && m.referencia.toLowerCase() === referencia.toLowerCase());
-            if (dupRef) return alert(`Referência "${referencia}" já usada por "${dupRef.nome}".`);
+            if (dupRef) { await showAlert(`Referência "${referencia}" já usada por "${dupRef.nome}".`, '⚠️'); return; }
         }
-        db.materiais.push({ id: Date.now(), referencia, nome, unidade, preco, min_estoque, estoque_atual: estoque_inicial, fornecedor_id: forn_id_mat, fornecedor_nome: forn_obj_mat ? forn_obj_mat.nome : '' });
-        if (estoque_inicial > 0) registrarMovimento('Entrada', nome, 'material', estoque_inicial, unidade, 'Estoque inicial');
+        db.materiais.push({ id: Date.now(), referencia, nome, unidade, preco: 0, min_estoque, estoque_atual: 0, fornecedor_id: forn_id_mat, fornecedor_nome: forn_obj_mat ? forn_obj_mat.nome : '' });
         salvarERecarregar('Material cadastrado!');
     }
 }
@@ -901,8 +1029,8 @@ function autoFillMaterialPorReferencia() {
     if (fornSel && existing.fornecedor_id) fornSel.value = existing.fornecedor_id;
 }
 
-function excluirMaterial(id) {
-    if (!confirm('Remover este material? Kits que o utilizam serão afetados.')) return;
+async function excluirMaterial(id) {
+    if (!await showConfirm('Remover este material? Kits que o utilizam serão afetados.', '🗑️', 'Remover', 'Cancelar')) return;
     db.materiais = db.materiais.filter(m => m.id != id);
     db.kits.forEach(k => { k.itens = k.itens.filter(i => i.materialId != id); });
     salvarERecarregar('Material removido.');
@@ -915,12 +1043,14 @@ function editarMaterial(id) {
     document.getElementById('mat-ref').value = m.referencia || '';
     document.getElementById('mat-nome').value = m.nome || '';
     document.getElementById('mat-unidade').value = m.unidade || 'un';
-    document.getElementById('mat-preco').value = m.preco || '';
     document.getElementById('mat-min').value = m.min_estoque || 0;
-    const qtdEl = document.getElementById('mat-qtd');
-    if (qtdEl) qtdEl.value = '';
     const fornSel = document.getElementById('mat-fornecedor');
     if (fornSel) fornSel.value = m.fornecedor_id || '';
+    const precoGroup = document.getElementById('mat-preco-group');
+    if (precoGroup) {
+        precoGroup.style.display = '';
+        document.getElementById('mat-preco').value = m.preco || 0;
+    }
     const btn = document.querySelector('button[onclick="salvarMaterial()"]');
     if (btn) btn.textContent = 'Atualizar Material';
     document.getElementById('mat-ref').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -935,11 +1065,11 @@ function cancelarAjuste() {
     document.querySelectorAll('.ajuste-form').forEach(el => el.style.display = 'none');
 }
 
-function confirmarAjuste(id) {
+async function confirmarAjuste(id) {
     const mat = db.materiais.find(m => m.id == id);
     if (!mat) return;
     const qtd = parseFloat(document.getElementById(`ajuste-qtd-${id}`)?.value);
-    if (isNaN(qtd)) return alert('Informe uma quantidade válida (positivo para entrada, negativo para saída).');
+    if (isNaN(qtd)) { await showAlert('Informe uma quantidade válida (positivo para entrada, negativo para saída).', '⚠️'); return; }
     mat.estoque_atual = Math.max(0, (mat.estoque_atual || 0) + qtd);
     registrarMovimento(qtd >= 0 ? 'Ajuste +' : 'Ajuste -', mat.nome, 'material', qtd, mat.unidade, '');
     salvarERecarregar('Ajuste realizado!');
@@ -1015,11 +1145,11 @@ function sortMateriais(col) {
 // --- KITS ---
 let kitDraftItens = [];
 
-function adicionarItemAoKit() {
+async function adicionarItemAoKit() {
     const matId = parseInt(document.getElementById('kit-item-mat')?.value);
     const qtd   = parseFloat(document.getElementById('kit-item-qtd')?.value);
-    if (!matId) return alert('Selecione o material.');
-    if (!qtd || qtd <= 0) return alert('Informe uma quantidade válida.');
+    if (!matId) { await showAlert('Selecione o material.', '⚠️'); return; }
+    if (!qtd || qtd <= 0) { await showAlert('Informe uma quantidade válida.', '⚠️'); return; }
     const mat = db.materiais.find(m => m.id == matId);
     if (!mat) return;
     const existing = kitDraftItens.find(i => i.materialId === matId);
@@ -1047,10 +1177,10 @@ function renderKitDraftItens() {
     </tr>`).join('');
 }
 
-function salvarKit() {
+async function salvarKit() {
     const nome = document.getElementById('kit-nome')?.value.trim();
-    if (!nome) return alert('Informe o nome do kit.');
-    if (!kitDraftItens.length) return alert('Adicione pelo menos um item ao kit.');
+    if (!nome) { await showAlert('Informe o nome do kit.', '⚠️'); return; }
+    if (!kitDraftItens.length) { await showAlert('Adicione pelo menos um item ao kit.', '⚠️'); return; }
     db.kits.push({
         id: Date.now(), nome,
         descricao: document.getElementById('kit-desc')?.value.trim() || '',
@@ -1059,8 +1189,8 @@ function salvarKit() {
     salvarERecarregar('Kit salvo!');
 }
 
-function excluirKit(id) {
-    if (!confirm('Remover este kit?')) return;
+async function excluirKit(id) {
+    if (!await showConfirm('Remover este kit?', '🗑️', 'Remover', 'Cancelar')) return;
     db.kits = db.kits.filter(k => k.id != id);
     salvarERecarregar('Kit removido.');
 }
@@ -1307,7 +1437,7 @@ function removerAmbiente(id) {
     renderAmbientes(); atualizarTotalPedido();
 }
 
-function calcularAmbiente(id) {
+async function calcularAmbiente(id) {
     const a = pedidoDraft.ambientes.find(x => x.id === id);
     if (!a) return;
     const larg       = parseFloat(document.getElementById(`a-larg-${id}`)?.value);
@@ -1315,20 +1445,20 @@ function calcularAmbiente(id) {
     const fator      = parseFloat(document.getElementById(`a-fator-${id}`)?.value);
     const bainha_cm  = parseFloat(document.getElementById(`a-bainha-${id}`)?.value) || 15;
     const cabecote_cm = parseFloat(document.getElementById(`a-cabecote-${id}`)?.value) || 10;
-    if (!larg || larg <= 0) return alert('Informe a largura da parede.');
-    if (!alt  || alt  <= 0) return alert('Informe a altura da parede.');
-    if (!fator || fator <= 0) return alert('Informe um fator de franzimento válido (ex: 2.0).');
+    if (!larg || larg <= 0) { await showAlert('Informe a largura da parede.', '⚠️'); return; }
+    if (!alt  || alt  <= 0) { await showAlert('Informe a altura da parede.', '⚠️'); return; }
+    if (!fator || fator <= 0) { await showAlert('Informe um fator de franzimento válido (ex: 2.0).', '⚠️'); return; }
     a.amb = document.getElementById(`a-amb-${id}`)?.value.trim() || '';
     a.prega = document.getElementById(`a-prega-${id}`)?.value || 'Americana';
     a.fixacao = document.getElementById(`a-fixacao-${id}`)?.value || 'Trilho Suico';
     a.fator = fator; a.largura = larg; a.altura = alt; a.bainha_cm = bainha_cm; a.cabecote_cm = cabecote_cm;
     const alt_bruta = alt + bainha_cm / 100 + cabecote_cm / 100;
     const tecidos = a.tecidos || [];
-    if (!tecidos.length) return alert('Adicione pelo menos um tecido ao ambiente.');
+    if (!tecidos.length) { await showAlert('Adicione pelo menos um tecido ao ambiente.', '⚠️'); return; }
     let totalMat = 0;
     for (let tidx = 0; tidx < tecidos.length; tidx++) {
         const tecidoId = document.getElementById(`a-tecido-${id}-${tidx}`)?.value;
-        if (!tecidoId) return alert(`Selecione o tecido${tecidos.length > 1 ? ' '+(tidx+1) : ''} do ambiente.`);
+        if (!tecidoId) { await showAlert(`Selecione o tecido${tecidos.length > 1 ? ' '+(tidx+1) : ''} do ambiente.`, '⚠️'); return; }
         const tecido = db.catalogo.find(t => t.id == tecidoId);
         if (!tecido) return;
         const t = tecidos[tidx];
@@ -1370,10 +1500,10 @@ function renderItensPedido() {
     </tr>`).join('');
 }
 
-function adicionarItemPedido() {
+async function adicionarItemPedido() {
     const matId = parseInt(document.getElementById('ped-item-mat')?.value);
     const qtd   = parseFloat(document.getElementById('ped-item-qtd')?.value) || 1;
-    if (!matId) return alert('Selecione um material.');
+    if (!matId) { await showAlert('Selecione um material.', '⚠️'); return; }
     const mat = db.materiais.find(m => m.id == matId);
     if (!mat) return;
     const existing = pedidoDraft.itens.find(i => i.materialId === matId);
@@ -1395,9 +1525,9 @@ function atualizarQuantidadeItem(idx, valor) {
     renderItensPedido(); atualizarTotalPedido();
 }
 
-function aplicarKit() {
+async function aplicarKit() {
     const kitId = parseInt(document.getElementById('ped-kit')?.value);
-    if (!kitId) return alert('Selecione um kit para aplicar.');
+    if (!kitId) { await showAlert('Selecione um kit para aplicar.', '⚠️'); return; }
     const kit = db.kits.find(k => k.id == kitId);
     if (!kit) return;
     for (const item of kit.itens) {
@@ -1455,15 +1585,15 @@ function filtrarClientes() {
     if (filtrados.length === 1) sel.value = String(filtrados[0].id);
 }
 
-function salvarPedido() {
+async function salvarPedido() {
     const statusAnterior = editandoIdPedido
         ? normalizarStatus(db.pedidos.find(p => p.id == editandoIdPedido)?.status || 'Orçamento')
         : 'Orçamento';
     const clienteId = document.getElementById('ped-cliente')?.value;
-    if (!clienteId) return alert('Selecione o cliente.');
-    if (!pedidoDraft.ambientes.length) return alert('Adicione pelo menos um ambiente.');
+    if (!clienteId) { await showAlert('Selecione o cliente.', '⚠️'); return; }
+    if (!pedidoDraft.ambientes.length) { await showAlert('Adicione pelo menos um ambiente.', '⚠️'); return; }
     const naoCalculados = pedidoDraft.ambientes.filter(a => !a.calculado);
-    if (naoCalculados.length) return alert(`${naoCalculados.length} ambiente(s) ainda não calculado(s). Clique em "Calcular Consumo" em cada ambiente.`);
+    if (naoCalculados.length) { await showAlert(`${naoCalculados.length} ambiente(s) ainda não calculado(s). Clique em "Calcular Consumo" em cada ambiente.`, '⚠️'); return; }
     pedidoDraft.ambientes.forEach(a => {
         const el = document.getElementById(`a-amb-${a.id}`);
         if (el) a.amb = el.value.trim() || a.amb;
@@ -1537,7 +1667,7 @@ function carregarPedidoParaEdicao(id) {
     const buscaEl = document.getElementById('ped-cliente-busca');
     if (buscaEl && cli) { buscaEl.value = cli.nome; filtrarClientes(); }
     document.getElementById('ped-cliente').value = String(ped.clienteId || '');
-    document.getElementById('ped-mao').value     = ped.maoObra || 150;
+    document.getElementById('ped-mao').value     = ped.maoObra || 0;
     document.getElementById('ped-status').value  = normalizarStatus(ped.status);
     const entregaEl = document.getElementById('ped-entrega');
     if (entregaEl) entregaEl.value = ped.data_entrega || '';
@@ -1700,7 +1830,7 @@ function renderOS() {
     container.innerHTML = `
         <div class="os-header">
             <div>
-                <div class="os-empresa"><div class="logo-box" style="display:inline-flex;vertical-align:middle;margin-right:8px;font-size:14px;width:36px;height:36px">SC</div>SCTech</div>
+                <div class="os-empresa"><img src="images/logo.png" alt="SCTech" style="height:42px;vertical-align:middle;margin-right:10px;object-fit:contain">SCTech</div>
                 <div class="os-titulo">ORDEM DE SERVIÇO INTERNA</div>
                 <div class="os-aviso">⚠ SEM VALOR COMERCIAL — USO EXCLUSIVAMENTE INTERNO</div>
             </div>
@@ -1759,7 +1889,7 @@ function renderProposta() {
     ).join('') : '';
     container.innerHTML = `
         <div class="proposta-header">
-            <div class="proposta-logo"><div class="logo-box">SC</div><div><h1 style="font-size:22px;color:var(--primary)">SCTech</h1><p style="font-size:12px;color:#888">Sistema de Gestão</p></div></div>
+            <div class="proposta-logo"><img src="images/logo.png" alt="SCTech" style="height:64px;object-fit:contain;margin-right:14px"><div><h1 style="font-size:22px;color:var(--primary)">SCTech</h1><p style="font-size:12px;color:#888">Sistema de Gestão</p></div></div>
             <div class="proposta-info"><h2>PROPOSTA COMERCIAL</h2><p>Nº <strong>${String(ped.id).slice(-6)}</strong></p><p>Data de emissão: ${hoje}</p><p>Válida até: ${validade}</p></div>
         </div>
         <div class="proposta-cliente">
@@ -1816,12 +1946,12 @@ function importarDados(event) {
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = e => {
+    reader.onload = async e => {
         try {
             const dados = JSON.parse(e.target.result);
-            if (!dados.clientes || !dados.catalogo || !dados.pedidos) return alert('Arquivo inválido: estrutura não reconhecida.');
+            if (!dados.clientes || !dados.catalogo || !dados.pedidos) { await showAlert('Arquivo inválido: estrutura não reconhecida.', '⚠️'); return; }
             const dataExp = dados.exportado_em ? new Date(dados.exportado_em).toLocaleDateString('pt-BR') : 'desconhecida';
-            if (!confirm(`Importar backup de ${dataExp}?\n\nTodos os dados atuais serão substituídos. Esta ação não pode ser desfeita.`)) return;
+            if (!await showConfirm(`Importar backup de ${dataExp}?\n\nTodos os dados atuais serão substituídos. Esta ação não pode ser desfeita.`, '⚠️', 'Importar', 'Cancelar')) return;
             db.clientes   = dados.clientes   || [];
             db.catalogo   = dados.catalogo   || [];
             db.pedidos    = dados.pedidos    || [];
@@ -1838,7 +1968,7 @@ function importarDados(event) {
             syncDB();
             toastReload('Dados importados com sucesso!', 'info');
             window.location.reload();
-        } catch { alert('Erro ao ler o arquivo. Certifique-se que é um backup válido do SCTech.'); }
+        } catch { await showAlert('Erro ao ler o arquivo. Certifique-se que é um backup válido do SCTech.', '❌'); }
     };
     reader.readAsText(file);
     event.target.value = '';
@@ -1946,9 +2076,9 @@ function mostrarTabRel(tab) {
 }
 
 // --- VENDEDORES ---
-function salvarVendedor() {
+async function salvarVendedor() {
     const nome = document.getElementById('vend-nome')?.value.trim();
-    if (!nome) return alert('Informe o nome do vendedor.');
+    if (!nome) { await showAlert('Informe o nome do vendedor.', '⚠️'); return; }
     const comissao_pct = parseFloat(document.getElementById('vend-comissao')?.value) || 0;
     const tel = document.getElementById('vend-tel')?.value.trim() || '';
     if (editandoIdVendedor) {
@@ -1958,7 +2088,7 @@ function salvarVendedor() {
         salvarERecarregar('Vendedor atualizado!');
     } else {
         const dup = db.vendedores.find(v => v.nome.trim().toLowerCase() === nome.toLowerCase());
-        if (dup) return alert(`Já existe um vendedor com o nome "${dup.nome}".`);
+        if (dup) { await showAlert(`Já existe um vendedor com o nome "${dup.nome}".`, '⚠️'); return; }
         db.vendedores.push({ id: Date.now(), nome, comissao_pct, tel });
         salvarERecarregar('Vendedor cadastrado!');
     }
@@ -1994,12 +2124,12 @@ function cancelarEdicaoVendedor() {
     if (cnc) cnc.style.display = 'none';
 }
 
-function excluirVendedor(id) {
+async function excluirVendedor(id) {
     const v = db.vendedores.find(x => x.id == id);
     if (!v) return;
     const usados = db.pedidos.filter(p => p.vendedor_id == id);
-    if (usados.length) return alert(`Não é possível excluir: ${escapeHtml(v.nome)} está associado a ${usados.length} pedido(s).`);
-    if (!confirm(`Excluir o vendedor "${v.nome}"?`)) return;
+    if (usados.length) { await showAlert(`Não é possível excluir: ${escapeHtml(v.nome)} está associado a ${usados.length} pedido(s).`, '🚫'); return; }
+    if (!await showConfirm(`Excluir o vendedor "${v.nome}"?`, '🗑️', 'Excluir', 'Cancelar')) return;
     db.vendedores = db.vendedores.filter(x => x.id != id);
     salvarERecarregar('Vendedor excluído.');
 }
@@ -2083,23 +2213,23 @@ function renderHistoricoComissoes() {
     }).join('');
 }
 
-function pagarComissao(pedidoId) {
+async function pagarComissao(pedidoId) {
     const ped = db.pedidos.find(p => p.id == pedidoId);
     if (!ped) return;
     const v = db.vendedores.find(x => x.id == ped.vendedor_id);
-    if (!confirm(`Registrar pagamento de comissão R$ ${(ped.comissao_valor||0).toFixed(2)} para ${v?.nome || ped.vendedor_nome || 'vendedor'}?`)) return;
+    if (!await showConfirm(`Registrar pagamento de comissão R$ ${(ped.comissao_valor||0).toFixed(2)} para ${v?.nome || ped.vendedor_nome || 'vendedor'}?`, '💰', 'Confirmar', 'Cancelar')) return;
     ped.comissao_paga       = true;
     ped.comissao_data_pgto  = Date.now();
     salvarERecarregar('Comissão paga!');
 }
 
-function pagarTodasFiltradas() {
+async function pagarTodasFiltradas() {
     const filtroVend = document.getElementById('filtro-vend-pendente')?.value || '';
     let pedidos = db.pedidos.filter(p => p.vendedor_id && (p.comissao_valor || 0) > 0 && !p.comissao_paga && normalizarStatus(p.status) === 'Instalado');
     if (filtroVend) pedidos = pedidos.filter(p => p.vendedor_id == filtroVend);
-    if (!pedidos.length) return alert('Nenhuma comissão pendente para pagar.');
+    if (!pedidos.length) { await showAlert('Nenhuma comissão pendente para pagar.', 'ℹ️'); return; }
     const total = pedidos.reduce((s, p) => s + (p.comissao_valor || 0), 0);
-    if (!confirm(`Pagar ${pedidos.length} comissão(ões) no total de R$ ${total.toFixed(2)}?`)) return;
+    if (!await showConfirm(`Pagar ${pedidos.length} comissão(ões) no total de R$ ${total.toFixed(2)}?`, '💰', 'Confirmar', 'Cancelar')) return;
     const agora = Date.now();
     pedidos.forEach(p => { p.comissao_paga = true; p.comissao_data_pgto = agora; });
     salvarERecarregar('Comissões pagas!');
@@ -2118,9 +2248,9 @@ function mostrarTabVendedores(tab) {
 }
 
 // --- FORNECEDORES ---
-function salvarFornecedor() {
+async function salvarFornecedor() {
     const nome  = document.getElementById('forn-nome')?.value.trim();
-    if (!nome) return alert('Informe o nome do fornecedor.');
+    if (!nome) { await showAlert('Informe o nome do fornecedor.', '⚠️'); return; }
     const cnpj  = document.getElementById('forn-cnpj')?.value.trim()  || '';
     const tel   = document.getElementById('forn-tel')?.value.trim()   || '';
     const email = document.getElementById('forn-email')?.value.trim() || '';
@@ -2129,10 +2259,10 @@ function salvarFornecedor() {
     if (cnpj) {
         const cnpjNorm = cnpj.replace(/\D/g, '');
         const dupCnpj  = db.fornecedores.find(f => f.cnpj && f.cnpj.replace(/\D/g,'') === cnpjNorm && f.id != editandoIdFornecedor);
-        if (dupCnpj) return alert(`CNPJ já cadastrado.\nFornecedor existente: ${dupCnpj.nome}`);
+        if (dupCnpj) { await showAlert(`CNPJ já cadastrado.\nFornecedor existente: ${dupCnpj.nome}`, '⚠️'); return; }
     }
     const dupNome = db.fornecedores.find(f => f.nome.trim().toLowerCase() === nome.toLowerCase() && f.id != editandoIdFornecedor);
-    if (dupNome) return alert(`Já existe um fornecedor com o nome "${dupNome.nome}".`);
+    if (dupNome) { await showAlert(`Já existe um fornecedor com o nome "${dupNome.nome}".`, '⚠️'); return; }
     if (editandoIdFornecedor) {
         const idx = db.fornecedores.findIndex(f => f.id == editandoIdFornecedor);
         if (idx !== -1) db.fornecedores[idx] = { ...db.fornecedores[idx], nome, cnpj, tel, email, end, obs };
@@ -2177,14 +2307,16 @@ function cancelarEdicaoFornecedor() {
     if (cnc) cnc.style.display = 'none';
 }
 
-function excluirFornecedor(id) {
+async function excluirFornecedor(id) {
     const f = db.fornecedores.find(x => x.id == id);
     if (!f) return;
     const matUsando = db.materiais.filter(m => m.fornecedor_id == id);
     const catUsando = db.catalogo.filter(c => c.fornecedor_id == id);
-    if (matUsando.length || catUsando.length)
-        return alert(`Não é possível excluir: ${escapeHtml(f.nome)} está vinculado a ${matUsando.length} material(is) e ${catUsando.length} tecido(s).`);
-    if (!confirm(`Excluir o fornecedor "${f.nome}"?`)) return;
+    if (matUsando.length || catUsando.length) {
+        await showAlert(`Não é possível excluir: ${escapeHtml(f.nome)} está vinculado a ${matUsando.length} material(is) e ${catUsando.length} tecido(s).`, '🚫');
+        return;
+    }
+    if (!await showConfirm(`Excluir o fornecedor "${f.nome}"?`, '🗑️', 'Excluir', 'Cancelar')) return;
     db.fornecedores = db.fornecedores.filter(x => x.id != id);
     salvarERecarregar('Fornecedor excluído.');
 }
@@ -2216,12 +2348,12 @@ function renderTabelaFornecedores() {
 }
 
 // --- PEDIDOS DE COMPRA ---
-function adicionarItemPC() {
+async function adicionarItemPC() {
     const tipo   = document.getElementById('pc-item-tipo')?.value || 'material';
     const itemId = parseInt(document.getElementById('pc-item-id')?.value);
     const qtd    = parseFloat(document.getElementById('pc-item-qtd')?.value) || 1;
-    if (!itemId) return alert('Selecione o item.');
-    if (qtd <= 0) return alert('Informe uma quantidade válida.');
+    if (!itemId) { await showAlert('Selecione o item.', '⚠️'); return; }
+    if (qtd <= 0) { await showAlert('Informe uma quantidade válida.', '⚠️'); return; }
     let item_nome, unidade, preco_unit;
     if (tipo === 'material') {
         const m = db.materiais.find(x => x.id === itemId);
@@ -2281,10 +2413,10 @@ function atualizarSelectItemPC() {
     }
 }
 
-function salvarPedidoCompra() {
+async function salvarPedidoCompra() {
     const fornId = parseInt(document.getElementById('pc-fornecedor')?.value);
-    if (!fornId) return alert('Selecione o fornecedor.');
-    if (!pcDraftItens.length) return alert('Adicione pelo menos um item ao pedido.');
+    if (!fornId) { await showAlert('Selecione o fornecedor.', '⚠️'); return; }
+    if (!pcDraftItens.length) { await showAlert('Adicione pelo menos um item ao pedido.', '⚠️'); return; }
     const forn = db.fornecedores.find(f => f.id === fornId);
     db.pedidos_compra.push({
         id:              Date.now(),
@@ -2345,8 +2477,8 @@ function atualizarStatusPC(id, status) {
     renderListaPedidosCompra();
 }
 
-function excluirPedidoCompra(id) {
-    if (!confirm('Excluir este pedido de compra?')) return;
+async function excluirPedidoCompra(id) {
+    if (!await showConfirm('Excluir este pedido de compra?', '🗑️', 'Excluir', 'Cancelar')) return;
     db.pedidos_compra = db.pedidos_compra.filter(p => p.id != id);
     salvarERecarregar('Pedido excluído.');
 }
@@ -2409,8 +2541,8 @@ function renderPedidoCompraDoc() {
     </tr>`).join('');
     container.innerHTML = `
         <div class="pc-header">
-            <div style="display:flex;align-items:center;gap:10px">
-                <div class="logo-box" style="display:inline-flex;font-size:14px;width:40px;height:40px">SC</div>
+            <div style="display:flex;align-items:center;gap:12px">
+                <img src="images/logo.png" alt="SCTech" style="height:52px;object-fit:contain">
                 <div><strong style="font-size:18px;color:var(--primary)">SCTech</strong><div style="font-size:12px;color:#888">Sistema de Gestão</div></div>
             </div>
             <div style="text-align:right">
@@ -2541,6 +2673,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const u = JSON.parse(sessionStorage.getItem('sc_user') || '{}');
             sidebarUserEl.textContent = u.nome || u.login || '—';
         }
+        initPageNavigation();
     }
 
     // Pending toast from previous action
@@ -2728,17 +2861,31 @@ function autoFillEntradaMaterialPorRef() {
     if (sel) sel.value = String(mat.id);
 }
 
-function salvarEntradaMaterial() {
-    const matId = parseInt(document.getElementById('est-mat-id')?.value);
-    const qtd   = parseFloat(document.getElementById('est-mat-qtd')?.value);
-    const data  = document.getElementById('est-mat-data')?.value;
-    if (!matId) return alert('Selecione o material.');
-    if (!qtd || qtd <= 0) return alert('Informe uma quantidade válida.');
+function calcularPrecoVendaMat() {
+    const custo  = parseFloat(document.getElementById('est-mat-preco-custo')?.value) || 0;
+    const markup = parseFloat(document.getElementById('est-mat-markup')?.value) || 0;
+    const venda  = custo > 0 ? custo * (1 + markup / 100) : 0;
+    const display = document.getElementById('est-mat-preco-venda-display');
+    if (display) display.textContent = 'R$ ' + venda.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function salvarEntradaMaterial() {
+    const matId  = parseInt(document.getElementById('est-mat-id')?.value);
+    const qtd    = parseFloat(document.getElementById('est-mat-qtd')?.value);
+    const data   = document.getElementById('est-mat-data')?.value;
+    const custo  = parseFloat(document.getElementById('est-mat-preco-custo')?.value) || 0;
+    const markup = parseFloat(document.getElementById('est-mat-markup')?.value) || 0;
+    if (!matId) { await showAlert('Selecione o material.', '⚠️'); return; }
+    if (!qtd || qtd <= 0) { await showAlert('Informe uma quantidade válida.', '⚠️'); return; }
     const mat = db.materiais.find(m => m.id === matId);
     if (!mat) return;
     mat.estoque_atual = Math.round(((mat.estoque_atual || 0) + qtd) * 1000) / 1000;
-    const ref = data ? `Entrada ${new Date(data + 'T12:00:00').toLocaleDateString('pt-BR')}` : 'Entrada manual';
-    registrarMovimento('Entrada', mat.nome, 'material', qtd, mat.unidade, ref);
+    if (custo > 0) {
+        mat.preco_custo = custo;
+        mat.preco = Math.round(custo * (1 + markup / 100) * 100) / 100;
+    }
+    const refData = data ? `Entrada ${new Date(data + 'T12:00:00').toLocaleDateString('pt-BR')}` : 'Entrada manual';
+    registrarMovimento('Entrada', mat.nome, 'material', qtd, mat.unidade, refData);
     salvarERecarregar('Entrada de material registrada!');
 }
 
@@ -2866,8 +3013,8 @@ function marcarCRPago(id) {
     salvarERecarregar('Recebimento registrado!');
 }
 
-function excluirCR(id) {
-    if (!confirm('Remover este lançamento a receber?')) return;
+async function excluirCR(id) {
+    if (!await showConfirm('Remover este lançamento a receber?', '🗑️', 'Remover', 'Cancelar')) return;
     db.contas_receber = db.contas_receber.filter(x => x.id != id);
     salvarERecarregar('Lançamento removido.');
 }
@@ -2882,30 +3029,30 @@ function marcarCPPago(id) {
     salvarERecarregar('Pagamento registrado!');
 }
 
-function excluirCP(id) {
-    if (!confirm('Remover este lançamento a pagar?')) return;
+async function excluirCP(id) {
+    if (!await showConfirm('Remover este lançamento a pagar?', '🗑️', 'Remover', 'Cancelar')) return;
     db.contas_pagar = db.contas_pagar.filter(x => x.id != id);
     salvarERecarregar('Lançamento removido.');
 }
 
-function salvarDespesaFixa() {
+async function salvarDespesaFixa() {
     const descricao = document.getElementById('df-descricao')?.value.trim();
     const valor = parseFloat(document.getElementById('df-valor')?.value) || 0;
     const dia = parseInt(document.getElementById('df-dia')?.value) || 1;
     const categoria = document.getElementById('df-categoria')?.value || 'outro';
-    if (!descricao) return alert('Informe a descrição da despesa.');
-    if (!valor) return alert('Informe o valor da despesa.');
+    if (!descricao) { await showAlert('Informe a descrição da despesa.', '⚠️'); return; }
+    if (!valor) { await showAlert('Informe o valor da despesa.', '⚠️'); return; }
     db.despesas_fixas.push({ id: Date.now(), descricao, valor, dia_vencimento: dia, categoria, ativo: true });
     salvarERecarregar('Despesa fixa cadastrada!');
 }
 
-function excluirDespesaFixa(id) {
-    if (!confirm('Remover esta despesa fixa recorrente?')) return;
+async function excluirDespesaFixa(id) {
+    if (!await showConfirm('Remover esta despesa fixa recorrente?', '🗑️', 'Remover', 'Cancelar')) return;
     db.despesas_fixas = db.despesas_fixas.filter(x => x.id != id);
     salvarERecarregar('Despesa removida.');
 }
 
-function gerarContasPagarDoMes() {
+async function gerarContasPagarDoMes() {
     const hoje = new Date();
     const mes = String(hoje.getMonth() + 1).padStart(2, '0');
     const ano = hoje.getFullYear();
@@ -2925,19 +3072,19 @@ function gerarContasPagarDoMes() {
         }
     });
     if (geradas) salvarERecarregar(`${geradas} despesa(s) gerada(s) para o mês!`);
-    else alert('Todas as despesas fixas do mês já foram geradas (ou nenhuma cadastrada).');
+    else await showAlert('Todas as despesas fixas do mês já foram geradas (ou nenhuma cadastrada).', 'ℹ️');
 }
 
-function adicionarContaPagarManual() {
+async function adicionarContaPagarManual() {
     const descricao = document.getElementById('cp-nova-descricao')?.value.trim();
     const credor    = document.getElementById('cp-nova-credor')?.value.trim() || '';
     const valor     = parseFloat(document.getElementById('cp-nova-valor')?.value) || 0;
     const vencimento = document.getElementById('cp-nova-vencimento')?.value;
     const categoria = document.getElementById('cp-nova-categoria')?.value || 'outro';
     const pedidoId  = document.getElementById('cp-nova-pedido')?.value || '';
-    if (!descricao)  return alert('Informe a descrição.');
-    if (!valor)      return alert('Informe o valor.');
-    if (!vencimento) return alert('Informe a data de vencimento.');
+    if (!descricao)  { await showAlert('Informe a descrição.', '⚠️'); return; }
+    if (!valor)      { await showAlert('Informe o valor.', '⚠️'); return; }
+    if (!vencimento) { await showAlert('Informe a data de vencimento.', '⚠️'); return; }
     db.contas_pagar.push({
         id: Date.now(), pedido_id: pedidoId ? parseInt(pedidoId) : null,
         tipo: 'variavel', categoria, descricao, credor_nome: credor,
