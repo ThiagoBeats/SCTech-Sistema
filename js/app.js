@@ -1564,17 +1564,39 @@ async function aplicarKit() {
 }
 
 function atualizarTotalPedido() {
-    const totalMat    = pedidoDraft.ambientes.filter(a=>a.calculado).reduce((s,a)=>s+(a.tecidos||[]).reduce((ts,t)=>ts+(t.total_material||0),0),0);
-    const totalItens  = pedidoDraft.itens.reduce((s,i)=>s+(i.subtotal||0),0);
-    const mao         = parseFloat(document.getElementById('ped-mao')?.value) || 0;
-    const bruto       = totalMat + totalItens + mao;
-    const descPct     = parseFloat(document.getElementById('ped-desconto')?.value) || 0;
-    const descVal     = Math.round(bruto * descPct / 100 * 100) / 100;
-    const total       = bruto - descVal;
-    const recEl = document.getElementById('ped-valor-recebido');
+    const tipo    = document.getElementById('ped-tipo-precificacao')?.value || 'item';
+    const mao     = parseFloat(document.getElementById('ped-mao')?.value) || 0;
+    const descPct = parseFloat(document.getElementById('ped-desconto')?.value) || 0;
+    let totalMat, totalItens, bruto;
+
+    if (tipo === 'pedido') {
+        totalMat = pedidoDraft.ambientes.filter(a => a.calculado).reduce((s, a) =>
+            s + (a.tecidos || []).reduce((ts, t) => {
+                const tec = db.catalogo.find(c => c.id == t.tecidoId);
+                return ts + (t.consumo_linear || 0) * (tec?.preco_custo || 0);
+            }, 0), 0);
+        totalItens = pedidoDraft.itens.reduce((s, i) => {
+            const mat = db.materiais.find(m => m.id == i.materialId);
+            return s + (i.quantidade || 0) * (mat?.preco_custo || 0);
+        }, 0);
+        const margemPct  = parseFloat(document.getElementById('ped-margem-pedido')?.value) || 0;
+        const custoTotal = totalMat + totalItens;
+        const vendaBase  = custoTotal * (1 + margemPct / 100);
+        bruto = vendaBase + mao;
+        const info = document.getElementById('ped-margem-pedido-info');
+        if (info) info.textContent = custoTotal > 0 ? `(custo R$ ${custoTotal.toFixed(2)} → venda R$ ${vendaBase.toFixed(2)})` : '';
+    } else {
+        totalMat   = pedidoDraft.ambientes.filter(a => a.calculado).reduce((s, a) => s + (a.tecidos || []).reduce((ts, t) => ts + (t.total_material || 0), 0), 0);
+        totalItens = pedidoDraft.itens.reduce((s, i) => s + (i.subtotal || 0), 0);
+        bruto      = totalMat + totalItens + mao;
+    }
+
+    const descVal  = Math.round(bruto * descPct / 100 * 100) / 100;
+    const total    = bruto - descVal;
+    const recEl    = document.getElementById('ped-valor-recebido');
     if (recEl && parseFloat(recEl.value) > total) { recEl.value = total.toFixed(2); }
-    const recebido    = parseFloat(document.getElementById('ped-valor-recebido')?.value) || 0;
-    const saldo       = Math.max(0, total - recebido);
+    const recebido = parseFloat(document.getElementById('ped-valor-recebido')?.value) || 0;
+    const saldo    = Math.max(0, total - recebido);
     const el = id => document.getElementById(id);
     if (el('ped-total-mat'))    el('ped-total-mat').textContent    = totalMat.toFixed(2);
     if (el('ped-total-itens'))  el('ped-total-itens').textContent  = totalItens.toFixed(2);
@@ -1586,10 +1608,17 @@ function atualizarTotalPedido() {
     const vendedorObj = db.vendedores.find(v => v.id === vendedorId);
     const comissaoPct = vendedorObj ? (vendedorObj.comissao_pct || 0) : 0;
     const comissaoVal = comissaoPct > 0 ? Math.round(total * comissaoPct / 100 * 100) / 100 : 0;
-    const rowEl = document.getElementById('ped-comissao-row');
+    const rowEl       = document.getElementById('ped-comissao-row');
     if (rowEl) rowEl.style.display = comissaoPct > 0 ? '' : 'none';
     if (el('ped-comissao-pct')) el('ped-comissao-pct').textContent = comissaoPct;
     if (el('ped-comissao-val')) el('ped-comissao-val').textContent = comissaoVal.toFixed(2);
+}
+
+function alternarTipoPrecificacao() {
+    const tipo = document.getElementById('ped-tipo-precificacao')?.value || 'item';
+    const row = document.getElementById('ped-margem-pedido-row');
+    if (row) row.style.display = tipo === 'pedido' ? 'block' : 'none';
+    atualizarTotalPedido();
 }
 
 function filtrarClientes() {
@@ -1620,14 +1649,37 @@ async function salvarPedido() {
         const el = document.getElementById(`a-amb-${a.id}`);
         if (el) a.amb = el.value.trim() || a.amb;
     });
-    const cliente         = db.clientes.find(c => c.id == clienteId);
-    const maoObra         = parseFloat(document.getElementById('ped-mao')?.value) || 0;
-    const total_material   = pedidoDraft.ambientes.reduce((s,a)=>s+(a.tecidos||[]).reduce((ts,t)=>ts+(t.total_material||0),0),0);
-    const total_acessorios = pedidoDraft.itens.reduce((s,i)=>s+(i.subtotal||0),0);
-    const bruto            = total_material + total_acessorios + maoObra;
+    const cliente          = db.clientes.find(c => c.id == clienteId);
+    const maoObra          = parseFloat(document.getElementById('ped-mao')?.value) || 0;
+    const tipoPrecificacao = document.getElementById('ped-tipo-precificacao')?.value || 'item';
+    const margemPedidoPct  = parseFloat(document.getElementById('ped-margem-pedido')?.value) || 0;
     const desconto_pct     = parseFloat(document.getElementById('ped-desconto')?.value) || 0;
-    const desconto_valor   = Math.round(bruto * desconto_pct / 100 * 100) / 100;
-    const valor            = bruto - desconto_valor;
+    let total_material, total_acessorios, desconto_valor, valor, custo_mat, custo_acess;
+    if (tipoPrecificacao === 'pedido') {
+        custo_mat   = pedidoDraft.ambientes.reduce((s,a) =>
+            s + (a.tecidos||[]).reduce((ts,t) => {
+                const tec = db.catalogo.find(c => c.id == t.tecidoId);
+                return ts + (t.consumo_linear||0) * (tec?.preco_custo||0);
+            }, 0), 0);
+        custo_acess = pedidoDraft.itens.reduce((s,i) => {
+            const mat = db.materiais.find(m => m.id == i.materialId);
+            return s + (i.quantidade||0) * (mat?.preco_custo||0);
+        }, 0);
+        const fator    = 1 + margemPedidoPct / 100;
+        total_material   = Math.round(custo_mat   * fator * 100) / 100;
+        total_acessorios = Math.round(custo_acess * fator * 100) / 100;
+        const bruto      = total_material + total_acessorios + maoObra;
+        desconto_valor   = Math.round(bruto * desconto_pct / 100 * 100) / 100;
+        valor            = bruto - desconto_valor;
+    } else {
+        custo_mat   = null;
+        custo_acess = null;
+        total_material   = pedidoDraft.ambientes.reduce((s,a)=>s+(a.tecidos||[]).reduce((ts,t)=>ts+(t.total_material||0),0),0);
+        total_acessorios = pedidoDraft.itens.reduce((s,i)=>s+(i.subtotal||0),0);
+        const bruto      = total_material + total_acessorios + maoObra;
+        desconto_valor   = Math.round(bruto * desconto_pct / 100 * 100) / 100;
+        valor            = bruto - desconto_valor;
+    }
     const ambNomes         = pedidoDraft.ambientes.map(a=>a.amb).filter(Boolean).join(', ') || 'Sem nome';
     const vendedor_id_sel  = parseInt(document.getElementById('ped-vendedor')?.value) || null;
     const vendedor_obj     = vendedor_id_sel ? db.vendedores.find(v => v.id === vendedor_id_sel) : null;
@@ -1638,6 +1690,7 @@ async function salvarPedido() {
         amb: ambNomes, ambientes: pedidoDraft.ambientes.map(a=>({...a})),
         itens: pedidoDraft.itens.map(i=>({...i})),
         maoObra, total_material, total_acessorios, desconto_pct, desconto_valor, valor,
+        tipo_precificacao: tipoPrecificacao, margem_pedido_pct: margemPedidoPct, custo_mat, custo_acess,
         status:         document.getElementById('ped-status')?.value || 'Orçamento',
         data_entrega:   document.getElementById('ped-entrega')?.value || null,
         observacoes:    document.getElementById('ped-obs')?.value.trim() || '',
@@ -1707,6 +1760,14 @@ function carregarPedidoParaEdicao(id) {
     if (rtEl) rtEl.value = ped.rt_pct || 0;
     const pagEl = document.getElementById('ped-tipo-pagamento');
     if (pagEl) pagEl.value = ped.tipo_pagamento || '50_50';
+    const tipoPrecEl = document.getElementById('ped-tipo-precificacao');
+    if (tipoPrecEl) {
+        tipoPrecEl.value = ped.tipo_precificacao || 'item';
+        const margemRow = document.getElementById('ped-margem-pedido-row');
+        if (margemRow) margemRow.style.display = tipoPrecEl.value === 'pedido' ? 'block' : 'none';
+    }
+    const margemPedEl = document.getElementById('ped-margem-pedido');
+    if (margemPedEl) margemPedEl.value = ped.margem_pedido_pct || 0;
     const ambientes = normalizarAmbientes(ped);
     _ambienteCounter = ambientes.length;
     pedidoDraft.ambientes = ambientes.map((a, i) => ({
@@ -1929,7 +1990,6 @@ function renderProposta() {
         <div class="proposta-totais">
             <div class="proposta-linha"><span>Materiais (${totalConsumo.toFixed(2)} m)</span><span>R$ ${totalMat.toFixed(2)}</span></div>
             ${totalAcess > 0 ? `<div class="proposta-linha"><span>Acessórios e ferragens</span><span>R$ ${totalAcess.toFixed(2)}</span></div>` : ''}
-            <div class="proposta-linha"><span>Mão de Obra / Instalação</span><span>R$ ${(ped.maoObra||0).toFixed(2)}</span></div>
             ${ped.desconto_pct > 0 ? `<div class="proposta-linha" style="color:#dc2626"><span>Desconto (${ped.desconto_pct}%)</span><span>− R$ ${(ped.desconto_valor||0).toFixed(2)}</span></div>` : ''}
             <div class="proposta-linha proposta-total"><span>VALOR TOTAL</span><span>R$ ${ped.valor.toFixed(2)}</span></div>
             ${ped.data_entrega ? `<div class="proposta-linha" style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;font-weight:600"><span>Previsão de Entrega</span><span>${new Date(ped.data_entrega + 'T12:00:00').toLocaleDateString('pt-BR')}</span></div>` : ''}
@@ -2773,6 +2833,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const dataEl = document.getElementById('est-data');
         if (dataEl) dataEl.value = new Date().toISOString().split('T')[0];
         renderEstoque();
+        const _savedEstTab = sessionStorage.getItem('sc_restore_tab_estoque');
+        if (_savedEstTab) {
+            sessionStorage.removeItem('sc_restore_tab_estoque');
+            setTimeout(() => mostrarTabEstoque(_savedEstTab), 0);
+        }
+        window.addEventListener('beforeunload', () => {
+            sessionStorage.setItem('sc_restore_tab_estoque', _curTabEstoque);
+        });
     }
 
     // Estoque (aba de entrada de materiais)
@@ -3264,7 +3332,9 @@ function renderDRE() {
     let totRec=0, totCusto=0, totLucro=0;
     const rows = pedidos.map(p=>{
         const receita   = p.valor||0;
-        const custoMat  = (p.total_material||0)+(p.total_acessorios||0);
+        const custoMat  = (p.tipo_precificacao === 'pedido' && p.custo_mat != null)
+            ? (p.custo_mat||0) + (p.custo_acess||0)
+            : (p.total_material||0) + (p.total_acessorios||0);
         const custoMao  = p.maoObra||0;
         const custoRT   = db.contas_pagar.filter(cp=>cp.pedido_id===p.id&&cp.categoria==='comissao_rt').reduce((s,cp)=>s+cp.valor,0);
         const custoExtra= db.contas_pagar.filter(cp=>cp.pedido_id===p.id&&cp.categoria!=='comissao_rt').reduce((s,cp)=>s+cp.valor,0);

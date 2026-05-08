@@ -148,6 +148,22 @@
 
         <!-- SEÇÃO 5: RESUMO E SALVAR -->
         <div class="card">
+            <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border)">
+                <div class="form-group" style="margin-bottom:0;min-width:230px">
+                    <label>Tipo de Precificação</label>
+                    <select id="ped-tipo-precificacao" onchange="alternarTipoPrecificacao()">
+                        <option value="item">Por item (margem por produto)</option>
+                        <option value="pedido">Por pedido (margem global)</option>
+                    </select>
+                </div>
+                <div id="ped-margem-pedido-row" style="display:none">
+                    <label style="font-size:12px;font-weight:700;color:#666;display:block;margin-bottom:5px">Margem Global (%)</label>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <input type="number" id="ped-margem-pedido" value="0" min="0" step="1" oninput="atualizarTotalPedido()" style="width:90px;padding:8px;border:1px solid #ccc;border-radius:4px;font-size:14px">
+                        <span id="ped-margem-pedido-info" style="color:#059669;font-size:12px;font-weight:600"></span>
+                    </div>
+                </div>
+            </div>
             <div style="display: flex; justify-content: flex-end; align-items: center; gap: 24px; flex-wrap: wrap;">
                 <div style="text-align: right; font-size: 13px; color: #555; line-height: 2;">
                     <div>Total Materiais (tecido): R$ <strong id="ped-total-mat">0.00</strong></div>
