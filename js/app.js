@@ -17,6 +17,18 @@ let db = {
     despesas_fixas:  JSON.parse(localStorage.getItem('sc_df'))   || []
 };
 
+function gerarNumeroPedido() {
+    const seq = (parseInt(localStorage.getItem('sc_ped_seq') || '0') + 1);
+    localStorage.setItem('sc_ped_seq', String(seq));
+    const yy = String(new Date().getFullYear()).slice(-2);
+    return parseInt(yy + String(seq).padStart(6, '0'));
+}
+
+function formatPedidoId(id) {
+    const s = String(id);
+    return s.length <= 8 ? s : s.slice(-6);
+}
+
 function syncDB() {
     localStorage.setItem('sc_cli',  JSON.stringify(db.clientes));
     localStorage.setItem('sc_cat',  JSON.stringify(db.catalogo));
@@ -304,7 +316,7 @@ function mostrarPedidosCliente(clienteId) {
         const cls   = COR_STATUS[normalizarStatus(p.status)] || 'st-orcamento';
         const pagto = statusPagamento(p);
         return `<tr>
-            <td style="font-size:12px">#${String(p.id).slice(-6)}</td>
+            <td style="font-size:12px">#${formatPedidoId(p.id)}</td>
             <td style="font-size:13px">${escapeHtml(p.amb || '—')}</td>
             <td>R$ ${(p.valor||0).toFixed(2)} ${pagto.cls ? `<span class="${pagto.cls}">${pagto.label}</span>` : ''}</td>
             <td><span class="status-tag ${cls}" style="font-size:11px">${normalizarStatus(p.status)}</span></td>
@@ -417,7 +429,7 @@ async function excluirCatalogo(id) {
     });
     if (emUso) {
         const cli = db.clientes.find(c => c.id == emUso.clienteId);
-        await showAlert(`Não é possível remover: este tecido está em uso no pedido #${String(emUso.id).slice(-6)} (${cli?.nome || 'cliente'}).`, '🚫'); return;
+        await showAlert(`Não é possível remover: este tecido está em uso no pedido #${formatPedidoId(emUso.id)} (${cli?.nome || 'cliente'}).`, '🚫'); return;
     }
     if (!await showConfirm('Remover este tecido do catálogo?', '🗑️', 'Remover')) return;
     db.catalogo = db.catalogo.filter(c => c.id != id);
@@ -514,7 +526,7 @@ function abrirOS(id) {
 async function aprovarPedido(id) {
     const ped = db.pedidos.find(p => p.id == id);
     if (!ped) return;
-    if (!await showConfirm(`Aprovar pedido #${String(id).slice(-6)} e enviar para produção?`, '✅', 'Aprovar')) return;
+    if (!await showConfirm(`Aprovar pedido #${formatPedidoId(id)} e enviar para produção?`, '✅', 'Aprovar')) return;
     ped.status = 'Medição';
     ped.data_producao = Date.now();
     salvarERecarregar('Pedido aprovado!');
@@ -523,7 +535,7 @@ async function aprovarPedido(id) {
 // --- BAIXA AUTOMÁTICA DE ESTOQUE ---
 function realizarBaixaTecidos(ped) {
     const ambientes = normalizarAmbientes(ped);
-    const pedRef = ped.id ? `Pedido #${String(ped.id).slice(-6)}` : 'Pedido';
+    const pedRef = ped.id ? `Pedido #${formatPedidoId(ped.id)}` : 'Pedido';
     for (const a of ambientes) {
         for (const t of (a.tecidos || [])) {
             if (!t.tecidoId || !(t.consumo_linear > 0)) continue;
@@ -547,7 +559,7 @@ function realizarBaixaTecidos(ped) {
 }
 
 function realizarBaixaMateriais(ped) {
-    const pedRef = ped.id ? `Pedido #${String(ped.id).slice(-6)}` : 'Pedido';
+    const pedRef = ped.id ? `Pedido #${formatPedidoId(ped.id)}` : 'Pedido';
     for (const item of (ped.itens || [])) {
         const mat = db.materiais.find(m => m.id == item.materialId);
         if (mat) {
@@ -594,7 +606,7 @@ function mostrarModalPagamento(ped, callback) {
     overlay.innerHTML = `
         <div style="background:white;border-radius:10px;padding:28px 32px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22)">
             <h3 style="margin-bottom:6px;color:var(--dark)">Confirmar Entrega</h3>
-            <p style="font-size:13px;color:#888;margin-bottom:18px">Pedido #${String(ped.id).slice(-6)}</p>
+            <p style="font-size:13px;color:#888;margin-bottom:18px">Pedido #${formatPedidoId(ped.id)}</p>
             <div style="background:#f8fafc;border-radius:6px;padding:14px 16px;margin-bottom:20px;font-size:14px">
                 <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:#555">Valor Total</span><strong>R$ ${total.toFixed(2)}</strong></div>
                 <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:#555">Valor Recebido</span><strong style="color:#059669">R$ ${recebido.toFixed(2)}</strong></div>
@@ -647,7 +659,7 @@ async function moverStatus(id, direcao) {
                 }
         const msgTec = linhasTec.length
             ? `Dar baixa nos tecidos e avançar para "Na Costura"?\n\n${linhasTec.join('\n')}`
-            : `Avançar pedido #${String(id).slice(-6)} para "Na Costura"?`;
+            : `Avançar pedido #${formatPedidoId(id)} para "Na Costura"?`;
         if (!await showConfirm(msgTec, '🧵', 'Confirmar Baixa', 'Cancelar')) return;
         realizarBaixaTecidos(ped);
     }
@@ -762,7 +774,7 @@ function renderDashboard() {
     if (texto)       pedidos = pedidos.filter(p => {
         const cpfBusca = texto.replace(/\D/g,'');
         const cli = cpfBusca.length >= 3 ? db.clientes.find(c => c.id == p.clienteId) : null;
-        return String(p.id).slice(-6).includes(texto)
+        return formatPedidoId(p.id).includes(texto)
             || p.clienteNome.toLowerCase().includes(texto)
             || (p.amb || '').toLowerCase().includes(texto)
             || (cli && cli.cpf && cli.cpf.replace(/\D/g,'').includes(cpfBusca));
@@ -781,6 +793,7 @@ function renderDashboard() {
     const { col, dir } = dashboardState;
     const valOf = p => {
         if (col === 'id')      return p.id;
+        if (col === 'criacao') return p.data_criacao || (String(p.id).length > 8 ? p.id : 0);
         if (col === 'cliente') return p.clienteNome.toLowerCase();
         if (col === 'amb')     return (p.amb || '').toLowerCase();
         if (col === 'valor')   return p.valor;
@@ -791,7 +804,7 @@ function renderDashboard() {
     pedidos.sort((a, b) => { const va = valOf(a), vb = valOf(b); return va < vb ? -dir : va > vb ? dir : 0; });
 
     const COLS = [
-        { key: 'id', label: 'ID' }, { key: 'cliente', label: 'Cliente' },
+        { key: 'id', label: 'Pedido' }, { key: 'criacao', label: 'Criação' }, { key: 'cliente', label: 'Cliente' },
         { key: 'amb', label: 'Ambiente' }, { key: 'valor', label: 'Valor (R$)' },
         { key: 'entrega', label: 'Entrega' }, { key: 'status', label: 'Status' }
     ];
@@ -813,8 +826,12 @@ function renderDashboard() {
         const entregaCell = entregaInf
             ? `<span class="${entregaInf.cls}">${entregaInf.label}</span>`
             : `<span style="color:#9ca3af;font-size:12px">—</span>`;
+        const dataCriacao = p.data_criacao
+            ? new Date(p.data_criacao).toLocaleDateString('pt-BR')
+            : (String(p.id).length > 8 ? new Date(p.id).toLocaleDateString('pt-BR') : '—');
         return `<tr>
-            <td><span style="cursor:pointer;color:var(--primary);font-weight:bold;text-decoration:underline" onclick="editarPedido(${p.id})" title="Editar pedido">#${String(p.id).slice(-6)}</span></td>
+            <td><span style="cursor:pointer;color:var(--primary);font-weight:bold;text-decoration:underline" onclick="editarPedido(${p.id})" title="Editar pedido">#${formatPedidoId(p.id)}</span></td>
+            <td style="white-space:nowrap">${dataCriacao}</td>
             <td>${escapeHtml(p.clienteNome||'')}</td>
             <td>${escapeHtml(p.amb||'')}</td>
             <td>R$ ${p.valor.toFixed(2)}${pagBadge}</td>
@@ -833,7 +850,7 @@ function renderDashboard() {
     const vazio = texto || statusFiltro
         ? 'Nenhum pedido encontrado com esses filtros.'
         : 'Nenhum pedido cadastrado. Clique em "+ Novo Pedido" para começar.';
-    tbody.innerHTML = rows || `<tr><td colspan="7" style="text-align:center;color:#999;padding:20px;">${vazio}</td></tr>`;
+    tbody.innerHTML = rows || `<tr><td colspan="8" style="text-align:center;color:#999;padding:20px;">${vazio}</td></tr>`;
 
     const counter = document.getElementById('pedidos-counter');
     if (counter) counter.textContent = pedidos.length === db.pedidos.length
@@ -884,6 +901,10 @@ async function salvarEntradaEstoque() {
     if (!referencia)            { await showAlert('Informe a referência do rolo.', '⚠️'); return; }
     if (!tecidoId)              { await showAlert('Selecione o tecido.', '⚠️'); return; }
     if (!metros || metros <= 0) { await showAlert('Informe a metragem do rolo.', '⚠️'); return; }
+    const nomeTecConf = db.catalogo.find(t => t.id === tecidoId)?.nome || '—';
+    const precoVendaConf = custo > 0 ? (custo * (1 + markup / 100)).toFixed(2) : null;
+    const linhaPreco = custo > 0 ? `\nCusto: R$ ${custo.toFixed(2)}/m  →  Venda: R$ ${precoVendaConf}/m` : '';
+    if (!await showConfirm(`Confirmar entrada de rolo?\n\nTecido: ${nomeTecConf}\nReferência: ${referencia}\nMetragem: ${metros} m${linhaPreco}`, '📦', 'Confirmar Entrada', 'Cancelar')) return;
     db.estoque.push({ id: Date.now(), tecido_id: tecidoId, lote: referencia, metragem_inicial: metros, metragem_atual: metros, data_entrada: data });
     if (custo > 0) {
         const tec = db.catalogo.find(t => t.id === tecidoId);
@@ -904,6 +925,45 @@ function autoFillTecidoNoAmbiente(ambId, tidx) {
     if (!tec) return;
     const sel = document.getElementById(`a-tecido-${ambId}-${tidx}`);
     if (sel) sel.value = String(tec.id);
+}
+
+function autoFillEntradaTecido() {
+    const tecidoId = parseInt(document.getElementById('est-tecido')?.value);
+    if (!tecidoId) return;
+    const tec = db.catalogo.find(t => t.id === tecidoId);
+    const ultimoRolo = db.estoque.filter(r => r.tecido_id === tecidoId).sort((a, b) => b.id - a.id)[0];
+    if (ultimoRolo) {
+        const metrosEl = document.getElementById('est-metros');
+        if (metrosEl) metrosEl.value = ultimoRolo.metragem_inicial;
+    }
+    if (tec) {
+        const custoEl = document.getElementById('est-preco-custo');
+        if (custoEl && tec.preco_custo) custoEl.value = tec.preco_custo;
+        const markupEl = document.getElementById('est-markup');
+        if (markupEl && tec.preco_custo > 0 && tec.preco > 0)
+            markupEl.value = Math.round(((tec.preco / tec.preco_custo) - 1) * 100);
+        calcularPrecoVendaTecido();
+    }
+}
+
+function autoFillEntradaMaterialById() {
+    const matId = parseInt(document.getElementById('est-mat-id')?.value);
+    if (!matId) return;
+    const mat = db.materiais.find(m => m.id === matId);
+    if (!mat) return;
+    const lastMov = db.movimentos.filter(m => m.item_nome === mat.nome && m.tipo === 'Entrada').sort((a, b) => b.id - a.id)[0];
+    if (lastMov) {
+        const qtdEl = document.getElementById('est-mat-qtd');
+        if (qtdEl) qtdEl.value = lastMov.quantidade;
+    }
+    if (mat.preco_custo > 0) {
+        const custoEl = document.getElementById('est-mat-preco-custo');
+        if (custoEl) custoEl.value = mat.preco_custo;
+        const markupEl = document.getElementById('est-mat-markup');
+        if (markupEl && mat.preco > 0)
+            markupEl.value = Math.round(((mat.preco / mat.preco_custo) - 1) * 100);
+        calcularPrecoVendaMat();
+    }
 }
 
 function autoFillTecidoPorReferencia() {
@@ -964,9 +1024,11 @@ function renderEstoque() {
         if (!rolos.length) return;
         const totalDisp = rolos.reduce((s, r) => s + r.metragem_atual, 0);
         const abaixoMin = tec.min_estoque > 0 && totalDisp < tec.min_estoque;
+        const precoVendaTec = tec.preco > 0 ? `<span style="margin-left:16px;color:#059669;font-size:13px">Preço de venda: <strong>R$ ${tec.preco.toFixed(2)}/m</strong></span>` : '';
         html += `<tr class="estoque-grupo"><td colspan="6">
             <strong>${tec.nome}</strong>
             <span style="margin-left:12px;color:#555;font-size:13px">Total disponível: <strong>${totalDisp.toFixed(2)} m</strong></span>
+            ${precoVendaTec}
             ${abaixoMin ? `<span class="badge-alerta">⚠ Abaixo do mínimo (${tec.min_estoque} m)</span>` : ''}
         </td></tr>`;
         rolos.forEach(r => {
@@ -1282,6 +1344,14 @@ let editandoIdPedido = null;
 let pedidoDraft = { ambientes: [], itens: [] };
 let _ambienteCounter = 0;
 
+function onAberturaChange(id) {
+    const val = document.getElementById(`a-abertura-${id}`)?.value || 'A';
+    const img = document.getElementById(`img-abertura-${id}`);
+    if (img) { img.src = `images/aberturas/Abertura${val}.png`; img.alt = `Abertura ${val}`; }
+    const lbl = document.getElementById(`lbl-abertura-${id}`);
+    if (lbl) lbl.textContent = `Tipo ${val}`;
+}
+
 function onPregaAmbiente(id) {
     const fatoresSugeridos = {
         'Americana': '2.5', 'Franzido': '2.5',
@@ -1330,6 +1400,8 @@ function syncAmbientesFromDOM() {
         const prega = v(`a-prega-${a.id}`); if (prega) a.prega = prega;
         const fator = parseFloat(v(`a-fator-${a.id}`)); if (!isNaN(fator)) a.fator = fator;
         const fixacao = v(`a-fixacao-${a.id}`); if (fixacao) a.fixacao = fixacao;
+        const abertura = v(`a-abertura-${a.id}`); if (abertura) a.abertura = abertura;
+        const local = v(`a-local-${a.id}`); if (local) a.local_instalacao = local;
         const larg = parseFloat(v(`a-larg-${a.id}`)); if (!isNaN(larg)) a.largura = larg;
         const alt = parseFloat(v(`a-alt-${a.id}`)); if (!isNaN(alt)) a.altura = alt;
         const bainha = parseFloat(v(`a-bainha-${a.id}`)); if (!isNaN(bainha)) a.bainha_cm = bainha;
@@ -1337,6 +1409,8 @@ function syncAmbientesFromDOM() {
         (a.tecidos || []).forEach((t, tidx) => {
             const sel = document.getElementById(`a-tecido-${a.id}-${tidx}`);
             if (sel && sel.value) t.tecidoId = parseInt(sel.value) || null;
+            const refEl = document.getElementById(`a-tec-ref-${a.id}-${tidx}`);
+            if (refEl) t._ref = refEl.value;
         });
     });
 }
@@ -1364,6 +1438,17 @@ function renderAmbientes() {
             {v:'Varão Aluminio Comum',l:'Varão Aluminio Comum'},
             {v:'Varão Suíço/Wave',l:'Varão Suíço/Wave'}
         ].map(o=>`<option value="${o.v}"${a.fixacao===o.v?' selected':''}>${o.l}</option>`).join('');
+        const localOpts = ['Parede','Teto'].map(o=>`<option value="${o}"${(a.local_instalacao||'Parede')===o?' selected':''}>${o}</option>`).join('');
+        const aberturaOpts = [
+            {v:'A',l:'Abertura A — Rec. Esq., Cmd. Esq.'},
+            {v:'B',l:'Abertura B — Rec. Dir., Cmd. Dir.'},
+            {v:'C',l:'Abertura C — Central, Cmd. Esq.'},
+            {v:'D',l:'Abertura D — Central, Cmd. Dir.'},
+            {v:'E',l:'Abertura E — Rec. Esq., Cmd. Dir.'},
+            {v:'F',l:'Abertura F — Rec. Dir., Cmd. Esq.'},
+            {v:'G',l:'Abertura G — Centro, Cmd. Esq.'},
+            {v:'H',l:'Abertura H — Centro, Cmd. Dir.'}
+        ].map(o=>`<option value="${o.v}"${(a.abertura||'A')===o.v?' selected':''}>${o.l}</option>`).join('');
         const fatorOpts = FATORES.map(f=>`<option value="${f}"${String(a.fator||2.5)===f?' selected':''}>${f}x</option>`).join('');
         const tecidos = a.tecidos || [];
         const buildTecOpts = (selId) => '<option value="">— Selecione o Tecido —</option>' + db.catalogo.map(c => {
@@ -1378,7 +1463,7 @@ function renderAmbientes() {
             return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
                 <div class="form-group" style="width:130px;flex-shrink:0;margin:0">
                     <label style="font-size:11px">Ref. Tecido</label>
-                    <input type="text" id="a-tec-ref-${a.id}-${tidx}" placeholder="Código" oninput="autoFillTecidoNoAmbiente(${a.id},${tidx})" style="font-size:12px">
+                    <input type="text" id="a-tec-ref-${a.id}-${tidx}" value="${escapeHtml(t._ref||'')}" placeholder="Código" oninput="autoFillTecidoNoAmbiente(${a.id},${tidx})" style="font-size:12px">
                 </div>
                 <div class="form-group" style="flex:1;margin:0">
                     <label>${tecidos.length > 1 ? 'Tecido '+(tidx+1) : 'Tecido'}</label>
@@ -1397,25 +1482,34 @@ function renderAmbientes() {
     <div class="ambiente-card-header">
         <h4 style="margin:0;color:var(--primary)">Ambiente ${n}</h4>${removeAmb}
     </div>
-    <div class="grid" style="margin-top:15px">
-        <div class="form-group" style="grid-column:1/-1"><label>Nome do Ambiente</label>
-            <input type="text" id="a-amb-${a.id}" value="${escapeHtml(a.amb||'')}" placeholder="Ex: Quarto Casal"></div>
-    </div>
-    <div class="grid">
-        <div class="form-group"><label>Tipo de Prega</label><select id="a-prega-${a.id}" onchange="onPregaAmbiente(${a.id})">${pregaOpts}</select></div>
-        <div class="form-group"><label>Fator de Franzimento <span class="info-tag">auto</span></label><select id="a-fator-${a.id}">${fatorOpts}</select></div>
-        <div class="form-group"><label>Material de Instalação</label><select id="a-fixacao-${a.id}">${fixacaoOpts}</select></div>
-    </div>
-    <div class="grid">
-        <div class="form-group"><label>Largura da Parede (m)</label><input type="number" id="a-larg-${a.id}" value="${a.largura||''}" placeholder="Ex: 2.40" step="0.01"></div>
-        <div class="form-group"><label>Altura da Parede (m)</label><input type="number" id="a-alt-${a.id}" value="${a.altura||''}" placeholder="Ex: 2.60" step="0.01"></div>
-        <div class="form-group"><label>Barra (cm) <span class="info-tag">padrão: 15</span></label><input type="number" id="a-bainha-${a.id}" value="${a.bainha_cm||15}" step="1"></div>
-        <div class="form-group"><label>Cabeçote/Entretela (cm) <span class="info-tag">padrão: 10</span></label><input type="number" id="a-cabecote-${a.id}" value="${a.cabecote_cm||10}" step="1"></div>
-    </div>
-    ${tecidosHTML}
-    ${addTecBtn}
-    <div style="text-align:right;margin-top:5px">
-        <button class="btn" onclick="calcularAmbiente(${a.id})">Calcular Consumo &rarr;</button>
+    <div style="display:flex;gap:20px;align-items:flex-start;margin-top:15px">
+        <div style="flex:1;min-width:0">
+            <div class="grid" style="margin-bottom:0">
+                <div class="form-group" style="max-width:280px"><label>Nome do Ambiente</label>
+                    <input type="text" id="a-amb-${a.id}" value="${escapeHtml(a.amb||'')}" placeholder="Ex: Quarto Casal"></div>
+            </div>
+            <div class="grid">
+                <div class="form-group"><label>Tipo de Prega</label><select id="a-prega-${a.id}" onchange="onPregaAmbiente(${a.id})">${pregaOpts}</select></div>
+                <div class="form-group"><label>Fator de Franzimento <span class="info-tag">auto</span></label><select id="a-fator-${a.id}">${fatorOpts}</select></div>
+                <div class="form-group"><label>Material de Instalação</label><select id="a-fixacao-${a.id}">${fixacaoOpts}</select></div>
+                <div class="form-group"><label>Tipo de Abertura</label><select id="a-abertura-${a.id}" onchange="onAberturaChange(${a.id})">${aberturaOpts}</select></div>
+                <div class="form-group"><label>Local de Instalação</label><select id="a-local-${a.id}">${localOpts}</select></div>
+            </div>
+            <div class="grid">
+                <div class="form-group"><label>Largura da Parede (m)</label><input type="number" id="a-larg-${a.id}" value="${a.largura||''}" placeholder="Ex: 2.40" step="0.01"></div>
+                <div class="form-group"><label>Altura da Parede (m)</label><input type="number" id="a-alt-${a.id}" value="${a.altura||''}" placeholder="Ex: 2.60" step="0.01"></div>
+                <div class="form-group"><label>Barra (cm) <span class="info-tag">padrão: 15</span></label><input type="number" id="a-bainha-${a.id}" value="${a.bainha_cm||15}" step="1"></div>
+                <div class="form-group"><label>Cabeçote/Entretela (cm) <span class="info-tag">padrão: 10</span></label><input type="number" id="a-cabecote-${a.id}" value="${a.cabecote_cm||10}" step="1"></div>
+            </div>
+            <div style="max-width:420px">${tecidosHTML}${addTecBtn}</div>
+            <div style="text-align:right;margin-top:5px">
+                <button class="btn" onclick="calcularAmbiente(${a.id})">Calcular Consumo &rarr;</button>
+            </div>
+        </div>
+        <div style="flex-shrink:0;width:500px;text-align:center">
+            <img id="img-abertura-${a.id}" src="images/aberturas/Abertura${a.abertura||'A'}.png" alt="Abertura ${a.abertura||'A'}" style="width:475px;height:auto;border:1px solid var(--border);border-radius:6px;display:block">
+            <div id="lbl-abertura-${a.id}" style="font-size:11px;color:#666;margin-top:4px;font-weight:600">Tipo ${a.abertura||'A'}</div>
+        </div>
     </div>
     ${a.calculado ? renderAmbienteBreakdown(a) : ''}
 </div>`;
@@ -1426,7 +1520,7 @@ function adicionarAmbiente() {
     syncAmbientesFromDOM();
     _ambienteCounter++;
     pedidoDraft.ambientes.push({
-        id: _ambienteCounter, calculado: false, amb: '', prega: 'Americana', fixacao: 'Trilho Suico',
+        id: _ambienteCounter, calculado: false, amb: '', prega: 'Americana', fixacao: 'Trilho Suico', abertura: 'A', local_instalacao: 'Parede',
         largura: null, altura: null, fator: 2.5, bainha_cm: 15, cabecote_cm: 10,
         tecidos: [{ tecidoId: null, tecidoNome: '', largura_rolo: 2.80, rapport_cm: 0, acrescimo_rapport_m: 0, num_panos: 0, alt_corte: 0, consumo_linear: 0, total_material: 0 }],
         total_material: 0
@@ -1473,6 +1567,8 @@ async function calcularAmbiente(id) {
     a.amb = document.getElementById(`a-amb-${id}`)?.value.trim() || '';
     a.prega = document.getElementById(`a-prega-${id}`)?.value || 'Americana';
     a.fixacao = document.getElementById(`a-fixacao-${id}`)?.value || 'Trilho Suico';
+    a.abertura = document.getElementById(`a-abertura-${id}`)?.value || 'A';
+    a.local_instalacao = document.getElementById(`a-local-${id}`)?.value || 'Parede';
     a.fator = fator; a.largura = larg; a.altura = alt; a.bainha_cm = bainha_cm; a.cabecote_cm = cabecote_cm;
     const alt_bruta = alt + bainha_cm / 100 + cabecote_cm / 100;
     const tecidos = a.tecidos || [];
@@ -1710,6 +1806,7 @@ async function salvarPedido() {
             dadosPedido.data_producao     = db.pedidos[index].data_producao;
             dadosPedido.data_instalado    = db.pedidos[index].data_instalado;
             dadosPedido.baixa_realizada   = db.pedidos[index].baixa_realizada;
+            dadosPedido.data_criacao      = db.pedidos[index].data_criacao || db.pedidos[index].id;
             dadosPedido.comissao_paga     = db.pedidos[index].comissao_paga     || false;
             dadosPedido.comissao_data_pgto = db.pedidos[index].comissao_data_pgto || null;
             dadosPedido.financeiro_gerado  = db.pedidos[index].financeiro_gerado  || false;
@@ -1720,7 +1817,8 @@ async function salvarPedido() {
             db.pedidos[index] = dadosPedido;
         }
     } else {
-        dadosPedido.id = Date.now();
+        dadosPedido.id = gerarNumeroPedido();
+        dadosPedido.data_criacao = Date.now();
         if (dadosPedido.status === 'Na Costura') {
             realizarBaixaEstoque(dadosPedido);
         }
@@ -1815,7 +1913,7 @@ function renderKanban() {
                     const dataInst = p.data_instalado ? new Date(p.data_instalado).toLocaleDateString('pt-BR') : (dias + 'd atrás');
                     return `<div class="kanban-card${cardAtrasado}" style="padding:8px 10px">
                         <div class="kanban-card-top">
-                            <span class="kanban-card-id" style="cursor:pointer;text-decoration:underline" onclick="editarPedido(${p.id})" title="Editar pedido">#${String(p.id).slice(-6)}</span>
+                            <span class="kanban-card-id" style="cursor:pointer;text-decoration:underline" onclick="editarPedido(${p.id})" title="Editar pedido">#${formatPedidoId(p.id)}</span>
                             <span class="kanban-card-age">${dataInst}</span>
                         </div>
                         <div class="kanban-card-cliente" style="font-size:13px">${escapeHtml(p.clienteNome||'')}${obsBadge}</div>
@@ -1845,7 +1943,7 @@ function renderKanban() {
                 const entregaBadge = entregaInf ? `<span class="${entregaInf.cls}">${entregaInf.label}</span>` : '';
                 return `<div class="kanban-card${cardAtrasado}">
                     <div class="kanban-card-top">
-                        <span class="kanban-card-id" style="cursor:pointer;text-decoration:underline" onclick="editarPedido(${p.id})" title="Editar pedido">#${String(p.id).slice(-6)}</span>
+                        <span class="kanban-card-id" style="cursor:pointer;text-decoration:underline" onclick="editarPedido(${p.id})" title="Editar pedido">#${formatPedidoId(p.id)}</span>
                         <span class="kanban-card-age">${dias === 0 ? 'hoje' : dias + 'd'}</span>
                     </div>
                     <div class="kanban-card-cliente">${escapeHtml(p.clienteNome||'')}${obsBadge}</div>
@@ -1892,6 +1990,7 @@ function renderOS() {
             <div class="os-section-title">Ambiente ${idx+1}${a.amb ? ': '+a.amb : ''}</div>
             <table class="os-table">
                 <tr><td class="os-th">Tipo de Prega</td><td><strong>${a.prega||'—'}</strong></td><td class="os-th">Mat. Instalação</td><td><strong>${a.fixacao||'—'}</strong></td></tr>
+                <tr><td class="os-th">Tipo de Abertura</td><td><strong>Tipo ${a.abertura||'A'}</strong></td><td class="os-th">Local de Instalação</td><td><strong>${a.local_instalacao||'Parede'}</strong></td></tr>
             </table>
             <table class="os-table" style="margin-top:8px">
                 <tr><td class="os-th">Largura da parede</td><td>${a.largura} m</td><td class="os-th">Altura da parede</td><td>${a.altura||'—'} m</td></tr>
@@ -1918,7 +2017,7 @@ function renderOS() {
                 <div class="os-aviso">⚠ SEM VALOR COMERCIAL — USO EXCLUSIVAMENTE INTERNO</div>
             </div>
             <div class="os-meta">
-                <div class="os-meta-item"><span>OS Nº</span><strong>${String(ped.id).slice(-6)}</strong></div>
+                <div class="os-meta-item"><span>OS Nº</span><strong>${formatPedidoId(ped.id)}</strong></div>
                 <div class="os-meta-item"><span>Emissão</span><strong>${hoje}</strong></div>
                 ${ped.data_entrega ? `<div class="os-meta-item"><span>Previsão entrega</span><strong>${new Date(ped.data_entrega + 'T12:00:00').toLocaleDateString('pt-BR')}</strong></div>` : ''}
                 <div class="os-meta-item"><span>Status</span><strong>${normalizarStatus(ped.status)}</strong></div>
@@ -1955,25 +2054,22 @@ function renderProposta() {
     const totalAcess   = ped.total_acessorios || 0;
     const ambRows = ambientes.map(a => {
         const tecidos = a.tecidos || [];
-        const consumoAmb = tecidos.reduce((s,t)=>s+(t.consumo_linear||0),0);
-        const totalMatAmb = tecidos.reduce((s,t)=>s+(t.total_material||0),0);
         const descTecidos = tecidos.map(t => t.tecidoNome).filter(Boolean).join(' + ') || 'Tecido selecionado';
         const primTec = tecidos[0] || {};
         return `<tr>
             <td><strong>${a.amb||'—'}</strong></td>
-            <td><strong>${a.prega?'Cortina '+a.prega:'Cortina'}</strong> em ${descTecidos}${a.fixacao?' — '+a.fixacao:''}
+            <td><strong>${a.prega?'Cortina '+a.prega:'Cortina'}</strong> em ${descTecidos}${a.fixacao?' — '+a.fixacao:''}${a.abertura?' | Abertura '+a.abertura:''}${a.local_instalacao?' | '+a.local_instalacao:''}
                 <small>Parede: ${a.largura}m × ${a.altura||'—'}m | Fator: ${a.fator}x | ${(primTec.num_panos||'—')} pano(s) de ${primTec.alt_corte?primTec.alt_corte.toFixed(3):'—'}m${tecidos.length>1?' | '+tecidos.length+' tecidos':''}</small>
             </td>
-            <td>${consumoAmb.toFixed(2)} m</td><td>R$ ${totalMatAmb.toFixed(2)}</td>
         </tr>`;
     }).join('');
     const acessRows = ped.itens && ped.itens.length ? ped.itens.map(i =>
-        `<tr><td><em>Acessório</em></td><td>${i.nome}</td><td>${i.quantidade} ${i.unidade}</td><td>R$ ${i.subtotal.toFixed(2)}</td></tr>`
+        `<tr><td><em>Acessório</em></td><td>${i.nome} — ${i.quantidade} ${i.unidade}</td></tr>`
     ).join('') : '';
     container.innerHTML = `
         <div class="proposta-header">
             <div class="proposta-logo"><img src="images/logo.png" alt="SCTech" style="height:64px;object-fit:contain;margin-right:14px"><div><h1 style="font-size:22px;color:var(--primary)">SCTech</h1><p style="font-size:12px;color:#888">Sistema de Gestão</p></div></div>
-            <div class="proposta-info"><h2>PROPOSTA COMERCIAL</h2><p>Nº <strong>${String(ped.id).slice(-6)}</strong></p><p>Data de emissão: ${hoje}</p><p>Válida até: ${validade}</p></div>
+            <div class="proposta-info"><h2>PROPOSTA COMERCIAL</h2><p>Nº <strong>${formatPedidoId(ped.id)}</strong></p><p>Data de emissão: ${hoje}</p><p>Válida até: ${validade}</p></div>
         </div>
         <div class="proposta-cliente">
             <h3>Cliente</h3>
@@ -1984,12 +2080,10 @@ function renderProposta() {
             ${cliente&&cliente.end   ? `<p>${cliente.end}</p>`          : ''}
         </div>
         <table class="proposta-tabela">
-            <thead><tr><th style="width:15%">Ambiente</th><th>Descrição</th><th style="width:14%">Consumo</th><th style="width:14%">Valor</th></tr></thead>
+            <thead><tr><th style="width:15%">Ambiente</th><th>Descrição</th></tr></thead>
             <tbody>${ambRows}${acessRows}</tbody>
         </table>
         <div class="proposta-totais">
-            <div class="proposta-linha"><span>Materiais (${totalConsumo.toFixed(2)} m)</span><span>R$ ${totalMat.toFixed(2)}</span></div>
-            ${totalAcess > 0 ? `<div class="proposta-linha"><span>Acessórios e ferragens</span><span>R$ ${totalAcess.toFixed(2)}</span></div>` : ''}
             ${ped.desconto_pct > 0 ? `<div class="proposta-linha" style="color:#dc2626"><span>Desconto (${ped.desconto_pct}%)</span><span>− R$ ${(ped.desconto_valor||0).toFixed(2)}</span></div>` : ''}
             <div class="proposta-linha proposta-total"><span>VALOR TOTAL</span><span>R$ ${ped.valor.toFixed(2)}</span></div>
             ${ped.data_entrega ? `<div class="proposta-linha" style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;font-weight:600"><span>Previsão de Entrega</span><span>${new Date(ped.data_entrega + 'T12:00:00').toLocaleDateString('pt-BR')}</span></div>` : ''}
@@ -2113,7 +2207,7 @@ function renderRelRecebiveis() {
             : '<span style="background:#eff6ff;color:#1e40af;font-size:11px;font-weight:bold;padding:2px 8px;border-radius:10px">≤30 dias</span>';
         const cls = COR_STATUS[normalizarStatus(p.status)] || 'st-orcamento';
         return `<tr>
-            <td style="font-size:12px">#${String(p.id).slice(-6)}</td>
+            <td style="font-size:12px">#${formatPedidoId(p.id)}</td>
             <td>${escapeHtml(p._cli)}</td>
             <td>R$ ${(p.valor||0).toFixed(2)}</td>
             <td style="color:#dc2626;font-weight:bold">R$ ${p._saldo.toFixed(2)}</td>
@@ -2258,7 +2352,7 @@ function renderComissoesPendentes() {
     tb.innerHTML = pedidos.map(p => {
         const v = db.vendedores.find(x => x.id == p.vendedor_id);
         return `<tr>
-            <td style="font-size:12px">#${String(p.id).slice(-6)}</td>
+            <td style="font-size:12px">#${formatPedidoId(p.id)}</td>
             <td>${escapeHtml(p.clienteNome || '—')}</td>
             <td>${escapeHtml(v?.nome || p.vendedor_nome || '—')}</td>
             <td>R$ ${(p.valor || 0).toFixed(2)}</td>
@@ -2286,7 +2380,7 @@ function renderHistoricoComissoes() {
         const dataPgto = p.comissao_data_pgto ? new Date(p.comissao_data_pgto).toLocaleDateString('pt-BR') : '—';
         return `<tr>
             <td style="font-size:12px;white-space:nowrap">${dataPgto}</td>
-            <td style="font-size:12px">#${String(p.id).slice(-6)}</td>
+            <td style="font-size:12px">#${formatPedidoId(p.id)}</td>
             <td>${escapeHtml(p.clienteNome || '—')}</td>
             <td>${escapeHtml(v?.nome || p.vendedor_nome || '—')}</td>
             <td>R$ ${(p.valor || 0).toFixed(2)}</td>
@@ -2531,7 +2625,7 @@ function renderListaPedidosCompra() {
         const total = p.itens.reduce((s, i) => s + i.subtotal, 0);
         const cls   = COR_PC[p.status] || 'st-orcamento';
         return `<tr>
-            <td style="font-size:12px">#${String(p.id).slice(-6)}</td>
+            <td style="font-size:12px">#${formatPedidoId(p.id)}</td>
             <td><strong>${escapeHtml(p.fornecedor_nome)}</strong></td>
             <td style="font-size:12px;color:#6b7280;white-space:nowrap">${data}</td>
             <td style="text-align:center">${p.itens.length}</td>
@@ -2629,7 +2723,7 @@ function renderPedidoCompraDoc() {
             </div>
             <div style="text-align:right">
                 <div style="font-size:20px;font-weight:bold;color:var(--dark)">PEDIDO DE COMPRA</div>
-                <div style="font-size:13px;color:#888">Nº ${String(pc.id).slice(-6)} · Emitido em ${hoje}</div>
+                <div style="font-size:13px;color:#888">Nº ${formatPedidoId(pc.id)} · Emitido em ${hoje}</div>
                 <div style="margin-top:4px"><span class="status-tag ${pc.status==='Recebido'?'st-faturado':pc.status==='Enviado'?'st-costura':'st-orcamento'}">${pc.status}</span></div>
             </div>
         </div>
@@ -2701,7 +2795,7 @@ function renderAgenda() {
             return `<div class="card" style="margin-bottom:10px">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
                     <div>
-                        <span style="font-size:11px;color:#888">Pedido #${String(p.id).slice(-6)}</span>
+                        <span style="font-size:11px;color:#888">Pedido #${formatPedidoId(p.id)}</span>
                         <div style="font-weight:bold;font-size:15px;margin:2px 0">${escapeHtml(p.clienteNome||'—')}</div>
                         <div style="font-size:13px;color:#555">${escapeHtml(p.amb||'—')}</div>
                     </div>
@@ -2807,7 +2901,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const idParaEditar = localStorage.getItem('sc_editando_id');
         if (idParaEditar) {
             editandoIdPedido = parseInt(idParaEditar);
-            document.getElementById('titulo-pagina-pedido').innerText = `Editando Pedido #${String(editandoIdPedido).slice(-6)}`;
+            document.getElementById('titulo-pagina-pedido').innerText = `Editando Pedido #${formatPedidoId(editandoIdPedido)}`;
             carregarPedidoParaEdicao(editandoIdPedido);
         } else {
             adicionarAmbiente();
@@ -2969,6 +3063,9 @@ async function salvarEntradaMaterial() {
     if (!qtd || qtd <= 0) { await showAlert('Informe uma quantidade válida.', '⚠️'); return; }
     const mat = db.materiais.find(m => m.id === matId);
     if (!mat) return;
+    const precoVendaMatConf = custo > 0 ? (custo * (1 + markup / 100)).toFixed(2) : null;
+    const linhaPrecoMat = custo > 0 ? `\nCusto: R$ ${custo.toFixed(2)}  →  Venda: R$ ${precoVendaMatConf}` : '';
+    if (!await showConfirm(`Confirmar entrada de material?\n\nMaterial: ${mat.nome}\nQuantidade: ${qtd} ${mat.unidade}${linhaPrecoMat}`, '📦', 'Confirmar Entrada', 'Cancelar')) return;
     mat.estoque_atual = Math.round(((mat.estoque_atual || 0) + qtd) * 1000) / 1000;
     if (custo > 0) {
         mat.preco_custo = custo;
@@ -3008,6 +3105,7 @@ function renderEstoqueMateriais() {
             <td><strong>${escapeHtml(m.nome)}</strong>${abaixoMin?`<span class="badge-alerta" style="margin-left:8px">⚠</span>`:''}</td>
             <td style="font-size:12px;color:#555">${escapeHtml(m.referencia||'—')}</td>
             <td>${m.unidade}</td>
+            <td style="color:#059669;font-weight:600">${m.preco > 0 ? 'R$ '+m.preco.toFixed(2) : '—'}</td>
             <td style="color:${cor}"><strong>${(m.estoque_atual||0).toFixed(2)}</strong>${m.min_estoque>0?`<span style="color:#888;font-size:12px"> / mín: ${m.min_estoque}</span>`:''}</td>
             <td style="font-size:12px;color:#555">${escapeHtml(m.fornecedor_nome||'—')}</td>
             <td>
@@ -3016,7 +3114,7 @@ function renderEstoqueMateriais() {
             </td>
         </tr>
         <tr id="ajuste-${m.id}" class="ajuste-form" style="display:none">
-            <td colspan="6" class="baixa-form-cell">
+            <td colspan="7" class="baixa-form-cell">
                 <strong>${escapeHtml(m.nome)}</strong> — saldo: <strong>${(m.estoque_atual||0).toFixed(2)} ${m.unidade}</strong> &emsp;
                 Quantidade (+ entrada / − saída):
                 <input type="number" id="ajuste-qtd-${m.id}" placeholder="Ex: +10 ou -3" step="0.01" style="width:130px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;margin:0 8px">
@@ -3054,7 +3152,7 @@ function gerarFinanceiroPedido(ped) {
             id: Date.now() + i,
             pedido_id: ped.id,
             cliente_nome: ped.clienteNome || '',
-            descricao: `${parcela.descricao} — Pedido #${String(ped.id).slice(-6)}`,
+            descricao: `${parcela.descricao} — Pedido #${formatPedidoId(ped.id)}`,
             valor,
             data_vencimento: vencimento,
             data_pagamento: null,
@@ -3092,7 +3190,7 @@ function marcarCRPago(id) {
             db.contas_pagar.push({
                 id: Date.now() + 1,
                 pedido_id: ped.id, tipo: 'variavel', categoria: 'comissao_rt',
-                descricao: `RT ${ped.rt_pct}% — ${ped.arquiteto_nome} — Ped. #${String(ped.id).slice(-6)}`,
+                descricao: `RT ${ped.rt_pct}% — ${ped.arquiteto_nome} — Ped. #${formatPedidoId(ped.id)}`,
                 credor_nome: ped.arquiteto_nome,
                 valor: rtValor,
                 data_vencimento: dataStr, data_pagamento: null, status: 'Pendente'
@@ -3304,7 +3402,7 @@ function renderContasPagar() {
     const pedSel = document.getElementById('cp-nova-pedido');
     if (pedSel) pedSel.innerHTML = '<option value="">— Sem vínculo de pedido —</option>' +
         db.pedidos.filter(p=>normalizarStatus(p.status)!=='Orçamento')
-        .map(p=>`<option value="${p.id}">#${String(p.id).slice(-6)} ${escapeHtml(p.clienteNome||'')}</option>`).join('');
+        .map(p=>`<option value="${p.id}">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}</option>`).join('');
 }
 
 function renderDespesasFixas() {
@@ -3344,7 +3442,7 @@ function renderDRE() {
         const cor       = margem>=30?'#059669':margem>=15?'#d97706':'#dc2626';
         totRec+=receita; totCusto+=custo; totLucro+=lucro;
         return `<tr>
-            <td style="font-size:12px;color:#888">#${String(p.id).slice(-6)}</td>
+            <td style="font-size:12px;color:#888">#${formatPedidoId(p.id)}</td>
             <td>${escapeHtml(p.clienteNome||'—')}</td>
             <td style="text-align:right">R$ ${receita.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
             <td style="text-align:right;color:#888">R$ ${custoMat.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
