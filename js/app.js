@@ -1344,7 +1344,7 @@ let editandoIdPedido = null;
 let pedidoDraft = { ambientes: [], itens: [] };
 let _ambienteCounter = 0;
 
-function onuraChange(id) {
+function onAberturaChange(id) {
     const val = document.getElementById(`a-abertura-${id}`)?.value || 'A';
     const img = document.getElementById(`img-abertura-${id}`);
     if (img) { img.src = `images/Aberturas/Abertura${val}.png`; img.alt = `Abertura ${val}`; }
