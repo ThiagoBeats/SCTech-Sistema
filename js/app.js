@@ -1344,10 +1344,10 @@ let editandoIdPedido = null;
 let pedidoDraft = { ambientes: [], itens: [] };
 let _ambienteCounter = 0;
 
-function onAberturaChange(id) {
+function onuraChange(id) {
     const val = document.getElementById(`a-abertura-${id}`)?.value || 'A';
     const img = document.getElementById(`img-abertura-${id}`);
-    if (img) { img.src = `images/aberturas/Abertura${val}.png`; img.alt = `Abertura ${val}`; }
+    if (img) { img.src = `images/Aberturas/Abertura${val}.png`; img.alt = `Abertura ${val}`; }
     const lbl = document.getElementById(`lbl-abertura-${id}`);
     if (lbl) lbl.textContent = `Tipo ${val}`;
 }
@@ -1507,7 +1507,7 @@ function renderAmbientes() {
             </div>
         </div>
         <div style="flex-shrink:0;width:500px;text-align:center">
-            <img id="img-abertura-${a.id}" src="images/aberturas/Abertura${a.abertura||'A'}.png" alt="Abertura ${a.abertura||'A'}" style="width:475px;height:auto;border:1px solid var(--border);border-radius:6px;display:block">
+            <img id="img-abertura-${a.id}" src="images/Aberturas/Abertura${a.abertura||'A'}.png" alt="Abertura ${a.abertura||'A'}" style="width:475px;height:auto;border:1px solid var(--border);border-radius:6px;display:block">
             <div id="lbl-abertura-${a.id}" style="font-size:11px;color:#666;margin-top:4px;font-weight:600">Tipo ${a.abertura||'A'}</div>
         </div>
     </div>
