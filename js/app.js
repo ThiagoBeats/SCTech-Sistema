@@ -894,7 +894,7 @@ function renderDashboard() {
 
     const COLS = [
         { key: 'id', label: 'Pedido' }, { key: 'criacao', label: 'Criação' }, { key: 'cliente', label: 'Cliente' },
-        { key: 'amb', label: 'Ambiente' }, { key: 'valor', label: 'Valor (R$)' },
+        { key: 'valor', label: 'Valor (R$)' },
         { key: 'entrega', label: 'Entrega' }, { key: 'status', label: 'Status' }
     ];
     thead.innerHTML = '<tr>' + COLS.map(c => {
@@ -922,7 +922,6 @@ function renderDashboard() {
             <td><span style="cursor:pointer;color:var(--primary);font-weight:bold;text-decoration:underline" onclick="editarPedido(${p.id})" title="Editar pedido">#${formatPedidoId(p.id)}</span></td>
             <td style="white-space:nowrap">${dataCriacao}</td>
             <td>${escapeHtml(p.clienteNome||'')}</td>
-            <td>${escapeHtml(p.amb||'')}</td>
             <td>R$ ${p.valor.toFixed(2)}${pagBadge}</td>
             <td>${entregaCell}</td>
             <td><span class="status-tag ${colorClass}">${p._status}</span> ${baixaTag}</td>
@@ -2513,28 +2512,92 @@ function mostrarTabVendedores(tab) {
 }
 
 // --- FORNECEDORES ---
-async function salvarFornecedor() {
-    const nome  = document.getElementById('forn-nome')?.value.trim();
-    if (!nome) { await showAlert('Informe o nome do fornecedor.', '⚠️'); return; }
-    const cnpj  = document.getElementById('forn-cnpj')?.value.trim()  || '';
-    const tel   = document.getElementById('forn-tel')?.value.trim()   || '';
-    const email = document.getElementById('forn-email')?.value.trim() || '';
-    const end   = document.getElementById('forn-end')?.value.trim()   || '';
-    const obs   = document.getElementById('forn-obs')?.value.trim()   || '';
-    if (cnpj) {
-        const cnpjNorm = cnpj.replace(/\D/g, '');
-        const dupCnpj  = db.fornecedores.find(f => f.cnpj && f.cnpj.replace(/\D/g,'') === cnpjNorm && f.id != editandoIdFornecedor);
-        if (dupCnpj) { await showAlert(`CNPJ já cadastrado.\nFornecedor existente: ${dupCnpj.nome}`, '⚠️'); return; }
+function mascaraCNPJ(el) {
+    let v = el.value.replace(/\D/g, '').slice(0, 14);
+    if (v.length > 12)     v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, '$1.$2.$3/$4-$5');
+    else if (v.length > 8) v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{0,4})/,        '$1.$2.$3/$4');
+    else if (v.length > 5) v = v.replace(/^(\d{2})(\d{3})(\d{0,3})/,               '$1.$2.$3');
+    else if (v.length > 2) v = v.replace(/^(\d{2})(\d{0,3})/,                       '$1.$2');
+    el.value = v;
+}
+
+async function buscarCNPJ() {
+    const cnpjRaw = document.getElementById('forn-cnpj')?.value.replace(/\D/g, '');
+    const statusEl = document.getElementById('forn-cnpj-status');
+    const btn = document.getElementById('forn-btn-buscar-cnpj');
+
+    if (!cnpjRaw || cnpjRaw.length !== 14) {
+        statusEl.innerHTML = '<span style="color:#dc2626">⚠️ Informe um CNPJ válido com 14 dígitos.</span>';
+        return;
     }
-    const dupNome = db.fornecedores.find(f => f.nome.trim().toLowerCase() === nome.toLowerCase() && f.id != editandoIdFornecedor);
-    if (dupNome) { await showAlert(`Já existe um fornecedor com o nome "${dupNome.nome}".`, '⚠️'); return; }
+    statusEl.innerHTML = '<span style="color:#6b7280">⏳ Consultando...</span>';
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await fetch(`https://publica.cnpj.ws/cnpj/${cnpjRaw}`);
+        if (!res.ok) throw { tipo: res.status === 404 ? 'nao_encontrado' : 'erro_http' };
+        const d = await res.json();
+        const est = d.estabelecimento || {};
+
+        const set = (id, val) => { if (!val) return; const el = document.getElementById(id); if (el) el.value = val; };
+
+        set('forn-nome',          d.razao_social || '');
+        set('forn-nome-fantasia', est.nome_fantasia || '');
+
+        const logr = [est.tipo_logradouro, est.logradouro].filter(Boolean).join(' ');
+        set('forn-end',    logr);
+        set('forn-num',    est.numero || '');
+        set('forn-cidade', est.cidade?.nome || '');
+        set('forn-estado', est.estado?.sigla || '');
+
+        if (est.ddd1 && est.telefone1) set('forn-tel', `(${est.ddd1}) ${est.telefone1}`);
+        set('forn-email', est.email || '');
+
+        const ie = est.inscricoes_estaduais?.[0]?.inscricao_estadual;
+        if (ie) set('forn-ie', ie);
+
+        statusEl.innerHTML = '<span style="color:#059669">✅ Dados preenchidos!</span>';
+        setTimeout(() => { statusEl.innerHTML = ''; }, 4000);
+    } catch (e) {
+        statusEl.innerHTML = e.tipo === 'nao_encontrado'
+            ? '<span style="color:#dc2626">❌ CNPJ não encontrado na base de dados.</span>'
+            : '<span style="color:#dc2626">❌ Erro ao consultar. Verifique sua conexão.</span>';
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function salvarFornecedor() {
+    const cnpj = document.getElementById('forn-cnpj')?.value.trim() || '';
+    const nome = document.getElementById('forn-nome')?.value.trim() || '';
+    if (!cnpj) { await showAlert('Informe o CNPJ do fornecedor.', '⚠️'); return; }
+    if (!nome) { await showAlert('Informe a Razão Social do fornecedor.', '⚠️'); return; }
+
+    const cnpjNorm = cnpj.replace(/\D/g, '');
+    const dupCnpj  = db.fornecedores.find(f => f.cnpj && f.cnpj.replace(/\D/g,'') === cnpjNorm && f.id != editandoIdFornecedor);
+    if (dupCnpj) { await showAlert(`CNPJ já cadastrado.\nFornecedor: ${dupCnpj.nome}`, '⚠️'); return; }
+
+    const dados = {
+        nome,
+        cnpj,
+        nome_fantasia: document.getElementById('forn-nome-fantasia')?.value.trim() || '',
+        end:    document.getElementById('forn-end')?.value.trim()    || '',
+        num:    document.getElementById('forn-num')?.value.trim()    || '',
+        cidade: document.getElementById('forn-cidade')?.value.trim() || '',
+        estado: document.getElementById('forn-estado')?.value.trim().toUpperCase() || '',
+        tel:    document.getElementById('forn-tel')?.value.trim()    || '',
+        email:  document.getElementById('forn-email')?.value.trim()  || '',
+        ie:     document.getElementById('forn-ie')?.value.trim()     || '',
+        obs:    document.getElementById('forn-obs')?.value.trim()    || '',
+    };
+
     if (editandoIdFornecedor) {
         const idx = db.fornecedores.findIndex(f => f.id == editandoIdFornecedor);
-        if (idx !== -1) db.fornecedores[idx] = { ...db.fornecedores[idx], nome, cnpj, tel, email, end, obs };
+        if (idx !== -1) db.fornecedores[idx] = { ...db.fornecedores[idx], ...dados };
         cancelarEdicaoFornecedor();
         salvarERecarregar('Fornecedor atualizado!');
     } else {
-        db.fornecedores.push({ id: Date.now(), nome, cnpj, tel, email, end, obs });
+        db.fornecedores.push({ id: Date.now(), ...dados });
         salvarERecarregar('Fornecedor cadastrado!');
     }
 }
@@ -2543,12 +2606,18 @@ function editarFornecedor(id) {
     const f = db.fornecedores.find(x => x.id == id);
     if (!f) return;
     editandoIdFornecedor = id;
-    document.getElementById('forn-nome').value  = f.nome  || '';
-    document.getElementById('forn-cnpj').value  = f.cnpj  || '';
-    document.getElementById('forn-tel').value   = f.tel   || '';
-    document.getElementById('forn-email').value = f.email || '';
-    document.getElementById('forn-end').value   = f.end   || '';
-    document.getElementById('forn-obs').value   = f.obs   || '';
+    const set = (elId, val) => { const el = document.getElementById(elId); if (el) el.value = val || ''; };
+    set('forn-cnpj',         f.cnpj);
+    set('forn-nome',         f.nome);
+    set('forn-nome-fantasia', f.nome_fantasia);
+    set('forn-end',          f.end);
+    set('forn-num',          f.num);
+    set('forn-cidade',       f.cidade);
+    set('forn-estado',       f.estado);
+    set('forn-tel',          f.tel);
+    set('forn-email',        f.email);
+    set('forn-ie',           f.ie);
+    set('forn-obs',          f.obs);
     const tit = document.getElementById('forn-form-titulo');
     const btn = document.getElementById('forn-btn-salvar');
     const cnc = document.getElementById('forn-btn-cancelar');
@@ -2561,8 +2630,11 @@ function editarFornecedor(id) {
 
 function cancelarEdicaoFornecedor() {
     editandoIdFornecedor = null;
-    ['forn-nome','forn-cnpj','forn-tel','forn-email','forn-end','forn-obs'].forEach(id => {
-        const el = document.getElementById(id); if (el) el.value = '';
+    ['forn-cnpj','forn-nome','forn-nome-fantasia','forn-end','forn-num',
+     'forn-cidade','forn-estado','forn-tel','forn-email','forn-ie','forn-obs',
+     'forn-cnpj-status'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.tagName === 'SPAN' ? el.innerHTML = '' : el.value = ''; }
     });
     const tit = document.getElementById('forn-form-titulo');
     const btn = document.getElementById('forn-btn-salvar');
@@ -2597,9 +2669,12 @@ function renderTabelaFornecedores() {
         const nMat = db.materiais.filter(m => m.fornecedor_id == f.id).length;
         const nCat = db.catalogo.filter(c => c.fornecedor_id == f.id).length;
         const vinc = [nMat > 0 ? `${nMat} mat.` : '', nCat > 0 ? `${nCat} tec.` : ''].filter(Boolean).join(' · ') || '—';
+        const cidadeUF = [f.cidade, f.estado].filter(Boolean).join(' / ') || '—';
+        const nomeFantasia = f.nome_fantasia ? `<br><small style="color:#888;font-size:12px">${escapeHtml(f.nome_fantasia)}</small>` : '';
         return `<tr>
-            <td><strong>${escapeHtml(f.nome)}</strong>${f.obs ? `<br><small style="color:#888;font-size:12px">${escapeHtml(f.obs)}</small>` : ''}</td>
+            <td><strong>${escapeHtml(f.nome)}</strong>${nomeFantasia}</td>
             <td style="font-size:13px">${escapeHtml(f.cnpj || '—')}</td>
+            <td style="font-size:13px">${escapeHtml(cidadeUF)}</td>
             <td style="font-size:13px">${escapeHtml(f.tel || '—')}</td>
             <td style="font-size:13px">${escapeHtml(f.email || '—')}</td>
             <td style="font-size:12px;color:#555">${vinc}</td>

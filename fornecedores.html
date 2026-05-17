@@ -37,16 +37,52 @@
         <!-- TAB: FORNECEDORES -->
         <div id="tab-forn-lista" class="tab-panel active">
             <div class="card">
-                <h3 id="forn-form-titulo">Cadastrar Fornecedor</h3>
-                <div class="grid" style="margin-top:15px">
+                <h3 id="forn-form-titulo" style="margin-bottom:16px">Cadastrar Fornecedor</h3>
+
+                <!-- Linha CNPJ + busca -->
+                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
+                    <div class="form-group" style="width:220px;margin-bottom:0">
+                        <label>CNPJ <span style="color:#dc2626">*</span></label>
+                        <input type="text" id="forn-cnpj" placeholder="00.000.000/0000-00" maxlength="18" oninput="mascaraCNPJ(this)">
+                    </div>
+                    <button class="btn" id="forn-btn-buscar-cnpj" onclick="buscarCNPJ()" style="margin-bottom:0">🔍 Buscar CNPJ</button>
+                    <span id="forn-cnpj-status" style="font-size:13px;align-self:center"></span>
+                </div>
+
+                <!-- Razão Social + Nome Fantasia -->
+                <div class="grid" style="grid-template-columns:1fr 1fr;margin-bottom:0">
                     <div class="form-group">
-                        <label>Nome / Razão Social <span style="color:#dc2626">*</span></label>
-                        <input type="text" id="forn-nome" placeholder="Ex: Tecidos Brasil Ltda">
+                        <label>Razão Social <span style="color:#dc2626">*</span></label>
+                        <input type="text" id="forn-nome" placeholder="Nome oficial da empresa">
                     </div>
                     <div class="form-group">
-                        <label>CNPJ / CPF</label>
-                        <input type="text" id="forn-cnpj" placeholder="00.000.000/0000-00">
+                        <label>Nome Fantasia</label>
+                        <input type="text" id="forn-nome-fantasia" placeholder="Nome comercial (opcional)">
                     </div>
+                </div>
+
+                <!-- Endereço -->
+                <div class="grid" style="grid-template-columns:2fr 0.5fr 1.5fr 0.5fr;margin-bottom:0">
+                    <div class="form-group">
+                        <label>Logradouro</label>
+                        <input type="text" id="forn-end" placeholder="Rua, Av., etc.">
+                    </div>
+                    <div class="form-group">
+                        <label>Número</label>
+                        <input type="text" id="forn-num" placeholder="Nº">
+                    </div>
+                    <div class="form-group">
+                        <label>Cidade</label>
+                        <input type="text" id="forn-cidade" placeholder="Cidade">
+                    </div>
+                    <div class="form-group">
+                        <label>UF</label>
+                        <input type="text" id="forn-estado" placeholder="UF" maxlength="2" style="text-transform:uppercase">
+                    </div>
+                </div>
+
+                <!-- Contato + IE + Obs -->
+                <div class="grid" style="grid-template-columns:1fr 1fr 1fr 1fr">
                     <div class="form-group">
                         <label>Telefone / WhatsApp</label>
                         <input type="text" id="forn-tel" placeholder="(11) 99999-9999">
@@ -55,19 +91,18 @@
                         <label>E-mail</label>
                         <input type="email" id="forn-email" placeholder="contato@fornecedor.com">
                     </div>
-                </div>
-                <div class="grid" style="grid-template-columns:1fr 1fr">
                     <div class="form-group">
-                        <label>Endereço</label>
-                        <textarea id="forn-end" rows="2" placeholder="Rua, número, cidade, estado" style="padding:10px;border:1px solid #ccc;border-radius:4px;resize:vertical;font-family:inherit;font-size:14px;width:100%"></textarea>
+                        <label>Inscrição Estadual</label>
+                        <input type="text" id="forn-ie" placeholder="IE (opcional)">
                     </div>
                     <div class="form-group">
                         <label>Observações</label>
-                        <textarea id="forn-obs" rows="2" placeholder="Prazo de entrega, condições, etc." style="padding:10px;border:1px solid #ccc;border-radius:4px;resize:vertical;font-family:inherit;font-size:14px;width:100%"></textarea>
+                        <input type="text" id="forn-obs" placeholder="Prazo, condições, etc.">
                     </div>
                 </div>
-                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
-                    <button class="btn" id="forn-btn-salvar" onclick="salvarFornecedor()">Salvar Fornecedor</button>
+
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+                    <button class="btn btn-success" id="forn-btn-salvar" onclick="salvarFornecedor()">Salvar Fornecedor</button>
                     <button class="btn btn-outline" id="forn-btn-cancelar" style="display:none" onclick="cancelarEdicaoFornecedor()">Cancelar</button>
                 </div>
             </div>
@@ -75,8 +110,9 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>Nome / Razão Social</th>
-                            <th>CNPJ / CPF</th>
+                            <th>Razão Social / Nome Fantasia</th>
+                            <th>CNPJ</th>
+                            <th>Cidade / UF</th>
                             <th>Telefone</th>
                             <th>E-mail</th>
                             <th>Vínculos</th>
