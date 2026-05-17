@@ -761,8 +761,97 @@ function sortDashboard(col) {
     renderDashboard();
 }
 
+let _chartFat = null, _chartStatus = null;
+
+function renderCharts() {
+    if (typeof Chart === 'undefined') return;
+
+    // ── Gráfico 1: Faturamento últimos 6 meses ──────────────────
+    const meses = [];
+    const hoje = new Date();
+    for (let i = 5; i >= 0; i--) {
+        const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+        meses.push({ ano: d.getFullYear(), mes: d.getMonth(), label: d.toLocaleString('pt-BR', { month: 'short', year: '2-digit' }) });
+    }
+    const fatPorMes = meses.map(m =>
+        db.pedidos
+            .filter(p => {
+                if (normalizarStatus(p.status) !== 'Instalado') return false;
+                const d = new Date(p.data_instalado || p.data_criacao || p.id);
+                return d.getFullYear() === m.ano && d.getMonth() === m.mes;
+            })
+            .reduce((s, p) => s + (p.valor || 0), 0)
+    );
+
+    const ctxFat = document.getElementById('chart-faturamento');
+    if (ctxFat) {
+        if (_chartFat) _chartFat.destroy();
+        _chartFat = new Chart(ctxFat, {
+            type: 'bar',
+            data: {
+                labels: meses.map(m => m.label),
+                datasets: [{
+                    label: 'Faturamento (R$)',
+                    data: fatPorMes,
+                    backgroundColor: 'rgba(42,92,130,0.75)',
+                    borderColor: '#2A5C82',
+                    borderWidth: 1.5,
+                    borderRadius: 6,
+                    borderSkipped: false
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { callback: v => 'R$ ' + v.toLocaleString('pt-BR') },
+                        grid: { color: 'rgba(0,0,0,0.05)' }
+                    },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    // ── Gráfico 2: Pedidos por status (donut) ───────────────────
+    const statusLabels = ['Orçamento','Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Pagamento','Instalado'];
+    const statusCores  = ['#f59e0b','#6366f1','#fb923c','#3b82f6','#10b981','#ef4444','#22c55e'];
+    const statusCount  = statusLabels.map(s => db.pedidos.filter(p => normalizarStatus(p.status) === s).length);
+
+    const ctxStatus = document.getElementById('chart-status');
+    if (ctxStatus) {
+        if (_chartStatus) _chartStatus.destroy();
+        _chartStatus = new Chart(ctxStatus, {
+            type: 'doughnut',
+            data: {
+                labels: statusLabels,
+                datasets: [{
+                    data: statusCount,
+                    backgroundColor: statusCores.map(c => c + 'cc'),
+                    borderColor: statusCores,
+                    borderWidth: 2,
+                    hoverOffset: 8
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: true,
+                cutout: '62%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { font: { size: 11 }, padding: 10, boxWidth: 12 }
+                    }
+                }
+            }
+        });
+    }
+}
+
 function renderDashboard() {
     renderMetrics();
+    renderCharts();
     const thead = document.getElementById('thead-pedidos');
     const tbody = document.getElementById('tb-pedidos');
     if (!thead || !tbody) return;
