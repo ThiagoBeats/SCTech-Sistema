@@ -1082,9 +1082,9 @@ function autoFillTecidoPorReferencia() {
     const sel = document.getElementById('est-tecido');
     if (!sel) return;
     const tec = db.catalogo.find(c => c.referencia && c.referencia.toLowerCase() === ref.toLowerCase());
-    if (tec) { sel.value = String(tec.id); return; }
+    if (tec) { sel.value = String(tec.id); autoFillEntradaTecido(); return; }
     const existing = db.estoque.find(r => r.lote && r.lote.toLowerCase() === ref.toLowerCase());
-    if (existing) sel.value = String(existing.tecido_id);
+    if (existing) { sel.value = String(existing.tecido_id); autoFillEntradaTecido(); }
 }
 
 function mostrarBaixaForm(roloId) {
@@ -3438,7 +3438,7 @@ function autoFillEntradaMaterialPorRef() {
     const mat = db.materiais.find(m => m.referencia && m.referencia.toLowerCase() === ref.toLowerCase());
     if (!mat) return;
     const sel = document.getElementById('est-mat-id');
-    if (sel) sel.value = String(mat.id);
+    if (sel) { sel.value = String(mat.id); autoFillEntradaMaterialById(); }
 }
 
 function calcularPrecoVendaMat() {
