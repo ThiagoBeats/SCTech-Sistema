@@ -14,19 +14,19 @@ let db = {
     pedidos_compra:  JSON.parse(localStorage.getItem('sc_pc'))   || [],
     contas_receber:  JSON.parse(localStorage.getItem('sc_cr'))   || [],
     contas_pagar:    JSON.parse(localStorage.getItem('sc_cp'))   || [],
-    despesas_fixas:  JSON.parse(localStorage.getItem('sc_df'))   || []
+    despesas_fixas:  JSON.parse(localStorage.getItem('sc_df'))   || [],
+    medicoes:        JSON.parse(localStorage.getItem('sc_med'))  || []
 };
 
 function gerarNumeroPedido() {
     const seq = (parseInt(localStorage.getItem('sc_ped_seq') || '0') + 1);
     localStorage.setItem('sc_ped_seq', String(seq));
     const yy = String(new Date().getFullYear()).slice(-2);
-    return parseInt(yy + String(seq).padStart(6, '0'));
+    return parseInt(yy + String(seq).padStart(3, '0'));
 }
 
 function formatPedidoId(id) {
-    const s = String(id);
-    return s.length <= 8 ? s : s.slice(-6);
+    return String(id);
 }
 
 function syncDB() {
@@ -43,6 +43,7 @@ function syncDB() {
     localStorage.setItem('sc_cr',   JSON.stringify(db.contas_receber));
     localStorage.setItem('sc_cp',   JSON.stringify(db.contas_pagar));
     localStorage.setItem('sc_df',   JSON.stringify(db.despesas_fixas));
+    localStorage.setItem('sc_med',  JSON.stringify(db.medicoes));
 }
 
 function registrarMovimento(tipo, item_nome, item_tipo, quantidade, unidade, referencia) {
@@ -852,6 +853,7 @@ function renderCharts() {
 function renderDashboard() {
     renderMetrics();
     renderCharts();
+    renderDashboardMedicoes();
     const thead = document.getElementById('thead-pedidos');
     const tbody = document.getElementById('tb-pedidos');
     if (!thead || !tbody) return;
@@ -1425,6 +1427,7 @@ function mostrarTabEstoque(tab) {
     document.getElementById('tab-' + tab)?.classList.add('active');
     document.querySelector(`.tab-btn[data-tab="${tab}"]`)?.classList.add('active');
     _tabBackBtn('.tab-nav', _prevTabEstoque, () => mostrarTabEstoque(_prevTabEstoque));
+    if (tab === 'consulta') renderConsultaEstoque();
 }
 
 // --- FORMULÁRIO DE PEDIDO (MULTI-AMBIENTE + ACESSÓRIOS) ---
@@ -2197,7 +2200,8 @@ function exportarDados() {
         estoque: db.estoque, materiais: db.materiais, kits: db.kits,
         movimentos: db.movimentos, vendedores: db.vendedores,
         fornecedores: db.fornecedores, pedidos_compra: db.pedidos_compra,
-        contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, despesas_fixas: db.despesas_fixas
+        contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, despesas_fixas: db.despesas_fixas,
+        medicoes: db.medicoes
     };
     const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
@@ -2229,6 +2233,7 @@ function importarDados(event) {
             db.contas_receber = dados.contas_receber || [];
             db.contas_pagar   = dados.contas_pagar   || [];
             db.despesas_fixas = dados.despesas_fixas || [];
+            db.medicoes       = dados.medicoes       || [];
             syncDB();
             toastReload('Dados importados com sucesso!', 'info');
             window.location.reload();
@@ -2917,6 +2922,198 @@ function renderPedidoCompraDoc() {
 }
 
 // --- AGENDA DE INSTALAÇÕES ---
+// =============================================
+// MÓDULO MEDIÇÕES
+// =============================================
+
+function toggleTipoClienteMedicao() {
+    const tipo = document.querySelector('input[name="med-tipo"]:checked')?.value || 'existente';
+    document.getElementById('med-grupo-existente').style.display = tipo === 'existente' ? '' : 'none';
+    document.getElementById('med-grupo-novo').style.display      = tipo === 'novo'      ? '' : 'none';
+}
+
+async function salvarMedicao() {
+    const tipo = document.querySelector('input[name="med-tipo"]:checked')?.value || 'existente';
+    let clienteId = null, clienteNome = '', clienteTel = '';
+
+    if (tipo === 'existente') {
+        clienteId = parseInt(document.getElementById('med-cliente-id')?.value) || null;
+        if (!clienteId) { await showAlert('Selecione o cliente.', '⚠️'); return; }
+        const cli = db.clientes.find(c => c.id == clienteId);
+        if (cli) { clienteNome = cli.nome; clienteTel = cli.tel || ''; }
+    } else {
+        clienteNome = (document.getElementById('med-novo-nome')?.value || '').trim();
+        clienteTel  = (document.getElementById('med-novo-tel')?.value || '').trim();
+        if (!clienteNome) { await showAlert('Informe o nome do cliente.', '⚠️'); return; }
+        const novoCli = { id: Date.now(), nome: clienteNome, tel: clienteTel, email: '', cpf: '', end: '' };
+        db.clientes.push(novoCli);
+        clienteId = novoCli.id;
+        const sel = document.getElementById('med-cliente-id');
+        if (sel) sel.innerHTML = '<option value="">— Selecione —</option>' +
+            db.clientes.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
+    }
+
+    const data = (document.getElementById('med-data')?.value || '').trim();
+    const hora = (document.getElementById('med-hora')?.value || '').trim();
+    const obs  = (document.getElementById('med-obs')?.value  || '').trim();
+    if (!data) { await showAlert('Informe a data da visita.', '⚠️'); return; }
+
+    db.medicoes.push({ id: Date.now(), clienteId, clienteNome, clienteTel, data, hora, obs, status: 'Agendado' });
+
+    const nomeEl = document.getElementById('med-novo-nome'); if (nomeEl) nomeEl.value = '';
+    const telEl  = document.getElementById('med-novo-tel');  if (telEl)  telEl.value  = '';
+    document.getElementById('med-data').value = '';
+    document.getElementById('med-hora').value = '';
+    document.getElementById('med-obs').value  = '';
+    document.querySelectorAll('input[name="med-tipo"]').forEach(r => { r.checked = r.value === 'existente'; });
+    toggleTipoClienteMedicao();
+
+    syncDB();
+    toast(tipo === 'novo' ? 'Cliente cadastrado e visita agendada!' : 'Visita agendada!', 'success');
+    renderMedicoes();
+    renderDashboardMedicoes();
+}
+
+function marcarMedicaoRealizada(id) {
+    const m = db.medicoes.find(x => x.id == id);
+    if (m) m.status = 'Realizado';
+    syncDB();
+    renderMedicoes();
+    renderDashboardMedicoes();
+}
+
+async function cancelarMedicao(id) {
+    if (!await showConfirm('Cancelar esta visita agendada?', '⚠️', 'Sim, cancelar', 'Não')) return;
+    const m = db.medicoes.find(x => x.id == id);
+    if (m) m.status = 'Cancelado';
+    syncDB();
+    renderMedicoes();
+    renderDashboardMedicoes();
+}
+
+async function excluirMedicao(id) {
+    if (!await showConfirm('Excluir este agendamento?', '🗑️', 'Excluir', 'Cancelar')) return;
+    db.medicoes = db.medicoes.filter(x => x.id != id);
+    syncDB();
+    renderMedicoes();
+    renderDashboardMedicoes();
+}
+
+function renderMedicoes() {
+    const container = document.getElementById('medicoes-container');
+    if (!container) return;
+
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const hojeStr = hoje.toISOString().split('T')[0];
+
+    const visitas = db.medicoes
+        .filter(m => m.status !== 'Cancelado')
+        .sort((a, b) => (a.data + (a.hora || '99:99')) < (b.data + (b.hora || '99:99')) ? -1 : 1);
+
+    if (!visitas.length) {
+        container.innerHTML = '<div class="card" style="text-align:center;color:#999;padding:40px">Nenhuma visita agendada. Use o formulário acima para agendar.</div>';
+        return;
+    }
+
+    const grupos = {};
+    visitas.forEach(v => {
+        let grupo;
+        if (v.status === 'Realizado') {
+            grupo = '✅ Realizados';
+        } else {
+            const d    = new Date(v.data + 'T00:00:00');
+            const diff = Math.round((d - hoje) / (1000 * 60 * 60 * 24));
+            if (diff < 0)        grupo = '⚠ Atrasado';
+            else if (diff === 0) grupo = '📅 Hoje';
+            else if (diff <= 7)  grupo = '📅 Esta semana';
+            else if (diff <= 14) grupo = '📆 Próxima semana';
+            else                 grupo = '🗓 Futuro';
+        }
+        if (!grupos[grupo]) grupos[grupo] = [];
+        grupos[grupo].push(v);
+    });
+
+    const ordem = ['⚠ Atrasado', '📅 Hoje', '📅 Esta semana', '📆 Próxima semana', '🗓 Futuro', '✅ Realizados'];
+    container.innerHTML = ordem.filter(g => grupos[g]).map(g => {
+        const cards = grupos[g].map(v => {
+            const d       = new Date(v.data + 'T12:00:00');
+            const dataFmt = v.data === hojeStr ? 'Hoje' : d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+            const isAtv   = v.status === 'Agendado';
+            const statusBg  = v.status === 'Realizado' ? '#d1fae5' : v.status === 'Cancelado' ? '#f3f4f6' : '#dbeafe';
+            const statusClr = v.status === 'Realizado' ? '#065f46' : v.status === 'Cancelado' ? '#6b7280' : '#1e40af';
+            return `<div class="card" style="margin-bottom:10px">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+                    <div>
+                        <div style="font-weight:700;font-size:15px;margin-bottom:4px">${escapeHtml(v.clienteNome || '—')}</div>
+                        ${v.clienteTel ? `<div style="font-size:13px;color:#555">📱 ${escapeHtml(v.clienteTel)}</div>` : ''}
+                        ${v.obs ? `<div style="font-size:13px;color:#6b7280;margin-top:4px">📝 ${escapeHtml(v.obs)}</div>` : ''}
+                    </div>
+                    <div style="text-align:right">
+                        <div style="font-weight:700;font-size:15px;color:#1f2937">${dataFmt}</div>
+                        ${v.hora ? `<div style="font-size:14px;color:#374151;font-weight:600">🕐 ${v.hora}</div>` : ''}
+                        <span style="display:inline-block;margin-top:6px;font-size:11px;font-weight:700;padding:2px 10px;border-radius:12px;background:${statusBg};color:${statusClr}">${v.status}</span>
+                    </div>
+                </div>
+                ${isAtv ? `<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+                    <button class="btn btn-success btn-sm" onclick="marcarMedicaoRealizada(${v.id})">✅ Marcar como Realizado</button>
+                    ${v.clienteTel ? `<a href="https://wa.me/55${v.clienteTel.replace(/\D/g,'')}" target="_blank" class="btn btn-outline btn-sm">📱 WhatsApp</a>` : ''}
+                    <button class="btn btn-outline btn-sm btn-danger" onclick="cancelarMedicao(${v.id})" style="margin-left:auto">✕ Cancelar</button>
+                </div>` : `<div style="margin-top:10px">
+                    <button class="btn btn-outline btn-sm btn-danger" onclick="excluirMedicao(${v.id})">🗑️ Excluir</button>
+                </div>`}
+            </div>`;
+        }).join('');
+        const bgGrupo = g.includes('Atrasado') ? '#fee2e2' : g.includes('Hoje') ? '#dbeafe' : '#f3f4f6';
+        const clrGrupo = g.includes('Atrasado') ? '#991b1b' : g.includes('Hoje') ? '#1e40af' : '#374151';
+        return `<div style="margin-bottom:20px">
+            <h3 style="font-size:14px;font-weight:700;color:${clrGrupo};margin-bottom:12px;padding:6px 12px;background:${bgGrupo};border-radius:6px">
+                ${g} <span style="font-size:12px;font-weight:normal">(${grupos[g].length})</span>
+            </h3>${cards}
+        </div>`;
+    }).join('');
+}
+
+function renderDashboardMedicoes() {
+    const container = document.getElementById('dashboard-medicoes');
+    if (!container) return;
+
+    const hojeStr = new Date().toISOString().split('T')[0];
+    const proximas = db.medicoes
+        .filter(m => m.status === 'Agendado' && m.data >= hojeStr)
+        .sort((a, b) => (a.data + (a.hora || '99:99')) < (b.data + (b.hora || '99:99')) ? -1 : 1)
+        .slice(0, 6);
+
+    if (!proximas.length) { container.style.display = 'none'; return; }
+    container.style.display = '';
+
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const cards = proximas.map(v => {
+        const d    = new Date(v.data + 'T12:00:00');
+        const diff = Math.round((d - hoje) / (1000 * 60 * 60 * 24));
+        const isHoje   = diff === 0;
+        const isAmanha = diff === 1;
+        const label = isHoje ? 'Hoje' : isAmanha ? 'Amanhã' : d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+        const bg   = isHoje ? '#dbeafe' : '#f8fafc';
+        const bord = isHoje ? '#93c5fd' : 'var(--border)';
+        const acc  = isHoje ? '#3b82f6' : '#2A5C82';
+        const clrL = isHoje ? '#1d4ed8' : '#6b7280';
+        return `<div onclick="location.href='pcp.html?view=medicoes'" style="cursor:pointer;background:${bg};border:1px solid ${bord};border-left:4px solid ${acc};border-radius:8px;padding:12px 16px;min-width:155px;flex:1;max-width:200px;transition:transform 0.1s,box-shadow 0.1s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+            <div style="font-size:11px;font-weight:700;color:${clrL};text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">${label}</div>
+            <div style="font-weight:700;font-size:14px;color:#1f2937;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(v.clienteNome)}">${escapeHtml(v.clienteNome)}</div>
+            ${v.hora ? `<div style="font-size:12px;color:#374151">🕐 ${v.hora}</div>` : ''}
+            ${v.clienteTel ? `<div style="font-size:12px;color:#6b7280;margin-top:2px">${escapeHtml(v.clienteTel)}</div>` : ''}
+        </div>`;
+    }).join('');
+
+    container.innerHTML = `<div class="card" style="margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+            <h3 style="color:#374151;font-size:15px;margin:0">📐 Próximas Medições</h3>
+            <a href="pcp.html?view=medicoes" class="btn btn-outline btn-sm">Ver agenda completa</a>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">${cards}</div>
+    </div>`;
+}
+
 function renderAgenda() {
     const container = document.getElementById('agenda-container');
     if (!container) return;
@@ -2996,11 +3193,14 @@ function toggleSidebar() {
 let _prevViewPCP = null, _curViewPCP = 'kanban';
 function mostrarViewPCP(view) {
     if (_curViewPCP !== view) { _prevViewPCP = _curViewPCP; _curViewPCP = view; }
-    document.getElementById('pcp-view-kanban').style.display = view === 'kanban' ? '' : 'none';
-    document.getElementById('pcp-view-agenda').style.display = view === 'agenda' ? '' : 'none';
-    document.getElementById('tab-btn-kanban').className = 'tab-btn' + (view==='kanban'?' active':'');
-    document.getElementById('tab-btn-agenda').className = 'tab-btn' + (view==='agenda'?' active':'');
-    if (view === 'agenda') renderAgenda();
+    document.getElementById('pcp-view-kanban').style.display   = view === 'kanban'   ? '' : 'none';
+    document.getElementById('pcp-view-agenda').style.display   = view === 'agenda'   ? '' : 'none';
+    document.getElementById('pcp-view-medicoes').style.display = view === 'medicoes' ? '' : 'none';
+    document.getElementById('tab-btn-kanban').className   = 'tab-btn' + (view === 'kanban'   ? ' active' : '');
+    document.getElementById('tab-btn-agenda').className   = 'tab-btn' + (view === 'agenda'   ? ' active' : '');
+    document.getElementById('tab-btn-medicoes').className = 'tab-btn' + (view === 'medicoes' ? ' active' : '');
+    if (view === 'agenda')   renderAgenda();
+    if (view === 'medicoes') renderMedicoes();
     _tabBackBtn('.tab-nav', _prevViewPCP, () => mostrarViewPCP(_prevViewPCP));
 }
 
@@ -3136,6 +3336,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('agenda-container'))   renderAgenda();
     if (document.getElementById('tb-rel-fat'))         renderRelatorios();
 
+    // Medições
+    if (document.getElementById('medicoes-container')) {
+        const sel = document.getElementById('med-cliente-id');
+        if (sel) sel.innerHTML = '<option value="">— Selecione —</option>' +
+            db.clientes.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
+        const dataEl = document.getElementById('med-data');
+        if (dataEl) dataEl.value = new Date().toISOString().split('T')[0];
+        renderMedicoes();
+        const urlView = new URLSearchParams(window.location.search).get('view');
+        if (urlView) mostrarViewPCP(urlView);
+    }
+
     if (document.getElementById('tb-vendedores')) {
         const filtros = ['filtro-vend-pendente', 'filtro-vend-hist'];
         filtros.forEach(fId => {
@@ -3238,6 +3450,138 @@ async function salvarEntradaMaterial() {
     const refData = data ? `Entrada ${new Date(data + 'T12:00:00').toLocaleDateString('pt-BR')}` : 'Entrada manual';
     registrarMovimento('Entrada', mat.nome, 'material', qtd, mat.unidade, refData);
     salvarERecarregar('Entrada de material registrada!');
+}
+
+function renderConsultaEstoque() {
+    const container = document.getElementById('consulta-resultados');
+    if (!container) return;
+
+    const termo = (document.getElementById('consulta-busca')?.value || '').toLowerCase().trim();
+    const tipo  = document.getElementById('consulta-tipo')?.value || '';
+
+    const fmt = v => v != null && v > 0 ? 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+    const fmtQtd = (v, un) => v != null ? Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + (un || '') : '—';
+
+    let html = '';
+
+    // ── TECIDOS ──────────────────────────────────────────────
+    if (tipo !== 'material') {
+        const tecidos = db.catalogo.filter(c => {
+            if (!termo) return true;
+            return c.nome.toLowerCase().includes(termo) || (c.referencia || '').toLowerCase().includes(termo);
+        });
+
+        tecidos.forEach(tec => {
+            const rolos = db.estoque.filter(r => r.tecido_id == tec.id);
+            const totalDisp = rolos.reduce((s, r) => s + r.metragem_atual, 0);
+            const abaixoMin = tec.min_estoque > 0 && totalDisp < tec.min_estoque;
+
+            // última entrada
+            const ults = db.movimentos.filter(m => m.tipo === 'Entrada' && m.categoria === 'tecido' && m.item && m.item.toLowerCase().includes(tec.nome.toLowerCase()));
+            const ultEnt = ults.length ? ults.sort((a,b)=>b.ts-a.ts)[0] : null;
+            const ultData = ultEnt ? new Date(ultEnt.ts).toLocaleDateString('pt-BR') : '—';
+
+            const rolosHtml = rolos.length ? `
+            <table style="margin-top:10px;font-size:13px">
+                <thead><tr>
+                    <th style="padding:4px 10px">Referência / Lote</th>
+                    <th style="padding:4px 10px">Metragem Inicial</th>
+                    <th style="padding:4px 10px">Disponível</th>
+                    <th style="padding:4px 10px">Data de Entrada</th>
+                    <th style="padding:4px 10px">Status</th>
+                </tr></thead>
+                <tbody>${rolos.map(r => {
+                    const pct = r.metragem_inicial > 0 ? Math.round((r.metragem_atual / r.metragem_inicial) * 100) : 0;
+                    const cor = pct > 40 ? '#059669' : pct > 15 ? '#d97706' : '#dc2626';
+                    const status = r.metragem_atual <= 0 ? '<span class="badge-esgotado">Esgotado</span>' : `<span style="color:${cor};font-weight:600">${pct}% restante</span>`;
+                    return `<tr>
+                        <td style="padding:4px 10px">${escapeHtml(r.lote)}</td>
+                        <td style="padding:4px 10px">${r.metragem_inicial.toFixed(2)} m</td>
+                        <td style="padding:4px 10px"><strong>${r.metragem_atual.toFixed(3)} m</strong></td>
+                        <td style="padding:4px 10px">${r.data_entrada ? new Date(r.data_entrada+'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+                        <td style="padding:4px 10px">${status}</td>
+                    </tr>`;
+                }).join('')}</tbody>
+            </table>` : '<p style="font-size:13px;color:#999;margin-top:8px">Nenhum rolo em estoque.</p>';
+
+            html += `
+            <div class="card" style="margin-bottom:14px">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+                    <div>
+                        <span style="font-size:11px;font-weight:700;color:#fff;background:#2A5C82;padding:2px 8px;border-radius:12px;margin-right:8px">TECIDO</span>
+                        <strong style="font-size:16px">${escapeHtml(tec.nome)}</strong>
+                        ${tec.referencia ? `<span style="margin-left:10px;font-size:13px;color:#888">Ref: ${escapeHtml(tec.referencia)}</span>` : ''}
+                        ${abaixoMin ? `<span class="badge-alerta" style="margin-left:10px">⚠ Abaixo do mínimo</span>` : ''}
+                    </div>
+                    <div style="font-size:22px;font-weight:700;color:${abaixoMin?'#dc2626':'#059669'}">${totalDisp.toFixed(2)} m</div>
+                </div>
+                <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-top:14px;gap:10px">
+                    <div class="consulta-info-item"><span class="consulta-info-label">Fornecedor</span><span>${escapeHtml(tec.fornecedor_nome||'—')}</span></div>
+                    <div class="consulta-info-item"><span class="consulta-info-label">Preço de Custo</span><span style="color:#374151;font-weight:600">${fmt(tec.preco_custo)}/m</span></div>
+                    <div class="consulta-info-item"><span class="consulta-info-label">Preço de Venda</span><span style="color:#059669;font-weight:700">${fmt(tec.preco)}/m</span></div>
+                    <div class="consulta-info-item"><span class="consulta-info-label">Largura do Rolo</span><span>${tec.largura_rolo ? tec.largura_rolo + ' m' : '—'}</span></div>
+                    <div class="consulta-info-item"><span class="consulta-info-label">Rapport</span><span>${tec.rapport ? tec.rapport + ' cm' : '—'}</span></div>
+                    <div class="consulta-info-item"><span class="consulta-info-label">Estoque Mínimo</span><span>${tec.min_estoque > 0 ? tec.min_estoque + ' m' : '—'}</span></div>
+                    <div class="consulta-info-item"><span class="consulta-info-label">Última Entrada</span><span>${ultData}</span></div>
+                    <div class="consulta-info-item"><span class="consulta-info-label">Rolos em Estoque</span><span>${rolos.length}</span></div>
+                </div>
+                ${rolosHtml}
+            </div>`;
+        });
+
+        if (!tecidos.length && tipo === 'tecido') {
+            html += `<div class="card" style="text-align:center;color:#999;padding:24px">Nenhum tecido encontrado${termo ? ` para "${termo}"` : ''}.</div>`;
+        }
+    }
+
+    // ── MATERIAIS ────────────────────────────────────────────
+    if (tipo !== 'tecido') {
+        const mats = db.materiais.filter(m => {
+            if (!termo) return true;
+            return m.nome.toLowerCase().includes(termo) || (m.referencia || '').toLowerCase().includes(termo);
+        });
+
+        mats.forEach(m => {
+            const abaixoMin = m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque;
+
+            const ults = db.movimentos.filter(mv => mv.tipo === 'Entrada' && mv.categoria === 'material' && mv.item && mv.item.toLowerCase().includes(m.nome.toLowerCase()));
+            const ultEnt = ults.length ? ults.sort((a,b)=>b.ts-a.ts)[0] : null;
+            const ultData = ultEnt ? new Date(ultEnt.ts).toLocaleDateString('pt-BR') : '—';
+
+            html += `
+            <div class="card" style="margin-bottom:14px">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+                    <div>
+                        <span style="font-size:11px;font-weight:700;color:#fff;background:#6366f1;padding:2px 8px;border-radius:12px;margin-right:8px">MATERIAL</span>
+                        <strong style="font-size:16px">${escapeHtml(m.nome)}</strong>
+                        ${m.referencia ? `<span style="margin-left:10px;font-size:13px;color:#888">Ref: ${escapeHtml(m.referencia)}</span>` : ''}
+                        ${abaixoMin ? `<span class="badge-alerta" style="margin-left:10px">⚠ Abaixo do mínimo</span>` : ''}
+                    </div>
+                    <div style="font-size:22px;font-weight:700;color:${abaixoMin?'#dc2626':'#059669'}">${fmtQtd(m.estoque_atual, m.unidade)}</div>
+                </div>
+                <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-top:14px;gap:10px">
+                    <div class="consulta-info-item"><span class="consulta-info-label">Fornecedor</span><span>${escapeHtml(m.fornecedor_nome||'—')}</span></div>
+                    <div class="consulta-info-item"><span class="consulta-info-label">Unidade</span><span>${escapeHtml(m.unidade||'—')}</span></div>
+                    <div class="consulta-info-item"><span class="consulta-info-label">Preço de Custo</span><span style="color:#374151;font-weight:600">${fmt(m.preco_custo)}</span></div>
+                    <div class="consulta-info-item"><span class="consulta-info-label">Preço de Venda</span><span style="color:#059669;font-weight:700">${fmt(m.preco)}</span></div>
+                    <div class="consulta-info-item"><span class="consulta-info-label">Estoque Mínimo</span><span>${m.min_estoque > 0 ? m.min_estoque + ' ' + m.unidade : '—'}</span></div>
+                    <div class="consulta-info-item"><span class="consulta-info-label">Última Entrada</span><span>${ultData}</span></div>
+                </div>
+            </div>`;
+        });
+
+        if (!mats.length && tipo === 'material') {
+            html += `<div class="card" style="text-align:center;color:#999;padding:24px">Nenhum material encontrado${termo ? ` para "${termo}"` : ''}.</div>`;
+        }
+    }
+
+    if (!html) {
+        html = `<div class="card" style="text-align:center;color:#999;padding:32px">
+            ${termo ? `Nenhum resultado para "<strong>${escapeHtml(termo)}</strong>".` : 'Digite um nome ou código para pesquisar.'}
+        </div>`;
+    }
+
+    container.innerHTML = html;
 }
 
 function renderEstoqueMateriais() {

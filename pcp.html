@@ -32,16 +32,75 @@
         </div>
 
         <div class="tab-nav" style="margin-bottom:0">
-            <button class="tab-btn active" id="tab-btn-kanban" onclick="mostrarViewPCP('kanban')">📋 Status dos pedidos</button>
-            <button class="tab-btn" id="tab-btn-agenda" onclick="mostrarViewPCP('agenda')">📅 Agenda de Instalações</button>
+            <button class="tab-btn active" id="tab-btn-kanban"   onclick="mostrarViewPCP('kanban')">📋 Status dos pedidos</button>
+            <button class="tab-btn"        id="tab-btn-agenda"   onclick="mostrarViewPCP('agenda')">📅 Agenda de Instalações</button>
+            <button class="tab-btn"        id="tab-btn-medicoes" onclick="mostrarViewPCP('medicoes')">📐 Agendamento de Medições</button>
         </div>
 
         <div id="pcp-view-kanban">
             <div id="aviso-orcamentos" class="aviso-orcamentos"></div>
             <div id="kanban-board" class="kanban-board"></div>
-        </div><!-- end pcp-view-kanban -->
+        </div>
         <div id="pcp-view-agenda" style="display:none">
             <div id="agenda-container"></div>
+        </div>
+        <div id="pcp-view-medicoes" style="display:none">
+            <div class="card" style="margin-bottom:0">
+                <h3 style="margin-bottom:18px;color:var(--primary)">Agendar Visita de Medição</h3>
+
+                <!-- Tipo de cliente -->
+                <div style="display:flex;gap:24px;margin-bottom:16px">
+                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-weight:600">
+                        <input type="radio" name="med-tipo" value="existente" checked onchange="toggleTipoClienteMedicao()"> Cliente existente
+                    </label>
+                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-weight:600">
+                        <input type="radio" name="med-tipo" value="novo" onchange="toggleTipoClienteMedicao()"> Novo cliente
+                    </label>
+                </div>
+
+                <!-- Cliente existente -->
+                <div id="med-grupo-existente">
+                    <div class="form-group" style="max-width:400px">
+                        <label>Cliente <span style="color:#dc2626">*</span></label>
+                        <select id="med-cliente-id">
+                            <option value="">— Selecione o cliente —</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Novo cliente inline -->
+                <div id="med-grupo-novo" style="display:none">
+                    <div class="grid" style="grid-template-columns:1fr 1fr;max-width:600px">
+                        <div class="form-group">
+                            <label>Nome do cliente <span style="color:#dc2626">*</span></label>
+                            <input type="text" id="med-novo-nome" placeholder="Nome completo">
+                        </div>
+                        <div class="form-group">
+                            <label>Telefone / WhatsApp</label>
+                            <input type="text" id="med-novo-tel" placeholder="(11) 99999-9999">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Data / Hora / Obs -->
+                <div class="grid" style="grid-template-columns:180px 140px 1fr;margin-top:4px">
+                    <div class="form-group">
+                        <label>Data da visita <span style="color:#dc2626">*</span></label>
+                        <input type="date" id="med-data">
+                    </div>
+                    <div class="form-group">
+                        <label>Horário</label>
+                        <input type="time" id="med-hora">
+                    </div>
+                    <div class="form-group">
+                        <label>Observações</label>
+                        <input type="text" id="med-obs" placeholder="Endereço, referências, ponto de encontro…">
+                    </div>
+                </div>
+
+                <button class="btn btn-success" onclick="salvarMedicao()">📐 Agendar Visita</button>
+            </div>
+            <div id="medicoes-container" style="margin-top:20px"></div>
         </div>
     </main>
     <script src="js/app.js"></script>

@@ -36,6 +36,7 @@
             <button class="tab-btn"        data-tab="materiais" onclick="mostrarTabEstoque('materiais')">🔩 Materiais</button>
             <button class="tab-btn"        data-tab="kits"      onclick="mostrarTabEstoque('kits')">📦 Kits</button>
             <button class="tab-btn"        data-tab="historico" onclick="mostrarTabEstoque('historico')">📋 Histórico</button>
+            <button class="tab-btn"        data-tab="consulta"  onclick="mostrarTabEstoque('consulta')">🔍 Consulta de Estoque</button>
             <button class="tab-btn" data-tab="backup" onclick="mostrarTabEstoque('backup')">💾 Backup</button>
         </div>
 
@@ -260,6 +261,27 @@
                     <tbody id="tb-historico"></tbody>
                 </table>
             </div>
+        </div>
+
+        <!-- ══════════════ ABA: CONSULTA DE ESTOQUE ══════════════ -->
+        <div id="tab-consulta" class="tab-panel">
+            <div class="card">
+                <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+                    <div class="form-group" style="flex:1;min-width:260px;margin-bottom:0">
+                        <label>Buscar produto (nome ou código)</label>
+                        <input type="text" id="consulta-busca" placeholder="Ex: Linho, TRILHO-SU-01…" oninput="renderConsultaEstoque()" autocomplete="off">
+                    </div>
+                    <div class="form-group" style="min-width:140px;margin-bottom:0">
+                        <label>Tipo</label>
+                        <select id="consulta-tipo" onchange="renderConsultaEstoque()">
+                            <option value="">Todos</option>
+                            <option value="tecido">Tecidos</option>
+                            <option value="material">Materiais</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div id="consulta-resultados"></div>
         </div>
 
         <!-- ══════════════ ABA: BACKUP ══════════════ -->

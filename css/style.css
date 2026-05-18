@@ -178,6 +178,9 @@ td { padding: 12px; border-bottom: 1px solid var(--border); }
 .estoque-grupo td { padding: 10px 14px; font-size: 14px; border-bottom: 2px solid var(--border); }
 .badge-alerta { background: #fee2e2; color: #991b1b; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; margin-left: 8px; }
 .badge-esgotado { background: #f3f4f6; color: #9ca3af; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+.consulta-info-item { display:flex; flex-direction:column; gap:3px; background:#f8fafc; border:1px solid var(--border); border-radius:6px; padding:10px 14px; }
+.consulta-info-item span { font-size:14px; color:#1f2937; }
+.consulta-info-label { font-size:11px !important; font-weight:700; text-transform:uppercase; color:#6b7280 !important; letter-spacing:0.04em; }
 .rolo-esgotado td { color: #9ca3af; font-style: italic; }
 .progresso-bar { width: 80px; height: 6px; background: #e5e7eb; border-radius: 3px; display: inline-block; vertical-align: middle; margin-right: 6px; }
 .progresso-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
