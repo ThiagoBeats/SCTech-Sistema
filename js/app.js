@@ -820,6 +820,25 @@ function renderCharts() {
     const statusLabels = ['Orçamento','Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Pagamento','Instalado'];
     const statusCores  = ['#f59e0b','#6366f1','#fb923c','#3b82f6','#10b981','#ef4444','#22c55e'];
     const statusCount  = statusLabels.map(s => db.pedidos.filter(p => normalizarStatus(p.status) === s).length);
+    const totalPedidos = statusCount.reduce((s, v) => s + v, 0);
+
+    const centerTextPlugin = {
+        id: 'centerText',
+        afterDraw(chart) {
+            const { ctx, chartArea: { left, top, width, height } } = chart;
+            const cx = left + width / 2, cy = top + height / 2;
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = 'bold 30px Inter, system-ui, sans-serif';
+            ctx.fillStyle = '#1f2937';
+            ctx.fillText(totalPedidos, cx, cy - 9);
+            ctx.font = '600 11px Inter, system-ui, sans-serif';
+            ctx.fillStyle = '#6b7280';
+            ctx.fillText('pedidos', cx, cy + 14);
+            ctx.restore();
+        }
+    };
 
     const ctxStatus = document.getElementById('chart-status');
     if (ctxStatus) {
@@ -838,14 +857,15 @@ function renderCharts() {
             },
             options: {
                 responsive: true, maintainAspectRatio: true,
-                cutout: '62%',
+                cutout: '64%',
                 plugins: {
                     legend: {
-                        position: 'bottom',
-                        labels: { font: { size: 11 }, padding: 10, boxWidth: 12 }
+                        position: 'right',
+                        labels: { font: { size: 11 }, padding: 12, boxWidth: 12, boxHeight: 12 }
                     }
                 }
-            }
+            },
+            plugins: [centerTextPlugin]
         });
     }
 }
