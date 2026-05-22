@@ -122,27 +122,6 @@ function initPageNavigation() {
         });
     });
 
-    // Inject back button if there's a previous page
-    const hist = _getNavHistory();
-    if (!hist.length) return;
-
-    const prevUrl  = hist[hist.length - 1];
-    const prevFile = prevUrl.split('/').pop().split('?')[0];
-    const prevName = _PAGE_NAMES[prevFile] || prevFile;
-
-    const btn = document.createElement('button');
-    btn.className = 'sidebar-page-back-btn';
-    btn.innerHTML = `&#8592; ${prevName}`;
-    btn.title = `Voltar para ${prevName}`;
-    btn.onclick = () => {
-        const h = _getNavHistory();
-        const url = h.pop();
-        _saveNavHistory(h);
-        if (url) window.location.href = url;
-    };
-
-    const logo = sidebar.querySelector('.logo');
-    if (logo) logo.insertAdjacentElement('afterend', btn);
 }
 
 // --- MODAIS INTERNOS ---
@@ -242,6 +221,27 @@ function logout() {
     sessionStorage.removeItem('sc_user');
     window.location.replace('login.html');
 }
+
+function toggleLogoPopup(e) {
+    e.stopPropagation();
+    const popup = document.getElementById('logo-popup');
+    if (!popup) return;
+    const opening = !popup.classList.contains('open');
+    if (opening) {
+        const wrap = document.getElementById('logo-popup-wrap');
+        const rect = wrap.getBoundingClientRect();
+        popup.style.top  = (rect.bottom + 6) + 'px';
+        popup.style.left = rect.left + 'px';
+        const u = JSON.parse(sessionStorage.getItem('sc_user') || '{}');
+        const el = document.getElementById('popup-user-name');
+        if (el) el.textContent = u.nome || u.login || '—';
+    }
+    popup.classList.toggle('open', opening);
+}
+document.addEventListener('click', () => {
+    const popup = document.getElementById('logo-popup');
+    if (popup) popup.classList.remove('open');
+});
 
 function escapeHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1000,6 +1000,411 @@ function calcularPrecoVendaTecido() {
     const display = document.getElementById('est-preco-venda-display');
     if (display) display.textContent = 'R$ ' + venda.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+// ─── BALANÇO DE ESTOQUE ──────────────────────────────────────────────────────
+
+function abrirBalanco() {
+    const existing = document.getElementById('balanco-overlay');
+    if (existing) existing.remove();
+
+    // --- Montar linhas de tecidos ---
+    let rowsTecidos = '';
+    db.estoque.forEach(r => {
+        const cat  = db.catalogo.find(c => c.id === r.tecido_id);
+        const nome = cat ? cat.nome : '—';
+        const sys  = (r.metragem_atual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        rowsTecidos += `<tr data-balanco-nome="${nome.toLowerCase()}" data-balanco-ref="${(r.lote||'').toLowerCase()}">
+            <td>${nome}</td>
+            <td>${r.lote || '—'}</td>
+            <td style="text-align:right">${sys} m</td>
+            <td><input type="number" min="0" step="0.01" placeholder="—"
+                data-balanco-rolo="${r.id}"
+                data-sys="${r.metragem_atual || 0}"
+                oninput="_diffBalanco(this)"
+                style="width:100%;padding:5px 8px;border:1px solid #ccc;border-radius:4px;text-align:right"></td>
+            <td id="diff-rolo-${r.id}" style="text-align:right;font-weight:600;color:#6b7280">—</td>
+        </tr>`;
+    });
+    if (!rowsTecidos) rowsTecidos = '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:16px">Nenhum rolo em estoque</td></tr>';
+
+    // --- Montar linhas de materiais ---
+    let rowsMats = '';
+    db.materiais.forEach(m => {
+        const sys = (m.estoque_atual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        rowsMats += `<tr data-balanco-nome="${m.nome.toLowerCase()}" data-balanco-ref="${(m.referencia||'').toLowerCase()}">
+            <td>${m.nome}</td>
+            <td>${m.referencia || '—'}</td>
+            <td style="text-align:center">${m.unidade || 'un'}</td>
+            <td style="text-align:right">${sys}</td>
+            <td><input type="number" min="0" step="0.01" placeholder="—"
+                data-balanco-mat="${m.id}"
+                data-sys="${m.estoque_atual || 0}"
+                oninput="_diffBalanco(this)"
+                style="width:100%;padding:5px 8px;border:1px solid #ccc;border-radius:4px;text-align:right"></td>
+            <td id="diff-mat-${m.id}" style="text-align:right;font-weight:600;color:#6b7280">—</td>
+        </tr>`;
+    });
+    if (!rowsMats) rowsMats = '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:16px">Nenhum material em estoque</td></tr>';
+
+    const thStyle = 'background:#f8fafc;padding:10px 12px;border-bottom:2px solid #e4e7eb;color:#555;font-size:13px;white-space:nowrap';
+    const inpStyle = 'padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;outline:none;transition:border-color .15s;width:100%';
+    const overlay = document.createElement('div');
+    overlay.id = 'balanco-overlay';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal-box" style="max-width:960px;width:100%">
+            <div class="modal-header">
+                <div>
+                    <h3 style="margin:0;font-size:17px">📋 Balanço de Estoque</h3>
+                    <p style="margin:4px 0 0;font-size:12px;color:#6b7280">${new Date().toLocaleDateString('pt-BR', {day:'2-digit',month:'long',year:'numeric'})}</p>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center">
+                    <button class="btn btn-outline btn-sm" onclick="exportarBalancoPDF()">📄 Exportar PDF</button>
+                    <button class="btn btn-success btn-sm" onclick="aplicarAjustesBalanco()">✔ Aplicar Ajustes</button>
+                    <button class="modal-close" onclick="document.getElementById('balanco-overlay').remove()">×</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:13px;color:#6b7280;margin-bottom:14px">
+                    Preencha a coluna <strong>Contado</strong> com as quantidades físicas apuradas. Deixe em branco os itens não contados.
+                    Clique em <strong>Exportar PDF</strong> para imprimir a planilha de contagem, ou em <strong>Aplicar Ajustes</strong> para atualizar o estoque.
+                </p>
+
+                <!-- Filtros -->
+                <div style="display:flex;gap:10px;margin-bottom:20px;padding:12px 14px;background:#f8fafc;border:1px solid #e4e7eb;border-radius:8px">
+                    <div style="flex:1">
+                        <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Nome</label>
+                        <input id="balanco-filter-nome" type="text" placeholder="Filtrar por nome..." style="${inpStyle}" oninput="_filtrarBalanco()">
+                    </div>
+                    <div style="flex:1">
+                        <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Código / Referência</label>
+                        <input id="balanco-filter-ref" type="text" placeholder="Filtrar por código ou lote..." style="${inpStyle}" oninput="_filtrarBalanco()">
+                    </div>
+                    <div style="display:flex;align-items:flex-end">
+                        <button class="btn btn-outline btn-sm" onclick="_limparFiltrosBalanco()" style="white-space:nowrap">✕ Limpar</button>
+                    </div>
+                </div>
+
+                <h4 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#2A5C82;margin-bottom:8px">🧵 Tecidos / Rolos</h4>
+                <div style="overflow-x:auto;margin-bottom:24px">
+                    <table style="width:100%;border-collapse:collapse;font-size:13px">
+                        <thead><tr>
+                            <th style="${thStyle}">Tecido</th>
+                            <th style="${thStyle}">Referência / Lote</th>
+                            <th style="${thStyle};text-align:right">Sist. (m)</th>
+                            <th style="${thStyle};text-align:right;width:130px">Contado (m)</th>
+                            <th style="${thStyle};text-align:right;width:100px">Diferença</th>
+                        </tr></thead>
+                        <tbody id="balanco-tbody-tecidos">${rowsTecidos}</tbody>
+                    </table>
+                </div>
+
+                <h4 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#2A5C82;margin-bottom:8px">🔩 Materiais e Acessórios</h4>
+                <div style="overflow-x:auto">
+                    <table style="width:100%;border-collapse:collapse;font-size:13px">
+                        <thead><tr>
+                            <th style="${thStyle}">Material</th>
+                            <th style="${thStyle}">Referência</th>
+                            <th style="${thStyle};text-align:center">Un.</th>
+                            <th style="${thStyle};text-align:right">Sist.</th>
+                            <th style="${thStyle};text-align:right;width:130px">Contado</th>
+                            <th style="${thStyle};text-align:right;width:100px">Diferença</th>
+                        </tr></thead>
+                        <tbody id="balanco-tbody-mats">${rowsMats}</tbody>
+                    </table>
+                </div>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+function _filtrarBalanco() {
+    const nome = (document.getElementById('balanco-filter-nome')?.value || '').toLowerCase().trim();
+    const ref  = (document.getElementById('balanco-filter-ref')?.value  || '').toLowerCase().trim();
+    document.querySelectorAll('#balanco-tbody-tecidos tr[data-balanco-nome], #balanco-tbody-mats tr[data-balanco-nome]').forEach(tr => {
+        const trNome = tr.dataset.balancoNome || '';
+        const trRef  = tr.dataset.balancoRef  || '';
+        tr.style.display = (!nome || trNome.includes(nome)) && (!ref || trRef.includes(ref)) ? '' : 'none';
+    });
+}
+
+function _limparFiltrosBalanco() {
+    const n = document.getElementById('balanco-filter-nome');
+    const r = document.getElementById('balanco-filter-ref');
+    if (n) n.value = '';
+    if (r) r.value = '';
+    _filtrarBalanco();
+}
+
+async function _logoBase64() {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            try {
+                const c = document.createElement('canvas');
+                c.width = img.naturalWidth; c.height = img.naturalHeight;
+                c.getContext('2d').drawImage(img, 0, 0);
+                resolve(c.toDataURL('image/png'));
+            } catch(e) { resolve(null); }
+        };
+        img.onerror = () => resolve(null);
+        img.src = 'images/logo.png';
+    });
+}
+
+function _diffBalanco(input) {
+    const sys = parseFloat(input.dataset.sys) || 0;
+    const contado = input.value === '' ? null : parseFloat(input.value);
+    const roloId = input.dataset.balancoRolo;
+    const matId  = input.dataset.balancoMat;
+    const cellId = roloId ? `diff-rolo-${roloId}` : `diff-mat-${matId}`;
+    const cell   = document.getElementById(cellId);
+    if (!cell) return;
+    if (contado === null || isNaN(contado)) { cell.textContent = '—'; cell.style.color = '#6b7280'; return; }
+    const diff = contado - sys;
+    const fmt  = (Math.abs(diff)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (Math.abs(diff) < 0.001) { cell.textContent = '='; cell.style.color = '#6b7280'; }
+    else if (diff > 0)  { cell.textContent = `+${fmt}`; cell.style.color = '#059669'; }
+    else                { cell.textContent = `−${fmt}`; cell.style.color = '#dc2626'; }
+}
+
+async function exportarBalancoPDF() {
+    const dataHoje = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const logoSrc  = await _logoBase64();
+    const logoHtml = logoSrc
+        ? `<img src="${logoSrc}" style="width:52px;height:52px;object-fit:contain;border-radius:10px;border:1px solid #e4e7eb;padding:4px;background:#fff">`
+        : `<div style="width:52px;height:52px;background:#2A5C82;border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:20px">S</div>`;
+
+    const trStyle = 'border-bottom:1px solid #e4e7eb';
+    const th = (t, extra='') => `<th style="background:#f0f4f8;padding:10px 12px;border-bottom:2px solid #cdd5df;font-size:11px;color:#444;text-align:left;${extra}">${t}</th>`;
+    const td = (t, extra='') => `<td style="padding:10px 12px;font-size:12px;${extra}">${t}</td>`;
+    const tdBlank = (w='120px') => `<td style="padding:10px 12px;border-bottom:1px solid #aaa;width:${w}"></td>`;
+
+    // Lê apenas linhas visíveis do modal (respeita filtros ativos)
+    const visibleTec = [...document.querySelectorAll('#balanco-tbody-tecidos tr[data-balanco-nome]')]
+        .filter(tr => tr.style.display !== 'none');
+    const visibleMat = [...document.querySelectorAll('#balanco-tbody-mats tr[data-balanco-nome]')]
+        .filter(tr => tr.style.display !== 'none');
+
+    const filtroNome = (document.getElementById('balanco-filter-nome')?.value || '').trim();
+    const filtroRef  = (document.getElementById('balanco-filter-ref')?.value  || '').trim();
+    const filtroAtivo = filtroNome || filtroRef;
+    const filtroDesc = [filtroNome && `Nome: "${filtroNome}"`, filtroRef && `Código: "${filtroRef}"`].filter(Boolean).join(' · ');
+
+    let rowsTec = '';
+    visibleTec.forEach(tr => {
+        const cells = tr.querySelectorAll('td');
+        rowsTec += `<tr style="${trStyle}">${td(cells[0]?.textContent||'—')}${td(cells[1]?.textContent||'—')}${td(cells[2]?.textContent||'—','text-align:right')}${tdBlank('120px')}${tdBlank('100px')}</tr>`;
+    });
+
+    let rowsMat = '';
+    visibleMat.forEach(tr => {
+        const cells = tr.querySelectorAll('td');
+        rowsMat += `<tr style="${trStyle}">${td(cells[0]?.textContent||'—')}${td(cells[1]?.textContent||'—')}${td(cells[2]?.textContent||'un','text-align:center')}${td(cells[3]?.textContent||'—','text-align:right')}${tdBlank('120px')}${tdBlank('100px')}</tr>`;
+    });
+
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+    <title>Balanço de Estoque — ${dataHoje}</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',Arial,sans-serif; }
+        body { padding:32px 40px; color:#1f2937; background:#fff; }
+        @media print {
+            @page { size: A4; margin:20mm 18mm; }
+            body { padding:0; }
+            .no-print { display:none !important; }
+        }
+        table { width:100%; border-collapse:collapse; margin-bottom:32px; }
+        h2 { font-size:21px; font-weight:800; margin-bottom:2px; }
+        h3 { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#2A5C82; margin:24px 0 10px; border-left:3px solid #2A5C82; padding-left:8px; }
+    </style>
+    </head><body>
+
+    <!-- Cabeçalho -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:18px;border-bottom:3px solid #2A5C82;margin-bottom:24px">
+        <div style="display:flex;align-items:center;gap:14px">
+            ${logoHtml}
+            <div>
+                <div style="font-size:20px;font-weight:800;color:#2A5C82;line-height:1.1">SCTech</div>
+                <div style="font-size:11px;color:#6b7280;margin-top:2px">Sistema de Gestão</div>
+            </div>
+        </div>
+        <div style="text-align:right">
+            <h2 style="color:#1f2937">Balanço de Estoque</h2>
+            <div style="font-size:12px;color:#6b7280;margin-top:4px">Data: <strong>${dataHoje}</strong></div>
+            <div style="font-size:12px;margin-top:8px;display:flex;align-items:center;gap:6px;justify-content:flex-end">
+                Responsável:&nbsp;<span style="display:inline-block;min-width:200px;border-bottom:1px solid #999">&nbsp;</span>
+            </div>
+        </div>
+    </div>
+
+    ${filtroAtivo ? `<div style="margin-bottom:20px;padding:8px 12px;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;font-size:11px;color:#92400e">
+        <strong>Filtro aplicado:</strong> ${filtroDesc} — exibindo ${visibleTec.length} tecido(s) e ${visibleMat.length} material(is).
+    </div>` : ''}
+
+    <h3>Tecidos / Rolos</h3>
+    <table>
+        <thead><tr>${th('Tecido')}${th('Referência / Lote')}${th('Qtd. Sistema','text-align:right')}${th('Qtd. Contada','text-align:right;width:130px')}${th('Diferença','text-align:right;width:110px')}</tr></thead>
+        <tbody>${rowsTec || `<tr><td colspan="5" style="padding:14px;color:#aaa;text-align:center">${filtroAtivo ? 'Nenhum tecido corresponde ao filtro' : 'Nenhum rolo em estoque'}</td></tr>`}</tbody>
+    </table>
+
+    <h3>Materiais e Acessórios</h3>
+    <table>
+        <thead><tr>${th('Material')}${th('Referência')}${th('Un.','text-align:center;width:60px')}${th('Qtd. Sistema','text-align:right')}${th('Qtd. Contada','text-align:right;width:130px')}${th('Diferença','text-align:right;width:110px')}</tr></thead>
+        <tbody>${rowsMat || `<tr><td colspan="6" style="padding:14px;color:#aaa;text-align:center">${filtroAtivo ? 'Nenhum material corresponde ao filtro' : 'Nenhum material em estoque'}</td></tr>`}</tbody>
+    </table>
+
+    <!-- Assinaturas -->
+    <div style="margin-top:48px;display:flex;justify-content:space-between;gap:24px;padding-top:20px;border-top:1px solid #d1d5db">
+        <div style="text-align:center;flex:1">
+            <div style="border-top:1px solid #555;margin:0 16px 8px;padding-top:8px"></div>
+            <div style="font-size:11px;color:#6b7280">Responsável pelo Balanço</div>
+        </div>
+        <div style="text-align:center;flex:1">
+            <div style="border-top:1px solid #555;margin:0 16px 8px;padding-top:8px"></div>
+            <div style="font-size:11px;color:#6b7280">Supervisor / Aprovação</div>
+        </div>
+        <div style="text-align:center;flex:1">
+            <div style="border-top:1px solid #555;margin:0 16px 8px;padding-top:8px"></div>
+            <div style="font-size:11px;color:#6b7280">Data de Conclusão</div>
+        </div>
+    </div>
+
+    <script>window.onload = () => window.print();<\/script>
+    </body></html>`;
+
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+}
+
+function _showConfirmBalanco(ajustes) {
+    return new Promise(resolve => {
+        const o = _getModal();
+        document.getElementById('sc-modal-icon').textContent = '📋';
+        const msgEl = document.getElementById('sc-modal-msg');
+
+        const fmt = (v, un) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (un ? ' ' + un : '');
+        let listHtml = `<strong style="font-size:14px;display:block;margin-bottom:10px">Confirmar ${ajustes.length} ajuste(s) no estoque?</strong>`;
+        listHtml += `<div style="max-height:240px;overflow-y:auto;text-align:left;border:1px solid #e4e7eb;border-radius:8px;background:#f8fafc">`;
+        ajustes.forEach((a, i) => {
+            const nome   = a.tipo === 'rolo'
+                ? ((db.catalogo.find(c => c.id === a.rolo.tecido_id)?.nome || 'Tecido') + (a.rolo.lote ? ` [${a.rolo.lote}]` : ''))
+                : a.mat.nome;
+            const antes  = a.tipo === 'rolo' ? (a.rolo.metragem_atual || 0) : (a.mat.estoque_atual || 0);
+            const un     = a.tipo === 'rolo' ? 'm' : (a.mat.unidade || 'un');
+            const diff   = a.contado - antes;
+            const color  = diff > 0 ? '#059669' : '#dc2626';
+            const sign   = diff > 0 ? '+' : '';
+            const sep    = i < ajustes.length - 1 ? 'border-bottom:1px solid #e4e7eb' : '';
+            listHtml += `<div style="padding:8px 12px;${sep};display:flex;justify-content:space-between;align-items:center;gap:16px;font-size:12px">
+                <span style="color:#374151;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nome}</span>
+                <span style="white-space:nowrap;flex-shrink:0;color:#6b7280">
+                    ${fmt(antes, un)} → <strong style="color:${color}">${fmt(a.contado, un)}</strong>
+                    <span style="color:${color};margin-left:4px">(${sign}${fmt(Math.abs(diff), '')})</span>
+                </span>
+            </div>`;
+        });
+        listHtml += `</div><p style="font-size:11px;color:#9ca3af;margin-top:10px">As quantidades serão registradas no histórico de movimentações.</p>`;
+        msgEl.innerHTML = listHtml;
+
+        const btns = document.getElementById('sc-modal-btns');
+        btns.innerHTML = `<button class="btn btn-outline" id="sc-modal-cancel">Cancelar</button><button class="btn btn-success" id="sc-modal-ok">Confirmar Ajustes</button>`;
+        o.style.display = 'flex';
+        const close = val => {
+            o.style.display = 'none';
+            document.removeEventListener('keydown', esc);
+            msgEl.innerHTML = '';
+            resolve(val);
+        };
+        const esc = e => { if (e.key === 'Escape') close(false); };
+        document.getElementById('sc-modal-ok').addEventListener('click', () => close(true), { once: true });
+        document.getElementById('sc-modal-cancel').addEventListener('click', () => close(false), { once: true });
+        document.addEventListener('keydown', esc);
+        document.getElementById('sc-modal-ok').focus();
+    });
+}
+
+function _atualizarLinhasBalanco(ajustes) {
+    const fmt2 = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    ajustes.forEach(a => {
+        if (a.tipo === 'rolo') {
+            const input = document.querySelector(`[data-balanco-rolo="${a.rolo.id}"]`);
+            if (!input) return;
+            const novo = a.rolo.metragem_atual;
+            input.dataset.sys = novo;
+            input.value = '';
+            const cells = input.closest('tr')?.querySelectorAll('td');
+            if (cells?.[2]) cells[2].textContent = fmt2(novo) + ' m';
+            const diffCell = document.getElementById(`diff-rolo-${a.rolo.id}`);
+            if (diffCell) { diffCell.textContent = '—'; diffCell.style.color = '#6b7280'; }
+        } else {
+            const input = document.querySelector(`[data-balanco-mat="${a.mat.id}"]`);
+            if (!input) return;
+            const novo = a.mat.estoque_atual;
+            input.dataset.sys = novo;
+            input.value = '';
+            const cells = input.closest('tr')?.querySelectorAll('td');
+            if (cells?.[3]) cells[3].textContent = fmt2(novo);
+            const diffCell = document.getElementById(`diff-mat-${a.mat.id}`);
+            if (diffCell) { diffCell.textContent = '—'; diffCell.style.color = '#6b7280'; }
+        }
+    });
+}
+
+async function aplicarAjustesBalanco() {
+    const ajustes = [];
+
+    document.querySelectorAll('[data-balanco-rolo]').forEach(input => {
+        if (input.value === '') return;
+        const contado = parseFloat(input.value);
+        if (isNaN(contado)) return;
+        const rolo = db.estoque.find(r => r.id == input.dataset.balancoRolo);
+        if (!rolo) return;
+        const diff = contado - (rolo.metragem_atual || 0);
+        if (Math.abs(diff) < 0.001) return;
+        ajustes.push({ tipo: 'rolo', rolo, diff, contado });
+    });
+
+    document.querySelectorAll('[data-balanco-mat]').forEach(input => {
+        if (input.value === '') return;
+        const contado = parseFloat(input.value);
+        if (isNaN(contado)) return;
+        const mat = db.materiais.find(m => m.id == input.dataset.balancoMat);
+        if (!mat) return;
+        const diff = contado - (mat.estoque_atual || 0);
+        if (Math.abs(diff) < 0.001) return;
+        ajustes.push({ tipo: 'mat', mat, diff, contado });
+    });
+
+    if (!ajustes.length) {
+        toast('Nenhuma diferença para ajustar. Preencha as quantidades contadas.', 'info');
+        return;
+    }
+
+    if (!await _showConfirmBalanco(ajustes)) return;
+
+    ajustes.forEach(a => {
+        if (a.tipo === 'rolo') {
+            const cat  = db.catalogo.find(c => c.id === a.rolo.tecido_id);
+            const nome = (cat ? cat.nome : 'Tecido') + ' [' + (a.rolo.lote || '') + ']';
+            a.rolo.metragem_atual = Math.max(0, a.contado);
+            registrarMovimento(a.diff >= 0 ? 'Ajuste +' : 'Ajuste -', nome, 'tecido', a.diff, 'm', a.rolo.lote || '');
+        } else {
+            a.mat.estoque_atual = Math.max(0, a.contado);
+            registrarMovimento(a.diff >= 0 ? 'Ajuste +' : 'Ajuste -', a.mat.nome, 'material', a.diff, a.mat.unidade || 'un', a.mat.referencia || '');
+        }
+    });
+
+    syncDB();
+    _atualizarLinhasBalanco(ajustes);
+    toast(`${ajustes.length} ajuste(s) aplicado(s) com sucesso!`, 'success');
+    renderEstoque();
+    renderEstoqueMateriais();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function salvarEntradaEstoque() {
     const referencia = document.getElementById('est-lote').value.trim();
@@ -3098,39 +3503,70 @@ function renderDashboardMedicoes() {
     if (!container) return;
 
     const hojeStr = new Date().toISOString().split('T')[0];
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+
+    const atrasadas = db.medicoes
+        .filter(m => m.status === 'Agendado' && m.data < hojeStr)
+        .sort((a, b) => (a.data + (a.hora || '99:99')) > (b.data + (b.hora || '99:99')) ? -1 : 1);
+
     const proximas = db.medicoes
         .filter(m => m.status === 'Agendado' && m.data >= hojeStr)
         .sort((a, b) => (a.data + (a.hora || '99:99')) < (b.data + (b.hora || '99:99')) ? -1 : 1)
         .slice(0, 6);
 
-    if (!proximas.length) { container.style.display = 'none'; return; }
+    if (!atrasadas.length && !proximas.length) { container.style.display = 'none'; return; }
     container.style.display = '';
 
-    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    const cards = proximas.map(v => {
+    function makeCard(v, atrasada) {
         const d    = new Date(v.data + 'T12:00:00');
         const diff = Math.round((d - hoje) / (1000 * 60 * 60 * 24));
-        const isHoje   = diff === 0;
-        const isAmanha = diff === 1;
-        const label = isHoje ? 'Hoje' : isAmanha ? 'Amanhã' : d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
-        const bg   = isHoje ? '#dbeafe' : '#f8fafc';
-        const bord = isHoje ? '#93c5fd' : 'var(--border)';
-        const acc  = isHoje ? '#3b82f6' : '#2A5C82';
-        const clrL = isHoje ? '#1d4ed8' : '#6b7280';
+        let label, bg, bord, acc, clrL;
+        if (atrasada) {
+            const dias = Math.abs(diff);
+            label = dias === 1 ? 'Ontem' : `${dias}d atrás`;
+            bg = '#fff1f2'; bord = '#fca5a5'; acc = '#ef4444'; clrL = '#dc2626';
+        } else {
+            label = diff === 0 ? 'Hoje' : diff === 1 ? 'Amanhã' : d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+            bg    = diff === 0 ? '#dbeafe' : '#f8fafc';
+            bord  = diff === 0 ? '#93c5fd' : 'var(--border)';
+            acc   = diff === 0 ? '#3b82f6' : '#2A5C82';
+            clrL  = diff === 0 ? '#1d4ed8' : '#6b7280';
+        }
         return `<div onclick="location.href='pcp.html?view=medicoes'" style="cursor:pointer;background:${bg};border:1px solid ${bord};border-left:4px solid ${acc};border-radius:8px;padding:12px 16px;min-width:155px;flex:1;max-width:200px;transition:transform 0.1s,box-shadow 0.1s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
             <div style="font-size:11px;font-weight:700;color:${clrL};text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">${label}</div>
             <div style="font-weight:700;font-size:14px;color:#1f2937;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(v.clienteNome)}">${escapeHtml(v.clienteNome)}</div>
             ${v.hora ? `<div style="font-size:12px;color:#374151">🕐 ${v.hora}</div>` : ''}
             ${v.clienteTel ? `<div style="font-size:12px;color:#6b7280;margin-top:2px">${escapeHtml(v.clienteTel)}</div>` : ''}
         </div>`;
-    }).join('');
+    }
+
+    let sections = '';
+
+    if (atrasadas.length) {
+        sections += `<div style="margin-bottom:${proximas.length ? '18px' : '0'}">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#dc2626;margin-bottom:8px">⚠️ Atrasadas (${atrasadas.length})</div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">${atrasadas.map(v => makeCard(v, true)).join('')}</div>
+        </div>`;
+    }
+
+    if (proximas.length) {
+        sections += `<div>
+            ${atrasadas.length ? `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;margin-bottom:8px">📐 Próximas</div>` : ''}
+            <div style="display:flex;gap:12px;flex-wrap:wrap">${proximas.map(v => makeCard(v, false)).join('')}</div>
+        </div>`;
+    }
+
+    const titleColor = atrasadas.length ? '#dc2626' : '#374151';
+    const titleText  = atrasadas.length
+        ? `⚠️ Medições — ${atrasadas.length} atrasada${atrasadas.length > 1 ? 's' : ''}`
+        : '📐 Próximas Medições';
 
     container.innerHTML = `<div class="card" style="margin-bottom:20px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-            <h3 style="color:#374151;font-size:15px;margin:0">📐 Próximas Medições</h3>
+            <h3 style="color:${titleColor};font-size:15px;margin:0">${titleText}</h3>
             <a href="pcp.html?view=medicoes" class="btn btn-outline btn-sm">Ver agenda completa</a>
         </div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap">${cards}</div>
+        ${sections}
     </div>`;
 }
 
@@ -3228,10 +3664,10 @@ function mostrarViewPCP(view) {
 document.addEventListener('DOMContentLoaded', () => {
     if (!document.getElementById('login-usuario')) {
         checkAuth();
-        const sidebarUserEl = document.getElementById('sidebar-user-name');
-        if (sidebarUserEl) {
+        const popupUserEl = document.getElementById('popup-user-name');
+        if (popupUserEl) {
             const u = JSON.parse(sessionStorage.getItem('sc_user') || '{}');
-            sidebarUserEl.textContent = u.nome || u.login || '—';
+            popupUserEl.textContent = u.nome || u.login || '—';
         }
         initPageNavigation();
     }
