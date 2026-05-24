@@ -7,7 +7,7 @@
 </head>
 <body>
     <aside class="sidebar" id="main-sidebar">
-        <div class="logo-popup-wrap" id="logo-popup-wrap"><div class="logo" onclick="toggleLogoPopup(event)"><img src="images/logo.png" alt="SCTech" class="sidebar-logo-img"><h2>SCTech</h2></div><div class="logo-popup" id="logo-popup"><div class="logo-popup-header"><div class="logo-popup-avatar">&#128100;</div><div><div class="logo-popup-name" id="popup-user-name">&#8212;</div><div class="logo-popup-role">Usu&#225;rio SCTech</div></div></div><div class="logo-popup-sep"></div><a href="sobre.html" class="logo-popup-item"><span>&#8505;&#65039;</span> Sobre o Sistema</a><div class="logo-popup-sep"></div><button class="logo-popup-item logo-popup-logout" onclick="logout()"><span>&#128682;</span> Sair</button></div></div>
+        <div class="logo-popup-wrap" id="logo-popup-wrap"><div class="logo" onclick="toggleLogoPopup(event)"><img src="images/logo.png" alt="SCTech" class="sidebar-logo-img"><h2>SCTech</h2></div><div class="logo-popup" id="logo-popup"><div class="logo-popup-header"><div class="logo-popup-avatar">&#128100;</div><div><div class="logo-popup-name" id="popup-user-name">&#8212;</div><div class="logo-popup-role">Usu&#225;rio SCTech</div></div></div><div class="logo-popup-sep"></div><a href="sobre.html" class="logo-popup-item"><span>&#8505;&#65039;</span> Sobre o Sistema</a><a href="empresa.html" class="logo-popup-item"><span>&#9881;&#65039;</span> Configurar Empresa</a><div class="logo-popup-sep"></div><button class="logo-popup-item logo-popup-logout" onclick="logout()"><span>&#128682;</span> Sair</button></div></div>
         <a href="index.html"      class="nav-item"><img src="images/icones/dashboard.png" class="nav-icon"> <span class="nav-text">Página Inicial</span></a>
         <a href="pcp.html"        class="nav-item"><img src="images/icones/producao.png" class="nav-icon"> <span class="nav-text">Produção</span></a>
         <a href="estoque.html"    class="nav-item"><img src="images/icones/estoque.png" class="nav-icon"> <span class="nav-text">Estoque</span></a>
@@ -157,15 +157,21 @@
         <div id="tab-forn-novo" class="tab-panel">
             <div class="card">
                 <h3 style="color:var(--primary);margin-bottom:20px">Novo Pedido de Compra</h3>
-                <div class="grid" style="grid-template-columns:1fr">
-                    <div class="form-group">
+                <!-- Busca de fornecedor -->
+                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+                    <div class="form-group" style="width:220px;margin-bottom:0">
+                        <label>Buscar por CNPJ</label>
+                        <input type="text" id="pc-busca-cnpj" placeholder="00.000.000/0000-00" maxlength="18"
+                               oninput="mascaraCNPJ(this);filtrarFornecedorPorCNPJ(this.value)">
+                    </div>
+                    <div class="form-group" style="flex:1;min-width:220px;margin-bottom:0">
                         <label>Fornecedor <span style="color:#dc2626">*</span></label>
-                        <select id="pc-fornecedor">
+                        <select id="pc-fornecedor" onchange="document.getElementById('pc-busca-cnpj').value=''">
                             <option value="">— Selecione o fornecedor —</option>
                         </select>
                     </div>
                 </div>
-                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:14px;margin-top:10px">
+                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:14px;margin-top:6px">
                     <div class="form-group" style="min-width:140px;margin-bottom:0">
                         <label>Tipo</label>
                         <select id="pc-item-tipo" onchange="atualizarSelectItemPC()">
@@ -173,9 +179,22 @@
                             <option value="tecido">Tecido</option>
                         </select>
                     </div>
+                    <div class="form-group" style="width:140px;margin-bottom:0">
+                        <label>Código <span class="info-tag">referência</span></label>
+                        <input type="text" id="pc-item-codigo" placeholder="Ex: LB-001"
+                               oninput="buscarItemPorCodigoPC(this.value)"
+                               style="text-transform:uppercase">
+                    </div>
                     <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
                         <label>Item</label>
-                        <select id="pc-item-id"></select>
+                        <select id="pc-item-id" onchange="document.getElementById('pc-item-codigo').value=''"></select>
+                    </div>
+                    <div class="form-group" id="pc-unidade-group" style="width:130px;margin-bottom:0;display:none">
+                        <label>Unidade</label>
+                        <select id="pc-item-unidade">
+                            <option value="m">Metro (m)</option>
+                            <option value="rolo">Rolo</option>
+                        </select>
                     </div>
                     <div class="form-group" style="width:110px;margin-bottom:0">
                         <label>Quantidade</label>
@@ -189,7 +208,7 @@
                             <th>Item</th>
                             <th style="width:110px">Quantidade</th>
                             <th style="width:60px">Un.</th>
-                            <th style="width:110px">Subtotal</th>
+                            <th style="width:130px">Último preço pago</th>
                             <th style="width:50px"></th>
                         </tr>
                     </thead>

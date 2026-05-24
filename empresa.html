@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Configurar Empresa - SCTech</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .logo-upload-area {
+            border: 2px dashed var(--border);
+            border-radius: 10px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            background: #fafbfc;
+            cursor: pointer;
+            transition: border-color .2s, background .2s;
+        }
+        .logo-upload-area:hover { border-color: var(--primary); background: #eff6ff; }
+        #emp-logo-preview { min-width: 100px; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+        .logo-placeholder { width: 100px; height: 60px; background: #e5e7eb; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 24px; }
+        .remove-logo-btn { font-size: 12px; color: #dc2626; cursor: pointer; background: none; border: none; padding: 0; margin-top: 4px; }
+        .remove-logo-btn:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <aside class="sidebar" id="main-sidebar">
+        <div class="logo-popup-wrap" id="logo-popup-wrap"><div class="logo" onclick="toggleLogoPopup(event)"><img src="images/logo.png" alt="SCTech" class="sidebar-logo-img"><h2>SCTech</h2></div><div class="logo-popup" id="logo-popup"><div class="logo-popup-header"><div class="logo-popup-avatar">&#128100;</div><div><div class="logo-popup-name" id="popup-user-name">&#8212;</div><div class="logo-popup-role">Usu&#225;rio SCTech</div></div></div><div class="logo-popup-sep"></div><a href="sobre.html" class="logo-popup-item"><span>&#8505;&#65039;</span> Sobre o Sistema</a><a href="empresa.html" class="logo-popup-item"><span>&#9881;&#65039;</span> Configurar Empresa</a><div class="logo-popup-sep"></div><button class="logo-popup-item logo-popup-logout" onclick="logout()"><span>&#128682;</span> Sair</button></div></div>
+        <a href="index.html"      class="nav-item"><img src="images/icones/dashboard.png" class="nav-icon"> <span class="nav-text">Página Inicial</span></a>
+        <a href="pcp.html"        class="nav-item"><img src="images/icones/producao.png" class="nav-icon"> <span class="nav-text">Produção</span></a>
+        <a href="estoque.html"    class="nav-item"><img src="images/icones/estoque.png" class="nav-icon"> <span class="nav-text">Estoque</span></a>
+        <a href="clientes.html"   class="nav-item"><img src="images/icones/clientes.png" class="nav-icon"> <span class="nav-text">Clientes</span></a>
+        <a href="catalogo.html"   class="nav-item"><img src="images/icones/catalogo.png" class="nav-icon"> <span class="nav-text">Cadastro/Catálogo</span></a>
+        <a href="relatorios.html" class="nav-item"><img src="images/icones/relatorios.png" class="nav-icon"> <span class="nav-text">Relatórios</span></a>
+        <a href="vendedores.html" class="nav-item"><img src="images/icones/vendedores.png" class="nav-icon"> <span class="nav-text">Vendedores</span></a>
+        <a href="fornecedores.html" class="nav-item"><img src="images/icones/fornecedores.png" class="nav-icon"> <span class="nav-text">Fornecedores</span></a>
+        <a href="financeiro.html"   class="nav-item"><img src="images/icones/financeiro.png" class="nav-icon"> <span class="nav-text">Financeiro</span></a>
+    </aside>
+    <main class="main">
+        <div class="header"><h2>⚙️ Configurar Empresa</h2></div>
+
+        <div class="card" style="max-width:860px">
+            <h3 style="margin-bottom:20px;color:var(--primary)">Logotipo da Empresa</h3>
+            <div class="logo-upload-area" onclick="document.getElementById('emp-logo-input').click()">
+                <div id="emp-logo-preview"><div class="logo-placeholder">🏢</div></div>
+                <div>
+                    <div style="font-weight:600;color:#374151;margin-bottom:4px">Clique para selecionar a logo</div>
+                    <div style="font-size:12px;color:#6b7280">PNG, JPG ou SVG · Recomendado: fundo transparente · Máx. 2 MB</div>
+                    <div style="font-size:12px;color:#6b7280;margin-top:2px">Será exibida nos pedidos, orçamentos e documentos impressos.</div>
+                    <button class="remove-logo-btn" id="emp-remove-logo" style="display:none" onclick="event.stopPropagation();removerLogoEmpresa()">✕ Remover logo</button>
+                </div>
+            </div>
+            <input type="file" id="emp-logo-input" accept="image/*" style="display:none" onchange="previewLogoEmpresa(this)">
+        </div>
+
+        <div class="card" style="max-width:860px">
+            <h3 style="margin-bottom:20px;color:var(--primary)">Dados da Empresa</h3>
+
+            <div class="grid" style="grid-template-columns:1fr 1fr;margin-bottom:0">
+                <div class="form-group">
+                    <label>Razão Social <span style="color:#dc2626">*</span></label>
+                    <input type="text" id="emp-razao" placeholder="Nome oficial da empresa">
+                </div>
+                <div class="form-group">
+                    <label>Nome Fantasia</label>
+                    <input type="text" id="emp-fantasia" placeholder="Nome comercial">
+                </div>
+            </div>
+
+            <div class="grid" style="grid-template-columns:220px 1fr;margin-bottom:0">
+                <div class="form-group">
+                    <label>CNPJ</label>
+                    <input type="text" id="emp-cnpj" placeholder="00.000.000/0000-00" maxlength="18" oninput="mascaraCNPJ(this)">
+                </div>
+                <div class="form-group">
+                    <label>Endereço Completo</label>
+                    <input type="text" id="emp-end" placeholder="Rua, nº, bairro, cidade — UF, CEP">
+                </div>
+            </div>
+
+            <div class="grid" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:0">
+                <div class="form-group">
+                    <label>Telefone / WhatsApp</label>
+                    <input type="text" id="emp-tel" placeholder="(11) 99999-9999">
+                </div>
+                <div class="form-group">
+                    <label>E-mail</label>
+                    <input type="email" id="emp-email" placeholder="contato@empresa.com.br">
+                </div>
+                <div class="form-group">
+                    <label>Site</label>
+                    <input type="text" id="emp-site" placeholder="www.empresa.com.br">
+                </div>
+            </div>
+
+            <div style="margin-top:8px;display:flex;gap:10px;align-items:center">
+                <button class="btn btn-success" onclick="salvarEmpresaConfigs()">💾 Salvar Configurações</button>
+                <span style="font-size:12px;color:#6b7280">As informações serão aplicadas imediatamente em todos os documentos gerados.</span>
+            </div>
+        </div>
+
+        <div class="card" style="max-width:860px" id="emp-preview-card" style="display:none">
+            <h3 style="margin-bottom:14px;color:var(--primary)">Pré-visualização do Cabeçalho</h3>
+            <div id="emp-cabecalho-preview" style="border:1px solid var(--border);border-radius:8px;padding:16px 20px;background:#fff"></div>
+        </div>
+    </main>
+    <script src="js/app.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            carregarEmpresaConfigs();
+            atualizarPreviewCabecalho();
+        });
+        function atualizarPreviewCabecalho() {
+            const card = document.getElementById('emp-preview-card');
+            const preview = document.getElementById('emp-cabecalho-preview');
+            const emp = getEmpresa();
+            const temDados = emp.razao_social || emp.nome_fantasia || emp.logo_base64;
+            if (!card || !preview) return;
+            if (temDados) {
+                card.style.display = '';
+                preview.innerHTML = buildEmpresaHeaderHTML(56);
+            } else {
+                card.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>

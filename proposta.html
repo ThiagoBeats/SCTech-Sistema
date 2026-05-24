@@ -18,6 +18,13 @@
             <a href="index.html">← Voltar ao Dashboard</a>
         </div>
         <div class="topbar-actions">
+            <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#555;background:#f8fafc;border:1px solid #e4e7eb;border-radius:8px;padding:5px 12px">
+                <label for="proposta-validade" style="white-space:nowrap;font-weight:500">Válida por:</label>
+                <input type="number" id="proposta-validade" min="1" max="365" value="15"
+                       style="width:54px;padding:3px 6px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;text-align:center"
+                       onchange="renderProposta()">
+                <span style="white-space:nowrap">dias</span>
+            </div>
             <button class="btn btn-outline" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
         </div>
     </div>

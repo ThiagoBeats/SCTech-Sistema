@@ -7,7 +7,7 @@
 </head>
 <body>
     <aside class="sidebar" id="main-sidebar">
-        <div class="logo-popup-wrap" id="logo-popup-wrap"><div class="logo" onclick="toggleLogoPopup(event)"><img src="images/logo.png" alt="SCTech" class="sidebar-logo-img"><h2>SCTech</h2></div><div class="logo-popup" id="logo-popup"><div class="logo-popup-header"><div class="logo-popup-avatar">&#128100;</div><div><div class="logo-popup-name" id="popup-user-name">&#8212;</div><div class="logo-popup-role">Usu&#225;rio SCTech</div></div></div><div class="logo-popup-sep"></div><a href="sobre.html" class="logo-popup-item"><span>&#8505;&#65039;</span> Sobre o Sistema</a><div class="logo-popup-sep"></div><button class="logo-popup-item logo-popup-logout" onclick="logout()"><span>&#128682;</span> Sair</button></div></div>
+        <div class="logo-popup-wrap" id="logo-popup-wrap"><div class="logo" onclick="toggleLogoPopup(event)"><img src="images/logo.png" alt="SCTech" class="sidebar-logo-img"><h2>SCTech</h2></div><div class="logo-popup" id="logo-popup"><div class="logo-popup-header"><div class="logo-popup-avatar">&#128100;</div><div><div class="logo-popup-name" id="popup-user-name">&#8212;</div><div class="logo-popup-role">Usu&#225;rio SCTech</div></div></div><div class="logo-popup-sep"></div><a href="sobre.html" class="logo-popup-item"><span>&#8505;&#65039;</span> Sobre o Sistema</a><a href="empresa.html" class="logo-popup-item"><span>&#9881;&#65039;</span> Configurar Empresa</a><div class="logo-popup-sep"></div><button class="logo-popup-item logo-popup-logout" onclick="logout()"><span>&#128682;</span> Sair</button></div></div>
         <a href="index.html"    class="nav-item"><img src="images/icones/dashboard.png" class="nav-icon"> <span class="nav-text">Página Inicial</span></a>
         <a href="pcp.html"      class="nav-item active"><img src="images/icones/producao.png" class="nav-icon"> <span class="nav-text">Produção</span></a>
         <a href="estoque.html"  class="nav-item"><img src="images/icones/estoque.png" class="nav-icon"> <span class="nav-text">Estoque</span></a>
@@ -31,6 +31,35 @@
 
         <div id="pcp-view-kanban">
             <div id="aviso-orcamentos" class="aviso-orcamentos"></div>
+            <!-- Filtros do Kanban -->
+            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;padding:12px 0 4px">
+                <div style="flex:1;min-width:160px">
+                    <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Cliente</label>
+                    <input id="kf-cliente" type="text" placeholder="🔍 Buscar cliente..."
+                           style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"
+                           oninput="aplicarFiltroKanban()">
+                </div>
+                <div style="flex:1;min-width:140px">
+                    <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Vendedor</label>
+                    <select id="kf-vendedor"
+                            style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:#fff"
+                            onchange="aplicarFiltroKanban()">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div style="flex:1;min-width:140px">
+                    <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Tecido</label>
+                    <select id="kf-tecido"
+                            style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:#fff"
+                            onchange="aplicarFiltroKanban()">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div style="display:flex;align-items:flex-end;gap:8px;padding-bottom:1px">
+                    <button class="btn btn-outline btn-sm" onclick="limparFiltroKanban()" style="white-space:nowrap">✕ Limpar</button>
+                    <span id="kf-resultado" style="font-size:12px;color:#6b7280;white-space:nowrap;line-height:32px"></span>
+                </div>
+            </div>
             <div id="kanban-board" class="kanban-board"></div>
         </div>
         <div id="pcp-view-agenda" style="display:none">
@@ -74,7 +103,7 @@
                     </div>
                 </div>
 
-                <!-- Data / Hora / Obs -->
+                <!-- Data / Hora / Endereço / Obs -->
                 <div class="grid" style="grid-template-columns:180px 140px 1fr;margin-top:4px">
                     <div class="form-group">
                         <label>Data da visita <span style="color:#dc2626">*</span></label>
@@ -85,9 +114,13 @@
                         <input type="time" id="med-hora">
                     </div>
                     <div class="form-group">
-                        <label>Observações</label>
-                        <input type="text" id="med-obs" placeholder="Endereço, referências, ponto de encontro…">
+                        <label>Endereço da visita <span style="color:#dc2626">*</span></label>
+                        <input type="text" id="med-end" placeholder="Rua, nº, bairro, cidade…">
                     </div>
+                </div>
+                <div class="form-group" style="margin-top:0">
+                    <label>Observações</label>
+                    <input type="text" id="med-obs" placeholder="Referências, ponto de encontro, instruções…">
                 </div>
 
                 <button class="btn btn-success" onclick="salvarMedicao()">📐 Agendar Visita</button>

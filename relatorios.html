@@ -7,7 +7,7 @@
 </head>
 <body>
     <aside class="sidebar" id="main-sidebar">
-        <div class="logo-popup-wrap" id="logo-popup-wrap"><div class="logo" onclick="toggleLogoPopup(event)"><img src="images/logo.png" alt="SCTech" class="sidebar-logo-img"><h2>SCTech</h2></div><div class="logo-popup" id="logo-popup"><div class="logo-popup-header"><div class="logo-popup-avatar">&#128100;</div><div><div class="logo-popup-name" id="popup-user-name">&#8212;</div><div class="logo-popup-role">Usu&#225;rio SCTech</div></div></div><div class="logo-popup-sep"></div><a href="sobre.html" class="logo-popup-item"><span>&#8505;&#65039;</span> Sobre o Sistema</a><div class="logo-popup-sep"></div><button class="logo-popup-item logo-popup-logout" onclick="logout()"><span>&#128682;</span> Sair</button></div></div>
+        <div class="logo-popup-wrap" id="logo-popup-wrap"><div class="logo" onclick="toggleLogoPopup(event)"><img src="images/logo.png" alt="SCTech" class="sidebar-logo-img"><h2>SCTech</h2></div><div class="logo-popup" id="logo-popup"><div class="logo-popup-header"><div class="logo-popup-avatar">&#128100;</div><div><div class="logo-popup-name" id="popup-user-name">&#8212;</div><div class="logo-popup-role">Usu&#225;rio SCTech</div></div></div><div class="logo-popup-sep"></div><a href="sobre.html" class="logo-popup-item"><span>&#8505;&#65039;</span> Sobre o Sistema</a><a href="empresa.html" class="logo-popup-item"><span>&#9881;&#65039;</span> Configurar Empresa</a><div class="logo-popup-sep"></div><button class="logo-popup-item logo-popup-logout" onclick="logout()"><span>&#128682;</span> Sair</button></div></div>
         <a href="index.html"       class="nav-item"><img src="images/icones/dashboard.png" class="nav-icon"> <span class="nav-text">Página Inicial</span></a>
         <a href="pcp.html"         class="nav-item"><img src="images/icones/producao.png" class="nav-icon"> <span class="nav-text">Produção</span></a>
         <a href="estoque.html"     class="nav-item"><img src="images/icones/estoque.png" class="nav-icon"> <span class="nav-text">Estoque</span></a>
@@ -28,8 +28,13 @@
 
         <!-- Faturamento Mensal -->
         <div id="tab-rel-faturamento" class="tab-panel active">
-            <div class="card">
+            <div class="card" style="margin-bottom:16px">
                 <h3 style="margin-bottom:16px">Faturamento dos Últimos 6 Meses</h3>
+                <div style="max-width:780px;margin:0 auto">
+                    <canvas id="chart-rel-fat" height="90"></canvas>
+                </div>
+            </div>
+            <div class="card">
                 <table>
                     <thead><tr>
                         <th>Mês</th>
@@ -45,6 +50,12 @@
 
         <!-- Contas a Receber -->
         <div id="tab-rel-recebiveis" class="tab-panel">
+            <div class="card" style="margin-bottom:16px">
+                <h3 style="margin-bottom:16px">Aging de Recebíveis</h3>
+                <div style="max-width:520px;margin:0 auto">
+                    <canvas id="chart-rel-rec" height="110"></canvas>
+                </div>
+            </div>
             <div class="card">
                 <h3 style="margin-bottom:16px">Contas a Receber</h3>
                 <table>
@@ -64,6 +75,12 @@
 
         <!-- Por Vendedor -->
         <div id="tab-rel-vendedores" class="tab-panel">
+            <div class="card" style="margin-bottom:16px">
+                <h3 style="margin-bottom:16px">Faturamento por Vendedor</h3>
+                <div style="max-width:680px;margin:0 auto">
+                    <canvas id="chart-rel-vend" height="100"></canvas>
+                </div>
+            </div>
             <div class="card">
                 <h3 style="margin-bottom:16px">Performance por Vendedor</h3>
                 <table>
@@ -79,6 +96,7 @@
             </div>
         </div>
     </main>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

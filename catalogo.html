@@ -7,7 +7,7 @@
 </head>
 <body>
     <aside class="sidebar" id="main-sidebar">
-        <div class="logo-popup-wrap" id="logo-popup-wrap"><div class="logo" onclick="toggleLogoPopup(event)"><img src="images/logo.png" alt="SCTech" class="sidebar-logo-img"><h2>SCTech</h2></div><div class="logo-popup" id="logo-popup"><div class="logo-popup-header"><div class="logo-popup-avatar">&#128100;</div><div><div class="logo-popup-name" id="popup-user-name">&#8212;</div><div class="logo-popup-role">Usu&#225;rio SCTech</div></div></div><div class="logo-popup-sep"></div><a href="sobre.html" class="logo-popup-item"><span>&#8505;&#65039;</span> Sobre o Sistema</a><div class="logo-popup-sep"></div><button class="logo-popup-item logo-popup-logout" onclick="logout()"><span>&#128682;</span> Sair</button></div></div>
+        <div class="logo-popup-wrap" id="logo-popup-wrap"><div class="logo" onclick="toggleLogoPopup(event)"><img src="images/logo.png" alt="SCTech" class="sidebar-logo-img"><h2>SCTech</h2></div><div class="logo-popup" id="logo-popup"><div class="logo-popup-header"><div class="logo-popup-avatar">&#128100;</div><div><div class="logo-popup-name" id="popup-user-name">&#8212;</div><div class="logo-popup-role">Usu&#225;rio SCTech</div></div></div><div class="logo-popup-sep"></div><a href="sobre.html" class="logo-popup-item"><span>&#8505;&#65039;</span> Sobre o Sistema</a><a href="empresa.html" class="logo-popup-item"><span>&#9881;&#65039;</span> Configurar Empresa</a><div class="logo-popup-sep"></div><button class="logo-popup-item logo-popup-logout" onclick="logout()"><span>&#128682;</span> Sair</button></div></div>
         <a href="index.html"      class="nav-item"><img src="images/icones/dashboard.png" class="nav-icon"> <span class="nav-text">Página Inicial</span></a>
         <a href="pcp.html"        class="nav-item"><img src="images/icones/producao.png" class="nav-icon"> <span class="nav-text">Produção</span></a>
         <a href="estoque.html"    class="nav-item"><img src="images/icones/estoque.png" class="nav-icon"> <span class="nav-text">Estoque</span></a>
@@ -55,6 +55,11 @@
                         <label>Preço de Venda (R$/m) <span class="info-tag">edição</span></label>
                         <input type="number" id="cat-preco" placeholder="0.00" step="0.01" min="0">
                     </div>
+                </div>
+                <div class="form-group" style="margin-top:8px">
+                    <label>Foto do Tecido <span class="info-tag">opcional</span></label>
+                    <input type="file" id="cat-foto" accept="image/*" onchange="previewFotoCatalogo(this)" style="font-size:13px">
+                    <div id="cat-foto-preview"></div>
                 </div>
                 <p style="font-size:12px;color:#888;margin:8px 0 12px">💡 O preço por metro é calculado automaticamente na entrada de estoque (custo + margem).</p>
                 <button class="btn" onclick="salvarCatalogo()">Salvar no Catálogo</button>

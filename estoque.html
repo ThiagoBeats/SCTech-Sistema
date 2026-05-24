@@ -7,7 +7,7 @@
 </head>
 <body>
     <aside class="sidebar" id="main-sidebar">
-        <div class="logo-popup-wrap" id="logo-popup-wrap"><div class="logo" onclick="toggleLogoPopup(event)"><img src="images/logo.png" alt="SCTech" class="sidebar-logo-img"><h2>SCTech</h2></div><div class="logo-popup" id="logo-popup"><div class="logo-popup-header"><div class="logo-popup-avatar">&#128100;</div><div><div class="logo-popup-name" id="popup-user-name">&#8212;</div><div class="logo-popup-role">Usu&#225;rio SCTech</div></div></div><div class="logo-popup-sep"></div><a href="sobre.html" class="logo-popup-item"><span>&#8505;&#65039;</span> Sobre o Sistema</a><div class="logo-popup-sep"></div><button class="logo-popup-item logo-popup-logout" onclick="logout()"><span>&#128682;</span> Sair</button></div></div>
+        <div class="logo-popup-wrap" id="logo-popup-wrap"><div class="logo" onclick="toggleLogoPopup(event)"><img src="images/logo.png" alt="SCTech" class="sidebar-logo-img"><h2>SCTech</h2></div><div class="logo-popup" id="logo-popup"><div class="logo-popup-header"><div class="logo-popup-avatar">&#128100;</div><div><div class="logo-popup-name" id="popup-user-name">&#8212;</div><div class="logo-popup-role">Usu&#225;rio SCTech</div></div></div><div class="logo-popup-sep"></div><a href="sobre.html" class="logo-popup-item"><span>&#8505;&#65039;</span> Sobre o Sistema</a><a href="empresa.html" class="logo-popup-item"><span>&#9881;&#65039;</span> Configurar Empresa</a><div class="logo-popup-sep"></div><button class="logo-popup-item logo-popup-logout" onclick="logout()"><span>&#128682;</span> Sair</button></div></div>
         <a href="index.html"    class="nav-item"><img src="images/icones/dashboard.png" class="nav-icon"> <span class="nav-text">Página Inicial</span></a>
         <a href="pcp.html"      class="nav-item"><img src="images/icones/producao.png" class="nav-icon"> <span class="nav-text">Produção</span></a>
         <a href="estoque.html"  class="nav-item active"><img src="images/icones/estoque.png" class="nav-icon"> <span class="nav-text">Estoque</span></a>
@@ -30,6 +30,7 @@
             <button class="tab-btn"        data-tab="kits"      onclick="mostrarTabEstoque('kits')">📦 Kits</button>
             <button class="tab-btn"        data-tab="historico" onclick="mostrarTabEstoque('historico')">📋 Histórico</button>
             <button class="tab-btn"        data-tab="consulta"  onclick="mostrarTabEstoque('consulta')">🔍 Consulta de Estoque</button>
+            <button class="tab-btn" data-tab="futuro"  onclick="mostrarTabEstoque('futuro')">📊 Estoque Futuro</button>
             <button class="tab-btn" data-tab="backup" onclick="mostrarTabEstoque('backup')">💾 Backup</button>
         </div>
 
@@ -254,15 +255,20 @@
                     <tbody id="tb-historico"></tbody>
                 </table>
             </div>
+            <div id="hist-pag" style="display:flex;justify-content:center;align-items:center;gap:10px;padding:8px 0"></div>
         </div>
 
         <!-- ══════════════ ABA: CONSULTA DE ESTOQUE ══════════════ -->
         <div id="tab-consulta" class="tab-panel">
             <div class="card">
                 <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-                    <div class="form-group" style="flex:1;min-width:260px;margin-bottom:0">
-                        <label>Buscar produto (nome ou código)</label>
-                        <input type="text" id="consulta-busca" placeholder="Ex: Linho, TRILHO-SU-01…" oninput="renderConsultaEstoque()" autocomplete="off">
+                    <div class="form-group" style="flex:2;min-width:220px;margin-bottom:0">
+                        <label>Buscar por nome</label>
+                        <input type="text" id="consulta-busca" placeholder="Ex: Linho Belga, Trilho Suíço…" oninput="renderConsultaEstoque()" autocomplete="off">
+                    </div>
+                    <div class="form-group" style="flex:1;min-width:160px;margin-bottom:0">
+                        <label>Código / Referência</label>
+                        <input type="text" id="consulta-codigo" placeholder="Ex: LB-001, TRILHO-SU-01" oninput="renderConsultaEstoque()" autocomplete="off" style="text-transform:uppercase">
                     </div>
                     <div class="form-group" style="min-width:140px;margin-bottom:0">
                         <label>Tipo</label>
@@ -275,6 +281,11 @@
                 </div>
             </div>
             <div id="consulta-resultados"></div>
+        </div>
+
+        <!-- ══════════════ ABA: ESTOQUE FUTURO ══════════════ -->
+        <div id="tab-futuro" class="tab-panel">
+            <!-- Preenchido dinamicamente por renderEstoqueFuturo() -->
         </div>
 
         <!-- ══════════════ ABA: BACKUP ══════════════ -->
