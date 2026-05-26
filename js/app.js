@@ -745,13 +745,11 @@ async function excluirPedido(id) {
 }
 
 function gerarProposta(id) {
-    localStorage.setItem('sc_proposta_id', id);
-    window.open('proposta.html', '_blank');
+    abrirPropostaModal(id);
 }
 
 function abrirOS(id) {
-    localStorage.setItem('sc_os_id', id);
-    window.open('os.html', '_blank');
+    abrirDocModal(gerarHTMLOS(id), 'Ordem de Serviço');
 }
 
 async function aprovarPedido(id) {
@@ -1256,23 +1254,79 @@ function renderDashboard() {
 function renderDashboardAlertas() {
     const el = document.getElementById('dashboard-alertas');
     if (!el) return;
+    const hojeStr = new Date().toISOString().split('T')[0];
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    const amanha = new Date(hoje); amanha.setDate(amanha.getDate() + 1);
-    const alertas = db.pedidos.filter(p => {
+    const banners = [];
+
+    const mkBanner = (icon, bg, bord, textClr, titulo, itens) =>
+        `<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:${bg};border:1px solid ${bord};border-radius:8px;padding:10px 16px;font-size:13px">
+            <span style="font-size:17px;flex-shrink:0">${icon}</span>
+            <span style="color:${textClr}">${titulo}</span>
+            <span>${itens}</span>
+        </div>`;
+
+    // Pedidos com entrega hoje
+    const entregasHoje = db.pedidos.filter(p => {
         if (!p.data_entrega || normalizarStatus(p.status) === 'Instalado') return false;
-        const entrega = new Date(p.data_entrega + 'T00:00:00');
-        return entrega >= hoje && entrega <= amanha;
+        return p.data_entrega === hojeStr;
     });
-    if (!alertas.length) { el.innerHTML = ''; el.style.display = 'none'; return; }
-    el.style.display = '';
-    const lista = alertas.map(p =>
-        `<span style="cursor:pointer;color:var(--primary);font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}</span>`
-    ).join(' &nbsp;·&nbsp; ');
-    el.innerHTML = `<div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px 16px;font-size:13px;margin-bottom:12px">
-        <span style="font-size:18px;flex-shrink:0">🔔</span>
-        <span style="color:#92400e"><strong>${alertas.length} pedido(s)</strong> com entrega em até 24h:</span>
-        <span>${lista}</span>
-    </div>`;
+    if (entregasHoje.length) {
+        const itens = entregasHoje.map(p =>
+            `<span style="cursor:pointer;color:#92400e;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}</span>`
+        ).join(' &nbsp;·&nbsp; ');
+        banners.push(mkBanner('🔔', '#fef3c7', '#fcd34d', '#92400e',
+            `<strong>${entregasHoje.length} pedido(s)</strong> com entrega prevista para hoje:`, itens));
+    }
+
+    // Medições atrasadas
+    const medicAtrasadas = db.medicoes.filter(m => m.status === 'Agendado' && m.data < hojeStr);
+    if (medicAtrasadas.length) {
+        const itens = medicAtrasadas.map(m =>
+            `<span style="cursor:pointer;color:#991b1b;font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')} (${m.data.split('-').reverse().join('/')})</span>`
+        ).join(' &nbsp;·&nbsp; ');
+        banners.push(mkBanner('📐', '#fff1f2', '#fca5a5', '#991b1b',
+            `<strong>${medicAtrasadas.length} medição(ões)</strong> atrasada(s):`, itens));
+    }
+
+    // Medições hoje
+    const medicHoje = db.medicoes.filter(m => m.status === 'Agendado' && m.data === hojeStr);
+    if (medicHoje.length) {
+        const itens = medicHoje.map(m =>
+            `<span style="cursor:pointer;color:#1d4ed8;font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')}${m.hora ? ' às ' + m.hora : ''}</span>`
+        ).join(' &nbsp;·&nbsp; ');
+        banners.push(mkBanner('📐', '#dbeafe', '#93c5fd', '#1e40af',
+            `<strong>${medicHoje.length} medição(ões)</strong> agendada(s) para hoje:`, itens));
+    }
+
+    // Instalações atrasadas
+    const instStatus = ['Pronto p/ Instalação', 'Aguardando Pagamento'];
+    const instAtrasadas = db.pedidos.filter(p =>
+        instStatus.includes(normalizarStatus(p.status)) && p.data_entrega && p.data_entrega < hojeStr);
+    if (instAtrasadas.length) {
+        const itens = instAtrasadas.map(p =>
+            `<span style="cursor:pointer;color:#991b1b;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')} (${p.data_entrega.split('-').reverse().join('/')})</span>`
+        ).join(' &nbsp;·&nbsp; ');
+        banners.push(mkBanner('🔧', '#fff1f2', '#fca5a5', '#991b1b',
+            `<strong>${instAtrasadas.length} instalação(ões)</strong> atrasada(s):`, itens));
+    }
+
+    // Instalações hoje
+    const instHoje = db.pedidos.filter(p =>
+        instStatus.includes(normalizarStatus(p.status)) && p.data_entrega === hojeStr);
+    if (instHoje.length) {
+        const itens = instHoje.map(p =>
+            `<span style="cursor:pointer;color:#1d4ed8;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}${p.inst_hora ? ' às ' + p.inst_hora : ''}</span>`
+        ).join(' &nbsp;·&nbsp; ');
+        banners.push(mkBanner('🔧', '#dbeafe', '#93c5fd', '#1e40af',
+            `<strong>${instHoje.length} instalação(ões)</strong> agendada(s) para hoje:`, itens));
+    }
+
+    if (!banners.length) { el.innerHTML = ''; el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.style.background = 'transparent';
+    el.style.border = 'none';
+    el.style.padding = '0';
+    el.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">${banners.join('')}</div>`;
 }
 
 function filtrarMetrica(valor) {
@@ -2928,12 +2982,105 @@ function renderKanban() {
     if (resEl) resEl.textContent = filtroAtivo ? `${totalFiltrado} pedido(s) encontrado(s)` : '';
 }
 
+// --- DOC MODAL ---
+function abrirDocModal(htmlContent, titulo, extraToolbar) {
+    let overlay = document.getElementById('doc-modal-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'doc-modal-overlay';
+        overlay.innerHTML = `
+            <div id="doc-modal-topbar">
+                <span id="doc-modal-topbar-title"></span>
+                <div id="doc-modal-topbar-actions"></div>
+            </div>
+            <div id="doc-modal-scroll">
+                <div id="doc-modal-paper"></div>
+            </div>`;
+        document.body.appendChild(overlay);
+        overlay.addEventListener('click', e => { if (e.target === overlay) fecharDocModal(); });
+    }
+    document.getElementById('doc-modal-topbar-title').textContent = titulo || 'Documento';
+    document.getElementById('doc-modal-paper').innerHTML = htmlContent;
+    document.getElementById('doc-modal-topbar-actions').innerHTML =
+        (extraToolbar || '') +
+        `<button class="doc-modal-btn" onclick="imprimirDocModal()">🖨️ Imprimir / PDF</button>` +
+        `<button class="doc-modal-btn doc-modal-btn-close" onclick="fecharDocModal()">✕ Fechar</button>`;
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function fecharDocModal() {
+    const overlay = document.getElementById('doc-modal-overlay');
+    if (overlay) overlay.classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+function imprimirDocModal() {
+    const paper = document.getElementById('doc-modal-paper');
+    if (!paper) return;
+    let printRoot = document.getElementById('doc-print-root');
+    if (!printRoot) {
+        printRoot = document.createElement('div');
+        printRoot.id = 'doc-print-root';
+        document.body.appendChild(printRoot);
+    }
+    printRoot.innerHTML = paper.innerHTML;
+    document.body.classList.add('doc-modal-printing');
+    window.print();
+    window.addEventListener('afterprint', function cleanup() {
+        document.body.classList.remove('doc-modal-printing');
+        printRoot.innerHTML = '';
+        window.removeEventListener('afterprint', cleanup);
+    }, { once: true });
+}
+
+function abrirPropostaModal(pedidoId) {
+    const extra = `<label style="color:#fff;font-size:13px;display:flex;align-items:center;gap:6px;margin-right:4px">
+        Validade: <input type="number" id="proposta-dias-modal" value="15" min="1" max="365"
+            style="width:56px;padding:4px 6px;border-radius:4px;border:none;font-size:13px;text-align:center"
+            onchange="atualizarPropostaModal(${pedidoId}, this.value)"> dias
+    </label>`;
+    abrirDocModal(gerarHTMLProposta(pedidoId, 15), 'Proposta Comercial', extra);
+}
+
+function atualizarPropostaModal(pedidoId, dias) {
+    const paper = document.getElementById('doc-modal-paper');
+    if (paper) paper.innerHTML = gerarHTMLProposta(pedidoId, parseInt(dias) || 15);
+}
+
+let _pcShareData = null;
+function mostrarSharePC() {
+    if (!_pcShareData) return;
+    const { waUrl, mailUrl, num, avisoWA, avisoMail } = _pcShareData;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `<div class="modal-box" style="max-width:420px">
+        <div class="modal-header">
+            <h3>Compartilhar — Pedido #${num}</h3>
+            <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:13px;color:#6b7280;margin-bottom:16px">Imprima ou salve o PDF clicando em 🖨️ Imprimir / PDF e depois envie ao fornecedor:</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <a href="${waUrl}" target="_blank" onclick="this.closest('.modal-overlay').remove()"
+                   style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 12px;background:#25D366;border-radius:10px;color:#fff;text-decoration:none;font-weight:600;font-size:14px">
+                    <span style="font-size:28px">📱</span>WhatsApp${avisoWA}
+                </a>
+                <a href="${mailUrl}" onclick="this.closest('.modal-overlay').remove()"
+                   style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 12px;background:var(--primary);border-radius:10px;color:#fff;text-decoration:none;font-weight:600;font-size:14px">
+                    <span style="font-size:28px">✉️</span>E-mail${avisoMail}
+                </a>
+            </div>
+        </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
 // --- ORDEM DE SERVIÇO ---
-function renderOS() {
-    const id = localStorage.getItem('sc_os_id');
-    const ped = db.pedidos.find(p => p.id == id);
-    const container = document.getElementById('os-container');
-    if (!ped) { container.innerHTML = '<p style="text-align:center;color:#999;padding:40px;">OS não encontrada.</p>'; return; }
+function gerarHTMLOS(pedidoId) {
+    const ped = db.pedidos.find(p => p.id == pedidoId);
+    if (!ped) return '<p style="text-align:center;color:#999;padding:40px;">OS não encontrada.</p>';
     const ambientes = normalizarAmbientes(ped);
     const cliente   = db.clientes.find(c => c.id == ped.clienteId);
     const hoje      = new Date().toLocaleDateString('pt-BR');
@@ -2970,7 +3117,7 @@ function renderOS() {
                 ${ped.itens.map(i=>`<tr><td>${escapeHtml(i.nome)}</td><td>${i.quantidade}</td><td>${escapeHtml(i.unidade)}</td></tr>`).join('')}
             </table>
         </div>` : '';
-    container.innerHTML = `
+    return `
         <div class="os-header">
             <div>
                 <div class="os-empresa">${buildEmpresaHeaderHTML(42)}</div>
@@ -3000,16 +3147,20 @@ function renderOS() {
         </div>`;
 }
 
+function renderOS() {
+    const container = document.getElementById('os-container');
+    if (!container) return;
+    container.innerHTML = gerarHTMLOS(localStorage.getItem('sc_os_id'));
+}
+
 // --- PROPOSTA PDF ---
-function renderProposta() {
-    const id = localStorage.getItem('sc_proposta_id');
-    const ped = db.pedidos.find(p => p.id == id);
-    const container = document.getElementById('proposta-container');
-    if (!ped) { container.innerHTML = '<p style="text-align:center;color:#999;padding:40px;">Pedido não encontrado.</p>'; return; }
+function gerarHTMLProposta(pedidoId, diasValidade) {
+    const ped = db.pedidos.find(p => p.id == pedidoId);
+    if (!ped) return '<p style="text-align:center;color:#999;padding:40px;">Pedido não encontrado.</p>';
+    diasValidade = diasValidade || 15;
     const ambientes    = normalizarAmbientes(ped);
     const cliente      = db.clientes.find(c => c.id == ped.clienteId);
     const hoje           = new Date().toLocaleDateString('pt-BR');
-    const diasValidade   = parseInt(document.getElementById('proposta-validade')?.value) || 15;
     const validade       = new Date(Date.now() + diasValidade * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR');
     const totalConsumo = ambientes.reduce((s,a)=>s+(a.tecidos||[]).reduce((ts,t)=>ts+(t.consumo_linear||0),0),0);
     const totalMat     = ped.total_material || ambientes.reduce((s,a)=>s+(a.total_material||0),0);
@@ -3028,7 +3179,7 @@ function renderProposta() {
     const acessRows = ped.itens && ped.itens.length ? ped.itens.map(i =>
         `<tr><td><em>Acessório</em></td><td>${escapeHtml(i.nome)} — ${i.quantidade} ${escapeHtml(i.unidade)}</td></tr>`
     ).join('') : '';
-    container.innerHTML = `
+    return `
         <div class="proposta-header">
             <div class="proposta-logo">${buildEmpresaHeaderHTML(64)}</div>
             <div class="proposta-info"><h2>PROPOSTA COMERCIAL</h2><p>Nº <strong>${formatPedidoId(ped.id)}</strong></p><p>Data de emissão: ${hoje}</p><p>Válida até: ${validade}</p></div>
@@ -3065,6 +3216,12 @@ function renderProposta() {
             </ul>
         </div>
         <div class="proposta-aprovacao"><p>Aprovado em: _____ / _____ / _________</p><br><p>Assinatura do cliente: _________________________________________________</p></div>`;
+}
+
+function renderProposta() {
+    const container = document.getElementById('proposta-container');
+    if (!container) return;
+    container.innerHTML = gerarHTMLProposta(localStorage.getItem('sc_proposta_id'), 15);
 }
 
 // --- BACKUP / EXPORTAR ---
@@ -3674,21 +3831,23 @@ async function adicionarItemPC() {
     if (!itemId) { await showAlert('Selecione o item.', '⚠️'); return; }
     if (qtd <= 0) { await showAlert('Informe uma quantidade válida.', '⚠️'); return; }
     let item_nome, unidade, preco_unit;
+    let referencia = '';
     if (tipo === 'material') {
         const m = db.materiais.find(x => x.id === itemId);
         if (!m) return;
-        item_nome = m.nome; unidade = m.unidade; preco_unit = m.preco_custo || 0;
+        item_nome = m.nome; unidade = m.unidade; preco_unit = m.preco_custo || 0; referencia = m.referencia || '';
     } else {
         const c = db.catalogo.find(x => x.id === itemId);
         if (!c) return;
         unidade    = document.getElementById('pc-item-unidade')?.value || 'm';
         item_nome  = c.nome;
         preco_unit = ultimoPrecoTecido(itemId);
+        referencia = c.referencia || '';
     }
     const chave = `${tipo}|${itemId}|${unidade}`;
     const existing = pcDraftItens.find(i => `${i.tipo}|${i.item_id}|${i.unidade}` === chave);
     if (existing) { existing.quantidade += qtd; existing.subtotal = existing.quantidade * existing.preco_unit; }
-    else { pcDraftItens.push({ tipo, item_id: itemId, item_nome, unidade, quantidade: qtd, preco_unit, subtotal: qtd * preco_unit }); }
+    else { pcDraftItens.push({ tipo, item_id: itemId, item_nome, referencia, unidade, quantidade: qtd, preco_unit, subtotal: qtd * preco_unit }); }
     renderItensPCDraft();
 }
 
@@ -3838,14 +3997,8 @@ function compartilharPC(id) {
     const num   = formatPedidoId(pc.id);
     const data  = new Date(pc.data_criacao).toLocaleDateString('pt-BR');
 
-    // Abre o PDF em nova aba imediatamente
-    localStorage.setItem('sc_pc_id', id);
-    window.open('pedido-compra.html', '_blank');
-
-    // URLs de compartilhamento
     const msgWA  = encodeURIComponent(`Olá! Segue o pedido de compra #${num} em anexo.`);
     const waUrl  = tel ? `https://wa.me/55${tel}?text=${msgWA}` : `https://wa.me/?text=${msgWA}`;
-
     const corpoEmail =
         `Olá${forn?.nome ? ', ' + forn.nome : ''}!\n\n` +
         `Segue em anexo o pedido de compra #${num}, emitido em ${data}.\n\n` +
@@ -3853,44 +4006,12 @@ function compartilharPC(id) {
         (pc.observacoes ? `Observações: ${pc.observacoes}\n` : '') +
         `\nAtenciosamente.`;
     const mailUrl = `mailto:${email}?subject=${encodeURIComponent('Pedido de compra ' + num)}&body=${encodeURIComponent(corpoEmail)}`;
+    const avisoWA   = !tel   ? `<div style="font-size:11px;color:#d97706;margin-top:4px">⚠ Sem telefone cadastrado</div>` : `<div style="font-size:11px;margin-top:4px">${escapeHtml(forn?.tel || '')}</div>`;
+    const avisoMail = !email ? `<div style="font-size:11px;color:#d97706;margin-top:4px">⚠ Sem e-mail cadastrado</div>`   : `<div style="font-size:11px;margin-top:4px">${escapeHtml(email)}</div>`;
 
-    // Avisos de contato ausente
-    const avisoWA   = !tel   ? `<div style="font-size:11px;color:#d97706;margin-top:4px">⚠ Sem telefone cadastrado</div>` : `<div style="font-size:11px;color:#6b7280;margin-top:4px">${forn?.tel || ''}</div>`;
-    const avisoMail = !email ? `<div style="font-size:11px;color:#d97706;margin-top:4px">⚠ Sem e-mail cadastrado</div>`   : `<div style="font-size:11px;color:#6b7280;margin-top:4px">${email}</div>`;
-
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML = `<div class="modal-box" style="max-width:460px">
-        <div class="modal-header">
-            <h3>Compartilhar — Pedido #${num}</h3>
-            <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
-        </div>
-        <div class="modal-body">
-            <ol style="font-size:14px;color:#374151;line-height:2;padding-left:20px;margin-bottom:20px">
-                <li>O PDF foi aberto em outra aba — <strong>salve-o</strong> no seu computador</li>
-                <li>Escolha como enviar ao fornecedor e <strong>anexe o PDF</strong> salvo</li>
-            </ol>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                <a href="${waUrl}" target="_blank" onclick="this.closest('.modal-overlay').remove()"
-                   style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 12px;background:#25D366;border-radius:10px;color:#fff;text-decoration:none;font-weight:600;font-size:14px">
-                    <span style="font-size:28px">📱</span>
-                    WhatsApp
-                    ${avisoWA}
-                </a>
-                <a href="${mailUrl}" onclick="this.closest('.modal-overlay').remove()"
-                   style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 12px;background:var(--primary);border-radius:10px;color:#fff;text-decoration:none;font-weight:600;font-size:14px">
-                    <span style="font-size:28px">✉️</span>
-                    E-mail
-                    ${avisoMail}
-                </a>
-            </div>
-            <p style="font-size:12px;color:#9ca3af;text-align:center;margin-top:14px;margin-bottom:0">
-                Destinatário e assunto são preenchidos automaticamente
-            </p>
-        </div>
-    </div>`;
-    document.body.appendChild(overlay);
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    _pcShareData = { waUrl, mailUrl, num, avisoWA, avisoMail };
+    const extra = `<button class="doc-modal-btn" onclick="mostrarSharePC()" style="background:#25D366">📤 Compartilhar</button>`;
+    abrirDocModal(gerarHTMLPedidoCompra(id), 'Pedido de Compra #' + num, extra);
 }
 
 function atualizarStatusPC(id, status) {
@@ -3909,8 +4030,7 @@ async function excluirPedidoCompra(id) {
 }
 
 function abrirPedidoCompra(id) {
-    localStorage.setItem('sc_pc_id', id);
-    window.open('pedido-compra.html', '_blank');
+    abrirDocModal(gerarHTMLPedidoCompra(id), 'Pedido de Compra');
 }
 
 function criarPCParaFornecedor(fornId) {
@@ -3948,24 +4068,31 @@ function mostrarTabFornecedores(tab) {
 }
 
 // --- PEDIDO DE COMPRA (documento imprimível) ---
-function renderPedidoCompraDoc() {
-    const id  = localStorage.getItem('sc_pc_id');
-    const pc  = db.pedidos_compra.find(p => p.id == id);
-    const container = document.getElementById('pedido-compra-container');
-    if (!container) return;
-    if (!pc) { container.innerHTML = '<p style="text-align:center;color:#999;padding:40px;">Pedido não encontrado.</p>'; return; }
+function gerarHTMLPedidoCompra(id) {
+    const pc = db.pedidos_compra.find(p => p.id == id);
+    if (!pc) return '<p style="text-align:center;color:#999;padding:40px;">Pedido não encontrado.</p>';
     const forn  = db.fornecedores.find(f => f.id == pc.fornecedor_id);
     const hoje  = new Date().toLocaleDateString('pt-BR');
     const total = pc.itens.reduce((s, i) => s + i.subtotal, 0);
-    const linhas = pc.itens.map(i => `<tr>
+    const linhas = pc.itens.map(i => {
+        let ref = i.referencia || '';
+        if (!ref && i.item_id) {
+            const src = i.tipo === 'tecido'
+                ? db.catalogo.find(x => x.id == i.item_id)
+                : db.materiais.find(x => x.id == i.item_id);
+            ref = src?.referencia || '';
+        }
+        return `<tr>
+        <td style="font-size:12px;color:#555;white-space:nowrap">${ref ? escapeHtml(ref) : '<span style="color:#ccc">—</span>'}</td>
         <td>${escapeHtml(i.item_nome)}</td>
         <td style="text-align:center">${i.tipo === 'tecido' ? 'Tecido' : 'Material'}</td>
         <td style="text-align:right">${i.quantidade}</td>
         <td>${i.unidade}</td>
         <td style="text-align:right">R$ ${i.preco_unit.toFixed(2)}</td>
         <td style="text-align:right"><strong>R$ ${i.subtotal.toFixed(2)}</strong></td>
-    </tr>`).join('');
-    container.innerHTML = `
+    </tr>`;
+    }).join('');
+    return `
         <div class="pc-header">
             ${buildEmpresaHeaderHTML(52)}
             <div style="text-align:right">
@@ -3985,9 +4112,9 @@ function renderPedidoCompraDoc() {
         <div class="pc-section">
             <div class="pc-section-title">Itens Solicitados</div>
             <table class="pc-table">
-                <thead><tr><th>Descrição</th><th style="text-align:center">Tipo</th><th style="text-align:right;width:80px">Qtd</th><th style="width:50px">Un.</th><th style="text-align:right;width:100px">R$/Un.</th><th style="text-align:right;width:110px">Subtotal</th></tr></thead>
+                <thead><tr><th style="width:100px">Código</th><th>Descrição</th><th style="text-align:center">Tipo</th><th style="text-align:right;width:80px">Qtd</th><th style="width:50px">Un.</th><th style="text-align:right;width:100px">R$/Un.</th><th style="text-align:right;width:110px">Subtotal</th></tr></thead>
                 <tbody>${linhas}</tbody>
-                <tfoot><tr style="background:#f8fafc"><td colspan="5" style="text-align:right;font-weight:bold;padding:10px 8px;color:#374151">Total Estimado:</td><td style="text-align:right;font-weight:bold;padding:10px 8px">R$ ${total.toFixed(2)}</td></tr></tfoot>
+                <tfoot><tr style="background:#f8fafc"><td colspan="6" style="text-align:right;font-weight:bold;padding:10px 8px;color:#374151">Total Estimado:</td><td style="text-align:right;font-weight:bold;padding:10px 8px">R$ ${total.toFixed(2)}</td></tr></tfoot>
             </table>
         </div>
         ${pc.observacoes ? `<div class="pc-section"><div class="pc-section-title">Observações</div><div style="padding:10px 14px;border:1px solid #e4e7eb;border-radius:4px;font-size:14px;min-height:50px">${escapeHtml(pc.observacoes)}</div></div>` : ''}
@@ -3996,6 +4123,12 @@ function renderPedidoCompraDoc() {
             <div><div class="pc-section-title">Aprovado por</div><div class="pc-linha"></div><small>Nome / Data</small></div>
             <div><div class="pc-section-title">Recebido por</div><div class="pc-linha"></div><small>Nome / Assinatura / Data</small></div>
         </div>`;
+}
+
+function renderPedidoCompraDoc() {
+    const container = document.getElementById('pedido-compra-container');
+    if (!container) return;
+    container.innerHTML = gerarHTMLPedidoCompra(localStorage.getItem('sc_pc_id'));
     setTimeout(() => window.print(), 500);
 }
 
@@ -4093,93 +4226,52 @@ function imprimirAgendamentoMedicao(id) {
     const d   = new Date(v.data + 'T12:00:00');
     const dataFmt = d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
     const horaFmt = v.hora || '—';
-
-    const emp = getEmpresa();
-    const empNome    = emp.nome_fantasia || emp.razao_social || 'SCTech';
-    const empLogoSrc = emp.logo_base64 || 'images/logo.png';
-    const empInfos   = [emp.cnpj ? 'CNPJ: ' + emp.cnpj : '', emp.telefone || '', emp.email || '', emp.site || ''].filter(Boolean).join('  ·  ');
-    const empEnd     = emp.endereco || '';
-    const empLogoHTML = `<div style="display:flex;align-items:center;gap:12px">
-        <img src="${empLogoSrc}" alt="${empNome}" style="height:52px;max-width:160px;object-fit:contain">
-        <div>
-            <div style="font-size:18px;font-weight:700;color:#2A5C82">${empNome}</div>
-            ${empInfos ? `<div style="font-size:11px;color:#6b7280;margin-top:2px">${empInfos}</div>` : ''}
-            ${empEnd   ? `<div style="font-size:11px;color:#6b7280">${empEnd}</div>` : ''}
-        </div>
-    </div>`;
+    const badgeBg  = v.status === 'Realizado' ? '#d1fae5' : '#dbeafe';
+    const badgeClr = v.status === 'Realizado' ? '#065f46' : '#1e40af';
 
     const row = (label, val) => val
-        ? `<tr><td style="padding:8px 12px;font-weight:600;color:#555;width:180px;border-bottom:1px solid #e5e7eb">${label}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${val}</td></tr>`
+        ? `<tr>
+            <td style="padding:8px 12px;font-weight:600;color:#555;width:180px;border-bottom:1px solid #e5e7eb">${label}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${val}</td>
+           </tr>`
         : '';
 
-    const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<title>Agendamento de Medição</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; font-size: 14px; color: #1f2937; background: #fff; padding: 32px; }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #2A5C82; padding-bottom: 16px; margin-bottom: 24px; }
-  .header h1 { font-size: 22px; color: #2A5C82; margin-bottom: 4px; }
-  .header p  { font-size: 12px; color: #6b7280; }
-  .badge { display: inline-block; padding: 3px 12px; border-radius: 12px; font-size: 12px; font-weight: 700;
-           background: ${v.status === 'Realizado' ? '#d1fae5' : '#dbeafe'};
-           color: ${v.status === 'Realizado' ? '#065f46' : '#1e40af'}; }
-  .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: #6b7280;
-                   margin: 20px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #e5e7eb; }
-  table { width: 100%; border-collapse: collapse; }
-  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af; display: flex; justify-content: space-between; }
-  .assinatura { margin-top: 48px; text-align: center; }
-  .assinatura .linha { border-top: 1px solid #374151; width: 260px; margin: 0 auto 6px; }
-  .assinatura p { font-size: 12px; color: #6b7280; }
-  @media print { body { padding: 16px; } }
-</style>
-</head>
-<body>
-<div class="header">
-  <div>
-    ${empLogoHTML}
-  </div>
-  <div style="text-align:right">
-    <div style="font-size:16px;font-weight:700;color:#1f2937">AGENDAMENTO DE MEDIÇÃO</div>
-    <div style="font-size:12px;color:#6b7280;margin-top:2px">Emitido em ${new Date().toLocaleString('pt-BR')}</div>
-    <span class="badge" style="margin-top:6px;display:inline-block">${v.status}</span>
-  </div>
-</div>
+    const secTitle = (t) => `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#6b7280;margin:20px 0 8px;padding-bottom:4px;border-bottom:1px solid #e5e7eb">${t}</div>`;
 
-<div class="section-title">Dados do Cliente</div>
-<table>
-  ${row('Nome', escapeHtml(v.clienteNome || '—'))}
-  ${row('Telefone / WhatsApp', escapeHtml(v.clienteTel || ''))}
-  ${row('E-mail', escapeHtml(cli?.email || ''))}
-  ${row('CPF / CNPJ', escapeHtml(cli?.cpf || ''))}
-  ${row('Endereço cadastrado', escapeHtml(cli?.end || ''))}
-</table>
+    const html = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #2A5C82;padding-bottom:16px;margin-bottom:24px">
+            <div>${buildEmpresaHeaderHTML(52)}</div>
+            <div style="text-align:right">
+                <div style="font-size:16px;font-weight:700;color:#1f2937">AGENDAMENTO DE MEDIÇÃO</div>
+                <div style="font-size:12px;color:#6b7280;margin-top:2px">Emitido em ${new Date().toLocaleString('pt-BR')}</div>
+                <span style="display:inline-block;margin-top:6px;padding:3px 12px;border-radius:12px;font-size:12px;font-weight:700;background:${badgeBg};color:${badgeClr}">${escapeHtml(v.status)}</span>
+            </div>
+        </div>
+        ${secTitle('Dados do Cliente')}
+        <table style="width:100%;border-collapse:collapse">
+            ${row('Nome', escapeHtml(v.clienteNome || '—'))}
+            ${row('Telefone / WhatsApp', escapeHtml(v.clienteTel || ''))}
+            ${row('E-mail', escapeHtml(cli?.email || ''))}
+            ${row('CPF / CNPJ', escapeHtml(cli?.cpf || ''))}
+            ${row('Endereço cadastrado', escapeHtml(cli?.end || ''))}
+        </table>
+        ${secTitle('Dados do Agendamento')}
+        <table style="width:100%;border-collapse:collapse">
+            ${row('Data da visita', dataFmt)}
+            ${row('Horário', horaFmt)}
+            ${row('Endereço da visita', escapeHtml(v.endereco || ''))}
+            ${row('Observações', escapeHtml(v.obs || ''))}
+        </table>
+        <div style="margin-top:48px;text-align:center">
+            <div style="border-top:1px solid #374151;width:260px;margin:0 auto 6px"></div>
+            <p style="font-size:12px;color:#6b7280">Assinatura do responsável</p>
+        </div>
+        <div style="margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af;display:flex;justify-content:space-between">
+            <span>${escapeHtml(getEmpresa().nome_fantasia || getEmpresa().razao_social || 'SCTech')}</span>
+            <span>ID do agendamento: ${v.id}</span>
+        </div>`;
 
-<div class="section-title">Dados do Agendamento</div>
-<table>
-  ${row('Data da visita', dataFmt)}
-  ${row('Horário', horaFmt)}
-  ${row('Endereço da visita', escapeHtml(v.endereco || ''))}
-  ${row('Observações', escapeHtml(v.obs || ''))}
-</table>
-
-<div class="assinatura">
-  <div class="linha"></div>
-  <p>Assinatura do responsável</p>
-</div>
-
-<div class="footer">
-  <span>${empNome}</span>
-  <span>ID do agendamento: ${v.id}</span>
-</div>
-<script>window.onload = function() { window.print(); }<\/script>
-</body>
-</html>`;
-
-    const w = window.open('', '_blank');
-    if (w) { w.document.write(html); w.document.close(); }
+    abrirDocModal(html, 'Agendamento de Medição');
 }
 
 function renderMedicoes() {
@@ -4832,10 +4924,9 @@ function renderConsultaEstoque() {
             const totalDisp = rolos.reduce((s, r) => s + r.metragem_atual, 0);
             const abaixoMin = tec.min_estoque > 0 && totalDisp < tec.min_estoque;
 
-            // última entrada
-            const ults = db.movimentos.filter(m => m.tipo === 'Entrada' && m.categoria === 'tecido' && m.item && m.item.toLowerCase().includes(tec.nome.toLowerCase()));
-            const ultEnt = ults.length ? ults.sort((a,b)=>b.ts-a.ts)[0] : null;
-            const ultData = ultEnt ? new Date(ultEnt.ts).toLocaleDateString('pt-BR') : '—';
+            // última entrada — usa data_entrada dos rolos em estoque (mais preciso)
+            const ultRolo = rolos.filter(r => r.data_entrada).sort((a, b) => b.data_entrada.localeCompare(a.data_entrada))[0];
+            const ultData = ultRolo ? new Date(ultRolo.data_entrada + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
 
             const rolosHtml = rolos.length ? `
             <table style="margin-top:10px;font-size:13px">
@@ -4899,9 +4990,9 @@ function renderConsultaEstoque() {
         mats.forEach(m => {
             const abaixoMin = m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque;
 
-            const ults = db.movimentos.filter(mv => mv.tipo === 'Entrada' && mv.categoria === 'material' && mv.item && mv.item.toLowerCase().includes(m.nome.toLowerCase()));
-            const ultEnt = ults.length ? ults.sort((a,b)=>b.ts-a.ts)[0] : null;
-            const ultData = ultEnt ? new Date(ultEnt.ts).toLocaleDateString('pt-BR') : '—';
+            const ults = db.movimentos.filter(mv => mv.tipo === 'Entrada' && mv.item_tipo === 'material' && mv.item_nome === m.nome);
+            const ultEnt = ults.length ? ults.sort((a, b) => b.data - a.data)[0] : null;
+            const ultData = ultEnt ? new Date(ultEnt.data).toLocaleDateString('pt-BR') : '—';
 
             html += `
             <div class="card" style="margin-bottom:14px">
