@@ -4642,10 +4642,32 @@ function mostrarViewPCP(view) {
     _tabBackBtn('.tab-nav', _prevViewPCP, () => mostrarViewPCP(_prevViewPCP));
 }
 
+// --- TEMA CLARO / ESCURO ---
+function toggleTema() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const novo = isDark ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', novo);
+    localStorage.setItem('sc_tema', novo);
+    atualizarIconeTema();
+}
+function carregarTema() {
+    const tema = localStorage.getItem('sc_tema') || 'light';
+    document.documentElement.setAttribute('data-theme', tema);
+    atualizarIconeTema();
+}
+function atualizarIconeTema() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const ic = document.getElementById('tema-icone');
+    const sw = document.getElementById('tema-switch');
+    if (ic) ic.textContent = isDark ? '☀️' : '🌙';
+    if (sw) sw.classList.toggle('active', isDark);
+}
+
 // --- INICIALIZAÇÃO ---
 document.addEventListener('DOMContentLoaded', () => {
     if (!document.getElementById('login-usuario')) {
         checkAuth();
+        carregarTema();
         const popupUserEl = document.getElementById('popup-user-name');
         if (popupUserEl) {
             const u = JSON.parse(sessionStorage.getItem('sc_user') || '{}');
