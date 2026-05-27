@@ -24,7 +24,7 @@
         </div>
 
         <!-- SEÇÃO 1: DADOS DO PEDIDO -->
-        <div class="card">
+        <div class="card section-card">
             <h3 style="color: var(--primary); margin-bottom: 20px;">1. Dados do Pedido</h3>
             <div class="grid">
                 <div class="form-group">
@@ -68,7 +68,7 @@
         </div>
 
         <!-- SEÇÃO 3: MATERIAIS E ACESSÓRIOS -->
-        <div class="card">
+        <div class="card section-card">
             <h3 style="color: var(--primary); margin-bottom: 20px;">3. Materiais e Acessórios</h3>
 
             <!-- Aplicar kit -->
@@ -110,7 +110,7 @@
         </div>
 
         <!-- SEÇÃO 4: PARCELAMENTO E COMISSÃO -->
-        <div class="card">
+        <div class="card section-card">
             <h3 style="color: var(--primary); margin-bottom: 20px;">4. Parcelamento e Comissão (RT)</h3>
             <div class="grid">
                 <div class="form-group">
@@ -135,7 +135,7 @@
         </div>
 
         <!-- SEÇÃO 5: RESUMO E SALVAR -->
-        <div class="card">
+        <div class="card section-card">
             <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border)">
                 <div class="form-group" style="margin-bottom:0;min-width:180px">
                     <label>Mão de Obra / Instalação (R$)</label>
@@ -156,7 +156,7 @@
                     </div>
                 </div>
             </div>
-            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 24px; flex-wrap: wrap;">
+            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 20px; flex-wrap: wrap;">
                 <div style="text-align: right; font-size: 13px; color: #555; line-height: 2;">
                     <div>Total Materiais (tecido): R$ <strong id="ped-total-mat">0.00</strong></div>
                     <div>Total Acessórios: R$ <strong id="ped-total-itens">0.00</strong></div>
@@ -169,13 +169,16 @@
                         % &nbsp;= − R$ <strong id="ped-desconto-val" style="color:#dc2626">0.00</strong>
                     </div>
                 </div>
-                <div style="text-align: right;">
-                    <label style="display:block;font-size:12px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">Valor Recebido (R$)</label>
-                    <input type="number" id="ped-valor-recebido" value="0" step="0.01" min="0" oninput="atualizarTotalPedido()" style="width:160px;padding:8px 10px;border:1px solid #ccc;border-radius:4px;text-align:right;font-size:14px">
-                    <div style="margin-top:5px;font-size:13px;color:#059669;font-weight:700">Saldo: R$ <span id="ped-saldo">0.00</span></div>
+                <div class="recebido-box">
+                    <label style="display:block;font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">Valor Recebido (R$)</label>
+                    <input type="number" id="ped-valor-recebido" value="0" step="0.01" min="0" oninput="atualizarTotalPedido()" style="width:160px;padding:8px 10px;border:1px solid #bbf7d0;border-radius:4px;text-align:right;font-size:14px;background:#fff">
+                    <div style="margin-top:6px;font-size:14px;color:#059669;font-weight:700">Saldo: R$ <span id="ped-saldo">0.00</span></div>
                 </div>
-                <h2 style="color: var(--dark);">Valor Final: R$ <span id="ped-total-final">0.00</span></h2>
-                <button class="btn btn-success" onclick="salvarPedido()">Salvar Pedido</button>
+                <div class="valor-final-box">
+                    <div class="valor-final-label">Valor Final</div>
+                    <div class="valor-final-num">R$ <span id="ped-total-final">0.00</span></div>
+                </div>
+                <button class="btn btn-success" onclick="salvarPedido()" style="height:fit-content">Salvar Pedido</button>
             </div>
         </div>
     </main>

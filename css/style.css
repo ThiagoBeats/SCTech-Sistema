@@ -179,7 +179,7 @@ td { padding: 12px; border-bottom: 1px solid var(--border); }
 .estoque-grupo { background: #f1f5f9; }
 .estoque-grupo td { padding: 10px 14px; font-size: 14px; border-bottom: 2px solid var(--border); }
 .badge-alerta { background: #fee2e2; color: #991b1b; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; margin-left: 8px; }
-.badge-esgotado { background: #f3f4f6; color: #9ca3af; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+.badge-esgotado { background: #fee2e2; color: #dc2626; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
 .consulta-info-item { display:flex; flex-direction:column; gap:3px; background:#f8fafc; border:1px solid var(--border); border-radius:6px; padding:10px 14px; }
 .consulta-info-item span { font-size:14px; color:#1f2937; }
 .consulta-info-label { font-size:11px !important; font-weight:700; text-transform:uppercase; color:#6b7280 !important; letter-spacing:0.04em; }
@@ -193,6 +193,21 @@ td { padding: 12px; border-bottom: 1px solid var(--border); }
 /* Dashboard: alerta inline */
 .dashboard-alertas { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; padding: 10px 16px; margin-bottom: 16px; display: none; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 14px; color: #9a3412; }
 .alerta-inline { background: #ffedd5; border-radius: 10px; padding: 2px 10px; font-size: 13px; }
+
+/* Dashboard: linhas de tabela com problemas */
+.row-atrasado { background: #fff5f5 !important; }
+.row-atrasado td:first-child { border-left: 3px solid #dc2626; }
+
+/* Pedido: cards de seção com âncora visual */
+.section-card { border-left: 4px solid var(--primary); }
+
+/* Pedido: box do valor final */
+.valor-final-box { background: linear-gradient(135deg, #f0fdf4, #dcfce7); border: 2px solid #86efac; border-radius: 10px; padding: 14px 22px; text-align: center; }
+.valor-final-box .valor-final-label { font-size: 11px; font-weight: 700; color: #166534; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+.valor-final-box .valor-final-num { font-size: 28px; font-weight: 800; color: #15803d; line-height: 1.1; }
+
+/* Pedido: box do valor recebido / saldo */
+.recebido-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 16px; text-align: right; }
 
 /* Alerta de lote no formulário de pedido */
 .alerta-lote-pedido { background: #fef3c7; border: 1px solid #fde047; border-radius: 6px; padding: 10px 14px; font-size: 13px; color: #92400e; gap: 8px; align-items: center; margin-top: 8px; }
@@ -215,6 +230,7 @@ td { padding: 12px; border-bottom: 1px solid var(--border); }
     gap: 16px;
 }
 .metric-icon { width: 44px; height: 44px; flex-shrink: 0; object-fit: contain; align-self: center; background: #eff6ff; border-radius: 12px; padding: 8px; box-sizing: border-box; }
+.metric-card-alerta { border-left: 4px solid #ef4444; }
 .metric-card-alerta .metric-icon { background: #fef2f2; }
 .metric-body { display: flex; flex-direction: column; justify-content: space-between; flex: 1; min-width: 0; }
 .metric-body .metric-value { text-align: right; align-self: flex-end; }
@@ -259,7 +275,9 @@ td { padding: 12px; border-bottom: 1px solid var(--border); }
 .badge-entrega  { background: #eff6ff; color: #1e40af; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
 
 /* Kanban: card com entrega atrasada */
-.kanban-card-atrasado { border-left: 3px solid #dc2626 !important; }
+.kanban-card-atrasado { border-left: 4px solid #dc2626 !important; background: #fff5f5 !important; }
+.kanban-card-age-warning  { background: #fef3c7 !important; color: #92400e !important; font-weight: 700 !important; }
+.kanban-card-age-critical { background: #fee2e2 !important; color: #dc2626 !important; font-weight: 700 !important; }
 
 /* ── HISTÓRICO DE MOVIMENTAÇÕES ──────────────────────────────── */
 .mov-badge { font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; display: inline-block; white-space: nowrap; }

@@ -434,8 +434,8 @@ function mostrarPedidosCliente(clienteId) {
         tbody.innerHTML = pedidos.slice(inicio, inicio + POR_PAG).map(p => {
             const cls = COR_STATUS[normalizarStatus(p.status)] || 'st-orcamento';
             const pagto = statusPagamento(p);
-            return `<tr>
-                <td style="font-size:12px">#${formatPedidoId(p.id)}</td>
+            return `<tr style="cursor:pointer" onclick="this.closest('.modal-overlay').remove();editarPedido(${p.id})" onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background=''">
+                <td style="font-size:12px;color:var(--primary);font-weight:600">#${formatPedidoId(p.id)}</td>
                 <td style="font-size:13px">${escapeHtml(p.amb || '—')}</td>
                 <td>R$ ${(p.valor||0).toFixed(2)} ${pagto.cls ? `<span class="${pagto.cls}">${pagto.label}</span>` : ''}</td>
                 <td><span class="status-tag ${cls}" style="font-size:11px">${normalizarStatus(p.status)}</span></td>
@@ -1208,6 +1208,7 @@ function renderDashboard() {
         return `<th class="th-sort${ativo ? ' th-sort-ativo' : ''}" onclick="sortDashboard('${c.key}')">${c.label} <span class="sort-icon">${seta}</span></th>`;
     }).join('') + '<th>Ação</th></tr>';
 
+    const hojeStr = new Date().toISOString().split('T')[0];
     const rows = pedidos.map(p => {
         const colorClass = COR_STATUS[p._status] || 'st-orcamento';
         const btnAprovar = p._status === 'Orçamento'
@@ -1223,7 +1224,8 @@ function renderDashboard() {
         const dataCriacao = p.data_criacao
             ? new Date(p.data_criacao).toLocaleDateString('pt-BR')
             : (String(p.id).length > 8 ? new Date(p.id).toLocaleDateString('pt-BR') : '—');
-        return `<tr>
+        const rowAtrasado = p.data_entrega && p._status !== 'Instalado' && p.data_entrega < hojeStr ? ' class="row-atrasado"' : '';
+        return `<tr${rowAtrasado}>
             <td><span style="cursor:pointer;color:var(--primary);font-weight:bold;text-decoration:underline" onclick="editarPedido(${p.id})" title="Editar pedido">#${formatPedidoId(p.id)}</span></td>
             <td style="white-space:nowrap">${dataCriacao}</td>
             <td>${escapeHtml(p.clienteNome||'')}</td>
@@ -2954,7 +2956,7 @@ function renderKanban() {
                 return `<div class="kanban-card${cardAtrasado}">
                     <div class="kanban-card-top">
                         <span class="kanban-card-id" style="cursor:pointer;text-decoration:underline" onclick="editarPedido(${p.id})" title="Editar pedido">#${formatPedidoId(p.id)}</span>
-                        <span class="kanban-card-age">${dias === 0 ? 'hoje' : dias + 'd'}</span>
+                        <span class="kanban-card-age${dias >= 30 ? ' kanban-card-age-critical' : dias >= 14 ? ' kanban-card-age-warning' : ''}">${dias === 0 ? 'hoje' : dias + 'd'}</span>
                     </div>
                     <div class="kanban-card-cliente">${escapeHtml(p.clienteNome||'')}${obsBadge}</div>
                     <div class="kanban-card-amb">${escapeHtml(p.amb||'')}</div>
