@@ -1323,6 +1323,19 @@ function renderDashboardAlertas() {
             `<strong>${instHoje.length} instalação(ões)</strong> agendada(s) para hoje:`, itens));
     }
 
+    // Estoque crítico (tecidos + materiais)
+    const tecidosCriticos = db.catalogo.filter(c => c.min_estoque > 0 && estoqueDisponivel(c.id) < c.min_estoque);
+    const matCriticos     = db.materiais.filter(m => m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque);
+    const totalCriticos   = tecidosCriticos.length + matCriticos.length;
+    if (totalCriticos) {
+        const itens = [
+            ...tecidosCriticos.map(c => `<span style="cursor:pointer;color:#92400e;font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(c.nome)}: ${estoqueDisponivel(c.id).toFixed(2)} m (mín. ${c.min_estoque} m)</span>`),
+            ...matCriticos.map(m => `<span style="cursor:pointer;color:#92400e;font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(m.nome)}: ${(m.estoque_atual||0).toFixed(2)} ${m.unidade||''} (mín. ${m.min_estoque})</span>`)
+        ].join(' &nbsp;·&nbsp; ');
+        banners.push(mkBanner('⚠️', '#fef3c7', '#fcd34d', '#92400e',
+            `<strong>${totalCriticos} item(ns)</strong> com estoque abaixo do mínimo:`, itens));
+    }
+
     if (!banners.length) { el.innerHTML = ''; el.style.display = 'none'; return; }
     el.style.display = 'block';
     el.style.background = 'transparent';
@@ -2813,6 +2826,28 @@ async function salvarPedido() {
     localStorage.removeItem('sc_editando_id');
     toastReload('Pedido salvo!');
     window.location.href = 'index.html';
+}
+
+function bloquearPedidoInstalado() {
+    const ped = db.pedidos.find(p => p.id == editandoIdPedido);
+    if (!ped || normalizarStatus(ped.status) !== 'Instalado') return;
+
+    document.querySelectorAll('.main input, .main select, .main textarea, .main button')
+        .forEach(el => {
+            if (el.id === 'ped-status') return;
+            el.disabled = true;
+        });
+
+    const saveBtn = document.querySelector('.btn-success[onclick="salvarPedido()"]');
+    if (saveBtn) saveBtn.style.display = 'none';
+
+    const header = document.querySelector('.header');
+    if (header) {
+        const notice = document.createElement('div');
+        notice.style.cssText = 'background:#fef3c7;border:1px solid #f59e0b;color:#92400e;padding:8px 14px;border-radius:6px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;';
+        notice.innerHTML = '🔒 Pedido instalado — somente leitura';
+        header.appendChild(notice);
+    }
 }
 
 function carregarPedidoParaEdicao(id) {
@@ -4729,19 +4764,10 @@ document.addEventListener('DOMContentLoaded', () => {
             editandoIdPedido = parseInt(idParaEditar);
             document.getElementById('titulo-pagina-pedido').innerText = `Editando Pedido #${formatPedidoId(editandoIdPedido)}`;
             carregarPedidoParaEdicao(editandoIdPedido);
+            bloquearPedidoInstalado();
         } else {
             adicionarAmbiente();
             renderItensPedido();
-        }
-    }
-
-    if (document.getElementById('dashboard-alertas')) {
-        const alertEl = document.getElementById('dashboard-alertas');
-        const criticos = db.catalogo.filter(c=>c.min_estoque>0&&estoqueDisponivel(c.id)<c.min_estoque);
-        if (criticos.length) {
-            alertEl.innerHTML = `<strong>⚠ Alerta de Estoque:</strong> ` +
-                criticos.map(c=>`<span class="alerta-inline"><strong>${c.nome}</strong>: ${estoqueDisponivel(c.id).toFixed(2)} m (mín. ${c.min_estoque} m)</span>`).join('');
-            alertEl.style.display = 'flex';
         }
     }
 
