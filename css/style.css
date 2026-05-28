@@ -190,9 +190,8 @@ td { padding: 12px; border-bottom: 1px solid var(--border); }
 .badge-sem-estoque { background: #fee2e2; color: #991b1b; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
 .badge-lote { background: #fef3c7; color: #92400e; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; }
 
-/* Dashboard: alerta inline */
-.dashboard-alertas { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; padding: 10px 16px; margin-bottom: 16px; display: none; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 14px; color: #9a3412; }
-.alerta-inline { background: #ffedd5; border-radius: 10px; padding: 2px 10px; font-size: 13px; }
+/* Dashboard: alertas */
+.dashboard-alertas { display: none; }
 
 /* Dashboard: linhas de tabela com problemas */
 .row-atrasado { background: #fff5f5 !important; }
@@ -357,20 +356,6 @@ body.login-page { display: flex; align-items: center; justify-content: center; b
 .nav-icon { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; opacity: 0.6; transition: opacity 0.2s, transform 0.2s; }
 .nav-item:hover .nav-icon { opacity: 1; transform: translateY(-2px) scale(1.1); }
 .nav-item.active .nav-icon { opacity: 1; }
-.sidebar-collapsed { width: 52px !important; }
-.sidebar-collapsed .logo h2 { display: none; }
-.sidebar-collapsed .logo-box { margin: 0 auto; }
-.sidebar-collapsed .logo { padding: 12px 8px; }
-.sidebar-collapsed .nav-text { display: none; }
-.sidebar-collapsed .nav-item { padding: 10px 0; justify-content: center; }
-.sidebar-collapsed .sidebar-footer { flex-direction: column; padding: 8px 4px; gap: 4px; }
-.sidebar-collapsed .sidebar-user-info { display: none; }
-.sidebar-collapsed .btn-logout { font-size: 0; padding: 6px 10px; }
-.sidebar-collapsed .btn-logout::before { content: '🚪'; font-size: 14px; }
-.pcp-sidebar-toggle { background: var(--light); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 11px; font-weight: bold; color: #6b7280; margin: 4px 8px; display: block; width: calc(100% - 16px); text-align: center; }
-.pcp-sidebar-toggle:hover { background: #e9ecef; }
-.sidebar-collapsed .pcp-sidebar-toggle { margin: 4px 2px; width: calc(100% - 4px); font-size: 0; padding: 4px; }
-.sidebar-collapsed .pcp-sidebar-toggle::before { content: '→'; font-size: 13px; font-weight: bold; color: #6b7280; }
 
 /* ── BACKUP TAB ───────────────────────────────────────────────── */
 .backup-card { text-align:center;padding:32px; }
@@ -421,16 +406,16 @@ body.login-page { display: flex; align-items: center; justify-content: center; b
 }
 
 /* ── MÓDULO FINANCEIRO ───────────────────────────────────────── */
-.fin-kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
-.fin-kpi { border-radius: 8px; padding: 20px 22px; color: white; }
+.fin-kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 24px; }
+.fin-kpi { border-radius: 8px; padding: 12px 14px; color: white; min-width: 0; }
 .fin-kpi-green  { background: linear-gradient(135deg, #059669, #047857); }
 .fin-kpi-blue   { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
 .fin-kpi-orange { background: linear-gradient(135deg, #d97706, #b45309); }
 .fin-kpi-red    { background: linear-gradient(135deg, #dc2626, #b91c1c); }
 .fin-kpi-gray   { background: linear-gradient(135deg, #6b7280, #4b5563); }
-.fin-kpi-label  { font-size: 12px; opacity: 0.85; margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
-.fin-kpi-value  { font-size: 22px; font-weight: 700; }
-.fin-kpi-sub    { font-size: 11px; opacity: 0.75; margin-top: 4px; }
+.fin-kpi-label  { font-size: 10px; opacity: 0.85; margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+.fin-kpi-value  { font-size: 16px; font-weight: 700; word-break: break-all; }
+.fin-kpi-sub    { font-size: 10px; opacity: 0.75; margin-top: 3px; }
 .fin-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap; }
 .fin-badge-pending { background: #fef3c7; color: #d97706; }
 .fin-badge-red     { background: #fee2e2; color: #dc2626; }
@@ -440,6 +425,19 @@ body.login-page { display: flex; align-items: center; justify-content: center; b
 .fin-atrasado td { color: #dc2626 !important; }
 .fin-panel { display: none; }
 .fin-panel.active { display: block; }
+
+/* ── FINANCEIRO: BARRA DE PERÍODO ────────────────────────────── */
+.fin-periodo-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:16px; padding:10px 14px; background:var(--white); border:1px solid var(--border); border-radius:8px; }
+.fin-periodo-btn { padding:5px 13px; border:1px solid var(--border); border-radius:6px; background:transparent; font-size:13px; font-weight:600; color:#6b7280; cursor:pointer; transition:all .15s; }
+.fin-periodo-btn:hover { background:var(--light); color:var(--primary); border-color:var(--primary); }
+.fin-periodo-btn.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+
+/* ── FINANCEIRO: ALERTAS ─────────────────────────────────────── */
+.fin-alerta { display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:8px; font-size:13px; margin-bottom:8px; }
+.fin-alerta-danger  { background:#fff1f2; border:1px solid #fca5a5; color:#991b1b; }
+.fin-alerta-warning { background:#fef3c7; border:1px solid #fcd34d; color:#92400e; }
+.fin-alerta-info    { background:#dbeafe; border:1px solid #93c5fd; color:#1e40af; }
+.fin-alerta-success { background:#dcfce7; border:1px solid #86efac; color:#166534; }
 
 /* ── TEMA ESCURO ─────────────────────────────────────────────── */
 html[data-theme="dark"] {

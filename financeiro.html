@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Financeiro - SCTech</title>
+    <link rel="icon" href="images/logo.png">
     <link rel="stylesheet" href="css/style.css">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light')</script>
 </head>
@@ -31,22 +32,67 @@
 
         <!-- TAB: VISÃO GERAL -->
         <div id="fin-dashboard" class="fin-panel active">
+
+            <!-- Barra de filtro por período -->
+            <div class="fin-periodo-bar">
+                <button class="fin-periodo-btn" data-p="hoje"   onclick="setFinPeriodo('hoje')">Hoje</button>
+                <button class="fin-periodo-btn" data-p="7d"     onclick="setFinPeriodo('7d')">7 dias</button>
+                <button class="fin-periodo-btn" data-p="30d"    onclick="setFinPeriodo('30d')">30 dias</button>
+                <button class="fin-periodo-btn active" data-p="mes" onclick="setFinPeriodo('mes')">Este mês</button>
+                <button class="fin-periodo-btn" data-p="custom" onclick="setFinPeriodo('custom')">📅 Personalizado</button>
+                <div id="fin-custom-range" style="display:none;align-items:center;gap:8px;flex-wrap:wrap">
+                    <input type="date" id="fin-custom-ini" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--white);color:var(--dark)">
+                    <span style="color:#6b7280">→</span>
+                    <input type="date" id="fin-custom-fim" style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--white);color:var(--dark)">
+                    <button class="btn btn-outline btn-sm" onclick="aplicarFiltroCustom()">Aplicar</button>
+                </div>
+                <span id="fin-periodo-label" style="font-size:12px;color:#6b7280;margin-left:4px"></span>
+                <button class="btn btn-outline btn-sm" onclick="gerarRelatorioFinanceiro()" style="margin-left:auto">📄 Exportar Relatório</button>
+            </div>
+
+            <!-- Alertas -->
+            <div id="fin-alertas" style="margin-bottom:16px"></div>
+
+            <!-- KPIs: 6 colunas -->
             <div id="fin-kpis" class="fin-kpi-grid"></div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
-                <div class="card">
-                    <h3 style="margin-bottom:14px">📥 Próximos Recebimentos</h3>
-                    <table>
-                        <thead><tr><th>Vencimento</th><th>Cliente</th><th>Descrição</th><th style="text-align:right">Valor</th><th>Status</th></tr></thead>
-                        <tbody id="fin-dash-receber"></tbody>
-                    </table>
+
+            <!-- Meta do mês -->
+            <div class="card" style="margin-bottom:20px">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+                    <div>
+                        <h3 style="margin:0 0 3px;color:var(--primary);font-size:15px">🎯 Meta de Faturamento</h3>
+                        <span id="fin-meta-mes-label" style="font-size:12px;color:#6b7280"></span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                        <label style="font-size:13px;color:#6b7280;font-weight:600">Meta (R$):</label>
+                        <input type="number" id="fin-meta-valor" placeholder="Ex: 15000" step="100" min="0"
+                            style="width:130px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--white);color:var(--dark)">
+                        <button class="btn btn-outline btn-sm" onclick="salvarMetaMes()">Salvar</button>
+                    </div>
                 </div>
-                <div class="card">
-                    <h3 style="margin-bottom:14px">📤 Próximos Pagamentos</h3>
-                    <table>
-                        <thead><tr><th>Vencimento</th><th>Credor</th><th>Descrição</th><th style="text-align:right">Valor</th><th>Status</th></tr></thead>
-                        <tbody id="fin-dash-pagar"></tbody>
-                    </table>
+                <div id="fin-meta-progress"></div>
+            </div>
+
+            <!-- Gráficos: combo (2fr) + 2 donuts (1fr each) -->
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:16px;margin-bottom:20px;align-items:start">
+                <div class="card" style="padding:18px">
+                    <h3 style="margin:0 0 12px;font-size:14px;color:#374151">📊 Entradas × Saídas × Saldo</h3>
+                    <div style="position:relative;height:200px"><canvas id="chart-fin-combo"></canvas></div>
                 </div>
+                <div class="card" style="padding:18px">
+                    <h3 style="margin:0 0 12px;font-size:14px;color:#374151">💰 Recebimentos</h3>
+                    <canvas id="chart-fin-rec"></canvas>
+                </div>
+                <div class="card" style="padding:18px">
+                    <h3 style="margin:0 0 12px;font-size:14px;color:#374151">📤 Despesas por Categoria</h3>
+                    <canvas id="chart-fin-desp"></canvas>
+                </div>
+            </div>
+
+            <!-- Tabelas -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <div class="card" id="fin-card-receber"></div>
+                <div class="card" id="fin-card-pagar"></div>
             </div>
         </div>
 
@@ -219,6 +265,7 @@
             </div>
         </div>
     </main>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

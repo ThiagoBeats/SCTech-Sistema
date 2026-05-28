@@ -760,6 +760,7 @@ async function aprovarPedido(id) {
     ped.data_producao = Date.now();
     if (!ped.timeline) ped.timeline = [];
     ped.timeline.push({ status: 'Medição', data: Date.now() });
+    gerarFinanceiroPedido(ped);
     salvarERecarregar('Pedido aprovado!');
 }
 
@@ -1098,9 +1099,38 @@ function renderCharts() {
     }
 
     // ── Gráfico 2: Pedidos por status (donut) ───────────────────
+    const filtroSel = document.getElementById('chart-status-filtro');
+    if (filtroSel && !filtroSel.options.length) {
+        const hoje2 = new Date();
+        filtroSel.innerHTML = '<option value="todos">Todos os pedidos</option>' +
+            Array.from({ length: 5 }, (_, i) => {
+                const d = new Date(hoje2.getFullYear(), hoje2.getMonth() - i, 1);
+                const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                const label = d.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+                return `<option value="${val}">${label.charAt(0).toUpperCase() + label.slice(1)}</option>`;
+            }).join('');
+    }
+    renderChartStatus();
+}
+
+function renderChartStatus() {
+    if (typeof Chart === 'undefined') return;
+    const ctxStatus = document.getElementById('chart-status');
+    if (!ctxStatus) return;
+
+    const filtroSel = document.getElementById('chart-status-filtro');
+    const filtro = filtroSel?.value || 'todos';
+
+    const pedidosFiltrados = db.pedidos.filter(p => {
+        if (filtro === 'todos') return true;
+        const [ano, mes] = filtro.split('-').map(Number);
+        const d = new Date(p.data_criacao || p.id);
+        return d.getFullYear() === ano && d.getMonth() === mes - 1;
+    });
+
     const statusLabels = ['Orçamento','Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Pagamento','Instalado'];
     const statusCores  = ['#f59e0b','#6366f1','#fb923c','#3b82f6','#10b981','#ef4444','#22c55e'];
-    const statusCount  = statusLabels.map(s => db.pedidos.filter(p => normalizarStatus(p.status) === s).length);
+    const statusCount  = statusLabels.map(s => pedidosFiltrados.filter(p => normalizarStatus(p.status) === s).length);
     const totalPedidos = statusCount.reduce((s, v) => s + v, 0);
 
     const centerTextPlugin = {
@@ -1121,34 +1151,31 @@ function renderCharts() {
         }
     };
 
-    const ctxStatus = document.getElementById('chart-status');
-    if (ctxStatus) {
-        if (_chartStatus) _chartStatus.destroy();
-        _chartStatus = new Chart(ctxStatus, {
-            type: 'doughnut',
-            data: {
-                labels: statusLabels,
-                datasets: [{
-                    data: statusCount,
-                    backgroundColor: statusCores.map(c => c + 'cc'),
-                    borderColor: statusCores,
-                    borderWidth: 2,
-                    hoverOffset: 8
-                }]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: true,
-                cutout: '64%',
-                plugins: {
-                    legend: {
-                        position: 'right',
-                        labels: { font: { size: 11 }, padding: 12, boxWidth: 12, boxHeight: 12 }
-                    }
+    if (_chartStatus) _chartStatus.destroy();
+    _chartStatus = new Chart(ctxStatus, {
+        type: 'doughnut',
+        data: {
+            labels: statusLabels,
+            datasets: [{
+                data: statusCount,
+                backgroundColor: statusCores.map(c => c + 'cc'),
+                borderColor: statusCores,
+                borderWidth: 2,
+                hoverOffset: 8
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: true,
+            cutout: '64%',
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: { font: { size: 11 }, padding: 12, boxWidth: 12, boxHeight: 12 }
                 }
-            },
-            plugins: [centerTextPlugin]
-        });
-    }
+            }
+        },
+        plugins: [centerTextPlugin]
+    });
 }
 
 function renderDashboard() {
@@ -1370,13 +1397,14 @@ function verificarConflitoDeLote(tecidoId, metrosNecessarios) {
 }
 
 // --- ESTOQUE DE TECIDO: CRUD ---
-function calcularPrecoVendaTecido() {
-    const custo  = parseFloat(document.getElementById('est-preco-custo')?.value) || 0;
-    const markup = parseFloat(document.getElementById('est-markup')?.value) || 0;
+function _calcularPrecoVenda(custoId, markupId, displayId) {
+    const custo  = parseFloat(document.getElementById(custoId)?.value) || 0;
+    const markup = parseFloat(document.getElementById(markupId)?.value) || 0;
     const venda  = custo > 0 ? custo * (1 + markup / 100) : 0;
-    const display = document.getElementById('est-preco-venda-display');
+    const display = document.getElementById(displayId);
     if (display) display.textContent = 'R$ ' + venda.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+function calcularPrecoVendaTecido() { _calcularPrecoVenda('est-preco-custo', 'est-markup', 'est-preco-venda-display'); }
 
 // ─── BALANÇO DE ESTOQUE ──────────────────────────────────────────────────────
 
@@ -4650,18 +4678,6 @@ function renderAgenda() {
     }).join('');
 }
 
-// --- SIDEBAR COLLAPSE (PCP) ---
-function toggleSidebar() {
-    const sidebar = document.getElementById('main-sidebar');
-    if (!sidebar) return;
-    const isCollapsed = sidebar.classList.toggle('sidebar-collapsed');
-    const btn = document.getElementById('sidebar-toggle-btn');
-    if (btn) {
-        btn.title = isCollapsed ? 'Expandir sidebar' : 'Recolher sidebar';
-        btn.textContent = isCollapsed ? '→' : '← Recolher';
-    }
-}
-
 // --- PCP VIEW TOGGLE ---
 let _prevViewPCP = null, _curViewPCP = 'kanban';
 function mostrarViewPCP(view) {
@@ -4917,13 +4933,7 @@ function autoFillEntradaMaterialPorRef() {
     if (sel) { sel.value = String(mat.id); autoFillEntradaMaterialById(); }
 }
 
-function calcularPrecoVendaMat() {
-    const custo  = parseFloat(document.getElementById('est-mat-preco-custo')?.value) || 0;
-    const markup = parseFloat(document.getElementById('est-mat-markup')?.value) || 0;
-    const venda  = custo > 0 ? custo * (1 + markup / 100) : 0;
-    const display = document.getElementById('est-mat-preco-venda-display');
-    if (display) display.textContent = 'R$ ' + venda.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+function calcularPrecoVendaMat() { _calcularPrecoVenda('est-mat-preco-custo', 'est-mat-markup', 'est-mat-preco-venda-display'); }
 
 async function salvarEntradaMaterial() {
     const matId  = parseInt(document.getElementById('est-mat-id')?.value);
@@ -5140,6 +5150,54 @@ const PLANOS_PAGAMENTO = {
     '40_60':  [{ descricao: 'Entrada (40%)', pct: 40, dias: 0 }, { descricao: 'Saldo na instalação (60%)', pct: 60, dias: -1 }],
 };
 
+function _migrarFinanceiroPedidos() {
+    const pendentes = db.pedidos.filter(p =>
+        !p.financeiro_gerado &&
+        normalizarStatus(p.status) !== 'Orçamento' &&
+        (p.valor || 0) > 0
+    );
+    if (!pendentes.length) return;
+    let nextId = Date.now();
+    pendentes.forEach(ped => {
+        if (normalizarStatus(ped.status) === 'Instalado' && (ped.valor_recebido || 0) >= (ped.valor || 0)) {
+            const dataPgto = ped.data_instalado
+                ? new Date(ped.data_instalado).toISOString().split('T')[0]
+                : new Date().toISOString().split('T')[0];
+            db.contas_receber.push({
+                id: nextId++,
+                pedido_id: ped.id,
+                cliente_nome: ped.clienteNome || '',
+                descricao: `Pagamento — Pedido #${formatPedidoId(ped.id)}`,
+                valor: ped.valor,
+                data_vencimento: dataPgto,
+                data_pagamento: dataPgto,
+                status: 'Pago'
+            });
+        } else {
+            const plano = PLANOS_PAGAMENTO[ped.tipo_pagamento || '50_50'] || PLANOS_PAGAMENTO['50_50'];
+            const hoje = new Date();
+            plano.forEach((parcela, i) => {
+                const valor = Math.round(ped.valor * parcela.pct / 100 * 100) / 100;
+                const vencimento = parcela.dias === -1
+                    ? (ped.data_entrega || new Date(hoje.getTime() + 30 * 86400000).toISOString().split('T')[0])
+                    : new Date(hoje.getTime() + parcela.dias * 86400000).toISOString().split('T')[0];
+                db.contas_receber.push({
+                    id: nextId++,
+                    pedido_id: ped.id,
+                    cliente_nome: ped.clienteNome || '',
+                    descricao: `${parcela.descricao} — Pedido #${formatPedidoId(ped.id)}`,
+                    valor,
+                    data_vencimento: vencimento,
+                    data_pagamento: null,
+                    status: 'Pendente'
+                });
+            });
+        }
+        ped.financeiro_gerado = true;
+    });
+    syncDB();
+}
+
 function gerarFinanceiroPedido(ped) {
     if (ped.financeiro_gerado) return;
     const plano = PLANOS_PAGAMENTO[ped.tipo_pagamento || '50_50'] || PLANOS_PAGAMENTO['50_50'];
@@ -5285,6 +5343,209 @@ async function adicionarContaPagarManual() {
     salvarERecarregar('Conta a pagar registrada!');
 }
 
+// --- FINANCEIRO: ESTADO E HELPERS ---
+let _finPeriodo = 'mes';
+let _finDataIni = '', _finDataFim = '';
+let _finMetas = {};
+let _chartFinCombo = null, _chartFinRec = null, _chartFinDesp = null;
+let _finSortRec = { col: 'venc', dir: 1 };
+let _finSortPag = { col: 'venc', dir: 1 };
+
+const _finCenterTextPlugin = {
+    id: 'finCenterText',
+    afterDraw(chart) {
+        const cfg = chart.options.plugins?.centerText;
+        if (!cfg?.text) return;
+        const { ctx, chartArea } = chart;
+        const cx = (chartArea.left + chartArea.right) / 2;
+        const cy = (chartArea.top + chartArea.bottom) / 2;
+        ctx.save();
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = 'bold 13px system-ui,sans-serif'; ctx.fillStyle = '#111827';
+        ctx.fillText(cfg.text, cx, cy - (cfg.subtext ? 8 : 0));
+        if (cfg.subtext) {
+            ctx.font = '10px system-ui,sans-serif'; ctx.fillStyle = '#6b7280';
+            ctx.fillText(cfg.subtext, cx, cy + 9);
+        }
+        ctx.restore();
+    }
+};
+
+function _finSortToggle(which, col) {
+    const s = which === 'rec' ? _finSortRec : _finSortPag;
+    if (s.col === col) s.dir *= -1; else { s.col = col; s.dir = 1; }
+    renderDashboardFinanceiro();
+}
+
+function getFinPeriodo() {
+    const hoje = new Date();
+    const hojeStr = hoje.toISOString().split('T')[0];
+    if (_finPeriodo === 'hoje') return { ini: hojeStr, fim: hojeStr, label: 'Hoje' };
+    if (_finPeriodo === '7d') {
+        const d = new Date(hoje); d.setDate(d.getDate() - 6);
+        return { ini: d.toISOString().split('T')[0], fim: hojeStr, label: 'Últimos 7 dias' };
+    }
+    if (_finPeriodo === '30d') {
+        const d = new Date(hoje); d.setDate(d.getDate() - 29);
+        return { ini: d.toISOString().split('T')[0], fim: hojeStr, label: 'Últimos 30 dias' };
+    }
+    if (_finPeriodo === 'mes') {
+        const ini = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-01`;
+        const nome = hoje.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+        return { ini, fim: hojeStr, label: nome.charAt(0).toUpperCase() + nome.slice(1) };
+    }
+    const dIni = _finDataIni.split('-').reverse().join('/');
+    const dFim = _finDataFim.split('-').reverse().join('/');
+    return { ini: _finDataIni, fim: _finDataFim, label: `${dIni} – ${dFim}` };
+}
+
+function setFinPeriodo(tipo) {
+    _finPeriodo = tipo;
+    document.querySelectorAll('.fin-periodo-btn').forEach(b => b.classList.toggle('active', b.dataset.p === tipo));
+    const cr = document.getElementById('fin-custom-range');
+    if (cr) cr.style.display = tipo === 'custom' ? 'flex' : 'none';
+    if (tipo !== 'custom') renderDashboardFinanceiro();
+}
+
+function aplicarFiltroCustom() {
+    const ini = document.getElementById('fin-custom-ini')?.value;
+    const fim = document.getElementById('fin-custom-fim')?.value;
+    if (!ini || !fim || ini > fim) { showAlert('Selecione um intervalo de datas válido.', '⚠️'); return; }
+    _finDataIni = ini; _finDataFim = fim;
+    renderDashboardFinanceiro();
+}
+
+function salvarMetaMes() {
+    const hoje = new Date();
+    const key = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+    const val = parseFloat(document.getElementById('fin-meta-valor')?.value) || 0;
+    if (!val) { showAlert('Informe o valor da meta.', '⚠️'); return; }
+    _finMetas[key] = val;
+    localStorage.setItem('sc_fin_metas', JSON.stringify(_finMetas));
+    renderDashboardFinanceiro();
+}
+
+function _finGerarBuckets(ini, fim) {
+    const iniD = new Date(ini + 'T00:00:00');
+    const fimD = new Date(fim + 'T00:00:00');
+    const dias = Math.round((fimD - iniD) / 86400000) + 1;
+    if (dias <= 35) {
+        return Array.from({ length: dias }, (_, i) => {
+            const d = new Date(iniD); d.setDate(d.getDate() + i);
+            const ds = d.toISOString().split('T')[0];
+            return { label: d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }), ini: ds, fim: ds };
+        });
+    }
+    const buckets = [];
+    let cur = new Date(iniD);
+    while (cur <= fimD) {
+        const we = new Date(cur); we.setDate(we.getDate() + 6);
+        if (we > fimD) we.setTime(fimD.getTime());
+        buckets.push({
+            label: cur.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }),
+            ini: cur.toISOString().split('T')[0],
+            fim: we.toISOString().split('T')[0]
+        });
+        cur.setDate(cur.getDate() + 7);
+    }
+    return buckets;
+}
+
+function gerarRelatorioFinanceiro() {
+    const { ini, fim, label } = getFinPeriodo();
+    const inRange = d => d && d >= ini && d <= fim;
+    const fmt = v => (v||0).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+    const fmtDate = s => s ? new Date(s+'T12:00:00').toLocaleDateString('pt-BR') : '—';
+
+    const recebido  = db.contas_receber.filter(cr=>cr.status==='Pago'&&inRange(cr.data_pagamento)).reduce((s,cr)=>s+cr.valor,0);
+    const aReceber  = db.contas_receber.filter(cr=>cr.status!=='Pago'&&inRange(cr.data_vencimento)).reduce((s,cr)=>s+cr.valor,0);
+    const totalPago = db.contas_pagar.filter(cp=>cp.status==='Pago'&&inRange(cp.data_pagamento)).reduce((s,cp)=>s+cp.valor,0);
+    const aPagar    = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&inRange(cp.data_vencimento)).reduce((s,cp)=>s+cp.valor,0);
+    const saldoPrev = (recebido+aReceber)-(totalPago+aPagar);
+    const lucro     = recebido-totalPago;
+    const pedPagos  = new Set(db.contas_receber.filter(cr=>cr.status==='Pago'&&inRange(cr.data_pagamento)&&cr.pedido_id).map(cr=>cr.pedido_id));
+    const ticketMedio = pedPagos.size ? recebido/pedPagos.size : 0;
+
+    const kpiBox = (lbl, val, sub, cor) =>
+        `<div style="background:${cor};border-radius:8px;padding:14px 16px;color:white">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;opacity:.85;margin-bottom:4px">${lbl}</div>
+            <div style="font-size:18px;font-weight:700">${val}</div>
+            ${sub?`<div style="font-size:10px;opacity:.7;margin-top:2px">${sub}</div>`:''}
+         </div>`;
+
+    const proxRec = db.contas_receber.filter(cr=>cr.status!=='Pago').sort((a,b)=>a.data_vencimento.localeCompare(b.data_vencimento)).slice(0,10);
+    const proxPag = db.contas_pagar.filter(cp=>cp.status!=='Pago').sort((a,b)=>a.data_vencimento.localeCompare(b.data_vencimento)).slice(0,10);
+
+    const comboImg = document.getElementById('chart-fin-combo')?.toDataURL?.('image/png') || null;
+    const recImg   = document.getElementById('chart-fin-rec')?.toDataURL?.('image/png') || null;
+    const despImg  = document.getElementById('chart-fin-desp')?.toDataURL?.('image/png') || null;
+    const empresa  = getEmpresa();
+
+    const thStyle = 'padding:6px 8px;text-align:left;border:1px solid #e5e7eb;background:#f9fafb;font-size:11px';
+    const tdStyle = 'padding:5px 8px;border:1px solid #e5e7eb;font-size:12px';
+
+    const mkTable = (rows, headers, emptyMsg) => `
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+            <thead><tr>${headers.map(h=>`<th style="${thStyle}${h.right?';text-align:right':''}">${h.label}</th>`).join('')}</tr></thead>
+            <tbody>${rows.length ? rows : `<tr><td colspan="${headers.length}" style="${tdStyle};text-align:center;color:#9ca3af">${emptyMsg}</td></tr>`}</tbody>
+        </table>`;
+
+    const rowsRec = proxRec.map(cr => {
+        const at = cr.status==='Atrasado';
+        return `<tr style="background:${at?'#fff1f2':''}">
+            <td style="${tdStyle}${at?';color:#dc2626;font-weight:700':''}">${fmtDate(cr.data_vencimento)}</td>
+            <td style="${tdStyle}">${escapeHtml(cr.cliente_nome)}</td>
+            <td style="${tdStyle};color:#6b7280;font-size:11px">${escapeHtml(cr.descricao)}</td>
+            <td style="${tdStyle};text-align:right;font-weight:700">R$ ${fmt(cr.valor)}</td>
+            <td style="${tdStyle}">${cr.status}</td>
+        </tr>`;
+    });
+    const rowsPag = proxPag.map(cp => {
+        const at = cp.status==='Atrasado';
+        return `<tr style="background:${at?'#fff1f2':''}">
+            <td style="${tdStyle}${at?';color:#dc2626;font-weight:700':''}">${fmtDate(cp.data_vencimento)}</td>
+            <td style="${tdStyle}">${escapeHtml(cp.credor_nome||cp.categoria||'—')}</td>
+            <td style="${tdStyle};color:#6b7280;font-size:11px">${escapeHtml(cp.descricao)}</td>
+            <td style="${tdStyle};text-align:right;font-weight:700">R$ ${fmt(cp.valor)}</td>
+            <td style="${tdStyle}">${cp.status}</td>
+        </tr>`;
+    });
+
+    const html = `<div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:20px;color:#1f2937">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #2A5C82;padding-bottom:14px;margin-bottom:20px">
+        <div>${empresa.logo?`<img src="${empresa.logo}" style="height:32px;margin-bottom:4px;display:block">`:''}
+            <h1 style="color:#2A5C82;margin:0;font-size:20px">${escapeHtml(empresa.nome||'SCTech')}</h1>
+            <p style="margin:2px 0 0;color:#6b7280;font-size:12px">Relatório Financeiro · ${escapeHtml(label)}</p>
+        </div>
+        <div style="text-align:right;font-size:11px;color:#9ca3af">
+            <div>Gerado em ${new Date().toLocaleDateString('pt-BR')}</div>
+            <div>${ini.split('-').reverse().join('/')} – ${fim.split('-').reverse().join('/')}</div>
+        </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
+        ${kpiBox('Total Recebido', 'R$ '+fmt(recebido), label, '#059669')}
+        ${kpiBox('A Receber', 'R$ '+fmt(aReceber), 'vence no período', '#2563eb')}
+        ${kpiBox('A Pagar', 'R$ '+fmt(aPagar), 'vence no período', '#d97706')}
+        ${kpiBox('Saldo Previsto', 'R$ '+fmt(saldoPrev), 'receb.+a receber−despesas', saldoPrev>=0?'#0891b2':'#dc2626')}
+        ${kpiBox('Lucro (Caixa)', 'R$ '+fmt(lucro), 'recebido − saídas pagas', lucro>=0?'#16a34a':'#dc2626')}
+        ${kpiBox('Ticket Médio', ticketMedio>0?'R$ '+fmt(ticketMedio):'—', pedPagos.size+' pedido(s)', '#7c3aed')}
+    </div>
+    ${comboImg?`<h3 style="font-size:13px;color:#374151;margin:0 0 6px">Entradas × Saídas × Saldo</h3><img src="${comboImg}" style="width:100%;border-radius:6px;margin-bottom:14px">`:''}
+    ${(recImg||despImg)?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        ${recImg?`<div><h3 style="font-size:13px;color:#374151;margin:0 0 4px">Recebimentos</h3><img src="${recImg}" style="width:100%"></div>`:''}
+        ${despImg?`<div><h3 style="font-size:13px;color:#374151;margin:0 0 4px">Despesas por Categoria</h3><img src="${despImg}" style="width:100%"></div>`:''}
+    </div>`:''}
+    <h3 style="font-size:13px;color:#374151;margin:8px 0 6px;border-bottom:1px solid #e5e7eb;padding-bottom:4px">📥 Próximos Recebimentos</h3>
+    ${mkTable(rowsRec, [{label:'Vencimento'},{label:'Cliente'},{label:'Descrição'},{label:'Valor',right:true},{label:'Status'}], 'Nenhum recebimento pendente.')}
+    <h3 style="font-size:13px;color:#374151;margin:8px 0 6px;border-bottom:1px solid #e5e7eb;padding-bottom:4px">📤 Próximos Pagamentos</h3>
+    ${mkTable(rowsPag, [{label:'Vencimento'},{label:'Credor'},{label:'Descrição'},{label:'Valor',right:true},{label:'Status'}], 'Nenhum pagamento pendente.')}
+    <div style="margin-top:20px;padding-top:10px;border-top:1px solid #e5e7eb;font-size:10px;color:#9ca3af;text-align:center">
+        Relatório gerado pelo sistema SCTech · ${new Date().toLocaleString('pt-BR')}
+    </div>
+</div>`;
+    abrirDocModal(html, `Relatório Financeiro — ${label}`);
+}
+
 function mostrarTabFinanceiro(tab) {
     if (_curTabFin !== tab) { _prevTabFin = _curTabFin; _curTabFin = tab; }
     document.querySelectorAll('.fin-tab-btn').forEach(b => b.classList.remove('active'));
@@ -5300,49 +5561,243 @@ function mostrarTabFinanceiro(tab) {
 }
 
 function renderDashboardFinanceiro() {
+    if (typeof Chart === 'undefined') return;
+    _migrarFinanceiroPedidos();
     atualizarStatusVencimentos();
-    const hoje = new Date();
-    const em30 = new Date(hoje.getTime() + 30 * 86400000).toISOString().split('T')[0];
-    const mesStr = hoje.toISOString().substring(0, 7);
+    try { _finMetas = JSON.parse(localStorage.getItem('sc_fin_metas') || '{}'); } catch(e) { _finMetas = {}; }
 
-    const receitaMes   = db.contas_receber.filter(cr => cr.status === 'Pago' && (cr.data_pagamento||'').startsWith(mesStr)).reduce((s,cr)=>s+cr.valor,0);
-    const aReceberProx = db.contas_receber.filter(cr => cr.status !== 'Pago' && cr.data_vencimento <= em30).reduce((s,cr)=>s+cr.valor,0);
-    const aPagarProx   = db.contas_pagar.filter(cp => cp.status !== 'Pago' && cp.data_vencimento <= em30).reduce((s,cp)=>s+cp.valor,0);
-    const atRec = db.contas_receber.filter(cr => cr.status === 'Atrasado').length;
-    const atPag = db.contas_pagar.filter(cp => cp.status === 'Atrasado').length;
+    const { ini, fim, label } = getFinPeriodo();
+    const inRange = d => d && d >= ini && d <= fim;
+    const hojeStr = new Date().toISOString().split('T')[0];
+    const fmt = v => (v||0).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+
+    const periodoLabelEl = document.getElementById('fin-periodo-label');
+    if (periodoLabelEl) periodoLabelEl.textContent = label;
+
+    // ── KPIs ──────────────────────────────────────────────────────
+    const recebido  = db.contas_receber.filter(cr=>cr.status==='Pago'&&inRange(cr.data_pagamento)).reduce((s,cr)=>s+cr.valor,0);
+    const aReceber  = db.contas_receber.filter(cr=>cr.status!=='Pago'&&inRange(cr.data_vencimento)).reduce((s,cr)=>s+cr.valor,0);
+    const totalPago = db.contas_pagar.filter(cp=>cp.status==='Pago'&&inRange(cp.data_pagamento)).reduce((s,cp)=>s+cp.valor,0);
+    const aPagar    = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&inRange(cp.data_vencimento)).reduce((s,cp)=>s+cp.valor,0);
+    const saldoPrev = (recebido+aReceber)-(totalPago+aPagar);
+    const lucro     = recebido-totalPago;
+    const pedPagos  = new Set(db.contas_receber.filter(cr=>cr.status==='Pago'&&inRange(cr.data_pagamento)&&cr.pedido_id).map(cr=>cr.pedido_id));
+    const ticketMedio = pedPagos.size ? recebido/pedPagos.size : 0;
 
     const kpiEl = document.getElementById('fin-kpis');
     if (kpiEl) kpiEl.innerHTML = `
-        <div class="fin-kpi fin-kpi-green"><div class="fin-kpi-label">Recebido este mês</div><div class="fin-kpi-value">R$ ${receitaMes.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div>
-        <div class="fin-kpi fin-kpi-blue"><div class="fin-kpi-label">A receber (30 dias)</div><div class="fin-kpi-value">R$ ${aReceberProx.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div>
-        <div class="fin-kpi fin-kpi-orange"><div class="fin-kpi-label">A pagar (30 dias)</div><div class="fin-kpi-value">R$ ${aPagarProx.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div></div>
-        <div class="fin-kpi ${atRec+atPag>0?'fin-kpi-red':'fin-kpi-gray'}"><div class="fin-kpi-label">Em atraso</div><div class="fin-kpi-value">${atRec+atPag}</div><div class="fin-kpi-sub">${atRec} a receber · ${atPag} a pagar</div></div>`;
+        <div class="fin-kpi fin-kpi-green"><div class="fin-kpi-label">Total Recebido</div><div class="fin-kpi-value">R$ ${fmt(recebido)}</div><div class="fin-kpi-sub">${escapeHtml(label)}</div></div>
+        <div class="fin-kpi fin-kpi-blue"><div class="fin-kpi-label">A Receber</div><div class="fin-kpi-value">R$ ${fmt(aReceber)}</div><div class="fin-kpi-sub">vence no período</div></div>
+        <div class="fin-kpi fin-kpi-orange"><div class="fin-kpi-label">A Pagar</div><div class="fin-kpi-value">R$ ${fmt(aPagar)}</div><div class="fin-kpi-sub">vence no período</div></div>
+        <div class="fin-kpi ${saldoPrev>=0?'fin-kpi-blue':'fin-kpi-orange'}"><div class="fin-kpi-label">Saldo Previsto</div><div class="fin-kpi-value">R$ ${fmt(saldoPrev)}</div><div class="fin-kpi-sub">receb. + a receber − despesas</div></div>
+        <div class="fin-kpi ${lucro>=0?'fin-kpi-green':'fin-kpi-red'}"><div class="fin-kpi-label">Lucro (Caixa)</div><div class="fin-kpi-value">R$ ${fmt(lucro)}</div><div class="fin-kpi-sub">recebido − saídas pagas</div></div>
+        <div class="fin-kpi fin-kpi-gray"><div class="fin-kpi-label">Ticket Médio</div><div class="fin-kpi-value">${ticketMedio>0?'R$ '+fmt(ticketMedio):'—'}</div><div class="fin-kpi-sub">${pedPagos.size} pedido(s) com recebimento</div></div>`;
 
-    const proxRec = db.contas_receber.filter(cr=>cr.status!=='Pago').sort((a,b)=>a.data_vencimento.localeCompare(b.data_vencimento)).slice(0,6);
-    const tbRec = document.getElementById('fin-dash-receber');
-    if (tbRec) tbRec.innerHTML = proxRec.length ? proxRec.map(cr=>{
-        const at=cr.status==='Atrasado';
-        return `<tr class="${at?'fin-atrasado':''}">
-            <td>${new Date(cr.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR')}</td>
-            <td>${escapeHtml(cr.cliente_nome)}</td>
-            <td>${escapeHtml(cr.descricao)}</td>
-            <td style="text-align:right"><strong>R$ ${cr.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
-            <td><span class="fin-badge fin-badge-${at?'red':'pending'}">${cr.status}</span></td>
-        </tr>`;
-    }).join('') : '<tr><td colspan="5" style="text-align:center;color:#999;padding:16px">Nenhum recebimento pendente.</td></tr>';
+    // ── ALERTAS ───────────────────────────────────────────────────
+    const alertasEl = document.getElementById('fin-alertas');
+    if (alertasEl) {
+        const mkA = (tipo, icon, texto) => `<div class="fin-alerta fin-alerta-${tipo}"><span style="font-size:18px;flex-shrink:0">${icon}</span><span>${texto}</span></div>`;
+        const alertas = [];
 
-    const proxPag = db.contas_pagar.filter(cp=>cp.status!=='Pago').sort((a,b)=>a.data_vencimento.localeCompare(b.data_vencimento)).slice(0,6);
-    const tbPag = document.getElementById('fin-dash-pagar');
-    if (tbPag) tbPag.innerHTML = proxPag.length ? proxPag.map(cp=>{
-        const at=cp.status==='Atrasado';
-        return `<tr class="${at?'fin-atrasado':''}">
-            <td>${new Date(cp.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR')}</td>
-            <td>${escapeHtml(cp.credor_nome||cp.categoria)}</td>
-            <td>${escapeHtml(cp.descricao)}</td>
-            <td style="text-align:right"><strong>R$ ${cp.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
-            <td><span class="fin-badge fin-badge-${at?'red':'pending'}">${cp.status}</span></td>
-        </tr>`;
-    }).join('') : '<tr><td colspan="5" style="text-align:center;color:#999;padding:16px">Nenhum pagamento pendente.</td></tr>';
+        const venHojeRec = db.contas_receber.filter(cr=>cr.status==='Pendente'&&cr.data_vencimento===hojeStr);
+        const venHojePag = db.contas_pagar.filter(cp=>cp.status==='Pendente'&&cp.data_vencimento===hojeStr);
+        if (venHojeRec.length+venHojePag.length)
+            alertas.push(mkA('warning','⏰',`<strong>${venHojeRec.length+venHojePag.length} conta(s) vencem hoje</strong> — ${venHojeRec.length} a receber (R$ ${fmt(venHojeRec.reduce((s,x)=>s+x.valor,0))}) · ${venHojePag.length} a pagar (R$ ${fmt(venHojePag.reduce((s,x)=>s+x.valor,0))})`));
+
+        const atRec = db.contas_receber.filter(cr=>cr.status==='Atrasado');
+        if (atRec.length)
+            alertas.push(mkA('danger','❌',`<strong>${atRec.length} recebimento(s) em atraso</strong> — R$ ${fmt(atRec.reduce((s,x)=>s+x.valor,0))} de ${new Set(atRec.map(x=>x.cliente_nome)).size} cliente(s)`));
+
+        const atPag = db.contas_pagar.filter(cp=>cp.status==='Atrasado');
+        if (atPag.length)
+            alertas.push(mkA('danger','💸',`<strong>${atPag.length} pagamento(s) em atraso</strong> — R$ ${fmt(atPag.reduce((s,x)=>s+x.valor,0))}`));
+
+        const hoje2 = new Date();
+        const mesAtStr = `${hoje2.getFullYear()}-${String(hoje2.getMonth()+1).padStart(2,'0')}`;
+        const mesAntD  = new Date(hoje2.getFullYear(), hoje2.getMonth()-1, 1);
+        const mesAntStr = `${mesAntD.getFullYear()}-${String(mesAntD.getMonth()+1).padStart(2,'0')}`;
+        const fatAt = db.contas_receber.filter(cr=>cr.status==='Pago'&&(cr.data_pagamento||'').startsWith(mesAtStr)).reduce((s,cr)=>s+cr.valor,0);
+        const fatAnt= db.contas_receber.filter(cr=>cr.status==='Pago'&&(cr.data_pagamento||'').startsWith(mesAntStr)).reduce((s,cr)=>s+cr.valor,0);
+        if (fatAnt>0) {
+            const pct = ((fatAt-fatAnt)/fatAnt*100).toFixed(1);
+            alertas.push(mkA(fatAt>=fatAnt?'success':'warning', fatAt>=fatAnt?'📈':'📉',
+                `Faturamento deste mês <strong>${fatAt>=fatAnt?'+':''}${pct}%</strong> vs. mês anterior (R$ ${fmt(fatAt)} × R$ ${fmt(fatAnt)})`));
+        }
+
+        const metaMes = _finMetas[mesAtStr]||0;
+        if (metaMes>0) {
+            const pctMeta = (fatAt/metaMes*100).toFixed(1);
+            if (fatAt>=metaMes)
+                alertas.push(mkA('success','🏆',`Meta do mês atingida! <strong>${pctMeta}%</strong> — R$ ${fmt(fatAt)} de R$ ${fmt(metaMes)}`));
+            else if (fatAt>=metaMes*0.8)
+                alertas.push(mkA('info','🎯',`Faltam <strong>R$ ${fmt(metaMes-fatAt)}</strong> para atingir a meta (${pctMeta}% concluído)`));
+        }
+
+        const em7 = new Date(hojeStr+'T00:00:00'); em7.setDate(em7.getDate()+7);
+        const em7Str = em7.toISOString().split('T')[0];
+        const proxVenc = db.contas_receber.filter(cr=>cr.status!=='Pago'&&cr.data_vencimento>hojeStr&&cr.data_vencimento<=em7Str).length
+                       + db.contas_pagar.filter(cp=>cp.status!=='Pago'&&cp.data_vencimento>hojeStr&&cp.data_vencimento<=em7Str).length;
+        if (proxVenc>=3)
+            alertas.push(mkA('info','📋',`<strong>${proxVenc} conta(s)</strong> vencem nos próximos 7 dias`));
+
+        alertasEl.innerHTML = alertas.join('');
+    }
+
+    // ── META ──────────────────────────────────────────────────────
+    const hoje3 = new Date();
+    const mesKey = `${hoje3.getFullYear()}-${String(hoje3.getMonth()+1).padStart(2,'0')}`;
+    const metaValor  = _finMetas[mesKey]||0;
+    const fatMesAt   = db.contas_receber.filter(cr=>cr.status==='Pago'&&(cr.data_pagamento||'').startsWith(mesKey)).reduce((s,cr)=>s+cr.valor,0);
+    const metaInputEl = document.getElementById('fin-meta-valor');
+    if (metaInputEl && !metaInputEl._userEditing) metaInputEl.value = metaValor||'';
+    const nomeMes = hoje3.toLocaleString('pt-BR',{month:'long',year:'numeric'});
+    const labelMetaEl = document.getElementById('fin-meta-mes-label');
+    if (labelMetaEl) labelMetaEl.textContent = nomeMes.charAt(0).toUpperCase()+nomeMes.slice(1);
+    const progressEl = document.getElementById('fin-meta-progress');
+    if (progressEl) {
+        if (!metaValor) {
+            progressEl.innerHTML = '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:8px 0">Defina uma meta acima para acompanhar seu progresso.</p>';
+        } else {
+            const pctRaw = Math.min(100, fatMesAt/metaValor*100);
+            const pctStr = pctRaw.toFixed(1);
+            const cor = pctRaw>=100?'#059669':pctRaw>=70?'#10b981':pctRaw>=40?'#f59e0b':'#ef4444';
+            progressEl.innerHTML = `
+                <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+                    <span style="color:#6b7280">Faturado: <strong>R$ ${fmt(fatMesAt)}</strong></span>
+                    <span style="color:#6b7280">Meta: <strong>R$ ${fmt(metaValor)}</strong></span>
+                    <span style="font-weight:700;color:${cor}">${pctStr}%</span>
+                </div>
+                <div style="background:#f3f4f6;border-radius:8px;height:22px;overflow:hidden">
+                    <div style="height:100%;width:${pctStr}%;background:linear-gradient(90deg,${cor},${cor}cc);border-radius:8px;transition:width .5s;display:flex;align-items:center;justify-content:flex-end;padding-right:${pctRaw>10?8:0}px">
+                        ${pctRaw>12?`<span style="font-size:11px;font-weight:700;color:#fff">${pctStr}%</span>`:''}
+                    </div>
+                </div>
+                <p style="font-size:12px;color:${pctRaw>=100?'#059669':'#9ca3af'};margin-top:5px;font-weight:${pctRaw>=100?700:400}">
+                    ${pctRaw>=100?'🏆 Meta atingida!':`Faltam <strong style="color:#374151">R$ ${fmt(metaValor-fatMesAt)}</strong> para a meta.`}
+                </p>`;
+        }
+    }
+
+    // ── GRÁFICO COMBO ─────────────────────────────────────────────
+    const buckets  = _finGerarBuckets(ini, fim);
+    const entradas = buckets.map(b=>db.contas_receber.filter(cr=>cr.status==='Pago'&&cr.data_pagamento>=b.ini&&cr.data_pagamento<=b.fim).reduce((s,cr)=>s+cr.valor,0));
+    const saidas   = buckets.map(b=>db.contas_pagar.filter(cp=>cp.status==='Pago'&&cp.data_pagamento>=b.ini&&cp.data_pagamento<=b.fim).reduce((s,cp)=>s+cp.valor,0));
+    let _acc = 0;
+    const saldos = entradas.map((e, i) => { _acc += e - saidas[i]; return _acc; });
+    const ctxCombo = document.getElementById('chart-fin-combo');
+    if (ctxCombo) {
+        if (_chartFinCombo) _chartFinCombo.destroy();
+        _chartFinCombo = new Chart(ctxCombo, {
+            data: { labels: buckets.map(b=>b.label), datasets: [
+                { type:'bar',  label:'Entradas', data:entradas, backgroundColor:'#86efac', borderColor:'#22c55e', borderWidth:1, borderRadius:4, yAxisID:'y' },
+                { type:'bar',  label:'Saídas',   data:saidas,   backgroundColor:'#fca5a5', borderColor:'#ef4444', borderWidth:1, borderRadius:4, yAxisID:'y' },
+                { type:'line', label:'Saldo',    data:saldos,   borderColor:'#2A5C82', backgroundColor:'rgba(42,92,130,0.08)', pointRadius:3, borderWidth:2, fill:true, yAxisID:'y', tension:0.3 }
+            ]},
+            options: { responsive:true, maintainAspectRatio:false,
+                plugins:{ legend:{ position:'top', labels:{ font:{size:11}, padding:10, boxWidth:11 }}},
+                scales:{
+                    y:{ beginAtZero:true, ticks:{ callback:v=>'R$'+v.toLocaleString('pt-BR'), font:{size:10} }, grid:{color:'rgba(0,0,0,0.05)'} },
+                    x:{ grid:{display:false}, ticks:{ font:{size:10}, maxRotation:45 }}
+                }
+            }
+        });
+    }
+
+    // ── DONUT RECEBIMENTOS ────────────────────────────────────────
+    const recPago = db.contas_receber.filter(cr=>cr.status==='Pago'&&inRange(cr.data_pagamento)).reduce((s,cr)=>s+cr.valor,0);
+    const recPend = db.contas_receber.filter(cr=>cr.status==='Pendente'&&inRange(cr.data_vencimento)).reduce((s,cr)=>s+cr.valor,0);
+    const recAtr  = db.contas_receber.filter(cr=>cr.status==='Atrasado').reduce((s,cr)=>s+cr.valor,0);
+    const totalRec = recPago + recPend + recAtr;
+    const ctxRec  = document.getElementById('chart-fin-rec');
+    if (ctxRec) {
+        if (_chartFinRec) _chartFinRec.destroy();
+        _chartFinRec = new Chart(ctxRec, {
+            type:'doughnut',
+            data:{ labels:['Recebido','Pendente','Atrasado'], datasets:[{ data:[recPago,recPend,recAtr], backgroundColor:['#22c55ecc','#f59e0bcc','#ef4444cc'], borderColor:['#22c55e','#f59e0b','#ef4444'], borderWidth:2, hoverOffset:6 }]},
+            options:{ responsive:true, maintainAspectRatio:true, cutout:'65%', plugins:{ legend:{ position:'bottom', labels:{ font:{size:11}, padding:8, boxWidth:10 }}, centerText:{ text: totalRec > 0 ? 'R$ '+fmt(totalRec) : '—', subtext:'Total' }}},
+            plugins:[_finCenterTextPlugin]
+        });
+    }
+
+    // ── DONUT DESPESAS POR CATEGORIA ─────────────────────────────
+    const CAT_LABELS = { tecido:'Tecido/Mat.', salario:'Salário', comissao_rt:'Comissão RT', aluguel:'Aluguel', conta:'Contas', outro:'Outros', costureira:'Costureira', instalador:'Instalador' };
+    const CAT_CORES  = { tecido:'#6366f1', salario:'#f59e0b', comissao_rt:'#8b5cf6', aluguel:'#ef4444', conta:'#3b82f6', outro:'#6b7280', costureira:'#ec4899', instalador:'#f97316' };
+    const despCats = {};
+    db.contas_pagar.filter(cp=>inRange(cp.data_vencimento)).forEach(cp => { const c=cp.categoria||'outro'; despCats[c]=(despCats[c]||0)+cp.valor; });
+    const catKeys   = Object.keys(despCats);
+    const totalDesp = catKeys.reduce((s,k)=>s+despCats[k], 0);
+    const ctxDesp   = document.getElementById('chart-fin-desp');
+    if (ctxDesp) {
+        if (_chartFinDesp) _chartFinDesp.destroy();
+        _chartFinDesp = catKeys.length ? new Chart(ctxDesp, {
+            type:'doughnut',
+            data:{ labels:catKeys.map(k=>CAT_LABELS[k]||k), datasets:[{ data:catKeys.map(k=>despCats[k]), backgroundColor:catKeys.map(k=>(CAT_CORES[k]||'#9ca3af')+'cc'), borderColor:catKeys.map(k=>CAT_CORES[k]||'#9ca3af'), borderWidth:2, hoverOffset:6 }]},
+            options:{ responsive:true, maintainAspectRatio:true, cutout:'65%', plugins:{ legend:{ position:'bottom', labels:{ font:{size:10}, padding:7, boxWidth:10 }}, centerText:{ text:'R$ '+fmt(totalDesp), subtext:'Total' }}},
+            plugins:[_finCenterTextPlugin]
+        }) : null;
+        if (!catKeys.length) {
+            const p = ctxDesp.parentElement.querySelector('p.fin-sem-desp');
+            if (!p) { const el=document.createElement('p'); el.className='fin-sem-desp'; el.style.cssText='color:#9ca3af;font-size:12px;text-align:center;padding:20px 0'; el.textContent='Sem despesas no período.'; ctxDesp.after(el); }
+        }
+    }
+
+    // ── TABELAS ───────────────────────────────────────────────────
+    const _thSort = (which, col, label, align) => {
+        const s = which === 'rec' ? _finSortRec : _finSortPag;
+        const active = s.col === col;
+        const arrow = active ? (s.dir === 1 ? ' ▲' : ' ▼') : '';
+        return `<th style="${align?'text-align:'+align+';':''} cursor:pointer;user-select:none;white-space:nowrap;${active?'color:var(--primary);':''}" onclick="_finSortToggle('${which}','${col}')">${label}${arrow}</th>`;
+    };
+    const _sortList = (list, s, nomeKey) => {
+        return [...list].sort((a, b) => {
+            if (s.col === 'venc')  return s.dir * (a.data_vencimento||'').localeCompare(b.data_vencimento||'');
+            if (s.col === 'nome')  return s.dir * (a[nomeKey]||'').localeCompare(b[nomeKey]||'');
+            if (s.col === 'valor') return s.dir * (a.valor - b.valor);
+            return 0;
+        }).slice(0, 10);
+    };
+
+    const recCard = document.getElementById('fin-card-receber');
+    if (recCard) {
+        const lista = _sortList(db.contas_receber.filter(cr=>cr.status!=='Pago'), _finSortRec, 'cliente_nome');
+        recCard.innerHTML = `<h3 style="margin-bottom:14px;font-size:14px">📥 Próximos Recebimentos</h3>
+        <table><thead><tr>
+            ${_thSort('rec','venc','Vencimento')} ${_thSort('rec','nome','Cliente')}
+            <th>Descrição</th>
+            ${_thSort('rec','valor','Valor','right')}
+            <th>Status</th>
+        </tr></thead><tbody>${lista.length ? lista.map(cr => {
+            const at = cr.status === 'Atrasado';
+            return `<tr class="${at?'fin-atrasado':''}">
+                <td>${new Date(cr.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR')}</td>
+                <td>${escapeHtml(cr.cliente_nome)}</td>
+                <td style="font-size:12px;color:#6b7280">${escapeHtml(cr.descricao)}</td>
+                <td style="text-align:right"><strong>R$ ${fmt(cr.valor)}</strong></td>
+                <td><span class="fin-badge fin-badge-${at?'red':'pending'}">${cr.status}</span></td>
+            </tr>`;
+        }).join('') : '<tr><td colspan="5" style="text-align:center;color:#999;padding:16px">Nenhum recebimento pendente.</td></tr>'}</tbody></table>`;
+    }
+
+    const pagCard = document.getElementById('fin-card-pagar');
+    if (pagCard) {
+        const lista = _sortList(db.contas_pagar.filter(cp=>cp.status!=='Pago'), _finSortPag, 'credor_nome');
+        pagCard.innerHTML = `<h3 style="margin-bottom:14px;font-size:14px">📤 Próximos Pagamentos</h3>
+        <table><thead><tr>
+            ${_thSort('pag','venc','Vencimento')} ${_thSort('pag','nome','Credor')}
+            <th>Descrição</th>
+            ${_thSort('pag','valor','Valor','right')}
+            <th>Status</th>
+        </tr></thead><tbody>${lista.length ? lista.map(cp => {
+            const at = cp.status === 'Atrasado';
+            return `<tr class="${at?'fin-atrasado':''}">
+                <td>${new Date(cp.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR')}</td>
+                <td>${escapeHtml(cp.credor_nome||cp.categoria||'—')}</td>
+                <td style="font-size:12px;color:#6b7280">${escapeHtml(cp.descricao)}</td>
+                <td style="text-align:right"><strong>R$ ${fmt(cp.valor)}</strong></td>
+                <td><span class="fin-badge fin-badge-${at?'red':'pending'}">${cp.status}</span></td>
+            </tr>`;
+        }).join('') : '<tr><td colspan="5" style="text-align:center;color:#999;padding:16px">Nenhum pagamento pendente.</td></tr>'}</tbody></table>`;
+    }
 }
 
 function renderContasReceber() {

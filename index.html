@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Dashboard - SCTech</title>
+    <link rel="icon" href="images/logo.png">
     <link rel="stylesheet" href="css/style.css">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light')</script>
 </head>
@@ -83,7 +84,10 @@
                 <canvas id="chart-faturamento"></canvas>
             </div>
             <div class="card chart-card">
-                <h3 style="margin-bottom:16px;color:#374151;font-size:15px">Pedidos por Status</h3>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:10px;flex-wrap:wrap">
+                    <h3 style="color:#374151;font-size:15px;margin:0">Pedidos por Status</h3>
+                    <select id="chart-status-filtro" onchange="renderChartStatus()" style="font-size:12px;padding:4px 8px;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#374151;cursor:pointer"></select>
+                </div>
                 <canvas id="chart-status"></canvas>
             </div>
         </div>
