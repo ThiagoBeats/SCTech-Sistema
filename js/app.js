@@ -5348,6 +5348,7 @@ let _finPeriodo = 'mes';
 let _finDataIni = '', _finDataFim = '';
 let _finMetas = {};
 let _chartFinCombo = null, _chartFinRec = null, _chartFinDesp = null;
+let _chartFinEvolucao = null, _chartFinAging = null, _chartFinTopClientes = null, _chartFinFunil = null;
 let _finSortRec = { col: 'venc', dir: 1 };
 let _finSortPag = { col: 'venc', dir: 1 };
 
@@ -5479,6 +5480,10 @@ function gerarRelatorioFinanceiro() {
     const comboImg = document.getElementById('chart-fin-combo')?.toDataURL?.('image/png') || null;
     const recImg   = document.getElementById('chart-fin-rec')?.toDataURL?.('image/png') || null;
     const despImg  = document.getElementById('chart-fin-desp')?.toDataURL?.('image/png') || null;
+    const evolImg  = document.getElementById('chart-fin-evolucao')?.toDataURL?.('image/png') || null;
+    const agingImg = document.getElementById('chart-fin-aging')?.toDataURL?.('image/png') || null;
+    const topImg   = document.getElementById('chart-fin-top-clientes')?.toDataURL?.('image/png') || null;
+    const funilImg = document.getElementById('chart-fin-funil')?.toDataURL?.('image/png') || null;
     const empresa  = getEmpresa();
 
     const thStyle = 'padding:6px 8px;text-align:left;border:1px solid #e5e7eb;background:#f9fafb;font-size:11px';
@@ -5530,7 +5535,13 @@ function gerarRelatorioFinanceiro() {
         ${kpiBox('Lucro (Caixa)', 'R$ '+fmt(lucro), 'recebido − saídas pagas', lucro>=0?'#16a34a':'#dc2626')}
         ${kpiBox('Ticket Médio', ticketMedio>0?'R$ '+fmt(ticketMedio):'—', pedPagos.size+' pedido(s)', '#7c3aed')}
     </div>
-    ${comboImg?`<h3 style="font-size:13px;color:#374151;margin:0 0 6px">Entradas × Saídas × Saldo</h3><img src="${comboImg}" style="width:100%;border-radius:6px;margin-bottom:14px">`:''}
+    ${evolImg?`<h3 style="font-size:13px;color:#374151;margin:0 0 6px">Evolução Mensal (12 meses)</h3><img src="${evolImg}" style="width:100%;border-radius:6px;margin-bottom:14px">`:''}
+    ${comboImg?`<h3 style="font-size:13px;color:#374151;margin:0 0 6px">Entradas × Saídas × Saldo (período)</h3><img src="${comboImg}" style="width:100%;border-radius:6px;margin-bottom:14px">`:''}
+    ${(agingImg||topImg||funilImg)?`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+        ${agingImg?`<div><h3 style="font-size:12px;color:#374151;margin:0 0 4px">Aging de Recebíveis</h3><img src="${agingImg}" style="width:100%"></div>`:''}
+        ${topImg?`<div><h3 style="font-size:12px;color:#374151;margin:0 0 4px">Top 10 Clientes</h3><img src="${topImg}" style="width:100%"></div>`:''}
+        ${funilImg?`<div><h3 style="font-size:12px;color:#374151;margin:0 0 4px">Funil de Pedidos</h3><img src="${funilImg}" style="width:100%"></div>`:''}
+    </div>`:''}
     ${(recImg||despImg)?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
         ${recImg?`<div><h3 style="font-size:13px;color:#374151;margin:0 0 4px">Recebimentos</h3><img src="${recImg}" style="width:100%"></div>`:''}
         ${despImg?`<div><h3 style="font-size:13px;color:#374151;margin:0 0 4px">Despesas por Categoria</h3><img src="${despImg}" style="width:100%"></div>`:''}
@@ -5570,6 +5581,8 @@ function renderDashboardFinanceiro() {
     const inRange = d => d && d >= ini && d <= fim;
     const hojeStr = new Date().toISOString().split('T')[0];
     const fmt = v => (v||0).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+    const kpiBox = (lbl, val, sub, cor) =>
+        `<div class="fin-kpi fin-kpi-${cor}"><div class="fin-kpi-label">${lbl}</div><div class="fin-kpi-value">${val}</div>${sub?`<div class="fin-kpi-sub">${sub}</div>`:''}</div>`;
 
     const periodoLabelEl = document.getElementById('fin-periodo-label');
     if (periodoLabelEl) periodoLabelEl.textContent = label;
@@ -5592,6 +5605,62 @@ function renderDashboardFinanceiro() {
         <div class="fin-kpi ${saldoPrev>=0?'fin-kpi-blue':'fin-kpi-orange'}"><div class="fin-kpi-label">Saldo Previsto</div><div class="fin-kpi-value">R$ ${fmt(saldoPrev)}</div><div class="fin-kpi-sub">receb. + a receber − despesas</div></div>
         <div class="fin-kpi ${lucro>=0?'fin-kpi-green':'fin-kpi-red'}"><div class="fin-kpi-label">Lucro (Caixa)</div><div class="fin-kpi-value">R$ ${fmt(lucro)}</div><div class="fin-kpi-sub">recebido − saídas pagas</div></div>
         <div class="fin-kpi fin-kpi-gray"><div class="fin-kpi-label">Ticket Médio</div><div class="fin-kpi-value">${ticketMedio>0?'R$ '+fmt(ticketMedio):'—'}</div><div class="fin-kpi-sub">${pedPagos.size} pedido(s) com recebimento</div></div>`;
+
+    // ── NOVOS KPIs ────────────────────────────────────────────────
+    const kpis2El = document.getElementById('fin-kpis2');
+    if (kpis2El) {
+        const totalCR  = db.contas_receber.filter(cr=>cr.status!=='Pago').reduce((s,cr)=>s+cr.valor,0);
+        const totalAtr = db.contas_receber.filter(cr=>cr.status==='Atrasado').reduce((s,cr)=>s+cr.valor,0);
+        const inadimplPct = totalCR > 0 ? totalAtr/totalCR*100 : 0;
+        const corInadimpl = inadimplPct > 20 ? 'red' : inadimplPct > 10 ? 'orange' : inadimplPct > 0 ? 'gray' : 'green';
+
+        let pmrSoma = 0, pmrN = 0;
+        db.pedidos.filter(p=>normalizarStatus(p.status)==='Instalado'&&p.data_instalado).forEach(p => {
+            const criacao = typeof p.data_criacao==='number' ? p.data_criacao : (typeof p.id==='number' ? p.id : 0);
+            const dias = Math.round((p.data_instalado - criacao) / 86400000);
+            if (dias > 0 && dias < 730) { pmrSoma += dias; pmrN++; }
+        });
+        const pmr = pmrN > 0 ? Math.round(pmrSoma/pmrN) : 0;
+
+        const margemPct = recebido > 0 ? lucro/recebido*100 : 0;
+        const corMargem = margemPct >= 30 ? 'green' : margemPct >= 15 ? 'blue' : margemPct >= 0 ? 'orange' : 'red';
+
+        const pedAndamento = db.pedidos.filter(p=>{ const s=normalizarStatus(p.status); return s!=='Instalado'&&s!=='Orçamento'; });
+        const valPipeline  = pedAndamento.reduce((s,p)=>s+(p.valor||0),0);
+
+        const totalPeds    = db.pedidos.length;
+        const pConvertidos = db.pedidos.filter(p=>normalizarStatus(p.status)!=='Orçamento').length;
+        const taxaConv     = totalPeds > 0 ? pConvertidos/totalPeds*100 : 0;
+        const corConv      = taxaConv >= 70 ? 'green' : taxaConv >= 50 ? 'blue' : 'orange';
+
+        kpis2El.innerHTML =
+            kpiBox('Inadimplência', inadimplPct.toFixed(1)+'%', `R$ ${fmt(totalAtr)} atrasado`, corInadimpl) +
+            kpiBox('PMR', pmr > 0 ? pmr+' dias' : '—', pmrN ? `${pmrN} pedidos concluídos` : 'Sem dados', 'blue') +
+            kpiBox('Margem Líquida', (margemPct>=0?'':'-')+Math.abs(margemPct).toFixed(1)+'%', escapeHtml(label), corMargem) +
+            kpiBox('Pipeline', 'R$ '+fmt(valPipeline), `${pedAndamento.length} em andamento`, 'blue') +
+            kpiBox('Conversão', taxaConv.toFixed(1)+'%', `${pConvertidos}/${totalPeds} pedidos`, corConv);
+    }
+
+    // ── PROJEÇÃO DE FLUXO ─────────────────────────────────────────
+    const projecaoEl = document.getElementById('fin-projecao');
+    if (projecaoEl) {
+        const mkProj = dias => {
+            const horizStr = new Date(new Date().getTime()+dias*86400000).toISOString().split('T')[0];
+            const ent = db.contas_receber.filter(cr=>cr.status!=='Pago'&&cr.data_vencimento>=hojeStr&&cr.data_vencimento<=horizStr).reduce((s,cr)=>s+cr.valor,0);
+            const sai = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&cp.data_vencimento>=hojeStr&&cp.data_vencimento<=horizStr).reduce((s,cp)=>s+cp.valor,0);
+            const saldo = ent - sai;
+            const cor = saldo>=0?'#059669':'#dc2626';
+            const bg  = saldo>=0?'#f0fdf4':'#fff5f5';
+            return `<div style="text-align:center;padding:16px 12px;background:${bg};border:1px solid ${cor}33;border-radius:8px">
+                <div style="font-size:11px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Próximos ${dias} dias</div>
+                <div style="font-size:12px;margin-bottom:3px;color:#16a34a">▲ Entradas: <strong>R$ ${fmt(ent)}</strong></div>
+                <div style="font-size:12px;margin-bottom:10px;color:#dc2626">▼ Saídas: <strong>R$ ${fmt(sai)}</strong></div>
+                <div style="font-size:20px;font-weight:700;color:${cor}">${saldo>=0?'+':''}R$ ${fmt(saldo)}</div>
+                <div style="font-size:10px;color:#6b7280;margin-top:4px">saldo líquido previsto</div>
+            </div>`;
+        };
+        projecaoEl.innerHTML = [30,60,90].map(mkProj).join('');
+    }
 
     // ── ALERTAS ───────────────────────────────────────────────────
     const alertasEl = document.getElementById('fin-alertas');
@@ -5640,6 +5709,13 @@ function renderDashboardFinanceiro() {
         if (proxVenc>=3)
             alertas.push(mkA('info','📋',`<strong>${proxVenc} conta(s)</strong> vencem nos próximos 7 dias`));
 
+        const _h7 = new Date(hojeStr+'T00:00:00'); _h7.setDate(_h7.getDate()+7);
+        const _h7s = _h7.toISOString().split('T')[0];
+        const _ent7 = db.contas_receber.filter(cr=>cr.status!=='Pago'&&cr.data_vencimento>=hojeStr&&cr.data_vencimento<=_h7s).reduce((s,cr)=>s+cr.valor,0);
+        const _sai7 = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&cp.data_vencimento>=hojeStr&&cp.data_vencimento<=_h7s).reduce((s,cp)=>s+cp.valor,0);
+        if (_sai7 > _ent7 && _sai7 > 0)
+            alertas.push(mkA('danger','⚠️',`Gap de caixa: saídas superam entradas nos próximos 7 dias em <strong>R$ ${fmt(_sai7-_ent7)}</strong> (entradas: R$ ${fmt(_ent7)} · saídas: R$ ${fmt(_sai7)})`));
+
         alertasEl.innerHTML = alertas.join('');
     }
 
@@ -5676,6 +5752,109 @@ function renderDashboardFinanceiro() {
                     ${pctRaw>=100?'🏆 Meta atingida!':`Faltam <strong style="color:#374151">R$ ${fmt(metaValor-fatMesAt)}</strong> para a meta.`}
                 </p>`;
         }
+    }
+
+    // ── EVOLUÇÃO MENSAL 12 MESES ──────────────────────────────────
+    const _hj12 = new Date();
+    const evolLabels = [], evolRec12 = [], evolPag12 = [];
+    for (let i=11;i>=0;i--) {
+        const d = new Date(_hj12.getFullYear(), _hj12.getMonth()-i, 1);
+        const ms = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        evolLabels.push(d.toLocaleString('pt-BR',{month:'short'})+'/'+String(d.getFullYear()).slice(2));
+        evolRec12.push(db.contas_receber.filter(cr=>cr.status==='Pago'&&(cr.data_pagamento||'').startsWith(ms)).reduce((s,cr)=>s+cr.valor,0));
+        evolPag12.push(db.contas_pagar.filter(cp=>cp.status==='Pago'&&(cp.data_pagamento||'').startsWith(ms)).reduce((s,cp)=>s+cp.valor,0));
+    }
+    const ctxEvol = document.getElementById('chart-fin-evolucao');
+    if (ctxEvol) {
+        if (_chartFinEvolucao) _chartFinEvolucao.destroy();
+        _chartFinEvolucao = new Chart(ctxEvol, {
+            data:{ labels:evolLabels, datasets:[
+                {type:'bar',  label:'Entradas', data:evolRec12, backgroundColor:'#86efaccc', borderColor:'#22c55e', borderWidth:1, borderRadius:3, yAxisID:'y'},
+                {type:'bar',  label:'Saídas',   data:evolPag12, backgroundColor:'#fca5a5cc', borderColor:'#ef4444', borderWidth:1, borderRadius:3, yAxisID:'y'},
+                {type:'line', label:'Resultado', data:evolRec12.map((e,i)=>e-evolPag12[i]), borderColor:'#2A5C82', backgroundColor:'rgba(42,92,130,0.06)', borderWidth:2, pointRadius:3, fill:true, tension:0.35, yAxisID:'y'}
+            ]},
+            options:{ responsive:true, maintainAspectRatio:false,
+                plugins:{ legend:{ position:'top', labels:{ font:{size:11}, boxWidth:10, padding:8 }}},
+                scales:{ y:{ beginAtZero:true, ticks:{ callback:v=>'R$'+v.toLocaleString('pt-BR'), font:{size:10}}, grid:{color:'rgba(0,0,0,0.05)'}},
+                          x:{ grid:{display:false}, ticks:{ font:{size:10}}}}
+            }
+        });
+    }
+
+    // ── AGING DE RECEBÍVEIS ───────────────────────────────────────
+    const _hjD = new Date(hojeStr+'T00:00:00');
+    const agBuckets = [
+        {label:'A vencer',     color:'#22c55e', check:d=>d>0},
+        {label:'Vence hoje',   color:'#f59e0b', check:d=>d===0},
+        {label:'1–7d atraso',  color:'#fb923c', check:d=>d<0&&d>=-7},
+        {label:'8–30d atraso', color:'#ef4444', check:d=>d<-7&&d>=-30},
+        {label:'+30d atraso',  color:'#991b1b', check:d=>d<-30},
+    ];
+    const agVals = agBuckets.map(()=>0);
+    db.contas_receber.filter(cr=>cr.status!=='Pago'&&cr.data_vencimento).forEach(cr=>{
+        const diff = Math.round((new Date(cr.data_vencimento+'T00:00:00')-_hjD)/86400000);
+        for (let i=0;i<agBuckets.length;i++) { if (agBuckets[i].check(diff)) { agVals[i]+=cr.valor; break; } }
+    });
+    const ctxAging = document.getElementById('chart-fin-aging');
+    if (ctxAging) {
+        if (_chartFinAging) _chartFinAging.destroy();
+        _chartFinAging = new Chart(ctxAging, {
+            type:'bar',
+            data:{labels:agBuckets.map(b=>b.label), datasets:[{data:agVals, backgroundColor:agBuckets.map(b=>b.color+'cc'), borderColor:agBuckets.map(b=>b.color), borderWidth:1, borderRadius:4}]},
+            options:{indexAxis:'y', responsive:true, maintainAspectRatio:false,
+                plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>' R$ '+ctx.raw.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}}},
+                scales:{ x:{beginAtZero:true, ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR'),font:{size:10}}, grid:{color:'rgba(0,0,0,0.05)'}},
+                          y:{ticks:{font:{size:11}}, grid:{display:false}}}
+            }
+        });
+    }
+
+    // ── TOP 10 CLIENTES ───────────────────────────────────────────
+    const cliMap = {};
+    db.contas_receber.filter(cr=>cr.status==='Pago'&&cr.cliente_nome).forEach(cr=>{ cliMap[cr.cliente_nome]=(cliMap[cr.cliente_nome]||0)+cr.valor; });
+    const topCli = Object.entries(cliMap).sort(([,a],[,b])=>b-a).slice(0,10);
+    const ctxTop = document.getElementById('chart-fin-top-clientes');
+    if (ctxTop) {
+        if (_chartFinTopClientes) _chartFinTopClientes.destroy();
+        if (topCli.length) {
+            _chartFinTopClientes = new Chart(ctxTop, {
+                type:'bar',
+                data:{labels:topCli.map(([n])=>n.length>16?n.slice(0,16)+'…':n), datasets:[{data:topCli.map(([,v])=>v), backgroundColor:'#2A5C82cc', borderColor:'#2A5C82', borderWidth:1, borderRadius:3}]},
+                options:{indexAxis:'y', responsive:true, maintainAspectRatio:false,
+                    plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>' R$ '+ctx.raw.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}}},
+                    scales:{ x:{beginAtZero:true, ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR'),font:{size:10}}, grid:{color:'rgba(0,0,0,0.05)'}},
+                              y:{ticks:{font:{size:10}}, grid:{display:false}}}
+                }
+            });
+        } else {
+            const el = ctxTop.parentElement;
+            if (!el.querySelector('.fin-sem-dados')) { const p=document.createElement('p'); p.className='fin-sem-dados'; p.style.cssText='color:#9ca3af;font-size:12px;text-align:center;padding:20px 0'; p.textContent='Sem recebimentos registrados.'; el.appendChild(p); }
+        }
+    }
+
+    // ── FUNIL DE PEDIDOS ──────────────────────────────────────────
+    const FUNIL_ST = [
+        {key:'Orçamento',            label:'Orçamento',     color:'#94a3b8'},
+        {key:'Medição',              label:'Medição',       color:'#60a5fa'},
+        {key:'Aguardando Tecido',    label:'Ag. Tecido',    color:'#a78bfa'},
+        {key:'Na Costura',           label:'Na Costura',    color:'#f472b6'},
+        {key:'Pronto p/ Instalação', label:'Pronto Inst.',  color:'#34d399'},
+        {key:'Aguardando Pagamento', label:'Ag. Pagamento', color:'#fbbf24'},
+        {key:'Instalado',            label:'Instalado',     color:'#22c55e'},
+    ];
+    const funilCounts = FUNIL_ST.map(s=>db.pedidos.filter(p=>normalizarStatus(p.status)===s.key).length);
+    const ctxFunil = document.getElementById('chart-fin-funil');
+    if (ctxFunil) {
+        if (_chartFinFunil) _chartFinFunil.destroy();
+        _chartFinFunil = new Chart(ctxFunil, {
+            type:'bar',
+            data:{labels:FUNIL_ST.map(s=>s.label), datasets:[{data:funilCounts, backgroundColor:FUNIL_ST.map(s=>s.color+'cc'), borderColor:FUNIL_ST.map(s=>s.color), borderWidth:1, borderRadius:4}]},
+            options:{indexAxis:'y', responsive:true, maintainAspectRatio:false,
+                plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>` ${ctx.raw} pedido${ctx.raw!==1?'s':''}`}}},
+                scales:{ x:{beginAtZero:true, ticks:{stepSize:1,font:{size:10}}, grid:{color:'rgba(0,0,0,0.05)'}},
+                          y:{ticks:{font:{size:10}}, grid:{display:false}}}
+            }
+        });
     }
 
     // ── GRÁFICO COMBO ─────────────────────────────────────────────

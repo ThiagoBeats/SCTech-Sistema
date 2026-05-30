@@ -56,6 +56,12 @@
             <!-- KPIs: 6 colunas -->
             <div id="fin-kpis" class="fin-kpi-grid"></div>
 
+            <!-- KPIs adicionais: 5 colunas -->
+            <div id="fin-kpis2" class="fin-kpi-grid" style="grid-template-columns:repeat(5,1fr)"></div>
+
+            <!-- Projeção de fluxo de caixa -->
+            <div id="fin-projecao" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px"></div>
+
             <!-- Meta do mês -->
             <div class="card" style="margin-bottom:20px">
                 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px">
@@ -71,6 +77,28 @@
                     </div>
                 </div>
                 <div id="fin-meta-progress"></div>
+            </div>
+
+            <!-- Evolução mensal 12 meses -->
+            <div class="card" style="margin-bottom:20px;padding:18px">
+                <h3 style="margin:0 0 12px;font-size:14px;color:#374151">📈 Evolução Mensal (12 meses)</h3>
+                <div style="position:relative;height:180px"><canvas id="chart-fin-evolucao"></canvas></div>
+            </div>
+
+            <!-- Aging + Top Clientes + Funil -->
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px;align-items:start">
+                <div class="card" style="padding:18px">
+                    <h3 style="margin:0 0 12px;font-size:14px;color:#374151">⏳ Aging de Recebíveis</h3>
+                    <div style="position:relative;height:220px"><canvas id="chart-fin-aging"></canvas></div>
+                </div>
+                <div class="card" style="padding:18px">
+                    <h3 style="margin:0 0 12px;font-size:14px;color:#374151">🏆 Top 10 Clientes</h3>
+                    <div style="position:relative;height:220px"><canvas id="chart-fin-top-clientes"></canvas></div>
+                </div>
+                <div class="card" style="padding:18px">
+                    <h3 style="margin:0 0 12px;font-size:14px;color:#374151">🔁 Funil de Pedidos</h3>
+                    <div style="position:relative;height:220px"><canvas id="chart-fin-funil"></canvas></div>
+                </div>
             </div>
 
             <!-- Gráficos: combo (2fr) + 2 donuts (1fr each) -->
