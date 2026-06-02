@@ -1280,6 +1280,69 @@ function renderDashboard() {
         ? `${db.pedidos.length} pedido(s)` : `${pedidos.length} de ${db.pedidos.length} pedido(s)`;
 }
 
+// ── CONFIGURAÇÃO DE ALERTAS ───────────────────────────────────
+const ALERTAS_TIPOS = {
+    entrega:        { label: 'Entregas atrasadas / hoje',         icon: '🚚' },
+    medicao:        { label: 'Medições atrasadas / agendadas',    icon: '📐' },
+    instalacao:     { label: 'Instalações atrasadas / agendadas', icon: '🔧' },
+    estoque:        { label: 'Estoque abaixo do mínimo',          icon: '📦' },
+    fin_vencimento: { label: 'Contas vencendo hoje / em breve',   icon: '📅' },
+    fin_atraso:     { label: 'Recebimentos / pagamentos atrasados', icon: '❌' },
+    fin_gap:        { label: 'Gap de caixa (7 dias)',             icon: '⚠️' },
+    fin_meta:       { label: 'Progresso da meta de faturamento',  icon: '🎯' },
+    fin_tendencia:  { label: 'Tendência de faturamento mensal',   icon: '📈' },
+};
+
+function getAlertasCfg() {
+    try { return JSON.parse(localStorage.getItem('sc_alertas_cfg')) || {}; } catch(e) { return {}; }
+}
+function alertaAtivo(tipo) {
+    return getAlertasCfg()[tipo] !== false;
+}
+function toggleAlertaTipo(tipo) {
+    const cfg = getAlertasCfg();
+    cfg[tipo] = !alertaAtivo(tipo);
+    localStorage.setItem('sc_alertas_cfg', JSON.stringify(cfg));
+    renderBellIndicator();
+    renderEmpresaAlertasCfg();
+}
+function renderEmpresaAlertasCfg() {
+    const el = document.getElementById('emp-alertas-cfg');
+    if (!el) return;
+    const cfg = getAlertasCfg();
+    el.innerHTML = Object.entries(ALERTAS_TIPOS).map(([key, info]) => {
+        const ativo = cfg[key] !== false;
+        return `<div class="alerta-toggle-row">
+            <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-size:20px">${info.icon}</span>
+                <div>
+                    <div style="font-size:13px;font-weight:500;color:var(--dark)">${info.label}</div>
+                    <div style="font-size:11px;color:${ativo?'#059669':'#9ca3af'};margin-top:1px">${ativo?'Ativo':'Desativado'}</div>
+                </div>
+            </div>
+            <label class="toggle-switch">
+                <input type="checkbox" ${ativo?'checked':''} onchange="toggleAlertaTipo('${key}')">
+                <span class="toggle-slider"></span>
+            </label>
+        </div>`;
+    }).join('');
+}
+function renderBellIndicator() {
+    const headerEl = document.querySelector('.header');
+    if (!headerEl) return;
+    const cfg = getAlertasCfg();
+    const temDesativado = Object.keys(ALERTAS_TIPOS).some(k => cfg[k] === false);
+    let bell = document.getElementById('alerta-bell-disabled');
+    if (!temDesativado) { if (bell) bell.remove(); return; }
+    if (!bell) {
+        bell = document.createElement('div');
+        bell.id = 'alerta-bell-disabled';
+        bell.onclick = () => window.location.href = 'empresa.html';
+        headerEl.appendChild(bell);
+    }
+    bell.innerHTML = `🔕 Alertas desabilitados<div class="bell-tip">Alguns alertas estão desabilitados. Clique para gerenciar em Configurar Empresa.</div>`;
+}
+
 function renderDashboardAlertas() {
     const el = document.getElementById('dashboard-alertas');
     if (!el) return;
@@ -1295,72 +1358,76 @@ function renderDashboardAlertas() {
         </div>`;
 
     // Pedidos com entrega hoje
-    const entregasHoje = db.pedidos.filter(p => {
-        if (!p.data_entrega || normalizarStatus(p.status) === 'Instalado') return false;
-        return p.data_entrega === hojeStr;
-    });
-    if (entregasHoje.length) {
-        const itens = entregasHoje.map(p =>
-            `<span style="cursor:pointer;color:#92400e;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}</span>`
-        ).join(' &nbsp;·&nbsp; ');
-        banners.push(mkBanner('🔔', '#fef3c7', '#fcd34d', '#92400e',
-            `<strong>${entregasHoje.length} pedido(s)</strong> com entrega prevista para hoje:`, itens));
+    if (alertaAtivo('entrega')) {
+        const entregasHoje = db.pedidos.filter(p => {
+            if (!p.data_entrega || normalizarStatus(p.status) === 'Instalado') return false;
+            return p.data_entrega === hojeStr;
+        });
+        if (entregasHoje.length) {
+            const itens = entregasHoje.map(p =>
+                `<span style="cursor:pointer;color:#92400e;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}</span>`
+            ).join(' &nbsp;·&nbsp; ');
+            banners.push(mkBanner('🔔', '#fef3c7', '#fcd34d', '#92400e',
+                `<strong>${entregasHoje.length} pedido(s)</strong> com entrega prevista para hoje:`, itens));
+        }
     }
 
-    // Medições atrasadas
-    const medicAtrasadas = db.medicoes.filter(m => m.status === 'Agendado' && m.data < hojeStr);
-    if (medicAtrasadas.length) {
-        const itens = medicAtrasadas.map(m =>
-            `<span style="cursor:pointer;color:#991b1b;font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')} (${m.data.split('-').reverse().join('/')})</span>`
-        ).join(' &nbsp;·&nbsp; ');
-        banners.push(mkBanner('📐', '#fff1f2', '#fca5a5', '#991b1b',
-            `<strong>${medicAtrasadas.length} medição(ões)</strong> atrasada(s):`, itens));
+    // Medições atrasadas + hoje
+    if (alertaAtivo('medicao')) {
+        const medicAtrasadas = db.medicoes.filter(m => m.status === 'Agendado' && m.data < hojeStr);
+        if (medicAtrasadas.length) {
+            const itens = medicAtrasadas.map(m =>
+                `<span style="cursor:pointer;color:#991b1b;font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')} (${m.data.split('-').reverse().join('/')})</span>`
+            ).join(' &nbsp;·&nbsp; ');
+            banners.push(mkBanner('📐', '#fff1f2', '#fca5a5', '#991b1b',
+                `<strong>${medicAtrasadas.length} medição(ões)</strong> atrasada(s):`, itens));
+        }
+        const medicHoje = db.medicoes.filter(m => m.status === 'Agendado' && m.data === hojeStr);
+        if (medicHoje.length) {
+            const itens = medicHoje.map(m =>
+                `<span style="cursor:pointer;color:#1d4ed8;font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')}${m.hora ? ' às ' + m.hora : ''}</span>`
+            ).join(' &nbsp;·&nbsp; ');
+            banners.push(mkBanner('📐', '#dbeafe', '#93c5fd', '#1e40af',
+                `<strong>${medicHoje.length} medição(ões)</strong> agendada(s) para hoje:`, itens));
+        }
     }
 
-    // Medições hoje
-    const medicHoje = db.medicoes.filter(m => m.status === 'Agendado' && m.data === hojeStr);
-    if (medicHoje.length) {
-        const itens = medicHoje.map(m =>
-            `<span style="cursor:pointer;color:#1d4ed8;font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')}${m.hora ? ' às ' + m.hora : ''}</span>`
-        ).join(' &nbsp;·&nbsp; ');
-        banners.push(mkBanner('📐', '#dbeafe', '#93c5fd', '#1e40af',
-            `<strong>${medicHoje.length} medição(ões)</strong> agendada(s) para hoje:`, itens));
-    }
-
-    // Instalações atrasadas
-    const instStatus = ['Pronto p/ Instalação', 'Aguardando Pagamento'];
-    const instAtrasadas = db.pedidos.filter(p =>
-        instStatus.includes(normalizarStatus(p.status)) && p.data_entrega && p.data_entrega < hojeStr);
-    if (instAtrasadas.length) {
-        const itens = instAtrasadas.map(p =>
-            `<span style="cursor:pointer;color:#991b1b;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')} (${p.data_entrega.split('-').reverse().join('/')})</span>`
-        ).join(' &nbsp;·&nbsp; ');
-        banners.push(mkBanner('🔧', '#fff1f2', '#fca5a5', '#991b1b',
-            `<strong>${instAtrasadas.length} instalação(ões)</strong> atrasada(s):`, itens));
-    }
-
-    // Instalações hoje
-    const instHoje = db.pedidos.filter(p =>
-        instStatus.includes(normalizarStatus(p.status)) && p.data_entrega === hojeStr);
-    if (instHoje.length) {
-        const itens = instHoje.map(p =>
-            `<span style="cursor:pointer;color:#1d4ed8;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}${p.inst_hora ? ' às ' + p.inst_hora : ''}</span>`
-        ).join(' &nbsp;·&nbsp; ');
-        banners.push(mkBanner('🔧', '#dbeafe', '#93c5fd', '#1e40af',
-            `<strong>${instHoje.length} instalação(ões)</strong> agendada(s) para hoje:`, itens));
+    // Instalações atrasadas + hoje
+    if (alertaAtivo('instalacao')) {
+        const instStatus = ['Pronto p/ Instalação', 'Aguardando Pagamento'];
+        const instAtrasadas = db.pedidos.filter(p =>
+            instStatus.includes(normalizarStatus(p.status)) && p.data_entrega && p.data_entrega < hojeStr);
+        if (instAtrasadas.length) {
+            const itens = instAtrasadas.map(p =>
+                `<span style="cursor:pointer;color:#991b1b;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')} (${p.data_entrega.split('-').reverse().join('/')})</span>`
+            ).join(' &nbsp;·&nbsp; ');
+            banners.push(mkBanner('🔧', '#fff1f2', '#fca5a5', '#991b1b',
+                `<strong>${instAtrasadas.length} instalação(ões)</strong> atrasada(s):`, itens));
+        }
+        const instHoje = db.pedidos.filter(p =>
+            instStatus.includes(normalizarStatus(p.status)) && p.data_entrega === hojeStr);
+        if (instHoje.length) {
+            const itens = instHoje.map(p =>
+                `<span style="cursor:pointer;color:#1d4ed8;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}${p.inst_hora ? ' às ' + p.inst_hora : ''}</span>`
+            ).join(' &nbsp;·&nbsp; ');
+            banners.push(mkBanner('🔧', '#dbeafe', '#93c5fd', '#1e40af',
+                `<strong>${instHoje.length} instalação(ões)</strong> agendada(s) para hoje:`, itens));
+        }
     }
 
     // Estoque crítico (tecidos + materiais)
-    const tecidosCriticos = db.catalogo.filter(c => c.min_estoque > 0 && estoqueDisponivel(c.id) < c.min_estoque);
-    const matCriticos     = db.materiais.filter(m => m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque);
-    const totalCriticos   = tecidosCriticos.length + matCriticos.length;
-    if (totalCriticos) {
-        const itens = [
-            ...tecidosCriticos.map(c => `<span style="cursor:pointer;color:#92400e;font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(c.nome)}: ${estoqueDisponivel(c.id).toFixed(2)} m (mín. ${c.min_estoque} m)</span>`),
-            ...matCriticos.map(m => `<span style="cursor:pointer;color:#92400e;font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(m.nome)}: ${(m.estoque_atual||0).toFixed(2)} ${m.unidade||''} (mín. ${m.min_estoque})</span>`)
-        ].join(' &nbsp;·&nbsp; ');
-        banners.push(mkBanner('⚠️', '#fef3c7', '#fcd34d', '#92400e',
-            `<strong>${totalCriticos} item(ns)</strong> com estoque abaixo do mínimo:`, itens));
+    if (alertaAtivo('estoque')) {
+        const tecidosCriticos = db.catalogo.filter(c => c.min_estoque > 0 && estoqueDisponivel(c.id) < c.min_estoque);
+        const matCriticos     = db.materiais.filter(m => m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque);
+        const totalCriticos   = tecidosCriticos.length + matCriticos.length;
+        if (totalCriticos) {
+            const itens = [
+                ...tecidosCriticos.map(c => `<span style="cursor:pointer;color:#92400e;font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(c.nome)}: ${estoqueDisponivel(c.id).toFixed(2)} m (mín. ${c.min_estoque} m)</span>`),
+                ...matCriticos.map(m => `<span style="cursor:pointer;color:#92400e;font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(m.nome)}: ${(m.estoque_atual||0).toFixed(2)} ${m.unidade||''} (mín. ${m.min_estoque})</span>`)
+            ].join(' &nbsp;·&nbsp; ');
+            banners.push(mkBanner('⚠️', '#fef3c7', '#fcd34d', '#92400e',
+                `<strong>${totalCriticos} item(ns)</strong> com estoque abaixo do mínimo:`, itens));
+        }
     }
 
     if (!banners.length) { el.innerHTML = ''; el.style.display = 'none'; return; }
@@ -1864,6 +1931,14 @@ function autoFillTecidoNoAmbiente(ambId, tidx) {
     if (!tec) return;
     const sel = document.getElementById(`a-tecido-${ambId}-${tidx}`);
     if (sel) sel.value = String(tec.id);
+}
+
+function autoFillRefFromTecido(ambId, tidx) {
+    const selEl = document.getElementById(`a-tecido-${ambId}-${tidx}`);
+    if (!selEl || !selEl.value) return;
+    const tec = db.catalogo.find(c => c.id == selEl.value);
+    const refEl = document.getElementById(`a-tec-ref-${ambId}-${tidx}`);
+    if (refEl) refEl.value = tec?.referencia || '';
 }
 
 function autoFillEntradaTecido() {
@@ -2390,7 +2465,7 @@ function renderAmbienteBreakdown(a) {
     if (!a.calculado) return '';
     const tecidos = a.tecidos || [];
     if (!tecidos.length) return '';
-    const alt_bruta = (a.altura||0) + (a.bainha_cm||15)/100 + (a.cabecote_cm||10)/100;
+    const alt_bruta = (a.altura||0) + (a.bainha_cm||15)/100 + (a.cabecote_cm ?? 0)/100;
     const totalMat = tecidos.reduce((s,t)=>s+(t.total_material||0),0);
     const parts = tecidos.map((t, tidx) => {
         if (!t.tecidoId) return '';
@@ -2472,7 +2547,7 @@ function renderAmbientes() {
             {v:'G',l:'Abertura G — Centro, Cmd. Esq.'},
             {v:'H',l:'Abertura H — Centro, Cmd. Dir.'}
         ].map(o=>`<option value="${o.v}"${(a.abertura||'A')===o.v?' selected':''}>${o.l}</option>`).join('');
-        const fatorOpts = FATORES.map(f=>`<option value="${f}"${String(a.fator||2.5)===f?' selected':''}>${f}x</option>`).join('');
+        const fatorOpts = FATORES.map(f=>`<option value="${f}"${parseFloat(f)===(a.fator??2.5)?' selected':''}>${f}x</option>`).join('');
         const tecidos = a.tecidos || [];
         const buildTecOpts = (selId) => '<option value="">— Selecione o Tecido —</option>' + db.catalogo.map(c => {
             const disp = estoqueDisponivel(c.id);
@@ -2490,7 +2565,7 @@ function renderAmbientes() {
                 </div>
                 <div class="form-group" style="flex:1;margin:0">
                     <label>${tecidos.length > 1 ? 'Tecido '+(tidx+1) : 'Tecido'}</label>
-                    <select id="a-tecido-${a.id}-${tidx}">${buildTecOpts(t.tecidoId)}</select>
+                    <select id="a-tecido-${a.id}-${tidx}" onchange="autoFillRefFromTecido(${a.id},${tidx})">${buildTecOpts(t.tecidoId)}</select>
                 </div>
                 ${removeBtn}
             </div>`;
@@ -2522,7 +2597,7 @@ function renderAmbientes() {
                 <div class="form-group"><label>Largura da Parede (m)</label><input type="number" id="a-larg-${a.id}" value="${a.largura||''}" placeholder="Ex: 2.40" step="0.01"></div>
                 <div class="form-group"><label>Altura da Parede (m)</label><input type="number" id="a-alt-${a.id}" value="${a.altura||''}" placeholder="Ex: 2.60" step="0.01"></div>
                 <div class="form-group"><label>Barra (cm) <span class="info-tag">padrão: 15</span></label><input type="number" id="a-bainha-${a.id}" value="${a.bainha_cm||15}" step="1"></div>
-                <div class="form-group"><label>Cabeçote/Entretela (cm) <span class="info-tag">padrão: 10</span></label><input type="number" id="a-cabecote-${a.id}" value="${a.cabecote_cm||10}" step="1"></div>
+                <div class="form-group"><label>Cabeçote/Entretela (cm) <span class="info-tag">padrão: 0</span></label><input type="number" id="a-cabecote-${a.id}" value="${a.cabecote_cm ?? 0}" step="1"></div>
             </div>
             <div style="max-width:420px">${tecidosHTML}${addTecBtn}</div>
             <div style="text-align:right;margin-top:5px">
@@ -2544,7 +2619,7 @@ function adicionarAmbiente() {
     _ambienteCounter++;
     pedidoDraft.ambientes.push({
         id: _ambienteCounter, calculado: false, amb: '', prega: 'Americana', fixacao: 'Trilho Suico', abertura: 'A', local_instalacao: 'Parede',
-        largura: null, altura: null, fator: 2.5, bainha_cm: 15, cabecote_cm: 10,
+        largura: null, altura: null, fator: 2.5, bainha_cm: 15, cabecote_cm: 0,
         tecidos: [{ tecidoId: null, tecidoNome: '', largura_rolo: 2.80, rapport_cm: 0, acrescimo_rapport_m: 0, num_panos: 0, alt_corte: 0, consumo_linear: 0, total_material: 0 }],
         total_material: 0
     });
@@ -2583,7 +2658,7 @@ async function calcularAmbiente(id) {
     const alt        = parseFloat(document.getElementById(`a-alt-${id}`)?.value);
     const fator      = parseFloat(document.getElementById(`a-fator-${id}`)?.value);
     const bainha_cm  = parseFloat(document.getElementById(`a-bainha-${id}`)?.value) || 15;
-    const cabecote_cm = parseFloat(document.getElementById(`a-cabecote-${id}`)?.value) || 10;
+    const cabecote_cm = parseFloat(document.getElementById(`a-cabecote-${id}`)?.value) || 0;
     if (!larg || larg <= 0) { await showAlert('Informe a largura da parede.', '⚠️'); return; }
     if (!alt  || alt  <= 0) { await showAlert('Informe a altura da parede.', '⚠️'); return; }
     if (!fator || fator <= 0) { await showAlert('Informe um fator de franzimento válido (ex: 2.0).', '⚠️'); return; }
@@ -4584,6 +4659,25 @@ function salvarCamposInstalacao(pedidoId) {
     renderDashboardInstalacoes();
 }
 
+async function alterarDataInstalacao(pedidoId) {
+    const p = db.pedidos.find(x => x.id == pedidoId);
+    if (!p) return;
+    const novaData = (document.getElementById(`inst-data-${pedidoId}`)?.value || '').trim();
+    if (!novaData) { showAlert('Selecione uma data válida antes de confirmar.', '⚠️'); return; }
+    if (novaData === p.data_entrega) { toast('A data já é essa.', 'info', 1500); return; }
+    const fmtD = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
+    const ok = await showConfirm(
+        `Alterar a data de instalação do pedido #${formatPedidoId(pedidoId)}?\n\nData atual: ${fmtD(p.data_entrega)}\nNova data:  ${fmtD(novaData)}\n\nA alteração refletirá no pedido.`,
+        '📅', 'Confirmar', 'Cancelar'
+    );
+    if (!ok) return;
+    p.data_entrega = novaData;
+    syncDB();
+    toast('Data de instalação atualizada!', 'success', 2000);
+    renderAgenda();
+    renderDashboardInstalacoes();
+}
+
 function renderAgenda() {
     const container = document.getElementById('agenda-container');
     if (!container) return;
@@ -4644,6 +4738,20 @@ function renderAgenda() {
                 <!-- Campos editáveis de instalação -->
                 <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
                     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:10px">Detalhes da Instalação</div>
+
+                    <!-- Data de instalação (com confirmação) -->
+                    <div style="margin-bottom:10px;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px">
+                        <label style="font-size:11px;color:#92400e;font-weight:700;display:block;margin-bottom:6px">📅 Data de Instalação</label>
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                            <input type="date" id="inst-data-${p.id}" value="${p.data_entrega||''}"
+                                   style="padding:6px 10px;border:1px solid #fcd34d;border-radius:6px;font-size:13px;background:#fff;color:var(--dark);flex:1;min-width:140px">
+                            <button class="btn btn-sm" style="background:#d97706;color:#fff;border:none;white-space:nowrap" onclick="alterarDataInstalacao(${p.id})">
+                                📅 Alterar Data
+                            </button>
+                        </div>
+                        <div style="font-size:10px;color:#b45309;margin-top:5px">Alteração reflete no pedido e exige confirmação.</div>
+                    </div>
+
                     <div style="display:grid;grid-template-columns:1fr 120px;gap:8px;margin-bottom:8px">
                         <div>
                             <label style="font-size:11px;color:#6b7280;display:block;margin-bottom:3px">Endereço</label>
@@ -4719,6 +4827,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!document.getElementById('login-usuario')) {
         checkAuth();
         carregarTema();
+        renderBellIndicator();
         const popupUserEl = document.getElementById('popup-user-name');
         if (popupUserEl) {
             const u = JSON.parse(sessionStorage.getItem('sc_user') || '{}');
@@ -5668,18 +5777,21 @@ function renderDashboardFinanceiro() {
         const mkA = (tipo, icon, texto) => `<div class="fin-alerta fin-alerta-${tipo}"><span style="font-size:18px;flex-shrink:0">${icon}</span><span>${texto}</span></div>`;
         const alertas = [];
 
-        const venHojeRec = db.contas_receber.filter(cr=>cr.status==='Pendente'&&cr.data_vencimento===hojeStr);
-        const venHojePag = db.contas_pagar.filter(cp=>cp.status==='Pendente'&&cp.data_vencimento===hojeStr);
-        if (venHojeRec.length+venHojePag.length)
-            alertas.push(mkA('warning','⏰',`<strong>${venHojeRec.length+venHojePag.length} conta(s) vencem hoje</strong> — ${venHojeRec.length} a receber (R$ ${fmt(venHojeRec.reduce((s,x)=>s+x.valor,0))}) · ${venHojePag.length} a pagar (R$ ${fmt(venHojePag.reduce((s,x)=>s+x.valor,0))})`));
+        if (alertaAtivo('fin_vencimento')) {
+            const venHojeRec = db.contas_receber.filter(cr=>cr.status==='Pendente'&&cr.data_vencimento===hojeStr);
+            const venHojePag = db.contas_pagar.filter(cp=>cp.status==='Pendente'&&cp.data_vencimento===hojeStr);
+            if (venHojeRec.length+venHojePag.length)
+                alertas.push(mkA('warning','⏰',`<strong>${venHojeRec.length+venHojePag.length} conta(s) vencem hoje</strong> — ${venHojeRec.length} a receber (R$ ${fmt(venHojeRec.reduce((s,x)=>s+x.valor,0))}) · ${venHojePag.length} a pagar (R$ ${fmt(venHojePag.reduce((s,x)=>s+x.valor,0))})`));
+        }
 
-        const atRec = db.contas_receber.filter(cr=>cr.status==='Atrasado');
-        if (atRec.length)
-            alertas.push(mkA('danger','❌',`<strong>${atRec.length} recebimento(s) em atraso</strong> — R$ ${fmt(atRec.reduce((s,x)=>s+x.valor,0))} de ${new Set(atRec.map(x=>x.cliente_nome)).size} cliente(s)`));
-
-        const atPag = db.contas_pagar.filter(cp=>cp.status==='Atrasado');
-        if (atPag.length)
-            alertas.push(mkA('danger','💸',`<strong>${atPag.length} pagamento(s) em atraso</strong> — R$ ${fmt(atPag.reduce((s,x)=>s+x.valor,0))}`));
+        if (alertaAtivo('fin_atraso')) {
+            const atRec = db.contas_receber.filter(cr=>cr.status==='Atrasado');
+            if (atRec.length)
+                alertas.push(mkA('danger','❌',`<strong>${atRec.length} recebimento(s) em atraso</strong> — R$ ${fmt(atRec.reduce((s,x)=>s+x.valor,0))} de ${new Set(atRec.map(x=>x.cliente_nome)).size} cliente(s)`));
+            const atPag = db.contas_pagar.filter(cp=>cp.status==='Atrasado');
+            if (atPag.length)
+                alertas.push(mkA('danger','💸',`<strong>${atPag.length} pagamento(s) em atraso</strong> — R$ ${fmt(atPag.reduce((s,x)=>s+x.valor,0))}`));
+        }
 
         const hoje2 = new Date();
         const mesAtStr = `${hoje2.getFullYear()}-${String(hoje2.getMonth()+1).padStart(2,'0')}`;
@@ -5687,14 +5799,14 @@ function renderDashboardFinanceiro() {
         const mesAntStr = `${mesAntD.getFullYear()}-${String(mesAntD.getMonth()+1).padStart(2,'0')}`;
         const fatAt = db.contas_receber.filter(cr=>cr.status==='Pago'&&(cr.data_pagamento||'').startsWith(mesAtStr)).reduce((s,cr)=>s+cr.valor,0);
         const fatAnt= db.contas_receber.filter(cr=>cr.status==='Pago'&&(cr.data_pagamento||'').startsWith(mesAntStr)).reduce((s,cr)=>s+cr.valor,0);
-        if (fatAnt>0) {
+        if (alertaAtivo('fin_tendencia') && fatAnt>0) {
             const pct = ((fatAt-fatAnt)/fatAnt*100).toFixed(1);
             alertas.push(mkA(fatAt>=fatAnt?'success':'warning', fatAt>=fatAnt?'📈':'📉',
                 `Faturamento deste mês <strong>${fatAt>=fatAnt?'+':''}${pct}%</strong> vs. mês anterior (R$ ${fmt(fatAt)} × R$ ${fmt(fatAnt)})`));
         }
 
         const metaMes = _finMetas[mesAtStr]||0;
-        if (metaMes>0) {
+        if (alertaAtivo('fin_meta') && metaMes>0) {
             const pctMeta = (fatAt/metaMes*100).toFixed(1);
             if (fatAt>=metaMes)
                 alertas.push(mkA('success','🏆',`Meta do mês atingida! <strong>${pctMeta}%</strong> — R$ ${fmt(fatAt)} de R$ ${fmt(metaMes)}`));
@@ -5706,14 +5818,14 @@ function renderDashboardFinanceiro() {
         const em7Str = em7.toISOString().split('T')[0];
         const proxVenc = db.contas_receber.filter(cr=>cr.status!=='Pago'&&cr.data_vencimento>hojeStr&&cr.data_vencimento<=em7Str).length
                        + db.contas_pagar.filter(cp=>cp.status!=='Pago'&&cp.data_vencimento>hojeStr&&cp.data_vencimento<=em7Str).length;
-        if (proxVenc>=3)
+        if (alertaAtivo('fin_vencimento') && proxVenc>=3)
             alertas.push(mkA('info','📋',`<strong>${proxVenc} conta(s)</strong> vencem nos próximos 7 dias`));
 
         const _h7 = new Date(hojeStr+'T00:00:00'); _h7.setDate(_h7.getDate()+7);
         const _h7s = _h7.toISOString().split('T')[0];
         const _ent7 = db.contas_receber.filter(cr=>cr.status!=='Pago'&&cr.data_vencimento>=hojeStr&&cr.data_vencimento<=_h7s).reduce((s,cr)=>s+cr.valor,0);
         const _sai7 = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&cp.data_vencimento>=hojeStr&&cp.data_vencimento<=_h7s).reduce((s,cp)=>s+cp.valor,0);
-        if (_sai7 > _ent7 && _sai7 > 0)
+        if (alertaAtivo('fin_gap') && _sai7 > _ent7 && _sai7 > 0)
             alertas.push(mkA('danger','⚠️',`Gap de caixa: saídas superam entradas nos próximos 7 dias em <strong>R$ ${fmt(_sai7-_ent7)}</strong> (entradas: R$ ${fmt(_ent7)} · saídas: R$ ${fmt(_sai7)})`));
 
         alertasEl.innerHTML = alertas.join('');

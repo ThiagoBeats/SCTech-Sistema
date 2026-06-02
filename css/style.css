@@ -439,6 +439,24 @@ body.login-page { display: flex; align-items: center; justify-content: center; b
 .fin-alerta-info    { background:#dbeafe; border:1px solid #93c5fd; color:#1e40af; }
 .fin-alerta-success { background:#dcfce7; border:1px solid #86efac; color:#166534; }
 
+/* ── TOGGLE SWITCH (alertas config) ─────────────────────────── */
+.alerta-toggle-row { display:flex; align-items:center; justify-content:space-between; padding:11px 0; border-bottom:1px solid var(--border); }
+.alerta-toggle-row:last-child { border-bottom:none; }
+.toggle-switch { position:relative; display:inline-block; width:42px; height:24px; flex-shrink:0; }
+.toggle-switch input { opacity:0; width:0; height:0; }
+.toggle-slider { position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#cbd5e1; border-radius:24px; transition:.25s; }
+.toggle-slider::before { position:absolute; content:""; height:18px; width:18px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.25s; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+.toggle-switch input:checked + .toggle-slider { background:var(--primary); }
+.toggle-switch input:checked + .toggle-slider::before { transform:translateX(18px); }
+
+/* ── BELL: alertas desabilitados ─────────────────────────────── */
+#alerta-bell-disabled { display:inline-flex; align-items:center; gap:6px; padding:5px 11px; background:#fff7ed; border:1px solid #fed7aa; border-radius:20px; cursor:pointer; font-size:12px; font-weight:600; color:#c2410c; transition:all .2s; position:relative; margin-left:auto; white-space:nowrap; }
+#alerta-bell-disabled:hover { background:#ffedd5; border-color:#fb923c; }
+#alerta-bell-disabled .bell-tip { display:none; position:absolute; top:calc(100% + 8px); right:0; background:#1f2937; color:#fff; font-size:11px; padding:7px 12px; border-radius:6px; white-space:nowrap; z-index:500; pointer-events:none; box-shadow:0 4px 12px rgba(0,0,0,.2); }
+#alerta-bell-disabled:hover .bell-tip { display:block; }
+html[data-theme="dark"] #alerta-bell-disabled { background:#431407; border-color:#9a3412; color:#fdba74; }
+html[data-theme="dark"] #alerta-bell-disabled:hover { background:#7c2d12; }
+
 /* ── TEMA ESCURO ─────────────────────────────────────────────── */
 html[data-theme="dark"] {
     --primary: #4A90E2;

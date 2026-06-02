@@ -102,6 +102,12 @@
             </div>
         </div>
 
+        <div class="card" style="max-width:860px">
+            <h3 style="margin-bottom:6px;color:var(--primary)">🔔 Preferências de Alertas</h3>
+            <p style="font-size:12px;color:#6b7280;margin-bottom:16px">Escolha quais alertas devem ser exibidos no sistema. Alertas desabilitados mostrarão um indicador 🔕 no cabeçalho de todas as páginas.</p>
+            <div id="emp-alertas-cfg"></div>
+        </div>
+
         <div class="card" style="max-width:860px" id="emp-preview-card" style="display:none">
             <h3 style="margin-bottom:14px;color:var(--primary)">Pré-visualização do Cabeçalho</h3>
             <div id="emp-cabecalho-preview" style="border:1px solid var(--border);border-radius:8px;padding:16px 20px;background:#fff"></div>
@@ -112,6 +118,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             carregarEmpresaConfigs();
             atualizarPreviewCabecalho();
+            renderEmpresaAlertasCfg();
         });
         function atualizarPreviewCabecalho() {
             const card = document.getElementById('emp-preview-card');
