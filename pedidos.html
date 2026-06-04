@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Pedidos - SCTech</title>
+    <link rel="icon" href="images/logo.png">
+    <link rel="stylesheet" href="css/style.css">
+    <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light')</script>
+</head>
+<body>
+    <aside class="sidebar" id="main-sidebar">
+        <div class="logo-popup-wrap" id="logo-popup-wrap"><div class="logo" onclick="toggleLogoPopup(event)"><img src="images/logo.png" alt="SCTech" class="sidebar-logo-img"><h2>SCTech</h2></div><div class="logo-popup" id="logo-popup"><div class="logo-popup-header"><div class="logo-popup-avatar">&#128100;</div><div><div class="logo-popup-name" id="popup-user-name">&#8212;</div><div class="logo-popup-role">Usu&#225;rio SCTech</div></div></div><div class="logo-popup-sep"></div><button class="logo-popup-item" onclick="toggleTema()" style="justify-content:space-between"><span style="display:flex;align-items:center;gap:10px"><span id="tema-icone">🌙</span> Tema</span><span class="tema-switch" id="tema-switch"></span></button><div class="logo-popup-sep"></div><a href="sobre.html" class="logo-popup-item"><span>&#8505;&#65039;</span> Sobre o Sistema</a><a href="empresa.html" class="logo-popup-item"><span>&#9881;&#65039;</span> Configurar Empresa</a><div class="logo-popup-sep"></div><button class="logo-popup-item logo-popup-logout" onclick="logout()"><span>&#128682;</span> Sair</button></div></div>
+        <a href="index.html"        class="nav-item"><img src="images/icones/dashboard.png" class="nav-icon"> <span class="nav-text">Página Inicial</span></a>
+        <a href="pedidos.html"      class="nav-item active"><img src="images/icones/relatorios.png" class="nav-icon"> <span class="nav-text">Pedidos</span></a>
+        <a href="pcp.html"          class="nav-item"><img src="images/icones/producao.png" class="nav-icon"> <span class="nav-text">Produção</span></a>
+        <a href="estoque.html"      class="nav-item"><img src="images/icones/estoque.png" class="nav-icon"> <span class="nav-text">Estoque</span></a>
+        <a href="clientes.html"     class="nav-item"><img src="images/icones/clientes.png" class="nav-icon"> <span class="nav-text">Clientes</span></a><a href="catalogo.html" class="nav-item"><img src="images/icones/catalogo.png" class="nav-icon"> <span class="nav-text">Cadastro/Catálogo</span></a>
+        <a href="vendedores.html"   class="nav-item"><img src="images/icones/vendedores.png" class="nav-icon"> <span class="nav-text">Vendedores</span></a>
+        <a href="fornecedores.html" class="nav-item"><img src="images/icones/fornecedores.png" class="nav-icon"> <span class="nav-text">Fornecedores</span></a>
+        <a href="financeiro.html"   class="nav-item"><img src="images/icones/financeiro.png" class="nav-icon"> <span class="nav-text">Financeiro</span></a>
+    </aside>
+
+    <main class="main">
+        <div class="header">
+            <h2>Pedidos</h2>
+            <a href="pedido.html" class="btn btn-success" style="display:flex;align-items:center;gap:7px;font-weight:600">+ Novo Pedido</a>
+        </div>
+
+        <!-- Gráfico + Filtros + Cards de Status -->
+        <div style="display:grid;grid-template-columns:280px 1fr;gap:20px;margin-bottom:20px;align-items:start">
+
+            <!-- Donut: Pedidos por Status -->
+            <div class="card chart-card" style="padding:20px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px;flex-wrap:wrap">
+                    <h3 style="color:#374151;font-size:14px;margin:0;font-weight:700">Pedidos por Status</h3>
+                    <select id="chart-status-filtro" onchange="renderChartStatus()" style="font-size:11px;padding:3px 7px;border:1px solid #d1d5db;border-radius:6px;background:var(--white);color:var(--dark);cursor:pointer"></select>
+                </div>
+                <canvas id="chart-status"></canvas>
+            </div>
+
+            <!-- Coluna direita: filtros + cards de status -->
+            <div style="display:flex;flex-direction:column;gap:12px">
+
+                <!-- Filtros -->
+                <div class="card" style="padding:16px 20px">
+                    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+                        <div class="form-group" style="flex:2;min-width:200px;margin-bottom:0">
+                            <label>Buscar</label>
+                            <input type="text" id="filtro-texto" placeholder="Buscar por ID, cliente ou ambiente…" oninput="renderDashboard()">
+                        </div>
+                        <div class="form-group" style="flex:1;min-width:160px;margin-bottom:0">
+                            <label>Status</label>
+                            <select id="filtro-status" onchange="renderDashboard()">
+                                <option value="">Todos os status</option>
+                                <option value="Orçamento">Orçamento</option>
+                                <option value="Medição">Medição</option>
+                                <option value="Aguardando Tecido">Aguardando Tecido</option>
+                                <option value="Na Costura">Na Costura</option>
+                                <option value="Pronto p/ Instalação">Pronto p/ Instalação</option>
+                                <option value="Aguardando Pagamento">Aguardando Pagamento</option>
+                                <option value="Instalado">Instalado</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom:0;display:flex;align-items:center;padding-bottom:2px">
+                            <span id="pedidos-counter" class="pedidos-counter"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cards de contagem por status -->
+                <div id="pedidos-status-cards" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px"></div>
+
+            </div>
+        </div>
+
+        <!-- Tabela de pedidos -->
+        <div class="card">
+            <table>
+                <thead id="thead-pedidos"></thead>
+                <tbody id="tb-pedidos"></tbody>
+            </table>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        const STATUS_CARDS_CFG = [
+            { key:'Orçamento',             label:'Orçamento',       ic:'📋', bg:'#f1f5f9', bord:'#cbd5e1', clr:'#475569' },
+            { key:'Medição',               label:'Medição',         ic:'📐', bg:'#dbeafe', bord:'#93c5fd', clr:'#1e40af' },
+            { key:'Aguardando Tecido',     label:'Ag. Tecido',      ic:'🧵', bg:'#ede9fe', bord:'#c4b5fd', clr:'#5b21b6' },
+            { key:'Na Costura',            label:'Na Costura',      ic:'✂️', bg:'#fce7f3', bord:'#f9a8d4', clr:'#9d174d' },
+            { key:'Pronto p/ Instalação',  label:'Pronto p/ Inst.', ic:'📦', bg:'#dcfce7', bord:'#86efac', clr:'#166534' },
+            { key:'Aguardando Pagamento',  label:'Ag. Pagamento',   ic:'💳', bg:'#fef9c3', bord:'#fde047', clr:'#854d0e' },
+            { key:'Instalado',             label:'Instalado',       ic:'✅', bg:'#d1fae5', bord:'#6ee7b7', clr:'#065f46' },
+        ];
+
+        function renderStatusCards() {
+            const el = document.getElementById('pedidos-status-cards');
+            if (!el) return;
+            el.innerHTML = STATUS_CARDS_CFG.map(s => {
+                const peds  = db.pedidos.filter(p => normalizarStatus(p.status) === s.key);
+                const count = peds.length;
+                const valor = peds.reduce((sum, p) => sum + (p.valor || 0), 0);
+                const ativo = document.getElementById('filtro-status')?.value === s.key;
+                return `<div onclick="filtrarPorStatusPedidos('${s.key}')"
+                    style="background:${s.bg};border:2px solid ${ativo ? s.clr : s.bord};border-radius:8px;padding:12px 14px;cursor:pointer;transition:all .15s${ativo ? ';box-shadow:0 0 0 3px '+s.clr+'33' : ''}"
+                    onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,.12)'"
+                    onmouseout="this.style.transform='';this.style.boxShadow='${ativo ? '0 0 0 3px '+s.clr+'33' : ''}'">
+                    <div style="font-size:11px;color:${s.clr};font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">${s.ic} ${s.label}</div>
+                    <div style="font-size:24px;font-weight:800;color:${s.clr};line-height:1">${count}</div>
+                    <div style="font-size:11px;color:${s.clr};opacity:.8;margin-top:4px">R$ ${valor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function filtrarPorStatusPedidos(status) {
+            const sel = document.getElementById('filtro-status');
+            if (!sel) return;
+            sel.value = sel.value === status ? '' : status; // toggle: clicar no mesmo status limpa o filtro
+            renderDashboard();
+            renderStatusCards();
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            renderDashboard();
+            renderStatusCards();
+        });
+    </script>
+</body>
+</html>

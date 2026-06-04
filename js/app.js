@@ -755,6 +755,20 @@ function abrirOS(id) {
 async function aprovarPedido(id) {
     const ped = db.pedidos.find(p => p.id == id);
     if (!ped) return;
+
+    const pendencias = [];
+    if (!ped.clienteNome && !ped.clienteId) pendencias.push('• Cliente não definido');
+    if (!ped.vendedor_nome && !ped.vendedor_id) pendencias.push('• Vendedor não definido');
+    if (!ped.data_entrega) pendencias.push('• Data de entrega não definida');
+
+    if (pendencias.length) {
+        await showAlert(
+            `Não é possível aprovar o pedido #${formatPedidoId(id)}.\n\nCorrija os itens abaixo antes de aprovar:\n\n${pendencias.join('\n')}`,
+            '⚠️'
+        );
+        return;
+    }
+
     if (!await showConfirm(`Aprovar pedido #${formatPedidoId(id)} e enviar para produção?`, '✅', 'Aprovar')) return;
     ped.status = 'Medição';
     ped.data_producao = Date.now();
@@ -1049,56 +1063,7 @@ let _chartFat = null, _chartStatus = null;
 function renderCharts() {
     if (typeof Chart === 'undefined') return;
 
-    // ── Gráfico 1: Faturamento últimos 6 meses ──────────────────
-    const meses = [];
-    const hoje = new Date();
-    for (let i = 5; i >= 0; i--) {
-        const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
-        meses.push({ ano: d.getFullYear(), mes: d.getMonth(), label: d.toLocaleString('pt-BR', { month: 'short', year: '2-digit' }) });
-    }
-    const fatPorMes = meses.map(m =>
-        db.pedidos
-            .filter(p => {
-                if (normalizarStatus(p.status) !== 'Instalado') return false;
-                const d = new Date(p.data_instalado || p.data_criacao || p.id);
-                return d.getFullYear() === m.ano && d.getMonth() === m.mes;
-            })
-            .reduce((s, p) => s + (p.valor || 0), 0)
-    );
-
-    const ctxFat = document.getElementById('chart-faturamento');
-    if (ctxFat) {
-        if (_chartFat) _chartFat.destroy();
-        _chartFat = new Chart(ctxFat, {
-            type: 'bar',
-            data: {
-                labels: meses.map(m => m.label),
-                datasets: [{
-                    label: 'Faturamento (R$)',
-                    data: fatPorMes,
-                    backgroundColor: 'rgba(42,92,130,0.75)',
-                    borderColor: '#2A5C82',
-                    borderWidth: 1.5,
-                    borderRadius: 6,
-                    borderSkipped: false
-                }]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: true,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: { callback: v => 'R$ ' + v.toLocaleString('pt-BR') },
-                        grid: { color: 'rgba(0,0,0,0.05)' }
-                    },
-                    x: { grid: { display: false } }
-                }
-            }
-        });
-    }
-
-    // ── Gráfico 2: Pedidos por status (donut) ───────────────────
+    // ── Gráfico: Pedidos por status (donut) ─────────────────────
     const filtroSel = document.getElementById('chart-status-filtro');
     if (filtroSel && !filtroSel.options.length) {
         const hoje2 = new Date();
@@ -1327,9 +1292,20 @@ function renderEmpresaAlertasCfg() {
         </div>`;
     }).join('');
 }
+function _getHeaderGroup() {
+    let grp = document.getElementById('header-right-group');
+    if (!grp) {
+        const headerEl = document.querySelector('.header');
+        if (!headerEl) return null;
+        grp = document.createElement('div');
+        grp.id = 'header-right-group';
+        grp.style.cssText = 'display:flex;align-items:center;gap:10px;margin-left:auto';
+        headerEl.appendChild(grp);
+    }
+    return grp;
+}
+
 function renderBellIndicator() {
-    const headerEl = document.querySelector('.header');
-    if (!headerEl) return;
     const cfg = getAlertasCfg();
     const temDesativado = Object.keys(ALERTAS_TIPOS).some(k => cfg[k] === false);
     let bell = document.getElementById('alerta-bell-disabled');
@@ -1338,10 +1314,46 @@ function renderBellIndicator() {
         bell = document.createElement('div');
         bell.id = 'alerta-bell-disabled';
         bell.onclick = () => window.location.href = 'empresa.html';
-        headerEl.appendChild(bell);
+        const grp = _getHeaderGroup();
+        if (grp) grp.appendChild(bell);
     }
     bell.innerHTML = `🔕 Alertas desabilitados<div class="bell-tip">Alguns alertas estão desabilitados. Clique para gerenciar em Configurar Empresa.</div>`;
 }
+
+function renderDashboardsButton() {
+    if (document.getElementById('dash-nav-btn')) return;
+    if (window.location.pathname.toLowerCase().includes('dashboards')) return;
+    const grp = _getHeaderGroup();
+    if (!grp) return;
+    const DASH_LIST = [
+        ['comercial','📊','Comercial / Vendas'],
+        ['producao','🏭','Produção'],
+        ['estoque','📦','Estoque'],
+        ['instalacoes','🔧','Instalações'],
+        ['compras','🛒','Compras'],
+        ['gerencial','👔','Gerencial'],
+    ];
+    const wrap = document.createElement('div');
+    wrap.id = 'dash-nav-btn';
+    wrap.style.cssText = 'position:relative';
+    wrap.innerHTML = `<button class="btn btn-outline btn-sm" onclick="toggleDashboardsMenu(event)" style="display:flex;align-items:center;gap:5px;font-weight:600">
+        📊 Dashboards <span style="font-size:9px;opacity:.7">▾</span>
+    </button>
+    <div id="dash-dropdown" style="display:none;position:absolute;top:calc(100%+8px);right:0;background:var(--white);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.14);z-index:3000;min-width:220px;padding:5px 0;overflow:hidden">
+        ${DASH_LIST.map(([id,ic,lb])=>`<a href="dashboards.html?dash=${id}" style="display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;font-weight:500;color:var(--dark);text-decoration:none;white-space:nowrap" onmouseover="this.style.background='var(--light)'" onmouseout="this.style.background=''">${ic} <span>${lb}</span></a>`).join('<div style="height:1px;background:var(--border)"></div>')}
+    </div>`;
+    grp.insertBefore(wrap, grp.firstChild);
+}
+
+function toggleDashboardsMenu(e) {
+    e.stopPropagation();
+    const m = document.getElementById('dash-dropdown');
+    if (m) m.style.display = m.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', () => {
+    const m = document.getElementById('dash-dropdown');
+    if (m) m.style.display = 'none';
+});
 
 function renderDashboardAlertas() {
     const el = document.getElementById('dashboard-alertas');
@@ -1357,8 +1369,23 @@ function renderDashboardAlertas() {
             <span>${itens}</span>
         </div>`;
 
-    // Pedidos com entrega hoje
+    // Pedidos com entrega atrasada ou hoje
     if (alertaAtivo('entrega')) {
+        const entregasAtrasadas = db.pedidos.filter(p => {
+            if (!p.data_entrega || normalizarStatus(p.status) === 'Instalado') return false;
+            return p.data_entrega < hojeStr;
+        });
+        if (entregasAtrasadas.length) {
+            const itens = entregasAtrasadas
+                .sort((a, b) => a.data_entrega.localeCompare(b.data_entrega))
+                .map(p => {
+                    const diasAtraso = Math.round((hoje - new Date(p.data_entrega + 'T00:00:00')) / 86400000);
+                    return `<span style="cursor:pointer;color:#991b1b;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})" title="${diasAtraso}d de atraso">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')} (${p.data_entrega.split('-').reverse().join('/')})</span>`;
+                }).join(' &nbsp;·&nbsp; ');
+            banners.push(mkBanner('🚨', '#fff1f2', '#fca5a5', '#991b1b',
+                `<strong>${entregasAtrasadas.length} entrega(s) atrasada(s):</strong>`, itens));
+        }
+
         const entregasHoje = db.pedidos.filter(p => {
             if (!p.data_entrega || normalizarStatus(p.status) === 'Instalado') return false;
             return p.data_entrega === hojeStr;
@@ -1430,12 +1457,55 @@ function renderDashboardAlertas() {
         }
     }
 
-    if (!banners.length) { el.innerHTML = ''; el.style.display = 'none'; return; }
-    el.style.display = 'block';
-    el.style.background = 'transparent';
-    el.style.border = 'none';
-    el.style.padding = '0';
-    el.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">${banners.join('')}</div>`;
+    // Contador no cabeçalho do card
+    const countEl = document.getElementById('dash-alertas-count');
+    if (countEl) {
+        if (banners.length) {
+            countEl.textContent = banners.length + (banners.length === 1 ? ' alerta' : ' alertas');
+            countEl.style.background = '#fee2e2';
+            countEl.style.color = '#991b1b';
+        } else {
+            countEl.textContent = '';
+            countEl.style.background = '#f3f4f6';
+            countEl.style.color = '#6b7280';
+        }
+    }
+
+    if (!banners.length) {
+        el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:32px 0;color:#9ca3af;font-size:13px;gap:8px">
+            <span style="font-size:32px">✅</span>
+            <span>Nenhum alerta ativo no momento.</span>
+        </div>`;
+        clearInterval(window._dashAlertaScroll);
+        return;
+    }
+
+    el.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px;padding-right:2px">${banners.join('')}</div>`;
+
+    // Auto-scroll quando há mais de um alerta
+    clearInterval(window._dashAlertaScroll);
+    if (banners.length > 1) {
+        let pausado = false;
+        el.addEventListener('mouseenter', () => { pausado = true; }, { passive: true });
+        el.addEventListener('mouseleave', () => { pausado = false; }, { passive: true });
+        window._dashAlertaScroll = setInterval(() => {
+            if (pausado) return;
+            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 2) {
+                // chegou ao fim — pausa 2s e volta ao topo suavemente
+                clearInterval(window._dashAlertaScroll);
+                setTimeout(() => {
+                    el.scrollTo({ top: 0, behavior: 'smooth' });
+                    setTimeout(() => {
+                        if (document.getElementById('dashboard-alertas') === el) {
+                            renderDashboardAlertas();
+                        }
+                    }, 800);
+                }, 2000);
+            } else {
+                el.scrollTop += 1;
+            }
+        }, 35);
+    }
 }
 
 function filtrarMetrica(valor) {
@@ -2679,6 +2749,7 @@ async function calcularAmbiente(id) {
         if (!tecido) return;
         const t = tecidos[tidx];
         t.tecidoId = tecido.id; t.tecidoNome = tecido.nome;
+        t._ref = document.getElementById(`a-tec-ref-${id}-${tidx}`)?.value || t._ref || '';
         t.largura_rolo = tecido.largura_rolo || 2.80; t.rapport_cm = tecido.rapport || 0;
         let acrescimo_rapport_m = 0, alt_corte = alt_bruta;
         if (t.rapport_cm > 0) {
@@ -3293,6 +3364,37 @@ function renderOS() {
     container.innerHTML = gerarHTMLOS(localStorage.getItem('sc_os_id'));
 }
 
+// --- CONDIÇÕES GERAIS DA PROPOSTA ---
+const _COND_GERAIS_DEFAULT = `Proposta válida por {diasValidade} dias a partir da data de emissão.
+O prazo de produção inicia após a confirmação formal e o recebimento do sinal combinado.
+As medidas estão sujeitas a conferência técnica in loco antes do corte definitivo do tecido.
+Alterações no projeto após a aprovação podem gerar custos adicionais.
+Não nos responsabilizamos por variações de tonalidade entre rolos de tecido de lotes distintos não informados previamente.`;
+
+function getCondicoesGerais() {
+    return localStorage.getItem('sc_cond_gerais') || _COND_GERAIS_DEFAULT;
+}
+
+function salvarCondicoesGerais() {
+    const el = document.getElementById('emp-condicoes-gerais');
+    if (!el) return;
+    localStorage.setItem('sc_cond_gerais', el.value);
+    toast('Condições Gerais salvas!', 'success', 1800);
+}
+
+function restaurarCondicoesGerais() {
+    const el = document.getElementById('emp-condicoes-gerais');
+    if (!el) return;
+    el.value = _COND_GERAIS_DEFAULT;
+    localStorage.removeItem('sc_cond_gerais');
+    toast('Condições restauradas para o padrão.', 'info', 1800);
+}
+
+function carregarCondicoesGerais() {
+    const el = document.getElementById('emp-condicoes-gerais');
+    if (el) el.value = getCondicoesGerais();
+}
+
 // --- PROPOSTA PDF ---
 function gerarHTMLProposta(pedidoId, diasValidade) {
     const ped = db.pedidos.find(p => p.id == pedidoId);
@@ -3309,10 +3411,21 @@ function gerarHTMLProposta(pedidoId, diasValidade) {
         const tecidos = a.tecidos || [];
         const descTecidos = tecidos.map(t => escapeHtml(t.tecidoNome||'')).filter(Boolean).join(' + ') || 'Tecido selecionado';
         const primTec = tecidos[0] || {};
+        const aberturaImg = a.abertura
+            ? `<img src="images/Aberturas/Abertura${escapeHtml(a.abertura)}.png" alt="Abertura ${escapeHtml(a.abertura)}"
+                style="height:54px;width:auto;vertical-align:middle;margin-left:10px;border:1px solid #e5e7eb;border-radius:4px;padding:2px;background:#fff"
+                title="Tipo de abertura: ${escapeHtml(a.abertura)}">`
+            : '';
         return `<tr>
             <td><strong>${escapeHtml(a.amb||'—')}</strong></td>
-            <td><strong>${a.prega?'Cortina '+escapeHtml(a.prega):'Cortina'}</strong> em ${descTecidos}${a.fixacao?' — '+escapeHtml(a.fixacao):''}${a.abertura?' | Abertura '+escapeHtml(a.abertura):''}${a.local_instalacao?' | '+escapeHtml(a.local_instalacao):''}
-                <small>Parede: ${a.largura}m × ${a.altura||'—'}m | Fator: ${a.fator}x | ${(primTec.num_panos||'—')} pano(s) de ${primTec.alt_corte?primTec.alt_corte.toFixed(3):'—'}m${tecidos.length>1?' | '+tecidos.length+' tecidos':''}</small>
+            <td>
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+                    <div>
+                        <strong>${a.prega?'Cortina '+escapeHtml(a.prega):'Cortina'}</strong> em ${descTecidos}${a.fixacao?' — '+escapeHtml(a.fixacao):''}${a.abertura?' | Abertura '+escapeHtml(a.abertura):''}${a.local_instalacao?' | '+escapeHtml(a.local_instalacao):''}
+                        <br><small>Parede: ${a.largura}m × ${a.altura||'—'}m | Fator: ${a.fator}x | ${(primTec.num_panos||'—')} pano(s) de ${primTec.alt_corte?primTec.alt_corte.toFixed(3):'—'}m${tecidos.length>1?' | '+tecidos.length+' tecidos':''}</small>
+                    </div>
+                    ${aberturaImg}
+                </div>
             </td>
         </tr>`;
     }).join('');
@@ -3347,12 +3460,12 @@ function gerarHTMLProposta(pedidoId, diasValidade) {
         </div>
         <div class="proposta-termos">
             <h4>Condições Gerais</h4>
-            <ul>
-                <li>Proposta válida por ${diasValidade} dias a partir da data de emissão.</li>
-                <li>O prazo de produção inicia após a confirmação formal e o recebimento do sinal combinado.</li>
-                <li>As medidas estão sujeitas a conferência técnica <em>in loco</em> antes do corte definitivo do tecido.</li>
-                <li>Alterações no projeto após a aprovação podem gerar custos adicionais.</li>
-                <li>Não nos responsabilizamos por variações de tonalidade entre rolos de tecido de lotes distintos não informados previamente.</li>
+            <ul>${getCondicoesGerais()
+                .replace(/\{diasValidade\}/g, diasValidade)
+                .split('\n')
+                .filter(l => l.trim())
+                .map(l => `<li>${escapeHtml(l.trim())}</li>`)
+                .join('')}
             </ul>
         </div>
         <div class="proposta-aprovacao"><p>Aprovado em: _____ / _____ / _________</p><br><p>Assinatura do cliente: _________________________________________________</p></div>`;
@@ -3771,6 +3884,14 @@ function mostrarTabVendedores(tab) {
 }
 
 // --- FORNECEDORES ---
+function mascaraCPF(el) {
+    let v = el.value.replace(/\D/g, '').slice(0, 11);
+    if (v.length > 9)      v = v.replace(/^(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4');
+    else if (v.length > 6) v = v.replace(/^(\d{3})(\d{3})(\d{0,3})/, '$1.$2.$3');
+    else if (v.length > 3) v = v.replace(/^(\d{3})(\d{0,3})/, '$1.$2');
+    el.value = v;
+}
+
 function mascaraCNPJ(el) {
     let v = el.value.replace(/\D/g, '').slice(0, 14);
     if (v.length > 12)     v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, '$1.$2.$3/$4-$5');
@@ -4120,8 +4241,7 @@ function renderListaPedidosCompra() {
                     <option${p.status==='Enviado'?' selected':''}>Enviado</option>
                     <option${p.status==='Recebido'?' selected':''}>Recebido</option>
                 </select>
-                <button class="btn btn-outline btn-sm" onclick="abrirPedidoCompra(${p.id})" title="Visualizar / PDF">📄</button>
-                <button class="btn btn-outline btn-sm" onclick="compartilharPC(${p.id})" title="Compartilhar pedido">📤 Compartilhar</button>
+                <button class="btn btn-outline btn-sm" onclick="abrirPedidoCompra(${p.id})" title="Baixar PDF">📄 PDF</button>
                 <button class="btn btn-outline btn-sm btn-danger" onclick="excluirPedidoCompra(${p.id})">🗑️</button>
             </td>
         </tr>`;
@@ -4283,6 +4403,25 @@ function toggleTipoClienteMedicao() {
     document.getElementById('med-grupo-novo').style.display      = tipo === 'novo'      ? '' : 'none';
 }
 
+function onMedClienteChange() {
+    const sel = document.getElementById('med-cliente-id');
+    if (!sel || !sel.value) return;
+    const cli = db.clientes.find(c => c.id == sel.value);
+    if (!cli) return;
+    const endEl = document.getElementById('med-end');
+    if (endEl && cli.end) endEl.value = cli.end;
+}
+
+function criarPedidoDaMedicao(medicaoId) {
+    const m = db.medicoes.find(x => x.id == medicaoId);
+    if (!m) return;
+    localStorage.setItem('sc_novo_pedido_pre', JSON.stringify({
+        clienteId:   m.clienteId   || null,
+        clienteNome: m.clienteNome || '',
+    }));
+    window.location.href = 'pedido.html';
+}
+
 async function salvarMedicao() {
     const tipo = document.querySelector('input[name="med-tipo"]:checked')?.value || 'existente';
     let clienteId = null, clienteNome = '', clienteTel = '';
@@ -4300,8 +4439,15 @@ async function salvarMedicao() {
     } else {
         clienteNome = (document.getElementById('med-novo-nome')?.value || '').trim();
         clienteTel  = (document.getElementById('med-novo-tel')?.value || '').trim();
+        const clienteCpf   = (document.getElementById('med-novo-cpf')?.value || '').trim();
+        const clienteEmail = (document.getElementById('med-novo-email')?.value || '').trim();
         if (!clienteNome) { await showAlert('Informe o nome do cliente.', '⚠️'); return; }
-        const novoCli = { id: Date.now(), nome: clienteNome, tel: clienteTel, email: '', cpf: '', end: '' };
+        if (clienteCpf) {
+            const cpfDigitos = clienteCpf.replace(/\D/g, '');
+            const duplicado = db.clientes.find(c => c.cpf && c.cpf.replace(/\D/g, '') === cpfDigitos);
+            if (duplicado) { await showAlert(`CPF já cadastrado para o cliente "${duplicado.nome}".`, '⚠️'); return; }
+        }
+        const novoCli = { id: Date.now(), nome: clienteNome, tel: clienteTel, email: clienteEmail, cpf: clienteCpf, end: '' };
         db.clientes.push(novoCli);
         clienteId = novoCli.id;
         const sel = document.getElementById('med-cliente-id');
@@ -4316,10 +4462,18 @@ async function salvarMedicao() {
     if (!data) { await showAlert('Informe a data da visita.', '⚠️'); return; }
     if (!end)  { await showAlert('Informe o endereço da visita.', '⚠️'); return; }
 
+    // Vincula o endereço ao cadastro do cliente quando é um novo cliente
+    if (tipo === 'novo' && clienteId) {
+        const cliNovo = db.clientes.find(c => c.id === clienteId);
+        if (cliNovo) cliNovo.end = end;
+    }
+
     db.medicoes.push({ id: Date.now(), clienteId, clienteNome, clienteTel, endereco: end, data, hora, obs, status: 'Agendado' });
 
-    const nomeEl = document.getElementById('med-novo-nome'); if (nomeEl) nomeEl.value = '';
-    const telEl  = document.getElementById('med-novo-tel');  if (telEl)  telEl.value  = '';
+    const nomeEl  = document.getElementById('med-novo-nome');  if (nomeEl)  nomeEl.value  = '';
+    const telEl   = document.getElementById('med-novo-tel');   if (telEl)   telEl.value   = '';
+    const cpfEl   = document.getElementById('med-novo-cpf');   if (cpfEl)   cpfEl.value   = '';
+    const emailEl = document.getElementById('med-novo-email'); if (emailEl) emailEl.value = '';
     document.getElementById('med-data').value = '';
     document.getElementById('med-hora').value = '';
     document.getElementById('med-end').value  = '';
@@ -4475,9 +4629,10 @@ function renderMedicoes() {
                     ${v.clienteTel ? `<a href="https://wa.me/55${v.clienteTel.replace(/\D/g,'')}" target="_blank" class="btn btn-outline btn-sm">📱 WhatsApp</a>` : ''}
                     <button class="btn btn-outline btn-sm" onclick="imprimirAgendamentoMedicao(${v.id})">🖨️ Documento</button>
                     <button class="btn btn-outline btn-sm btn-danger" onclick="cancelarMedicao(${v.id})" style="margin-left:auto">✕ Cancelar</button>
-                </div>` : `<div style="margin-top:10px;display:flex;gap:8px">
+                </div>` : `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                    <button class="btn btn-success btn-sm" onclick="criarPedidoDaMedicao(${v.id})" title="Abre o formulário de pedido com o cliente já preenchido">+ Criar Pedido</button>
                     <button class="btn btn-outline btn-sm" onclick="imprimirAgendamentoMedicao(${v.id})">🖨️ Documento</button>
-                    <button class="btn btn-outline btn-sm btn-danger" onclick="excluirMedicao(${v.id})">🗑️ Excluir</button>
+                    <button class="btn btn-outline btn-sm btn-danger" onclick="excluirMedicao(${v.id})" style="margin-left:auto">🗑️ Excluir</button>
                 </div>`}
             </div>`;
         }).join('');
@@ -4827,6 +4982,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!document.getElementById('login-usuario')) {
         checkAuth();
         carregarTema();
+        renderDashboardsButton();
         renderBellIndicator();
         const popupUserEl = document.getElementById('popup-user-name');
         if (popupUserEl) {
@@ -4893,6 +5049,21 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             adicionarAmbiente();
             renderItensPedido();
+            // Pré-preenche cliente quando vindo de "Criar Pedido" na medição
+            const prePed = localStorage.getItem('sc_novo_pedido_pre');
+            if (prePed) {
+                localStorage.removeItem('sc_novo_pedido_pre');
+                try {
+                    const d = JSON.parse(prePed);
+                    if (d.clienteId || d.clienteNome) {
+                        const buscaEl = document.getElementById('ped-cliente-busca');
+                        if (buscaEl && d.clienteNome) buscaEl.value = d.clienteNome;
+                        filtrarClientes();
+                        const sel = document.getElementById('ped-cliente');
+                        if (sel && d.clienteId) sel.value = String(d.clienteId);
+                    }
+                } catch(e) {}
+            }
         }
     }
 
