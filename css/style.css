@@ -35,7 +35,7 @@ body { background-color: var(--light); display: flex; flex-direction: column; he
 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 
 /* Elementos Visuais */
-.card { background: var(--white); padding: 20px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 20px; }
+.card { background: var(--white); padding: 20px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 20px; flex-shrink: 0; }
 .btn { padding: 8px 16px; border-radius: 6px; cursor: pointer; border: none; font-weight: bold; color: white; background: var(--primary); text-decoration: none; display: inline-block; transition: background 0.15s, box-shadow 0.15s, transform 0.1s; }
 .btn:hover { background: #1e4a6e; box-shadow: 0 4px 10px rgba(42,92,130,0.3); transform: translateY(-1px); }
 .btn:active { transform: translateY(0); box-shadow: none; }
@@ -563,8 +563,10 @@ html[data-theme="dark"] #doc-modal-scroll { background: #0f172a; }
    rolar horizontalmente apenas o componente que não coube. ──────── */
 
 /* Qualquer card que contenha uma tabela ganha rolagem horizontal própria
-   em vez de forçar a página inteira a estourar. */
-.card:has(table) { overflow-x: auto; }
+   em vez de forçar a página inteira a estourar. min-height evita que o
+   próprio overflow (que zera o tamanho mínimo automático em flex/grid)
+   espremia o card verticalmente. */
+.card:has(table) { overflow-x: auto; min-height: min-content; }
 
 /* Cabeçalhos de página: permitir quebra de linha em vez de cortar botões */
 .header { flex-wrap: wrap; gap: 10px; row-gap: 10px; }
