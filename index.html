@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Dashboard - SCTech</title>
     <link rel="icon" href="images/logo.png">
     <link rel="stylesheet" href="css/style.css">
@@ -32,49 +33,49 @@
             </div>
         </div>
         <div class="metrics-grid">
-            <div class="metric-card">
+            <div class="metric-card" id="card-fat-mes">
                 <img src="images/icones2/faturamento.png" class="metric-icon" alt="">
                 <div class="metric-body">
                     <div class="metric-label">Faturamento do Mês</div>
                     <div class="metric-value" id="met-fat-mes">—</div>
                 </div>
             </div>
-            <div class="metric-card metric-card-link" onclick="filtrarMetrica('em_producao')">
+            <div class="metric-card metric-card-link" id="card-producao" onclick="filtrarMetrica('em_producao')">
                 <img src="images/icones2/producao.png" class="metric-icon" alt="">
                 <div class="metric-body">
                     <div class="metric-label">Em Produção</div>
                     <div class="metric-value" id="met-producao">—</div>
                 </div>
             </div>
-            <div class="metric-card metric-card-link" onclick="filtrarMetrica('Orçamento')">
+            <div class="metric-card metric-card-link" id="card-orcamentos" onclick="filtrarMetrica('Orçamento')">
                 <img src="images/icones2/orcamentos.png" class="metric-icon" alt="">
                 <div class="metric-body">
                     <div class="metric-label">Orçamentos Abertos</div>
                     <div class="metric-value" id="met-orcamentos">—</div>
                 </div>
             </div>
-            <div class="metric-card">
+            <div class="metric-card" id="card-ticket">
                 <img src="images/icones2/ticket.png" class="metric-icon" alt="">
                 <div class="metric-body">
                     <div class="metric-label">Ticket Médio</div>
                     <div class="metric-value" id="met-ticket">—</div>
                 </div>
             </div>
-            <div class="metric-card metric-card-alerta">
+            <div class="metric-card metric-card-alerta" id="card-estoque-critico">
                 <img src="images/icones2/critico.png" class="metric-icon" alt="">
                 <div class="metric-body">
                     <div class="metric-label">Estoque Crítico</div>
                     <div class="metric-value" id="met-estoque-critico">—</div>
                 </div>
             </div>
-            <div class="metric-card metric-card-alerta metric-card-link" onclick="filtrarMetrica('atrasados')">
+            <div class="metric-card metric-card-alerta metric-card-link" id="card-atrasados" onclick="filtrarMetrica('atrasados')">
                 <img src="images/icones2/entrega.png" class="metric-icon" alt="">
                 <div class="metric-body">
                     <div class="metric-label">Entregas Atrasadas</div>
                     <div class="metric-value" id="met-atrasados">—</div>
                 </div>
             </div>
-            <div class="metric-card metric-card-link" onclick="filtrarMetrica('a_receber')">
+            <div class="metric-card metric-card-link" id="card-a-receber" onclick="filtrarMetrica('a_receber')">
                 <img src="images/icones2/receber.png" class="metric-icon" alt="">
                 <div class="metric-body">
                     <div class="metric-label">A Receber (Total)</div>
@@ -84,14 +85,14 @@
         </div>
 
         <div class="charts-grid">
-            <div class="card chart-card dash-alertas-card">
+            <div class="card chart-card dash-alertas-card" id="card-alertas">
                 <h3 style="margin:0 0 12px;color:#374151;font-size:15px;flex-shrink:0;display:flex;align-items:center;gap:8px">
                     🔔 Alertas do Sistema
                     <span id="dash-alertas-count" style="font-size:11px;font-weight:600;padding:1px 8px;border-radius:10px;background:#f3f4f6;color:#6b7280"></span>
                 </h3>
                 <div class="dash-alertas-scroll" id="dashboard-alertas"></div>
             </div>
-            <div class="card chart-card">
+            <div class="card chart-card" id="card-chart-status">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:10px;flex-wrap:wrap">
                     <h3 style="color:#374151;font-size:15px;margin:0">Pedidos por Status</h3>
                     <select id="chart-status-filtro" onchange="renderChartStatus()" style="font-size:12px;padding:4px 8px;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#374151;cursor:pointer"></select>
@@ -106,7 +107,7 @@
         <div class="card">
             <h3 style="margin-bottom:14px;color:#374151;font-size:15px">Painel de Pedidos</h3>
             <div class="filter-bar">
-                <input type="text" id="filtro-texto" placeholder="Buscar por ID, cliente ou ambiente…" oninput="renderDashboard()">
+                <input type="text" id="filtro-texto" placeholder="Buscar por ID, cliente, ambiente, telefone ou endereço…" oninput="renderDashboard()">
                 <select id="filtro-status" onchange="renderDashboard()">
                     <option value="">Todos os status</option>
                     <option value="Orçamento">Orçamento</option>

@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Configurar Empresa - SCTech</title>
     <link rel="icon" href="images/logo.png">
     <link rel="stylesheet" href="css/style.css">
@@ -59,7 +60,7 @@
         <div class="card" style="max-width:860px">
             <h3 style="margin-bottom:20px;color:var(--primary)">Dados da Empresa</h3>
 
-            <div class="grid" style="grid-template-columns:1fr 1fr;margin-bottom:0">
+            <div class="grid" style="margin-bottom:0">
                 <div class="form-group">
                     <label>Razão Social <span style="color:#dc2626">*</span></label>
                     <input type="text" id="emp-razao" placeholder="Nome oficial da empresa">
@@ -70,7 +71,7 @@
                 </div>
             </div>
 
-            <div class="grid" style="grid-template-columns:220px 1fr;margin-bottom:0">
+            <div class="grid" style="margin-bottom:0">
                 <div class="form-group">
                     <label>CNPJ</label>
                     <input type="text" id="emp-cnpj" placeholder="00.000.000/0000-00" maxlength="18" oninput="mascaraCNPJ(this)">
@@ -81,7 +82,7 @@
                 </div>
             </div>
 
-            <div class="grid" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:0">
+            <div class="grid" style="margin-bottom:0">
                 <div class="form-group">
                     <label>Telefone / WhatsApp</label>
                     <input type="text" id="emp-tel" placeholder="(11) 99999-9999">
@@ -122,6 +123,12 @@
             <div id="emp-alertas-cfg"></div>
         </div>
 
+        <div class="card" style="max-width:860px">
+            <h3 style="margin-bottom:6px;color:var(--primary)">🏠 Cards da Página Inicial</h3>
+            <p style="font-size:12px;color:#6b7280;margin-bottom:16px">Escolha quais cards e painéis devem ser exibidos na Página Inicial (Dashboard).</p>
+            <div id="emp-dashcards-cfg"></div>
+        </div>
+
         <div class="card" style="max-width:860px" id="emp-preview-card" style="display:none">
             <h3 style="margin-bottom:14px;color:var(--primary)">Pré-visualização do Cabeçalho</h3>
             <div id="emp-cabecalho-preview" style="border:1px solid var(--border);border-radius:8px;padding:16px 20px;background:#fff"></div>
@@ -133,6 +140,7 @@
             carregarEmpresaConfigs();
             atualizarPreviewCabecalho();
             renderEmpresaAlertasCfg();
+            renderEmpresaDashCardsCfg();
             carregarCondicoesGerais();
         });
         function atualizarPreviewCabecalho() {

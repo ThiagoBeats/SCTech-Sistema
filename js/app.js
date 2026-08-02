@@ -2,7 +2,7 @@
 let db = {
     clientes:    JSON.parse(localStorage.getItem('sc_cli'))  || [],
     catalogo:    JSON.parse(localStorage.getItem('sc_cat'))  || [
-        { id: 1, nome: 'Linho Sintético (Exemplo)', preco: 65.00, largura_rolo: 2.80, rapport: 0, min_estoque: 0 }
+        { id: 1, nome: 'Linho Sintético (Exemplo)', preco: 65.00, largura_rolo: 2.80, min_estoque: 0 }
     ],
     pedidos:     JSON.parse(localStorage.getItem('sc_ped'))  || [],
     estoque:     JSON.parse(localStorage.getItem('sc_est'))  || [],
@@ -550,7 +550,7 @@ async function salvarCatalogo() {
             if (dupRef) { await showAlert(`Referência "${referencia}" já usada por "${dupRef.nome}".`, '⚠️'); return; }
         }
         const novaImgCad = document.getElementById('cat-foto-preview')?.dataset.base64 || '';
-        db.catalogo.push({ id: Date.now(), nome, preco: 0, largura_rolo, rapport: 0, referencia, min_estoque, fornecedor_id: forn_id_cat, fornecedor_nome: forn_obj_cat ? forn_obj_cat.nome : '', imagem: novaImgCad });
+        db.catalogo.push({ id: Date.now(), nome, preco: 0, largura_rolo, referencia, min_estoque, fornecedor_id: forn_id_cat, fornecedor_nome: forn_obj_cat ? forn_obj_cat.nome : '', imagem: novaImgCad });
         salvarERecarregar('Tecido cadastrado no catálogo!');
     }
 }
@@ -699,15 +699,29 @@ function normalizarStatus(status) {
 }
 
 function normalizarAmbientes(ped) {
+    // Tipo de prega / fator / barra / cabeçote eram armazenados por ambiente em pedidos
+    // antigos; agora vivem por tecido. Ao carregar dados legados, cada tecido herda os
+    // valores do ambiente (que já existiam) como fallback, sem sobrescrever valores próprios.
     if (ped.ambientes && ped.ambientes.length) {
         return ped.ambientes.map(a => {
-            if (a.tecidos && a.tecidos.length) return a;
+            if (a.tecidos && a.tecidos.length) {
+                return {
+                    ...a,
+                    tecidos: a.tecidos.map(t => ({
+                        prega: a.prega || 'Americana', fator: a.fator ?? 2.5,
+                        bainha_cm: a.bainha_cm ?? 15, cabecote_cm: a.cabecote_cm ?? 0,
+                        ...t
+                    }))
+                };
+            }
             return {
                 ...a,
                 tecidos: [{
                     tecidoId: a.tecidoId || null, tecidoNome: a.tecidoNome || '',
-                    largura_rolo: a.largura_rolo || 2.80, rapport_cm: a.rapport_cm || 0,
-                    acrescimo_rapport_m: a.acrescimo_rapport_m || 0, num_panos: a.num_panos || 0,
+                    largura_rolo: a.largura_rolo || 2.80,
+                    prega: a.prega || 'Americana', fator: a.fator ?? 2.5,
+                    bainha_cm: a.bainha_cm ?? 15, cabecote_cm: a.cabecote_cm ?? 0,
+                    num_panos: a.num_panos || 0,
                     alt_corte: a.alt_corte || 0, consumo_linear: a.consumo_linear || 0,
                     total_material: a.total_material || 0
                 }]
@@ -717,13 +731,14 @@ function normalizarAmbientes(ped) {
     if (ped.tecidoId || ped.largura) {
         return [{
             id: 1, calculado: true,
-            amb: ped.amb || '', prega: ped.prega || 'Americana', fixacao: ped.fixacao || 'Trilho Suico',
-            largura: ped.largura || 0, altura: ped.altura || 0, fator: ped.fator || 2.5,
-            bainha_cm: ped.bainha_cm || 15, cabecote_cm: ped.cabecote_cm || 10,
+            amb: ped.amb || '', fixacao: ped.fixacao || 'Trilho Suico',
+            largura: ped.largura || 0, altura: ped.altura || 0,
             tecidos: [{
                 tecidoId: ped.tecidoId, tecidoNome: ped.tecidoNome || '',
-                largura_rolo: ped.largura_rolo || 2.80, rapport_cm: ped.rapport_cm || 0,
-                acrescimo_rapport_m: ped.acrescimo_rapport_m || 0, num_panos: ped.num_panos || 0,
+                largura_rolo: ped.largura_rolo || 2.80,
+                prega: ped.prega || 'Americana', fator: ped.fator ?? 2.5,
+                bainha_cm: ped.bainha_cm ?? 15, cabecote_cm: ped.cabecote_cm ?? 10,
+                num_panos: ped.num_panos || 0,
                 alt_corte: ped.alt_corte || 0, consumo_linear: ped.consumo_linear || 0,
                 total_material: ped.total_material || Math.max(0, (ped.valor || 0) - (ped.maoObra || 0))
             }]
@@ -749,6 +764,7 @@ function gerarProposta(id) {
 }
 
 function abrirOS(id) {
+    _docModalAtual = { tipo: 'os', pedidoId: id };
     abrirDocModal(gerarHTMLOS(id), 'Ordem de Serviço');
 }
 
@@ -916,6 +932,50 @@ function mostrarModalPagamento(ped, callback) {
     overlay.querySelector('#mpg-cancel').onclick = () => { document.body.removeChild(overlay); callback(null); };
 }
 
+function mostrarModalAgendarInstalacao(ped, callback) {
+    const cli = db.clientes.find(c => c.id == ped.clienteId);
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.innerHTML = `
+        <div style="background:white;border-radius:10px;padding:28px 32px;max-width:420px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.22)">
+            <h3 style="margin-bottom:6px;color:var(--dark)">📅 Agendar Instalação</h3>
+            <p style="font-size:13px;color:#888;margin-bottom:18px">Pedido #${formatPedidoId(ped.id)} ainda não tem instalação agendada. Deseja agendar agora?</p>
+            <div class="form-group" style="margin-bottom:10px">
+                <label style="font-size:12px;font-weight:bold;color:#666">Data de Instalação</label>
+                <input type="date" id="mai-data" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box">
+            </div>
+            <div class="form-group" style="margin-bottom:10px">
+                <label style="font-size:12px;font-weight:bold;color:#666">Horário (opcional)</label>
+                <input type="time" id="mai-hora" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box">
+            </div>
+            <div class="form-group" style="margin-bottom:18px">
+                <label style="font-size:12px;font-weight:bold;color:#666">Endereço da Instalação</label>
+                <input type="text" id="mai-end" placeholder="${cli && cli.end ? escapeHtml(cli.end) : 'Endereço da instalação…'}" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+                <button id="mai-salvar" class="btn btn-success" style="padding:11px;font-size:14px">📅 Agendar Instalação</button>
+                <button id="mai-pular" class="btn btn-outline" style="padding:9px;font-size:13px">Pular por enquanto</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+    const dataEl = document.getElementById('mai-data');
+    dataEl.focus();
+    overlay.querySelector('#mai-salvar').onclick = () => {
+        const data = dataEl.value;
+        if (!data) { dataEl.style.borderColor = '#dc2626'; return; }
+        const hora = document.getElementById('mai-hora').value;
+        const end  = document.getElementById('mai-end').value.trim();
+        document.body.removeChild(overlay);
+        callback({ data, hora, end });
+    };
+    overlay.querySelector('#mai-pular').onclick = () => { document.body.removeChild(overlay); callback(null); };
+    overlay.addEventListener('click', e => { if (e.target === overlay) { document.body.removeChild(overlay); callback(null); } });
+}
+
+function ofertarAgendamentoInstalacao(ped) {
+    return new Promise(resolve => mostrarModalAgendarInstalacao(ped, resolve));
+}
+
 async function moverStatus(id, direcao) {
     const ped = db.pedidos.find(p => p.id == id);
     if (!ped) return;
@@ -974,6 +1034,16 @@ async function moverStatus(id, direcao) {
             const linhasMat = itensPed.map(i => `• ${i.nome}: ${i.quantidade} ${i.unidade}`);
             if (!await showConfirm(`Dar baixa nos materiais e avançar para "Pronto p/ Instalação"?\n\n${linhasMat.join('\n')}`, '🔩', 'Confirmar Baixa', 'Cancelar')) return;
             realizarBaixaMateriais(ped);
+        }
+    }
+
+    // ── Na Costura → Pronto p/ Instalação: verificar se já existe agenda de instalação
+    if (STATUS_PIPELINE[idx] === 'Na Costura' && STATUS_PIPELINE[novoIdx] === 'Pronto p/ Instalação' && !ped.data_entrega) {
+        const agendamento = await ofertarAgendamentoInstalacao(ped);
+        if (agendamento) {
+            ped.data_entrega = agendamento.data;
+            if (agendamento.hora) ped.inst_hora = agendamento.hora;
+            if (agendamento.end)  ped.inst_endereco = agendamento.end;
         }
     }
 
@@ -1149,6 +1219,7 @@ function renderDashboard() {
     renderDashboardMedicoes();
     renderDashboardInstalacoes();
     renderDashboardAlertas();
+    aplicarDashCardsVisibilidade();
     const thead = document.getElementById('thead-pedidos');
     const tbody = document.getElementById('tb-pedidos');
     if (!thead || !tbody) return;
@@ -1158,12 +1229,14 @@ function renderDashboard() {
 
     let pedidos = db.pedidos.map(p => ({ ...p, _status: normalizarStatus(p.status) }));
     if (texto)       pedidos = pedidos.filter(p => {
-        const cpfBusca = texto.replace(/\D/g,'');
-        const cli = cpfBusca.length >= 3 ? db.clientes.find(c => c.id == p.clienteId) : null;
+        const digitsBusca = texto.replace(/\D/g,'');
+        const cli = db.clientes.find(c => c.id == p.clienteId);
         return formatPedidoId(p.id).includes(texto)
             || p.clienteNome.toLowerCase().includes(texto)
             || (p.amb || '').toLowerCase().includes(texto)
-            || (cli && cli.cpf && cli.cpf.replace(/\D/g,'').includes(cpfBusca));
+            || (digitsBusca.length >= 3 && cli && cli.cpf && cli.cpf.replace(/\D/g,'').includes(digitsBusca))
+            || (digitsBusca.length >= 3 && cli && cli.tel && cli.tel.replace(/\D/g,'').includes(digitsBusca))
+            || (cli && cli.end && cli.end.toLowerCase().includes(texto));
     });
     if (statusFiltro === 'em_producao') {
         pedidos = pedidos.filter(p => p._status !== 'Orçamento' && p._status !== 'Instalado');
@@ -1292,6 +1365,71 @@ function renderEmpresaAlertasCfg() {
         </div>`;
     }).join('');
 }
+// ── CONFIGURAÇÃO DE CARDS DO DASHBOARD ────────────────────────
+const DASHBOARD_CARDS = {
+    fat_mes:            { label: 'Faturamento do Mês',            icon: '💰' },
+    producao:           { label: 'Em Produção',                   icon: '🧵' },
+    orcamentos:         { label: 'Orçamentos Abertos',            icon: '📋' },
+    ticket:             { label: 'Ticket Médio',                  icon: '🎫' },
+    estoque_critico:    { label: 'Estoque Crítico',               icon: '📦' },
+    atrasados:          { label: 'Entregas Atrasadas',            icon: '🚚' },
+    a_receber:          { label: 'A Receber (Total)',             icon: '💵' },
+    alertas:            { label: 'Painel de Alertas do Sistema',  icon: '🔔' },
+    chart_status:       { label: 'Gráfico: Pedidos por Status',   icon: '📊' },
+    agenda_instalacoes: { label: 'Agenda de Instalações (resumo)', icon: '🔧' },
+    agenda_medicoes:    { label: 'Agenda de Medições (resumo)',    icon: '📐' },
+};
+const DASH_CARD_ELEMENT_IDS = {
+    fat_mes: 'card-fat-mes', producao: 'card-producao', orcamentos: 'card-orcamentos',
+    ticket: 'card-ticket', estoque_critico: 'card-estoque-critico', atrasados: 'card-atrasados',
+    a_receber: 'card-a-receber', alertas: 'card-alertas', chart_status: 'card-chart-status',
+    agenda_instalacoes: 'dashboard-instalacoes', agenda_medicoes: 'dashboard-medicoes',
+};
+
+function getDashCardsCfg() {
+    try { return JSON.parse(localStorage.getItem('sc_dashcards_cfg')) || {}; } catch(e) { return {}; }
+}
+function dashCardVisivel(key) {
+    return getDashCardsCfg()[key] !== false;
+}
+function toggleDashCard(key) {
+    const cfg = getDashCardsCfg();
+    cfg[key] = !dashCardVisivel(key);
+    localStorage.setItem('sc_dashcards_cfg', JSON.stringify(cfg));
+    renderEmpresaDashCardsCfg();
+    aplicarDashCardsVisibilidade();
+}
+function renderEmpresaDashCardsCfg() {
+    const el = document.getElementById('emp-dashcards-cfg');
+    if (!el) return;
+    const cfg = getDashCardsCfg();
+    el.innerHTML = Object.entries(DASHBOARD_CARDS).map(([key, info]) => {
+        const ativo = cfg[key] !== false;
+        return `<div class="alerta-toggle-row">
+            <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-size:20px">${info.icon}</span>
+                <div>
+                    <div style="font-size:13px;font-weight:500;color:var(--dark)">${info.label}</div>
+                    <div style="font-size:11px;color:${ativo?'#059669':'#9ca3af'};margin-top:1px">${ativo?'Visível':'Oculto'}</div>
+                </div>
+            </div>
+            <label class="toggle-switch">
+                <input type="checkbox" ${ativo?'checked':''} onchange="toggleDashCard('${key}')">
+                <span class="toggle-slider"></span>
+            </label>
+        </div>`;
+    }).join('');
+}
+function aplicarDashCardsVisibilidade() {
+    const cfg = getDashCardsCfg();
+    Object.entries(DASH_CARD_ELEMENT_IDS).forEach(([key, elId]) => {
+        const elCard = document.getElementById(elId);
+        if (!elCard) return;
+        if (cfg[key] === false) elCard.style.display = 'none';
+        else if (key !== 'agenda_instalacoes' && key !== 'agenda_medicoes') elCard.style.display = '';
+    });
+}
+
 function _getHeaderGroup() {
     let grp = document.getElementById('header-right-group');
     if (!grp) {
@@ -2520,14 +2658,14 @@ function onAberturaChange(id) {
     if (lbl) lbl.textContent = `Tipo ${val}`;
 }
 
-function onPregaAmbiente(id) {
+function onPregaTecido(ambId, tidx) {
     const fatoresSugeridos = {
         'Americana': '2.5', 'Franzido': '2.5',
         'Wave Botao': '2.0', 'Wave Plus': '2.0',
         'Macho-Femea': '2.0', 'Painel': '1.5'
     };
-    const prega = document.getElementById(`a-prega-${id}`)?.value;
-    const fatorEl = document.getElementById(`a-fator-${id}`);
+    const prega = document.getElementById(`t-prega-${ambId}-${tidx}`)?.value;
+    const fatorEl = document.getElementById(`t-fator-${ambId}-${tidx}`);
     if (fatorEl && prega) fatorEl.value = fatoresSugeridos[prega] || '2.5';
 }
 
@@ -2535,22 +2673,21 @@ function renderAmbienteBreakdown(a) {
     if (!a.calculado) return '';
     const tecidos = a.tecidos || [];
     if (!tecidos.length) return '';
-    const alt_bruta = (a.altura||0) + (a.bainha_cm||15)/100 + (a.cabecote_cm ?? 0)/100;
     const totalMat = tecidos.reduce((s,t)=>s+(t.total_material||0),0);
     const parts = tecidos.map((t, tidx) => {
         if (!t.tecidoId) return '';
         const disp = estoqueDisponivel(t.tecidoId);
         const stockColor = disp < (t.consumo_linear||0) ? '#dc2626' : '#059669';
         const temConflito = verificarConflitoDeLote(t.tecidoId, t.consumo_linear||0);
+        const alt_bruta = (a.altura||0) + (t.bainha_cm??15)/100 + (t.cabecote_cm??0)/100;
         const titulo = tecidos.length > 1 ? `<div class="breakdown-row" style="font-weight:bold;color:var(--primary);padding-bottom:6px;border-bottom:1px solid #dde">Tecido ${tidx+1}: ${escapeHtml(t.tecidoNome||'')}</div>` : '';
         return `<div class="breakdown-box" style="margin-top:10px">
             ${titulo}
-            <div class="breakdown-row"><span class="label">Largura total (parede × fator)</span><span><strong>${((a.largura||0)*(a.fator||1)).toFixed(2)}</strong> m</span></div>
+            <div class="breakdown-row"><span class="label">Tipo de prega</span><span><strong>${escapeHtml(t.prega||'—')}</strong></span></div>
+            <div class="breakdown-row"><span class="label">Largura total (parede × fator)</span><span><strong>${((a.largura||0)*(t.fator||1)).toFixed(2)}</strong> m</span></div>
             <div class="breakdown-row"><span class="label">Largura do rolo</span><span><strong>${(t.largura_rolo||2.80).toFixed(2)}</strong> m</span></div>
             <div class="breakdown-row"><span class="label">Número de panos</span><span><strong>${t.num_panos}</strong> pano(s)</span></div>
             <div class="breakdown-row"><span class="label">Altura bruta (parede + barra + cabeçote)</span><span><strong>${alt_bruta.toFixed(3)}</strong> m</span></div>
-            ${t.rapport_cm > 0 ? `<div class="breakdown-row"><span class="label">Acréscimo por rapport</span><span>+ <strong>${((t.acrescimo_rapport_m||0)*100).toFixed(1)}</strong> cm/pano</span></div>` : ''}
-            <div class="breakdown-row"><span class="label">Altura de corte por pano</span><span><strong>${(t.alt_corte||0).toFixed(3)}</strong> m</span></div>
             <div class="breakdown-row destaque"><span>Consumo total</span><span><strong>${(t.consumo_linear||0).toFixed(2)}</strong> m lineares</span></div>
             <div class="breakdown-row"><span class="label">Estoque disponível</span><span style="color:${stockColor}"><strong>${disp.toFixed(2)} m</strong></span></div>
             <div class="breakdown-row"><span class="label">Valor do tecido</span><span>R$ <strong>${(t.total_material||0).toFixed(2)}</strong></span></div>
@@ -2565,20 +2702,20 @@ function syncAmbientesFromDOM() {
     pedidoDraft.ambientes.forEach(a => {
         const v = id => document.getElementById(id)?.value;
         const amb = v(`a-amb-${a.id}`); if (amb !== undefined) a.amb = amb.trim();
-        const prega = v(`a-prega-${a.id}`); if (prega) a.prega = prega;
-        const fator = parseFloat(v(`a-fator-${a.id}`)); if (!isNaN(fator)) a.fator = fator;
         const fixacao = v(`a-fixacao-${a.id}`); if (fixacao) a.fixacao = fixacao;
         const abertura = v(`a-abertura-${a.id}`); if (abertura) a.abertura = abertura;
         const local = v(`a-local-${a.id}`); if (local) a.local_instalacao = local;
         const larg = parseFloat(v(`a-larg-${a.id}`)); if (!isNaN(larg)) a.largura = larg;
         const alt = parseFloat(v(`a-alt-${a.id}`)); if (!isNaN(alt)) a.altura = alt;
-        const bainha = parseFloat(v(`a-bainha-${a.id}`)); if (!isNaN(bainha)) a.bainha_cm = bainha;
-        const cab = parseFloat(v(`a-cabecote-${a.id}`)); if (!isNaN(cab)) a.cabecote_cm = cab;
         (a.tecidos || []).forEach((t, tidx) => {
             const sel = document.getElementById(`a-tecido-${a.id}-${tidx}`);
             if (sel && sel.value) t.tecidoId = parseInt(sel.value) || null;
             const refEl = document.getElementById(`a-tec-ref-${a.id}-${tidx}`);
             if (refEl) t._ref = refEl.value;
+            const prega = v(`t-prega-${a.id}-${tidx}`); if (prega) t.prega = prega;
+            const fator = parseFloat(v(`t-fator-${a.id}-${tidx}`)); if (!isNaN(fator)) t.fator = fator;
+            const bainha = parseFloat(v(`t-bainha-${a.id}-${tidx}`)); if (!isNaN(bainha)) t.bainha_cm = bainha;
+            const cab = parseFloat(v(`t-cabecote-${a.id}-${tidx}`)); if (!isNaN(cab)) t.cabecote_cm = cab;
         });
     });
 }
@@ -2587,16 +2724,16 @@ function renderAmbientes() {
     const container = document.getElementById('ambientes-container');
     if (!container) return;
     const FATORES = ['1.0','1.5','2.0','2.5','2.7', '3.0','3.5','4.0'];
+    const PREGA_OPTS = [
+        {v:'Americana',l:'Prega Americana'},
+        {v:'Wave Botao',l:'Wave Botão'},
+        {v:'Wave Plus',l:'Wave Plus/Flex'},
+        {v:'Franzido',l:'Franzido'},
+        {v:'Macho-Femea',l:'Prega Macho-Fêmea'},
+        {v:'Painel',l:'Painel / Sem Prega'}
+    ];
     container.innerHTML = pedidoDraft.ambientes.map((a, idx) => {
         const n = idx + 1;
-        const pregaOpts = [
-            {v:'Americana',l:'Prega Americana'},
-            {v:'Wave Botao',l:'Wave Botão'},
-            {v:'Wave Plus',l:'Wave Plus/Flex'},
-            {v:'Franzido',l:'Franzido'},
-            {v:'Macho-Femea',l:'Prega Macho-Fêmea'},
-            {v:'Painel',l:'Painel / Sem Prega'}
-        ].map(o=>`<option value="${o.v}"${a.prega===o.v?' selected':''}>${o.l}</option>`).join('');
         const fixacaoOpts = [
             {v:'Trilho Suico Simples',l:'Trilho Suíço Simples'},
             {v:'Trilho Suíço Duplo',l:'Trilho Suíço Duplo'},
@@ -2617,7 +2754,6 @@ function renderAmbientes() {
             {v:'G',l:'Abertura G — Centro, Cmd. Esq.'},
             {v:'H',l:'Abertura H — Centro, Cmd. Dir.'}
         ].map(o=>`<option value="${o.v}"${(a.abertura||'A')===o.v?' selected':''}>${o.l}</option>`).join('');
-        const fatorOpts = FATORES.map(f=>`<option value="${f}"${parseFloat(f)===(a.fator??2.5)?' selected':''}>${f}x</option>`).join('');
         const tecidos = a.tecidos || [];
         const buildTecOpts = (selId) => '<option value="">— Selecione o Tecido —</option>' + db.catalogo.map(c => {
             const disp = estoqueDisponivel(c.id);
@@ -2625,15 +2761,33 @@ function renderAmbientes() {
             return `<option value="${c.id}"${selId==c.id?' selected':''}>${c.nome}${c.referencia?' ['+c.referencia+']':''} — R$ ${c.preco.toFixed(2)}/m${stockInfo}</option>`;
         }).join('');
         const tecidosHTML = tecidos.map((t, tidx) => {
+            const pregaOpts = PREGA_OPTS.map(o=>`<option value="${o.v}"${(t.prega||'Americana')===o.v?' selected':''}>${o.l}</option>`).join('');
+            const fatorOpts = FATORES.map(f=>`<option value="${f}"${parseFloat(f)===(t.fator??2.5)?' selected':''}>${f}x</option>`).join('');
             const removeBtn = tecidos.length > 1
                 ? `<button class="btn btn-outline btn-sm btn-danger" onclick="removerTecidoDoAmbiente(${a.id},${tidx})" title="Remover este tecido" style="flex-shrink:0">×</button>`
                 : '';
-            return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-                <div class="form-group" style="width:130px;flex-shrink:0;margin:0">
-                    <label style="font-size:11px">Ref. Tecido</label>
-                    <input type="text" id="a-tec-ref-${a.id}-${tidx}" value="${escapeHtml(t._ref||'')}" placeholder="Código" oninput="autoFillTecidoNoAmbiente(${a.id},${tidx})" style="font-size:12px">
+            return `<div class="tecido-row-compact">
+                <div class="form-group" style="width:118px;flex-shrink:0">
+                    <label>Tipo de Prega</label>
+                    <select id="t-prega-${a.id}-${tidx}" onchange="onPregaTecido(${a.id},${tidx})">${pregaOpts}</select>
                 </div>
-                <div class="form-group" style="flex:1;margin:0">
+                <div class="form-group" style="width:64px;flex-shrink:0">
+                    <label>Fator <span class="info-tag" style="margin-left:0;font-size:9px">auto</span></label>
+                    <select id="t-fator-${a.id}-${tidx}">${fatorOpts}</select>
+                </div>
+                <div class="form-group" style="width:56px;flex-shrink:0">
+                    <label>Barra (cm)</label>
+                    <input type="number" id="t-bainha-${a.id}-${tidx}" value="${t.bainha_cm??15}" step="1">
+                </div>
+                <div class="form-group" style="width:56px;flex-shrink:0">
+                    <label>Cabeç. (cm)</label>
+                    <input type="number" id="t-cabecote-${a.id}-${tidx}" value="${t.cabecote_cm??0}" step="1">
+                </div>
+                <div class="form-group" style="width:110px;flex-shrink:0">
+                    <label>Ref. Tecido</label>
+                    <input type="text" id="a-tec-ref-${a.id}-${tidx}" value="${escapeHtml(t._ref||'')}" placeholder="Código" oninput="autoFillTecidoNoAmbiente(${a.id},${tidx})">
+                </div>
+                <div class="form-group" style="flex:1;min-width:170px">
                     <label>${tecidos.length > 1 ? 'Tecido '+(tidx+1) : 'Tecido'}</label>
                     <select id="a-tecido-${a.id}-${tidx}" onchange="autoFillRefFromTecido(${a.id},${tidx})">${buildTecOpts(t.tecidoId)}</select>
                 </div>
@@ -2650,32 +2804,26 @@ function renderAmbientes() {
     <div class="ambiente-card-header">
         <h4 style="margin:0;color:var(--primary)">Ambiente ${n}</h4>${removeAmb}
     </div>
-    <div style="display:flex;gap:20px;align-items:flex-start;margin-top:15px">
-        <div style="flex:1;min-width:0">
+    <div style="display:flex;gap:20px;align-items:flex-start;margin-top:15px;flex-wrap:wrap">
+        <div style="flex:1;min-width:280px">
             <div class="grid" style="margin-bottom:0">
                 <div class="form-group" style="max-width:280px"><label>Nome do Ambiente</label>
                     <input type="text" id="a-amb-${a.id}" value="${escapeHtml(a.amb||'')}" placeholder="Ex: Quarto Casal"></div>
             </div>
             <div class="grid">
-                <div class="form-group"><label>Tipo de Prega</label><select id="a-prega-${a.id}" onchange="onPregaAmbiente(${a.id})">${pregaOpts}</select></div>
-                <div class="form-group"><label>Fator de Franzimento <span class="info-tag">auto</span></label><select id="a-fator-${a.id}">${fatorOpts}</select></div>
                 <div class="form-group"><label>Material de Instalação</label><select id="a-fixacao-${a.id}">${fixacaoOpts}</select></div>
                 <div class="form-group"><label>Tipo de Abertura</label><select id="a-abertura-${a.id}" onchange="onAberturaChange(${a.id})">${aberturaOpts}</select></div>
                 <div class="form-group"><label>Local de Instalação</label><select id="a-local-${a.id}">${localOpts}</select></div>
-            </div>
-            <div class="grid">
                 <div class="form-group"><label>Largura da Parede (m)</label><input type="number" id="a-larg-${a.id}" value="${a.largura||''}" placeholder="Ex: 2.40" step="0.01"></div>
                 <div class="form-group"><label>Altura da Parede (m)</label><input type="number" id="a-alt-${a.id}" value="${a.altura||''}" placeholder="Ex: 2.60" step="0.01"></div>
-                <div class="form-group"><label>Barra (cm) <span class="info-tag">padrão: 15</span></label><input type="number" id="a-bainha-${a.id}" value="${a.bainha_cm||15}" step="1"></div>
-                <div class="form-group"><label>Cabeçote/Entretela (cm) <span class="info-tag">padrão: 0</span></label><input type="number" id="a-cabecote-${a.id}" value="${a.cabecote_cm ?? 0}" step="1"></div>
             </div>
-            <div style="max-width:420px">${tecidosHTML}${addTecBtn}</div>
+            <div style="max-width:none">${tecidosHTML}${addTecBtn}</div>
             <div style="text-align:right;margin-top:5px">
                 <button class="btn" onclick="calcularAmbiente(${a.id})">Calcular Consumo &rarr;</button>
             </div>
         </div>
-        <div style="flex-shrink:0;width:500px;text-align:center">
-            <img id="img-abertura-${a.id}" src="images/Aberturas/Abertura${a.abertura||'A'}.png" alt="Abertura ${a.abertura||'A'}" style="width:475px;height:auto;border:1px solid var(--border);border-radius:6px;display:block">
+        <div style="flex:0 1 475px;min-width:220px;max-width:475px;margin:0 auto;text-align:center">
+            <img id="img-abertura-${a.id}" src="images/Aberturas/Abertura${a.abertura||'A'}.png" alt="Abertura ${a.abertura||'A'}" style="width:100%;height:auto;border:1px solid var(--border);border-radius:6px;display:block">
             <div id="lbl-abertura-${a.id}" style="font-size:11px;color:#666;margin-top:4px;font-weight:600">Tipo ${a.abertura||'A'}</div>
         </div>
     </div>
@@ -2688,9 +2836,9 @@ function adicionarAmbiente() {
     syncAmbientesFromDOM();
     _ambienteCounter++;
     pedidoDraft.ambientes.push({
-        id: _ambienteCounter, calculado: false, amb: '', prega: 'Americana', fixacao: 'Trilho Suico', abertura: 'A', local_instalacao: 'Parede',
-        largura: null, altura: null, fator: 2.5, bainha_cm: 15, cabecote_cm: 0,
-        tecidos: [{ tecidoId: null, tecidoNome: '', largura_rolo: 2.80, rapport_cm: 0, acrescimo_rapport_m: 0, num_panos: 0, alt_corte: 0, consumo_linear: 0, total_material: 0 }],
+        id: _ambienteCounter, calculado: false, amb: '', fixacao: 'Trilho Suico', abertura: 'A', local_instalacao: 'Parede',
+        largura: null, altura: null,
+        tecidos: [{ tecidoId: null, tecidoNome: '', largura_rolo: 2.80, prega: 'Americana', fator: 2.5, bainha_cm: 15, cabecote_cm: 0, num_panos: 0, alt_corte: 0, consumo_linear: 0, total_material: 0 }],
         total_material: 0
     });
     renderAmbientes();
@@ -2701,7 +2849,7 @@ function adicionarTecidoAoAmbiente(ambId) {
     const a = pedidoDraft.ambientes.find(x => x.id === ambId);
     if (!a || (a.tecidos || []).length >= 3) return;
     if (!a.tecidos) a.tecidos = [];
-    a.tecidos.push({ tecidoId: null, tecidoNome: '', largura_rolo: 2.80, rapport_cm: 0, acrescimo_rapport_m: 0, num_panos: 0, alt_corte: 0, consumo_linear: 0, total_material: 0 });
+    a.tecidos.push({ tecidoId: null, tecidoNome: '', largura_rolo: 2.80, prega: 'Americana', fator: 2.5, bainha_cm: 15, cabecote_cm: 0, num_panos: 0, alt_corte: 0, consumo_linear: 0, total_material: 0 });
     a.calculado = false;
     renderAmbientes();
 }
@@ -2724,21 +2872,15 @@ function removerAmbiente(id) {
 async function calcularAmbiente(id) {
     const a = pedidoDraft.ambientes.find(x => x.id === id);
     if (!a) return;
-    const larg       = parseFloat(document.getElementById(`a-larg-${id}`)?.value);
-    const alt        = parseFloat(document.getElementById(`a-alt-${id}`)?.value);
-    const fator      = parseFloat(document.getElementById(`a-fator-${id}`)?.value);
-    const bainha_cm  = parseFloat(document.getElementById(`a-bainha-${id}`)?.value) || 15;
-    const cabecote_cm = parseFloat(document.getElementById(`a-cabecote-${id}`)?.value) || 0;
+    const larg = parseFloat(document.getElementById(`a-larg-${id}`)?.value);
+    const alt  = parseFloat(document.getElementById(`a-alt-${id}`)?.value);
     if (!larg || larg <= 0) { await showAlert('Informe a largura da parede.', '⚠️'); return; }
     if (!alt  || alt  <= 0) { await showAlert('Informe a altura da parede.', '⚠️'); return; }
-    if (!fator || fator <= 0) { await showAlert('Informe um fator de franzimento válido (ex: 2.0).', '⚠️'); return; }
     a.amb = document.getElementById(`a-amb-${id}`)?.value.trim() || '';
-    a.prega = document.getElementById(`a-prega-${id}`)?.value || 'Americana';
     a.fixacao = document.getElementById(`a-fixacao-${id}`)?.value || 'Trilho Suico';
     a.abertura = document.getElementById(`a-abertura-${id}`)?.value || 'A';
     a.local_instalacao = document.getElementById(`a-local-${id}`)?.value || 'Parede';
-    a.fator = fator; a.largura = larg; a.altura = alt; a.bainha_cm = bainha_cm; a.cabecote_cm = cabecote_cm;
-    const alt_bruta = alt + bainha_cm / 100 + cabecote_cm / 100;
+    a.largura = larg; a.altura = alt;
     const tecidos = a.tecidos || [];
     if (!tecidos.length) { await showAlert('Adicione pelo menos um tecido ao ambiente.', '⚠️'); return; }
     let totalMat = 0;
@@ -2748,18 +2890,19 @@ async function calcularAmbiente(id) {
         const tecido = db.catalogo.find(t => t.id == tecidoId);
         if (!tecido) return;
         const t = tecidos[tidx];
+        const fator       = parseFloat(document.getElementById(`t-fator-${id}-${tidx}`)?.value);
+        const bainha_cm   = parseFloat(document.getElementById(`t-bainha-${id}-${tidx}`)?.value) || 15;
+        const cabecote_cm = parseFloat(document.getElementById(`t-cabecote-${id}-${tidx}`)?.value) || 0;
+        if (!fator || fator <= 0) { await showAlert(`Informe um fator de franzimento válido para o tecido${tecidos.length > 1 ? ' '+(tidx+1) : ''} (ex: 2.0).`, '⚠️'); return; }
         t.tecidoId = tecido.id; t.tecidoNome = tecido.nome;
         t._ref = document.getElementById(`a-tec-ref-${id}-${tidx}`)?.value || t._ref || '';
-        t.largura_rolo = tecido.largura_rolo || 2.80; t.rapport_cm = tecido.rapport || 0;
-        let acrescimo_rapport_m = 0, alt_corte = alt_bruta;
-        if (t.rapport_cm > 0) {
-            const rapport_m = t.rapport_cm / 100;
-            alt_corte = Math.ceil(alt_bruta / rapport_m) * rapport_m;
-            acrescimo_rapport_m = alt_corte - alt_bruta;
-        }
+        t.prega = document.getElementById(`t-prega-${id}-${tidx}`)?.value || 'Americana';
+        t.fator = fator; t.bainha_cm = bainha_cm; t.cabecote_cm = cabecote_cm;
+        t.largura_rolo = tecido.largura_rolo || 2.80;
+        const alt_bruta = alt + bainha_cm / 100 + cabecote_cm / 100;
         const num_panos = Math.ceil((larg * fator) / t.largura_rolo);
-        const consumo_linear = num_panos * alt_corte;
-        t.acrescimo_rapport_m = acrescimo_rapport_m; t.alt_corte = alt_corte;
+        const consumo_linear = num_panos * alt_bruta;
+        t.alt_corte = alt_bruta;
         t.num_panos = num_panos; t.consumo_linear = consumo_linear;
         t.total_material = consumo_linear * tecido.preco;
         totalMat += t.total_material;
@@ -3148,7 +3291,7 @@ function renderKanban() {
                 const totalConsumo = ambientes.reduce((s,a)=>s+(a.tecidos||[]).reduce((ts,t)=>ts+(t.consumo_linear||0),0),0);
                 const totalPanos   = ambientes.reduce((s,a)=>s+(a.tecidos||[]).reduce((ts,t)=>ts+(t.num_panos||0),0),0);
                 const tecidoNomes  = [...new Set(ambientes.flatMap(a=>(a.tecidos||[]).map(t=>t.tecidoNome).filter(Boolean)))];
-                const pregaTipos   = [...new Set(ambientes.map(a=>a.prega).filter(Boolean))];
+                const pregaTipos   = [...new Set(ambientes.flatMap(a=>(a.tecidos||[]).map(t=>t.prega)).filter(Boolean))];
                 let badgeEst = '';
                 for (const a of ambientes) {
                     for (const t of (a.tecidos||[])) {
@@ -3193,7 +3336,106 @@ function renderKanban() {
     if (resEl) resEl.textContent = filtroAtivo ? `${totalFiltrado} pedido(s) encontrado(s)` : '';
 }
 
+// --- ASSINATURA DIGITAL (canvas) ---
+function buildAssinaturaHTML(pedidoId, campo, w, h) {
+    w = w || 260; h = h || 90;
+    const ped = db.pedidos.find(p => p.id == pedidoId);
+    const dataUrl = ped?.assinaturas?.[campo] || '';
+    const canvasId = `sig-canvas-${pedidoId}-${campo}`;
+    if (dataUrl) {
+        return `<div class="assinatura-box">
+            <img src="${dataUrl}" class="assinatura-img" style="width:${w}px;height:${h}px;object-fit:contain" alt="Assinatura">
+            <button type="button" class="btn btn-outline btn-sm no-print" style="margin-top:4px" onclick="refazerAssinatura(${pedidoId},'${campo}')">✏️ Refazer assinatura</button>
+        </div>`;
+    }
+    return `<div class="assinatura-box">
+        <canvas id="${canvasId}" class="assinatura-canvas" data-pedido="${pedidoId}" data-campo="${campo}" width="${w}" height="${h}" style="width:${w}px;height:${h}px"></canvas>
+        <div class="no-print" style="margin-top:4px;display:flex;gap:6px">
+            <button type="button" class="btn btn-outline btn-sm" onclick="limparAssinatura('${canvasId}')">🗑️ Limpar</button>
+            <button type="button" class="btn btn-sm" onclick="salvarAssinatura(${pedidoId},'${campo}','${canvasId}')">💾 Salvar Assinatura</button>
+        </div>
+    </div>`;
+}
+
+function iniciarAssinaturaPads(root) {
+    (root || document).querySelectorAll('canvas.assinatura-canvas').forEach(canvas => {
+        if (canvas._sigBound) return;
+        canvas._sigBound = true;
+        const ctx = canvas.getContext('2d');
+        ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = '#1f2937';
+        let drawing = false, last = null;
+        const pos = e => {
+            const r = canvas.getBoundingClientRect();
+            const cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+            const cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+            return { x: cx * canvas.width / r.width, y: cy * canvas.height / r.height };
+        };
+        const start = e => { drawing = true; last = pos(e); e.preventDefault(); };
+        const move  = e => {
+            if (!drawing) return;
+            const p = pos(e);
+            ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+            last = p; e.preventDefault();
+        };
+        const end = () => { drawing = false; };
+        canvas.addEventListener('mousedown', start);
+        canvas.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', end);
+        canvas.addEventListener('touchstart', start, { passive: false });
+        canvas.addEventListener('touchmove', move, { passive: false });
+        canvas.addEventListener('touchend', end);
+    });
+}
+
+function limparAssinatura(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function _assinaturaCanvasVazio(canvas) {
+    const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let i = 3; i < data.length; i += 4) if (data[i] !== 0) return false;
+    return true;
+}
+
+async function salvarAssinatura(pedidoId, campo, canvasId) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    if (_assinaturaCanvasVazio(canvas)) { await showAlert('Desenhe a assinatura antes de salvar.', '⚠️'); return; }
+    const ped = db.pedidos.find(p => p.id == pedidoId);
+    if (!ped) return;
+    if (!ped.assinaturas) ped.assinaturas = {};
+    ped.assinaturas[campo] = canvas.toDataURL('image/png');
+    syncDB();
+    toast('Assinatura salva!', 'success', 1500);
+    _refrescarDocModalAtual();
+}
+
+async function refazerAssinatura(pedidoId, campo) {
+    const ok = await showConfirm('Apagar esta assinatura e assinar novamente?', '🖊️');
+    if (!ok) return;
+    const ped = db.pedidos.find(p => p.id == pedidoId);
+    if (ped?.assinaturas) delete ped.assinaturas[campo];
+    syncDB();
+    _refrescarDocModalAtual();
+}
+
 // --- DOC MODAL ---
+let _docModalAtual = null; // { tipo: 'os'|'proposta', pedidoId, dias }
+
+function _refrescarDocModalAtual() {
+    if (!_docModalAtual) return;
+    const paper = document.getElementById('doc-modal-paper')
+        || document.getElementById('os-container')
+        || document.getElementById('proposta-container');
+    if (!paper) return;
+    paper.innerHTML = _docModalAtual.tipo === 'os'
+        ? gerarHTMLOS(_docModalAtual.pedidoId)
+        : gerarHTMLProposta(_docModalAtual.pedidoId, _docModalAtual.dias || 15);
+    iniciarAssinaturaPads(paper);
+}
+
 function abrirDocModal(htmlContent, titulo, extraToolbar) {
     let overlay = document.getElementById('doc-modal-overlay');
     if (!overlay) {
@@ -3211,7 +3453,9 @@ function abrirDocModal(htmlContent, titulo, extraToolbar) {
         overlay.addEventListener('click', e => { if (e.target === overlay) fecharDocModal(); });
     }
     document.getElementById('doc-modal-topbar-title').textContent = titulo || 'Documento';
-    document.getElementById('doc-modal-paper').innerHTML = htmlContent;
+    const paper = document.getElementById('doc-modal-paper');
+    paper.innerHTML = htmlContent;
+    iniciarAssinaturaPads(paper);
     document.getElementById('doc-modal-topbar-actions').innerHTML =
         (extraToolbar || '') +
         `<button class="doc-modal-btn" onclick="imprimirDocModal()">🖨️ Imprimir / PDF</button>` +
@@ -3224,6 +3468,7 @@ function fecharDocModal() {
     const overlay = document.getElementById('doc-modal-overlay');
     if (overlay) overlay.classList.remove('active');
     document.body.style.overflow = '';
+    _docModalAtual = null;
 }
 
 function imprimirDocModal() {
@@ -3235,7 +3480,22 @@ function imprimirDocModal() {
         printRoot.id = 'doc-print-root';
         document.body.appendChild(printRoot);
     }
-    printRoot.innerHTML = paper.innerHTML;
+    const clone = paper.cloneNode(true);
+    // cloneNode não preserva o bitmap desenhado no canvas — substitui cada canvas de
+    // assinatura pela imagem atual antes de imprimir, mesmo que ainda não tenha sido salva.
+    const origCanvases  = paper.querySelectorAll('canvas.assinatura-canvas');
+    const cloneCanvases = clone.querySelectorAll('canvas.assinatura-canvas');
+    origCanvases.forEach((origCanvas, i) => {
+        const cloneCanvas = cloneCanvases[i];
+        if (!cloneCanvas) return;
+        const img = document.createElement('img');
+        img.className = 'assinatura-img';
+        img.style.cssText = cloneCanvas.style.cssText;
+        img.src = origCanvas.toDataURL('image/png');
+        cloneCanvas.replaceWith(img);
+    });
+    printRoot.innerHTML = '';
+    printRoot.appendChild(clone);
     document.body.classList.add('doc-modal-printing');
     window.print();
     window.addEventListener('afterprint', function cleanup() {
@@ -3246,6 +3506,7 @@ function imprimirDocModal() {
 }
 
 function abrirPropostaModal(pedidoId) {
+    _docModalAtual = { tipo: 'proposta', pedidoId, dias: 15 };
     const extra = `<label style="color:#fff;font-size:13px;display:flex;align-items:center;gap:6px;margin-right:4px">
         Validade: <input type="number" id="proposta-dias-modal" value="15" min="1" max="365"
             style="width:56px;padding:4px 6px;border-radius:4px;border:none;font-size:13px;text-align:center"
@@ -3255,8 +3516,9 @@ function abrirPropostaModal(pedidoId) {
 }
 
 function atualizarPropostaModal(pedidoId, dias) {
+    if (_docModalAtual) _docModalAtual.dias = parseInt(dias) || 15;
     const paper = document.getElementById('doc-modal-paper');
-    if (paper) paper.innerHTML = gerarHTMLProposta(pedidoId, parseInt(dias) || 15);
+    if (paper) { paper.innerHTML = gerarHTMLProposta(pedidoId, parseInt(dias) || 15); iniciarAssinaturaPads(paper); }
 }
 
 let _pcShareData = null;
@@ -3300,7 +3562,9 @@ function gerarHTMLOS(pedidoId) {
         const totalConsumo = tecidos.reduce((s,t)=>s+(t.consumo_linear||0),0);
         const tecidoRows = tecidos.map((t, tidx) => {
             const label = tecidos.length > 1 ? `Tecido ${tidx+1}` : 'Tecido';
-            return `<tr><td class="os-th">${label}</td><td><strong>${escapeHtml(t.tecidoNome||'—')}</strong></td><td class="os-th">Rapport</td><td>${t.rapport_cm>0?t.rapport_cm+' cm':'Liso'}</td></tr>
+            return `<tr><td class="os-th">${label}</td><td><strong>${escapeHtml(t.tecidoNome||'—')}</strong></td><td class="os-th">Tipo de Prega</td><td><strong>${escapeHtml(t.prega||'—')}</strong></td></tr>
+                <tr><td class="os-th">Fator franzimento</td><td>${t.fator}x</td><td class="os-th">Largura total</td><td>${((a.largura||0)*(t.fator||1)).toFixed(2)} m</td></tr>
+                <tr><td class="os-th">Barra</td><td>${t.bainha_cm??15} cm</td><td class="os-th">Cabeçote/Entretela</td><td>${t.cabecote_cm??0} cm</td></tr>
                 <tr><td class="os-th">Panos</td><td>${t.num_panos||'—'}</td><td class="os-th">Alt. Corte</td><td>${t.alt_corte?t.alt_corte.toFixed(3):'—'} m</td></tr>
                 <tr><td class="os-th">Consumo</td><td colspan="3"><strong>${(t.consumo_linear||0).toFixed(2)} m lineares</strong></td></tr>`;
         }).join('');
@@ -3308,13 +3572,8 @@ function gerarHTMLOS(pedidoId) {
         <div class="os-section">
             <div class="os-section-title">Ambiente ${idx+1}${a.amb ? ': '+escapeHtml(a.amb) : ''}</div>
             <table class="os-table">
-                <tr><td class="os-th">Tipo de Prega</td><td><strong>${escapeHtml(a.prega||'—')}</strong></td><td class="os-th">Mat. Instalação</td><td><strong>${escapeHtml(a.fixacao||'—')}</strong></td></tr>
-                <tr><td class="os-th">Tipo de Abertura</td><td><strong>Tipo ${escapeHtml(a.abertura||'A')}</strong></td><td class="os-th">Local de Instalação</td><td><strong>${escapeHtml(a.local_instalacao||'Parede')}</strong></td></tr>
-            </table>
-            <table class="os-table" style="margin-top:8px">
-                <tr><td class="os-th">Largura da parede</td><td>${a.largura} m</td><td class="os-th">Altura da parede</td><td>${a.altura||'—'} m</td></tr>
-                <tr><td class="os-th">Fator franzimento</td><td>${a.fator}x</td><td class="os-th">Largura total</td><td>${((a.largura||0)*(a.fator||1)).toFixed(2)} m</td></tr>
-                <tr><td class="os-th">Barra</td><td>${a.bainha_cm||15} cm</td><td class="os-th">Cabeçote/Entretela</td><td>${a.cabecote_cm||10} cm</td></tr>
+                <tr><td class="os-th">Mat. Instalação</td><td><strong>${escapeHtml(a.fixacao||'—')}</strong></td><td class="os-th">Local de Instalação</td><td><strong>${escapeHtml(a.local_instalacao||'Parede')}</strong></td></tr>
+                <tr><td class="os-th">Tipo de Abertura</td><td><strong>Tipo ${escapeHtml(a.abertura||'A')}</strong></td><td class="os-th">Largura × Altura da parede</td><td><strong>${a.largura} m × ${a.altura||'—'} m</strong></td></tr>
             </table>
             <table class="os-table" style="margin-top:8px">${tecidoRows}</table>
             ${tecidos.length > 1 ? `<div class="os-destaque">Total: <strong>${totalConsumo.toFixed(2)} m lineares</strong> (${tecidos.length} tecidos)</div>` : ''}
@@ -3352,16 +3611,19 @@ function gerarHTMLOS(pedidoId) {
         ${ambientesHTML}${itensHTML}
         <div class="os-section"><div class="os-section-title">Observações</div><div class="os-obs-box" style="padding:10px 14px;font-size:14px;min-height:64px">${ped.observacoes ? escapeHtml(ped.observacoes) : ''}</div></div>
         <div class="os-assinaturas">
-            <div class="os-assinatura-item"><div class="os-section-title">Costureira</div><div class="os-linha-assinatura"></div><small>Nome / Assinatura / Data conclusão</small></div>
-            <div class="os-assinatura-item"><div class="os-section-title">Instalador</div><div class="os-linha-assinatura"></div><small>Nome / Assinatura / Data instalação</small></div>
-            <div class="os-assinatura-item"><div class="os-section-title">Conferência (Gerência)</div><div class="os-linha-assinatura"></div><small>Nome / Visto / Data</small></div>
+            <div class="os-assinatura-item"><div class="os-section-title">Costureira</div>${buildAssinaturaHTML(ped.id,'costureira',200,70)}<small>Nome / Assinatura / Data conclusão</small></div>
+            <div class="os-assinatura-item"><div class="os-section-title">Instalador</div>${buildAssinaturaHTML(ped.id,'instalador',200,70)}<small>Nome / Assinatura / Data instalação</small></div>
+            <div class="os-assinatura-item"><div class="os-section-title">Conferência (Gerência)</div>${buildAssinaturaHTML(ped.id,'conferencia',200,70)}<small>Nome / Visto / Data</small></div>
         </div>`;
 }
 
 function renderOS() {
     const container = document.getElementById('os-container');
     if (!container) return;
-    container.innerHTML = gerarHTMLOS(localStorage.getItem('sc_os_id'));
+    const pedidoId = localStorage.getItem('sc_os_id');
+    _docModalAtual = { tipo: 'os', pedidoId };
+    container.innerHTML = gerarHTMLOS(pedidoId);
+    iniciarAssinaturaPads(container);
 }
 
 // --- CONDIÇÕES GERAIS DA PROPOSTA ---
@@ -3409,8 +3671,11 @@ function gerarHTMLProposta(pedidoId, diasValidade) {
     const totalAcess   = ped.total_acessorios || 0;
     const ambRows = ambientes.map(a => {
         const tecidos = a.tecidos || [];
-        const descTecidos = tecidos.map(t => escapeHtml(t.tecidoNome||'')).filter(Boolean).join(' + ') || 'Tecido selecionado';
         const primTec = tecidos[0] || {};
+        const descTecidos = tecidos.map(t => {
+            const nome = escapeHtml(t.tecidoNome||'');
+            return nome ? `${nome}${t.prega ? ' ('+escapeHtml(t.prega)+', '+t.fator+'x)' : ''}` : '';
+        }).filter(Boolean).join(' + ') || 'Tecido selecionado';
         const aberturaImg = a.abertura
             ? `<img src="images/Aberturas/Abertura${escapeHtml(a.abertura)}.png" alt="Abertura ${escapeHtml(a.abertura)}"
                 style="height:54px;width:auto;vertical-align:middle;margin-left:10px;border:1px solid #e5e7eb;border-radius:4px;padding:2px;background:#fff"
@@ -3421,8 +3686,8 @@ function gerarHTMLProposta(pedidoId, diasValidade) {
             <td>
                 <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
                     <div>
-                        <strong>${a.prega?'Cortina '+escapeHtml(a.prega):'Cortina'}</strong> em ${descTecidos}${a.fixacao?' — '+escapeHtml(a.fixacao):''}${a.abertura?' | Abertura '+escapeHtml(a.abertura):''}${a.local_instalacao?' | '+escapeHtml(a.local_instalacao):''}
-                        <br><small>Parede: ${a.largura}m × ${a.altura||'—'}m | Fator: ${a.fator}x | ${(primTec.num_panos||'—')} pano(s) de ${primTec.alt_corte?primTec.alt_corte.toFixed(3):'—'}m${tecidos.length>1?' | '+tecidos.length+' tecidos':''}</small>
+                        <strong>Cortina</strong> em ${descTecidos}${a.fixacao?' — '+escapeHtml(a.fixacao):''}${a.abertura?' | Abertura '+escapeHtml(a.abertura):''}${a.local_instalacao?' | '+escapeHtml(a.local_instalacao):''}
+                        <br><small>Parede: ${a.largura}m × ${a.altura||'—'}m | ${(primTec.num_panos||'—')} pano(s) de ${primTec.alt_corte?primTec.alt_corte.toFixed(3):'—'}m${tecidos.length>1?' | '+tecidos.length+' tecidos':''}</small>
                     </div>
                     ${aberturaImg}
                 </div>
@@ -3468,13 +3733,20 @@ function gerarHTMLProposta(pedidoId, diasValidade) {
                 .join('')}
             </ul>
         </div>
-        <div class="proposta-aprovacao"><p>Aprovado em: _____ / _____ / _________</p><br><p>Assinatura do cliente: _________________________________________________</p></div>`;
+        <div class="proposta-aprovacao">
+            <p>Aprovado em: _____ / _____ / _________</p>
+            <p style="margin-top:12px">Assinatura do cliente:</p>
+            ${buildAssinaturaHTML(ped.id,'cliente',300,100)}
+        </div>`;
 }
 
 function renderProposta() {
     const container = document.getElementById('proposta-container');
     if (!container) return;
-    container.innerHTML = gerarHTMLProposta(localStorage.getItem('sc_proposta_id'), 15);
+    const pedidoId = localStorage.getItem('sc_proposta_id');
+    _docModalAtual = { tipo: 'proposta', pedidoId, dias: 15 };
+    container.innerHTML = gerarHTMLProposta(pedidoId, 15);
+    iniciarAssinaturaPads(container);
 }
 
 // --- BACKUP / EXPORTAR ---
@@ -4666,7 +4938,7 @@ function renderDashboardMedicoes() {
     container.style.display = '';
 
     function makeCard(v, atrasada) {
-        const d    = new Date(v.data + 'T12:00:00');
+        const d    = new Date(v.data + 'T00:00:00');
         const diff = Math.round((d - hoje) / (1000 * 60 * 60 * 24));
         let label, bg, bord, acc, clrL;
         if (atrasada) {
@@ -4743,7 +5015,7 @@ function renderDashboardInstalacoes() {
     container.style.display = '';
 
     function makeCard(p) {
-        const d    = p.data_entrega ? new Date(p.data_entrega + 'T12:00:00') : null;
+        const d    = p.data_entrega ? new Date(p.data_entrega + 'T00:00:00') : null;
         const diff = d ? Math.round((d - hoje) / (1000 * 60 * 60 * 24)) : null;
         const atrasado = diff !== null && diff < 0;
         let label, bg, bord, acc, clrL;

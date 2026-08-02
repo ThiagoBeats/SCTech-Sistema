@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Financeiro - SCTech</title>
     <link rel="icon" href="images/logo.png">
     <link rel="stylesheet" href="css/style.css">
@@ -57,10 +58,10 @@
             <div id="fin-kpis" class="fin-kpi-grid"></div>
 
             <!-- KPIs adicionais: 5 colunas -->
-            <div id="fin-kpis2" class="fin-kpi-grid" style="grid-template-columns:repeat(5,1fr)"></div>
+            <div id="fin-kpis2" class="fin-kpi-grid"></div>
 
             <!-- Projeção de fluxo de caixa -->
-            <div id="fin-projecao" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px"></div>
+            <div id="fin-projecao" class="rgrid-3"></div>
 
             <!-- Meta do mês -->
             <div class="card" style="margin-bottom:20px">
@@ -86,7 +87,7 @@
             </div>
 
             <!-- Aging + Top Clientes + Funil -->
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px;align-items:start">
+            <div class="rgrid-3">
                 <div class="card" style="padding:18px">
                     <h3 style="margin:0 0 12px;font-size:14px;color:#374151">⏳ Aging de Recebíveis</h3>
                     <div style="position:relative;height:220px"><canvas id="chart-fin-aging"></canvas></div>
@@ -102,7 +103,7 @@
             </div>
 
             <!-- Gráficos: combo (2fr) + 2 donuts (1fr each) -->
-            <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:16px;margin-bottom:20px;align-items:start">
+            <div class="rgrid-2-1">
                 <div class="card" style="padding:18px">
                     <h3 style="margin:0 0 12px;font-size:14px;color:#374151">📊 Entradas × Saídas × Saldo</h3>
                     <div style="position:relative;height:200px"><canvas id="chart-fin-combo"></canvas></div>
@@ -118,7 +119,7 @@
             </div>
 
             <!-- Tabelas -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="rgrid-2">
                 <div class="card" id="fin-card-receber"></div>
                 <div class="card" id="fin-card-pagar"></div>
             </div>
