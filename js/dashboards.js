@@ -256,7 +256,7 @@ function _dashComercial() {
     _mkChart('dc-fat-mes',{data:{labels:mes12.map(m=>m.label),datasets:[
         {type:'bar',label:'Faturamento',data:fatM,backgroundColor:'#86efaccc',borderColor:'#22c55e',borderWidth:1,borderRadius:3,yAxisID:'y'},
         {type:'line',label:'Ticket Médio',data:tkM,borderColor:'#7c3aed',backgroundColor:'rgba(124,58,237,0.07)',borderWidth:2,pointRadius:3,fill:true,tension:0.3,yAxisID:'y2'}
-    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}},tooltip:{callbacks:{label:ctx=>` ${_fmtR(ctx.raw)}`}}},scales:{y:{..._scaleY,position:'left'},y2:{position:'right',beginAtZero:true,ticks:{callback:v=>_fmtR(v),font:{size:9}},grid:{display:false}},..._scaleX}}});
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}},tooltip:{callbacks:{label:ctx=>` ${_fmtR(ctx.raw)}`}}},scales:{y:{..._scaleY,position:'left'},y2:{position:'right',beginAtZero:true,ticks:{callback:v=>_fmtR(v),font:{size:9}},grid:{display:false}},x:{..._scaleX}}}});
 
     // Performance vendedor — aplica filtro de período (instalações no período) e de vendedor
     const vendMap={};
@@ -335,10 +335,10 @@ function _dashProducao() {
         _kpi('Prontos p/ Instalar', _fmtN(prontos.length), 'aguardando agendamento', 'green') +
         _kpi('Ag. Pagamento', _fmtN(agPag.length), 'antes de instalar', 'orange') +
         _kpi('Tempo Médio', tmpMedio?tmpMedio+'d':'—', 'produção até entrega', 'teal') +
-        _kpi('Instalados no Período', _fmtN(instPer.length), _fmtR(instPer.reduce((s,p)=>s+(p.valor||0),0)), 'purple')
+        _kpi('Instalados no Período', _fmtN(instPer.length), 'no período selecionado', 'purple')
     }</div>
     <div class="dgrid-2" style="margin-bottom:16px">
-        <div class="dchart-card"><h3>📊 Distribuição por Status (Qtd + Valor)</h3><div class="dchart-wrap" style="height:220px"><canvas id="dc-pcp-status"></canvas></div></div>
+        <div class="dchart-card"><h3>📊 Distribuição por Status (Quantidade)</h3><div class="dchart-wrap" style="height:220px"><canvas id="dc-pcp-status"></canvas></div></div>
         <div class="dchart-card"><h3>⏱ Tempo Médio por Etapa (dias)</h3><div class="dchart-wrap" style="height:220px"><canvas id="dc-pcp-tempo"></canvas></div></div>
     </div>
     <div class="dgrid-2" style="margin-bottom:16px">
@@ -347,15 +347,15 @@ function _dashProducao() {
     </div>
     <div class="dchart-card">
         <h3>📋 Pedidos em Produção (${peds.length})</h3>
-        <table class="dash-table"><thead><tr><th>#</th><th>Cliente</th><th>Ambiente</th><th>Status</th><th>Entrega</th><th>Prazo</th><th>Valor</th></tr></thead>
+        <table class="dash-table"><thead><tr><th>#</th><th>Cliente</th><th>Ambiente</th><th>Status</th><th>Entrega</th><th>Prazo</th></tr></thead>
         <tbody>${peds.length ? peds.sort((a,b)=>(a.data_entrega||'9').localeCompare(b.data_entrega||'9')).map(p=>{
             const diff = p.data_entrega ? Math.round((new Date(p.data_entrega+'T00:00:00')-new Date(hoje+'T00:00:00'))/86400000) : null;
             const prazoBadge = diff===null ? _badge('Sem data','gray') : diff<0 ? _badge(Math.abs(diff)+'d atraso','red') : diff===0 ? _badge('Hoje','orange') : _badge(diff+'d','green');
             return `<tr><td><a href="pedido.html?edit=${p.id}" style="color:var(--primary);font-weight:700">#${formatPedidoId(p.id)}</a></td>
             <td>${escapeHtml(p.clienteNome||'—')}</td><td style="font-size:11px">${escapeHtml(p.amb||'—')}</td>
             <td>${_statusBadge(normalizarStatus(p.status))}</td>
-            <td>${p.data_entrega?_fmtDate(p.data_entrega):'—'}</td><td>${prazoBadge}</td><td>${_fmtR(p.valor)}</td></tr>`;
-        }).join('') : `<tr><td colspan="7" class="dash-empty">Nenhum pedido em produção com os filtros selecionados</td></tr>`}</tbody></table>
+            <td>${p.data_entrega?_fmtDate(p.data_entrega):'—'}</td><td>${prazoBadge}</td></tr>`;
+        }).join('') : `<tr><td colspan="6" class="dash-empty">Nenhum pedido em produção com os filtros selecionados</td></tr>`}</tbody></table>
     </div>`;
 
     // Base filtrada para gráficos — sem filtro de status (para mostrar todos os status no gráfico)
@@ -368,11 +368,10 @@ function _dashProducao() {
     });
     // Status dist
     const stCores = {'Medição':'#60a5fa','Aguardando Tecido':'#a78bfa','Na Costura':'#f472b6','Pronto p/ Instalação':'#34d399','Aguardando Pagamento':'#fbbf24'};
-    const stData  = EM_PROD.map(s=>({s,q:pedsBase.filter(p=>normalizarStatus(p.status)===s).length,v:pedsBase.filter(p=>normalizarStatus(p.status)===s).reduce((a,p)=>a+(p.valor||0),0)}));
+    const stData  = EM_PROD.map(s=>({s,q:pedsBase.filter(p=>normalizarStatus(p.status)===s).length}));
     _mkChart('dc-pcp-status',{type:'bar',data:{labels:stData.map(d=>d.s.length>14?d.s.slice(0,14)+'…':d.s),datasets:[
-        {label:'Qtd.',data:stData.map(d=>d.q),backgroundColor:EM_PROD.map(s=>stCores[s]+'cc'),borderColor:EM_PROD.map(s=>stCores[s]),borderWidth:1,borderRadius:4,yAxisID:'y'},
-        {label:'Valor',data:stData.map(d=>d.v),type:'line',borderColor:'#2A5C82',backgroundColor:'rgba(42,92,130,0.07)',borderWidth:2,pointRadius:3,tension:0.3,yAxisID:'y2'}
-    ]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}},tooltip:{callbacks:{label:ctx=>ctx.datasetIndex===0?` ${ctx.raw} pedidos`:` ${_fmtR(ctx.raw)}`}}},scales:{y:{ticks:{font:{size:10}},grid:{display:false}},y2:{position:'right',beginAtZero:true,ticks:{callback:v=>_fmtR(v),font:{size:9}},grid:{display:false}}}}});
+        {label:'Qtd.',data:stData.map(d=>d.q),backgroundColor:EM_PROD.map(s=>stCores[s]+'cc'),borderColor:EM_PROD.map(s=>stCores[s]),borderWidth:1,borderRadius:4,yAxisID:'y'}
+    ]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.raw} pedidos`}}},scales:{y:{ticks:{font:{size:10}},grid:{display:false}}}}});
 
     // Tempo por etapa
     const etapas = [['Orçamento','Medição'],['Medição','Aguardando Tecido'],['Aguardando Tecido','Na Costura'],['Na Costura','Pronto p/ Instalação'],['Pronto p/ Instalação','Instalado']];
@@ -436,13 +435,6 @@ function _dashEstoque() {
     const totalItens = (tipo!=='material'?db.estoque.length:0) + (tipo!=='tecido'?mats.length:0);
     const totalCrit  = tecCrit.length + matCrit.length;
 
-    // Valor estimado em estoque (tecidos)
-    const valEstoque = tecs.reduce((s,c)=>s+estoqueDisponivel(c.id)*(c.preco||0),0)
-                     + mats.reduce((s,m)=>s+(m.estoque_atual||0)*(m.preco||0),0);
-
-    // Consumo projetado
-    const consProj = db.pedidos.filter(p=>{const s=normalizarStatus(p.status);return s!=='Instalado'&&s!=='Orçamento';}).reduce((s,p)=>s+(p.total_material||0),0);
-
     // Entradas este mês
     const mesAtual = new Date().toISOString().slice(0,7);
     const entMes   = db.movimentos.filter(m=>m.tipo==='Entrada'&&new Date(m.data).toISOString().slice(0,7)===mesAtual).length;
@@ -452,8 +444,6 @@ function _dashEstoque() {
     <div class="dkpi-grid" style="grid-template-columns:repeat(3,1fr)">${
         _kpi('Total em Estoque', _fmtN(totalItens), 'rolos + materiais', 'blue') +
         _kpi('Itens Críticos', _fmtN(totalCrit), 'abaixo do mínimo', 'red') +
-        _kpi('Valor Estimado', _fmtR(valEstoque), 'a preço de venda', 'green') +
-        _kpi('Consumo Projetado', _fmtR(consProj), 'pedidos em andamento', 'orange') +
         _kpi('Necessidade Recompra', _fmtN(totalCrit), 'itens', 'red') +
         _kpi('Entradas Este Mês', _fmtN(entMes), 'movimentos registrados', 'teal')
     }</div>
@@ -535,9 +525,6 @@ function _dashInstalacoes() {
     const semData   = agendadas.filter(p=>!p.data_entrega);
     const proximas  = agendadas.filter(p=>p.data_entrega&&p.data_entrega>=hoje);
 
-    // Valor pendente
-    const valPend = agendadas.reduce((s,p)=>s+(p.valor||0)-(p.valor_recebido||0),0);
-
     // Status pagamento das agendadas
     const crMap = {};
     db.contas_receber.forEach(cr=>{if(cr.pedido_id)crMap[cr.pedido_id]=(crMap[cr.pedido_id]||[]).concat(cr);});
@@ -554,11 +541,10 @@ function _dashInstalacoes() {
 
     const el = document.getElementById('dash-content');
     el.innerHTML = `
-    <div class="dkpi-grid" style="grid-template-columns:repeat(5,1fr)">${
+    <div class="dkpi-grid" style="grid-template-columns:repeat(4,1fr)">${
         _kpi('Agendadas', _fmtN(agendadas.length), 'próx. 30 dias e além', 'blue') +
         _kpi('Atrasadas', _fmtN(atrasadas.length), 'entrega vencida', 'red') +
-        _kpi('Instaladas no Período', _fmtN(instPer.length), _fmtR(instPer.reduce((s,p)=>s+(p.valor||0),0)), 'green') +
-        _kpi('Valor Pendente', _fmtR(valPend), 'total a receber', 'orange') +
+        _kpi('Instaladas no Período', _fmtN(instPer.length), 'no período selecionado', 'green') +
         _kpi('Sem Data', _fmtN(semData.length), 'precisam agendamento', 'gray')
     }</div>
     <div class="dgrid-2" style="margin-bottom:16px">
@@ -568,7 +554,7 @@ function _dashInstalacoes() {
     <div class="dchart-card" style="margin-bottom:16px"><h3>📈 Instalações por Semana — Últimas 8 semanas</h3><div class="dchart-wrap" style="height:160px"><canvas id="dc-inst-sem"></canvas></div></div>
     <div class="dchart-card">
         <h3>🔧 Instalações Agendadas (${lista.length})</h3>
-        <table class="dash-table"><thead><tr><th>#</th><th>Cliente</th><th>Data Instalação</th><th>Prazo</th><th>Endereço</th><th>Valor</th><th>Pagamento</th></tr></thead>
+        <table class="dash-table"><thead><tr><th>#</th><th>Cliente</th><th>Data Instalação</th><th>Prazo</th><th>Endereço</th><th>Pagamento</th></tr></thead>
         <tbody>${lista.length ? lista.sort((a,b)=>(a.data_entrega||'9').localeCompare(b.data_entrega||'9')).map(p=>{
             const diff = p.data_entrega ? Math.round((new Date(p.data_entrega+'T00:00:00')-new Date(hoje+'T00:00:00'))/86400000) : null;
             const prazoBadge = diff===null?_badge('Sem data','gray'):diff<0?_badge(Math.abs(diff)+'d atraso','red'):diff===0?_badge('Hoje','orange'):_badge(diff+'d','green');
@@ -579,8 +565,8 @@ function _dashInstalacoes() {
             <td>${p.data_entrega?_fmtDate(p.data_entrega):'—'}</td>
             <td>${prazoBadge}</td>
             <td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(p.inst_endereco||'—')}</td>
-            <td>${_fmtR(p.valor)}</td><td>${pagBadge}</td></tr>`;
-        }).join('') : `<tr><td colspan="7" class="dash-empty">Nenhuma instalação com os filtros selecionados</td></tr>`}</tbody></table>
+            <td>${pagBadge}</td></tr>`;
+        }).join('') : `<tr><td colspan="6" class="dash-empty">Nenhuma instalação com os filtros selecionados</td></tr>`}</tbody></table>
     </div>`;
 
     // Carga 30 dias — usa lista com filtro de pagamento aplicado
@@ -638,13 +624,6 @@ function _dashCompras() {
 
     const pcAbertos = db.pedidos_compra.filter(pc=>pc.status!=='Recebido');
     const pcPer     = db.pedidos_compra.filter(pc=>inR(pc.data));
-    const valAbertos = pcAbertos.reduce((s,pc)=>{
-        const itens=pc.itens||[];
-        return s+itens.reduce((ss,it)=>ss+(it.quantidade||0)*(it.preco_unit||0),0);
-    },0);
-    const valPer = pcPer.reduce((s,pc)=>{
-        return s+(pc.itens||[]).reduce((ss,it)=>ss+(it.quantidade||0)*(it.preco_unit||0),0);
-    },0);
     const pcRecebPer = pcPer.filter(pc=>pc.status==='Recebido');
 
     // Entradas por mês (últimos 6 meses via movimentos)
@@ -652,21 +631,16 @@ function _dashCompras() {
 
     const el = document.getElementById('dash-content');
     el.innerHTML = `
-    <div class="dkpi-grid" style="grid-template-columns:repeat(5,1fr)">${
+    <div class="dkpi-grid" style="grid-template-columns:repeat(3,1fr)">${
         _kpi('Itens a Repor', _fmtN(tecCrit.length+matCrit.length), 'abaixo do mínimo', 'red') +
         _kpi('PCs Abertos', _fmtN(pcAbertos.length), 'rascunho ou enviado', 'orange') +
-        _kpi('Valor em Aberto', _fmtR(valAbertos), 'PCs não recebidos', 'blue') +
-        _kpi('Recebidos no Período', _fmtN(pcRecebPer.length), _fmtR(valPer), 'green') +
-        _kpi('Comprometido', _fmtR(valPer), 'PCs do período', 'teal')
+        _kpi('Recebidos no Período', _fmtN(pcRecebPer.length), 'pedidos de compra', 'green')
     }</div>
     <div class="dgrid-2" style="margin-bottom:16px">
         <div class="dchart-card"><h3>⚠️ Necessidade de Recompra (déficit)</h3><div class="dchart-wrap" style="height:${Math.max(160,(tecCrit.length+matCrit.length)*32+60)}px"><canvas id="dc-cmp-repor"></canvas></div></div>
         <div class="dchart-card"><h3>🏭 PCs por Fornecedor</h3><div class="dchart-wrap" style="height:${Math.max(160,db.fornecedores.length*36+60)}px"><canvas id="dc-cmp-forn"></canvas></div></div>
     </div>
-    <div class="dgrid-2" style="margin-bottom:16px">
-        <div class="dchart-card"><h3>📂 Valor por Categoria de Despesa</h3><div class="dchart-wrap" style="height:200px"><canvas id="dc-cmp-cat"></canvas></div></div>
-        <div class="dchart-card"><h3>📈 Entradas de Estoque — Últimos 6 meses</h3><div class="dchart-wrap" style="height:200px"><canvas id="dc-cmp-ent"></canvas></div></div>
-    </div>
+    <div class="dchart-card" style="margin-bottom:16px"><h3>📈 Entradas de Estoque — Últimos 6 meses</h3><div class="dchart-wrap" style="height:200px"><canvas id="dc-cmp-ent"></canvas></div></div>
     <div class="dgrid-2">
         <div class="dchart-card">
             <h3>📋 Itens para Recompra</h3>
@@ -701,13 +675,6 @@ function _dashCompras() {
     pcs.forEach(pc=>{const f=db.fornecedores.find(x=>x.id==pc.fornecedor_id);const n=f?.nome_fantasia||f?.razao_social||'Sem fornecedor';fornMap[n]=(fornMap[n]||0)+1;});
     const fornRows=Object.entries(fornMap).sort(([,a],[,b])=>b-a).slice(0,8);
     if(fornRows.length) _mkChart('dc-cmp-forn',{type:'bar',data:{labels:fornRows.map(([n])=>n.length>14?n.slice(0,14)+'…':n),datasets:[{label:'Pedidos de Compra',data:fornRows.map(([,v])=>v),backgroundColor:'#2A5C82cc',borderColor:'#2A5C82',borderWidth:1,borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.raw} PC(s)`}}},scales:{y:{ticks:{font:{size:10}},grid:{display:false}},x:{beginAtZero:true,ticks:{stepSize:1,font:{size:10}},grid:{color:'rgba(0,0,0,0.05)'}}}}});
-
-    // Valor por categoria (despesas)
-    const catMap={};
-    const CAT_LBL={tecido:'Tecido/Mat.',salario:'Salário',comissao_rt:'Comissão RT',aluguel:'Aluguel',conta:'Contas',outro:'Outros',costureira:'Costureira',instalador:'Instalador'};
-    db.contas_pagar.filter(cp=>cp.status==='Pago'&&inR(cp.data_pagamento)).forEach(cp=>{const c=CAT_LBL[cp.categoria||'outro']||'Outros';catMap[c]=(catMap[c]||0)+cp.valor;});
-    const catRows=Object.entries(catMap).sort(([,a],[,b])=>b-a);
-    if(catRows.length) _mkChart('dc-cmp-cat',{type:'doughnut',data:{labels:catRows.map(([n])=>n),datasets:[{data:catRows.map(([,v])=>v),backgroundColor:['#6366f1cc','#f59e0bcc','#8b5cf6cc','#ef4444cc','#3b82f6cc','#6b7280cc','#ec4899cc','#f97316cc'],borderWidth:2,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${_fmtR(ctx.raw)}`}}}}});
 
     // Entradas 6 meses
     const mes6H=_meses(6);
