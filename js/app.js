@@ -197,7 +197,103 @@ function _saveNavHistory(hist) {
     sessionStorage.setItem('sc_nav_history', JSON.stringify(hist.slice(-30)));
 }
 
+// --- SIDEBAR (navegação lateral) ---
+const NAV_ICON_PATHS = {
+    home: '<path d="M4 12 12 5l8 7"/><path d="M6 11v8a1 1 0 0 0 1 1h3v-5h4v5h3a1 1 0 0 0 1-1v-8"/>',
+    pedidos: '<rect x="5" y="3" width="14" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="13" y2="16"/>',
+    producao: '<circle cx="6" cy="6" r="2.1"/><circle cx="18" cy="6" r="2.1"/><circle cx="12" cy="18" r="2.1"/><line x1="7.7" y1="7.6" x2="10.6" y2="16"/><line x1="16.3" y1="7.6" x2="13.4" y2="16"/><line x1="8.1" y1="6" x2="15.9" y2="6"/>',
+    estoque: '<path d="M12 3 20 7.5v9L12 21 4 16.5v-9L12 3Z"/><line x1="4" y1="7.5" x2="12" y2="12"/><line x1="20" y1="7.5" x2="12" y2="12"/><line x1="12" y1="12" x2="12" y2="21"/>',
+    clientes: '<circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><circle cx="17" cy="8.5" r="2.3"/><path d="M15.3 14.7c2.4.5 4.2 2.4 4.2 5.3"/>',
+    catalogo: '<path d="M11.5 3.5H5A1.5 1.5 0 0 0 3.5 5v6.5a1.5 1.5 0 0 0 .44 1.06l8.5 8.5a1.5 1.5 0 0 0 2.12 0l6.5-6.5a1.5 1.5 0 0 0 0-2.12l-8.5-8.5a1.5 1.5 0 0 0-1.06-.44Z"/><circle cx="8" cy="8" r="1.3"/>',
+    vendedores: '<circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><path d="M15.5 12.3 17 13.8l3-3.1"/>',
+    fornecedores: '<rect x="2.5" y="8" width="11" height="8" rx="1"/><path d="M13.5 11h3.2l3.3 3v2h-6.5"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/>',
+    financeiro: '<line x1="4" y1="20" x2="4" y2="10"/><line x1="9.3" y1="20" x2="9.3" y2="4"/><line x1="14.7" y1="20" x2="14.7" y2="13"/><line x1="20" y1="20" x2="20" y2="7"/><line x1="2" y1="20" x2="22" y2="20"/>',
+    settings: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.2M12 18.8V21M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M3 12h2.2M18.8 12H21M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/>',
+    info: '<circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.6" r="0.6" fill="currentColor" stroke="none"/>',
+    logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><line x1="21" y1="12" x2="9" y2="12"/><path d="M16 7l5 5-5 5"/>',
+    collapse: '<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/>',
+    user: '<circle cx="12" cy="8.2" r="3.4"/><path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/>',
+    dollar: '<circle cx="12" cy="12" r="9"/><path d="M9 15.3c0 1.1 1.3 1.9 3 1.9s3-.7 3-1.9-1.4-1.6-3-2-3-.9-3-2 1.3-1.9 3-1.9 3 .8 3 1.7"/><line x1="12" y1="6" x2="12" y2="7.4"/><line x1="12" y1="16.6" x2="12" y2="18"/>',
+    file: '<path d="M6 3h8l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v4h4"/><line x1="8" y1="12.5" x2="15" y2="12.5"/><line x1="8" y1="16" x2="15" y2="16"/>',
+    receipt: '<path d="M6 3h12v17l-2.5-1.5L13 20l-2.5-1.5L8 20l-2-1.5V3Z"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="11.5" x2="15" y2="11.5"/>',
+    alert: '<path d="M12 3 22 20H2Z"/><line x1="12" y1="9.5" x2="12" y2="14"/><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none"/>',
+    inbox: '<path d="M3 12h4l2 3h6l2-3h4"/><path d="M5 12 6.5 5.5A1 1 0 0 1 7.5 4.7h9A1 1 0 0 1 17.5 5.5L19 12"/><path d="M3 12v6a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-6"/>',
+};
+
+function navIcon(name, size) {
+    size = size || 20;
+    return `<svg class="nav-icon-svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${NAV_ICON_PATHS[name] || ''}</svg>`;
+}
+
+const SIDEBAR_MODULOS = [
+    { href: 'index.html',       icon: 'home',         label: 'Página Inicial' },
+    { href: 'pedidos.html',     icon: 'pedidos',      label: 'Pedidos' },
+    { href: 'pcp.html',         icon: 'producao',     label: 'Produção' },
+    { href: 'estoque.html',     icon: 'estoque',      label: 'Estoque' },
+    { href: 'clientes.html',    icon: 'clientes',     label: 'Clientes' },
+    { href: 'catalogo.html',    icon: 'catalogo',     label: 'Cadastro/Catálogo' },
+    { href: 'vendedores.html',  icon: 'vendedores',   label: 'Vendedores' },
+    { href: 'fornecedores.html', icon: 'fornecedores', label: 'Fornecedores' },
+    { href: 'financeiro.html',  icon: 'financeiro',   label: 'Financeiro' },
+];
+
+function getSidebarCollapsed() {
+    return localStorage.getItem('sc_sidebar') === 'collapsed';
+}
+
+function toggleSidebarCollapse() {
+    const collapsed = !getSidebarCollapsed();
+    localStorage.setItem('sc_sidebar', collapsed ? 'collapsed' : 'expanded');
+    document.documentElement.setAttribute('data-sidebar', collapsed ? 'collapsed' : 'expanded');
+    const sidebar = document.getElementById('main-sidebar');
+    if (sidebar) sidebar.classList.toggle('collapsed', collapsed);
+    const btn = document.getElementById('sidebar-toggle-btn');
+    if (btn) btn.title = collapsed ? 'Expandir menu' : 'Recolher menu';
+}
+
+function renderSidebar() {
+    const sidebar = document.getElementById('main-sidebar');
+    if (!sidebar) return;
+    const currentFile = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
+    const collapsed = getSidebarCollapsed();
+    sidebar.classList.toggle('collapsed', collapsed);
+
+    const navHTML = SIDEBAR_MODULOS.map(m => {
+        const active = m.href.toLowerCase() === currentFile;
+        return `<a href="${m.href}" class="nav-item${active ? ' active' : ''}" title="${escapeHtml(m.label)}">${navIcon(m.icon)}<span class="nav-text">${escapeHtml(m.label)}</span></a>`;
+    }).join('');
+
+    sidebar.innerHTML = `
+        <div class="logo-popup-wrap" id="logo-popup-wrap">
+            <div class="logo" onclick="toggleLogoPopup(event)">
+                <img src="images/logo.png" alt="SCTech" class="sidebar-logo-img">
+                <h2>SCTech</h2>
+            </div>
+            <div class="logo-popup" id="logo-popup">
+                <div class="logo-popup-header">
+                    <div class="logo-popup-avatar">${navIcon('user', 18)}</div>
+                    <div><div class="logo-popup-name" id="popup-user-name">—</div><div class="logo-popup-role">Usuário SCTech</div></div>
+                </div>
+                <div class="logo-popup-sep"></div>
+                <button class="logo-popup-item" onclick="toggleTema()" style="justify-content:space-between">
+                    <span style="display:flex;align-items:center;gap:10px"><span id="tema-icone">🌙</span> Tema</span>
+                    <span class="tema-switch" id="tema-switch"></span>
+                </button>
+                <div class="logo-popup-sep"></div>
+                <a href="sobre.html" class="logo-popup-item">${navIcon('info', 16)} Sobre o Sistema</a>
+                <a href="empresa.html" class="logo-popup-item">${navIcon('settings', 16)} Configurar Empresa</a>
+                <div class="logo-popup-sep"></div>
+                <button class="logo-popup-item logo-popup-logout" onclick="logout()">${navIcon('logout', 16)} Sair</button>
+            </div>
+        </div>
+        <nav class="nav-rows">${navHTML}</nav>
+        <button class="sidebar-toggle" id="sidebar-toggle-btn" onclick="toggleSidebarCollapse()" title="${collapsed ? 'Expandir menu' : 'Recolher menu'}">
+            ${navIcon('collapse', 18)}<span class="nav-text">Recolher menu</span>
+        </button>`;
+}
+
 function initPageNavigation() {
+    renderSidebar();
     const sidebar = document.getElementById('main-sidebar');
     if (!sidebar) return;
 
@@ -2681,21 +2777,21 @@ function renderAmbienteBreakdown(a) {
         const temConflito = verificarConflitoDeLote(t.tecidoId, t.consumo_linear||0);
         const alt_bruta = (a.altura||0) + (t.bainha_cm??15)/100 + (t.cabecote_cm??0)/100;
         const titulo = tecidos.length > 1 ? `<div class="breakdown-row" style="font-weight:bold;color:var(--primary);padding-bottom:6px;border-bottom:1px solid #dde">Tecido ${tidx+1}: ${escapeHtml(t.tecidoNome||'')}</div>` : '';
-        return `<div class="breakdown-box" style="margin-top:10px">
+        return `<div class="breakdown-box">
             ${titulo}
             <div class="breakdown-row"><span class="label">Tipo de prega</span><span><strong>${escapeHtml(t.prega||'—')}</strong></span></div>
-            <div class="breakdown-row"><span class="label">Largura total (parede × fator)</span><span><strong>${((a.largura||0)*(t.fator||1)).toFixed(2)}</strong> m</span></div>
+            <div class="breakdown-row"><span class="label" title="Largura da parede × fator de franzimento">Largura total</span><span><strong>${((a.largura||0)*(t.fator||1)).toFixed(2)}</strong> m</span></div>
             <div class="breakdown-row"><span class="label">Largura do rolo</span><span><strong>${(t.largura_rolo||2.80).toFixed(2)}</strong> m</span></div>
             <div class="breakdown-row"><span class="label">Número de panos</span><span><strong>${t.num_panos}</strong> pano(s)</span></div>
-            <div class="breakdown-row"><span class="label">Altura bruta (parede + barra + cabeçote)</span><span><strong>${alt_bruta.toFixed(3)}</strong> m</span></div>
+            <div class="breakdown-row"><span class="label" title="Altura da parede + barra + cabeçote">Altura bruta</span><span><strong>${alt_bruta.toFixed(3)}</strong> m</span></div>
             <div class="breakdown-row destaque"><span>Consumo total</span><span><strong>${(t.consumo_linear||0).toFixed(2)}</strong> m lineares</span></div>
             <div class="breakdown-row"><span class="label">Estoque disponível</span><span style="color:${stockColor}"><strong>${disp.toFixed(2)} m</strong></span></div>
-            <div class="breakdown-row"><span class="label">Valor do tecido</span><span>R$ <strong>${(t.total_material||0).toFixed(2)}</strong></span></div>
+            <div class="breakdown-row destaque"><span>Valor do tecido</span><span>R$ <strong>${(t.total_material||0).toFixed(2)}</strong></span></div>
             ${temConflito ? `<div class="alerta-lote-pedido" style="display:flex;margin-top:4px">⚠ <strong style="margin:0 4px">Atenção:</strong> pode exigir múltiplos lotes — risco de variação de tonalidade.</div>` : ''}
         </div>`;
     }).join('');
-    const totalRow = tecidos.length > 1 ? `<div class="breakdown-box" style="margin-top:6px"><div class="breakdown-row destaque"><span>Total combinado (${tecidos.length} tecidos)</span><span>R$ <strong>${totalMat.toFixed(2)}</strong></span></div></div>` : '';
-    return parts + totalRow;
+    const totalRow = tecidos.length > 1 ? `<div class="breakdown-box breakdown-total"><div class="breakdown-row destaque"><span>Total combinado (${tecidos.length} tecidos)</span><span>R$ <strong>${totalMat.toFixed(2)}</strong></span></div></div>` : '';
+    return `<div class="breakdown-wrap">${parts}</div>${totalRow}`;
 }
 
 function syncAmbientesFromDOM() {
@@ -3557,26 +3653,35 @@ function gerarHTMLOS(pedidoId) {
     const ambientes = normalizarAmbientes(ped);
     const cliente   = db.clientes.find(c => c.id == ped.clienteId);
     const hoje      = new Date().toLocaleDateString('pt-BR');
+    const osSpec = (label, val) => `<span class="os-spec"><span class="os-spec-lbl">${label}</span>${val}</span>`;
     const ambientesHTML = ambientes.map((a, idx) => {
         const tecidos = a.tecidos || [];
         const totalConsumo = tecidos.reduce((s,t)=>s+(t.consumo_linear||0),0);
-        const tecidoRows = tecidos.map((t, tidx) => {
-            const label = tecidos.length > 1 ? `Tecido ${tidx+1}` : 'Tecido';
-            return `<tr><td class="os-th">${label}</td><td><strong>${escapeHtml(t.tecidoNome||'—')}</strong></td><td class="os-th">Tipo de Prega</td><td><strong>${escapeHtml(t.prega||'—')}</strong></td></tr>
-                <tr><td class="os-th">Fator franzimento</td><td>${t.fator}x</td><td class="os-th">Largura total</td><td>${((a.largura||0)*(t.fator||1)).toFixed(2)} m</td></tr>
-                <tr><td class="os-th">Barra</td><td>${t.bainha_cm??15} cm</td><td class="os-th">Cabeçote/Entretela</td><td>${t.cabecote_cm??0} cm</td></tr>
-                <tr><td class="os-th">Panos</td><td>${t.num_panos||'—'}</td><td class="os-th">Alt. Corte</td><td>${t.alt_corte?t.alt_corte.toFixed(3):'—'} m</td></tr>
-                <tr><td class="os-th">Consumo</td><td colspan="3"><strong>${(t.consumo_linear||0).toFixed(2)} m lineares</strong></td></tr>`;
+        const tecBlocks = tecidos.map((t, tidx) => {
+            const prefixo = tecidos.length > 1 ? `Tecido ${tidx+1}: ` : '';
+            const largTotal = ((a.largura||0)*(t.fator||1)).toFixed(2);
+            return `<div class="os-tec-block">
+                <div class="os-tec-name">${prefixo}${escapeHtml(t.tecidoNome||'—')}</div>
+                <div class="os-tec-specs">
+                    ${osSpec('Prega', escapeHtml(t.prega||'—'))}
+                    ${osSpec('Fator', (t.fator||'—')+'x')}
+                    ${osSpec('Barra', (t.bainha_cm??15)+' cm')}
+                    ${osSpec('Cabeçote', (t.cabecote_cm??0)+' cm')}
+                    ${osSpec('Largura total', largTotal+' m')}
+                    ${osSpec('Panos', t.num_panos||'—')}
+                    ${osSpec('Alt. corte', (t.alt_corte?t.alt_corte.toFixed(3):'—')+' m')}
+                    <span class="os-spec os-spec-consumo"><span class="os-spec-lbl">Consumo</span><strong>${(t.consumo_linear||0).toFixed(2)} m</strong></span>
+                </div>
+            </div>`;
         }).join('');
         return `
-        <div class="os-section">
-            <div class="os-section-title">Ambiente ${idx+1}${a.amb ? ': '+escapeHtml(a.amb) : ''}</div>
-            <table class="os-table">
-                <tr><td class="os-th">Mat. Instalação</td><td><strong>${escapeHtml(a.fixacao||'—')}</strong></td><td class="os-th">Local de Instalação</td><td><strong>${escapeHtml(a.local_instalacao||'Parede')}</strong></td></tr>
-                <tr><td class="os-th">Tipo de Abertura</td><td><strong>Tipo ${escapeHtml(a.abertura||'A')}</strong></td><td class="os-th">Largura × Altura da parede</td><td><strong>${a.largura} m × ${a.altura||'—'} m</strong></td></tr>
-            </table>
-            <table class="os-table" style="margin-top:8px">${tecidoRows}</table>
-            ${tecidos.length > 1 ? `<div class="os-destaque">Total: <strong>${totalConsumo.toFixed(2)} m lineares</strong> (${tecidos.length} tecidos)</div>` : ''}
+        <div class="os-amb-card">
+            <div class="os-amb-head">
+                <span class="os-amb-name">Ambiente ${idx+1}${a.amb ? ': '+escapeHtml(a.amb) : ''}</span>
+                <span class="os-amb-meta">${escapeHtml(a.fixacao||'—')} · ${escapeHtml(a.local_instalacao||'Parede')} · Abertura ${escapeHtml(a.abertura||'A')} · ${a.largura||'—'}m × ${a.altura||'—'}m</span>
+            </div>
+            ${tecBlocks}
+            ${tecidos.length > 1 ? `<div class="os-amb-total">Total do ambiente: <strong>${totalConsumo.toFixed(2)} m lineares</strong></div>` : ''}
         </div>`;
     }).join('');
     const itensHTML = ped.itens && ped.itens.length ? `
@@ -3601,13 +3706,7 @@ function gerarHTMLOS(pedidoId) {
                 <div class="os-meta-item"><span>Status</span><strong>${normalizarStatus(ped.status)}</strong></div>
             </div>
         </div>
-        <div class="os-section">
-            <table class="os-table">
-                <tr><td class="os-th">Cliente</td><td><strong>${escapeHtml(cliente?cliente.nome:'—')}</strong></td><td class="os-th">Telefone</td><td>${escapeHtml(cliente&&cliente.tel?cliente.tel:'—')}</td></tr>
-                <tr><td class="os-th">Ambientes</td><td><strong>${escapeHtml(ped.amb||'—')}</strong></td><td class="os-th">E-mail</td><td>${escapeHtml(cliente&&cliente.email?cliente.email:'—')}</td></tr>
-                <tr><td class="os-th">Endereço</td><td colspan="3">${escapeHtml(cliente&&cliente.end?cliente.end:'—')}</td></tr>
-            </table>
-        </div>
+        <div class="os-cliente-bar"><span class="os-cliente-label">Cliente</span><strong>${escapeHtml(cliente?cliente.nome:'—')}</strong></div>
         ${ambientesHTML}${itensHTML}
         <div class="os-section"><div class="os-section-title">Observações</div><div class="os-obs-box" style="padding:10px 14px;font-size:14px;min-height:64px">${ped.observacoes ? escapeHtml(ped.observacoes) : ''}</div></div>
         <div class="os-assinaturas">

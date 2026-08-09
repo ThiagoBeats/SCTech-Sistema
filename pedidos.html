@@ -6,20 +6,10 @@
     <title>Pedidos - SCTech</title>
     <link rel="icon" href="images/logo.png">
     <link rel="stylesheet" href="css/style.css">
-    <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light')</script>
+    <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
-    <aside class="sidebar" id="main-sidebar">
-        <div class="logo-popup-wrap" id="logo-popup-wrap"><div class="logo" onclick="toggleLogoPopup(event)"><img src="images/logo.png" alt="SCTech" class="sidebar-logo-img"><h2>SCTech</h2></div><div class="logo-popup" id="logo-popup"><div class="logo-popup-header"><div class="logo-popup-avatar">&#128100;</div><div><div class="logo-popup-name" id="popup-user-name">&#8212;</div><div class="logo-popup-role">Usu&#225;rio SCTech</div></div></div><div class="logo-popup-sep"></div><button class="logo-popup-item" onclick="toggleTema()" style="justify-content:space-between"><span style="display:flex;align-items:center;gap:10px"><span id="tema-icone">🌙</span> Tema</span><span class="tema-switch" id="tema-switch"></span></button><div class="logo-popup-sep"></div><a href="sobre.html" class="logo-popup-item"><span>&#8505;&#65039;</span> Sobre o Sistema</a><a href="empresa.html" class="logo-popup-item"><span>&#9881;&#65039;</span> Configurar Empresa</a><div class="logo-popup-sep"></div><button class="logo-popup-item logo-popup-logout" onclick="logout()"><span>&#128682;</span> Sair</button></div></div>
-        <a href="index.html"        class="nav-item"><img src="images/icones/dashboard.png" class="nav-icon"> <span class="nav-text">Página Inicial</span></a>
-        <a href="pedidos.html"      class="nav-item active"><img src="images/icones/relatorios.png" class="nav-icon"> <span class="nav-text">Pedidos</span></a>
-        <a href="pcp.html"          class="nav-item"><img src="images/icones/producao.png" class="nav-icon"> <span class="nav-text">Produção</span></a>
-        <a href="estoque.html"      class="nav-item"><img src="images/icones/estoque.png" class="nav-icon"> <span class="nav-text">Estoque</span></a>
-        <a href="clientes.html"     class="nav-item"><img src="images/icones/clientes.png" class="nav-icon"> <span class="nav-text">Clientes</span></a><a href="catalogo.html" class="nav-item"><img src="images/icones/catalogo.png" class="nav-icon"> <span class="nav-text">Cadastro/Catálogo</span></a>
-        <a href="vendedores.html"   class="nav-item"><img src="images/icones/vendedores.png" class="nav-icon"> <span class="nav-text">Vendedores</span></a>
-        <a href="fornecedores.html" class="nav-item"><img src="images/icones/fornecedores.png" class="nav-icon"> <span class="nav-text">Fornecedores</span></a>
-        <a href="financeiro.html"   class="nav-item"><img src="images/icones/financeiro.png" class="nav-icon"> <span class="nav-text">Financeiro</span></a>
-    </aside>
+    <aside class="sidebar" id="main-sidebar"></aside>
 
     <main class="main">
         <div class="header">

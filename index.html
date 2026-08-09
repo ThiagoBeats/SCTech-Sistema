@@ -6,20 +6,10 @@
     <title>Dashboard - SCTech</title>
     <link rel="icon" href="images/logo.png">
     <link rel="stylesheet" href="css/style.css">
-    <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light')</script>
+    <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
-    <aside class="sidebar" id="main-sidebar">
-        <div class="logo-popup-wrap" id="logo-popup-wrap"><div class="logo" onclick="toggleLogoPopup(event)"><img src="images/logo.png" alt="SCTech" class="sidebar-logo-img"><h2>SCTech</h2></div><div class="logo-popup" id="logo-popup"><div class="logo-popup-header"><div class="logo-popup-avatar">&#128100;</div><div><div class="logo-popup-name" id="popup-user-name">&#8212;</div><div class="logo-popup-role">Usu&#225;rio SCTech</div></div></div><div class="logo-popup-sep"></div><button class="logo-popup-item" onclick="toggleTema()" style="justify-content:space-between"><span style="display:flex;align-items:center;gap:10px"><span id="tema-icone">🌙</span> Tema</span><span class="tema-switch" id="tema-switch"></span></button><div class="logo-popup-sep"></div><a href="sobre.html" class="logo-popup-item"><span>&#8505;&#65039;</span> Sobre o Sistema</a><a href="empresa.html" class="logo-popup-item"><span>&#9881;&#65039;</span> Configurar Empresa</a><div class="logo-popup-sep"></div><button class="logo-popup-item logo-popup-logout" onclick="logout()"><span>&#128682;</span> Sair</button></div></div>
-        <a href="index.html"    class="nav-item active"><img src="images/icones/dashboard.png" class="nav-icon"> <span class="nav-text">Página Inicial</span></a>
-        <a href="pedidos.html" class="nav-item"><img src="images/icones/relatorios.png" class="nav-icon"> <span class="nav-text">Pedidos</span></a>
-        <a href="pcp.html"      class="nav-item"><img src="images/icones/producao.png" class="nav-icon"> <span class="nav-text">Produção</span></a>
-        <a href="estoque.html"  class="nav-item"><img src="images/icones/estoque.png" class="nav-icon"> <span class="nav-text">Estoque</span></a>
-        <a href="clientes.html" class="nav-item"><img src="images/icones/clientes.png" class="nav-icon"> <span class="nav-text">Clientes</span></a><a href="catalogo.html" class="nav-item"><img src="images/icones/catalogo.png" class="nav-icon"> <span class="nav-text">Cadastro/Catálogo</span></a>
-        <a href="vendedores.html" class="nav-item"><img src="images/icones/vendedores.png" class="nav-icon"> <span class="nav-text">Vendedores</span></a>
-        <a href="fornecedores.html" class="nav-item"><img src="images/icones/fornecedores.png" class="nav-icon"> <span class="nav-text">Fornecedores</span></a>
-        <a href="financeiro.html"   class="nav-item"><img src="images/icones/financeiro.png" class="nav-icon"> <span class="nav-text">Financeiro</span></a>
-    </aside>
+    <aside class="sidebar" id="main-sidebar"></aside>
     <main class="main">
         <div class="header">
             <h2>Painel de Acompanhamento</h2>
@@ -34,49 +24,49 @@
         </div>
         <div class="metrics-grid">
             <div class="metric-card" id="card-fat-mes">
-                <img src="images/icones2/faturamento.png" class="metric-icon" alt="">
+                <div class="metric-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 15.3c0 1.1 1.3 1.9 3 1.9s3-.7 3-1.9-1.4-1.6-3-2-3-.9-3-2 1.3-1.9 3-1.9 3 .8 3 1.7"/><line x1="12" y1="6" x2="12" y2="7.4"/><line x1="12" y1="16.6" x2="12" y2="18"/></svg></div>
                 <div class="metric-body">
                     <div class="metric-label">Faturamento do Mês</div>
                     <div class="metric-value" id="met-fat-mes">—</div>
                 </div>
             </div>
             <div class="metric-card metric-card-link" id="card-producao" onclick="filtrarMetrica('em_producao')">
-                <img src="images/icones2/producao.png" class="metric-icon" alt="">
+                <div class="metric-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.1"/><circle cx="18" cy="6" r="2.1"/><circle cx="12" cy="18" r="2.1"/><line x1="7.7" y1="7.6" x2="10.6" y2="16"/><line x1="16.3" y1="7.6" x2="13.4" y2="16"/><line x1="8.1" y1="6" x2="15.9" y2="6"/></svg></div>
                 <div class="metric-body">
                     <div class="metric-label">Em Produção</div>
                     <div class="metric-value" id="met-producao">—</div>
                 </div>
             </div>
             <div class="metric-card metric-card-link" id="card-orcamentos" onclick="filtrarMetrica('Orçamento')">
-                <img src="images/icones2/orcamentos.png" class="metric-icon" alt="">
+                <div class="metric-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v4h4"/><line x1="8" y1="12.5" x2="15" y2="12.5"/><line x1="8" y1="16" x2="15" y2="16"/></svg></div>
                 <div class="metric-body">
                     <div class="metric-label">Orçamentos Abertos</div>
                     <div class="metric-value" id="met-orcamentos">—</div>
                 </div>
             </div>
             <div class="metric-card" id="card-ticket">
-                <img src="images/icones2/ticket.png" class="metric-icon" alt="">
+                <div class="metric-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v17l-2.5-1.5L13 20l-2.5-1.5L8 20l-2-1.5V3Z"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="11.5" x2="15" y2="11.5"/></svg></div>
                 <div class="metric-body">
                     <div class="metric-label">Ticket Médio</div>
                     <div class="metric-value" id="met-ticket">—</div>
                 </div>
             </div>
             <div class="metric-card metric-card-alerta" id="card-estoque-critico">
-                <img src="images/icones2/critico.png" class="metric-icon" alt="">
+                <div class="metric-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 22 20H2Z"/><line x1="12" y1="9.5" x2="12" y2="14"/><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none"/></svg></div>
                 <div class="metric-body">
                     <div class="metric-label">Estoque Crítico</div>
                     <div class="metric-value" id="met-estoque-critico">—</div>
                 </div>
             </div>
             <div class="metric-card metric-card-alerta metric-card-link" id="card-atrasados" onclick="filtrarMetrica('atrasados')">
-                <img src="images/icones2/entrega.png" class="metric-icon" alt="">
+                <div class="metric-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="8" width="11" height="8" rx="1"/><path d="M13.5 11h3.2l3.3 3v2h-6.5"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/></svg></div>
                 <div class="metric-body">
                     <div class="metric-label">Entregas Atrasadas</div>
                     <div class="metric-value" id="met-atrasados">—</div>
                 </div>
             </div>
             <div class="metric-card metric-card-link" id="card-a-receber" onclick="filtrarMetrica('a_receber')">
-                <img src="images/icones2/receber.png" class="metric-icon" alt="">
+                <div class="metric-icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 3h6l2-3h4"/><path d="M5 12 6.5 5.5A1 1 0 0 1 7.5 4.7h9A1 1 0 0 1 17.5 5.5L19 12"/><path d="M3 12v6a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-6"/></svg></div>
                 <div class="metric-body">
                     <div class="metric-label">A Receber (Total)</div>
                     <div class="metric-value" id="met-a-receber">—</div>
