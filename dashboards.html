@@ -9,7 +9,7 @@
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light')</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
-        body { margin:0; padding:0; background:var(--bg); font-family:inherit; overflow-x:hidden; }
+        body { display:block; height:auto; margin:0; padding:0; background:var(--light); font-family:inherit; overflow-x:hidden; overflow-y:auto; }
         #dash-topbar { display:flex; align-items:center; gap:12px; padding:10px 24px; background:var(--white); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:200; flex-wrap:wrap; }
         #dash-topbar .dash-logo { font-weight:800; font-size:16px; color:var(--primary); display:flex; align-items:center; gap:8px; margin-right:8px; }
         #dash-topbar .dash-logo img { height:26px; }

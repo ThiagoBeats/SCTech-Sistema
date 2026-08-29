@@ -5920,6 +5920,145 @@ async function excluirCR(id) {
     salvarERecarregar('Lançamento removido.');
 }
 
+// --- CONTAS A PAGAR: validação de CNPJ (dígitos verificadores) ---
+function validarCNPJ(cnpj) {
+    const d = String(cnpj || '').replace(/\D/g, '');
+    if (d.length !== 14 || /^(\d)\1{13}$/.test(d)) return false;
+    const calcDV = (base) => {
+        let pos = base.length - 7, soma = 0;
+        for (let i = 0; i < base.length; i++) { soma += parseInt(base[i]) * pos--; if (pos < 2) pos = 9; }
+        const resto = soma % 11;
+        return resto < 2 ? 0 : 11 - resto;
+    };
+    const dv1 = calcDV(d.slice(0, 12));
+    const dv2 = calcDV(d.slice(0, 12) + dv1);
+    return d === d.slice(0, 12) + String(dv1) + String(dv2);
+}
+
+// --- CONTAS A PAGAR: decodificação de linha digitável (padrão FEBRABAN) ---
+// Referência: manual de padrões da FEBRABAN para código de barras de arrecadação e boletos bancários.
+const BANCOS_COMPENSACAO = {
+    '001': 'Banco do Brasil', '033': 'Santander', '077': 'Inter', '104': 'Caixa Econômica Federal',
+    '237': 'Bradesco', '260': 'Nubank', '341': 'Itaú', '399': 'HSBC', '422': 'Safra',
+    '070': 'BRB', '745': 'Citibank', '212': 'Banco Original', '336': 'C6 Bank', '655': 'Neon',
+};
+function bancoPorCodigo(codigo) { return BANCOS_COMPENSACAO[codigo] || `Banco ${codigo}`; }
+
+function _mod10Boleto(digits) {
+    let soma = 0, peso = 2;
+    for (let i = digits.length - 1; i >= 0; i--) {
+        let prod = parseInt(digits[i]) * peso;
+        if (prod > 9) prod -= 9;
+        soma += prod;
+        peso = peso === 2 ? 1 : 2;
+    }
+    const resto = soma % 10;
+    return resto === 0 ? 0 : 10 - resto;
+}
+function _mod11BoletoGeral(digits43) {
+    let soma = 0, peso = 2;
+    for (let i = digits43.length - 1; i >= 0; i--) {
+        soma += parseInt(digits43[i]) * peso;
+        peso = peso === 9 ? 2 : peso + 1;
+    }
+    const resto = soma % 11;
+    let dv = 11 - resto;
+    if (dv === 0 || dv === 10 || dv === 11) dv = 1;
+    return dv;
+}
+function _mod11ConvenioBloco(digits) {
+    let soma = 0, peso = 2;
+    for (let i = digits.length - 1; i >= 0; i--) {
+        soma += parseInt(digits[i]) * peso;
+        peso = peso === 9 ? 2 : peso + 1;
+    }
+    const resto = soma % 11;
+    let dv = 11 - resto;
+    if (dv >= 10) dv = 0;
+    return dv;
+}
+// Fator de vencimento: dias corridos desde uma data-base. A FEBRABAN trocou a base em 22/02/2025
+// (a base de 1997 estava perto de estourar o campo de 4 dígitos). Escolhemos a base cujo resultado
+// cai numa janela plausível (evita confundir uma data de 1998 com uma de 2028, por exemplo).
+function _fatorParaData(fator) {
+    if (!fator) return null;
+    const baseClassica = new Date(Date.UTC(1997, 9, 7));
+    const baseNova = new Date(Date.UTC(2022, 1, 22));
+    const dClassica = new Date(baseClassica.getTime() + fator * 86400000);
+    const dNova = new Date(baseNova.getTime() + fator * 86400000);
+    const hoje = new Date();
+    const dentroFaixa = dt => { const anos = (dt - hoje) / (365 * 86400000); return anos > -3 && anos < 6; };
+    if (dentroFaixa(dNova)) return dNova.toISOString().split('T')[0];
+    if (dentroFaixa(dClassica)) return dClassica.toISOString().split('T')[0];
+    return dNova.toISOString().split('T')[0];
+}
+function _decodificarBoletoBancario(d) {
+    const c1 = d.slice(0, 9), dv1 = d[9];
+    const c2 = d.slice(10, 20), dv2 = d[20];
+    const c3 = d.slice(21, 31), dv3 = d[31];
+    const dvGeral = d[32];
+    const fatorVenc = d.slice(33, 37);
+    const valorStr = d.slice(37, 47);
+    if (_mod10Boleto(c1) !== parseInt(dv1)) return { ok: false, motivo: 'Dígito verificador do 1º campo não confere — revise a linha digitável.' };
+    if (_mod10Boleto(c2) !== parseInt(dv2)) return { ok: false, motivo: 'Dígito verificador do 2º campo não confere — revise a linha digitável.' };
+    if (_mod10Boleto(c3) !== parseInt(dv3)) return { ok: false, motivo: 'Dígito verificador do 3º campo não confere — revise a linha digitável.' };
+    const banco = c1.slice(0, 3);
+    const moeda = c1[3];
+    const campoLivre = c1.slice(4, 9) + c2 + c3;
+    const barcode43 = banco + moeda + fatorVenc + valorStr + campoLivre;
+    if (_mod11BoletoGeral(barcode43) !== parseInt(dvGeral)) return { ok: false, motivo: 'Dígito verificador geral não confere — revise a linha digitável.' };
+    return { ok: true, tipo: 'boleto', bancoCodigo: banco, banco: bancoPorCodigo(banco), valor: parseInt(valorStr, 10) / 100, vencimento: _fatorParaData(parseInt(fatorVenc, 10)) };
+}
+function _decodificarConvenio(d) {
+    const blocos = [d.slice(0, 12), d.slice(12, 24), d.slice(24, 36), d.slice(36, 48)];
+    const indicadorValor = d[2];
+    const usaMod10 = indicadorValor === '6' || indicadorValor === '7';
+    const checar = usaMod10 ? _mod10Boleto : _mod11ConvenioBloco;
+    let barcode = '';
+    for (const bloco of blocos) {
+        const corpo = bloco.slice(0, 11), dv = bloco[11];
+        if (checar(corpo) !== parseInt(dv)) return { ok: false, motivo: 'Dígito verificador não confere — revise a linha digitável de convênio.' };
+        barcode += corpo;
+    }
+    const valorEfetivo = indicadorValor === '6' || indicadorValor === '8';
+    const valorStr = barcode.slice(4, 15);
+    return { ok: true, tipo: 'convenio', valor: valorEfetivo ? parseInt(valorStr, 10) / 100 : null, valorReferencia: !valorEfetivo, vencimento: null };
+}
+function decodificarLinhaDigitavel(raw) {
+    const d = String(raw || '').replace(/\D/g, '');
+    if (d.length === 47) return _decodificarBoletoBancario(d);
+    if (d.length === 48) return _decodificarConvenio(d);
+    if (d.length === 44) return { ok: false, motivo: 'Isso parece um código de barras (44 dígitos) — cole a linha digitável impressa no boleto (47 ou 48 dígitos), não o código de barras.' };
+    return { ok: false, motivo: null };
+}
+
+// Busca um lançamento anterior pelo número do documento (não há API pública gratuita para isso —
+// só encontra o que já foi lançado/importado antes neste mesmo sistema).
+function buscarNumeroDocumentoHistorico(numero, cnpjDigits) {
+    const num = String(numero || '').replace(/\D/g, '');
+    if (!num) return null;
+    return db.contas_pagar.find(cp => cp.numero_documento && cp.numero_documento.replace(/\D/g, '') === num
+        && (!cnpjDigits || (cp.cnpj_fornecedor || '').replace(/\D/g, '') === cnpjDigits)) || null;
+}
+
+// Gera as datas de vencimento futuras de uma despesa recorrente, respeitando data-fim (se houver)
+// e um teto de segurança de 60 meses a partir do início (não dá pra gerar "para sempre").
+function gerarOcorrenciasRecorrentes(dataInicioStr, periodicidade, dataFimStr) {
+    const passosMeses = { mensal: 1, bimestral: 2, trimestral: 3, semestral: 6, anual: 12 };
+    const datas = [];
+    let atual = new Date(dataInicioStr + 'T12:00:00');
+    const limiteMax = new Date(atual); limiteMax.setMonth(limiteMax.getMonth() + 60);
+    const limite = dataFimStr ? new Date(Math.min(new Date(dataFimStr + 'T12:00:00').getTime(), limiteMax.getTime())) : limiteMax;
+    let guard = 0;
+    while (atual <= limite && guard < 240) {
+        datas.push(atual.toISOString().split('T')[0]);
+        if (periodicidade === 'quinzenal') { atual = new Date(atual); atual.setDate(atual.getDate() + 15); }
+        else { const meses = passosMeses[periodicidade] || 1; atual = new Date(atual); atual.setMonth(atual.getMonth() + meses); }
+        guard++;
+    }
+    return datas;
+}
+
 function marcarCPPago(id) {
     const cp = db.contas_pagar.find(x => x.id == id);
     if (!cp) return;
@@ -5934,6 +6073,15 @@ async function excluirCP(id) {
     if (!await showConfirm('Remover este lançamento a pagar?', '🗑️', 'Remover', 'Cancelar')) return;
     db.contas_pagar = db.contas_pagar.filter(x => x.id != id);
     salvarERecarregar('Lançamento removido.');
+}
+
+async function excluirGrupoCP(paiId) {
+    const grupo = db.contas_pagar.filter(x => x.lancamento_pai_id === paiId);
+    if (!grupo.length) return;
+    if (!await showConfirm(`Remover todos os ${grupo.length} lançamentos deste grupo (parcelas ou recorrência)?\n\nEsta ação não pode ser desfeita.`, '🗑️', 'Remover grupo', 'Cancelar')) return;
+    db.contas_pagar = db.contas_pagar.filter(x => x.lancamento_pai_id !== paiId);
+    db.despesas_fixas = db.despesas_fixas.filter(x => x.id !== paiId);
+    salvarERecarregar('Grupo removido.');
 }
 
 async function salvarDespesaFixa() {
@@ -5958,7 +6106,7 @@ async function gerarContasPagarDoMes() {
     const mes = String(hoje.getMonth() + 1).padStart(2, '0');
     const ano = hoje.getFullYear();
     let geradas = 0;
-    db.despesas_fixas.filter(df => df.ativo).forEach(df => {
+    db.despesas_fixas.filter(df => df.ativo && !df.periodicidade).forEach(df => {
         const vencStr = `${ano}-${mes}-${String(df.dia_vencimento).padStart(2, '0')}`;
         const jaExiste = db.contas_pagar.some(cp => !cp.pedido_id && cp.data_vencimento === vencStr && cp.descricao === df.descricao);
         if (!jaExiste) {
@@ -5976,22 +6124,653 @@ async function gerarContasPagarDoMes() {
     else await showAlert('Todas as despesas fixas do mês já foram geradas (ou nenhuma cadastrada).', 'ℹ️');
 }
 
+// --- CONTAS A PAGAR: menu "+ Nova Conta a Pagar" ---
+function toggleMenuContaPagar(e) {
+    e.stopPropagation();
+    const dd = document.getElementById('cp-menu-dropdown');
+    if (!dd) return;
+    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+}
+document.addEventListener('click', (e) => {
+    const dd = document.getElementById('cp-menu-dropdown');
+    if (dd && dd.style.display === 'block' && !dd.contains(e.target) && e.target.id !== 'cp-menu-btn') dd.style.display = 'none';
+});
+
+function abrirModalContaPagar(modo, manterAnexoPendente) {
+    const dropdown = document.getElementById('cp-menu-dropdown');
+    if (dropdown) dropdown.style.display = 'none';
+    if (modo === 'arquivo') {
+        abrirModalImportarNota();
+        return;
+    }
+    if (!manterAnexoPendente) _anexoPendenteCP = null;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `<div class="modal-box" style="max-width:640px">
+        <div class="modal-header">
+            <h3>Lançar Conta a Pagar</h3>
+            <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="grid">
+                <div class="form-group" style="grid-column:span 2">
+                    <label>Descrição <span style="color:#dc2626">*</span></label>
+                    <input type="text" id="cpm-descricao" placeholder="Ex: Compra de tecido, salário costureira…">
+                </div>
+                <div class="form-group">
+                    <label>CNPJ do Fornecedor <span class="info-tag">opcional</span></label>
+                    <input type="text" id="cpm-cnpj" placeholder="00.000.000/0000-00" maxlength="18" oninput="mascaraCNPJ(this); onCnpjContaPagarInput();">
+                    <div id="cpm-cnpj-status" style="font-size:11px;margin-top:3px;min-height:14px"></div>
+                </div>
+                <div class="form-group">
+                    <label>Credor / Fornecedor</label>
+                    <input type="text" id="cpm-credor" placeholder="Nome do credor">
+                </div>
+                <div class="form-group">
+                    <label>Valor (R$) <span style="color:#dc2626">*</span></label>
+                    <input type="number" id="cpm-valor" step="0.01" min="0" placeholder="0.00">
+                </div>
+                <div class="form-group">
+                    <label>Vencimento <span style="color:#dc2626">*</span></label>
+                    <input type="date" id="cpm-vencimento">
+                </div>
+                <div class="form-group" style="grid-column:span 2">
+                    <label>Nº da Nota ou Linha Digitável do Boleto <span class="info-tag">opcional</span></label>
+                    <input type="text" id="cpm-doc" placeholder="Cole a linha digitável (boleto/convênio) ou digite o nº da nota" oninput="onDocContaPagarInput()">
+                    <div id="cpm-doc-help" style="font-size:11px;margin-top:3px;color:#6b7280;min-height:14px"></div>
+                </div>
+            </div>
+            <div style="display:flex;gap:24px;flex-wrap:wrap;margin:6px 0 14px;padding:12px 14px;background:#f8fafc;border:1px solid var(--border);border-radius:8px">
+                <div style="display:flex;align-items:center;gap:10px">
+                    <label class="toggle-switch"><input type="checkbox" id="cpm-recorrente" onchange="onToggleRecorrenteCP()"><span class="toggle-slider"></span></label>
+                    <span style="font-size:13px;font-weight:600">Recorrente?</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px">
+                    <label class="toggle-switch"><input type="checkbox" id="cpm-parcelado" onchange="onToggleParceladoCP()"><span class="toggle-slider"></span></label>
+                    <span style="font-size:13px;font-weight:600">Parcelado?</span>
+                </div>
+            </div>
+            <div id="cpm-recorrente-fields" class="grid" style="display:none">
+                <div class="form-group">
+                    <label>Periodicidade</label>
+                    <select id="cpm-periodicidade">
+                        <option value="mensal">Mensal</option>
+                        <option value="quinzenal">Quinzenal</option>
+                        <option value="bimestral">Bimestral</option>
+                        <option value="trimestral">Trimestral</option>
+                        <option value="semestral">Semestral</option>
+                        <option value="anual">Anual</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Data Fim <span class="info-tag">vazio = sem fim (máx. 60 meses)</span></label>
+                    <input type="date" id="cpm-data-fim">
+                </div>
+            </div>
+            <div id="cpm-parcelado-fields" class="grid" style="display:none">
+                <div class="form-group">
+                    <label>Número de Parcelas</label>
+                    <input type="number" id="cpm-parcelas" min="2" step="1" placeholder="Ex: 3">
+                </div>
+            </div>
+            <div class="grid">
+                <div class="form-group">
+                    <label>Categoria</label>
+                    <select id="cpm-categoria">
+                        <option value="tecido">Tecido / Material</option>
+                        <option value="instalador">Instalador</option>
+                        <option value="costureira">Costureira</option>
+                        <option value="aluguel">Aluguel</option>
+                        <option value="salario">Salário</option>
+                        <option value="conta">Conta (luz, internet…)</option>
+                        <option value="comissao_rt">Comissão RT</option>
+                        <option value="outro">Outro</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Vincular a Pedido</label>
+                    <select id="cpm-pedido"></select>
+                </div>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;padding:16px 24px;border-top:1px solid var(--border)">
+            <button class="btn btn-success" onclick="adicionarContaPagarManual()">Lançar Conta a Pagar</button>
+            <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+        </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    const pedSel = overlay.querySelector('#cpm-pedido');
+    if (pedSel) pedSel.innerHTML = '<option value="">— Sem vínculo de pedido —</option>' +
+        db.pedidos.filter(p => normalizarStatus(p.status) !== 'Orçamento')
+        .map(p => `<option value="${p.id}">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome || '')}</option>`).join('');
+}
+
+function onToggleRecorrenteCP() {
+    const chkR = document.getElementById('cpm-recorrente'), chkP = document.getElementById('cpm-parcelado');
+    const on = chkR?.checked;
+    document.getElementById('cpm-recorrente-fields').style.display = on ? 'grid' : 'none';
+    if (on && chkP?.checked) { chkP.checked = false; document.getElementById('cpm-parcelado-fields').style.display = 'none'; }
+}
+function onToggleParceladoCP() {
+    const chkP = document.getElementById('cpm-parcelado'), chkR = document.getElementById('cpm-recorrente');
+    const on = chkP?.checked;
+    document.getElementById('cpm-parcelado-fields').style.display = on ? 'grid' : 'none';
+    if (on && chkR?.checked) { chkR.checked = false; document.getElementById('cpm-recorrente-fields').style.display = 'none'; }
+}
+
+async function onCnpjContaPagarInput() {
+    const el = document.getElementById('cpm-cnpj');
+    const statusEl = document.getElementById('cpm-cnpj-status');
+    if (!el || !statusEl) return;
+    const digits = el.value.replace(/\D/g, '');
+    if (digits.length !== 14) { statusEl.textContent = ''; return; }
+    if (!validarCNPJ(digits)) { statusEl.innerHTML = '<span style="color:#dc2626">⚠️ CNPJ inválido — confira os dígitos.</span>'; return; }
+    statusEl.innerHTML = '<span style="color:#6b7280">⏳ Consultando...</span>';
+    try {
+        const res = await fetch(`https://publica.cnpj.ws/cnpj/${digits}`);
+        if (!res.ok) throw new Error(res.status === 404 ? 'nao_encontrado' : 'erro');
+        const d = await res.json();
+        const est = d.estabelecimento || {};
+        const credorEl = document.getElementById('cpm-credor');
+        if (credorEl) credorEl.value = est.nome_fantasia || d.razao_social || credorEl.value;
+        statusEl.innerHTML = '<span style="color:#059669">✅ Fornecedor encontrado e preenchido.</span>';
+    } catch (e) {
+        statusEl.innerHTML = e.message === 'nao_encontrado'
+            ? '<span style="color:#6b7280">CNPJ não encontrado — preencha o credor manualmente.</span>'
+            : '<span style="color:#6b7280">Não foi possível consultar agora — preencha o credor manualmente.</span>';
+    }
+}
+
+function onDocContaPagarInput() {
+    const raw = document.getElementById('cpm-doc')?.value || '';
+    const helpEl = document.getElementById('cpm-doc-help');
+    if (!helpEl) return;
+    const digits = raw.replace(/\D/g, '');
+    if (!digits) { helpEl.textContent = ''; return; }
+
+    if (digits.length === 44) {
+        helpEl.style.color = '#6b7280';
+        helpEl.textContent = 'Chave de acesso de NF-e detectada (44 dígitos). A busca automática por chave completa ainda não está disponível — use "Exportar nota/boleto" (em breve) ou preencha manualmente.';
+        return;
+    }
+    if (digits.length === 47 || digits.length === 48) {
+        const res = decodificarLinhaDigitavel(digits);
+        if (res.ok) {
+            if (res.valor) document.getElementById('cpm-valor').value = res.valor.toFixed(2);
+            if (res.vencimento) document.getElementById('cpm-vencimento').value = res.vencimento;
+            const descEl = document.getElementById('cpm-descricao');
+            if (descEl && !descEl.value.trim()) descEl.value = res.tipo === 'boleto' ? `Boleto ${res.banco}` : 'Conta de consumo (convênio)';
+            helpEl.style.color = '#059669';
+            helpEl.textContent = res.tipo === 'boleto'
+                ? `Boleto identificado — ${res.banco}${res.valor ? `, valor R$ ${res.valor.toFixed(2)}` : ''}${res.vencimento ? `, vencimento ${new Date(res.vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}.`
+                : `Linha de convênio identificada${res.valorReferencia ? ' (valor de referência — confirme o valor real a pagar)' : ''}. Este tipo de linha não codifica vencimento — informe manualmente.`;
+        } else if (res.motivo) {
+            helpEl.style.color = '#dc2626';
+            helpEl.textContent = res.motivo;
+        }
+        return;
+    }
+    if (digits.length >= 6 && digits.length <= 20) {
+        const cnpjDigits = (document.getElementById('cpm-cnpj')?.value || '').replace(/\D/g, '');
+        const achado = buscarNumeroDocumentoHistorico(digits, cnpjDigits);
+        if (achado) {
+            const credorEl = document.getElementById('cpm-credor');
+            const valorEl = document.getElementById('cpm-valor');
+            if (credorEl && !credorEl.value.trim()) credorEl.value = achado.credor_nome || '';
+            if (valorEl && !valorEl.value) valorEl.value = achado.valor.toFixed(2);
+            helpEl.style.color = '#059669';
+            helpEl.textContent = `Encontrado no histórico: lançamento anterior de "${achado.credor_nome || '—'}" com este número de documento.`;
+        } else {
+            helpEl.style.color = '#6b7280';
+            helpEl.textContent = 'Busca automática só pelo número da nota não é garantida — não existe API pública gratuita para isso. Use "Exportar nota/boleto" ou informe a chave de acesso completa (44 dígitos).';
+        }
+        return;
+    }
+    helpEl.textContent = '';
+}
+
 async function adicionarContaPagarManual() {
-    const descricao = document.getElementById('cp-nova-descricao')?.value.trim();
-    const credor    = document.getElementById('cp-nova-credor')?.value.trim() || '';
-    const valor     = parseFloat(document.getElementById('cp-nova-valor')?.value) || 0;
-    const vencimento = document.getElementById('cp-nova-vencimento')?.value;
-    const categoria = document.getElementById('cp-nova-categoria')?.value || 'outro';
-    const pedidoId  = document.getElementById('cp-nova-pedido')?.value || '';
+    const descricao   = document.getElementById('cpm-descricao')?.value.trim();
+    const cnpjFornecedor = document.getElementById('cpm-cnpj')?.value.trim() || '';
+    const credor      = document.getElementById('cpm-credor')?.value.trim() || '';
+    const valor       = parseFloat(document.getElementById('cpm-valor')?.value) || 0;
+    const vencimento  = document.getElementById('cpm-vencimento')?.value;
+    const categoria   = document.getElementById('cpm-categoria')?.value || 'outro';
+    const pedidoId    = document.getElementById('cpm-pedido')?.value || '';
+    const docRaw      = document.getElementById('cpm-doc')?.value.trim() || '';
+    const docDigits   = docRaw.replace(/\D/g, '');
+    const ehLinhaDigitavel = docDigits.length === 47 || docDigits.length === 48;
+    const recorrente  = document.getElementById('cpm-recorrente')?.checked || false;
+    const periodicidade = document.getElementById('cpm-periodicidade')?.value || 'mensal';
+    const dataFim     = document.getElementById('cpm-data-fim')?.value || '';
+    const parcelado   = document.getElementById('cpm-parcelado')?.checked || false;
+    const numParcelas = parseInt(document.getElementById('cpm-parcelas')?.value) || 1;
+
     if (!descricao)  { await showAlert('Informe a descrição.', '⚠️'); return; }
     if (!valor)      { await showAlert('Informe o valor.', '⚠️'); return; }
     if (!vencimento) { await showAlert('Informe a data de vencimento.', '⚠️'); return; }
+    if (cnpjFornecedor.replace(/\D/g, '').length === 14 && !validarCNPJ(cnpjFornecedor)) {
+        if (!await showConfirm('O CNPJ informado parece inválido (dígito verificador não confere). Deseja lançar mesmo assim?', '⚠️', 'Lançar mesmo assim', 'Corrigir')) return;
+    }
+    if (parcelado && numParcelas < 2) { await showAlert('Informe um número de parcelas maior que 1.', '⚠️'); return; }
+
+    const chaveAcesso = _anexoPendenteCP?.chaveAcesso || null;
+    const numeroDocumento = (!ehLinhaDigitavel && docRaw) ? docRaw : null;
+    let tipoLancamento = 'manual';
+    if (ehLinhaDigitavel) tipoLancamento = 'boleto';
+    else if (chaveAcesso || numeroDocumento) tipoLancamento = 'nota';
+
+    const camposDoc = {
+        cnpj_fornecedor: cnpjFornecedor || null,
+        linha_digitavel: ehLinhaDigitavel ? docDigits : null,
+        numero_documento: numeroDocumento,
+        chave_acesso: chaveAcesso,
+        tipo_lancamento: tipoLancamento,
+        arquivo_anexo_url: _anexoPendenteCP?.dataUrl || null,
+        arquivo_anexo_nome: _anexoPendenteCP?.nome || null,
+        arquivo_anexo_tipo: _anexoPendenteCP?.tipo || null,
+    };
+    _anexoPendenteCP = null;
+
+    if (parcelado) {
+        const valorParcela = Math.round((valor / numParcelas) * 100) / 100;
+        const paiId = Date.now();
+        let somaLancada = 0;
+        for (let i = 0; i < numParcelas; i++) {
+            const venc = new Date(vencimento + 'T12:00:00'); venc.setMonth(venc.getMonth() + i);
+            const isUltima = i === numParcelas - 1;
+            const valorFinal = isUltima ? Math.round((valor - somaLancada) * 100) / 100 : valorParcela;
+            somaLancada += valorFinal;
+            db.contas_pagar.push({
+                id: paiId + i + 1, pedido_id: pedidoId ? parseInt(pedidoId) : null,
+                tipo: 'variavel', categoria, descricao: `${descricao} (parcela ${i + 1}/${numParcelas})`,
+                credor_nome: credor, valor: valorFinal, data_vencimento: venc.toISOString().split('T')[0],
+                data_pagamento: null, status: 'Pendente',
+                lancamento_pai_id: paiId, parcelado: true, numero_parcelas: numParcelas, parcela_atual: i + 1,
+                ...camposDoc
+            });
+        }
+        salvarERecarregar(`${numParcelas} parcelas lançadas!`);
+        return;
+    }
+
+    if (recorrente) {
+        const dfId = Date.now();
+        db.despesas_fixas.push({
+            id: dfId, descricao, valor, dia_vencimento: new Date(vencimento + 'T12:00:00').getDate(),
+            categoria, ativo: true, periodicidade, data_inicio: vencimento, data_fim: dataFim || null,
+            credor_nome: credor, cnpj_fornecedor: cnpjFornecedor || null
+        });
+        const ocorrencias = gerarOcorrenciasRecorrentes(vencimento, periodicidade, dataFim);
+        ocorrencias.forEach((venc, i) => {
+            db.contas_pagar.push({
+                id: dfId + i + 1, pedido_id: pedidoId ? parseInt(pedidoId) : null,
+                tipo: 'fixo', categoria, descricao, credor_nome: credor,
+                valor, data_vencimento: venc, data_pagamento: null, status: 'Pendente',
+                lancamento_pai_id: dfId, recorrente: true, periodicidade,
+                ...camposDoc
+            });
+        });
+        salvarERecarregar(`Despesa recorrente cadastrada — ${ocorrencias.length} lançamento(s) gerado(s)!`);
+        return;
+    }
+
     db.contas_pagar.push({
         id: Date.now(), pedido_id: pedidoId ? parseInt(pedidoId) : null,
         tipo: 'variavel', categoria, descricao, credor_nome: credor,
-        valor, data_vencimento: vencimento, data_pagamento: null, status: 'Pendente'
+        valor, data_vencimento: vencimento, data_pagamento: null, status: 'Pendente',
+        ...camposDoc
     });
     salvarERecarregar('Conta a pagar registrada!');
+}
+
+// --- CONTAS A PAGAR: importar nota/boleto (XML de NF-e e PDF com texto) ---
+// Guarda o anexo lido enquanto o usuário revisa os campos extraídos no modal manual;
+// só vira parte do lançamento de fato quando o usuário confirma em "Lançar Conta a Pagar".
+let _anexoPendenteCP = null;
+let _pdfJsPronto = null; // Promise compartilhada p/ não carregar a lib mais de uma vez
+
+function abrirModalImportarNota() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `<div class="modal-box" style="max-width:520px">
+        <div class="modal-header">
+            <h3>Exportar Nota / Boleto</h3>
+            <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:12.5px;color:#6b7280;margin-bottom:14px">Envie o arquivo original — os campos serão extraídos automaticamente quando possível. Você sempre revisa e confirma antes de lançar.</p>
+            <div id="cpi-dropzone" style="border:2px dashed var(--border);border-radius:10px;padding:36px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s">
+                <div style="font-size:32px;margin-bottom:8px">📎</div>
+                <div style="font-weight:600;color:#374151;margin-bottom:4px">Clique para selecionar ou arraste o arquivo aqui</div>
+                <div style="font-size:12px;color:#6b7280">PDF, XML, JPG ou PNG · Máx. 4 MB</div>
+            </div>
+            <input type="file" id="cpi-file-input" accept=".pdf,.xml,.jpg,.jpeg,.png" style="display:none">
+            <div id="cpi-status" style="margin-top:14px;font-size:13px"></div>
+        </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+    const dz = overlay.querySelector('#cpi-dropzone');
+    const input = overlay.querySelector('#cpi-file-input');
+    dz.addEventListener('click', () => input.click());
+    input.addEventListener('change', () => onArquivoContaPagarSelecionado(input.files?.[0]));
+    ['dragover', 'dragleave', 'drop'].forEach(evt => dz.addEventListener(evt, e => e.preventDefault()));
+    dz.addEventListener('dragover', () => { dz.style.borderColor = 'var(--primary)'; dz.style.background = '#eff6ff'; });
+    dz.addEventListener('dragleave', () => { dz.style.borderColor = 'var(--border)'; dz.style.background = ''; });
+    dz.addEventListener('drop', e => {
+        dz.style.borderColor = 'var(--border)'; dz.style.background = '';
+        const file = e.dataTransfer?.files?.[0];
+        if (file) onArquivoContaPagarSelecionado(file);
+    });
+}
+
+function _lerArquivoComoDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Falha ao ler o arquivo.'));
+        reader.readAsDataURL(file);
+    });
+}
+
+async function onArquivoContaPagarSelecionado(file) {
+    if (!file) return;
+    const statusEl = document.getElementById('cpi-status');
+    const MAX_BYTES = 4 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+        if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626">⚠️ Arquivo muito grande (máx. 4 MB) — o navegador guarda os anexos junto com o resto dos dados do sistema.</span>';
+        return;
+    }
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (!['pdf', 'xml', 'jpg', 'jpeg', 'png'].includes(ext)) {
+        if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626">⚠️ Formato não suportado. Envie PDF, XML, JPG ou PNG.</span>';
+        return;
+    }
+    if (statusEl) statusEl.innerHTML = '<span style="color:#6b7280">⏳ Lendo arquivo...</span>';
+
+    let dataUrl = null;
+    try { dataUrl = await _lerArquivoComoDataUrl(file); }
+    catch { if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626">⚠️ Não foi possível ler o arquivo.</span>'; return; }
+
+    const mostrarProgressoOcr = pct => {
+        if (statusEl) statusEl.innerHTML = `<span style="color:#6b7280">🔍 Lendo por OCR (pode levar alguns segundos)... ${pct}%</span>`;
+    };
+
+    let extraidos = { ok: false, motivo: 'erro' };
+    try {
+        if (ext === 'xml') {
+            extraidos = await _extrairDadosXmlNFe(file);
+        } else if (ext === 'pdf') {
+            extraidos = await _extrairDadosPdf(file);
+            if (!extraidos.ok && extraidos.motivo === 'pdf_sem_texto') {
+                extraidos = await _extrairDadosPdfEscaneadoOcr(file, mostrarProgressoOcr);
+            }
+        } else {
+            extraidos = await _extrairDadosImagemOcr(dataUrl, mostrarProgressoOcr);
+        }
+    } catch (err) {
+        extraidos = { ok: false, motivo: 'erro', detalhe: err.message };
+    }
+
+    if (statusEl) statusEl.innerHTML = extraidos.ok
+        ? '<span style="color:#059669">✅ Dados extraídos! Abrindo para revisão...</span>'
+        : '<span style="color:#6b7280">Não foi possível extrair automaticamente. Abrindo para preenchimento manual...</span>';
+
+    await new Promise(r => setTimeout(r, 500));
+    document.querySelectorAll('.modal-overlay').forEach(o => o.remove());
+
+    _anexoPendenteCP = { nome: file.name, tipo: file.type || ext, dataUrl, chaveAcesso: extraidos.chaveAcesso || null };
+    abrirModalContaPagar('manual', true);
+    _preencherModalComExtracao(extraidos, file.name);
+}
+
+function _preencherModalComExtracao(dados, nomeArquivo) {
+    const set = (id, val) => { if (val === undefined || val === null || val === '') return; const el = document.getElementById(id); if (el) el.value = val; };
+    if (dados.ok) {
+        if (dados.cnpj) { set('cpm-cnpj', dados.cnpj); const el = document.getElementById('cpm-cnpj'); if (el) mascaraCNPJ(el); }
+        set('cpm-credor', dados.credor || '');
+        if (dados.valor != null) set('cpm-valor', dados.valor.toFixed(2));
+        set('cpm-vencimento', dados.vencimento || '');
+        set('cpm-descricao', dados.credor ? `Nota/Boleto ${dados.credor}` : (dados.tipo === 'nota' ? 'Nota fiscal importada' : 'Boleto importado'));
+        const docEl = document.getElementById('cpm-doc');
+        if (docEl) docEl.value = dados.linhaDigitavel || dados.numeroDocumento || dados.chaveAcesso || '';
+    } else {
+        set('cpm-descricao', `Documento importado — ${nomeArquivo}`);
+    }
+    const helpEl = document.getElementById('cpm-doc-help');
+    if (!helpEl) return;
+    if (dados.ok) {
+        helpEl.style.color = '#059669';
+        helpEl.textContent = `Preenchido a partir de "${nomeArquivo}". Revise os campos antes de lançar.`;
+        if (dados.dupInfo) helpEl.textContent += ` Esta nota possui ${dados.dupInfo} parcela(s) de cobrança — marque "Parcelado?" abaixo se quiser lançar todas.`;
+    } else if (dados.motivo === 'ocr_falhou') {
+        helpEl.style.color = '#dc2626';
+        helpEl.textContent = `Não foi possível processar a leitura automática (OCR)${dados.detalhe ? ' — ' + dados.detalhe : ''}. O arquivo foi anexado; preencha manualmente.`;
+    } else if (dados.motivo === 'ocr_sem_texto') {
+        helpEl.style.color = '#6b7280';
+        helpEl.textContent = 'Não conseguimos reconhecer texto neste arquivo (qualidade baixa ou imagem ilegível). O arquivo foi anexado; preencha manualmente.';
+    } else if (dados.motivo === 'ocr_sem_campos') {
+        helpEl.style.color = '#6b7280';
+        helpEl.textContent = 'A leitura automática por OCR não encontrou CNPJ, valor ou linha digitável neste documento — a extração por OCR é aproximada e nem sempre reconhece todos os documentos. O arquivo foi anexado; confira e preencha manualmente.';
+    } else if (dados.motivo === 'xml_invalido' || dados.motivo === 'xml_sem_nfe') {
+        helpEl.style.color = '#dc2626';
+        helpEl.textContent = 'Este XML não parece ser uma NF-e válida. O arquivo foi anexado; preencha manualmente.';
+    } else {
+        helpEl.style.color = '#dc2626';
+        helpEl.textContent = `Não foi possível ler os dados automaticamente${dados.detalhe ? ' (' + dados.detalhe + ')' : ''}. O arquivo foi anexado; preencha manualmente.`;
+    }
+}
+
+// --- Extração: XML de NF-e ---
+async function _extrairDadosXmlNFe(file) {
+    const texto = await file.text();
+    const doc = new DOMParser().parseFromString(texto, 'application/xml');
+    if (doc.querySelector('parsererror')) return { ok: false, motivo: 'xml_invalido' };
+    const infNFe = doc.querySelector('infNFe');
+    if (!infNFe) return { ok: false, motivo: 'xml_sem_nfe' };
+    const get = sel => infNFe.querySelector(sel)?.textContent?.trim() || '';
+
+    const cnpj = get('emit > CNPJ');
+    const credor = get('emit > xFant') || get('emit > xNome');
+    const valorStr = get('total > ICMSTot > vNF');
+    const valor = valorStr ? parseFloat(valorStr) : null;
+    const numeroDocumento = get('ide > nNF');
+
+    let chaveAcesso = (infNFe.getAttribute('Id') || '').replace(/^NFe/i, '');
+    if (!/^\d{44}$/.test(chaveAcesso)) chaveAcesso = doc.querySelector('protNFe infProt chNFe')?.textContent?.trim() || '';
+
+    const duplicatas = Array.from(infNFe.querySelectorAll('cobr > dup'));
+    let vencimento = duplicatas[0]?.querySelector('dVenc')?.textContent?.trim() || '';
+    if (!vencimento) vencimento = (get('ide > dhEmi') || get('ide > dEmi')).slice(0, 10);
+
+    if (!cnpj && !valor) return { ok: false, motivo: 'xml_sem_campos' };
+    return {
+        ok: true, tipo: 'nota', cnpj: cnpj || null, credor: credor || null, valor, vencimento: vencimento || null,
+        numeroDocumento: numeroDocumento || null, chaveAcesso: chaveAcesso || null,
+        dupInfo: duplicatas.length > 1 ? duplicatas.length : null,
+    };
+}
+
+// --- Extração: PDF com camada de texto (boleto ou DANFE) ---
+async function _garantirPdfJs() {
+    if (window.pdfjsLib) return;
+    if (!_pdfJsPronto) {
+        _pdfJsPronto = new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
+            s.onload = resolve;
+            s.onerror = () => reject(new Error('Não foi possível carregar o leitor de PDF — verifique sua conexão.'));
+            document.head.appendChild(s);
+        }).then(() => {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+        });
+    }
+    await _pdfJsPronto;
+}
+
+async function _extrairTextoPdf(file) {
+    await _garantirPdfJs();
+    const buf = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+    let texto = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const pagina = await pdf.getPage(i);
+        const conteudo = await pagina.getTextContent();
+        texto += conteudo.items.map(it => it.str).join(' ') + '\n';
+    }
+    return texto;
+}
+
+// Extrai os campos (linha digitável, chave de acesso, CNPJ, valor) de um texto já
+// obtido por qualquer via (camada de texto do PDF OU saída de OCR). Compartilhado
+// entre o caminho de PDF-com-texto e os caminhos de OCR (imagem e PDF escaneado).
+async function _extrairCamposGenericos(texto) {
+    if (!texto || texto.replace(/\s/g, '').length < 10) return { ok: false, motivo: 'sem_texto' };
+
+    // 1) linha digitável (boleto bancário ou convênio) em qualquer lugar do texto.
+    // Janela generosa: alguns PDFs (ex.: quando o campo usa letter-spacing p/ alinhamento
+    // visual) fazem o pdf.js extrair um espaço entre CADA dígito, dobrando o tamanho do trecho.
+    const candidatosLinha = texto.match(/\d[\d.\s]{35,200}\d/g) || [];
+    for (const cand of candidatosLinha) {
+        const digitos = cand.replace(/\D/g, '');
+        if (digitos.length === 47 || digitos.length === 48) {
+            const dec = decodificarLinhaDigitavel(digitos);
+            if (dec.ok) return { ok: true, tipo: 'boleto', valor: dec.valor, vencimento: dec.vencimento, linhaDigitavel: digitos, credor: dec.banco ? `Boleto ${dec.banco}`.replace('Boleto ', '') : null, cnpj: null };
+        }
+    }
+
+    // 2) chave de acesso de NF-e (44 dígitos) — indica DANFE (mesma observação da janela acima)
+    let chaveAcesso = null;
+    for (const cand of (texto.match(/\d[\d.\s]{40,180}\d/g) || [])) {
+        const d = cand.replace(/\D/g, '');
+        if (d.length === 44) { chaveAcesso = d; break; }
+    }
+
+    // 3) CNPJ do emitente — se achar, consulta a mesma API pública já usada no lançamento manual
+    let cnpj = null, credor = null;
+    const cnpjMatch = texto.match(/\d{2}[.\s]?\d{3}[.\s]?\d{3}[\/\s]?\d{4}[-\s]?\d{2}/);
+    if (cnpjMatch) {
+        const digitos = cnpjMatch[0].replace(/\D/g, '');
+        if (validarCNPJ(digitos)) {
+            cnpj = digitos;
+            try {
+                const res = await fetch(`https://publica.cnpj.ws/cnpj/${digitos}`);
+                if (res.ok) { const d = await res.json(); credor = d.estabelecimento?.nome_fantasia || d.razao_social || null; }
+            } catch { /* segue sem nome — usuário preenche */ }
+        }
+    }
+
+    // 4) valor em reais no texto (ex.: "R$ 1.234,56") — só usado se não veio de linha digitável
+    let valor = null;
+    const valorMatch = texto.match(/R\$\s*([\d.]+,\d{2})/);
+    if (valorMatch) valor = parseFloat(valorMatch[1].replace(/\./g, '').replace(',', '.'));
+
+    if (!cnpj && !valor && !chaveAcesso) return { ok: false, motivo: 'sem_campos' };
+    return { ok: true, tipo: chaveAcesso ? 'nota' : 'boleto', cnpj, credor, valor, vencimento: null, chaveAcesso };
+}
+
+async function _extrairDadosPdf(file) {
+    const texto = await _extrairTextoPdf(file);
+    const r = await _extrairCamposGenericos(texto);
+    if (!r.ok && r.motivo === 'sem_texto') return { ok: false, motivo: 'pdf_sem_texto' };
+    if (!r.ok && r.motivo === 'sem_campos') return { ok: false, motivo: 'pdf_sem_campos' };
+    return r;
+}
+
+// --- Extração: OCR (Tesseract.js) para imagens e PDFs escaneados sem camada de texto ---
+let _tesseractPronto = null;
+async function _garantirTesseract() {
+    if (window.Tesseract) return;
+    if (!_tesseractPronto) {
+        _tesseractPronto = new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+            s.onload = resolve;
+            s.onerror = () => reject(new Error('Não foi possível carregar o leitor de OCR — verifique sua conexão.'));
+            document.head.appendChild(s);
+        });
+    }
+    await _tesseractPronto;
+}
+
+// Roda OCR sobre uma imagem (data URL, <canvas> ou File/Blob) e devolve o texto reconhecido.
+async function _ocrImagem(fonte, onProgresso) {
+    await _garantirTesseract();
+    const worker = await window.Tesseract.createWorker('por', 1, {
+        logger: m => { if (onProgresso && m.status === 'recognizing text') onProgresso(Math.round((m.progress || 0) * 100)); }
+    });
+    try {
+        const { data } = await worker.recognize(fonte);
+        return data.text || '';
+    } finally {
+        await worker.terminate();
+    }
+}
+
+// Renderiza as páginas de um PDF (sem camada de texto) como canvases, para servir de entrada ao OCR.
+// Limitado às 3 primeiras páginas — boletos/notas cabem nisso e o custo de OCR cresce rápido por página.
+async function _renderizarPaginasPdfComoImagens(file) {
+    await _garantirPdfJs();
+    const buf = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+    const canvases = [];
+    const maxPaginas = Math.min(pdf.numPages, 3);
+    for (let i = 1; i <= maxPaginas; i++) {
+        const pagina = await pdf.getPage(i);
+        const viewport = pagina.getViewport({ scale: 2 }); // resolução maior ajuda a precisão do OCR
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width; canvas.height = viewport.height;
+        await pagina.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        canvases.push(canvas);
+    }
+    return canvases;
+}
+
+async function _extrairDadosImagemOcr(dataUrl, onProgresso) {
+    let texto;
+    try { texto = await _ocrImagem(dataUrl, onProgresso); }
+    catch (e) { return { ok: false, motivo: 'ocr_falhou', detalhe: e.message }; }
+    const r = await _extrairCamposGenericos(texto);
+    if (!r.ok && r.motivo === 'sem_texto') return { ok: false, motivo: 'ocr_sem_texto' };
+    if (!r.ok && r.motivo === 'sem_campos') return { ok: false, motivo: 'ocr_sem_campos' };
+    return r;
+}
+
+async function _extrairDadosPdfEscaneadoOcr(file, onProgresso) {
+    let canvases;
+    try { canvases = await _renderizarPaginasPdfComoImagens(file); }
+    catch (e) { return { ok: false, motivo: 'ocr_falhou', detalhe: e.message }; }
+    let textoTotal = '';
+    for (let i = 0; i < canvases.length; i++) {
+        const texto = await _ocrImagem(canvases[i], pct => onProgresso && onProgresso(Math.round((i + pct / 100) / canvases.length * 100)));
+        textoTotal += texto + '\n';
+    }
+    const r = await _extrairCamposGenericos(textoTotal);
+    if (!r.ok && r.motivo === 'sem_texto') return { ok: false, motivo: 'ocr_sem_texto' };
+    if (!r.ok && r.motivo === 'sem_campos') return { ok: false, motivo: 'ocr_sem_campos' };
+    return r;
+}
+
+// --- Visualizar anexo original de um lançamento (auditoria) ---
+function verAnexoCP(id) {
+    const cp = db.contas_pagar.find(x => x.id == id);
+    if (!cp || !cp.arquivo_anexo_url) return;
+    const tipo = cp.arquivo_anexo_tipo || '';
+    if (tipo.includes('pdf') || tipo.startsWith('image/')) {
+        const w = window.open('', '_blank');
+        if (!w) { toast('Permita pop-ups para visualizar o anexo.', 'info'); return; }
+        const nome = escapeHtml(cp.arquivo_anexo_nome || 'Anexo');
+        w.document.write(tipo.includes('pdf')
+            ? `<title>${nome}</title><embed src="${cp.arquivo_anexo_url}" type="application/pdf" style="width:100%;height:100vh;border:none">`
+            : `<title>${nome}</title><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;height:100vh"><img src="${cp.arquivo_anexo_url}" style="max-width:100%;max-height:100vh"></body>`);
+    } else {
+        const a = document.createElement('a');
+        a.href = cp.arquivo_anexo_url; a.download = cp.arquivo_anexo_nome || 'anexo';
+        document.body.appendChild(a); a.click(); a.remove();
+    }
 }
 
 // --- FINANCEIRO: ESTADO E HELPERS ---
@@ -6681,20 +7460,20 @@ function renderContasPagar() {
     tb.innerHTML = lista.map(cp => {
         const at=cp.status==='Atrasado', pago=cp.status==='Pago', isRT=cp.categoria==='comissao_rt';
         const tipoTag = cp.tipo==='fixo' ? '<span class="fin-badge fin-badge-gray">Fixo</span>' : '<span class="fin-badge fin-badge-blue">Variável</span>';
+        const grupoTag = cp.parcelado ? `<span class="fin-badge fin-badge-blue" title="Parcela ${cp.parcela_atual} de ${cp.numero_parcelas}">${cp.parcela_atual}/${cp.numero_parcelas}</span>`
+            : cp.recorrente ? `<span class="fin-badge fin-badge-gray" title="Lançamento recorrente (${cp.periodicidade})">🔁</span>` : '';
+        const anexoBtn = cp.arquivo_anexo_url ? `<button class="btn btn-outline btn-sm" onclick="verAnexoCP(${cp.id})" title="Ver documento anexado" style="margin-left:4px">📎</button>` : '';
+        const grupoDelBtn = cp.lancamento_pai_id ? `<button class="btn btn-outline btn-sm btn-danger" onclick="excluirGrupoCP(${cp.lancamento_pai_id})" title="Excluir todo o grupo" style="margin-left:4px">🗑️ grupo</button>` : '';
         return `<tr class="${at?'fin-atrasado':''}">
             <td>${new Date(cp.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR')}</td>
-            <td>${escapeHtml(cp.descricao)}${isRT?' <span title="Comissão RT — gerada após quitação total do pedido" style="cursor:help">🏛️</span>':''}</td>
+            <td>${escapeHtml(cp.descricao)}${isRT?' <span title="Comissão RT — gerada após quitação total do pedido" style="cursor:help">🏛️</span>':''}${grupoTag?' '+grupoTag:''}</td>
             <td>${escapeHtml(cp.credor_nome||'—')}</td>
             <td style="text-align:right"><strong>R$ ${cp.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
             <td>${tipoTag}</td>
             <td>${pago?`<span style="color:#059669;font-size:12px">✓ ${new Date(cp.data_pagamento+'T12:00:00').toLocaleDateString('pt-BR')}</span>`:`<span class="fin-badge fin-badge-${at?'red':'pending'}">${cp.status}</span>`}</td>
-            <td>${!pago?`<button class="btn btn-sm btn-success" onclick="marcarCPPago(${cp.id})" title="Confirmar pagamento">✓ Pagar</button>`:''}<button class="btn btn-outline btn-sm btn-danger" onclick="excluirCP(${cp.id})" title="Excluir" style="margin-left:4px">🗑️</button></td>
+            <td>${!pago?`<button class="btn btn-sm btn-success" onclick="marcarCPPago(${cp.id})" title="Confirmar pagamento">✓ Pagar</button>`:''}<button class="btn btn-outline btn-sm btn-danger" onclick="excluirCP(${cp.id})" title="Excluir" style="margin-left:4px">🗑️</button>${grupoDelBtn}${anexoBtn}</td>
         </tr>`;
     }).join('');
-    const pedSel = document.getElementById('cp-nova-pedido');
-    if (pedSel) pedSel.innerHTML = '<option value="">— Sem vínculo de pedido —</option>' +
-        db.pedidos.filter(p=>normalizarStatus(p.status)!=='Orçamento')
-        .map(p=>`<option value="${p.id}">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}</option>`).join('');
 }
 
 function renderDespesasFixas() {

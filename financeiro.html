@@ -146,47 +146,18 @@
 
         <!-- TAB: A PAGAR -->
         <div id="fin-pagar" class="fin-panel">
-            <div class="card">
-                <h3 style="margin-bottom:16px">Lançar Conta a Pagar</h3>
-                <div class="grid">
-                    <div class="form-group" style="grid-column:span 2">
-                        <label>Descrição <span style="color:#dc2626">*</span></label>
-                        <input type="text" id="cp-nova-descricao" placeholder="Ex: Compra de tecido, salário costureira…">
-                    </div>
-                    <div class="form-group">
-                        <label>Credor / Fornecedor</label>
-                        <input type="text" id="cp-nova-credor" placeholder="Nome do credor">
-                    </div>
-                    <div class="form-group">
-                        <label>Valor (R$) <span style="color:#dc2626">*</span></label>
-                        <input type="number" id="cp-nova-valor" step="0.01" min="0" placeholder="0.00">
-                    </div>
-                    <div class="form-group">
-                        <label>Vencimento <span style="color:#dc2626">*</span></label>
-                        <input type="date" id="cp-nova-vencimento">
-                    </div>
-                    <div class="form-group">
-                        <label>Categoria</label>
-                        <select id="cp-nova-categoria">
-                            <option value="tecido">Tecido / Material</option>
-                            <option value="instalador">Instalador</option>
-                            <option value="costureira">Costureira</option>
-                            <option value="aluguel">Aluguel</option>
-                            <option value="salario">Salário</option>
-                            <option value="conta">Conta (luz, internet…)</option>
-                            <option value="comissao_rt">Comissão RT</option>
-                            <option value="outro">Outro</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Vincular a Pedido</label>
-                        <select id="cp-nova-pedido"></select>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+                <div style="position:relative">
+                    <button class="btn btn-success" id="cp-menu-btn" onclick="toggleMenuContaPagar(event)" style="display:flex;align-items:center;gap:6px">
+                        + Nova Conta a Pagar <span style="font-size:9px;opacity:.8">▾</span>
+                    </button>
+                    <div id="cp-menu-dropdown" style="display:none;position:absolute;top:calc(100% + 6px);left:0;background:var(--white);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.14);z-index:500;min-width:230px;overflow:hidden">
+                        <button class="logo-popup-item" style="width:100%" onclick="abrirModalContaPagar('manual')">✏️ Lançar manualmente</button>
+                        <div style="height:1px;background:var(--border)"></div>
+                        <button class="logo-popup-item" style="width:100%" onclick="abrirModalContaPagar('arquivo')">📎 Exportar nota/boleto</button>
                     </div>
                 </div>
-                <div style="display:flex;gap:10px;flex-wrap:wrap">
-                    <button class="btn btn-success" onclick="adicionarContaPagarManual()">Lançar Conta a Pagar</button>
-                    <button class="btn btn-outline" onclick="gerarContasPagarDoMes()" title="Gera os lançamentos das despesas fixas para o mês atual">🔁 Gerar Despesas Fixas do Mês</button>
-                </div>
+                <button class="btn btn-outline" onclick="gerarContasPagarDoMes()" title="Gera os lançamentos das despesas fixas para o mês atual">🔁 Gerar Despesas Fixas do Mês</button>
             </div>
             <div class="card">
                 <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
