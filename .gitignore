@@ -1,0 +1,5 @@
+# Imagens (pedido explícito: não versionar por enquanto)
+images/
+
+# Configuração local do Claude Code (específica desta máquina)
+.claude/settings.local.json

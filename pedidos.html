@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pedidos - SCTech</title>
+    <link rel="icon" href="images/logo.png">
+    <link rel="stylesheet" href="css/style.css">
+    <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
+</head>
+<body>
+    <aside class="sidebar" id="main-sidebar"></aside>
+
+    <main class="main">
+        <div class="header">
+            <h2>Pedidos</h2>
+            <a href="pedido.html" id="btn-novo-pedido" class="btn btn-success" style="display:flex;align-items:center;gap:7px;font-weight:600">+ Novo Pedido</a>
+        </div>
+
+        <!-- Gráfico + Filtros + Cards de Status -->
+        <div class="rgrid-1-2">
+
+            <!-- Donut: Pedidos por Status -->
+            <div class="card chart-card" style="padding:20px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px;flex-wrap:wrap">
+                    <h3 style="color:#374151;font-size:14px;margin:0;font-weight:700">Pedidos por Status</h3>
+                    <select id="chart-status-filtro" onchange="renderChartStatus()" style="font-size:11px;padding:3px 7px;border:1px solid #d1d5db;border-radius:6px;background:var(--white);color:var(--dark);cursor:pointer"></select>
+                </div>
+                <canvas id="chart-status"></canvas>
+            </div>
+
+            <!-- Coluna direita: filtros + cards de status -->
+            <div style="display:flex;flex-direction:column;gap:12px">
+
+                <!-- Filtros -->
+                <div class="card" style="padding:16px 20px">
+                    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+                        <div style="min-width:150px">
+                            <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Vendedor</label>
+                            <select id="filtro-vendedor" onchange="renderDashboard()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:var(--white);color:var(--dark)">
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-outline btn-sm" onclick="salvarFiltroVendedorTela()" style="white-space:nowrap" title="Lembrar este filtro de vendedor para a próxima vez que você abrir esta tela">💾 Salvar filtro</button>
+                        <div class="form-group" style="flex:2;min-width:200px;margin-bottom:0">
+                            <label>Buscar</label>
+                            <input type="text" id="filtro-texto" placeholder="Buscar por ID, cliente, ambiente, telefone ou endereço…" oninput="renderDashboard()">
+                        </div>
+                        <div class="form-group" style="flex:1;min-width:160px;margin-bottom:0">
+                            <label>Status</label>
+                            <select id="filtro-status" onchange="renderDashboard()">
+                                <option value="">Todos os status</option>
+                                <option value="Orçamento">Orçamento</option>
+                                <option value="Medição">Medição</option>
+                                <option value="Aguardando Tecido">Aguardando Tecido</option>
+                                <option value="Na Costura">Na Costura</option>
+                                <option value="Pronto p/ Instalação">Pronto p/ Instalação</option>
+                                <option value="Aguardando Pagamento">Aguardando Pagamento</option>
+                                <option value="Instalado">Instalado</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom:0;display:flex;align-items:center;padding-bottom:2px">
+                            <span id="pedidos-counter" class="pedidos-counter"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cards de contagem por status -->
+                <div id="pedidos-status-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px"></div>
+
+            </div>
+        </div>
+
+        <!-- Tabela de pedidos -->
+        <div class="card">
+            <table>
+                <thead id="thead-pedidos"></thead>
+                <tbody id="tb-pedidos"></tbody>
+            </table>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        const STATUS_CARDS_CFG = [
+            { key:'Orçamento',             label:'Orçamento',       ic:'📋', bg:'#f1f5f9', bord:'#cbd5e1', clr:'#475569' },
+            { key:'Medição',               label:'Medição',         ic:'📐', bg:'#dbeafe', bord:'#93c5fd', clr:'#1e40af' },
+            { key:'Aguardando Tecido',     label:'Ag. Tecido',      ic:'🧵', bg:'#ede9fe', bord:'#c4b5fd', clr:'#5b21b6' },
+            { key:'Na Costura',            label:'Na Costura',      ic:'✂️', bg:'#fce7f3', bord:'#f9a8d4', clr:'#9d174d' },
+            { key:'Pronto p/ Instalação',  label:'Pronto p/ Inst.', ic:'📦', bg:'#dcfce7', bord:'#86efac', clr:'#166534' },
+            { key:'Aguardando Pagamento',  label:'Ag. Pagamento',   ic:'💳', bg:'#fef9c3', bord:'#fde047', clr:'#854d0e' },
+            { key:'Instalado',             label:'Instalado',       ic:'✅', bg:'#d1fae5', bord:'#6ee7b7', clr:'#065f46' },
+        ];
+
+        function renderStatusCards() {
+            const el = document.getElementById('pedidos-status-cards');
+            if (!el) return;
+            el.innerHTML = STATUS_CARDS_CFG.map(s => {
+                const peds  = db.pedidos.filter(p => normalizarStatus(p.status) === s.key);
+                const count = peds.length;
+                const valor = peds.reduce((sum, p) => sum + (p.valor || 0), 0);
+                const ativo = document.getElementById('filtro-status')?.value === s.key;
+                return `<div onclick="filtrarPorStatusPedidos('${s.key}')"
+                    style="background:${s.bg};border:2px solid ${ativo ? s.clr : s.bord};border-radius:8px;padding:12px 14px;cursor:pointer;transition:all .15s${ativo ? ';box-shadow:0 0 0 3px '+s.clr+'33' : ''}"
+                    onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,.12)'"
+                    onmouseout="this.style.transform='';this.style.boxShadow='${ativo ? '0 0 0 3px '+s.clr+'33' : ''}'">
+                    <div style="font-size:11px;color:${s.clr};font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">${s.ic} ${s.label}</div>
+                    <div style="font-size:24px;font-weight:800;color:${s.clr};line-height:1">${count}</div>
+                    <div style="font-size:11px;color:${s.clr};opacity:.8;margin-top:4px">R$ ${valor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function filtrarPorStatusPedidos(status) {
+            const sel = document.getElementById('filtro-status');
+            if (!sel) return;
+            sel.value = sel.value === status ? '' : status; // toggle: clicar no mesmo status limpa o filtro
+            renderDashboard();
+            renderStatusCards();
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            renderDashboard();
+            renderStatusCards();
+        });
+    </script>
+</body>
+</html>

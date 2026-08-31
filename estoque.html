@@ -1,0 +1,304 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Estoque - SCTech</title>
+    <link rel="icon" href="images/logo.png">
+    <link rel="stylesheet" href="css/style.css">
+    <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
+</head>
+<body>
+    <aside class="sidebar" id="main-sidebar"></aside>
+    <main class="main">
+        <div class="header">
+            <h2>Gestão de Estoque</h2>
+            <button class="btn btn-outline" onclick="abrirBalanco()">📋 Balanço de Estoque</button>
+        </div>
+
+        <!-- Navegação por abas -->
+        <div class="tab-nav">
+            <button class="tab-btn active" data-tab="tecidos"   onclick="mostrarTabEstoque('tecidos')">🧵 Tecidos</button>
+            <button class="tab-btn"        data-tab="materiais" onclick="mostrarTabEstoque('materiais')">🔩 Materiais</button>
+            <button class="tab-btn"        data-tab="kits"      onclick="mostrarTabEstoque('kits')">📦 Kits</button>
+            <button class="tab-btn"        data-tab="historico" onclick="mostrarTabEstoque('historico')">📋 Histórico</button>
+            <button class="tab-btn"        data-tab="consulta"  onclick="mostrarTabEstoque('consulta')">🔍 Consulta de Estoque</button>
+            <button class="tab-btn" data-tab="futuro"  onclick="mostrarTabEstoque('futuro')">📊 Estoque Futuro</button>
+            <button class="tab-btn" data-tab="backup" onclick="mostrarTabEstoque('backup')">💾 Backup</button>
+        </div>
+
+        <!-- ══════════════ ABA: TECIDOS ══════════════ -->
+        <div id="tab-tecidos" class="tab-panel active">
+
+            <!-- Alertas de ponto de pedido -->
+            <div id="alertas-ponto-pedido" class="alertas-ponto-pedido"></div>
+
+            <!-- Registrar entrada de rolo -->
+            <div class="card">
+                <h3 style="margin-bottom:16px">Registrar Entrada de Rolo</h3>
+                <div class="grid">
+                    <div class="form-group">
+                        <label>Referência <span class="info-tag">lote / banho de cor</span></label>
+                        <input type="text" id="est-lote" placeholder="Ex: L2024-03 ou Banho #7" oninput="autoFillTecidoPorReferencia()">
+                    </div>
+                    <div class="form-group">
+                        <label>Tecido</label>
+                        <select id="est-tecido" onchange="autoFillEntradaTecido()"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Metragem do Rolo (m)</label>
+                        <input type="number" id="est-metros" placeholder="Ex: 50.00" step="0.01" min="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>Preço de Custo (R$/m) <span class="info-tag">pago ao fornecedor</span></label>
+                        <input type="number" id="est-preco-custo" placeholder="Ex: 45.00" step="0.01" min="0" oninput="calcularPrecoVendaTecido()">
+                    </div>
+                    <div class="form-group">
+                        <label>Margem (%)</label>
+                        <input type="number" id="est-markup" placeholder="Ex: 80" step="1" min="0" value="0" oninput="calcularPrecoVendaTecido()">
+                    </div>
+                    <div class="form-group">
+                        <label>Preço de Venda (R$/m) <span class="info-tag">calculado</span></label>
+                        <div id="est-preco-venda-display" style="padding:8px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;font-weight:700;color:#059669;font-size:14px">R$ 0,00</div>
+                    </div>
+                    <div class="form-group">
+                        <label>Data de Entrada</label>
+                        <input type="date" id="est-data">
+                    </div>
+                </div>
+                <button class="btn btn-success" onclick="salvarEntradaEstoque()">Registrar Entrada</button>
+            </div>
+
+            <!-- Tabela de rolos -->
+            <div class="card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Referência</th>
+                            <th>Metragem Inicial</th>
+                            <th>Disponível</th>
+                            <th>Ocupação</th>
+                            <th>Entrada</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-estoque"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ══════════════ ABA: MATERIAIS ══════════════ -->
+        <div id="tab-materiais" class="tab-panel">
+
+            <!-- Alertas de estoque mínimo -->
+            <div id="alertas-mat-min" class="alertas-ponto-pedido"></div>
+
+            <!-- Registrar entrada de material -->
+            <div class="card">
+                <h3 style="margin-bottom:16px">Registrar Entrada de Material / Acessório</h3>
+                <div class="grid">
+                    <div class="form-group">
+                        <label>Referência <span class="info-tag">código do material</span></label>
+                        <input type="text" id="est-mat-ref" placeholder="Ex: TRILHO-SU-01" oninput="autoFillEntradaMaterialPorRef()">
+                    </div>
+                    <div class="form-group" style="grid-column:span 2">
+                        <label>Material</label>
+                        <select id="est-mat-id" onchange="autoFillEntradaMaterialById()"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Quantidade</label>
+                        <input type="number" id="est-mat-qtd" placeholder="Ex: 50" step="0.01" min="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>Preço de Custo (R$) <span class="info-tag">pago ao fornecedor</span></label>
+                        <input type="number" id="est-mat-preco-custo" placeholder="Ex: 8.50" step="0.01" min="0" oninput="calcularPrecoVendaMat()">
+                    </div>
+                    <div class="form-group">
+                        <label>Margem (%)</label>
+                        <input type="number" id="est-mat-markup" placeholder="Ex: 50" step="1" min="0" value="0" oninput="calcularPrecoVendaMat()">
+                    </div>
+                    <div class="form-group">
+                        <label>Preço de Venda <span class="info-tag">calculado</span></label>
+                        <div id="est-mat-preco-venda-display" style="padding:8px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;font-weight:700;color:#059669;font-size:14px">R$ 0,00</div>
+                    </div>
+                    <div class="form-group">
+                        <label>Data de Entrada</label>
+                        <input type="date" id="est-mat-data">
+                    </div>
+                </div>
+                <button class="btn btn-success" onclick="salvarEntradaMaterial()">Registrar Entrada</button>
+            </div>
+
+            <!-- Tabela de estoque de materiais -->
+            <div class="card">
+                <table>
+                    <thead><tr>
+                        <th>Material</th>
+                        <th>Referência</th>
+                        <th>Unidade</th>
+                        <th>Preço Venda</th>
+                        <th>Estoque Atual</th>
+                        <th>Fornecedor</th>
+                        <th>Ações</th>
+                    </tr></thead>
+                    <tbody id="tb-estoque-mat"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ══════════════ ABA: KITS ══════════════ -->
+        <div id="tab-kits" class="tab-panel">
+
+            <!-- Criar novo kit -->
+            <div class="card">
+                <h3 style="margin-bottom:16px">Criar Kit</h3>
+                <div class="grid">
+                    <div class="form-group" style="grid-column:1/-1">
+                        <label>Nome do Kit</label>
+                        <input type="text" id="kit-nome" placeholder="Ex: Kit Trilho 2m, Kit Instalação Padrão…">
+                    </div>
+                    <div class="form-group" style="grid-column:1/-1">
+                        <label>Descrição (opcional)</label>
+                        <input type="text" id="kit-desc" placeholder="Breve descrição do kit">
+                    </div>
+                </div>
+
+                <h4 style="margin-bottom:10px;color:#555">Itens do Kit</h4>
+                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+                    <div class="form-group" style="flex:1;min-width:200px">
+                        <label>Material</label>
+                        <select id="kit-item-mat"></select>
+                    </div>
+                    <div class="form-group" style="width:120px">
+                        <label>Quantidade</label>
+                        <input type="number" id="kit-item-qtd" placeholder="Ex: 2" step="0.01" min="0.01" value="1">
+                    </div>
+                    <button class="btn btn-outline" style="margin-bottom:0" onclick="adicionarItemAoKit()">+ Adicionar Item</button>
+                </div>
+
+                <!-- Preview dos itens do kit em criação -->
+                <div style="margin-bottom:14px">
+                    <table>
+                        <thead>
+                            <tr><th>Material</th><th>Quantidade</th><th style="width:60px"></th></tr>
+                        </thead>
+                        <tbody id="tb-kit-draft"></tbody>
+                    </table>
+                </div>
+
+                <button class="btn btn-success" onclick="salvarKit()">Salvar Kit</button>
+            </div>
+
+            <!-- Kits cadastrados -->
+            <div class="card">
+                <h3 style="margin-bottom:16px">Kits Cadastrados</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Composição</th>
+                            <th style="width:80px">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-kits"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ══════════════ ABA: HISTÓRICO ══════════════ -->
+        <div id="tab-historico" class="tab-panel">
+            <div class="hist-filtros">
+                <div class="form-group">
+                    <label>Tipo</label>
+                    <select id="hist-filtro-tipo" onchange="renderHistorico()">
+                        <option value="">Todos</option>
+                        <option value="Entrada">Entrada</option>
+                        <option value="Baixa Pedido">Baixa Pedido</option>
+                        <option value="Baixa Manual">Baixa Manual</option>
+                        <option value="Ajuste +">Ajuste ↑</option>
+                        <option value="Ajuste -">Ajuste ↓</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex:1;min-width:180px">
+                    <label>Item</label>
+                    <input type="text" id="hist-filtro-item" placeholder="Buscar por nome do item…" oninput="renderHistorico()">
+                </div>
+                <div class="form-group">
+                    <label>De</label>
+                    <input type="date" id="hist-filtro-de" onchange="renderHistorico()">
+                </div>
+                <div class="form-group">
+                    <label>Até</label>
+                    <input type="date" id="hist-filtro-ate" onchange="renderHistorico()">
+                </div>
+                <button class="btn btn-outline" style="margin-bottom:0;align-self:flex-end" onclick="limparFiltrosHistorico()">Limpar</button>
+            </div>
+            <div class="card">
+                <h3 style="margin-bottom:16px">Movimentações de Estoque</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:130px">Data / Hora</th>
+                            <th style="width:120px">Tipo</th>
+                            <th>Item</th>
+                            <th style="width:110px">Quantidade</th>
+                            <th style="width:120px">Referência</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-historico"></tbody>
+                </table>
+            </div>
+            <div id="hist-pag" style="display:flex;justify-content:center;align-items:center;gap:10px;padding:8px 0"></div>
+        </div>
+
+        <!-- ══════════════ ABA: CONSULTA DE ESTOQUE ══════════════ -->
+        <div id="tab-consulta" class="tab-panel">
+            <div class="card">
+                <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+                    <div class="form-group" style="flex:2;min-width:220px;margin-bottom:0">
+                        <label>Buscar por nome</label>
+                        <input type="text" id="consulta-busca" placeholder="Ex: Linho Belga, Trilho Suíço…" oninput="renderConsultaEstoque()" autocomplete="off">
+                    </div>
+                    <div class="form-group" style="flex:1;min-width:160px;margin-bottom:0">
+                        <label>Código / Referência</label>
+                        <input type="text" id="consulta-codigo" placeholder="Ex: LB-001, TRILHO-SU-01" oninput="renderConsultaEstoque()" autocomplete="off" style="text-transform:uppercase">
+                    </div>
+                    <div class="form-group" style="min-width:140px;margin-bottom:0">
+                        <label>Tipo</label>
+                        <select id="consulta-tipo" onchange="renderConsultaEstoque()">
+                            <option value="">Todos</option>
+                            <option value="tecido">Tecidos</option>
+                            <option value="material">Materiais</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div id="consulta-resultados"></div>
+        </div>
+
+        <!-- ══════════════ ABA: ESTOQUE FUTURO ══════════════ -->
+        <div id="tab-futuro" class="tab-panel">
+            <!-- Preenchido dinamicamente por renderEstoqueFuturo() -->
+        </div>
+
+        <!-- ══════════════ ABA: BACKUP ══════════════ -->
+        <div id="tab-backup" class="tab-panel">
+            <div class="card backup-card">
+                <div class="logo-box" style="margin:0 auto 16px;background:#059669">⬇️</div>
+                <h3 style="margin-bottom:0">Exportar Dados</h3>
+                <p>Faz o download de todos os dados do sistema em formato JSON. Guarde o arquivo em local seguro.</p>
+                <button class="btn btn-success" onclick="exportarDados()">Exportar Backup JSON</button>
+            </div>
+            <div class="card backup-card">
+                <div class="logo-box" style="margin:0 auto 16px;background:#2A5C82">⬆️</div>
+                <h3 style="margin-bottom:0">Importar Dados</h3>
+                <p>Restaura os dados a partir de um arquivo JSON exportado anteriormente. <strong style="color:#dc2626">Atenção: substituirá TODOS os dados atuais.</strong></p>
+                <input type="file" id="importar-arquivo" accept=".json" style="display:none" onchange="importarDados(event)">
+                <button class="btn" onclick="document.getElementById('importar-arquivo').click()">Selecionar Arquivo JSON</button>
+            </div>
+        </div>
+
+    </main>
+    <script src="js/app.js"></script>
+</body>
+</html>

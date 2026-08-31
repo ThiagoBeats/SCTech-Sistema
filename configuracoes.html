@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Configurações - SCTech</title>
+    <link rel="icon" href="images/logo.png">
+    <link rel="stylesheet" href="css/style.css">
+    <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
+</head>
+<body>
+    <aside class="sidebar" id="main-sidebar"></aside>
+    <main class="main">
+        <div class="header"><h2>Configurações</h2></div>
+
+        <div class="tab-nav">
+            <button class="tab-btn cfg-tab-btn active" data-tab="usuarios" onclick="mostrarTabConfig('usuarios')">👤 Usuários</button>
+            <button class="tab-btn cfg-tab-btn"        data-tab="papeis"   onclick="mostrarTabConfig('papeis')">🛡️ Papéis</button>
+        </div>
+
+        <!-- TAB: USUÁRIOS -->
+        <div id="cfg-usuarios" class="cfg-panel active">
+            <div class="card">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+                    <div>
+                        <h3 style="margin:0 0 3px">Usuários do sistema</h3>
+                        <span style="font-size:12px;color:#6b7280">Cada usuário tem um papel (perfil de acesso) e pode ter permissões personalizadas por módulo.</span>
+                    </div>
+                    <button class="btn btn-success" onclick="abrirModalUsuario()">+ Novo Usuário</button>
+                </div>
+                <table>
+                    <thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Status</th><th>Ações</th></tr></thead>
+                    <tbody id="tb-usuarios"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: PAPÉIS -->
+        <div id="cfg-papeis" class="cfg-panel">
+            <div class="card">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+                    <div>
+                        <h3 style="margin:0 0 3px">Papéis (perfis de acesso)</h3>
+                        <span style="font-size:12px;color:#6b7280">Definem o nível de acesso padrão a cada módulo. Um usuário pode sobrescrever o papel individualmente.</span>
+                    </div>
+                    <button class="btn btn-success" onclick="abrirModalPapel()">+ Novo Papel</button>
+                </div>
+                <table>
+                    <thead><tr><th>Papel</th><th>Usuários</th><th>Ações</th></tr></thead>
+                    <tbody id="tb-papeis"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

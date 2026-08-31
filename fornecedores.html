@@ -1,0 +1,222 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Fornecedores - SCTech</title>
+    <link rel="icon" href="images/logo.png">
+    <link rel="stylesheet" href="css/style.css">
+    <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
+</head>
+<body>
+    <aside class="sidebar" id="main-sidebar"></aside>
+    <main class="main">
+        <div class="header"><h2>Fornecedores e Pedidos de Compra</h2></div>
+
+        <div class="tab-nav">
+            <button class="tab-btn forn-tab-btn active" data-tab="lista"   onclick="mostrarTabFornecedores('lista')">🏭 Fornecedores</button>
+            <button class="tab-btn forn-tab-btn"        data-tab="pedidos" onclick="mostrarTabFornecedores('pedidos')">📋 Pedidos de Compra</button>
+            <button class="tab-btn forn-tab-btn"        data-tab="novo"    onclick="mostrarTabFornecedores('novo')">+ Novo Pedido</button>
+        </div>
+
+        <!-- TAB: FORNECEDORES -->
+        <div id="tab-forn-lista" class="tab-panel active">
+            <div class="card">
+                <h3 id="forn-form-titulo" style="margin-bottom:16px">Cadastrar Fornecedor</h3>
+
+                <!-- Linha CNPJ + busca -->
+                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
+                    <div class="form-group" style="width:220px;margin-bottom:0">
+                        <label>CNPJ <span style="color:#dc2626">*</span></label>
+                        <input type="text" id="forn-cnpj" placeholder="00.000.000/0000-00" maxlength="18" oninput="mascaraCNPJ(this)">
+                    </div>
+                    <button class="btn" id="forn-btn-buscar-cnpj" onclick="buscarCNPJ()" style="margin-bottom:0">🔍 Buscar CNPJ</button>
+                    <span id="forn-cnpj-status" style="font-size:13px;align-self:center"></span>
+                </div>
+
+                <!-- Razão Social + Nome Fantasia -->
+                <div class="grid" style="margin-bottom:0">
+                    <div class="form-group">
+                        <label>Razão Social <span style="color:#dc2626">*</span></label>
+                        <input type="text" id="forn-nome" placeholder="Nome oficial da empresa">
+                    </div>
+                    <div class="form-group">
+                        <label>Nome Fantasia</label>
+                        <input type="text" id="forn-nome-fantasia" placeholder="Nome comercial (opcional)">
+                    </div>
+                </div>
+
+                <!-- Endereço -->
+                <div class="grid" style="margin-bottom:0">
+                    <div class="form-group">
+                        <label>Logradouro</label>
+                        <input type="text" id="forn-end" placeholder="Rua, Av., etc.">
+                    </div>
+                    <div class="form-group">
+                        <label>Número</label>
+                        <input type="text" id="forn-num" placeholder="Nº">
+                    </div>
+                    <div class="form-group">
+                        <label>Cidade</label>
+                        <input type="text" id="forn-cidade" placeholder="Cidade">
+                    </div>
+                    <div class="form-group">
+                        <label>UF</label>
+                        <input type="text" id="forn-estado" placeholder="UF" maxlength="2" style="text-transform:uppercase">
+                    </div>
+                </div>
+
+                <!-- Contato + IE + Obs -->
+                <div class="grid">
+                    <div class="form-group">
+                        <label>Telefone / WhatsApp</label>
+                        <input type="text" id="forn-tel" placeholder="(11) 99999-9999">
+                    </div>
+                    <div class="form-group">
+                        <label>E-mail</label>
+                        <input type="email" id="forn-email" placeholder="contato@fornecedor.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Inscrição Estadual</label>
+                        <input type="text" id="forn-ie" placeholder="IE (opcional)">
+                    </div>
+                    <div class="form-group">
+                        <label>Observações</label>
+                        <input type="text" id="forn-obs" placeholder="Prazo, condições, etc.">
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+                    <button class="btn btn-success" id="forn-btn-salvar" onclick="salvarFornecedor()">Salvar Fornecedor</button>
+                    <button class="btn btn-outline" id="forn-btn-cancelar" style="display:none" onclick="cancelarEdicaoFornecedor()">Cancelar</button>
+                </div>
+            </div>
+            <div class="card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Razão Social / Nome Fantasia</th>
+                            <th>CNPJ</th>
+                            <th>Cidade / UF</th>
+                            <th>Telefone</th>
+                            <th>E-mail</th>
+                            <th>Vínculos</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-fornecedores"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: PEDIDOS DE COMPRA -->
+        <div id="tab-forn-pedidos" class="tab-panel">
+            <div class="card">
+                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+                    <div class="form-group" style="flex:1;min-width:180px;margin-bottom:0">
+                        <label>Fornecedor</label>
+                        <select id="filtro-pc-forn" onchange="renderListaPedidosCompra()">
+                            <option value="">Todos os fornecedores</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="min-width:160px;margin-bottom:0">
+                        <label>Status</label>
+                        <select id="filtro-pc-status" onchange="renderListaPedidosCompra()">
+                            <option value="">Todos</option>
+                            <option>Rascunho</option>
+                            <option>Enviado</option>
+                            <option>Recebido</option>
+                        </select>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Fornecedor</th>
+                            <th>Data</th>
+                            <th style="text-align:center">Itens</th>
+                            <th>Valor Est.</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-pedidos-compra"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: NOVO PEDIDO -->
+        <div id="tab-forn-novo" class="tab-panel">
+            <div class="card">
+                <h3 style="color:var(--primary);margin-bottom:20px">Novo Pedido de Compra</h3>
+                <!-- Busca de fornecedor -->
+                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+                    <div class="form-group" style="width:220px;margin-bottom:0">
+                        <label>Buscar por CNPJ</label>
+                        <input type="text" id="pc-busca-cnpj" placeholder="00.000.000/0000-00" maxlength="18"
+                               oninput="mascaraCNPJ(this);filtrarFornecedorPorCNPJ(this.value)">
+                    </div>
+                    <div class="form-group" style="flex:1;min-width:220px;margin-bottom:0">
+                        <label>Fornecedor <span style="color:#dc2626">*</span></label>
+                        <select id="pc-fornecedor" onchange="document.getElementById('pc-busca-cnpj').value=''">
+                            <option value="">— Selecione o fornecedor —</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:14px;margin-top:6px">
+                    <div class="form-group" style="min-width:140px;margin-bottom:0">
+                        <label>Tipo</label>
+                        <select id="pc-item-tipo" onchange="atualizarSelectItemPC()">
+                            <option value="material">Material</option>
+                            <option value="tecido">Tecido</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="width:140px;margin-bottom:0">
+                        <label>Código <span class="info-tag">referência</span></label>
+                        <input type="text" id="pc-item-codigo" placeholder="Ex: LB-001"
+                               oninput="buscarItemPorCodigoPC(this.value)"
+                               style="text-transform:uppercase">
+                    </div>
+                    <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
+                        <label>Item</label>
+                        <select id="pc-item-id" onchange="document.getElementById('pc-item-codigo').value=''"></select>
+                    </div>
+                    <div class="form-group" id="pc-unidade-group" style="width:130px;margin-bottom:0;display:none">
+                        <label>Unidade</label>
+                        <select id="pc-item-unidade">
+                            <option value="m">Metro (m)</option>
+                            <option value="rolo">Rolo</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="width:110px;margin-bottom:0">
+                        <label>Quantidade</label>
+                        <input type="number" id="pc-item-qtd" value="1" step="0.01" min="0.01">
+                    </div>
+                    <button class="btn btn-outline" style="margin-bottom:0" onclick="adicionarItemPC()">+ Adicionar</button>
+                </div>
+                <table style="margin-top:14px;margin-bottom:14px">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th style="width:110px">Quantidade</th>
+                            <th style="width:60px">Un.</th>
+                            <th style="width:130px">Último preço pago</th>
+                            <th style="width:50px"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-pc-draft"></tbody>
+                </table>
+                <div class="form-group">
+                    <label>Observações</label>
+                    <textarea id="pc-obs" rows="3" placeholder="Condições de pagamento, prazo de entrega, referências..." style="padding:10px;border:1px solid #ccc;border-radius:4px;resize:vertical;font-family:inherit;font-size:14px;width:100%"></textarea>
+                </div>
+                <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px">
+                    <button class="btn btn-success" onclick="salvarPedidoCompra()">💾 Salvar Pedido de Compra</button>
+                </div>
+            </div>
+        </div>
+    </main>
+    <script src="js/app.js"></script>
+</body>
+</html>

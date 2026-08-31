@@ -1,0 +1,1116 @@
+================================================================================
+                     SCTECH — MAPEAMENTO COMPLETO DE FUNCIONALIDADES
+                          Sistema de Gestão para Cortineiros
+================================================================================
+Gerado em: 02/06/2026
+Escopo: Somente funcionalidades implementadas e operacionais
+================================================================================
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                         ESTRUTURA GERAL DO SISTEMA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Tecnologia:
+  - Aplicação web offline-first (HTML5 + CSS3 + JavaScript puro)
+  - Armazenamento: localStorage do navegador (sem servidor/banco externo)
+  - Gráficos: Chart.js 4.4.0
+  - Autenticação: sessionStorage com credencial hardcoded
+  - Compatível com: Chrome, Firefox, Edge, Safari (versões modernas)
+
+Módulos (telas):
+  1. Login
+  2. Página Inicial / Dashboard
+  3. Produção (PCP)
+  4. Estoque
+  5. Clientes
+  6. Cadastro / Catálogo
+  7. Relatórios
+  8. Vendedores
+  9. Fornecedores
+ 10. Financeiro
+ 11. Formulário de Pedido
+ 12. Configurar Empresa
+ 13. Sobre o Sistema
+
+Elementos globais presentes em todas as telas (exceto Login):
+  - Barra lateral de navegação (sidebar) com links para todos os módulos
+  - Popup de perfil (clique no logo): nome do usuário logado, toggle de tema,
+    links para "Sobre" e "Configurar Empresa", botão de Logout
+  - Toggle de tema claro/escuro persistido em localStorage
+  - Ícone de página (favicon): logo SCTech
+  - Indicador de alertas desabilitados: ícone 🔕 no cabeçalho, visível apenas
+    quando há algum tipo de alerta desativado nas preferências; clique navega
+    para a tela de configuração de empresa; ao passar o mouse exibe tooltip
+    "Alguns alertas estão desabilitados. Clique para gerenciar."
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 1. TELA DE LOGIN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Campos:
+  - Usuário (text, autocomplete: username)
+  - Senha (password, autocomplete: current-password)
+    → Pressionar Enter no campo de senha aciona o login
+
+Ações:
+  - Botão "Entrar": valida credenciais e redireciona para index.html
+  - Exibição de mensagem de erro em caso de credencial inválida
+
+Segurança:
+  - Credenciais hardcoded no front-end (login fixo: admin)
+  - Sessão armazenada em sessionStorage (chave: sc_user)
+  - Todas as outras telas verificam a sessão ao carregar; se não autenticado,
+    redirecionam automaticamente para login.html
+  - Logout disponível no popup de perfil da sidebar em todas as telas
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 2. PÁGINA INICIAL / DASHBOARD (index.html)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Botão de acesso rápido:
+  - "+ Novo Pedido" no cabeçalho → navega para pedido.html
+
+── 2.1 PAINEL DE ALERTAS ───────────────────────────────────────────────────────
+
+Tipo "Entrega hoje":
+  - Lista pedidos (não instalados) com data_entrega = hoje
+  - Exibe: nomes dos clientes com links para edição do pedido
+  - Visível apenas se houver ocorrências
+  - Pode ser desativado nas preferências de alertas
+
+Tipo "Medições atrasadas":
+  - Lista medições agendadas com data anterior a hoje que ainda não ocorreram
+  - Exibe: nome do cliente + data, com link para a aba de medições do PCP
+  - Pode ser desativado nas preferências de alertas
+
+Tipo "Medições para hoje":
+  - Lista medições agendadas para hoje
+  - Exibe: nome do cliente + horário (se definido), com link para PCP
+  - Pode ser desativado nas preferências de alertas
+
+Tipo "Instalações atrasadas":
+  - Lista pedidos nos status "Pronto p/ Instalação" ou "Aguardando Pagamento"
+    com data de entrega vencida
+  - Exibe: número do pedido, cliente, data prevista; link para edição
+  - Pode ser desativado nas preferências de alertas
+
+Tipo "Instalações para hoje":
+  - Lista instalações agendadas para hoje (mesmos status acima)
+  - Exibe: número do pedido, cliente, horário (se definido)
+  - Pode ser desativado nas preferências de alertas
+
+Tipo "Estoque crítico":
+  - Lista tecidos com estoque disponível abaixo do mínimo cadastrado
+  - Lista materiais/acessórios com estoque abaixo do mínimo cadastrado
+  - Exibe: nome do item, quantidade atual, quantidade mínima; link para estoque
+  - Pode ser desativado nas preferências de alertas
+
+── 2.2 CARDS DE MÉTRICAS ───────────────────────────────────────────────────────
+
+7 cards exibidos em linha:
+  1. Faturamento do Mês: soma dos valores dos pedidos instalados no mês atual
+  2. Em Produção: quantidade de pedidos em andamento (exceto Orçamento/Instalado)
+     → clique filtra a tabela de pedidos pelo status "em produção"
+  3. Orçamentos Abertos: quantidade de pedidos com status "Orçamento"
+     → clique filtra a tabela de pedidos por "Orçamento"
+  4. Ticket Médio: valor médio dos pedidos instalados
+  5. Estoque Crítico: quantidade de itens (tecidos + materiais) abaixo do mínimo
+  6. Entregas Atrasadas: pedidos com data de entrega vencida e não instalados
+     → clique filtra a tabela de pedidos por "atrasados"
+  7. A Receber (Total): soma de todas as contas a receber com status ≠ Pago
+     → clique filtra a tabela de pedidos por "a receber"
+
+── 2.3 GRÁFICOS ────────────────────────────────────────────────────────────────
+
+Gráfico 1 — Faturamento dos Últimos 6 Meses (barras):
+  - Eixo X: meses (formato: abreviação + ano)
+  - Eixo Y: valor em R$ com formatação pt-BR
+  - Dado: soma dos pedidos instalados (status = Instalado) em cada mês
+
+Gráfico 2 — Pedidos por Status (donut):
+  - Filtro de período (select): "Todos os pedidos" + últimos 5 meses individualmente
+  - Ao mudar o período, o gráfico é recalculado e re-renderizado sem recarregar a página
+  - Segmentos coloridos por status (Orçamento, Medição, Na Costura, etc.)
+  - Texto central: total de pedidos no período
+
+── 2.4 AGENDA DE INSTALAÇÕES (resumo) ──────────────────────────────────────────
+
+Mini-painel exibido no dashboard quando há pedidos aguardando instalação:
+  - Agrupa em: "Atrasados", "Próximas Instalações", "Sem data definida"
+  - Cada card mostra: label de tempo (Hoje / Amanhã / Xd atrás / data), cliente,
+    número do pedido, horário e endereço (se preenchidos)
+  - Cores: vermelho para atrasados, azul para hoje, cinza para outros
+  - Clique em qualquer card: navega para pcp.html?view=agenda (agenda completa)
+  - Botão "Ver agenda completa" no cabeçalho do painel
+  - Exibe até 6 próximos e todos os atrasados; até 3 sem data
+
+── 2.5 AGENDA DE MEDIÇÕES (resumo) ─────────────────────────────────────────────
+
+Mini-painel exibido no dashboard quando há medições pendentes:
+  - Agrupa em: "Atrasadas" e "Próximas"
+  - Cada item mostra: cliente, data, horário, endereço
+
+── 2.6 TABELA DE PEDIDOS ───────────────────────────────────────────────────────
+
+Filtros:
+  - Busca por texto: pesquisa em ID do pedido, nome do cliente e nome do ambiente
+    (atualização em tempo real ao digitar)
+  - Filtro por status: select com todos os status + atalhos especiais
+    (em_producao, atrasados, a_receber)
+  - Contador de resultados: "X de Y pedido(s)"
+
+Colunas da tabela (todas ordenáveis por clique no cabeçalho):
+  - Pedido (ID formatado, clicável para editar)
+  - Criação (data de criação do pedido)
+  - Cliente
+  - Valor (R$) + badge de status de pagamento (Pago / Saldo pendente / Valor total)
+  - Entrega (data prevista + badge colorido: urgente / hoje / próxima / normal)
+  - Status (tag colorida por etapa do pipeline)
+  - Ação (botões)
+
+Botões de ação por linha:
+  - 📄 Gerar proposta PDF: abre modal com preview da proposta comercial formatada
+  - 📋 Ver OS: abre modal com ordem de serviço formatada para impressão
+  - ⏱ Timeline: popup com histórico de status do pedido (ícone + data/hora por etapa)
+  - ✅ Aprovar (apenas para orçamentos): muda status para "Medição" com confirmação,
+    gera lançamentos financeiros automaticamente
+  - ✏️ Editar: navega para pedido.html com o pedido carregado para edição
+  - 🗑️ Excluir: confirmação antes de deletar permanentemente
+
+Comportamento da ordenação:
+  - Clique no cabeçalho: ordena pela coluna (ascendente)
+  - Segundo clique: ordem invertida (descendente)
+  - Indicador visual: ▲ / ▼ / ⇅ nos cabeçalhos
+  - Ativa: cabeçalho destacado em azul
+
+Pedido com status "Instalado":
+  - Linha identificada visualmente (fundo diferente se atrasado antes de instalar)
+  - Ao abrir para edição: todos os campos ficam bloqueados (somente leitura)
+  - Banner amarelo "🔒 Pedido instalado — somente leitura" no cabeçalho do form
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 3. PRODUÇÃO / PCP (pcp.html)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+3 abas: Status dos Pedidos | Agenda de Instalações | Agendamento de Medições
+Botão "+ Novo Pedido" no cabeçalho → pedido.html
+
+── 3.1 ABA: STATUS DOS PEDIDOS (KANBAN) ────────────────────────────────────────
+
+Filtros do kanban:
+  - Busca por cliente (text, tempo real)
+  - Filtro por vendedor (select)
+  - Filtro por tecido (select com todos os tecidos do catálogo)
+  - Botão "✕ Limpar" para resetar filtros
+  - Contador de resultado: "X pedido(s) encontrado(s)"
+
+Colunas do kanban (uma por status):
+  - Orçamento → Medição → Aguardando Tecido → Na Costura →
+    Pronto p/ Instalação → Aguardando Pagamento → Instalado
+
+Cada card no kanban exibe:
+  - Número do pedido, cliente, ambiente, valor
+  - Data de entrega (badge colorido: urgente / atrasado / normal)
+  - Status de pagamento (badge)
+  - Botões: avançar status (→), retroceder status (←), editar (✏️)
+
+Avanço de status com comportamentos automáticos:
+  - Orçamento → Medição: gera lançamentos em Contas a Receber automaticamente
+  - Aguardando Tecido → Na Costura: realiza baixa automática de tecidos no estoque
+    (verifica disponibilidade; exibe lista de tecidos a baixar com confirmação)
+  - Na Costura → Pronto p/ Instalação: verifica saldo de materiais/acessórios;
+    se insuficiente, bloqueia e informa; se suficiente, pede confirmação e dá baixa
+  - Pronto p/ Instalação ou Aguardando Pagamento → Instalado: exibe modal de
+    pagamento; usuário informa se foi pago integralmente ou se aguarda pagamento;
+    se pago, registra data de instalação, marca valor recebido e fecha o pedido
+
+Modal de pagamento (ao instalar):
+  - Exibe: valor total, já recebido, saldo a receber
+  - Opções: "Pago — Instalar agora" ou "Aguardando pagamento"
+  - Se pago: gera comissão de RT (retorno técnico para arquiteto) automaticamente
+    se houver percentual configurado e ainda não gerado
+
+── 3.2 ABA: AGENDA DE INSTALAÇÕES ─────────────────────────────────────────────
+
+Lista todos os pedidos com status "Pronto p/ Instalação" ou "Aguardando Pagamento"
+Agrupamento por faixas de tempo:
+  - ⚠ Atrasado: data de entrega já passou
+  - 📅 Esta semana: dentro dos próximos 7 dias
+  - 📆 Próxima semana: entre 8 e 14 dias
+  - 🗓 Futuro: além de 14 dias
+  - Sem data definida: pedidos sem data_entrega preenchida
+
+Cada card de instalação exibe:
+  - Número do pedido, cliente, ambiente, valor, status de pagamento
+  - Data de instalação atual (formatada em pt-BR)
+  - Telefone do cliente (se cadastrado)
+  - Campos editáveis diretamente na agenda:
+
+  Painel "Detalhes da Instalação" (dentro de cada card):
+    a) Data de Instalação:
+       - Input de data pré-preenchido com data atual do pedido
+       - Botão "📅 Alterar Data" (cor âmbar) → exibe popup de confirmação com
+         data atual e nova data formatadas; ao confirmar, atualiza data_entrega
+         no pedido e re-renderiza agenda e painel do dashboard
+    b) Endereço da instalação:
+       - Input text pré-preenchido; placeholder = endereço do cliente cadastrado
+    c) Horário:
+       - Input time
+    d) Informações Gerais / Observações:
+       - Textarea (2 linhas), redimensionável
+
+  Botões de ação:
+    - "💾 Salvar": persiste endereço, horário e observações no pedido
+    - Badge de status do pedido
+    - "📱 WhatsApp": link direto para WhatsApp do cliente (se telefone cadastrado)
+    - "📋 OS": abre modal da Ordem de Serviço para impressão
+
+── 3.3 ABA: AGENDAMENTO DE MEDIÇÕES ────────────────────────────────────────────
+
+Formulário de agendamento:
+  - Tipo de cliente (radio): "Cliente existente" ou "Novo cliente"
+    → Se "existente": select com lista de clientes cadastrados
+    → Se "novo": campos nome (text) e telefone/WhatsApp (text)
+  - Data da visita (date, obrigatório)
+  - Horário (time, opcional)
+  - Endereço da visita (text, obrigatório)
+  - Observações (text, opcional): referências, ponto de encontro, instruções
+  - Botão "📐 Agendar Visita"
+
+Lista de medições agendadas:
+  - Exibidas em cards agrupados por situação (atrasadas, hoje, próximas)
+  - Cada card: cliente, data, horário, endereço, observações
+  - Ações por medição: editar campos, marcar como realizada, excluir
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 4. ESTOQUE (estoque.html)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+7 abas: Tecidos | Materiais | Kits | Histórico | Consulta | Estoque Futuro | Backup
+
+── 4.1 ABA: TECIDOS ────────────────────────────────────────────────────────────
+
+Painel de alertas de ponto de pedido (topo):
+  - Lista tecidos que atingiram ou estão abaixo do estoque mínimo configurado
+
+Formulário — Registrar Entrada de Rolo:
+  - Referência / Lote (text): ao digitar, auto-preenche o select de tecido
+    se houver uma referência exata no catálogo (busca case-insensitive)
+  - Tecido (select): ao selecionar, auto-preenche referência, preço de custo
+    e margem a partir do último registro no catálogo
+  - Metragem do Rolo (m) (number, step 0.01, min 0.01)
+  - Preço de Custo (R$/m) (number, step 0.01): ao digitar, calcula e exibe
+    o Preço de Venda em tempo real com base na margem
+  - Margem % (number, step 1): ao digitar, atualiza Preço de Venda
+  - Preço de Venda (display automático): fundo verde, somente exibição
+  - Data de Entrada (date)
+  - Botão "Registrar Entrada": valida campos, exibe modal de confirmação com
+    resumo (tecido, referência, metragem, custo e preço de venda), persiste
+    rolo em db.estoque, registra movimento no histórico, atualiza preço de venda
+    no catálogo
+
+Tabela de Rolos em Estoque:
+  - Colunas: Referência | Metragem Inicial | Disponível | Ocupação (%) | Data Entrada
+  - Linha expandível por rolo: botão de baixa manual (quantidade + confirmação)
+  - Rolos esgotados: opacidade reduzida + badge "ESGOTADO"
+  - Ação por rolo: registrar baixa manual com quantidade e confirmação
+
+── 4.2 ABA: MATERIAIS ──────────────────────────────────────────────────────────
+
+Painel de alertas de estoque mínimo:
+  - Lista materiais abaixo do mínimo configurado
+
+Formulário — Registrar Entrada de Material:
+  - Referência (text): ao digitar, auto-preenche o select de material
+  - Material (select): ao selecionar, auto-preenche referência e preço
+  - Quantidade (number, step 0.01)
+  - Preço de Custo (R$) (number): calcula preço de venda em tempo real
+  - Margem % (number): atualiza preço de venda em tempo real
+  - Preço de Venda (display automático): fundo verde
+  - Data de Entrada (date)
+  - Botão "Registrar Entrada": confirma, persiste, registra movimento
+
+Tabela de Materiais em Estoque:
+  - Colunas: Material | Referência | Unidade | Preço Venda | Estoque Atual | Fornecedor
+  - Ação por linha: registrar ajuste (entrada +/saída -) com quantidade e confirmação
+
+── 4.3 ABA: KITS ───────────────────────────────────────────────────────────────
+
+Formulário de criação de kit:
+  - Nome do Kit (text, obrigatório)
+  - Descrição (text, opcional)
+  - Composição: select de material + quantidade + botão "+ Adicionar Item"
+  - Preview em tabela dos itens adicionados ao draft
+  - Botão "Salvar Kit"
+
+Tabela de Kits Cadastrados:
+  - Colunas: Nome | Composição (lista de itens) | Ações (editar, excluir)
+  - Kits são aplicáveis diretamente no formulário de pedido
+
+── 4.4 ABA: HISTÓRICO ──────────────────────────────────────────────────────────
+
+Filtros:
+  - Tipo de movimento (select): Todos | Entrada | Baixa Pedido |
+    Baixa Manual | Ajuste ↑ | Ajuste ↓
+  - Nome do item (text, tempo real)
+  - Data inicial (date)
+  - Data final (date)
+  - Botão "Limpar filtros"
+
+Tabela de movimentações:
+  - Colunas: Data/Hora | Tipo | Item | Quantidade | Referência
+  - Paginação com navegação entre páginas
+
+── 4.5 ABA: CONSULTA DE ESTOQUE ────────────────────────────────────────────────
+
+Busca unificada de tecidos e materiais:
+  - Campo de busca por nome (text, tempo real)
+  - Campo de busca por código/referência (text, auto-uppercase, tempo real)
+  - Filtro por tipo: Todos | Tecidos | Materiais
+  - Resultados exibidos em cards com: nome, referência, tipo, quantidade disponível,
+    preço de venda, status (OK / Abaixo do mínimo / Esgotado)
+
+── 4.6 ABA: ESTOQUE FUTURO ─────────────────────────────────────────────────────
+
+Projeção de consumo de estoque com base nos pedidos em andamento:
+  - Para cada tecido com pedidos não instalados, calcula:
+    → Estoque atual disponível
+    → Total consumido pelos pedidos em produção
+    → Saldo projetado após conclusão dos pedidos
+  - Destaque visual para itens com saldo projetado negativo (falta de estoque)
+
+── 4.7 ABA: BACKUP ─────────────────────────────────────────────────────────────
+
+Exportar Dados:
+  - Gera arquivo JSON com todos os dados do sistema
+  - Inclui: clientes, catálogo, pedidos, estoque, materiais, kits,
+    movimentos, vendedores, fornecedores, pedidos de compra,
+    contas a receber, contas a pagar, despesas fixas, medições
+  - Nome do arquivo: sctech_backup_YYYY-MM-DD.json
+
+Importar Dados:
+  - Seleciona arquivo JSON exportado anteriormente
+  - Exibe aviso: "substituirá TODOS os dados atuais"
+  - Requer confirmação antes de restaurar
+  - Após importação: recarrega a página com os dados restaurados
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 5. CLIENTES (clientes.html)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Formulário de cadastro/edição:
+  - Nome completo (text)
+  - Telefone / WhatsApp (text)
+  - E-mail (email)
+  - CPF (text)
+  - Endereço completo (text)
+  - Botão "Salvar Cliente" (cria ou atualiza dependendo do modo)
+  - Botão "Cancelar" (visível apenas no modo de edição)
+
+Busca em tempo real:
+  - Campo único de busca
+  - Pesquisa simultânea em: nome, CPF, telefone e e-mail
+  - Resultados filtrados à medida que o usuário digita
+
+Tabela de clientes:
+  - Colunas: Nome | Telefone | E-mail | CPF | Endereço | Ações
+  - Ações: Editar (carrega dados no formulário acima) | Excluir (com confirmação)
+
+Integração com outros módulos:
+  - Endereço do cliente é sugerido como placeholder no campo de endereço
+    de instalação na agenda do PCP
+  - Telefone gera link automático de WhatsApp na agenda de instalações
+  - Clientes são selecionáveis nos formulários de pedido e medição
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 6. CADASTRO / CATÁLOGO (catalogo.html)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+2 abas: Tecidos | Materiais e Acessórios
+
+── 6.1 ABA: TECIDOS ────────────────────────────────────────────────────────────
+
+Formulário de cadastro/edição:
+  - Referência (text): ao digitar, tenta auto-preencher com tecido existente
+    de mesma referência (busca case-insensitive)
+  - Nome do Tecido (text, obrigatório)
+  - Largura do Rolo em metros (number, step 0.01, valor padrão: 2.80)
+  - Estoque Mínimo em metros (number, step 0.5, padrão 0 = sem alerta)
+  - Fornecedor (select com fornecedores cadastrados, opcional)
+  - Preço de Venda R$/m (number): exibido apenas no modo edição;
+    em novos cadastros o preço é definido na entrada de estoque
+  - Foto do Tecido (upload de imagem, opcional):
+    → Preview em miniatura após seleção
+    → Imagem redimensionada e convertida para base64
+  - Botão "Salvar no Catálogo"
+
+Tabela do catálogo de tecidos:
+  - Colunas: Tecido (foto em miniatura + nome) | Referência | Preço (R$/m) |
+    Largura do Rolo | Estoque Mínimo | Em Estoque | Fornecedor | Ações
+  - Ações: Editar | Excluir (com confirmação)
+  - Tecidos sem estoque ou abaixo do mínimo: indicação visual
+
+── 6.2 ABA: MATERIAIS E ACESSÓRIOS ─────────────────────────────────────────────
+
+Painel de alertas de estoque mínimo (topo):
+  - Lista materiais com estoque abaixo do mínimo configurado
+
+Formulário de cadastro/edição:
+  - Referência (text): ao digitar, tenta localizar material existente
+  - Nome do Material (text, obrigatório)
+  - Unidade de Medida (select): un | m | cm | kg | cj | cx | par
+  - Estoque Mínimo (number)
+  - Fornecedor (select com fornecedores cadastrados, opcional)
+  - Preço de Venda R$ (number): exibido apenas na edição;
+    em novos cadastros o preço é definido na entrada de estoque
+  - Botão "Cadastrar Material"
+
+Tabela de materiais:
+  - Colunas: Material | Referência | Unidade | Preço Unit. | Estoque Atual |
+    Fornecedor | Ações
+  - Ordenação clicável em: Material, Preço, Estoque
+    (▲ ascendente / ▼ descendente / ⇅ sem ordem)
+  - Ações: Editar | Excluir (com confirmação)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 7. RELATÓRIOS (relatorios.html)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+3 abas: Faturamento Mensal | Contas a Receber | Por Vendedor
+
+── 7.1 ABA: FATURAMENTO MENSAL ─────────────────────────────────────────────────
+
+Gráfico de barras: Faturamento dos últimos 6 meses
+  - Eixo X: meses (abreviação + ano)
+  - Eixo Y: valor em R$
+  - Dado: soma dos pedidos com status "Instalado" por mês
+
+Tabela de faturamento mensal:
+  - Colunas: Mês | Pedidos Instalados | Faturamento Total | Valor Recebido |
+    Ticket Médio
+  - Linha por mês, coberto pelos últimos 6 meses
+
+── 7.2 ABA: CONTAS A RECEBER ───────────────────────────────────────────────────
+
+Gráfico de aging de recebíveis:
+  - Visualização da distribuição por faixa de vencimento/atraso
+
+Tabela de contas a receber:
+  - Colunas: ID do Pedido | Cliente | Valor Total | Saldo Devedor |
+    Status | Aging (dias)
+  - Aging colorido: verde (em dia), amarelo (próximo), vermelho (atrasado)
+
+── 7.3 ABA: POR VENDEDOR ───────────────────────────────────────────────────────
+
+Gráfico de barras: Faturamento por vendedor
+
+Tabela de performance por vendedor:
+  - Colunas: Vendedor | Total de Pedidos | Pedidos Instalados |
+    Volume Total | Valor Faturado
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 8. VENDEDORES (vendedores.html)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+3 abas: Vendedores | Comissões Pendentes | Histórico de Pagamentos
+
+── 8.1 ABA: VENDEDORES ─────────────────────────────────────────────────────────
+
+Formulário de cadastro/edição:
+  - Nome (text)
+  - Comissão % (number)
+  - Telefone (text)
+  - Botão "Salvar Vendedor"
+
+Tabela de vendedores:
+  - Colunas: Nome | Comissão (%) | Telefone | Total de Pedidos | Ações
+  - Ações: Editar | Excluir
+
+── 8.2 ABA: COMISSÕES PENDENTES ────────────────────────────────────────────────
+
+Filtro por vendedor (select)
+
+Resumo total:
+  - Valor total de comissões pendentes do vendedor selecionado (destaque visual)
+  - Botão "Pagar Todas as Comissões" do filtro aplicado (com confirmação)
+
+Tabela de comissões pendentes:
+  - Colunas: Pedido | Cliente | Vendedor | Valor do Pedido | Comissão (R$)
+  - Uma linha por pedido com comissão ainda não quitada
+
+── 8.3 ABA: HISTÓRICO DE PAGAMENTOS ────────────────────────────────────────────
+
+Filtro por vendedor (select)
+
+Tabela de histórico:
+  - Colunas: Data do Pagamento | Pedido | Cliente | Vendedor |
+    Valor do Pedido | Comissão Paga
+  - Ordenado por data mais recente
+
+Comissão de RT (Retorno Técnico para Arquiteto):
+  - Configurável por pedido (campo "% RT" no formulário do pedido)
+  - Gerada automaticamente como conta a pagar ao marcar pedido como pago/instalado
+  - Visível nas abas de comissões pendentes e histórico
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 9. FORNECEDORES (fornecedores.html)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+3 abas: Fornecedores | Pedidos de Compra | Novo Pedido de Compra
+
+── 9.1 ABA: FORNECEDORES ───────────────────────────────────────────────────────
+
+Formulário de cadastro/edição:
+  - CNPJ (text com máscara 00.000.000/0000-00):
+    → Busca automática na API CNPJ.ws ao preencher
+    → Auto-preenche: razão social, nome fantasia e endereço se encontrado
+  - Razão Social (text)
+  - Nome Fantasia (text)
+  - Endereço Completo (text)
+  - Telefone (text)
+  - E-mail (email)
+  - Inscrição Estadual (text)
+  - Observações (text)
+  - Botão "Salvar Fornecedor"
+
+Tabela de fornecedores:
+  - Colunas: Razão Social / Nome Fantasia | CNPJ | Cidade/UF |
+    Telefone | E-mail | Vínculos (qtd de tecidos/materiais) | Ações
+  - Ações: Editar | Excluir (com confirmação)
+
+── 9.2 ABA: PEDIDOS DE COMPRA ──────────────────────────────────────────────────
+
+Filtros:
+  - Por fornecedor (select)
+  - Por status (select): Rascunho | Enviado | Recebido
+
+Tabela de pedidos de compra:
+  - Colunas: ID | Fornecedor | Data | Qtd. Itens | Valor Estimado |
+    Status | Ações (ver, mudar status, excluir)
+
+── 9.3 ABA: NOVO PEDIDO DE COMPRA ──────────────────────────────────────────────
+
+Formulário:
+  - Busca de fornecedor por CNPJ (text) ou seleção por dropdown
+  - Tipo de item (radio): Material ou Tecido
+  - Busca de item por código/referência (text)
+  - Select de item (populado com base no tipo selecionado)
+  - Unidade (select): metro ou rolo (para tecidos); unidade padrão (para materiais)
+  - Quantidade (number)
+  - Botão "+ Adicionar Item" ao draft
+  - Tabela dinâmica de itens adicionados ao pedido (com ação de remover cada um)
+  - Observações gerais (textarea)
+  - Botão "Salvar Pedido de Compra"
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 10. FINANCEIRO (financeiro.html)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+5 abas: Visão Geral | A Receber | A Pagar | Despesas Fixas | DRE por Pedido
+
+── 10.1 ABA: VISÃO GERAL (DASHBOARD FINANCEIRO) ────────────────────────────────
+
+Filtro de período (barra superior):
+  - Botões: Hoje | 7 dias | 30 dias | Este mês (padrão) | Personalizado
+  - Modo personalizado: 2 campos de data (início e fim) + botão "Aplicar"
+  - Label de período ativo exibido ao lado dos botões
+  - Botão "📄 Exportar Relatório": gera PDF com todos os KPIs, gráficos e tabelas
+    do período atual (abre modal de preview para impressão)
+
+Alertas financeiros (filtragem por tipo configurável):
+  - Contas que vencem hoje: quantidade e valor total (receber + pagar)
+  - Recebimentos em atraso: quantidade, valor total, número de clientes distintos
+  - Pagamentos em atraso: quantidade e valor total
+  - Tendência de faturamento: comparação com mês anterior (+X% / -X%)
+  - Meta de faturamento: aviso de atingimento (🏆) ou progresso (🎯)
+  - Gap de caixa: alerta se saídas dos próximos 7 dias superam entradas previstas
+    (exibe o valor do gap em vermelho)
+  - Contas nos próximos 7 dias: quantidade total de vencimentos iminentes
+
+  Cada tipo de alerta pode ser desabilitado individualmente nas preferências
+  da tela de Configurar Empresa.
+
+KPIs — Linha 1 (6 cards em linha):
+  1. Total Recebido: soma de pagamentos recebidos no período
+  2. A Receber: soma de contas a receber com vencimento no período
+  3. A Pagar: soma de contas a pagar com vencimento no período
+  4. Saldo Previsto: (recebido + a receber) − (pago + a pagar)
+  5. Lucro (Caixa): recebido − total pago (saídas quitadas)
+  6. Ticket Médio: total recebido ÷ quantidade de pedidos com recebimento
+
+KPIs — Linha 2 (5 cards em linha):
+  7. Inadimplência %: total atrasado ÷ total a receber (vermelho >20%,
+     laranja >10%, verde ≤5%)
+  8. PMR (Prazo Médio de Recebimento): dias médios do pedido até o pagamento,
+     calculado sobre pedidos instalados com data de instalação registrada
+  9. Margem Líquida %: lucro ÷ total recebido no período (verde ≥30%,
+     azul 15-30%, laranja 0-15%, vermelho negativo)
+ 10. Pipeline: soma dos valores dos pedidos em andamento (exceto Orçamento
+     e Instalado); quantidade de pedidos em andamento
+ 11. Conversão %: pedidos que saíram de Orçamento ÷ total de pedidos
+
+Projeção de Fluxo de Caixa (3 cards):
+  - Próximos 30 dias: entradas previstas / saídas previstas / saldo líquido
+  - Próximos 60 dias: idem
+  - Próximos 90 dias: idem
+  - Fundo verde (saldo positivo) ou vermelho (saldo negativo)
+  - Base: contas a receber e a pagar com vencimento futuro (excluindo já pagas)
+
+Meta de Faturamento:
+  - Input para definir meta mensal em R$ + botão "Salvar"
+  - Barra de progresso horizontal com percentual atingido
+  - Cores: verde ≥100% / verde-médio ≥70% / âmbar ≥40% / vermelho <40%
+  - Texto: valor faturado × meta + faltam R$ X para a meta
+  - Meta armazenada por mês (chave: YYYY-MM)
+
+Gráfico 1 — Evolução Mensal 12 Meses (combo):
+  - Barras: Entradas (verde) e Saídas (vermelho) por mês
+  - Linha: Resultado mensal (entradas − saídas) em azul
+  - Cobre os últimos 12 meses corridos
+  - Eixo Y: valor em R$ (pt-BR)
+
+Gráfico 2 — Entradas × Saídas × Saldo (combo, filtrado por período):
+  - Barras lado a lado: Entradas (verde) e Saídas (vermelho) por bucket de tempo
+  - Linha: Saldo cumulativo (totaliza entradas − saídas ao longo do tempo)
+  - Bucketing: diário para períodos ≤35 dias; semanal para períodos maiores
+  - Eixo Y: valor em R$ (pt-BR); eixo X: datas/semanas
+
+Gráfico 3 — Aging de Recebíveis (barras horizontais):
+  - Faixas: A vencer | Vence hoje | 1–7d atraso | 8–30d atraso | +30d atraso
+  - Cores graduais (verde → âmbar → laranja → vermelho → bordô)
+  - Dados: contas a receber não pagas, agrupadas por diferença de dias do vencimento
+
+Gráfico 4 — Top 10 Clientes (barras horizontais):
+  - Clientes ordenados por total recebido (todos os tempos)
+  - Nomes truncados em 16 caracteres com reticências
+  - Tooltip: valor exato em R$ ao passar o mouse
+
+Gráfico 5 — Funil de Pedidos (barras horizontais):
+  - Uma barra por status do pipeline (Orçamento → Instalado)
+  - Quantidade atual de pedidos em cada etapa
+  - Cores distintas por etapa; tooltip com "X pedido(s)"
+
+Gráfico 6 — Donut Recebimentos (período ativo):
+  - Segmentos: Recebido (verde) | Pendente (âmbar) | Atrasado (vermelho)
+  - Total em R$ exibido no centro do donut
+  - Legenda posicionada abaixo
+
+Gráfico 7 — Donut Despesas por Categoria (período ativo):
+  - Categorias: Tecido/Mat. | Salário | Costureira | Instalador |
+    Aluguel | Contas | Comissão RT | Outros
+  - Cores distintas por categoria
+  - Total em R$ exibido no centro do donut
+  - Se sem despesas no período: exibe mensagem "Sem despesas no período"
+
+Tabela — Próximos Recebimentos:
+  - Contas a receber com status ≠ Pago; até 10 registros
+  - Colunas: Vencimento | Cliente | Descrição | Valor | Status
+  - Cabeçalhos clicáveis para ordenar por: Vencimento | Cliente | Valor
+    (▲ ascendente / ▼ descendente; coluna ativa destacada em azul)
+  - Linhas em atraso: fundo vermelho claro
+
+Tabela — Próximos Pagamentos:
+  - Contas a pagar com status ≠ Pago; até 10 registros
+  - Colunas: Vencimento | Credor | Descrição | Valor | Status
+  - Mesma lógica de ordenação clicável
+  - Linhas em atraso: fundo vermelho claro
+
+── 10.2 ABA: A RECEBER ─────────────────────────────────────────────────────────
+
+Filtros:
+  - Status (select): Todos | Pendente | Atrasado | Pago
+  - Cliente / Descrição (text, tempo real)
+  - Resumo dos valores filtrados: pendente total | recebido total
+
+Tabela de contas a receber:
+  - Colunas: Vencimento | Cliente | Descrição | Valor | Status | Ações
+  - Status com badge colorido (amarelo=pendente, vermelho=atrasado, verde=pago)
+  - Ação "Marcar como Pago": solicita data de recebimento (default: hoje);
+    atualiza status e data_pagamento; gera comissão RT se aplicável
+  - Ação "Remover": confirmação antes de excluir o lançamento
+  - Atualização automática de status: contas com vencimento passado
+    são marcadas como "Atrasado" automaticamente ao carregar a tela
+
+── 10.3 ABA: A PAGAR ───────────────────────────────────────────────────────────
+
+Formulário — Lançar Conta a Pagar:
+  - Descrição (text, obrigatório)
+  - Credor / Fornecedor (text)
+  - Valor R$ (number, step 0.01)
+  - Vencimento (date, obrigatório)
+  - Categoria (select): Tecido/Material | Instalador | Costureira | Aluguel |
+    Salário | Conta (luz, internet…) | Comissão RT | Outro
+  - Vincular a Pedido (select opcional, lista pedidos em aberto)
+  - Botão "Lançar Conta a Pagar"
+  - Botão "🔁 Gerar Despesas Fixas do Mês": cria lançamentos das despesas fixas
+    para o mês atual (com base nos cadastros da aba Despesas Fixas)
+
+Filtros da lista:
+  - Tipo (select): Todos | Variável | Fixo
+  - Status (select): Todos | Pendente | Atrasado | Pago
+  - Resumo dos valores filtrados
+
+Tabela de contas a pagar:
+  - Colunas: Vencimento | Descrição | Credor | Valor | Tipo | Status | Ações
+  - Ação "Marcar como Pago": solicita data de pagamento (default: hoje)
+  - Ação "Remover": com confirmação
+
+── 10.4 ABA: DESPESAS FIXAS ────────────────────────────────────────────────────
+
+Formulário de cadastro:
+  - Descrição (text)
+  - Valor Mensal R$ (number, step 0.01)
+  - Dia de Vencimento (number, 1-28)
+  - Categoria (select): Aluguel | Salário | Conta (luz, internet…) | Outro
+  - Botão "Cadastrar Despesa Fixa"
+
+Tabela de despesas fixas cadastradas:
+  - Colunas: Descrição | Categoria | Dia de Vencimento | Valor Mensal | Ações
+  - Ação: Excluir (com confirmação)
+  - Uso: base para geração mensal de contas a pagar via botão na aba A Pagar
+
+── 10.5 ABA: DRE POR PEDIDO ────────────────────────────────────────────────────
+
+Filtro por cliente (text, tempo real)
+
+Tabela de DRE por pedido:
+  - Uma linha por pedido instalado
+  - Colunas: Pedido | Cliente | Receita | Mat./Acess. | M.O. | RT | Lucro Líq. | Margem
+  - Margem colorida: verde ≥30% | amarelo ≥15% | vermelho <15%
+  - Nota explicativa: "Receita vs. custos por pedido. Custos de material e mão de
+    obra vêm do pedido; comissão RT é gerada automaticamente após quitação."
+
+Exportação de Relatório (botão na barra de período):
+  - PDF com todos os dados do período:
+    → Cabeçalho com logo e dados da empresa
+    → Grid de KPIs
+    → Evolução mensal (imagem do gráfico)
+    → Entradas × Saídas × Saldo (imagem do gráfico)
+    → Aging de Recebíveis + Top 10 Clientes + Funil (imagens dos gráficos)
+    → Donut Recebimentos + Donut Despesas (imagens)
+    → Tabela de próximos recebimentos
+    → Tabela de próximos pagamentos
+    → Rodapé com data/hora de geração
+
+Geração automática de lançamentos financeiros:
+  - Ao aprovar um pedido (Orçamento → qualquer outro status): cria contas a receber
+    com base no plano de pagamento escolhido no pedido
+  - Planos suportados: À vista | 50%+50% | 30%+70% | 40%+60%
+  - Cada parcela recebe: valor proporcional, data de vencimento, descrição,
+    vínculo com o pedido, cliente
+  - Migração automática: ao abrir o módulo financeiro, pedidos que nunca geraram
+    lançamentos (dados anteriores à implementação) são retroativamente processados
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 11. FORMULÁRIO DE PEDIDO (pedido.html)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Usado tanto para criação de novos pedidos quanto para edição de pedidos existentes.
+Pedidos com status "Instalado" abrem em modo somente leitura (todos os campos
+bloqueados + banner de aviso amarelo).
+
+── 11.1 DADOS GERAIS ───────────────────────────────────────────────────────────
+
+Cliente:
+  - Campo de busca por texto (filtra em tempo real por nome ou CPF)
+  - Select de cliente (populado dinamicamente com o resultado da busca)
+  - Se apenas 1 resultado: selecionado automaticamente
+
+Status do pedido (select):
+  Orçamento | Medição | Aguardando Tecido | Na Costura |
+  Pronto p/ Instalação | Aguardando Pagamento | Instalado
+
+Data de Entrega (date, opcional)
+Observações (textarea, opcional)
+
+── 11.2 SEÇÃO DE AMBIENTES ─────────────────────────────────────────────────────
+
+Cada ambiente é um painel colapsável com:
+
+  Identificação:
+  - Nome do Ambiente (text): ex. "Quarto Casal", "Sala de Estar"
+
+  Configuração de Cortina:
+  - Tipo de Prega (select): Americana | Franzido | Wave Botão | Wave Plus |
+    Macho-Fêmea | Painel
+    → Ao mudar: ajusta automaticamente o Fator de Franzimento sugerido
+  - Fator de Franzimento (select): 1.0x | 1.5x | 2.0x | 2.5x | 2.7x |
+    3.0x | 3.5x | 4.0x (label: "auto")
+    → Valor selecionado é mantido mesmo após recalcular o consumo
+  - Material de Instalação (select): Trilho Suíço | Trilho Simples |
+    Varão | Bandô | Outros
+  - Tipo de Abertura (select): A/B/C/D/E/F/G/H com descrições
+    (Centro/Esq./Dir. + combinações)
+  - Local de Instalação (select): Parede | Teto | Outro
+
+  Dimensões:
+  - Largura da Parede em metros (number, step 0.01)
+  - Altura da Parede em metros (number, step 0.01)
+  - Barra em cm (number, step 1, padrão: 15)
+  - Cabeçote/Entretela em cm (number, step 1, padrão: 0)
+
+  Tecidos (até 3 por ambiente):
+  - Para cada tecido:
+    → Ref. Tecido (text, código de referência):
+      - Ao digitar: auto-seleciona tecido no dropdown se a referência for encontrada
+    → Select de Tecido: lista todos os tecidos do catálogo com estoque disponível
+      - Ao selecionar: auto-preenche o campo "Ref. Tecido" com a referência do tecido
+      - Exibe: nome + referência + preço/m + estoque disponível
+    → Botão "×" para remover o tecido (quando há mais de 1)
+  - Botão "+ Adicionar Tecido" (habilitado até 3 tecidos por ambiente)
+
+  Cálculo de Consumo:
+  - Botão "Calcular Consumo →": executa o cálculo técnico para todos os tecidos
+    do ambiente
+  - Cálculo: número de panos = ⌈(largura × fator) ÷ largura_rolo⌉
+             altura de corte = altura + bainha/100 + cabeçote/100
+             (ajustada pelo rapport se configurado no catálogo)
+             consumo linear = panos × altura de corte
+  - Breakdown de consumo exibido após cálculo:
+    → Largura total (parede × fator)
+    → Largura do rolo
+    → Número de panos
+    → Altura bruta (parede + barra + cabeçote)
+    → Acréscimo por rapport (se aplicável)
+    → Altura de corte por pano
+    → Consumo total em metros lineares (destacado)
+    → Estoque disponível do tecido (colorido: verde=ok, vermelho=insuficiente)
+
+  Botão "Remover Ambiente" (disponível quando há mais de 1 ambiente)
+
+Botão "+ Adicionar Ambiente" (sem limite de ambientes)
+
+── 11.3 ACESSÓRIOS / MATERIAIS ─────────────────────────────────────────────────
+
+Botão "Aplicar Kit":
+  - Select de kits cadastrados → ao aplicar, adiciona todos os itens do kit
+    com suas quantidades padrão
+
+Adicionar item avulso:
+  - Select de material/acessório
+  - Quantidade (number, step 0.01, padrão: 1)
+  - Botão "Adicionar"
+
+Tabela de itens adicionados:
+  - Colunas: Nome | Quantidade (editável inline) | Unidade | Preço Unit. |
+    Subtotal | Ações (remover)
+
+── 11.4 PRECIFICAÇÃO E VALORES ─────────────────────────────────────────────────
+
+Tipo de Precificação (radio):
+  - Por item (padrão): usa o preço de venda cadastrado de cada tecido/material
+  - Por pedido: aplica uma margem percentual global sobre o custo total
+    → Exibe campo "Margem do Pedido %" (number) quando selecionado
+
+Mão de Obra R$ (number, step 0.01)
+
+Desconto % (number, step 0.5):
+  - Aplicado sobre o subtotal (material + acessórios + mão de obra)
+
+Resumo automático (atualizado em tempo real):
+  - Total Material
+  - Total Acessórios
+  - Mão de Obra
+  - Subtotal
+  - Desconto (valor em R$)
+  - Valor Final do Pedido
+  - Saldo a Receber (valor − já recebido)
+  - Comissão do vendedor (% e valor, visível quando há vendedor com comissão > 0)
+
+Valor Já Recebido R$ (number): para registrar entradas parciais
+
+── 11.5 INFORMAÇÕES COMERCIAIS ─────────────────────────────────────────────────
+
+Vendedor (select com vendedores cadastrados, opcional)
+Plano de Pagamento (select):
+  À vista | Entrada 50% + Saldo 50% | Entrada 30% + Saldo 70% |
+  Entrada 40% + Saldo 60%
+Arquiteto / RT (text, opcional): nome do arquiteto responsável pela indicação
+% RT (number): percentual de retorno técnico para o arquiteto
+  → Gerado como comissão automaticamente ao marcar pedido como pago
+
+── 11.6 DOCUMENTOS GERADOS ─────────────────────────────────────────────────────
+
+Proposta Comercial (PDF):
+  - Cabeçalho com logo e dados da empresa
+  - Dados do cliente e do pedido
+  - Tabela de ambientes com tipo de prega, tecidos, dimensões, consumo
+  - Tabela de acessórios/materiais
+  - Resumo de valores (subtotal, desconto, valor final, plano de pagamento)
+  - Observações
+  - Estilo limpo para impressão ou envio ao cliente
+
+Ordem de Serviço (OS):
+  - Cabeçalho com dados da empresa
+  - Dados do cliente, pedido, ambiente, data de entrega
+  - Instruções técnicas de instalação por ambiente:
+    → Tipo de prega, fixação, abertura, local
+    → Tecido(s) com referência, consumo, dimensões
+    → Acessórios e materiais
+  - Campo de observações
+  - Espaço para assinatura do cliente (recebimento da OS)
+
+Timeline do Pedido:
+  - Popup com histórico de mudanças de status
+  - Cada etapa: ícone colorido, nome do status, data e hora
+  - Etapa atual destacada em azul
+
+── 11.7 SALVAMENTO ─────────────────────────────────────────────────────────────
+
+Validações antes de salvar:
+  1. Cliente obrigatório
+  2. Mínimo de 1 ambiente
+  3. Todos os ambientes devem ter o consumo calculado
+
+Comportamentos automáticos ao salvar:
+  - Se novo pedido ou mudança de status (Orçamento → outro):
+    → Gera lançamentos em Contas a Receber com base no plano de pagamento
+  - Se status = "Na Costura" e baixa de tecidos ainda não realizada:
+    → Dá baixa automática nos rolos de estoque de cada tecido de cada ambiente
+  - Se status = "Na Costura" e baixa de materiais ainda não realizada:
+    → Dá baixa nos materiais/acessórios do pedido
+  - Após salvar: redireciona para index.html
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 12. CONFIGURAR EMPRESA (empresa.html)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+── 12.1 LOGOTIPO DA EMPRESA ────────────────────────────────────────────────────
+
+Área de upload com clique ou drag (borda tracejada):
+  - Formatos aceitos: PNG, JPG, SVG
+  - Tamanho máximo recomendado: 2 MB
+  - Fundo transparente recomendado
+  - Preview da imagem após seleção
+  - Redimensionamento automático para 400px na horizontal
+  - Armazenamento como base64 no localStorage
+  - Botão "✕ Remover logo": limpa a imagem selecionada
+  - Logo é usada nos documentos gerados (proposta e OS)
+
+── 12.2 DADOS DA EMPRESA ───────────────────────────────────────────────────────
+
+Campos:
+  - Razão Social (text, obrigatório para salvar)
+  - Nome Fantasia (text)
+  - CNPJ (text com máscara automática: 00.000.000/0000-00)
+  - Endereço Completo (text)
+  - Telefone / WhatsApp (text)
+  - E-mail (email)
+  - Site (text)
+  - Botão "💾 Salvar Configurações"
+  - Nota: "As informações serão aplicadas imediatamente em todos os documentos gerados"
+
+Pré-visualização do Cabeçalho:
+  - Card que aparece após preencher ao menos nome ou logo
+  - Mostra exatamente como o cabeçalho será renderizado nos documentos
+  - Atualizado automaticamente ao salvar
+
+── 12.3 PREFERÊNCIAS DE ALERTAS ────────────────────────────────────────────────
+
+9 toggle switches individuais (ligado/desligado):
+  1. Entregas atrasadas / hoje
+  2. Medições atrasadas / agendadas
+  3. Instalações atrasadas / agendadas
+  4. Estoque abaixo do mínimo
+  5. Contas vencendo hoje / em breve (financeiro)
+  6. Recebimentos / pagamentos atrasados (financeiro)
+  7. Gap de caixa (próximos 7 dias)
+  8. Progresso da meta de faturamento
+  9. Tendência de faturamento mensal
+
+Comportamento dos toggles:
+  - Mudança imediata: sem botão de salvar, aplica ao clicar
+  - Persiste em localStorage (chave: sc_alertas_cfg)
+  - Status atual exibido abaixo do nome: "Ativo" (verde) ou "Desativado" (cinza)
+  - Quando qualquer alerta está desabilitado: indicador 🔕 aparece no cabeçalho
+    de TODAS as telas do sistema
+  - Padrão: todos os alertas ativos
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 13. SOBRE O SISTEMA (sobre.html)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Página informativa estática (sem interações além da sidebar).
+Seções:
+  - Hero: logo, nome SCTech, badges de versão e status (ativo)
+  - Missão da empresa
+  - Dados da empresa desenvolvedora (CNPJ, IE, razão social, fundação)
+  - Contato: telefone, WhatsApp, e-mail, website, endereço físico
+  - Informações do sistema:
+    → Versão atual e número de build
+    → Ambiente: web app offline-first
+    → Armazenamento: localStorage (sem servidor externo)
+  - Compatibilidade: Chrome, Firefox, Edge, Safari
+  - Changelog: lista de atualizações com tags NOVO / MELHORIA / FIX
+  - Stack técnico: HTML5, CSS3, JavaScript ES6+, Chart.js 4.4.0,
+    localStorage, API CNPJ.ws (consulta de CNPJ de fornecedores)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    FUNCIONALIDADES TRANSVERSAIS / GLOBAIS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Tema Claro / Escuro:
+  - Toggle no popup de perfil da sidebar (disponível em todas as telas)
+  - Ícone animado: 🌙 (tema escuro) / ☀️ (tema claro)
+  - Switch visual (pill toggle)
+  - Persiste em localStorage (chave: sc_tema)
+  - Anti-flash: tema aplicado antes do carregamento do CSS em todas as telas
+
+Persistência de Dados:
+  - Todos os dados armazenados exclusivamente no localStorage do navegador
+  - 14 coleções independentes (ver estrutura em Estoque → Backup)
+  - Sem necessidade de conexão à internet após carregamento inicial
+  - Dados persistem entre sessões no mesmo navegador/computador
+
+Modais de Confirmação:
+  - Todas as ações destrutivas (excluir, aprovar, pagar, baixar estoque)
+    exigem confirmação em popup centralizado
+  - Layout consistente: ícone + mensagem + botão confirmar (cor contextual) +
+    botão cancelar
+
+Toasts de Notificação:
+  - Mensagens de sucesso/erro/informação no canto inferior da tela
+  - Auto-fechamento após 1,5 a 3 segundos
+  - Cores: verde (sucesso), vermelho (erro), azul (informação)
+
+Máscara de CNPJ:
+  - Aplicada automaticamente ao campo de CNPJ (fornecedores e empresa)
+  - Formato: 00.000.000/0000-00
+
+Auto-preenchimentos inteligentes:
+  - Ref. → Tecido: digitar referência no campo de texto auto-seleciona o tecido
+    no dropdown (estoque, catálogo, pedido)
+  - Tecido → Ref.: selecionar tecido no dropdown auto-preenche o campo de
+    referência (pedido)
+  - CNPJ → dados do fornecedor: via API CNPJ.ws (fornecedores)
+  - Preço de custo + margem → preço de venda: calculado em tempo real (estoque)
+  - Tipo de prega → fator de franzimento: sugestão automática ao mudar prega (pedido)
+
+Navegação entre abas com "Voltar":
+  - Em módulos com múltiplas abas, ao navegar para uma sub-aba, um botão
+    "← Voltar" aparece na barra de abas para retornar à aba anterior
+
+Geração de Documentos (PDF/impressão):
+  - Modal de preview com conteúdo formatado para impressão
+  - Botão de impressão integrado ao modal
+  - Estilo @media print aplicado (oculta sidebar, ajusta layout)
+  - Cabeçalho com logo e dados da empresa em todos os documentos gerados
+
+================================================================================
+                              FIM DO DOCUMENTO
+================================================================================
