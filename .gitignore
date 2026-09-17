@@ -1,5 +1,8 @@
 # Imagens (pedido explícito: não versionar por enquanto)
 images/
 
+# Material de referência de design (repo público da Anthropic, não faz parte do produto)
+LandingPage/
+
 # Configuração local do Claude Code (específica desta máquina)
 .claude/settings.local.json

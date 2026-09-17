@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCTech — Sistema de Gestão para Cortineiros</title>
+<link rel="icon" href="images/logo.png">
+<meta name="description" content="Do orçamento à instalação, sem perder o fio da meada. O sistema de gestão feito para ateliês de cortinas e persianas.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F8F6F1;
+  --paper-2:#EAEFEE;
+  --card:#FFFFFF;
+  --ink:#1C2B38;
+  --ink-soft:#56646F;
+  --bottle:#16324A;
+  --bottle-2:#0C2032;
+  --brass:#2FE0CF;
+  --brass-light:#8FF2E6;
+  --thread:#1F4260;
+  --line:#D7DEE1;
+  --shadow: 0 18px 40px -20px rgba(12,32,50,.35);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'Work Sans',system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+img{max-width:100%;display:block}
+a{color:inherit}
+h1,h2,h3{font-family:'Fraunces',Georgia,serif;font-weight:600;margin:0;letter-spacing:-0.01em}
+.eyebrow{
+  font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--bottle);
+}
+.wrap{max-width:1180px;margin:0 auto;padding:0 32px}
+section{position:relative}
+:focus-visible{outline:2.5px solid var(--brass);outline-offset:3px}
+
+/* ---------- background texture: linen weave ---------- */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(28,43,56,.025) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(0deg, rgba(28,43,56,.02) 0 1px, transparent 1px 3px);
+}
+
+/* ---------- NAV ---------- */
+.nav{
+  position:sticky;top:0;z-index:50;
+  background:rgba(248,246,241,.86);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.nav-inner{display:flex;align-items:center;gap:28px;padding:16px 32px;max-width:1180px;margin:0 auto}
+.nav-brand{display:flex;align-items:center;gap:10px;margin-right:auto;text-decoration:none}
+.nav-brand img{height:30px;width:auto}
+.nav-brand span{font-family:'Fraunces',serif;font-weight:600;font-size:19px;color:var(--ink)}
+.nav-links{display:flex;gap:26px;font-size:14px;font-weight:500}
+.nav-links a{text-decoration:none;color:var(--ink-soft);transition:color .15s}
+.nav-links a:hover{color:var(--bottle)}
+.nav-cta-group{display:flex;align-items:center;gap:14px}
+.nav-enter{font-size:13.5px;font-weight:600;text-decoration:none;color:var(--ink-soft);white-space:nowrap}
+.nav-enter:hover{color:var(--bottle)}
+.nav-toggle{display:none;background:none;border:none;cursor:pointer;padding:6px}
+.nav-toggle span{display:block;width:22px;height:2px;background:var(--ink);margin:5px 0;transition:.2s}
+
+/* ---------- BUTTONS ---------- */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  font-family:'Work Sans',sans-serif;font-weight:600;font-size:14.5px;
+  padding:13px 24px;border-radius:8px;text-decoration:none;cursor:pointer;
+  border:1.5px solid transparent;transition:transform .15s, box-shadow .15s, background .15s;
+  white-space:nowrap;
+}
+.btn:active{transform:translateY(1px)}
+.btn-brass{background:var(--brass);color:#0C2032;box-shadow:0 10px 24px -10px rgba(47,224,207,.45)}
+.btn-brass:hover{background:var(--brass-light);box-shadow:0 14px 28px -10px rgba(47,224,207,.55)}
+.btn-ghost{background:transparent;border-color:var(--ink);color:var(--ink)}
+.btn-ghost:hover{background:var(--ink);color:var(--paper)}
+.btn-on-dark{border-color:rgba(248,246,241,.4);color:var(--paper)}
+.btn-on-dark:hover{background:rgba(248,246,241,.12)}
+.btn-sm{padding:9px 16px;font-size:13px}
+
+/* ---------- HERO ---------- */
+.hero{padding:76px 32px 40px;position:relative;z-index:1}
+.hero-grid{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:1.05fr .95fr;gap:20px;align-items:center}
+.hero-copy .eyebrow{margin-bottom:18px;display:inline-block}
+.hero-copy h1{font-size:clamp(34px,4.6vw,58px);line-height:1.06;color:var(--bottle-2)}
+.hero-copy h1 em{
+  font-style:italic;
+  background:linear-gradient(120deg,#2a5372 0%,#22a99c 65%,#2fe0cf 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.hero-copy p.lede{margin:22px 0 30px;font-size:17.5px;line-height:1.6;color:var(--ink-soft);max-width:46ch}
+.hero-actions{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:26px}
+.hero-note{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);display:flex;align-items:center;gap:8px}
+.hero-note .dot{width:7px;height:7px;border-radius:50%;background:var(--bottle);display:inline-block;animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@media (prefers-reduced-motion: reduce){.hero-note .dot{animation:none}}
+
+/* hanging tag stage */
+.tag-stage{position:relative;height:440px}
+.tag{
+  position:absolute;background:var(--card);border-radius:14px;
+  box-shadow:var(--shadow);border:1px solid var(--line);
+}
+.tag::before{ /* punched hole */
+  content:'';position:absolute;top:16px;left:50%;transform:translateX(-50%);
+  width:14px;height:14px;border-radius:50%;background:var(--paper);border:2px solid var(--line);
+}
+.tag-string{
+  position:absolute;top:-46px;left:50%;width:2px;height:50px;background:var(--brass);
+  transform-origin:top center;
+}
+.tag-main{
+  width:280px;padding:42px 24px 24px;left:50%;top:52px;transform:translateX(-56%) rotate(-3deg);
+  z-index:3; animation:hangSwing 2.6s ease-out 1;
+}
+.tag-main .tag-string{animation:hangSwingString 2.6s ease-out 1}
+.tag-mini{width:150px;padding:30px 16px 16px;font-size:12px;color:var(--ink-soft)}
+.tag-mini-1{right:2px;top:0;transform:rotate(7deg);z-index:2;background:#E7EEEC}
+.tag-mini-2{right:36px;top:230px;transform:rotate(-9deg);z-index:1;background:#DCE6E4;opacity:.9}
+@keyframes hangSwing{
+  0%{transform:translateX(-56%) rotate(-16deg);}
+  30%{transform:translateX(-56%) rotate(6deg);}
+  55%{transform:translateX(-56%) rotate(-8deg);}
+  75%{transform:translateX(-56%) rotate(3deg);}
+  100%{transform:translateX(-56%) rotate(-3deg);}
+}
+@keyframes hangSwingString{
+  0%{transform:rotate(-16deg)}30%{transform:rotate(6deg)}55%{transform:rotate(-8deg)}75%{transform:rotate(3deg)}100%{transform:rotate(-3deg)}
+}
+@media (prefers-reduced-motion: reduce){
+  .tag-main{animation:none}
+  .tag-main .tag-string{animation:none}
+}
+.tag-label{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--brass);font-weight:600;margin-bottom:10px;display:block}
+.tag-main h2{font-size:21px;line-height:1.28;color:var(--bottle-2);margin-bottom:16px}
+.tag-swatchrow{display:flex;gap:6px;margin-top:16px}
+.tag-swatchrow span{width:16px;height:16px;border-radius:4px;display:inline-block;border:1px solid rgba(0,0,0,.08)}
+
+/* ---------- SOCIAL PROOF ---------- */
+.proof{padding:6px 32px 64px;position:relative;z-index:1}
+.proof-inner{max-width:1180px;margin:0 auto;text-align:center}
+.proof-line{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink-soft);letter-spacing:.03em;margin-bottom:22px}
+.proof-line strong{color:var(--bottle);font-weight:600}
+.proof-tags{display:flex;justify-content:center;gap:14px;flex-wrap:wrap}
+.proof-tag{
+  font-size:13px;font-weight:600;color:var(--ink-soft);background:var(--card);
+  border:1px solid var(--line);border-radius:20px;padding:8px 16px 8px 14px;
+  display:flex;align-items:center;gap:6px;
+}
+.proof-tag::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--brass)}
+
+/* ---------- SECTION HEADERS (shared) ---------- */
+.sec-head{max-width:640px;margin:0 auto 46px;text-align:center}
+.sec-head .eyebrow{display:block;margin-bottom:12px}
+.sec-head h2{font-size:clamp(26px,3.4vw,38px);color:var(--bottle-2);line-height:1.15}
+.sec-head p{margin-top:14px;color:var(--ink-soft);font-size:16px;line-height:1.6}
+
+/* ---------- ANTES / DEPOIS ---------- */
+.chaos{padding:90px 32px;background:var(--paper-2);border-top:1px solid var(--line);border-bottom:1px solid var(--line);position:relative;z-index:1}
+.chaos-grid{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
+.chaos-col h3{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;margin-bottom:22px}
+.chaos-before h3{color:#8B96A0}
+.chaos-after h3{color:var(--bottle)}
+.scrap-stack{position:relative;height:230px}
+.scrap{
+  position:absolute;background:#fff;border:1px solid #D7DEE1;padding:12px 14px;
+  font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#46545F;width:180px;
+  box-shadow:0 8px 18px -8px rgba(12,32,50,.25);line-height:1.5;
+}
+.scrap-1{top:0;left:10px;transform:rotate(-7deg);z-index:3}
+.scrap-2{top:26px;left:150px;transform:rotate(5deg);z-index:2;background:#EFF4F2}
+.scrap-3{top:104px;left:40px;transform:rotate(-3deg);z-index:1;background:#E9EFED}
+.scrap-4{top:132px;left:210px;transform:rotate(9deg);z-index:2;background:#fff}
+.fan-stack{position:relative;height:230px}
+.fan-item{
+  position:absolute;top:0;left:0;width:186px;background:var(--card);border:1px solid var(--line);
+  border-radius:10px;padding:14px 16px;box-shadow:0 10px 20px -12px rgba(12,32,50,.3);
+}
+.fan-item .fi-status{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--bottle);margin-bottom:5px}
+.fan-item .fi-title{font-size:13.5px;font-weight:600;color:var(--ink)}
+.fan-item .fi-sub{font-size:11.5px;color:var(--ink-soft);margin-top:3px}
+.fan-1{left:0;top:36px;transform:rotate(-7deg);z-index:1}
+.fan-2{left:150px;top:14px;transform:rotate(-1deg);z-index:2}
+.fan-3{left:300px;top:26px;transform:rotate(6deg);z-index:3}
+.chaos-caption{margin-top:22px;font-size:14.5px;color:var(--ink-soft);line-height:1.6;max-width:38ch}
+
+/* ---------- MÓDULOS ---------- */
+.modules{padding:100px 32px 90px;position:relative;z-index:1}
+.mod-grid{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.mod-card{
+  background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:26px 24px 24px;position:relative;overflow:hidden;
+  transition:transform .2s ease, box-shadow .2s ease;
+}
+.mod-card:hover{transform:translateY(-4px);box-shadow:var(--shadow)}
+.mod-swatch{width:34px;height:34px;border-radius:8px;margin-bottom:16px}
+.mod-card h3{font-size:18px;color:var(--bottle-2);margin-bottom:9px}
+.mod-card p{margin:0;font-size:14.5px;line-height:1.6;color:var(--ink-soft)}
+.mod-tab{position:absolute;top:0;right:22px;width:26px;height:14px;background:var(--paper-2);border:1px solid var(--line);border-top:none;border-radius:0 0 6px 6px}
+
+/* ---------- COMO FUNCIONA (measuring tape) ---------- */
+.how{padding:100px 32px 110px;background:var(--bottle-2);color:var(--paper);position:relative;z-index:1;overflow:hidden}
+.how::before{content:'';position:absolute;left:-120px;bottom:-140px;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,rgba(47,224,207,.22),transparent 70%);pointer-events:none}
+.how .sec-head{position:relative}
+.how .sec-head h2{color:var(--paper)}
+.how .sec-head .eyebrow{color:var(--brass-light)}
+.how .sec-head p{color:#AFC4D0}
+.tape{max-width:1180px;margin:70px auto 0;position:relative}
+.tape-line{position:absolute;left:0;right:0;top:13px;height:2px;background:repeating-linear-gradient(90deg, rgba(248,246,241,.5) 0 6px, transparent 6px 12px)}
+.tape-steps{display:grid;grid-template-columns:repeat(5,1fr);gap:18px;position:relative}
+.tape-step{padding-top:34px;position:relative}
+.tape-step::before{
+  content:'';position:absolute;top:5px;left:0;width:16px;height:16px;border-radius:50%;
+  background:var(--brass-light);border:3px solid var(--bottle-2);box-shadow:0 0 0 2px var(--brass-light);
+}
+.tape-mark{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--brass-light);font-weight:600;margin-bottom:10px;display:block}
+.tape-step h3{font-family:'Work Sans',sans-serif;font-weight:600;font-size:16px;color:#fff;margin-bottom:8px}
+.tape-step p{margin:0;font-size:13.5px;line-height:1.55;color:#AFC4D0}
+
+/* ---------- DEPOIMENTO ---------- */
+.testi{padding:100px 32px;position:relative;z-index:1}
+.testi-card{
+  max-width:720px;margin:0 auto;background:var(--card);border:1px solid var(--line);
+  border-radius:16px;padding:48px 52px;position:relative;box-shadow:var(--shadow);
+  transform:rotate(-1deg);
+}
+.testi-card::before{content:'';position:absolute;top:-10px;left:44px;width:64px;height:20px;background:rgba(22,50,74,.14);border:1px solid rgba(22,50,74,.28);transform:rotate(-4deg);border-radius:2px}
+.testi-quote{font-family:'Fraunces',serif;font-style:italic;font-weight:500;font-size:22px;line-height:1.55;color:var(--bottle-2)}
+.testi-who{margin-top:24px;display:flex;align-items:center;gap:12px}
+.testi-avatar{width:42px;height:42px;border-radius:50%;background:var(--brass);display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-weight:600;color:#0C2032}
+.testi-name{font-weight:600;font-size:14.5px}
+.testi-role{font-size:13px;color:var(--ink-soft)}
+
+/* ---------- CTA FINAL ---------- */
+.cta-final{padding:90px 32px;background:var(--bottle);position:relative;z-index:1;overflow:hidden}
+.cta-final::after{content:'';position:absolute;right:-80px;top:-80px;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,rgba(143,242,230,.28),transparent 70%)}
+.cta-inner{max-width:640px;margin:0 auto;text-align:center;position:relative}
+.cta-inner h2{color:#fff;font-size:clamp(26px,3.6vw,36px);margin-bottom:14px}
+.cta-inner p{color:#B9CCD6;font-size:16px;margin-bottom:30px;line-height:1.6}
+.cta-actions{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+
+/* ---------- FOOTER ---------- */
+footer{padding:56px 32px 34px;background:var(--paper-2);border-top:2px solid var(--brass);position:relative;z-index:1}
+.foot-inner{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:32px}
+.foot-brand{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.foot-brand img{height:26px}
+.foot-brand span{font-family:'Fraunces',serif;font-weight:600;font-size:17px}
+.foot-col h4{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:14px;font-weight:600}
+.foot-col ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.foot-col a{font-size:14px;text-decoration:none;color:var(--ink);opacity:.85}
+.foot-col a:hover{opacity:1;color:var(--bottle)}
+.foot-tagline{font-size:13.5px;color:var(--ink-soft);max-width:32ch;line-height:1.6}
+.foot-bottom{max-width:1180px;margin:44px auto 0;padding-top:22px;border-top:1px solid var(--line);font-size:12.5px;color:var(--ink-soft);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+
+/* ---------- RESPONSIVE ---------- */
+@media (max-width:920px){
+  .hero-grid{grid-template-columns:1fr}
+  .tag-stage{height:340px;margin-top:20px}
+  .chaos-grid{grid-template-columns:1fr;gap:70px}
+  .mod-grid{grid-template-columns:repeat(2,1fr)}
+  .tape-steps{grid-template-columns:repeat(2,1fr);row-gap:34px}
+  .tape-line{display:none}
+  .foot-inner{grid-template-columns:1fr 1fr}
+}
+@media (max-width:700px){
+  .nav-links{
+    position:fixed;top:64px;left:0;right:0;background:var(--paper);
+    flex-direction:column;padding:18px 32px 26px;border-bottom:1px solid var(--line);
+    display:none;gap:16px;box-shadow:0 14px 24px -18px rgba(0,0,0,.3);
+  }
+  .nav-links.open{display:flex}
+  .nav-toggle{display:block}
+  .nav-cta-group .nav-enter{display:none}
+  .mod-grid{grid-template-columns:1fr}
+  .tape-steps{grid-template-columns:1fr}
+  .testi-card{padding:34px 26px}
+  .foot-inner{grid-template-columns:1fr 1fr}
+
+  .scrap-stack,.fan-stack{height:178px}
+  .scrap,.fan-item{width:128px;padding:9px 11px;font-size:10px}
+  .fan-item .fi-title{font-size:11.5px}
+  .fan-item .fi-status{font-size:8.5px}
+  .scrap-1{left:0;top:0}
+  .scrap-2{left:92px;top:14px}
+  .scrap-3{left:18px;top:66px}
+  .scrap-4{left:126px;top:88px}
+  .fan-1{left:0;top:20px}
+  .fan-2{left:86px;top:6px}
+  .fan-3{left:172px;top:14px}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="#" class="nav-brand"><img src="images/logo.png" alt="SCTech"><span>SCTech</span></a>
+    <div class="nav-links" id="navLinks">
+      <a href="#modulos">Módulos</a>
+      <a href="#como-funciona">Como funciona</a>
+      <a href="#depoimento">Depoimentos</a>
+    </div>
+    <div class="nav-cta-group">
+      <a href="login.html" class="nav-enter">Entrar</a>
+      <a href="#cta" class="btn btn-brass btn-sm">Pedir demonstração</a>
+      <button class="nav-toggle" id="navToggle" aria-label="Abrir menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="hero-grid">
+    <div class="hero-copy">
+      <span class="eyebrow">Sistema de gestão para cortineiros</span>
+      <h1>Do orçamento à instalação,<br>sem perder <em>o fio da meada</em>.</h1>
+      <p class="lede">Cada orçamento, medição, corte e instalação — organizados num só lugar, do primeiro contato ao último ponto. Feito para quem corta e costura, não para quem só programa.</p>
+      <div class="hero-actions">
+        <a href="#cta" class="btn btn-brass">Pedir demonstração</a>
+        <a href="#como-funciona" class="btn btn-ghost">Ver como funciona</a>
+      </div>
+      <div class="hero-note"><span class="dot"></span> Usado por ateliês e confecções de cortina em todo o Brasil</div>
+    </div>
+    <div class="tag-stage">
+      <div class="tag tag-mini tag-mini-2">
+        <span class="tag-label">Estoque</span>
+        Rolo #114 · Linho Cru<br>82,4 m disponíveis
+      </div>
+      <div class="tag tag-mini tag-mini-1">
+        <span class="tag-label">Financeiro</span>
+        Meta do mês<br>R$ 48.200 · 71%
+      </div>
+      <div class="tag tag-main">
+        <div class="tag-string"></div>
+        <span class="tag-label">Pedido #26045</span>
+        <h2>Sala + 2 quartos<br>Prega Wave · Fator 2,0×</h2>
+        <div class="tag-swatchrow">
+          <span style="background:#16324A"></span>
+          <span style="background:#4A7291"></span>
+          <span style="background:#2FE0CF"></span>
+          <span style="background:#C7D3D8"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="proof">
+  <div class="proof-inner">
+    <div class="proof-line">Mais de <strong>300 ateliês</strong> já organizaram a produção com a SCTech</div>
+    <div class="proof-tags">
+      <span class="proof-tag">Cortinas da Ana</span>
+      <span class="proof-tag">Studio Tecido &amp; Cia</span>
+      <span class="proof-tag">Persianas Bittencourt</span>
+      <span class="proof-tag">Ateliê Fio de Prata</span>
+      <span class="proof-tag">Casa das Cortinas MG</span>
+    </div>
+  </div>
+</section>
+
+<section class="chaos">
+  <div class="wrap">
+    <div class="sec-head" style="margin-bottom:64px">
+      <span class="eyebrow">O problema real</span>
+      <h2>Da bagunça de papel ao fio certo</h2>
+    </div>
+    <div class="chaos-grid">
+      <div class="chaos-col chaos-before">
+        <h3>✕ Sem sistema</h3>
+        <div class="scrap-stack">
+          <div class="scrap scrap-1">medida da Dona Célia?? confirmar de novo</div>
+          <div class="scrap scrap-2">tecido linho bege — acabou?</div>
+          <div class="scrap scrap-3">instalação sexta ou sábado</div>
+          <div class="scrap scrap-4">cobrar sinal do pedido 240</div>
+        </div>
+        <p class="chaos-caption">Post-it, WhatsApp e memória. Um pedido esquecido custa caro — em tecido, em tempo e em cliente.</p>
+      </div>
+      <div class="chaos-col chaos-after">
+        <h3>✓ Com SCTech</h3>
+        <div class="fan-stack">
+          <div class="fan-item fan-1">
+            <div class="fi-status">Aguardando tecido</div>
+            <div class="fi-title">Pedido #26031</div>
+            <div class="fi-sub">Cozinha · Sra. Célia</div>
+          </div>
+          <div class="fan-item fan-2">
+            <div class="fi-status">Na costura</div>
+            <div class="fi-title">Pedido #26040</div>
+            <div class="fi-sub">Sala · Studio Tecido</div>
+          </div>
+          <div class="fan-item fan-3">
+            <div class="fi-status">Pronto p/ instalação</div>
+            <div class="fi-title">Pedido #26045</div>
+            <div class="fi-sub">2 quartos · Sex. 09:00</div>
+          </div>
+        </div>
+        <p class="chaos-caption">Cada pedido com seu status, sua medida e seu prazo — visível pra equipe inteira, sem perguntar duas vezes.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="modules" id="modulos">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Módulos</span>
+      <h2>Um sistema, do balcão à instalação</h2>
+      <p>Pensado para quem corta, costura e entrega — cada módulo resolve uma etapa real do seu ateliê.</p>
+    </div>
+    <div class="mod-grid">
+      <div class="mod-card"><div class="mod-tab"></div>
+        <div class="mod-swatch" style="background:#16324A"></div>
+        <h3>Pedidos</h3>
+        <p>Do orçamento à instalação, cada pedido com status, prega, metragem e prazo visíveis num clique.</p>
+      </div>
+      <div class="mod-card"><div class="mod-tab"></div>
+        <div class="mod-swatch" style="background:#2FE0CF"></div>
+        <h3>Produção</h3>
+        <p>Painel com as fases da costura e agenda de instalações e medições, sem depender de memória.</p>
+      </div>
+      <div class="mod-card"><div class="mod-tab"></div>
+        <div class="mod-swatch" style="background:#4A7291"></div>
+        <h3>Estoque</h3>
+        <p>Controle de rolos de tecido por metragem, lote e fornecedor — saiba o que falta antes de faltar.</p>
+      </div>
+      <div class="mod-card"><div class="mod-tab"></div>
+        <div class="mod-swatch" style="background:#1F4260"></div>
+        <h3>Financeiro</h3>
+        <p>Contas a pagar e a receber, DRE por pedido e meta de faturamento — sem planilha paralela.</p>
+      </div>
+      <div class="mod-card"><div class="mod-tab"></div>
+        <div class="mod-swatch" style="background:#22A99C"></div>
+        <h3>Clientes</h3>
+        <p>Histórico completo de cada cliente: pedidos, medidas e preferências, sempre à mão.</p>
+      </div>
+      <div class="mod-card"><div class="mod-tab"></div>
+        <div class="mod-swatch" style="background:#0C2032"></div>
+        <h3>Controle de acesso</h3>
+        <p>Defina o que cada costureira, vendedor ou instalador pode ver e fazer dentro do sistema.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="how" id="como-funciona">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Como funciona</span>
+      <h2>O fio que conecta cada etapa</h2>
+      <p>O mesmo pedido acompanha o cliente do primeiro contato à última cortina pendurada.</p>
+    </div>
+    <div class="tape">
+      <div class="tape-line"></div>
+      <div class="tape-steps">
+        <div class="tape-step">
+          <span class="tape-mark">00 cm</span>
+          <h3>Orçamento</h3>
+          <p>Medidas, tecidos e valores num orçamento que vira pedido com um clique.</p>
+        </div>
+        <div class="tape-step">
+          <span class="tape-mark">25 cm</span>
+          <h3>Medição</h3>
+          <p>Agenda de visitas técnicas, com endereço e horário sempre à mão.</p>
+        </div>
+        <div class="tape-step">
+          <span class="tape-mark">50 cm</span>
+          <h3>Produção</h3>
+          <p>Corte e costura acompanhados por status, sem perder o prazo de vista.</p>
+        </div>
+        <div class="tape-step">
+          <span class="tape-mark">75 cm</span>
+          <h3>Instalação</h3>
+          <p>Agenda de instalação vinculada ao pedido — chegou a hora, é só confirmar.</p>
+        </div>
+        <div class="tape-step">
+          <span class="tape-mark">100 cm</span>
+          <h3>Pós-venda</h3>
+          <p>Pagamento, comissão e histórico do cliente prontos para o próximo pedido.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="testi" id="depoimento">
+  <div class="wrap">
+    <div class="testi-card">
+      <p class="testi-quote">“Antes eu media, cortava, media de novo — e ainda perdia pedido no meio do caminho. Hoje cada cliente tem sua ficha, cada tecido seu rolo, cada pedido seu prazo.”</p>
+      <div class="testi-who">
+        <div class="testi-avatar">CM</div>
+        <div>
+          <div class="testi-name">Célia Martins</div>
+          <div class="testi-role">Ateliê Fio &amp; Cortina — São Paulo, SP</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta-final" id="cta">
+  <div class="cta-inner">
+    <h2>Pronto para organizar seu ateliê?</h2>
+    <p>Agende uma demonstração gratuita e veja como a SCTech se encaixa na rotina do seu negócio.</p>
+    <div class="cta-actions">
+      <a href="mailto:contato@sctech.com.br" class="btn btn-brass">Falar com um especialista</a>
+      <a href="login.html" class="btn btn-ghost btn-on-dark">Já sou cliente — Entrar</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="foot-inner">
+    <div>
+      <div class="foot-brand"><img src="images/logo.png" alt="SCTech"><span>SCTech</span></div>
+      <p class="foot-tagline">Sistema de gestão para ateliês de cortinas e persianas — do orçamento à instalação.</p>
+    </div>
+    <div class="foot-col">
+      <h4>Produto</h4>
+      <ul>
+        <li><a href="#modulos">Módulos</a></li>
+        <li><a href="#como-funciona">Como funciona</a></li>
+        <li><a href="#depoimento">Depoimentos</a></li>
+      </ul>
+    </div>
+    <div class="foot-col">
+      <h4>Empresa</h4>
+      <ul>
+        <li><a href="sobre.html">Sobre o sistema</a></li>
+        <li><a href="mailto:contato@sctech.com.br">Contato</a></li>
+      </ul>
+    </div>
+    <div class="foot-col">
+      <h4>Acesso</h4>
+      <ul>
+        <li><a href="login.html">Entrar no sistema</a></li>
+        <li><a href="#cta">Pedir demonstração</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot-bottom">
+    <span>© 2026 SCTech. Todos os direitos reservados.</span>
+    <span>Feito para quem corta, costura e entrega.</span>
+  </div>
+</footer>
+
+<script>
+// menu mobile
+const navToggle = document.getElementById('navToggle');
+const navLinks = document.getElementById('navLinks');
+navToggle.addEventListener('click', () => {
+  const open = navLinks.classList.toggle('open');
+  navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+});
+navLinks.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+  navLinks.classList.remove('open');
+  navToggle.setAttribute('aria-expanded', 'false');
+}));
+
+</script>
+</body>
+</html>
