@@ -145,7 +145,7 @@
                     <label style="font-size:12px;font-weight:700;color:#666;display:block;margin-bottom:5px">Margem Global (%)</label>
                     <div style="display:flex;align-items:center;gap:8px">
                         <input type="number" id="ped-margem-pedido" value="0" min="0" step="1" oninput="atualizarTotalPedido()" style="width:90px;padding:8px;border:1px solid #ccc;border-radius:4px;font-size:14px">
-                        <span id="ped-margem-pedido-info" style="color:#059669;font-size:12px;font-weight:600"></span>
+                        <span id="ped-margem-pedido-info" style="color:#005D3B;font-size:12px;font-weight:600"></span>
                     </div>
                 </div>
             </div>
@@ -153,19 +153,19 @@
                 <div style="text-align: right; font-size: 13px; color: #555; line-height: 2;">
                     <div>Total Materiais (tecido): R$ <strong id="ped-total-mat">0.00</strong></div>
                     <div>Total Acessórios: R$ <strong id="ped-total-itens">0.00</strong></div>
-                    <div id="ped-comissao-row" style="display:none;color:#92400e">
+                    <div id="ped-comissao-row" style="display:none;color:#8A6A00">
                         Comissão (<span id="ped-comissao-pct">0</span>%): R$ <strong id="ped-comissao-val">0.00</strong>
                     </div>
                     <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;margin-top:2px">
                         Desconto:
                         <input type="number" id="ped-desconto" value="0" step="0.5" min="0" max="100" oninput="atualizarTotalPedido()" style="width:58px;padding:3px 6px;border:1px solid #ccc;border-radius:4px;font-size:13px;text-align:right">
-                        % &nbsp;= − R$ <strong id="ped-desconto-val" style="color:#dc2626">0.00</strong>
+                        % &nbsp;= − R$ <strong id="ped-desconto-val" style="color:#F43927">0.00</strong>
                     </div>
                 </div>
                 <div class="recebido-box">
-                    <label style="display:block;font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">Valor Recebido (R$)</label>
-                    <input type="number" id="ped-valor-recebido" value="0" step="0.01" min="0" oninput="atualizarTotalPedido()" style="width:160px;padding:8px 10px;border:1px solid #bbf7d0;border-radius:4px;text-align:right;font-size:14px;background:#fff">
-                    <div style="margin-top:6px;font-size:14px;color:#059669;font-weight:700">Saldo: R$ <span id="ped-saldo">0.00</span></div>
+                    <label style="display:block;font-size:11px;font-weight:700;color:#0F6B0D;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">Valor Recebido (R$)</label>
+                    <input type="number" id="ped-valor-recebido" value="0" step="0.01" min="0" oninput="atualizarTotalPedido()" style="width:160px;padding:8px 10px;border:1px solid #8FD98D;border-radius:4px;text-align:right;font-size:14px;background:#fff">
+                    <div style="margin-top:6px;font-size:14px;color:#005D3B;font-weight:700">Saldo: R$ <span id="ped-saldo">0.00</span></div>
                 </div>
                 <div class="valor-final-box">
                     <div class="valor-final-label">Valor Final</div>

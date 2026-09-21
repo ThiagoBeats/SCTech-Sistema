@@ -172,7 +172,7 @@ function carregarEmpresaConfigs() {
         const preview = document.getElementById('emp-logo-preview');
         const removeBtn = document.getElementById('emp-remove-logo');
         if (preview) {
-            preview.innerHTML = `<img src="${emp.logo_base64}" style="max-height:90px;max-width:200px;object-fit:contain;border:1px solid #e5e7eb;border-radius:8px;padding:8px">`;
+            preview.innerHTML = `<img src="${emp.logo_base64}" style="max-height:90px;max-width:200px;object-fit:contain;border:1px solid #E0E0E0;border-radius:8px;padding:8px">`;
             preview.dataset.base64 = emp.logo_base64;
         }
         if (removeBtn) removeBtn.style.display = '';
@@ -186,7 +186,7 @@ function previewLogoEmpresa(input) {
         const preview   = document.getElementById('emp-logo-preview');
         const removeBtn = document.getElementById('emp-remove-logo');
         if (preview) {
-            preview.innerHTML = `<img src="${base64}" style="max-height:90px;max-width:200px;object-fit:contain;border:1px solid #e5e7eb;border-radius:8px;padding:8px">`;
+            preview.innerHTML = `<img src="${base64}" style="max-height:90px;max-width:200px;object-fit:contain;border:1px solid #E0E0E0;border-radius:8px;padding:8px">`;
             preview.dataset.base64 = base64;
         }
         if (removeBtn) removeBtn.style.display = '';
@@ -585,7 +585,7 @@ function _linhaMatrizPermissao(modulo, prefix, valorNivel, valorAcoes, opts) {
         ? `<div class="cfg-acoes-restritas">${acoesDisponiveis.map(a =>
             `<label class="cfg-check"><input type="checkbox" class="cfg-acao-chk" data-modulo="${modulo.key}" data-acao="${a.id}" ${(valorAcoes || []).includes(a.id) ? 'checked' : ''} ${dis}> ${escapeHtml(a.label)}</label>`
           ).join('')}</div>`
-        : '<span style="color:#9ca3af;font-size:11px">—</span>';
+        : '<span style="color:#8F8F8F;font-size:11px">—</span>';
     return { radiosHtml, acoesHtml };
 }
 
@@ -685,7 +685,7 @@ function renderConfigUsuarios() {
             <td><strong>${escapeHtml(u.nome)}</strong></td>
             <td>${escapeHtml(u.email)}</td>
             <td>${escapeHtml(papel ? papel.nome : '—')}${nExtras ? ` <span class="cfg-badge-personalizado" title="${nExtras} módulo(s) com permissão personalizada para este usuário">✏️ ${nExtras}</span>` : ''}</td>
-            <td><span class="status-tag" style="background:${u.ativo ? '#dcfce7' : '#f3f4f6'};color:${u.ativo ? '#166534' : '#6b7280'}">${u.ativo ? 'Ativo' : 'Inativo'}</span></td>
+            <td><span class="status-tag" style="background:${u.ativo ? '#E3F7E2' : '#F1F1F1'};color:${u.ativo ? '#0F6B0D' : '#8F8F8F'}">${u.ativo ? 'Ativo' : 'Inativo'}</span></td>
             <td>
                 <button class="btn btn-outline btn-sm" onclick="abrirModalUsuario(${u.id})" title="Editar">✏️</button>
                 <button class="btn btn-outline btn-sm" onclick="toggleAtivoUsuario(${u.id})" title="${u.ativo ? 'Desativar' : 'Ativar'}">${u.ativo ? '🚫' : '✅'}</button>
@@ -725,8 +725,8 @@ function abrirModalUsuario(id) {
                 </div>
             </div>
             ${editando ? `<label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:16px;cursor:pointer"><input type="checkbox" id="usr-ativo" ${u.ativo ? 'checked' : ''}> Usuário ativo</label>` : ''}
-            <h4 style="margin:0 0 4px;font-size:13px;color:#374151">Permissões por módulo</h4>
-            <p style="font-size:12px;color:#6b7280;margin:0 0 10px">Por padrão o usuário herda as permissões do papel. Marque "Personalizar" numa linha para sobrescrever só aquele módulo para este usuário.</p>
+            <h4 style="margin:0 0 4px;font-size:13px;color:var(--dark)">Permissões por módulo</h4>
+            <p style="font-size:12px;color:#8F8F8F;margin:0 0 10px">Por padrão o usuário herda as permissões do papel. Marque "Personalizar" numa linha para sobrescrever só aquele módulo para este usuário.</p>
             <div style="overflow-x:auto">${_matrizUsuarioHTML(papelInicial, u ? u.permissoes_extras : {})}</div>
             <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
                 <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
@@ -811,7 +811,7 @@ function abrirModalPapel(id) {
                 <label>Nome do papel</label>
                 <input type="text" id="papel-nome" value="${p ? escapeHtml(p.nome) : ''}" placeholder="Ex: Financeiro">
             </div>
-            <h4 style="margin:0 0 8px;font-size:13px;color:#374151">Matriz de permissões</h4>
+            <h4 style="margin:0 0 8px;font-size:13px;color:var(--dark)">Matriz de permissões</h4>
             <div style="overflow-x:auto">${_matrizPapelHTML(p ? p.permissoes : null)}</div>
             <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
                 <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
@@ -976,12 +976,12 @@ function mostrarPedidosCliente(clienteId) {
         tbody.innerHTML = pedidos.slice(inicio, inicio + POR_PAG).map(p => {
             const cls = COR_STATUS[normalizarStatus(p.status)] || 'st-orcamento';
             const pagto = statusPagamento(p);
-            return `<tr style="cursor:pointer" onclick="this.closest('.modal-overlay').remove();editarPedido(${p.id})" onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background=''">
+            return `<tr style="cursor:pointer" onclick="this.closest('.modal-overlay').remove();editarPedido(${p.id})" onmouseover="this.style.background='#EDF5FC'" onmouseout="this.style.background=''">
                 <td style="font-size:12px;color:var(--primary);font-weight:600">#${formatPedidoId(p.id)}</td>
                 <td style="font-size:13px">${escapeHtml(p.amb || '—')}</td>
                 <td>R$ ${(p.valor||0).toFixed(2)} ${pagto.cls ? `<span class="${pagto.cls}">${pagto.label}</span>` : ''}</td>
                 <td><span class="status-tag ${cls}" style="font-size:11px">${normalizarStatus(p.status)}</span></td>
-                <td style="font-size:12px;color:#6b7280">${p.data_entrega ? new Date(p.data_entrega+'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+                <td style="font-size:12px;color:#8F8F8F">${p.data_entrega ? new Date(p.data_entrega+'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
             </tr>`;
         }).join('') || '<tr><td colspan="5" style="text-align:center;color:#999;padding:16px">Nenhum pedido.</td></tr>';
         pagEl.innerHTML = '';
@@ -990,7 +990,7 @@ function mostrarPedidosCliente(clienteId) {
         btnPrev.className = 'btn btn-outline btn-sm'; btnPrev.textContent = '‹ Anterior'; btnPrev.disabled = pag === 0;
         btnPrev.onclick = () => { pag--; render(); };
         const info = document.createElement('span');
-        info.style.cssText = 'font-size:13px;color:#6b7280'; info.textContent = `${pag + 1} / ${totalPags}`;
+        info.style.cssText = 'font-size:13px;color:#8F8F8F'; info.textContent = `${pag + 1} / ${totalPags}`;
         const btnNext = document.createElement('button');
         btnNext.className = 'btn btn-outline btn-sm'; btnNext.textContent = 'Próximo ›'; btnNext.disabled = pag >= totalPags - 1;
         btnNext.onclick = () => { pag++; render(); };
@@ -1056,7 +1056,7 @@ function previewFotoCatalogo(input) {
     const preview = document.getElementById('cat-foto-preview');
     if (!file || !preview) return;
     _resizeImageBase64(file).then(function(base64) {
-        preview.innerHTML = `<img src="${base64}" style="max-width:120px;max-height:80px;border-radius:6px;border:1px solid #e5e7eb;margin-top:6px">`;
+        preview.innerHTML = `<img src="${base64}" style="max-width:120px;max-height:80px;border-radius:6px;border:1px solid #E0E0E0;margin-top:6px">`;
         preview.dataset.base64 = base64;
     });
 }
@@ -1112,11 +1112,11 @@ function verDetalhesTecido(id) {
     });
 
     const rolosHtml = rolosAtivos.length
-        ? rolosAtivos.map(r => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#f8fafc;border-radius:6px;margin-bottom:4px;font-size:13px">
-            <span style="color:#374151">${escapeHtml(r.lote || '—')}</span>
+        ? rolosAtivos.map(r => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#FAFAFA;border-radius:6px;margin-bottom:4px;font-size:13px">
+            <span style="color:var(--dark)">${escapeHtml(r.lote || '—')}</span>
             <strong>${r.metragem_atual.toFixed(2)} m</strong>
           </div>`).join('')
-        : '<p style="color:#9ca3af;font-size:13px;margin:4px 0">Nenhum rolo em estoque.</p>';
+        : '<p style="color:#8F8F8F;font-size:13px;margin:4px 0">Nenhum rolo em estoque.</p>';
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -1124,42 +1124,42 @@ function verDetalhesTecido(id) {
         <div class="modal-header">
             <div>
                 <h3 style="margin-bottom:2px">${escapeHtml(c.nome)}</h3>
-                ${c.referencia ? `<span style="font-size:13px;color:#6b7280">Ref: ${escapeHtml(c.referencia)}</span>` : ''}
+                ${c.referencia ? `<span style="font-size:13px;color:#8F8F8F">Ref: ${escapeHtml(c.referencia)}</span>` : ''}
             </div>
             <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
         </div>
         <div class="modal-body" style="padding-top:0">
-            ${c.imagem ? `<div style="text-align:center;margin-bottom:18px;background:#f1f5f9;border-radius:10px;padding:12px">
+            ${c.imagem ? `<div style="text-align:center;margin-bottom:18px;background:#F1F1F1;border-radius:10px;padding:12px">
                 <img src="${c.imagem}" style="max-width:100%;max-height:300px;border-radius:8px;object-fit:contain;box-shadow:0 2px 8px rgba(0,0,0,.10)">
             </div>` : ''}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
-                <div style="background:#f8fafc;border-radius:8px;padding:10px 14px">
-                    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Preço de Venda</div>
-                    <div style="font-size:18px;font-weight:700;color:var(--primary)">R$ ${c.preco.toFixed(2)}<span style="font-size:13px;font-weight:400;color:#6b7280">/m</span></div>
+                <div style="background:#FAFAFA;border-radius:8px;padding:10px 14px">
+                    <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Preço de Venda</div>
+                    <div style="font-size:18px;font-weight:700;color:var(--primary)">R$ ${c.preco.toFixed(2)}<span style="font-size:13px;font-weight:400;color:#8F8F8F">/m</span></div>
                 </div>
-                <div style="background:#f8fafc;border-radius:8px;padding:10px 14px">
-                    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Em Estoque</div>
-                    <div style="font-size:18px;font-weight:700;color:${abaixoMin ? '#dc2626' : '#16a34a'}">${disp.toFixed(2)} m ${abaixoMin ? '<span style="font-size:12px">⚠ Abaixo do mínimo</span>' : ''}</div>
+                <div style="background:#FAFAFA;border-radius:8px;padding:10px 14px">
+                    <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Em Estoque</div>
+                    <div style="font-size:18px;font-weight:700;color:${abaixoMin ? '#F43927' : '#159912'}">${disp.toFixed(2)} m ${abaixoMin ? '<span style="font-size:12px">⚠ Abaixo do mínimo</span>' : ''}</div>
                 </div>
-                <div style="background:#f8fafc;border-radius:8px;padding:10px 14px">
-                    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Largura do Rolo</div>
+                <div style="background:#FAFAFA;border-radius:8px;padding:10px 14px">
+                    <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Largura do Rolo</div>
                     <div style="font-size:15px;font-weight:600">${(c.largura_rolo || 2.80).toFixed(2)} m</div>
                 </div>
-                <div style="background:#f8fafc;border-radius:8px;padding:10px 14px">
-                    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Estoque Mínimo</div>
+                <div style="background:#FAFAFA;border-radius:8px;padding:10px 14px">
+                    <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Estoque Mínimo</div>
                     <div style="font-size:15px;font-weight:600">${c.min_estoque ? c.min_estoque + ' m' : '—'}</div>
                 </div>
-                ${c.fornecedor_nome ? `<div style="background:#f8fafc;border-radius:8px;padding:10px 14px;grid-column:1/-1">
-                    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Fornecedor</div>
+                ${c.fornecedor_nome ? `<div style="background:#FAFAFA;border-radius:8px;padding:10px 14px;grid-column:1/-1">
+                    <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Fornecedor</div>
                     <div style="font-size:14px;font-weight:500">${escapeHtml(c.fornecedor_nome)}</div>
                 </div>` : ''}
             </div>
             ${pedidosAtivos.length ? `<div style="margin-bottom:14px">
-                <div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Em produção (${pedidosAtivos.length} pedido(s))</div>
-                ${pedidosAtivos.map(p => `<div style="font-size:13px;padding:4px 0;color:#374151">#${formatPedidoId(p.id)} · ${escapeHtml(p.clienteNome||'—')} · <span class="status-tag ${COR_STATUS[normalizarStatus(p.status)]||''}" style="font-size:11px">${normalizarStatus(p.status)}</span></div>`).join('')}
+                <div style="font-size:12px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Em produção (${pedidosAtivos.length} pedido(s))</div>
+                ${pedidosAtivos.map(p => `<div style="font-size:13px;padding:4px 0;color:var(--dark)">#${formatPedidoId(p.id)} · ${escapeHtml(p.clienteNome||'—')} · <span class="status-tag ${COR_STATUS[normalizarStatus(p.status)]||''}" style="font-size:11px">${normalizarStatus(p.status)}</span></div>`).join('')}
             </div>` : ''}
             <div>
-                <div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Rolos em Estoque (${rolosAtivos.length} rolo(s) · ${rolosEsgotados.length} esgotado(s))</div>
+                <div style="font-size:12px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Rolos em Estoque (${rolosAtivos.length} rolo(s) · ${rolosEsgotados.length} esgotado(s))</div>
                 ${rolosHtml}
             </div>
         </div>
@@ -1216,7 +1216,7 @@ function editarCatalogo(id) {
     const preview = document.getElementById('cat-foto-preview');
     if (preview) {
         if (c.imagem) {
-            preview.innerHTML = `<img src="${c.imagem}" style="max-width:120px;max-height:80px;border-radius:6px;border:1px solid #e5e7eb;margin-top:6px">`;
+            preview.innerHTML = `<img src="${c.imagem}" style="max-width:120px;max-height:80px;border-radius:6px;border:1px solid #E0E0E0;margin-top:6px">`;
             preview.dataset.base64 = c.imagem;
         } else {
             preview.innerHTML = '';
@@ -1362,11 +1362,11 @@ function verTimeline(id) {
         const isCurrent = i === eventos.length - 1;
         const icon = STATUS_ICONS[e.status] || '⏺';
         const dataStr = new Date(e.data).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-        return `<div style="display:flex;gap:14px;align-items:flex-start;padding:10px 0;${i < eventos.length - 1 ? 'border-bottom:1px solid #f3f4f6' : ''}">
-            <div style="min-width:38px;height:38px;border-radius:50%;background:${isCurrent ? 'var(--primary)' : '#e5e7eb'};color:${isCurrent ? '#fff' : '#6b7280'};display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">${icon}</div>
+        return `<div style="display:flex;gap:14px;align-items:flex-start;padding:10px 0;${i < eventos.length - 1 ? 'border-bottom:1px solid #F1F1F1' : ''}">
+            <div style="min-width:38px;height:38px;border-radius:50%;background:${isCurrent ? 'var(--primary)' : '#E0E0E0'};color:${isCurrent ? '#fff' : '#8F8F8F'};display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">${icon}</div>
             <div>
-                <div style="font-weight:600;font-size:14px;color:${isCurrent ? 'var(--primary)' : '#111827'}">${e.label || e.status}</div>
-                <div style="font-size:12px;color:#6b7280;margin-top:3px">${dataStr}</div>
+                <div style="font-weight:600;font-size:14px;color:${isCurrent ? 'var(--primary)' : '#242424'}">${e.label || e.status}</div>
+                <div style="font-size:12px;color:#8F8F8F;margin-top:3px">${dataStr}</div>
             </div>
         </div>`;
     }).join('');
@@ -1378,7 +1378,7 @@ function verTimeline(id) {
             <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
         </div>
         <div class="modal-body">
-            ${rows || '<p style="text-align:center;color:#9ca3af;padding:20px 0">Sem histórico registrado.<br><small>Futuros movimentos serão registrados automaticamente.</small></p>'}
+            ${rows || '<p style="text-align:center;color:#8F8F8F;padding:20px 0">Sem histórico registrado.<br><small>Futuros movimentos serão registrados automaticamente.</small></p>'}
         </div>
     </div>`;
     document.body.appendChild(overlay);
@@ -1460,15 +1460,15 @@ function mostrarModalPagamento(ped, callback) {
         <div style="background:white;border-radius:10px;padding:28px 32px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22)">
             <h3 style="margin-bottom:6px;color:var(--dark)">Confirmar Entrega</h3>
             <p style="font-size:13px;color:#888;margin-bottom:18px">Pedido #${formatPedidoId(ped.id)}</p>
-            <div style="background:#f8fafc;border-radius:6px;padding:14px 16px;margin-bottom:20px;font-size:14px">
+            <div style="background:#FAFAFA;border-radius:6px;padding:14px 16px;margin-bottom:20px;font-size:14px">
                 <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:#555">Valor Total</span><strong>R$ ${total.toFixed(2)}</strong></div>
-                <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:#555">Valor Recebido</span><strong style="color:#059669">R$ ${recebido.toFixed(2)}</strong></div>
-                <div style="display:flex;justify-content:space-between;padding:8px 0 4px;border-top:1px solid #e4e7eb;margin-top:4px"><span style="color:#555;font-weight:600">Saldo a Receber</span><strong style="color:${saldo > 0.01 ? '#dc2626' : '#059669'}">R$ ${saldo.toFixed(2)}</strong></div>
+                <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:#555">Valor Recebido</span><strong style="color:#005D3B">R$ ${recebido.toFixed(2)}</strong></div>
+                <div style="display:flex;justify-content:space-between;padding:8px 0 4px;border-top:1px solid #E0E0E0;margin-top:4px"><span style="color:#555;font-weight:600">Saldo a Receber</span><strong style="color:${saldo > 0.01 ? '#F43927' : '#005D3B'}">R$ ${saldo.toFixed(2)}</strong></div>
             </div>
-            <p style="font-size:13px;color:#374151;font-weight:600;margin-bottom:14px">O pagamento foi recebido integralmente?</p>
+            <p style="font-size:13px;color:var(--dark);font-weight:600;margin-bottom:14px">O pagamento foi recebido integralmente?</p>
             <div style="display:flex;flex-direction:column;gap:10px">
                 <button id="mpg-sim" class="btn btn-success" style="padding:11px;font-size:14px">✓ Sim, pagamento completo → Instalado</button>
-                <button id="mpg-nao" class="btn" style="background:#d97706;padding:11px;font-size:14px">⏳ Não, há saldo pendente → Aguardando Pagamento</button>
+                <button id="mpg-nao" class="btn" style="background:#F2C924;padding:11px;font-size:14px">⏳ Não, há saldo pendente → Aguardando Pagamento</button>
                 <button id="mpg-cancel" class="btn btn-outline" style="padding:9px;font-size:13px">Cancelar</button>
             </div>
         </div>`;
@@ -1508,7 +1508,7 @@ function mostrarModalAgendarInstalacao(ped, callback) {
     dataEl.focus();
     overlay.querySelector('#mai-salvar').onclick = () => {
         const data = dataEl.value;
-        if (!data) { dataEl.style.borderColor = '#dc2626'; return; }
+        if (!data) { dataEl.style.borderColor = '#F43927'; return; }
         const hora = document.getElementById('mai-hora').value;
         const end  = document.getElementById('mai-end').value.trim();
         document.body.removeChild(overlay);
@@ -1710,7 +1710,7 @@ function renderChartStatus() {
     });
 
     const statusLabels = ['Orçamento','Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Pagamento','Instalado'];
-    const statusCores  = ['#f59e0b','#6366f1','#fb923c','#3b82f6','#10b981','#ef4444','#22c55e'];
+    const statusCores  = ['#F2C924','#2D77C1','#FF7F08','#9B31C8','#005D3B','#FF575F','#159912'];
     const statusCount  = statusLabels.map(s => pedidosFiltrados.filter(p => normalizarStatus(p.status) === s).length);
     const totalPedidos = statusCount.reduce((s, v) => s + v, 0);
 
@@ -1722,11 +1722,12 @@ function renderChartStatus() {
             ctx.save();
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.font = 'bold 30px Inter, system-ui, sans-serif';
-            ctx.fillStyle = '#1f2937';
+            ctx.font = 'bold 30px "Nunito", system-ui, sans-serif';
+            // Canvas não interpreta var(--x): lê o valor computado para acompanhar o tema
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--dark').trim() || '#242424';
             ctx.fillText(totalPedidos, cx, cy - 9);
-            ctx.font = '600 11px Inter, system-ui, sans-serif';
-            ctx.fillStyle = '#6b7280';
+            ctx.font = '700 11px "Nunito", system-ui, sans-serif';
+            ctx.fillStyle = '#8F8F8F';
             ctx.fillText('pedidos', cx, cy + 14);
             ctx.restore();
         }
@@ -1866,7 +1867,7 @@ function renderDashboard() {
         const pagBadge   = pagto.cls ? ` <span class="${pagto.cls}">${pagto.label}</span>` : '';
         const entregaCell = entregaInf
             ? `<span class="${entregaInf.cls}">${entregaInf.label}</span>`
-            : `<span style="color:#9ca3af;font-size:12px">—</span>`;
+            : `<span style="color:#8F8F8F;font-size:12px">—</span>`;
         const dataCriacao = p.data_criacao
             ? new Date(p.data_criacao).toLocaleDateString('pt-BR')
             : (String(p.id).length > 8 ? new Date(p.id).toLocaleDateString('pt-BR') : '—');
@@ -1940,7 +1941,7 @@ function renderEmpresaAlertasCfg() {
                 <span style="font-size:20px">${info.icon}</span>
                 <div>
                     <div style="font-size:13px;font-weight:500;color:var(--dark)">${info.label}</div>
-                    <div style="font-size:11px;color:${ativo?'#059669':'#9ca3af'};margin-top:1px">${ativo?'Ativo':'Desativado'}</div>
+                    <div style="font-size:11px;color:${ativo?'#005D3B':'#8F8F8F'};margin-top:1px">${ativo?'Ativo':'Desativado'}</div>
                 </div>
             </div>
             <label class="toggle-switch">
@@ -1995,7 +1996,7 @@ function renderEmpresaDashCardsCfg() {
                 <span style="font-size:20px">${info.icon}</span>
                 <div>
                     <div style="font-size:13px;font-weight:500;color:var(--dark)">${info.label}</div>
-                    <div style="font-size:11px;color:${ativo?'#059669':'#9ca3af'};margin-top:1px">${ativo?'Visível':'Oculto'}</div>
+                    <div style="font-size:11px;color:${ativo?'#005D3B':'#8F8F8F'};margin-top:1px">${ativo?'Visível':'Oculto'}</div>
                 </div>
             </div>
             <label class="toggle-switch">
@@ -2103,9 +2104,9 @@ function renderDashboardAlertas() {
                 .sort((a, b) => a.data_entrega.localeCompare(b.data_entrega))
                 .map(p => {
                     const diasAtraso = Math.round((hoje - new Date(p.data_entrega + 'T00:00:00')) / 86400000);
-                    return `<span style="cursor:pointer;color:#991b1b;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})" title="${diasAtraso}d de atraso">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')} (${p.data_entrega.split('-').reverse().join('/')})</span>`;
+                    return `<span style="cursor:pointer;color:#B3160A;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})" title="${diasAtraso}d de atraso">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')} (${p.data_entrega.split('-').reverse().join('/')})</span>`;
                 }).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('🚨', '#fff1f2', '#fca5a5', '#991b1b',
+            banners.push(mkBanner('🚨', '#FEF4F2', '#F79B90', '#B3160A',
                 `<strong>${entregasAtrasadas.length} entrega(s) atrasada(s):</strong>`, itens));
         }
 
@@ -2115,9 +2116,9 @@ function renderDashboardAlertas() {
         });
         if (entregasHoje.length) {
             const itens = entregasHoje.map(p =>
-                `<span style="cursor:pointer;color:#92400e;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}</span>`
+                `<span style="cursor:pointer;color:#8A6A00;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}</span>`
             ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('🔔', '#fef3c7', '#fcd34d', '#92400e',
+            banners.push(mkBanner('🔔', '#FEF6D8', '#F2C924', '#8A6A00',
                 `<strong>${entregasHoje.length} pedido(s)</strong> com entrega prevista para hoje:`, itens));
         }
     }
@@ -2127,17 +2128,17 @@ function renderDashboardAlertas() {
         const medicAtrasadas = db.medicoes.filter(m => m.status === 'Agendado' && m.data < hojeStr);
         if (medicAtrasadas.length) {
             const itens = medicAtrasadas.map(m =>
-                `<span style="cursor:pointer;color:#991b1b;font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')} (${m.data.split('-').reverse().join('/')})</span>`
+                `<span style="cursor:pointer;color:#B3160A;font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')} (${m.data.split('-').reverse().join('/')})</span>`
             ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('📐', '#fff1f2', '#fca5a5', '#991b1b',
+            banners.push(mkBanner('📐', '#FEF4F2', '#F79B90', '#B3160A',
                 `<strong>${medicAtrasadas.length} medição(ões)</strong> atrasada(s):`, itens));
         }
         const medicHoje = db.medicoes.filter(m => m.status === 'Agendado' && m.data === hojeStr);
         if (medicHoje.length) {
             const itens = medicHoje.map(m =>
-                `<span style="cursor:pointer;color:#1d4ed8;font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')}${m.hora ? ' às ' + m.hora : ''}</span>`
+                `<span style="cursor:pointer;color:#2D77C1;font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')}${m.hora ? ' às ' + m.hora : ''}</span>`
             ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('📐', '#dbeafe', '#93c5fd', '#1e40af',
+            banners.push(mkBanner('📐', '#E4EFF9', '#9FC4E5', '#1F5A96',
                 `<strong>${medicHoje.length} medição(ões)</strong> agendada(s) para hoje:`, itens));
         }
     }
@@ -2149,18 +2150,18 @@ function renderDashboardAlertas() {
             instStatus.includes(normalizarStatus(p.status)) && p.data_entrega && p.data_entrega < hojeStr);
         if (instAtrasadas.length) {
             const itens = instAtrasadas.map(p =>
-                `<span style="cursor:pointer;color:#991b1b;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')} (${p.data_entrega.split('-').reverse().join('/')})</span>`
+                `<span style="cursor:pointer;color:#B3160A;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')} (${p.data_entrega.split('-').reverse().join('/')})</span>`
             ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('🔧', '#fff1f2', '#fca5a5', '#991b1b',
+            banners.push(mkBanner('🔧', '#FEF4F2', '#F79B90', '#B3160A',
                 `<strong>${instAtrasadas.length} instalação(ões)</strong> atrasada(s):`, itens));
         }
         const instHoje = db.pedidos.filter(p =>
             instStatus.includes(normalizarStatus(p.status)) && p.data_entrega === hojeStr);
         if (instHoje.length) {
             const itens = instHoje.map(p =>
-                `<span style="cursor:pointer;color:#1d4ed8;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}${p.inst_hora ? ' às ' + p.inst_hora : ''}</span>`
+                `<span style="cursor:pointer;color:#2D77C1;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}${p.inst_hora ? ' às ' + p.inst_hora : ''}</span>`
             ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('🔧', '#dbeafe', '#93c5fd', '#1e40af',
+            banners.push(mkBanner('🔧', '#E4EFF9', '#9FC4E5', '#1F5A96',
                 `<strong>${instHoje.length} instalação(ões)</strong> agendada(s) para hoje:`, itens));
         }
     }
@@ -2172,10 +2173,10 @@ function renderDashboardAlertas() {
         const totalCriticos   = tecidosCriticos.length + matCriticos.length;
         if (totalCriticos) {
             const itens = [
-                ...tecidosCriticos.map(c => `<span style="cursor:pointer;color:#92400e;font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(c.nome)}: ${estoqueDisponivel(c.id).toFixed(2)} m (mín. ${c.min_estoque} m)</span>`),
-                ...matCriticos.map(m => `<span style="cursor:pointer;color:#92400e;font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(m.nome)}: ${(m.estoque_atual||0).toFixed(2)} ${m.unidade||''} (mín. ${m.min_estoque})</span>`)
+                ...tecidosCriticos.map(c => `<span style="cursor:pointer;color:#8A6A00;font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(c.nome)}: ${estoqueDisponivel(c.id).toFixed(2)} m (mín. ${c.min_estoque} m)</span>`),
+                ...matCriticos.map(m => `<span style="cursor:pointer;color:#8A6A00;font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(m.nome)}: ${(m.estoque_atual||0).toFixed(2)} ${m.unidade||''} (mín. ${m.min_estoque})</span>`)
             ].join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('⚠️', '#fef3c7', '#fcd34d', '#92400e',
+            banners.push(mkBanner('⚠️', '#FEF6D8', '#F2C924', '#8A6A00',
                 `<strong>${totalCriticos} item(ns)</strong> com estoque abaixo do mínimo:`, itens));
         }
     }
@@ -2185,17 +2186,17 @@ function renderDashboardAlertas() {
     if (countEl) {
         if (banners.length) {
             countEl.textContent = banners.length + (banners.length === 1 ? ' alerta' : ' alertas');
-            countEl.style.background = '#fee2e2';
-            countEl.style.color = '#991b1b';
+            countEl.style.background = '#FDE8E5';
+            countEl.style.color = '#B3160A';
         } else {
             countEl.textContent = '';
-            countEl.style.background = '#f3f4f6';
-            countEl.style.color = '#6b7280';
+            countEl.style.background = '#F1F1F1';
+            countEl.style.color = '#8F8F8F';
         }
     }
 
     if (!banners.length) {
-        el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:32px 0;color:#9ca3af;font-size:13px;gap:8px">
+        el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:32px 0;color:#8F8F8F;font-size:13px;gap:8px">
             <span style="font-size:32px">✅</span>
             <span>Nenhum alerta ativo no momento.</span>
         </div>`;
@@ -2280,17 +2281,17 @@ function abrirBalanco() {
         const cat  = db.catalogo.find(c => c.id === r.tecido_id);
         const nome = cat ? cat.nome : '—';
         const sys  = (r.metragem_atual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        const rowStyle = esgotado ? 'opacity:.5;background:#f9fafb' : '';
+        const rowStyle = esgotado ? 'opacity:.5;background:#FAFAFA' : '';
         rowsTecidos += `<tr data-balanco-nome="${nome.toLowerCase()}" data-balanco-ref="${(r.lote||'').toLowerCase()}" data-esgotado="${esgotado ? '1' : '0'}" style="${rowStyle}">
-            <td>${nome}${esgotado ? ' <span style="font-size:10px;background:#e5e7eb;color:#6b7280;padding:1px 5px;border-radius:4px;font-weight:600">ESGOTADO</span>' : ''}</td>
+            <td>${nome}${esgotado ? ' <span style="font-size:10px;background:#E0E0E0;color:#8F8F8F;padding:1px 5px;border-radius:4px;font-weight:600">ESGOTADO</span>' : ''}</td>
             <td>${r.lote || '—'}</td>
-            <td style="text-align:right;color:${esgotado ? '#9ca3af' : 'inherit'}">${sys} m</td>
+            <td style="text-align:right;color:${esgotado ? '#8F8F8F' : 'inherit'}">${sys} m</td>
             <td><input type="number" min="0" step="0.01" placeholder="—"
                 data-balanco-rolo="${r.id}"
                 data-sys="${r.metragem_atual || 0}"
                 oninput="_diffBalanco(this)"
                 style="width:100%;padding:5px 8px;border:1px solid #ccc;border-radius:4px;text-align:right"></td>
-            <td id="diff-rolo-${r.id}" style="text-align:right;font-weight:600;color:#6b7280">—</td>
+            <td id="diff-rolo-${r.id}" style="text-align:right;font-weight:600;color:#8F8F8F">—</td>
         </tr>`;
     });
     if (!rowsTecidos) rowsTecidos = '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:16px">Nenhum rolo em estoque</td></tr>';
@@ -2309,13 +2310,13 @@ function abrirBalanco() {
                 data-sys="${m.estoque_atual || 0}"
                 oninput="_diffBalanco(this)"
                 style="width:100%;padding:5px 8px;border:1px solid #ccc;border-radius:4px;text-align:right"></td>
-            <td id="diff-mat-${m.id}" style="text-align:right;font-weight:600;color:#6b7280">—</td>
+            <td id="diff-mat-${m.id}" style="text-align:right;font-weight:600;color:#8F8F8F">—</td>
         </tr>`;
     });
     if (!rowsMats) rowsMats = '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:16px">Nenhum material em estoque</td></tr>';
 
-    const thStyle = 'background:#f8fafc;padding:10px 12px;border-bottom:2px solid #e4e7eb;color:#555;font-size:13px;white-space:nowrap';
-    const inpStyle = 'padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;outline:none;transition:border-color .15s;width:100%';
+    const thStyle = 'background:#FAFAFA;padding:10px 12px;border-bottom:2px solid #E0E0E0;color:#555;font-size:13px;white-space:nowrap';
+    const inpStyle = 'padding:7px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px;outline:none;transition:border-color .15s;width:100%';
     const overlay = document.createElement('div');
     overlay.id = 'balanco-overlay';
     overlay.className = 'modal-overlay';
@@ -2324,7 +2325,7 @@ function abrirBalanco() {
             <div class="modal-header">
                 <div>
                     <h3 style="margin:0;font-size:17px">📋 Balanço de Estoque</h3>
-                    <p style="margin:4px 0 0;font-size:12px;color:#6b7280">${new Date().toLocaleDateString('pt-BR', {day:'2-digit',month:'long',year:'numeric'})}</p>
+                    <p style="margin:4px 0 0;font-size:12px;color:#8F8F8F">${new Date().toLocaleDateString('pt-BR', {day:'2-digit',month:'long',year:'numeric'})}</p>
                 </div>
                 <div style="display:flex;gap:8px;align-items:center">
                     <button class="btn btn-outline btn-sm" onclick="exportarBalancoPDF()">📄 Exportar PDF</button>
@@ -2333,33 +2334,33 @@ function abrirBalanco() {
                 </div>
             </div>
             <div class="modal-body">
-                <p style="font-size:13px;color:#6b7280;margin-bottom:14px">
+                <p style="font-size:13px;color:#8F8F8F;margin-bottom:14px">
                     Preencha a coluna <strong>Contado</strong> com as quantidades físicas apuradas. Deixe em branco os itens não contados.
                     Clique em <strong>Exportar PDF</strong> para imprimir a planilha de contagem, ou em <strong>Aplicar Ajustes</strong> para atualizar o estoque.
                 </p>
 
                 <!-- Filtros -->
-                <div style="display:flex;gap:10px;margin-bottom:${rolosEsgotados.length ? '8px' : '20px'};padding:12px 14px;background:#f8fafc;border:1px solid #e4e7eb;border-radius:8px;flex-wrap:wrap">
+                <div style="display:flex;gap:10px;margin-bottom:${rolosEsgotados.length ? '8px' : '20px'};padding:12px 14px;background:#FAFAFA;border:1px solid #E0E0E0;border-radius:8px;flex-wrap:wrap">
                     <div style="flex:1;min-width:150px">
-                        <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Nome</label>
+                        <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Nome</label>
                         <input id="balanco-filter-nome" type="text" placeholder="Filtrar por nome..." style="${inpStyle}" oninput="_filtrarBalanco()">
                     </div>
                     <div style="flex:1;min-width:150px">
-                        <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Código / Referência</label>
+                        <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Código / Referência</label>
                         <input id="balanco-filter-ref" type="text" placeholder="Filtrar por código ou lote..." style="${inpStyle}" oninput="_filtrarBalanco()">
                     </div>
                     <div style="display:flex;align-items:flex-end;gap:8px">
                         <button class="btn btn-outline btn-sm" onclick="_limparFiltrosBalanco()" style="white-space:nowrap">✕ Limpar</button>
                     </div>
                 </div>
-                ${rolosEsgotados.length ? `<div style="margin-bottom:16px;padding:8px 12px;background:#f9fafb;border:1px solid #e4e7eb;border-radius:6px;display:flex;align-items:center;gap:10px;font-size:12px;color:#6b7280">
+                ${rolosEsgotados.length ? `<div style="margin-bottom:16px;padding:8px 12px;background:#FAFAFA;border:1px solid #E0E0E0;border-radius:6px;display:flex;align-items:center;gap:10px;font-size:12px;color:#8F8F8F">
                     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
                         <input type="checkbox" id="balanco-show-esgotados" onchange="_filtrarBalanco()" style="width:14px;height:14px;cursor:pointer">
-                        Mostrar <strong style="color:#374151">${rolosEsgotados.length} rolo(s) esgotado(s)</strong> (metragem = 0 no sistema)
+                        Mostrar <strong style="color:var(--dark)">${rolosEsgotados.length} rolo(s) esgotado(s)</strong> (metragem = 0 no sistema)
                     </label>
                 </div>` : ''}
 
-                <h4 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#2A5C82;margin-bottom:8px">🧵 Tecidos / Rolos</h4>
+                <h4 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#005D3B;margin-bottom:8px">🧵 Tecidos / Rolos</h4>
                 <div style="overflow-x:auto;margin-bottom:24px">
                     <table style="width:100%;border-collapse:collapse;font-size:13px">
                         <thead><tr>
@@ -2373,7 +2374,7 @@ function abrirBalanco() {
                     </table>
                 </div>
 
-                <h4 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#2A5C82;margin-bottom:8px">🔩 Materiais e Acessórios</h4>
+                <h4 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#005D3B;margin-bottom:8px">🔩 Materiais e Acessórios</h4>
                 <div style="overflow-x:auto">
                     <table style="width:100%;border-collapse:collapse;font-size:13px">
                         <thead><tr>
@@ -2443,23 +2444,23 @@ function _diffBalanco(input) {
     const cellId = roloId ? `diff-rolo-${roloId}` : `diff-mat-${matId}`;
     const cell   = document.getElementById(cellId);
     if (!cell) return;
-    if (contado === null || isNaN(contado)) { cell.textContent = '—'; cell.style.color = '#6b7280'; return; }
+    if (contado === null || isNaN(contado)) { cell.textContent = '—'; cell.style.color = '#8F8F8F'; return; }
     const diff = contado - sys;
     const fmt  = (Math.abs(diff)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    if (Math.abs(diff) < 0.001) { cell.textContent = '='; cell.style.color = '#6b7280'; }
-    else if (diff > 0)  { cell.textContent = `+${fmt}`; cell.style.color = '#059669'; }
-    else                { cell.textContent = `−${fmt}`; cell.style.color = '#dc2626'; }
+    if (Math.abs(diff) < 0.001) { cell.textContent = '='; cell.style.color = '#8F8F8F'; }
+    else if (diff > 0)  { cell.textContent = `+${fmt}`; cell.style.color = '#005D3B'; }
+    else                { cell.textContent = `−${fmt}`; cell.style.color = '#F43927'; }
 }
 
 async function exportarBalancoPDF() {
     const dataHoje = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const logoSrc  = await _logoBase64();
     const logoHtml = logoSrc
-        ? `<img src="${logoSrc}" style="width:52px;height:52px;object-fit:contain;border-radius:10px;border:1px solid #e4e7eb;padding:4px;background:#fff">`
-        : `<div style="width:52px;height:52px;background:#2A5C82;border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:20px">S</div>`;
+        ? `<img src="${logoSrc}" style="width:52px;height:52px;object-fit:contain;border-radius:10px;border:1px solid #E0E0E0;padding:4px;background:#fff">`
+        : `<div style="width:52px;height:52px;background:#005D3B;border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:20px">S</div>`;
 
-    const trStyle = 'border-bottom:1px solid #e4e7eb';
-    const th = (t, extra='') => `<th style="background:#f0f4f8;padding:10px 12px;border-bottom:2px solid #cdd5df;font-size:11px;color:#444;text-align:left;${extra}">${t}</th>`;
+    const trStyle = 'border-bottom:1px solid #E0E0E0';
+    const th = (t, extra='') => `<th style="background:#FAFAFA;padding:10px 12px;border-bottom:2px solid #E0E0E0;font-size:11px;color:#444;text-align:left;${extra}">${t}</th>`;
     const td = (t, extra='') => `<td style="padding:10px 12px;font-size:12px;${extra}">${t}</td>`;
     const tdBlank = (w='120px') => `<td style="padding:10px 12px;border-bottom:1px solid #aaa;width:${w}"></td>`;
 
@@ -2479,7 +2480,7 @@ async function exportarBalancoPDF() {
         const cells    = tr.querySelectorAll('td');
         const esgotado = tr.dataset.esgotado === '1';
         const nomeCell = cells[0]?.textContent?.replace(/ESGOTADO/g, '').trim() || '—';
-        const extra    = esgotado ? 'color:#9ca3af;font-style:italic' : '';
+        const extra    = esgotado ? 'color:#8F8F8F;font-style:italic' : '';
         rowsTec += `<tr style="${trStyle}">${td(nomeCell + (esgotado ? ' (esgotado)' : ''), extra)}${td(cells[1]?.textContent||'—', extra)}${td(cells[2]?.textContent||'—', 'text-align:right;'+extra)}${tdBlank('120px')}${tdBlank('100px')}</tr>`;
     });
 
@@ -2493,7 +2494,7 @@ async function exportarBalancoPDF() {
     <title>Balanço de Estoque — ${dataHoje}</title>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',Arial,sans-serif; }
-        body { padding:32px 40px; color:#1f2937; background:#fff; }
+        body { padding:32px 40px; color:#242424; background:#fff; }
         @media print {
             @page { size: A4; margin:20mm 18mm; }
             body { padding:0; }
@@ -2501,29 +2502,29 @@ async function exportarBalancoPDF() {
         }
         table { width:100%; border-collapse:collapse; margin-bottom:32px; }
         h2 { font-size:21px; font-weight:800; margin-bottom:2px; }
-        h3 { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#2A5C82; margin:24px 0 10px; border-left:3px solid #2A5C82; padding-left:8px; }
+        h3 { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#005D3B; margin:24px 0 10px; border-left:3px solid #005D3B; padding-left:8px; }
     </style>
     </head><body>
 
     <!-- Cabeçalho -->
-    <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:18px;border-bottom:3px solid #2A5C82;margin-bottom:24px">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:18px;border-bottom:3px solid #005D3B;margin-bottom:24px">
         <div style="display:flex;align-items:center;gap:14px">
             ${logoHtml}
             <div>
-                <div style="font-size:20px;font-weight:800;color:#2A5C82;line-height:1.1">SCTech</div>
-                <div style="font-size:11px;color:#6b7280;margin-top:2px">Sistema de Gestão</div>
+                <div style="font-size:20px;font-weight:800;color:#005D3B;line-height:1.1">SCTech</div>
+                <div style="font-size:11px;color:#8F8F8F;margin-top:2px">Sistema de Gestão</div>
             </div>
         </div>
         <div style="text-align:right">
-            <h2 style="color:#1f2937">Balanço de Estoque</h2>
-            <div style="font-size:12px;color:#6b7280;margin-top:4px">Data: <strong>${dataHoje}</strong></div>
+            <h2 style="color:#242424">Balanço de Estoque</h2>
+            <div style="font-size:12px;color:#8F8F8F;margin-top:4px">Data: <strong>${dataHoje}</strong></div>
             <div style="font-size:12px;margin-top:8px;display:flex;align-items:center;gap:6px;justify-content:flex-end">
                 Responsável:&nbsp;<span style="display:inline-block;min-width:200px;border-bottom:1px solid #999">&nbsp;</span>
             </div>
         </div>
     </div>
 
-    ${filtroAtivo ? `<div style="margin-bottom:20px;padding:8px 12px;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;font-size:11px;color:#92400e">
+    ${filtroAtivo ? `<div style="margin-bottom:20px;padding:8px 12px;background:#FEFAE9;border:1px solid #F2C924;border-radius:6px;font-size:11px;color:#8A6A00">
         <strong>Filtro aplicado:</strong> ${filtroDesc} — exibindo ${visibleTec.length} tecido(s) e ${visibleMat.length} material(is).
     </div>` : ''}
 
@@ -2540,18 +2541,18 @@ async function exportarBalancoPDF() {
     </table>
 
     <!-- Assinaturas -->
-    <div style="margin-top:48px;display:flex;justify-content:space-between;gap:24px;padding-top:20px;border-top:1px solid #d1d5db">
+    <div style="margin-top:48px;display:flex;justify-content:space-between;gap:24px;padding-top:20px;border-top:1px solid #E0E0E0">
         <div style="text-align:center;flex:1">
             <div style="border-top:1px solid #555;margin:0 16px 8px;padding-top:8px"></div>
-            <div style="font-size:11px;color:#6b7280">Responsável pelo Balanço</div>
+            <div style="font-size:11px;color:#8F8F8F">Responsável pelo Balanço</div>
         </div>
         <div style="text-align:center;flex:1">
             <div style="border-top:1px solid #555;margin:0 16px 8px;padding-top:8px"></div>
-            <div style="font-size:11px;color:#6b7280">Supervisor / Aprovação</div>
+            <div style="font-size:11px;color:#8F8F8F">Supervisor / Aprovação</div>
         </div>
         <div style="text-align:center;flex:1">
             <div style="border-top:1px solid #555;margin:0 16px 8px;padding-top:8px"></div>
-            <div style="font-size:11px;color:#6b7280">Data de Conclusão</div>
+            <div style="font-size:11px;color:#8F8F8F">Data de Conclusão</div>
         </div>
     </div>
 
@@ -2571,7 +2572,7 @@ function _showConfirmBalanco(ajustes) {
 
         const fmt = (v, un) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (un ? ' ' + un : '');
         let listHtml = `<strong style="font-size:14px;display:block;margin-bottom:10px">Confirmar ${ajustes.length} ajuste(s) no estoque?</strong>`;
-        listHtml += `<div style="max-height:240px;overflow-y:auto;text-align:left;border:1px solid #e4e7eb;border-radius:8px;background:#f8fafc">`;
+        listHtml += `<div style="max-height:240px;overflow-y:auto;text-align:left;border:1px solid #E0E0E0;border-radius:8px;background:#FAFAFA">`;
         ajustes.forEach((a, i) => {
             const nome   = a.tipo === 'rolo'
                 ? ((db.catalogo.find(c => c.id === a.rolo.tecido_id)?.nome || 'Tecido') + (a.rolo.lote ? ` [${a.rolo.lote}]` : ''))
@@ -2579,18 +2580,18 @@ function _showConfirmBalanco(ajustes) {
             const antes  = a.tipo === 'rolo' ? (a.rolo.metragem_atual || 0) : (a.mat.estoque_atual || 0);
             const un     = a.tipo === 'rolo' ? 'm' : (a.mat.unidade || 'un');
             const diff   = a.contado - antes;
-            const color  = diff > 0 ? '#059669' : '#dc2626';
+            const color  = diff > 0 ? '#005D3B' : '#F43927';
             const sign   = diff > 0 ? '+' : '';
-            const sep    = i < ajustes.length - 1 ? 'border-bottom:1px solid #e4e7eb' : '';
+            const sep    = i < ajustes.length - 1 ? 'border-bottom:1px solid #E0E0E0' : '';
             listHtml += `<div style="padding:8px 12px;${sep};display:flex;justify-content:space-between;align-items:center;gap:16px;font-size:12px">
-                <span style="color:#374151;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nome}</span>
-                <span style="white-space:nowrap;flex-shrink:0;color:#6b7280">
+                <span style="color:var(--dark);font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nome}</span>
+                <span style="white-space:nowrap;flex-shrink:0;color:#8F8F8F">
                     ${fmt(antes, un)} → <strong style="color:${color}">${fmt(a.contado, un)}</strong>
                     <span style="color:${color};margin-left:4px">(${sign}${fmt(Math.abs(diff), '')})</span>
                 </span>
             </div>`;
         });
-        listHtml += `</div><p style="font-size:11px;color:#9ca3af;margin-top:10px">As quantidades serão registradas no histórico de movimentações.</p>`;
+        listHtml += `</div><p style="font-size:11px;color:#8F8F8F;margin-top:10px">As quantidades serão registradas no histórico de movimentações.</p>`;
         msgEl.innerHTML = listHtml;
 
         const btns = document.getElementById('sc-modal-btns');
@@ -2622,7 +2623,7 @@ function _atualizarLinhasBalanco(ajustes) {
             const cells = input.closest('tr')?.querySelectorAll('td');
             if (cells?.[2]) cells[2].textContent = fmt2(novo) + ' m';
             const diffCell = document.getElementById(`diff-rolo-${a.rolo.id}`);
-            if (diffCell) { diffCell.textContent = '—'; diffCell.style.color = '#6b7280'; }
+            if (diffCell) { diffCell.textContent = '—'; diffCell.style.color = '#8F8F8F'; }
         } else {
             const input = document.querySelector(`[data-balanco-mat="${a.mat.id}"]`);
             if (!input) return;
@@ -2632,7 +2633,7 @@ function _atualizarLinhasBalanco(ajustes) {
             const cells = input.closest('tr')?.querySelectorAll('td');
             if (cells?.[3]) cells[3].textContent = fmt2(novo);
             const diffCell = document.getElementById(`diff-mat-${a.mat.id}`);
-            if (diffCell) { diffCell.textContent = '—'; diffCell.style.color = '#6b7280'; }
+            if (diffCell) { diffCell.textContent = '—'; diffCell.style.color = '#8F8F8F'; }
         }
     });
 }
@@ -2831,7 +2832,7 @@ function renderEstoque() {
         if (!rolos.length) return;
         const totalDisp = rolos.reduce((s, r) => s + r.metragem_atual, 0);
         const abaixoMin = tec.min_estoque > 0 && totalDisp < tec.min_estoque;
-        const precoVendaTec = tec.preco > 0 ? `<span style="margin-left:16px;color:#059669;font-size:13px">Preço de venda: <strong>R$ ${tec.preco.toFixed(2)}/m</strong></span>` : '';
+        const precoVendaTec = tec.preco > 0 ? `<span style="margin-left:16px;color:#005D3B;font-size:13px">Preço de venda: <strong>R$ ${tec.preco.toFixed(2)}/m</strong></span>` : '';
         html += `<tr class="estoque-grupo"><td colspan="6">
             <strong>${tec.nome}</strong>
             <span style="margin-left:12px;color:#555;font-size:13px">Total disponível: <strong>${totalDisp.toFixed(2)} m</strong></span>
@@ -2840,7 +2841,7 @@ function renderEstoque() {
         </td></tr>`;
         rolos.forEach(r => {
             const pct = r.metragem_inicial > 0 ? Math.round((r.metragem_atual / r.metragem_inicial) * 100) : 0;
-            const cor = pct > 40 ? '#059669' : pct > 15 ? '#d97706' : '#dc2626';
+            const cor = pct > 40 ? '#005D3B' : pct > 15 ? '#F2C924' : '#F43927';
             const esgotado = r.metragem_atual <= 0;
             html += `<tr class="${esgotado ? 'rolo-esgotado' : ''}">
                 <td style="padding-left:22px">${r.lote}</td>
@@ -2857,7 +2858,7 @@ function renderEstoque() {
                 <td colspan="6" class="baixa-form-cell">
                     <strong>Baixar ref. ${r.lote}</strong> — saldo: <strong>${r.metragem_atual.toFixed(3)} m</strong> &emsp;
                     <input type="number" id="baixa-qtd-${r.id}" placeholder="Metros a baixar" step="0.001" min="0.001" max="${r.metragem_atual}" style="width:160px;padding:5px 8px;border:1px solid #ccc;border-radius:4px">
-                    <button class="btn btn-sm" style="background:#d97706" onclick="confirmarBaixa(${r.id})">Confirmar Baixa</button>
+                    <button class="btn btn-sm" style="background:#F2C924" onclick="confirmarBaixa(${r.id})">Confirmar Baixa</button>
                     <button class="btn btn-outline btn-sm" onclick="cancelarBaixa()">Cancelar</button>
                 </td>
             </tr>`;
@@ -2997,7 +2998,7 @@ function renderMateriais() {
 
     tb.innerHTML = lista.map(m => {
         const abaixoMin = m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque;
-        const corEstoque = abaixoMin ? '#dc2626' : '#059669';
+        const corEstoque = abaixoMin ? '#F43927' : '#005D3B';
         return `
         <tr>
             <td><strong>${m.nome}</strong>${abaixoMin ? `<span class="badge-alerta" style="margin-left:8px">⚠</span>` : ''}</td>
@@ -3020,7 +3021,7 @@ function renderMateriais() {
                 <strong>${m.nome}</strong> — saldo: <strong>${(m.estoque_atual||0).toFixed(2)} ${m.unidade}</strong> &emsp;
                 Quantidade (+ entrada / − saída):
                 <input type="number" id="ajuste-qtd-${m.id}" placeholder="Ex: +10 ou -3" step="0.01" style="width:130px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;margin:0 8px">
-                <button class="btn btn-sm" style="background:#059669" onclick="confirmarAjuste(${m.id})">Confirmar</button>
+                <button class="btn btn-sm" style="background:#005D3B" onclick="confirmarAjuste(${m.id})">Confirmar</button>
                 <button class="btn btn-outline btn-sm" onclick="cancelarAjuste()">Cancelar</button>
             </td>
         </tr>`;
@@ -3139,11 +3140,11 @@ function _renderHistPage() {
         const data = new Date(m.data).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
         const tipoLabel = m.tipo === 'Ajuste +' ? 'Ajuste ↑' : m.tipo === 'Ajuste -' ? 'Ajuste ↓' : m.tipo;
         return `<tr>
-            <td style="font-size:12px;color:#6b7280;white-space:nowrap">${data}</td>
+            <td style="font-size:12px;color:#8F8F8F;white-space:nowrap">${data}</td>
             <td><span class="mov-badge ${cls}">${tipoLabel}</span></td>
-            <td>${escapeHtml(m.item_nome)} <span style="font-size:11px;color:#9ca3af">(${m.item_tipo==='tecido'?'Tecido':'Material'})</span></td>
+            <td>${escapeHtml(m.item_nome)} <span style="font-size:11px;color:#8F8F8F">(${m.item_tipo==='tecido'?'Tecido':'Material'})</span></td>
             <td><strong>${m.quantidade.toFixed(2)}</strong> ${m.unidade}</td>
-            <td style="font-size:12px;color:#6b7280">${escapeHtml(m.referencia||'—')}</td>
+            <td style="font-size:12px;color:#8F8F8F">${escapeHtml(m.referencia||'—')}</td>
         </tr>`;
     }).join('');
     _renderHistPaginacao(totalPags, movs.length);
@@ -3157,7 +3158,7 @@ function _renderHistPaginacao(totalPags, total) {
     btnPrev.className = 'btn btn-outline btn-sm'; btnPrev.textContent = '‹ Anterior'; btnPrev.disabled = _histPag === 0;
     btnPrev.onclick = () => { _histPag--; _renderHistPage(); };
     const info = document.createElement('span');
-    info.style.cssText = 'font-size:13px;color:#6b7280';
+    info.style.cssText = 'font-size:13px;color:#8F8F8F';
     info.textContent = `${_histPag + 1} / ${totalPags} · ${total} registro(s)`;
     const btnNext = document.createElement('button');
     btnNext.className = 'btn btn-outline btn-sm'; btnNext.textContent = 'Próximo ›'; btnNext.disabled = _histPag >= totalPags - 1;
@@ -3193,9 +3194,9 @@ function renderEstoqueFuturo() {
         const disponivel = estoqueDisponivel(c.id);
         const reservado = Math.round(info.total * 100) / 100;
         const saldo = Math.round((disponivel - reservado) * 100) / 100;
-        const saldoCss = saldo < 0 ? 'color:#dc2626;font-weight:700' : saldo < 2 ? 'color:#d97706;font-weight:600' : 'color:#16a34a';
+        const saldoCss = saldo < 0 ? 'color:#F43927;font-weight:700' : saldo < 2 ? 'color:#F2C924;font-weight:600' : 'color:#159912';
         return `<tr>
-            <td>${escapeHtml(c.nome)}<br><span style="font-size:11px;color:#9ca3af">${escapeHtml(c.referencia||'')}</span></td>
+            <td>${escapeHtml(c.nome)}<br><span style="font-size:11px;color:#8F8F8F">${escapeHtml(c.referencia||'')}</span></td>
             <td style="text-align:center">${info.pedidoIds.size}</td>
             <td>${reservado.toFixed(2)} m</td>
             <td>${disponivel.toFixed(2)} m</td>
@@ -3204,7 +3205,7 @@ function renderEstoqueFuturo() {
     }).filter(Boolean).join('');
     el.innerHTML = `<div class="card">
         <h3 style="margin-bottom:4px">Consumo Previsto — Pedidos em Produção</h3>
-        <p style="font-size:13px;color:#6b7280;margin-bottom:16px">${pedAtivos.length} pedido(s) em produção considerados. Saldo negativo indica necessidade de reposição.</p>
+        <p style="font-size:13px;color:#8F8F8F;margin-bottom:16px">${pedAtivos.length} pedido(s) em produção considerados. Saldo negativo indica necessidade de reposição.</p>
         <table>
             <thead><tr>
                 <th>Tecido</th>
@@ -3262,7 +3263,7 @@ function renderAmbienteBreakdown(a) {
     const parts = tecidos.map((t, tidx) => {
         if (!t.tecidoId) return '';
         const disp = estoqueDisponivel(t.tecidoId);
-        const stockColor = disp < (t.consumo_linear||0) ? '#dc2626' : '#059669';
+        const stockColor = disp < (t.consumo_linear||0) ? '#F43927' : '#005D3B';
         const temConflito = verificarConflitoDeLote(t.tecidoId, t.consumo_linear||0);
         const alt_bruta = (a.altura||0) + (t.bainha_cm??15)/100 + (t.cabecote_cm??0)/100;
         const titulo = tecidos.length > 1 ? `<div class="breakdown-row" style="font-weight:bold;color:var(--primary);padding-bottom:6px;border-bottom:1px solid #dde">Tecido ${tidx+1}: ${escapeHtml(t.tecidoNome||'')}</div>` : '';
@@ -3747,7 +3748,7 @@ function bloquearPedidoInstalado() {
     const header = document.querySelector('.header');
     if (header) {
         const notice = document.createElement('div');
-        notice.style.cssText = 'background:#fef3c7;border:1px solid #f59e0b;color:#92400e;padding:8px 14px;border-radius:6px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;';
+        notice.style.cssText = 'background:#FEF6D8;border:1px solid #F2C924;color:#8A6A00;padding:8px 14px;border-radius:6px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;';
         notice.innerHTML = '🔒 Pedido instalado — somente leitura';
         header.appendChild(notice);
     }
@@ -3818,12 +3819,12 @@ function renderKanban() {
     const board = document.getElementById('kanban-board');
     if (!board) return;
     const COLUNAS = [
-        { status: 'Medição',              label: 'Aguardando Medição Fina', cor: '#4f46e5', bg: '#eef2ff' },
-        { status: 'Aguardando Tecido',    label: 'Aguardando Tecido',       cor: '#d97706', bg: '#fffbeb' },
-        { status: 'Na Costura',           label: 'Na Costura',              cor: '#2563eb', bg: '#eff6ff' },
-        { status: 'Pronto p/ Instalação', label: 'Pronto p/ Instalação',    cor: '#059669', bg: '#ecfdf5' },
-        { status: 'Aguardando Pagamento', label: 'Aguardando Pagamento',    cor: '#b45309', bg: '#fef3c7' },
-        { status: 'Instalado',            label: 'Instalado / Entregue',    cor: '#6b7280', bg: '#f9fafb' }
+        { status: 'Medição',              label: 'Aguardando Medição Fina', cor: '#2D77C1', bg: '#E4EFF9' },
+        { status: 'Aguardando Tecido',    label: 'Aguardando Tecido',       cor: '#FF7F08', bg: '#FFF0E0' },
+        { status: 'Na Costura',           label: 'Na Costura',              cor: '#9B31C8', bg: '#F2E6F9' },
+        { status: 'Pronto p/ Instalação', label: 'Pronto p/ Instalação',    cor: '#005D3B', bg: '#F0FBEF' },
+        { status: 'Aguardando Pagamento', label: 'Aguardando Pagamento',    cor: '#FF575F', bg: '#FEF4F2' },
+        { status: 'Instalado',            label: 'Instalado / Entregue',    cor: '#159912', bg: '#E3F7E2' }
     ];
     const avisoEl = document.getElementById('aviso-orcamentos');
     const orcamentos = db.pedidos.filter(p => normalizarStatus(p.status) === 'Orçamento');
@@ -3868,7 +3869,7 @@ function renderKanban() {
                         </div>
                         ${vendedorLinha}
                         <div class="kanban-card-cliente" style="font-size:13px">${escapeHtml(p.clienteNome||'')}${obsBadge}</div>
-                        <div style="font-size:12px;color:#6b7280">${escapeHtml(p.amb||'')}</div>
+                        <div style="font-size:12px;color:#8F8F8F">${escapeHtml(p.amb||'')}</div>
                         <div class="kanban-card-actions" style="margin-top:6px">
                             <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})" title="Ver Ordem de Serviço">📋 OS</button>
                             <button class="btn btn-outline btn-sm" onclick="verTimeline(${p.id})" title="Ver timeline">⏱</button>
@@ -3951,7 +3952,7 @@ function iniciarAssinaturaPads(root) {
         if (canvas._sigBound) return;
         canvas._sigBound = true;
         const ctx = canvas.getContext('2d');
-        ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = '#1f2937';
+        ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = '#242424';
         let drawing = false, last = null;
         const pos = e => {
             const r = canvas.getBoundingClientRect();
@@ -4122,7 +4123,7 @@ function mostrarSharePC() {
             <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
         </div>
         <div class="modal-body">
-            <p style="font-size:13px;color:#6b7280;margin-bottom:16px">Imprima ou salve o PDF clicando em 🖨️ Imprimir / PDF e depois envie ao fornecedor:</p>
+            <p style="font-size:13px;color:#8F8F8F;margin-bottom:16px">Imprima ou salve o PDF clicando em 🖨️ Imprimir / PDF e depois envie ao fornecedor:</p>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
                 <a href="${waUrl}" target="_blank" onclick="this.closest('.modal-overlay').remove()"
                    style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 12px;background:#25D366;border-radius:10px;color:#fff;text-decoration:none;font-weight:600;font-size:14px">
@@ -4270,7 +4271,7 @@ function gerarHTMLProposta(pedidoId, diasValidade) {
         }).filter(Boolean).join(' + ') || 'Tecido selecionado';
         const aberturaImg = a.abertura
             ? `<img src="images/Aberturas/Abertura${escapeHtml(a.abertura)}.png" alt="Abertura ${escapeHtml(a.abertura)}"
-                style="height:54px;width:auto;vertical-align:middle;margin-left:10px;border:1px solid #e5e7eb;border-radius:4px;padding:2px;background:#fff"
+                style="height:54px;width:auto;vertical-align:middle;margin-left:10px;border:1px solid #E0E0E0;border-radius:4px;padding:2px;background:#fff"
                 title="Tipo de abertura: ${escapeHtml(a.abertura)}">`
             : '';
         return `<tr>
@@ -4306,12 +4307,12 @@ function gerarHTMLProposta(pedidoId, diasValidade) {
             <thead><tr><th style="width:15%">Ambiente</th><th>Descrição</th></tr></thead>
             <tbody>${ambRows}${acessRows}</tbody>
         </table>
-        ${ped.observacoes ? `<div style="margin:16px 0;padding:12px 16px;background:#f8fafc;border-left:3px solid #2A5C82;border-radius:0 6px 6px 0">
-            <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Observações</div>
-            <p style="font-size:13px;color:#374151;margin:0;white-space:pre-line">${escapeHtml(ped.observacoes)}</p>
+        ${ped.observacoes ? `<div style="margin:16px 0;padding:12px 16px;background:#FAFAFA;border-left:3px solid #005D3B;border-radius:0 6px 6px 0">
+            <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Observações</div>
+            <p style="font-size:13px;color:var(--dark);margin:0;white-space:pre-line">${escapeHtml(ped.observacoes)}</p>
         </div>` : ''}
         <div class="proposta-totais">
-            ${ped.desconto_pct > 0 ? `<div class="proposta-linha" style="color:#dc2626"><span>Desconto (${ped.desconto_pct}%)</span><span>− R$ ${(ped.desconto_valor||0).toFixed(2)}</span></div>` : ''}
+            ${ped.desconto_pct > 0 ? `<div class="proposta-linha" style="color:#F43927"><span>Desconto (${ped.desconto_pct}%)</span><span>− R$ ${(ped.desconto_valor||0).toFixed(2)}</span></div>` : ''}
             <div class="proposta-linha proposta-total"><span>VALOR TOTAL</span><span>R$ ${ped.valor.toFixed(2)}</span></div>
             ${ped.data_entrega ? `<div class="proposta-linha" style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;font-weight:600"><span>Previsão de Entrega</span><span>${new Date(ped.data_entrega + 'T12:00:00').toLocaleDateString('pt-BR')}</span></div>` : ''}
         </div>
@@ -4437,8 +4438,8 @@ function renderRelFaturamento() {
             data: {
                 labels: meses.map(m => m.label),
                 datasets: [
-                    { label: 'Faturamento', data: fatPorMes, backgroundColor: 'rgba(42,92,130,0.8)', borderColor: '#2A5C82', borderWidth: 1.5, borderRadius: 5 },
-                    { label: 'Recebido',    data: recPorMes, backgroundColor: 'rgba(5,150,105,0.7)',  borderColor: '#059669', borderWidth: 1.5, borderRadius: 5 }
+                    { label: 'Faturamento', data: fatPorMes, backgroundColor: 'rgba(0, 93, 59, 0.85)', borderColor: '#005D3B', borderWidth: 1.5, borderRadius: 6 },
+                    { label: 'Recebido',    data: recPorMes, backgroundColor: 'rgba(201, 247, 117, 0.85)', borderColor: '#005D3B', borderWidth: 1.5, borderRadius: 6 }
                 ]
             },
             options: {
@@ -4472,21 +4473,21 @@ function renderRelRecebiveis() {
     tb.innerHTML = pendentes.map(p => {
         const faixa = p._dias > 90 ? '<span class="badge-pendente">+90 dias</span>'
             : p._dias > 60 ? '<span class="badge-parcial">61–90 dias</span>'
-            : p._dias > 30 ? '<span style="background:#fef3c7;color:#92400e;font-size:11px;font-weight:bold;padding:2px 8px;border-radius:10px">31–60 dias</span>'
-            : '<span style="background:#eff6ff;color:#1e40af;font-size:11px;font-weight:bold;padding:2px 8px;border-radius:10px">≤30 dias</span>';
+            : p._dias > 30 ? '<span style="background:#FEF6D8;color:#8A6A00;font-size:11px;font-weight:bold;padding:2px 8px;border-radius:10px">31–60 dias</span>'
+            : '<span style="background:#EDF5FC;color:#1F5A96;font-size:11px;font-weight:bold;padding:2px 8px;border-radius:10px">≤30 dias</span>';
         const cls = COR_STATUS[normalizarStatus(p.status)] || 'st-orcamento';
         return `<tr>
             <td style="font-size:12px">#${formatPedidoId(p.id)}</td>
             <td>${escapeHtml(p._cli)}</td>
             <td>R$ ${(p.valor||0).toFixed(2)}</td>
-            <td style="color:#dc2626;font-weight:bold">R$ ${p._saldo.toFixed(2)}</td>
+            <td style="color:#F43927;font-weight:bold">R$ ${p._saldo.toFixed(2)}</td>
             <td><span class="status-tag ${cls}" style="font-size:11px">${normalizarStatus(p.status)}</span></td>
             <td>${faixa}</td>
         </tr>`;
     }).join('');
     const totalPendente = pendentes.reduce((s, p) => s + p._saldo, 0);
     const tfootEl = document.getElementById('tfoot-rel-rec');
-    if (tfootEl) tfootEl.innerHTML = `<tr><td colspan="3" style="text-align:right;font-weight:bold;color:#555">Total a receber:</td><td style="font-weight:bold;color:#dc2626">R$ ${totalPendente.toFixed(2)}</td><td colspan="2"></td></tr>`;
+    if (tfootEl) tfootEl.innerHTML = `<tr><td colspan="3" style="text-align:right;font-weight:bold;color:#555">Total a receber:</td><td style="font-weight:bold;color:#F43927">R$ ${totalPendente.toFixed(2)}</td><td colspan="2"></td></tr>`;
 
     // Gráfico aging por faixa
     const agingBuckets = { '≤ 30 dias': 0, '31–60 dias': 0, '61–90 dias': 0, '> 90 dias': 0 };
@@ -4504,8 +4505,8 @@ function renderRelRecebiveis() {
             data: {
                 labels: Object.keys(agingBuckets),
                 datasets: [{ label: 'Saldo a receber (R$)', data: Object.values(agingBuckets),
-                    backgroundColor: ['rgba(59,130,246,0.75)','rgba(251,191,36,0.75)','rgba(249,115,22,0.75)','rgba(220,38,38,0.75)'],
-                    borderColor:     ['#3b82f6','#fbbf24','#f97316','#dc2626'],
+                    backgroundColor: ['rgba(45,119,193,0.75)','rgba(242,201,36,0.75)','rgba(255,127,8,0.75)','rgba(244,57,39,0.75)'],
+                    borderColor:     ['#2D77C1','#F2C924','#FF7F08','#F43927'],
                     borderWidth: 1.5, borderRadius: 5 }]
             },
             options: {
@@ -4536,13 +4537,13 @@ function renderRelVendedores() {
         <td style="text-align:center">${d.qtd}</td>
         <td style="text-align:center">${d.instalados}</td>
         <td>R$ ${d.total.toFixed(2)}</td>
-        <td style="color:#059669;font-weight:bold">R$ ${d.fat.toFixed(2)}</td>
+        <td style="color:#005D3B;font-weight:bold">R$ ${d.fat.toFixed(2)}</td>
     </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:#999;padding:20px">Nenhum dado.</td></tr>';
 
     const ctx = document.getElementById('chart-rel-vend');
     if (ctx && typeof Chart !== 'undefined' && lista.length) {
         if (_chartRelVend) _chartRelVend.destroy();
-        const CORES = ['#2A5C82','#059669','#d97706','#6366f1','#e11d48','#0891b2'];
+        const CORES = ['#005D3B','#2D77C1','#F2C924','#9B31C8','#FF575F','#17E8FF'];
         _chartRelVend = new Chart(ctx, {
             type: 'bar',
             data: {
@@ -4771,10 +4772,10 @@ async function buscarCNPJ() {
     const btn = document.getElementById('forn-btn-buscar-cnpj');
 
     if (!cnpjRaw || cnpjRaw.length !== 14) {
-        statusEl.innerHTML = '<span style="color:#dc2626">⚠️ Informe um CNPJ válido com 14 dígitos.</span>';
+        statusEl.innerHTML = '<span style="color:#F43927">⚠️ Informe um CNPJ válido com 14 dígitos.</span>';
         return;
     }
-    statusEl.innerHTML = '<span style="color:#6b7280">⏳ Consultando...</span>';
+    statusEl.innerHTML = '<span style="color:#8F8F8F">⏳ Consultando...</span>';
     if (btn) btn.disabled = true;
 
     try {
@@ -4800,12 +4801,12 @@ async function buscarCNPJ() {
         const ie = est.inscricoes_estaduais?.[0]?.inscricao_estadual;
         if (ie) set('forn-ie', ie);
 
-        statusEl.innerHTML = '<span style="color:#059669">✅ Dados preenchidos!</span>';
+        statusEl.innerHTML = '<span style="color:#005D3B">✅ Dados preenchidos!</span>';
         setTimeout(() => { statusEl.innerHTML = ''; }, 4000);
     } catch (e) {
         statusEl.innerHTML = e.tipo === 'nao_encontrado'
-            ? '<span style="color:#dc2626">❌ CNPJ não encontrado na base de dados.</span>'
-            : '<span style="color:#dc2626">❌ Erro ao consultar. Verifique sua conexão.</span>';
+            ? '<span style="color:#F43927">❌ CNPJ não encontrado na base de dados.</span>'
+            : '<span style="color:#F43927">❌ Erro ao consultar. Verifique sua conexão.</span>';
     } finally {
         if (btn) btn.disabled = false;
     }
@@ -5000,7 +5001,7 @@ function renderItensPCDraft() {
     tb.innerHTML = pcDraftItens.map((i, idx) => {
         const precoLabel = i.preco_unit > 0
             ? `R$ ${i.preco_unit.toFixed(2)}/${i.tipo === 'tecido' ? 'm' : i.unidade}`
-            : `<span style="color:#9ca3af;font-size:12px">sem registro</span>`;
+            : `<span style="color:#8F8F8F;font-size:12px">sem registro</span>`;
         return `<tr>
             <td>${escapeHtml(i.item_nome)} <span style="font-size:11px;color:#888">(${i.tipo === 'tecido' ? 'Tecido' : 'Material'})</span></td>
             <td><input type="number" value="${i.quantidade}" step="0.01" min="0.01" style="width:80px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:13px" onchange="atualizarQtdPC(${idx},this.value)"></td>
@@ -5008,7 +5009,7 @@ function renderItensPCDraft() {
             <td>${precoLabel}</td>
             <td><button class="btn btn-outline btn-sm btn-danger" onclick="removerItemPC(${idx})">✕</button></td>
         </tr>`;
-    }).join('') + `<tr style="background:#f8fafc"><td colspan="3" style="text-align:right;font-weight:bold;color:#555;padding:10px 12px">Total estimado:</td><td style="font-weight:bold;padding:10px 12px">${total > 0 ? 'R$ ' + total.toFixed(2) : '<span style="color:#9ca3af;font-size:12px">—</span>'}</td><td></td></tr>`;
+    }).join('') + `<tr style="background:#FAFAFA"><td colspan="3" style="text-align:right;font-weight:bold;color:#555;padding:10px 12px">Total estimado:</td><td style="font-weight:bold;padding:10px 12px">${total > 0 ? 'R$ ' + total.toFixed(2) : '<span style="color:#8F8F8F;font-size:12px">—</span>'}</td><td></td></tr>`;
 }
 
 function atualizarSelectItemPC() {
@@ -5048,12 +5049,12 @@ function buscarItemPorCodigoPC(val) {
     }
     if (encontrado) {
         sel.value = encontrado.id;
-        sel.style.borderColor = '#16a34a';
+        sel.style.borderColor = '#159912';
         sel.style.transition = 'border-color .3s';
         setTimeout(() => { sel.style.borderColor = ''; sel.style.transition = ''; }, 2000);
     } else {
         sel.value = '';
-        sel.style.borderColor = '#dc2626';
+        sel.style.borderColor = '#F43927';
     }
 }
 
@@ -5095,7 +5096,7 @@ function renderListaPedidosCompra() {
         return `<tr>
             <td style="font-size:12px">#${formatPedidoId(p.id)}</td>
             <td><strong>${escapeHtml(p.fornecedor_nome)}</strong></td>
-            <td style="font-size:12px;color:#6b7280;white-space:nowrap">${data}</td>
+            <td style="font-size:12px;color:#8F8F8F;white-space:nowrap">${data}</td>
             <td style="text-align:center">${p.itens.length}</td>
             <td>R$ ${total.toFixed(2)}</td>
             <td><span class="status-tag ${cls}">${p.status}</span></td>
@@ -5130,8 +5131,8 @@ function compartilharPC(id) {
         (pc.observacoes ? `Observações: ${pc.observacoes}\n` : '') +
         `\nAtenciosamente.`;
     const mailUrl = `mailto:${email}?subject=${encodeURIComponent('Pedido de compra ' + num)}&body=${encodeURIComponent(corpoEmail)}`;
-    const avisoWA   = !tel   ? `<div style="font-size:11px;color:#d97706;margin-top:4px">⚠ Sem telefone cadastrado</div>` : `<div style="font-size:11px;margin-top:4px">${escapeHtml(forn?.tel || '')}</div>`;
-    const avisoMail = !email ? `<div style="font-size:11px;color:#d97706;margin-top:4px">⚠ Sem e-mail cadastrado</div>`   : `<div style="font-size:11px;margin-top:4px">${escapeHtml(email)}</div>`;
+    const avisoWA   = !tel   ? `<div style="font-size:11px;color:#F2C924;margin-top:4px">⚠ Sem telefone cadastrado</div>` : `<div style="font-size:11px;margin-top:4px">${escapeHtml(forn?.tel || '')}</div>`;
+    const avisoMail = !email ? `<div style="font-size:11px;color:#F2C924;margin-top:4px">⚠ Sem e-mail cadastrado</div>`   : `<div style="font-size:11px;margin-top:4px">${escapeHtml(email)}</div>`;
 
     _pcShareData = { waUrl, mailUrl, num, avisoWA, avisoMail };
     const extra = `<button class="doc-modal-btn" onclick="mostrarSharePC()" style="background:#25D366">📤 Compartilhar</button>`;
@@ -5238,10 +5239,10 @@ function gerarHTMLPedidoCompra(id) {
             <table class="pc-table">
                 <thead><tr><th style="width:100px">Código</th><th>Descrição</th><th style="text-align:center">Tipo</th><th style="text-align:right;width:80px">Qtd</th><th style="width:50px">Un.</th><th style="text-align:right;width:100px">R$/Un.</th><th style="text-align:right;width:110px">Subtotal</th></tr></thead>
                 <tbody>${linhas}</tbody>
-                <tfoot><tr style="background:#f8fafc"><td colspan="6" style="text-align:right;font-weight:bold;padding:10px 8px;color:#374151">Total Estimado:</td><td style="text-align:right;font-weight:bold;padding:10px 8px">R$ ${total.toFixed(2)}</td></tr></tfoot>
+                <tfoot><tr style="background:#FAFAFA"><td colspan="6" style="text-align:right;font-weight:bold;padding:10px 8px;color:#242424">Total Estimado:</td><td style="text-align:right;font-weight:bold;padding:10px 8px">R$ ${total.toFixed(2)}</td></tr></tfoot>
             </table>
         </div>
-        ${pc.observacoes ? `<div class="pc-section"><div class="pc-section-title">Observações</div><div style="padding:10px 14px;border:1px solid #e4e7eb;border-radius:4px;font-size:14px;min-height:50px">${escapeHtml(pc.observacoes)}</div></div>` : ''}
+        ${pc.observacoes ? `<div class="pc-section"><div class="pc-section-title">Observações</div><div style="padding:10px 14px;border:1px solid #E0E0E0;border-radius:4px;font-size:14px;min-height:50px">${escapeHtml(pc.observacoes)}</div></div>` : ''}
         <div class="pc-assinaturas">
             <div><div class="pc-section-title">Solicitado por</div><div class="pc-linha"></div><small>Nome / Data</small></div>
             <div><div class="pc-section-title">Aprovado por</div><div class="pc-linha"></div><small>Nome / Data</small></div>
@@ -5384,24 +5385,24 @@ function imprimirAgendamentoMedicao(id) {
     const d   = new Date(v.data + 'T12:00:00');
     const dataFmt = d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
     const horaFmt = v.hora || '—';
-    const badgeBg  = v.status === 'Realizado' ? '#d1fae5' : '#dbeafe';
-    const badgeClr = v.status === 'Realizado' ? '#065f46' : '#1e40af';
+    const badgeBg  = v.status === 'Realizado' ? '#E3F7E2' : '#E4EFF9';
+    const badgeClr = v.status === 'Realizado' ? '#0F6B0D' : '#1F5A96';
 
     const row = (label, val) => val
         ? `<tr>
-            <td style="padding:8px 12px;font-weight:600;color:#555;width:180px;border-bottom:1px solid #e5e7eb">${label}</td>
-            <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${val}</td>
+            <td style="padding:8px 12px;font-weight:600;color:#555;width:180px;border-bottom:1px solid #E0E0E0">${label}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid #E0E0E0">${val}</td>
            </tr>`
         : '';
 
-    const secTitle = (t) => `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#6b7280;margin:20px 0 8px;padding-bottom:4px;border-bottom:1px solid #e5e7eb">${t}</div>`;
+    const secTitle = (t) => `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#8F8F8F;margin:20px 0 8px;padding-bottom:4px;border-bottom:1px solid #E0E0E0">${t}</div>`;
 
     const html = `
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #2A5C82;padding-bottom:16px;margin-bottom:24px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #005D3B;padding-bottom:16px;margin-bottom:24px">
             <div>${buildEmpresaHeaderHTML(52)}</div>
             <div style="text-align:right">
-                <div style="font-size:16px;font-weight:700;color:#1f2937">AGENDAMENTO DE MEDIÇÃO</div>
-                <div style="font-size:12px;color:#6b7280;margin-top:2px">Emitido em ${new Date().toLocaleString('pt-BR')}</div>
+                <div style="font-size:16px;font-weight:700;color:#242424">AGENDAMENTO DE MEDIÇÃO</div>
+                <div style="font-size:12px;color:#8F8F8F;margin-top:2px">Emitido em ${new Date().toLocaleString('pt-BR')}</div>
                 <span style="display:inline-block;margin-top:6px;padding:3px 12px;border-radius:12px;font-size:12px;font-weight:700;background:${badgeBg};color:${badgeClr}">${escapeHtml(v.status)}</span>
             </div>
         </div>
@@ -5421,10 +5422,10 @@ function imprimirAgendamentoMedicao(id) {
             ${row('Observações', escapeHtml(v.obs || ''))}
         </table>
         <div style="margin-top:48px;text-align:center">
-            <div style="border-top:1px solid #374151;width:260px;margin:0 auto 6px"></div>
-            <p style="font-size:12px;color:#6b7280">Assinatura do responsável</p>
+            <div style="border-top:1px solid #242424;width:260px;margin:0 auto 6px"></div>
+            <p style="font-size:12px;color:#8F8F8F">Assinatura do responsável</p>
         </div>
-        <div style="margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af;display:flex;justify-content:space-between">
+        <div style="margin-top:40px;padding-top:16px;border-top:1px solid #E0E0E0;font-size:12px;color:#8F8F8F;display:flex;justify-content:space-between">
             <span>${escapeHtml(getEmpresa().nome_fantasia || getEmpresa().razao_social || 'SCTech')}</span>
             <span>ID do agendamento: ${v.id}</span>
         </div>`;
@@ -5505,19 +5506,19 @@ function renderMedicoes() {
             const d       = new Date(v.data + 'T12:00:00');
             const dataFmt = v.data === hojeStr ? 'Hoje' : d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
             const isAtv   = v.status === 'Agendado';
-            const statusBg  = v.status === 'Realizado' ? '#d1fae5' : v.status === 'Cancelado' ? '#f3f4f6' : '#dbeafe';
-            const statusClr = v.status === 'Realizado' ? '#065f46' : v.status === 'Cancelado' ? '#6b7280' : '#1e40af';
+            const statusBg  = v.status === 'Realizado' ? '#E3F7E2' : v.status === 'Cancelado' ? '#F1F1F1' : '#E4EFF9';
+            const statusClr = v.status === 'Realizado' ? '#0F6B0D' : v.status === 'Cancelado' ? '#8F8F8F' : '#1F5A96';
             return `<div class="card" style="margin-bottom:10px">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
                     <div>
                         <div style="font-weight:700;font-size:15px;margin-bottom:4px">${escapeHtml(v.clienteNome || '—')}</div>
                         ${v.clienteTel ? `<div style="font-size:13px;color:#555">📱 ${escapeHtml(v.clienteTel)}</div>` : ''}
-                        ${v.endereco   ? `<div style="font-size:13px;color:#374151;margin-top:3px">📍 ${escapeHtml(v.endereco)}</div>` : ''}
-                        ${v.obs        ? `<div style="font-size:13px;color:#6b7280;margin-top:3px">📝 ${escapeHtml(v.obs)}</div>` : ''}
+                        ${v.endereco   ? `<div style="font-size:13px;color:var(--dark);margin-top:3px">📍 ${escapeHtml(v.endereco)}</div>` : ''}
+                        ${v.obs        ? `<div style="font-size:13px;color:#8F8F8F;margin-top:3px">📝 ${escapeHtml(v.obs)}</div>` : ''}
                     </div>
                     <div style="text-align:right">
-                        <div style="font-weight:700;font-size:15px;color:#1f2937">${dataFmt}</div>
-                        ${v.hora ? `<div style="font-size:14px;color:#374151;font-weight:600">🕐 ${v.hora}</div>` : ''}
+                        <div style="font-weight:700;font-size:15px;color:var(--dark)">${dataFmt}</div>
+                        ${v.hora ? `<div style="font-size:14px;color:var(--dark);font-weight:600">🕐 ${v.hora}</div>` : ''}
                         <span style="display:inline-block;margin-top:6px;font-size:11px;font-weight:700;padding:2px 10px;border-radius:12px;background:${statusBg};color:${statusClr}">${v.status}</span>
                     </div>
                 </div>
@@ -5533,8 +5534,8 @@ function renderMedicoes() {
                 </div>`}
             </div>`;
         }).join('');
-        const bgGrupo = g.includes('Atrasado') ? '#fee2e2' : g.includes('Hoje') ? '#dbeafe' : '#f3f4f6';
-        const clrGrupo = g.includes('Atrasado') ? '#991b1b' : g.includes('Hoje') ? '#1e40af' : '#374151';
+        const bgGrupo = g.includes('Atrasado') ? '#FDE8E5' : g.includes('Hoje') ? '#E4EFF9' : '#F1F1F1';
+        const clrGrupo = g.includes('Atrasado') ? '#B3160A' : g.includes('Hoje') ? '#1F5A96' : '#242424';
         return `<div style="margin-bottom:20px">
             <h3 style="font-size:14px;font-weight:700;color:${clrGrupo};margin-bottom:12px;padding:6px 12px;background:${bgGrupo};border-radius:6px">
                 ${g} <span style="font-size:12px;font-weight:normal">(${grupos[g].length})</span>
@@ -5569,19 +5570,19 @@ function renderDashboardMedicoes() {
         if (atrasada) {
             const dias = Math.abs(diff);
             label = dias === 1 ? 'Ontem' : `${dias}d atrás`;
-            bg = '#fff1f2'; bord = '#fca5a5'; acc = '#ef4444'; clrL = '#dc2626';
+            bg = '#FEF4F2'; bord = '#F79B90'; acc = '#F43927'; clrL = '#F43927';
         } else {
             label = diff === 0 ? 'Hoje' : diff === 1 ? 'Amanhã' : d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
-            bg    = diff === 0 ? '#dbeafe' : '#f8fafc';
-            bord  = diff === 0 ? '#93c5fd' : 'var(--border)';
-            acc   = diff === 0 ? '#3b82f6' : '#2A5C82';
-            clrL  = diff === 0 ? '#1d4ed8' : '#6b7280';
+            bg    = diff === 0 ? '#E4EFF9' : '#FAFAFA';
+            bord  = diff === 0 ? '#9FC4E5' : 'var(--border)';
+            acc   = diff === 0 ? '#2D77C1' : '#005D3B';
+            clrL  = diff === 0 ? '#2D77C1' : '#8F8F8F';
         }
         return `<div onclick="location.href='pcp.html?view=medicoes'" style="cursor:pointer;background:${bg};border:1px solid ${bord};border-left:4px solid ${acc};border-radius:8px;padding:12px 16px;min-width:155px;flex:1;max-width:200px;transition:transform 0.1s,box-shadow 0.1s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
             <div style="font-size:11px;font-weight:700;color:${clrL};text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">${label}</div>
-            <div style="font-weight:700;font-size:14px;color:#1f2937;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(v.clienteNome)}">${escapeHtml(v.clienteNome)}</div>
-            ${v.hora ? `<div style="font-size:12px;color:#374151">🕐 ${v.hora}</div>` : ''}
-            ${v.clienteTel ? `<div style="font-size:12px;color:#6b7280;margin-top:2px">${escapeHtml(v.clienteTel)}</div>` : ''}
+            <div style="font-weight:700;font-size:14px;color:var(--dark);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(v.clienteNome)}">${escapeHtml(v.clienteNome)}</div>
+            ${v.hora ? `<div style="font-size:12px;color:var(--dark)">🕐 ${v.hora}</div>` : ''}
+            ${v.clienteTel ? `<div style="font-size:12px;color:#8F8F8F;margin-top:2px">${escapeHtml(v.clienteTel)}</div>` : ''}
         </div>`;
     }
 
@@ -5589,19 +5590,19 @@ function renderDashboardMedicoes() {
 
     if (atrasadas.length) {
         sections += `<div style="margin-bottom:${proximas.length ? '18px' : '0'}">
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#dc2626;margin-bottom:8px">⚠️ Atrasadas (${atrasadas.length})</div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#F43927;margin-bottom:8px">⚠️ Atrasadas (${atrasadas.length})</div>
             <div style="display:flex;gap:12px;flex-wrap:wrap">${atrasadas.map(v => makeCard(v, true)).join('')}</div>
         </div>`;
     }
 
     if (proximas.length) {
         sections += `<div>
-            ${atrasadas.length ? `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;margin-bottom:8px">📐 Próximas</div>` : ''}
+            ${atrasadas.length ? `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#8F8F8F;margin-bottom:8px">📐 Próximas</div>` : ''}
             <div style="display:flex;gap:12px;flex-wrap:wrap">${proximas.map(v => makeCard(v, false)).join('')}</div>
         </div>`;
     }
 
-    const titleColor = atrasadas.length ? '#dc2626' : '#374151';
+    const titleColor = atrasadas.length ? '#F43927' : '#242424';
     const titleText  = atrasadas.length
         ? `⚠️ Medições — ${atrasadas.length} atrasada${atrasadas.length > 1 ? 's' : ''}`
         : '📐 Próximas Medições';
@@ -5645,48 +5646,48 @@ function renderDashboardInstalacoes() {
         const atrasado = diff !== null && diff < 0;
         let label, bg, bord, acc, clrL;
         if (diff === null) {
-            label = 'Sem data'; bg = '#f8fafc'; bord = 'var(--border)'; acc = '#9ca3af'; clrL = '#9ca3af';
+            label = 'Sem data'; bg = '#FAFAFA'; bord = 'var(--border)'; acc = '#8F8F8F'; clrL = '#8F8F8F';
         } else if (atrasado) {
             const dias = Math.abs(diff);
             label = dias === 1 ? 'Ontem' : `${dias}d atrás`;
-            bg = '#fff1f2'; bord = '#fca5a5'; acc = '#ef4444'; clrL = '#dc2626';
+            bg = '#FEF4F2'; bord = '#F79B90'; acc = '#F43927'; clrL = '#F43927';
         } else {
             label = diff === 0 ? 'Hoje' : diff === 1 ? 'Amanhã' : d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
-            bg    = diff === 0 ? '#dbeafe' : '#f8fafc';
-            bord  = diff === 0 ? '#93c5fd' : 'var(--border)';
-            acc   = diff === 0 ? '#3b82f6' : '#2A5C82';
-            clrL  = diff === 0 ? '#1d4ed8' : '#6b7280';
+            bg    = diff === 0 ? '#E4EFF9' : '#FAFAFA';
+            bord  = diff === 0 ? '#9FC4E5' : 'var(--border)';
+            acc   = diff === 0 ? '#2D77C1' : '#005D3B';
+            clrL  = diff === 0 ? '#2D77C1' : '#8F8F8F';
         }
         return `<div onclick="location.href='pcp.html?view=agenda'" style="cursor:pointer;background:${bg};border:1px solid ${bord};border-left:4px solid ${acc};border-radius:8px;padding:12px 16px;min-width:155px;flex:1;max-width:200px;transition:transform 0.1s,box-shadow 0.1s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
             <div style="font-size:11px;font-weight:700;color:${clrL};text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">${label}</div>
-            <div style="font-weight:700;font-size:14px;color:#1f2937;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(p.clienteNome)}">${escapeHtml(p.clienteNome||'—')}</div>
-            <div style="font-size:11px;color:#6b7280">#${formatPedidoId(p.id)}</div>
-            ${p.inst_hora     ? `<div style="font-size:12px;color:#374151;margin-top:2px">🕐 ${p.inst_hora}</div>` : ''}
-            ${p.inst_endereco ? `<div style="font-size:11px;color:#6b7280;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(p.inst_endereco)}">📍 ${escapeHtml(p.inst_endereco)}</div>` : ''}
+            <div style="font-weight:700;font-size:14px;color:var(--dark);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(p.clienteNome)}">${escapeHtml(p.clienteNome||'—')}</div>
+            <div style="font-size:11px;color:#8F8F8F">#${formatPedidoId(p.id)}</div>
+            ${p.inst_hora     ? `<div style="font-size:12px;color:var(--dark);margin-top:2px">🕐 ${p.inst_hora}</div>` : ''}
+            ${p.inst_endereco ? `<div style="font-size:11px;color:#8F8F8F;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(p.inst_endereco)}">📍 ${escapeHtml(p.inst_endereco)}</div>` : ''}
         </div>`;
     }
 
     let sections = '';
     if (atrasados.length) {
         sections += `<div style="margin-bottom:${(proximos.length || semData.length) ? '18px' : '0'}">
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#dc2626;margin-bottom:8px">⚠️ Atrasados (${atrasados.length})</div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#F43927;margin-bottom:8px">⚠️ Atrasados (${atrasados.length})</div>
             <div style="display:flex;gap:12px;flex-wrap:wrap">${atrasados.map(makeCard).join('')}</div>
         </div>`;
     }
     if (proximos.length) {
         sections += `<div style="margin-bottom:${semData.length ? '18px' : '0'}">
-            ${atrasados.length ? `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;margin-bottom:8px">🔧 Próximas Instalações</div>` : ''}
+            ${atrasados.length ? `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#8F8F8F;margin-bottom:8px">🔧 Próximas Instalações</div>` : ''}
             <div style="display:flex;gap:12px;flex-wrap:wrap">${proximos.map(makeCard).join('')}</div>
         </div>`;
     }
     if (semData.length) {
         sections += `<div>
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#9ca3af;margin-bottom:8px">Sem data definida (${semData.length})</div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#8F8F8F;margin-bottom:8px">Sem data definida (${semData.length})</div>
             <div style="display:flex;gap:12px;flex-wrap:wrap">${semData.map(makeCard).join('')}</div>
         </div>`;
     }
 
-    const titleColor = atrasados.length ? '#dc2626' : '#374151';
+    const titleColor = atrasados.length ? '#F43927' : '#242424';
     const titleText  = atrasados.length
         ? `⚠️ Instalações — ${atrasados.length} atrasada${atrasados.length > 1 ? 's' : ''}`
         : '🔧 Agenda de Instalações';
@@ -5831,8 +5832,8 @@ function renderAgenda() {
     });
     const ordemGrupos = ['⚠ Atrasado', '📅 Esta semana', '📆 Próxima semana', '🗓 Futuro', 'Sem data definida'];
     container.innerHTML = ordemGrupos.filter(g => grupos[g]).map(g => {
-        const bgGrupo  = g.includes('Atrasado') ? '#fee2e2' : g.includes('Esta semana') ? '#dbeafe' : '#f3f4f6';
-        const clrGrupo = g.includes('Atrasado') ? '#991b1b' : g.includes('Esta semana') ? '#1e40af' : '#374151';
+        const bgGrupo  = g.includes('Atrasado') ? '#FDE8E5' : g.includes('Esta semana') ? '#E4EFF9' : '#F1F1F1';
+        const clrGrupo = g.includes('Atrasado') ? '#B3160A' : g.includes('Esta semana') ? '#1F5A96' : '#242424';
         const cards = grupos[g].map(p => {
             const cli     = db.clientes.find(c => c.id == p.clienteId);
             const pagto   = statusPagamento(p);
@@ -5845,48 +5846,48 @@ function renderAgenda() {
                         <span style="font-size:11px;color:#888">Pedido #${formatPedidoId(p.id)}</span>
                         <div style="font-weight:bold;font-size:15px;margin:2px 0">${escapeHtml(p.clienteNome||'—')}</div>
                         <div style="font-size:13px;color:#555">${escapeHtml(p.amb||'—')}</div>
-                        ${cli?.tel ? `<div style="font-size:12px;color:#6b7280;margin-top:2px">📱 ${escapeHtml(cli.tel)}</div>` : ''}
+                        ${cli?.tel ? `<div style="font-size:12px;color:#8F8F8F;margin-top:2px">📱 ${escapeHtml(cli.tel)}</div>` : ''}
                     </div>
                     <div style="text-align:right">
                         <div style="font-weight:bold">R$ ${(p.valor||0).toFixed(2)}</div>
                         ${pagto.cls ? `<span class="${pagto.cls}">${pagto.label}</span>` : ''}
-                        <div style="font-size:12px;color:#6b7280;margin-top:4px">📅 ${entrega}</div>
+                        <div style="font-size:12px;color:#8F8F8F;margin-top:4px">📅 ${entrega}</div>
                     </div>
                 </div>
 
                 <!-- Campos editáveis de instalação -->
                 <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
-                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin-bottom:10px">Detalhes da Instalação</div>
+                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8F8F8F;margin-bottom:10px">Detalhes da Instalação</div>
 
                     <!-- Data de instalação (com confirmação) -->
-                    <div style="margin-bottom:10px;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px">
-                        <label style="font-size:11px;color:#92400e;font-weight:700;display:block;margin-bottom:6px">📅 Data de Instalação</label>
+                    <div style="margin-bottom:10px;padding:10px 12px;background:#FEFAE9;border:1px solid #F7DE86;border-radius:8px">
+                        <label style="font-size:11px;color:#8A6A00;font-weight:700;display:block;margin-bottom:6px">📅 Data de Instalação</label>
                         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                             <input type="date" id="inst-data-${p.id}" value="${p.data_entrega||''}"
-                                   style="padding:6px 10px;border:1px solid #fcd34d;border-radius:6px;font-size:13px;background:#fff;color:var(--dark);flex:1;min-width:140px">
-                            <button class="btn btn-sm" style="background:#d97706;color:#fff;border:none;white-space:nowrap" onclick="alterarDataInstalacao(${p.id})">
+                                   style="padding:6px 10px;border:1px solid #F2C924;border-radius:6px;font-size:13px;background:#fff;color:var(--dark);flex:1;min-width:140px">
+                            <button class="btn btn-sm" style="background:#F2C924;color:#fff;border:none;white-space:nowrap" onclick="alterarDataInstalacao(${p.id})">
                                 📅 Alterar Data
                             </button>
                         </div>
-                        <div style="font-size:10px;color:#b45309;margin-top:5px">Alteração reflete no pedido e exige confirmação.</div>
+                        <div style="font-size:10px;color:#8A6A00;margin-top:5px">Alteração reflete no pedido e exige confirmação.</div>
                     </div>
 
                     <div style="display:grid;grid-template-columns:1fr 120px;gap:8px;margin-bottom:8px">
                         <div>
-                            <label style="font-size:11px;color:#6b7280;display:block;margin-bottom:3px">Endereço</label>
+                            <label style="font-size:11px;color:#8F8F8F;display:block;margin-bottom:3px">Endereço</label>
                             <input type="text" id="inst-end-${p.id}" value="${escapeHtml(p.inst_endereco||'')}" placeholder="${escapeHtml(endPlaceholder)}"
-                                   style="width:100%;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+                                   style="width:100%;padding:6px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px">
                         </div>
                         <div>
-                            <label style="font-size:11px;color:#6b7280;display:block;margin-bottom:3px">Horário</label>
+                            <label style="font-size:11px;color:#8F8F8F;display:block;margin-bottom:3px">Horário</label>
                             <input type="time" id="inst-hora-${p.id}" value="${escapeHtml(p.inst_hora||'')}"
-                                   style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+                                   style="width:100%;padding:6px 8px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px">
                         </div>
                     </div>
                     <div style="margin-bottom:10px">
-                        <label style="font-size:11px;color:#6b7280;display:block;margin-bottom:3px">Informações Gerais</label>
+                        <label style="font-size:11px;color:#8F8F8F;display:block;margin-bottom:3px">Informações Gerais</label>
                         <textarea id="inst-obs-${p.id}" rows="2" placeholder="Observações, referências, instruções de acesso…"
-                                  style="width:100%;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;resize:vertical;font-family:inherit">${escapeHtml(p.inst_obs||'')}</textarea>
+                                  style="width:100%;padding:6px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px;resize:vertical;font-family:inherit">${escapeHtml(p.inst_obs||'')}</textarea>
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                         <button class="btn btn-success btn-sm" onclick="salvarCamposInstalacao(${p.id})">💾 Salvar</button>
@@ -5976,7 +5977,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const disp = estoqueDisponivel(c.id);
             const dispTxt = db.estoque.some(r=>r.tecido_id==c.id) ? `${disp.toFixed(2)} m` : '—';
             const alertMin = c.min_estoque>0&&disp<c.min_estoque ? `<span class="badge-alerta" style="margin-left:6px">⚠</span>` : '';
-            const thumb = c.imagem ? `<img src="${c.imagem}" style="width:32px;height:32px;object-fit:cover;border-radius:4px;margin-right:7px;vertical-align:middle;border:1px solid #e5e7eb">` : '';
+            const thumb = c.imagem ? `<img src="${c.imagem}" style="width:32px;height:32px;object-fit:cover;border-radius:4px;margin-right:7px;vertical-align:middle;border:1px solid #E0E0E0">` : '';
             const nomeClick = `<span style="cursor:pointer;color:var(--primary);font-weight:500;text-decoration:underline dotted" onclick="verDetalhesTecido(${c.id})" title="Ver detalhes">${escapeHtml(c.nome)}</span>`;
             return `<tr><td style="white-space:nowrap">${thumb}${nomeClick}</td><td style="font-size:12px;color:#555">${escapeHtml(c.referencia||'—')}</td><td>R$ ${c.preco.toFixed(2)}</td><td>${(c.largura_rolo||2.80).toFixed(2)} m</td><td>${c.min_estoque?c.min_estoque+' m':'—'}</td><td>${dispTxt}${alertMin}</td><td style="font-size:12px;color:#555">${escapeHtml(c.fornecedor_nome||'—')}</td><td>
                 <button class="btn btn-outline btn-sm" onclick="editarCatalogo(${c.id})" title="Editar">✏️ Editar</button>
@@ -6262,7 +6263,7 @@ function renderConsultaEstoque() {
                 </tr></thead>
                 <tbody>${rolos.map(r => {
                     const pct = r.metragem_inicial > 0 ? Math.round((r.metragem_atual / r.metragem_inicial) * 100) : 0;
-                    const cor = pct > 40 ? '#059669' : pct > 15 ? '#d97706' : '#dc2626';
+                    const cor = pct > 40 ? '#005D3B' : pct > 15 ? '#F2C924' : '#F43927';
                     const status = r.metragem_atual <= 0 ? '<span class="badge-esgotado">Esgotado</span>' : `<span style="color:${cor};font-weight:600">${pct}% restante</span>`;
                     return `<tr>
                         <td style="padding:4px 10px">${escapeHtml(r.lote)}</td>
@@ -6278,17 +6279,17 @@ function renderConsultaEstoque() {
             <div class="card" style="margin-bottom:14px">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
                     <div>
-                        <span style="font-size:11px;font-weight:700;color:#fff;background:#2A5C82;padding:2px 8px;border-radius:12px;margin-right:8px">TECIDO</span>
+                        <span style="font-size:11px;font-weight:700;color:#fff;background:#005D3B;padding:2px 8px;border-radius:12px;margin-right:8px">TECIDO</span>
                         <strong style="font-size:16px">${escapeHtml(tec.nome)}</strong>
                         ${tec.referencia ? `<span style="margin-left:10px;font-size:13px;color:#888">Ref: ${escapeHtml(tec.referencia)}</span>` : ''}
                         ${abaixoMin ? `<span class="badge-alerta" style="margin-left:10px">⚠ Abaixo do mínimo</span>` : ''}
                     </div>
-                    <div style="font-size:22px;font-weight:700;color:${abaixoMin?'#dc2626':'#059669'}">${totalDisp.toFixed(2)} m</div>
+                    <div style="font-size:22px;font-weight:700;color:${abaixoMin?'#F43927':'#005D3B'}">${totalDisp.toFixed(2)} m</div>
                 </div>
                 <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-top:14px;gap:10px">
                     <div class="consulta-info-item"><span class="consulta-info-label">Fornecedor</span><span>${escapeHtml(tec.fornecedor_nome||'—')}</span></div>
-                    <div class="consulta-info-item"><span class="consulta-info-label">Preço de Custo</span><span style="color:#374151;font-weight:600">${fmt(tec.preco_custo)}/m</span></div>
-                    <div class="consulta-info-item"><span class="consulta-info-label">Preço de Venda</span><span style="color:#059669;font-weight:700">${fmt(tec.preco)}/m</span></div>
+                    <div class="consulta-info-item"><span class="consulta-info-label">Preço de Custo</span><span style="color:var(--dark);font-weight:600">${fmt(tec.preco_custo)}/m</span></div>
+                    <div class="consulta-info-item"><span class="consulta-info-label">Preço de Venda</span><span style="color:#005D3B;font-weight:700">${fmt(tec.preco)}/m</span></div>
                     <div class="consulta-info-item"><span class="consulta-info-label">Largura do Rolo</span><span>${tec.largura_rolo ? tec.largura_rolo + ' m' : '—'}</span></div>
                     <div class="consulta-info-item"><span class="consulta-info-label">Estoque Mínimo</span><span>${tec.min_estoque > 0 ? tec.min_estoque + ' m' : '—'}</span></div>
                     <div class="consulta-info-item"><span class="consulta-info-label">Última Entrada</span><span>${ultData}</span></div>
@@ -6321,18 +6322,18 @@ function renderConsultaEstoque() {
             <div class="card" style="margin-bottom:14px">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
                     <div>
-                        <span style="font-size:11px;font-weight:700;color:#fff;background:#6366f1;padding:2px 8px;border-radius:12px;margin-right:8px">MATERIAL</span>
+                        <span style="font-size:11px;font-weight:700;color:#fff;background:#9B31C8;padding:2px 8px;border-radius:12px;margin-right:8px">MATERIAL</span>
                         <strong style="font-size:16px">${escapeHtml(m.nome)}</strong>
                         ${m.referencia ? `<span style="margin-left:10px;font-size:13px;color:#888">Ref: ${escapeHtml(m.referencia)}</span>` : ''}
                         ${abaixoMin ? `<span class="badge-alerta" style="margin-left:10px">⚠ Abaixo do mínimo</span>` : ''}
                     </div>
-                    <div style="font-size:22px;font-weight:700;color:${abaixoMin?'#dc2626':'#059669'}">${fmtQtd(m.estoque_atual, m.unidade)}</div>
+                    <div style="font-size:22px;font-weight:700;color:${abaixoMin?'#F43927':'#005D3B'}">${fmtQtd(m.estoque_atual, m.unidade)}</div>
                 </div>
                 <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-top:14px;gap:10px">
                     <div class="consulta-info-item"><span class="consulta-info-label">Fornecedor</span><span>${escapeHtml(m.fornecedor_nome||'—')}</span></div>
                     <div class="consulta-info-item"><span class="consulta-info-label">Unidade</span><span>${escapeHtml(m.unidade||'—')}</span></div>
-                    <div class="consulta-info-item"><span class="consulta-info-label">Preço de Custo</span><span style="color:#374151;font-weight:600">${fmt(m.preco_custo)}</span></div>
-                    <div class="consulta-info-item"><span class="consulta-info-label">Preço de Venda</span><span style="color:#059669;font-weight:700">${fmt(m.preco)}</span></div>
+                    <div class="consulta-info-item"><span class="consulta-info-label">Preço de Custo</span><span style="color:var(--dark);font-weight:600">${fmt(m.preco_custo)}</span></div>
+                    <div class="consulta-info-item"><span class="consulta-info-label">Preço de Venda</span><span style="color:#005D3B;font-weight:700">${fmt(m.preco)}</span></div>
                     <div class="consulta-info-item"><span class="consulta-info-label">Estoque Mínimo</span><span>${m.min_estoque > 0 ? m.min_estoque + ' ' + m.unidade : '—'}</span></div>
                     <div class="consulta-info-item"><span class="consulta-info-label">Última Entrada</span><span>${ultData}</span></div>
                 </div>
@@ -6377,12 +6378,12 @@ function renderEstoqueMateriais() {
     });
     tb.innerHTML = lista.map(m => {
         const abaixoMin = m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque;
-        const cor = abaixoMin ? '#dc2626' : '#059669';
+        const cor = abaixoMin ? '#F43927' : '#005D3B';
         return `<tr>
             <td><strong>${escapeHtml(m.nome)}</strong>${abaixoMin?`<span class="badge-alerta" style="margin-left:8px">⚠</span>`:''}</td>
             <td style="font-size:12px;color:#555">${escapeHtml(m.referencia||'—')}</td>
             <td>${m.unidade}</td>
-            <td style="color:#059669;font-weight:600">${m.preco > 0 ? 'R$ '+m.preco.toFixed(2) : '—'}</td>
+            <td style="color:#005D3B;font-weight:600">${m.preco > 0 ? 'R$ '+m.preco.toFixed(2) : '—'}</td>
             <td style="color:${cor}"><strong>${(m.estoque_atual||0).toFixed(2)}</strong>${m.min_estoque>0?`<span style="color:#888;font-size:12px"> / mín: ${m.min_estoque}</span>`:''}</td>
             <td style="font-size:12px;color:#555">${escapeHtml(m.fornecedor_nome||'—')}</td>
             <td>
@@ -6395,7 +6396,7 @@ function renderEstoqueMateriais() {
                 <strong>${escapeHtml(m.nome)}</strong> — saldo: <strong>${(m.estoque_atual||0).toFixed(2)} ${m.unidade}</strong> &emsp;
                 Quantidade (+ entrada / − saída):
                 <input type="number" id="ajuste-qtd-${m.id}" placeholder="Ex: +10 ou -3" step="0.01" style="width:130px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;margin:0 8px">
-                <button class="btn btn-sm" style="background:#059669" onclick="confirmarAjuste(${m.id})">Confirmar</button>
+                <button class="btn btn-sm" style="background:#005D3B" onclick="confirmarAjuste(${m.id})">Confirmar</button>
                 <button class="btn btn-outline btn-sm" onclick="cancelarAjuste()">Cancelar</button>
             </td>
         </tr>`;
@@ -6774,7 +6775,7 @@ function abrirModalContaPagar(modo, manterAnexoPendente) {
         <div class="modal-body">
             <div class="grid">
                 <div class="form-group" style="grid-column:span 2">
-                    <label>Descrição <span style="color:#dc2626">*</span></label>
+                    <label>Descrição <span style="color:#F43927">*</span></label>
                     <input type="text" id="cpm-descricao" placeholder="Ex: Compra de tecido, salário costureira…">
                 </div>
                 <div class="form-group">
@@ -6787,20 +6788,20 @@ function abrirModalContaPagar(modo, manterAnexoPendente) {
                     <input type="text" id="cpm-credor" placeholder="Nome do credor">
                 </div>
                 <div class="form-group">
-                    <label>Valor (R$) <span style="color:#dc2626">*</span></label>
+                    <label>Valor (R$) <span style="color:#F43927">*</span></label>
                     <input type="number" id="cpm-valor" step="0.01" min="0" placeholder="0.00">
                 </div>
                 <div class="form-group">
-                    <label>Vencimento <span style="color:#dc2626">*</span></label>
+                    <label>Vencimento <span style="color:#F43927">*</span></label>
                     <input type="date" id="cpm-vencimento">
                 </div>
                 <div class="form-group" style="grid-column:span 2">
                     <label>Nº da Nota ou Linha Digitável do Boleto <span class="info-tag">opcional</span></label>
                     <input type="text" id="cpm-doc" placeholder="Cole a linha digitável (boleto/convênio) ou digite o nº da nota" oninput="onDocContaPagarInput()">
-                    <div id="cpm-doc-help" style="font-size:11px;margin-top:3px;color:#6b7280;min-height:14px"></div>
+                    <div id="cpm-doc-help" style="font-size:11px;margin-top:3px;color:#8F8F8F;min-height:14px"></div>
                 </div>
             </div>
-            <div style="display:flex;gap:24px;flex-wrap:wrap;margin:6px 0 14px;padding:12px 14px;background:#f8fafc;border:1px solid var(--border);border-radius:8px">
+            <div style="display:flex;gap:24px;flex-wrap:wrap;margin:6px 0 14px;padding:12px 14px;background:#FAFAFA;border:1px solid var(--border);border-radius:8px">
                 <div style="display:flex;align-items:center;gap:10px">
                     <label class="toggle-switch"><input type="checkbox" id="cpm-recorrente" onchange="onToggleRecorrenteCP()"><span class="toggle-slider"></span></label>
                     <span style="font-size:13px;font-weight:600">Recorrente?</span>
@@ -6885,8 +6886,8 @@ async function onCnpjContaPagarInput() {
     if (!el || !statusEl) return;
     const digits = el.value.replace(/\D/g, '');
     if (digits.length !== 14) { statusEl.textContent = ''; return; }
-    if (!validarCNPJ(digits)) { statusEl.innerHTML = '<span style="color:#dc2626">⚠️ CNPJ inválido — confira os dígitos.</span>'; return; }
-    statusEl.innerHTML = '<span style="color:#6b7280">⏳ Consultando...</span>';
+    if (!validarCNPJ(digits)) { statusEl.innerHTML = '<span style="color:#F43927">⚠️ CNPJ inválido — confira os dígitos.</span>'; return; }
+    statusEl.innerHTML = '<span style="color:#8F8F8F">⏳ Consultando...</span>';
     try {
         const res = await fetch(`https://publica.cnpj.ws/cnpj/${digits}`);
         if (!res.ok) throw new Error(res.status === 404 ? 'nao_encontrado' : 'erro');
@@ -6894,11 +6895,11 @@ async function onCnpjContaPagarInput() {
         const est = d.estabelecimento || {};
         const credorEl = document.getElementById('cpm-credor');
         if (credorEl) credorEl.value = est.nome_fantasia || d.razao_social || credorEl.value;
-        statusEl.innerHTML = '<span style="color:#059669">✅ Fornecedor encontrado e preenchido.</span>';
+        statusEl.innerHTML = '<span style="color:#005D3B">✅ Fornecedor encontrado e preenchido.</span>';
     } catch (e) {
         statusEl.innerHTML = e.message === 'nao_encontrado'
-            ? '<span style="color:#6b7280">CNPJ não encontrado — preencha o credor manualmente.</span>'
-            : '<span style="color:#6b7280">Não foi possível consultar agora — preencha o credor manualmente.</span>';
+            ? '<span style="color:#8F8F8F">CNPJ não encontrado — preencha o credor manualmente.</span>'
+            : '<span style="color:#8F8F8F">Não foi possível consultar agora — preencha o credor manualmente.</span>';
     }
 }
 
@@ -6910,7 +6911,7 @@ function onDocContaPagarInput() {
     if (!digits) { helpEl.textContent = ''; return; }
 
     if (digits.length === 44) {
-        helpEl.style.color = '#6b7280';
+        helpEl.style.color = '#8F8F8F';
         helpEl.textContent = 'Chave de acesso de NF-e detectada (44 dígitos). A busca automática por chave completa ainda não está disponível — use "Exportar nota/boleto" (em breve) ou preencha manualmente.';
         return;
     }
@@ -6921,12 +6922,12 @@ function onDocContaPagarInput() {
             if (res.vencimento) document.getElementById('cpm-vencimento').value = res.vencimento;
             const descEl = document.getElementById('cpm-descricao');
             if (descEl && !descEl.value.trim()) descEl.value = res.tipo === 'boleto' ? `Boleto ${res.banco}` : 'Conta de consumo (convênio)';
-            helpEl.style.color = '#059669';
+            helpEl.style.color = '#005D3B';
             helpEl.textContent = res.tipo === 'boleto'
                 ? `Boleto identificado — ${res.banco}${res.valor ? `, valor R$ ${res.valor.toFixed(2)}` : ''}${res.vencimento ? `, vencimento ${new Date(res.vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}.`
                 : `Linha de convênio identificada${res.valorReferencia ? ' (valor de referência — confirme o valor real a pagar)' : ''}. Este tipo de linha não codifica vencimento — informe manualmente.`;
         } else if (res.motivo) {
-            helpEl.style.color = '#dc2626';
+            helpEl.style.color = '#F43927';
             helpEl.textContent = res.motivo;
         }
         return;
@@ -6939,10 +6940,10 @@ function onDocContaPagarInput() {
             const valorEl = document.getElementById('cpm-valor');
             if (credorEl && !credorEl.value.trim()) credorEl.value = achado.credor_nome || '';
             if (valorEl && !valorEl.value) valorEl.value = achado.valor.toFixed(2);
-            helpEl.style.color = '#059669';
+            helpEl.style.color = '#005D3B';
             helpEl.textContent = `Encontrado no histórico: lançamento anterior de "${achado.credor_nome || '—'}" com este número de documento.`;
         } else {
-            helpEl.style.color = '#6b7280';
+            helpEl.style.color = '#8F8F8F';
             helpEl.textContent = 'Busca automática só pelo número da nota não é garantida — não existe API pública gratuita para isso. Use "Exportar nota/boleto" ou informe a chave de acesso completa (44 dígitos).';
         }
         return;
@@ -7061,11 +7062,11 @@ function abrirModalImportarNota() {
             <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
         </div>
         <div class="modal-body">
-            <p style="font-size:12.5px;color:#6b7280;margin-bottom:14px">Envie o arquivo original — os campos serão extraídos automaticamente quando possível. Você sempre revisa e confirma antes de lançar.</p>
+            <p style="font-size:12.5px;color:#8F8F8F;margin-bottom:14px">Envie o arquivo original — os campos serão extraídos automaticamente quando possível. Você sempre revisa e confirma antes de lançar.</p>
             <div id="cpi-dropzone" style="border:2px dashed var(--border);border-radius:10px;padding:36px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s">
                 <div style="font-size:32px;margin-bottom:8px">📎</div>
-                <div style="font-weight:600;color:#374151;margin-bottom:4px">Clique para selecionar ou arraste o arquivo aqui</div>
-                <div style="font-size:12px;color:#6b7280">PDF, XML, JPG ou PNG · Máx. 4 MB</div>
+                <div style="font-weight:600;color:var(--dark);margin-bottom:4px">Clique para selecionar ou arraste o arquivo aqui</div>
+                <div style="font-size:12px;color:#8F8F8F">PDF, XML, JPG ou PNG · Máx. 4 MB</div>
             </div>
             <input type="file" id="cpi-file-input" accept=".pdf,.xml,.jpg,.jpeg,.png" style="display:none">
             <div id="cpi-status" style="margin-top:14px;font-size:13px"></div>
@@ -7079,7 +7080,7 @@ function abrirModalImportarNota() {
     dz.addEventListener('click', () => input.click());
     input.addEventListener('change', () => onArquivoContaPagarSelecionado(input.files?.[0]));
     ['dragover', 'dragleave', 'drop'].forEach(evt => dz.addEventListener(evt, e => e.preventDefault()));
-    dz.addEventListener('dragover', () => { dz.style.borderColor = 'var(--primary)'; dz.style.background = '#eff6ff'; });
+    dz.addEventListener('dragover', () => { dz.style.borderColor = 'var(--primary)'; dz.style.background = '#EDF5FC'; });
     dz.addEventListener('dragleave', () => { dz.style.borderColor = 'var(--border)'; dz.style.background = ''; });
     dz.addEventListener('drop', e => {
         dz.style.borderColor = 'var(--border)'; dz.style.background = '';
@@ -7102,22 +7103,22 @@ async function onArquivoContaPagarSelecionado(file) {
     const statusEl = document.getElementById('cpi-status');
     const MAX_BYTES = 4 * 1024 * 1024;
     if (file.size > MAX_BYTES) {
-        if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626">⚠️ Arquivo muito grande (máx. 4 MB) — o navegador guarda os anexos junto com o resto dos dados do sistema.</span>';
+        if (statusEl) statusEl.innerHTML = '<span style="color:#F43927">⚠️ Arquivo muito grande (máx. 4 MB) — o navegador guarda os anexos junto com o resto dos dados do sistema.</span>';
         return;
     }
     const ext = (file.name.split('.').pop() || '').toLowerCase();
     if (!['pdf', 'xml', 'jpg', 'jpeg', 'png'].includes(ext)) {
-        if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626">⚠️ Formato não suportado. Envie PDF, XML, JPG ou PNG.</span>';
+        if (statusEl) statusEl.innerHTML = '<span style="color:#F43927">⚠️ Formato não suportado. Envie PDF, XML, JPG ou PNG.</span>';
         return;
     }
-    if (statusEl) statusEl.innerHTML = '<span style="color:#6b7280">⏳ Lendo arquivo...</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:#8F8F8F">⏳ Lendo arquivo...</span>';
 
     let dataUrl = null;
     try { dataUrl = await _lerArquivoComoDataUrl(file); }
-    catch { if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626">⚠️ Não foi possível ler o arquivo.</span>'; return; }
+    catch { if (statusEl) statusEl.innerHTML = '<span style="color:#F43927">⚠️ Não foi possível ler o arquivo.</span>'; return; }
 
     const mostrarProgressoOcr = pct => {
-        if (statusEl) statusEl.innerHTML = `<span style="color:#6b7280">🔍 Lendo por OCR (pode levar alguns segundos)... ${pct}%</span>`;
+        if (statusEl) statusEl.innerHTML = `<span style="color:#8F8F8F">🔍 Lendo por OCR (pode levar alguns segundos)... ${pct}%</span>`;
     };
 
     let extraidos = { ok: false, motivo: 'erro' };
@@ -7137,8 +7138,8 @@ async function onArquivoContaPagarSelecionado(file) {
     }
 
     if (statusEl) statusEl.innerHTML = extraidos.ok
-        ? '<span style="color:#059669">✅ Dados extraídos! Abrindo para revisão...</span>'
-        : '<span style="color:#6b7280">Não foi possível extrair automaticamente. Abrindo para preenchimento manual...</span>';
+        ? '<span style="color:#005D3B">✅ Dados extraídos! Abrindo para revisão...</span>'
+        : '<span style="color:#8F8F8F">Não foi possível extrair automaticamente. Abrindo para preenchimento manual...</span>';
 
     await new Promise(r => setTimeout(r, 500));
     document.querySelectorAll('.modal-overlay').forEach(o => o.remove());
@@ -7164,23 +7165,23 @@ function _preencherModalComExtracao(dados, nomeArquivo) {
     const helpEl = document.getElementById('cpm-doc-help');
     if (!helpEl) return;
     if (dados.ok) {
-        helpEl.style.color = '#059669';
+        helpEl.style.color = '#005D3B';
         helpEl.textContent = `Preenchido a partir de "${nomeArquivo}". Revise os campos antes de lançar.`;
         if (dados.dupInfo) helpEl.textContent += ` Esta nota possui ${dados.dupInfo} parcela(s) de cobrança — marque "Parcelado?" abaixo se quiser lançar todas.`;
     } else if (dados.motivo === 'ocr_falhou') {
-        helpEl.style.color = '#dc2626';
+        helpEl.style.color = '#F43927';
         helpEl.textContent = `Não foi possível processar a leitura automática (OCR)${dados.detalhe ? ' — ' + dados.detalhe : ''}. O arquivo foi anexado; preencha manualmente.`;
     } else if (dados.motivo === 'ocr_sem_texto') {
-        helpEl.style.color = '#6b7280';
+        helpEl.style.color = '#8F8F8F';
         helpEl.textContent = 'Não conseguimos reconhecer texto neste arquivo (qualidade baixa ou imagem ilegível). O arquivo foi anexado; preencha manualmente.';
     } else if (dados.motivo === 'ocr_sem_campos') {
-        helpEl.style.color = '#6b7280';
+        helpEl.style.color = '#8F8F8F';
         helpEl.textContent = 'A leitura automática por OCR não encontrou CNPJ, valor ou linha digitável neste documento — a extração por OCR é aproximada e nem sempre reconhece todos os documentos. O arquivo foi anexado; confira e preencha manualmente.';
     } else if (dados.motivo === 'xml_invalido' || dados.motivo === 'xml_sem_nfe') {
-        helpEl.style.color = '#dc2626';
+        helpEl.style.color = '#F43927';
         helpEl.textContent = 'Este XML não parece ser uma NF-e válida. O arquivo foi anexado; preencha manualmente.';
     } else {
-        helpEl.style.color = '#dc2626';
+        helpEl.style.color = '#F43927';
         helpEl.textContent = `Não foi possível ler os dados automaticamente${dados.detalhe ? ' (' + dados.detalhe + ')' : ''}. O arquivo foi anexado; preencha manualmente.`;
     }
 }
@@ -7438,10 +7439,10 @@ const _finCenterTextPlugin = {
         const cy = (chartArea.top + chartArea.bottom) / 2;
         ctx.save();
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.font = 'bold 13px system-ui,sans-serif'; ctx.fillStyle = '#111827';
+        ctx.font = 'bold 13px system-ui,sans-serif'; ctx.fillStyle = '#242424';
         ctx.fillText(cfg.text, cx, cy - (cfg.subtext ? 8 : 0));
         if (cfg.subtext) {
-            ctx.font = '10px system-ui,sans-serif'; ctx.fillStyle = '#6b7280';
+            ctx.font = '10px system-ui,sans-serif'; ctx.fillStyle = '#8F8F8F';
             ctx.fillText(cfg.subtext, cx, cy + 9);
         }
         ctx.restore();
@@ -7563,71 +7564,71 @@ function gerarRelatorioFinanceiro() {
     const funilImg = document.getElementById('chart-fin-funil')?.toDataURL?.('image/png') || null;
     const empresa  = getEmpresa();
 
-    const thStyle = 'padding:6px 8px;text-align:left;border:1px solid #e5e7eb;background:#f9fafb;font-size:11px';
-    const tdStyle = 'padding:5px 8px;border:1px solid #e5e7eb;font-size:12px';
+    const thStyle = 'padding:6px 8px;text-align:left;border:1px solid #E0E0E0;background:#FAFAFA;font-size:11px';
+    const tdStyle = 'padding:5px 8px;border:1px solid #E0E0E0;font-size:12px';
 
     const mkTable = (rows, headers, emptyMsg) => `
         <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
             <thead><tr>${headers.map(h=>`<th style="${thStyle}${h.right?';text-align:right':''}">${h.label}</th>`).join('')}</tr></thead>
-            <tbody>${rows.length ? rows : `<tr><td colspan="${headers.length}" style="${tdStyle};text-align:center;color:#9ca3af">${emptyMsg}</td></tr>`}</tbody>
+            <tbody>${rows.length ? rows : `<tr><td colspan="${headers.length}" style="${tdStyle};text-align:center;color:#8F8F8F">${emptyMsg}</td></tr>`}</tbody>
         </table>`;
 
     const rowsRec = proxRec.map(cr => {
         const at = cr.status==='Atrasado';
-        return `<tr style="background:${at?'#fff1f2':''}">
-            <td style="${tdStyle}${at?';color:#dc2626;font-weight:700':''}">${fmtDate(cr.data_vencimento)}</td>
+        return `<tr style="background:${at?'#FEF4F2':''}">
+            <td style="${tdStyle}${at?';color:#F43927;font-weight:700':''}">${fmtDate(cr.data_vencimento)}</td>
             <td style="${tdStyle}">${escapeHtml(cr.cliente_nome)}</td>
-            <td style="${tdStyle};color:#6b7280;font-size:11px">${escapeHtml(cr.descricao)}</td>
+            <td style="${tdStyle};color:#8F8F8F;font-size:11px">${escapeHtml(cr.descricao)}</td>
             <td style="${tdStyle};text-align:right;font-weight:700">R$ ${fmt(cr.valor)}</td>
             <td style="${tdStyle}">${cr.status}</td>
         </tr>`;
     });
     const rowsPag = proxPag.map(cp => {
         const at = cp.status==='Atrasado';
-        return `<tr style="background:${at?'#fff1f2':''}">
-            <td style="${tdStyle}${at?';color:#dc2626;font-weight:700':''}">${fmtDate(cp.data_vencimento)}</td>
+        return `<tr style="background:${at?'#FEF4F2':''}">
+            <td style="${tdStyle}${at?';color:#F43927;font-weight:700':''}">${fmtDate(cp.data_vencimento)}</td>
             <td style="${tdStyle}">${escapeHtml(cp.credor_nome||cp.categoria||'—')}</td>
-            <td style="${tdStyle};color:#6b7280;font-size:11px">${escapeHtml(cp.descricao)}</td>
+            <td style="${tdStyle};color:#8F8F8F;font-size:11px">${escapeHtml(cp.descricao)}</td>
             <td style="${tdStyle};text-align:right;font-weight:700">R$ ${fmt(cp.valor)}</td>
             <td style="${tdStyle}">${cp.status}</td>
         </tr>`;
     });
 
-    const html = `<div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:20px;color:#1f2937">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #2A5C82;padding-bottom:14px;margin-bottom:20px">
+    const html = `<div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:20px;color:#242424">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #005D3B;padding-bottom:14px;margin-bottom:20px">
         <div>${empresa.logo?`<img src="${empresa.logo}" style="height:32px;margin-bottom:4px;display:block">`:''}
-            <h1 style="color:#2A5C82;margin:0;font-size:20px">${escapeHtml(empresa.nome||'SCTech')}</h1>
-            <p style="margin:2px 0 0;color:#6b7280;font-size:12px">Relatório Financeiro · ${escapeHtml(label)}</p>
+            <h1 style="color:#005D3B;margin:0;font-size:20px">${escapeHtml(empresa.nome||'SCTech')}</h1>
+            <p style="margin:2px 0 0;color:#8F8F8F;font-size:12px">Relatório Financeiro · ${escapeHtml(label)}</p>
         </div>
-        <div style="text-align:right;font-size:11px;color:#9ca3af">
+        <div style="text-align:right;font-size:11px;color:#8F8F8F">
             <div>Gerado em ${new Date().toLocaleDateString('pt-BR')}</div>
             <div>${ini.split('-').reverse().join('/')} – ${fim.split('-').reverse().join('/')}</div>
         </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
-        ${kpiBox('Total Recebido', 'R$ '+fmt(recebido), label, '#059669')}
-        ${kpiBox('A Receber', 'R$ '+fmt(aReceber), 'vence no período', '#2563eb')}
-        ${kpiBox('A Pagar', 'R$ '+fmt(aPagar), 'vence no período', '#d97706')}
-        ${kpiBox('Saldo Previsto', 'R$ '+fmt(saldoPrev), 'receb.+a receber−despesas', saldoPrev>=0?'#0891b2':'#dc2626')}
-        ${kpiBox('Lucro (Caixa)', 'R$ '+fmt(lucro), 'recebido − saídas pagas', lucro>=0?'#16a34a':'#dc2626')}
-        ${kpiBox('Ticket Médio', ticketMedio>0?'R$ '+fmt(ticketMedio):'—', pedPagos.size+' pedido(s)', '#7c3aed')}
+        ${kpiBox('Total Recebido', 'R$ '+fmt(recebido), label, '#005D3B')}
+        ${kpiBox('A Receber', 'R$ '+fmt(aReceber), 'vence no período', '#2D77C1')}
+        ${kpiBox('A Pagar', 'R$ '+fmt(aPagar), 'vence no período', '#F2C924')}
+        ${kpiBox('Saldo Previsto', 'R$ '+fmt(saldoPrev), 'receb.+a receber−despesas', saldoPrev>=0?'#17E8FF':'#F43927')}
+        ${kpiBox('Lucro (Caixa)', 'R$ '+fmt(lucro), 'recebido − saídas pagas', lucro>=0?'#159912':'#F43927')}
+        ${kpiBox('Ticket Médio', ticketMedio>0?'R$ '+fmt(ticketMedio):'—', pedPagos.size+' pedido(s)', '#9B31C8')}
     </div>
-    ${evolImg?`<h3 style="font-size:13px;color:#374151;margin:0 0 6px">Evolução Mensal (12 meses)</h3><img src="${evolImg}" style="width:100%;border-radius:6px;margin-bottom:14px">`:''}
-    ${comboImg?`<h3 style="font-size:13px;color:#374151;margin:0 0 6px">Entradas × Saídas × Saldo (período)</h3><img src="${comboImg}" style="width:100%;border-radius:6px;margin-bottom:14px">`:''}
+    ${evolImg?`<h3 style="font-size:13px;color:#242424;margin:0 0 6px">Evolução Mensal (12 meses)</h3><img src="${evolImg}" style="width:100%;border-radius:6px;margin-bottom:14px">`:''}
+    ${comboImg?`<h3 style="font-size:13px;color:#242424;margin:0 0 6px">Entradas × Saídas × Saldo (período)</h3><img src="${comboImg}" style="width:100%;border-radius:6px;margin-bottom:14px">`:''}
     ${(agingImg||topImg||funilImg)?`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
-        ${agingImg?`<div><h3 style="font-size:12px;color:#374151;margin:0 0 4px">Aging de Recebíveis</h3><img src="${agingImg}" style="width:100%"></div>`:''}
-        ${topImg?`<div><h3 style="font-size:12px;color:#374151;margin:0 0 4px">Top 10 Clientes</h3><img src="${topImg}" style="width:100%"></div>`:''}
-        ${funilImg?`<div><h3 style="font-size:12px;color:#374151;margin:0 0 4px">Funil de Pedidos</h3><img src="${funilImg}" style="width:100%"></div>`:''}
+        ${agingImg?`<div><h3 style="font-size:12px;color:#242424;margin:0 0 4px">Aging de Recebíveis</h3><img src="${agingImg}" style="width:100%"></div>`:''}
+        ${topImg?`<div><h3 style="font-size:12px;color:#242424;margin:0 0 4px">Top 10 Clientes</h3><img src="${topImg}" style="width:100%"></div>`:''}
+        ${funilImg?`<div><h3 style="font-size:12px;color:#242424;margin:0 0 4px">Funil de Pedidos</h3><img src="${funilImg}" style="width:100%"></div>`:''}
     </div>`:''}
     ${(recImg||despImg)?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-        ${recImg?`<div><h3 style="font-size:13px;color:#374151;margin:0 0 4px">Recebimentos</h3><img src="${recImg}" style="width:100%"></div>`:''}
-        ${despImg?`<div><h3 style="font-size:13px;color:#374151;margin:0 0 4px">Despesas por Categoria</h3><img src="${despImg}" style="width:100%"></div>`:''}
+        ${recImg?`<div><h3 style="font-size:13px;color:#242424;margin:0 0 4px">Recebimentos</h3><img src="${recImg}" style="width:100%"></div>`:''}
+        ${despImg?`<div><h3 style="font-size:13px;color:#242424;margin:0 0 4px">Despesas por Categoria</h3><img src="${despImg}" style="width:100%"></div>`:''}
     </div>`:''}
-    <h3 style="font-size:13px;color:#374151;margin:8px 0 6px;border-bottom:1px solid #e5e7eb;padding-bottom:4px">📥 Próximos Recebimentos</h3>
+    <h3 style="font-size:13px;color:#242424;margin:8px 0 6px;border-bottom:1px solid #E0E0E0;padding-bottom:4px">📥 Próximos Recebimentos</h3>
     ${mkTable(rowsRec, [{label:'Vencimento'},{label:'Cliente'},{label:'Descrição'},{label:'Valor',right:true},{label:'Status'}], 'Nenhum recebimento pendente.')}
-    <h3 style="font-size:13px;color:#374151;margin:8px 0 6px;border-bottom:1px solid #e5e7eb;padding-bottom:4px">📤 Próximos Pagamentos</h3>
+    <h3 style="font-size:13px;color:#242424;margin:8px 0 6px;border-bottom:1px solid #E0E0E0;padding-bottom:4px">📤 Próximos Pagamentos</h3>
     ${mkTable(rowsPag, [{label:'Vencimento'},{label:'Credor'},{label:'Descrição'},{label:'Valor',right:true},{label:'Status'}], 'Nenhum pagamento pendente.')}
-    <div style="margin-top:20px;padding-top:10px;border-top:1px solid #e5e7eb;font-size:10px;color:#9ca3af;text-align:center">
+    <div style="margin-top:20px;padding-top:10px;border-top:1px solid #E0E0E0;font-size:10px;color:#8F8F8F;text-align:center">
         Relatório gerado pelo sistema SCTech · ${new Date().toLocaleString('pt-BR')}
     </div>
 </div>`;
@@ -7737,9 +7738,9 @@ function renderDashboardFinanceiro() {
         if (_chartFinProjecao) _chartFinProjecao.destroy();
         _chartFinProjecao = new Chart(ctxProj, {
             data: { labels: projBuckets.map(b=>b.label), datasets: [
-                { type:'bar',  label:'Entradas', data:projEnt, backgroundColor:'#86efaccc', borderColor:'#22c55e', borderWidth:1, borderRadius:3, yAxisID:'y' },
-                { type:'bar',  label:'Saídas',   data:projSai, backgroundColor:'#fca5a5cc', borderColor:'#ef4444', borderWidth:1, borderRadius:3, yAxisID:'y' },
-                { type:'line', label:'Saldo',    data:projEnt.map((e,i)=>e-projSai[i]), borderColor:'#2A5C82', backgroundColor:'rgba(42,92,130,0.06)', borderWidth:2, pointRadius:3, fill:true, tension:0.35, yAxisID:'y' }
+                { type:'bar',  label:'Entradas', data:projEnt, backgroundColor:'#8FD98Dcc', borderColor:'#159912', borderWidth:1, borderRadius:3, yAxisID:'y' },
+                { type:'bar',  label:'Saídas',   data:projSai, backgroundColor:'#F79B90cc', borderColor:'#F43927', borderWidth:1, borderRadius:3, yAxisID:'y' },
+                { type:'line', label:'Saldo',    data:projEnt.map((e,i)=>e-projSai[i]), borderColor:'#005D3B', backgroundColor:'rgba(0,93,59,0.06)', borderWidth:2, pointRadius:3, fill:true, tension:0.35, yAxisID:'y' }
             ]},
             options: { responsive:true, maintainAspectRatio:false,
                 plugins:{ legend:{ position:'top', labels:{ font:{size:11}, boxWidth:10, padding:8 }}},
@@ -7750,9 +7751,9 @@ function renderDashboardFinanceiro() {
     }
     const resumoEl = document.getElementById('fin-proj-resumo');
     if (resumoEl) resumoEl.innerHTML = `
-        <div class="fp-item"><span class="fp-label">▲ Entradas totais</span><span class="fp-val" style="color:#16a34a">R$ ${fmt(projEntTotal)}</span></div>
-        <div class="fp-item"><span class="fp-label">▼ Saídas totais</span><span class="fp-val" style="color:#dc2626">R$ ${fmt(projSaiTotal)}</span></div>
-        <div class="fp-item"><span class="fp-label">Saldo líquido previsto</span><span class="fp-val" style="color:${projSaldoTotal>=0?'#059669':'#dc2626'}">${projSaldoTotal>=0?'+':''}R$ ${fmt(projSaldoTotal)}</span></div>`;
+        <div class="fp-item"><span class="fp-label">▲ Entradas totais</span><span class="fp-val" style="color:#159912">R$ ${fmt(projEntTotal)}</span></div>
+        <div class="fp-item"><span class="fp-label">▼ Saídas totais</span><span class="fp-val" style="color:#F43927">R$ ${fmt(projSaiTotal)}</span></div>
+        <div class="fp-item"><span class="fp-label">Saldo líquido previsto</span><span class="fp-val" style="color:${projSaldoTotal>=0?'#005D3B':'#F43927'}">${projSaldoTotal>=0?'+':''}R$ ${fmt(projSaldoTotal)}</span></div>`;
 
     // ── ALERTAS ───────────────────────────────────────────────────
     const alertasEl = document.getElementById('fin-alertas');
@@ -7827,24 +7828,24 @@ function renderDashboardFinanceiro() {
     const progressEl = document.getElementById('fin-meta-progress');
     if (progressEl) {
         if (!metaValor) {
-            progressEl.innerHTML = '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:8px 0">Defina uma meta acima para acompanhar seu progresso.</p>';
+            progressEl.innerHTML = '<p style="color:#8F8F8F;font-size:13px;text-align:center;padding:8px 0">Defina uma meta acima para acompanhar seu progresso.</p>';
         } else {
             const pctRaw = Math.min(100, fatMesAt/metaValor*100);
             const pctStr = pctRaw.toFixed(1);
-            const cor = pctRaw>=100?'#059669':pctRaw>=70?'#10b981':pctRaw>=40?'#f59e0b':'#ef4444';
+            const cor = pctRaw>=100?'#005D3B':pctRaw>=70?'#159912':pctRaw>=40?'#F2C924':'#F43927';
             progressEl.innerHTML = `
                 <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
-                    <span style="color:#6b7280">Faturado: <strong>R$ ${fmt(fatMesAt)}</strong></span>
-                    <span style="color:#6b7280">Meta: <strong>R$ ${fmt(metaValor)}</strong></span>
+                    <span style="color:#8F8F8F">Faturado: <strong>R$ ${fmt(fatMesAt)}</strong></span>
+                    <span style="color:#8F8F8F">Meta: <strong>R$ ${fmt(metaValor)}</strong></span>
                     <span style="font-weight:700;color:${cor}">${pctStr}%</span>
                 </div>
-                <div style="background:#f3f4f6;border-radius:8px;height:22px;overflow:hidden">
+                <div style="background:#F1F1F1;border-radius:8px;height:22px;overflow:hidden">
                     <div style="height:100%;width:${pctStr}%;background:linear-gradient(90deg,${cor},${cor}cc);border-radius:8px;transition:width .5s;display:flex;align-items:center;justify-content:flex-end;padding-right:${pctRaw>10?8:0}px">
                         ${pctRaw>12?`<span style="font-size:11px;font-weight:700;color:#fff">${pctStr}%</span>`:''}
                     </div>
                 </div>
-                <p style="font-size:12px;color:${pctRaw>=100?'#059669':'#9ca3af'};margin-top:5px;font-weight:${pctRaw>=100?700:400}">
-                    ${pctRaw>=100?'🏆 Meta atingida!':`Faltam <strong style="color:#374151">R$ ${fmt(metaValor-fatMesAt)}</strong> para a meta.`}
+                <p style="font-size:12px;color:${pctRaw>=100?'#005D3B':'#8F8F8F'};margin-top:5px;font-weight:${pctRaw>=100?700:400}">
+                    ${pctRaw>=100?'🏆 Meta atingida!':`Faltam <strong style="color:var(--dark)">R$ ${fmt(metaValor-fatMesAt)}</strong> para a meta.`}
                 </p>`;
         }
     }
@@ -7864,9 +7865,9 @@ function renderDashboardFinanceiro() {
         if (_chartFinEvolucao) _chartFinEvolucao.destroy();
         _chartFinEvolucao = new Chart(ctxEvol, {
             data:{ labels:evolLabels, datasets:[
-                {type:'bar',  label:'Entradas', data:evolRec12, backgroundColor:'#86efaccc', borderColor:'#22c55e', borderWidth:1, borderRadius:3, yAxisID:'y'},
-                {type:'bar',  label:'Saídas',   data:evolPag12, backgroundColor:'#fca5a5cc', borderColor:'#ef4444', borderWidth:1, borderRadius:3, yAxisID:'y'},
-                {type:'line', label:'Resultado', data:evolRec12.map((e,i)=>e-evolPag12[i]), borderColor:'#2A5C82', backgroundColor:'rgba(42,92,130,0.06)', borderWidth:2, pointRadius:3, fill:true, tension:0.35, yAxisID:'y'}
+                {type:'bar',  label:'Entradas', data:evolRec12, backgroundColor:'#8FD98Dcc', borderColor:'#159912', borderWidth:1, borderRadius:3, yAxisID:'y'},
+                {type:'bar',  label:'Saídas',   data:evolPag12, backgroundColor:'#F79B90cc', borderColor:'#F43927', borderWidth:1, borderRadius:3, yAxisID:'y'},
+                {type:'line', label:'Resultado', data:evolRec12.map((e,i)=>e-evolPag12[i]), borderColor:'#005D3B', backgroundColor:'rgba(0,93,59,0.06)', borderWidth:2, pointRadius:3, fill:true, tension:0.35, yAxisID:'y'}
             ]},
             options:{ responsive:true, maintainAspectRatio:false,
                 plugins:{ legend:{ position:'top', labels:{ font:{size:11}, boxWidth:10, padding:8 }}},
@@ -7879,11 +7880,11 @@ function renderDashboardFinanceiro() {
     // ── AGING DE RECEBÍVEIS ───────────────────────────────────────
     const _hjD = new Date(hojeStr+'T00:00:00');
     const agBuckets = [
-        {label:'A vencer',     color:'#22c55e', check:d=>d>0},
-        {label:'Vence hoje',   color:'#f59e0b', check:d=>d===0},
-        {label:'1–7d atraso',  color:'#fb923c', check:d=>d<0&&d>=-7},
-        {label:'8–30d atraso', color:'#ef4444', check:d=>d<-7&&d>=-30},
-        {label:'+30d atraso',  color:'#991b1b', check:d=>d<-30},
+        {label:'A vencer',     color:'#159912', check:d=>d>0},
+        {label:'Vence hoje',   color:'#F2C924', check:d=>d===0},
+        {label:'1–7d atraso',  color:'#FF7F08', check:d=>d<0&&d>=-7},
+        {label:'8–30d atraso', color:'#F43927', check:d=>d<-7&&d>=-30},
+        {label:'+30d atraso',  color:'#B3160A', check:d=>d<-30},
     ];
     const agVals = agBuckets.map(()=>0);
     db.contas_receber.filter(cr=>cr.status!=='Pago'&&cr.data_vencimento).forEach(cr=>{
@@ -7914,7 +7915,7 @@ function renderDashboardFinanceiro() {
         if (topCli.length) {
             _chartFinTopClientes = new Chart(ctxTop, {
                 type:'bar',
-                data:{labels:topCli.map(([n])=>n.length>16?n.slice(0,16)+'…':n), datasets:[{data:topCli.map(([,v])=>v), backgroundColor:'#2A5C82cc', borderColor:'#2A5C82', borderWidth:1, borderRadius:3}]},
+                data:{labels:topCli.map(([n])=>n.length>16?n.slice(0,16)+'…':n), datasets:[{data:topCli.map(([,v])=>v), backgroundColor:'#005D3Bcc', borderColor:'#005D3B', borderWidth:1, borderRadius:3}]},
                 options:{indexAxis:'y', responsive:true, maintainAspectRatio:false,
                     plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>' R$ '+ctx.raw.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}}},
                     scales:{ x:{beginAtZero:true, ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR'),font:{size:10}}, grid:{color:'rgba(0,0,0,0.05)'}},
@@ -7923,19 +7924,19 @@ function renderDashboardFinanceiro() {
             });
         } else {
             const el = ctxTop.parentElement;
-            if (!el.querySelector('.fin-sem-dados')) { const p=document.createElement('p'); p.className='fin-sem-dados'; p.style.cssText='color:#9ca3af;font-size:12px;text-align:center;padding:20px 0'; p.textContent='Sem recebimentos registrados.'; el.appendChild(p); }
+            if (!el.querySelector('.fin-sem-dados')) { const p=document.createElement('p'); p.className='fin-sem-dados'; p.style.cssText='color:#8F8F8F;font-size:12px;text-align:center;padding:20px 0'; p.textContent='Sem recebimentos registrados.'; el.appendChild(p); }
         }
     }
 
     // ── FUNIL DE PEDIDOS ──────────────────────────────────────────
     const FUNIL_ST = [
-        {key:'Orçamento',            label:'Orçamento',     color:'#94a3b8'},
-        {key:'Medição',              label:'Medição',       color:'#60a5fa'},
-        {key:'Aguardando Tecido',    label:'Ag. Tecido',    color:'#a78bfa'},
-        {key:'Na Costura',           label:'Na Costura',    color:'#f472b6'},
-        {key:'Pronto p/ Instalação', label:'Pronto Inst.',  color:'#34d399'},
-        {key:'Aguardando Pagamento', label:'Ag. Pagamento', color:'#fbbf24'},
-        {key:'Instalado',            label:'Instalado',     color:'#22c55e'},
+        {key:'Orçamento',            label:'Orçamento',     color:'#F2C924'},
+        {key:'Medição',              label:'Medição',       color:'#2D77C1'},
+        {key:'Aguardando Tecido',    label:'Ag. Tecido',    color:'#FF7F08'},
+        {key:'Na Costura',           label:'Na Costura',    color:'#9B31C8'},
+        {key:'Pronto p/ Instalação', label:'Pronto Inst.',  color:'#005D3B'},
+        {key:'Aguardando Pagamento', label:'Ag. Pagamento', color:'#FF575F'},
+        {key:'Instalado',            label:'Instalado',     color:'#159912'},
     ];
     const funilCounts = FUNIL_ST.map(s=>db.pedidos.filter(p=>normalizarStatus(p.status)===s.key).length);
     const ctxFunil = document.getElementById('chart-fin-funil');
@@ -7963,9 +7964,9 @@ function renderDashboardFinanceiro() {
         if (_chartFinCombo) _chartFinCombo.destroy();
         _chartFinCombo = new Chart(ctxCombo, {
             data: { labels: buckets.map(b=>b.label), datasets: [
-                { type:'bar',  label:'Entradas', data:entradas, backgroundColor:'#86efac', borderColor:'#22c55e', borderWidth:1, borderRadius:4, yAxisID:'y' },
-                { type:'bar',  label:'Saídas',   data:saidas,   backgroundColor:'#fca5a5', borderColor:'#ef4444', borderWidth:1, borderRadius:4, yAxisID:'y' },
-                { type:'line', label:'Saldo',    data:saldos,   borderColor:'#2A5C82', backgroundColor:'rgba(42,92,130,0.08)', pointRadius:3, borderWidth:2, fill:true, yAxisID:'y', tension:0.3 }
+                { type:'bar',  label:'Entradas', data:entradas, backgroundColor:'#8FD98D', borderColor:'#159912', borderWidth:1, borderRadius:4, yAxisID:'y' },
+                { type:'bar',  label:'Saídas',   data:saidas,   backgroundColor:'#F79B90', borderColor:'#F43927', borderWidth:1, borderRadius:4, yAxisID:'y' },
+                { type:'line', label:'Saldo',    data:saldos,   borderColor:'#005D3B', backgroundColor:'rgba(0,93,59,0.08)', pointRadius:3, borderWidth:2, fill:true, yAxisID:'y', tension:0.3 }
             ]},
             options: { responsive:true, maintainAspectRatio:false,
                 plugins:{ legend:{ position:'top', labels:{ font:{size:11}, padding:10, boxWidth:11 }}},
@@ -7987,7 +7988,7 @@ function renderDashboardFinanceiro() {
         if (_chartFinRec) _chartFinRec.destroy();
         _chartFinRec = new Chart(ctxRec, {
             type:'doughnut',
-            data:{ labels:['Recebido','Pendente','Atrasado'], datasets:[{ data:[recPago,recPend,recAtr], backgroundColor:['#22c55ecc','#f59e0bcc','#ef4444cc'], borderColor:['#22c55e','#f59e0b','#ef4444'], borderWidth:2, hoverOffset:6 }]},
+            data:{ labels:['Recebido','Pendente','Atrasado'], datasets:[{ data:[recPago,recPend,recAtr], backgroundColor:['#159912cc','#F2C924cc','#F43927cc'], borderColor:['#159912','#F2C924','#F43927'], borderWidth:2, hoverOffset:6 }]},
             options:{ responsive:true, maintainAspectRatio:true, cutout:'65%', plugins:{ legend:{ position:'bottom', labels:{ font:{size:11}, padding:8, boxWidth:10 }}, centerText:{ text: totalRec > 0 ? 'R$ '+fmt(totalRec) : '—', subtext:'Total' }}},
             plugins:[_finCenterTextPlugin]
         });
@@ -7995,7 +7996,7 @@ function renderDashboardFinanceiro() {
 
     // ── DONUT DESPESAS POR CATEGORIA ─────────────────────────────
     const CAT_LABELS = { tecido:'Tecido/Mat.', salario:'Salário', comissao_rt:'Comissão RT', aluguel:'Aluguel', conta:'Contas', outro:'Outros', costureira:'Costureira', instalador:'Instalador' };
-    const CAT_CORES  = { tecido:'#6366f1', salario:'#f59e0b', comissao_rt:'#8b5cf6', aluguel:'#ef4444', conta:'#3b82f6', outro:'#6b7280', costureira:'#ec4899', instalador:'#f97316' };
+    const CAT_CORES  = { tecido:'#9B31C8', salario:'#F2C924', comissao_rt:'#9B31C8', aluguel:'#F43927', conta:'#2D77C1', outro:'#8F8F8F', costureira:'#D70085', instalador:'#FF7F08' };
     const despCats = {};
     db.contas_pagar.filter(cp=>inRange(cp.data_vencimento)).forEach(cp => { const c=cp.categoria||'outro'; despCats[c]=(despCats[c]||0)+cp.valor; });
     const catKeys   = Object.keys(despCats);
@@ -8005,13 +8006,13 @@ function renderDashboardFinanceiro() {
         if (_chartFinDesp) _chartFinDesp.destroy();
         _chartFinDesp = catKeys.length ? new Chart(ctxDesp, {
             type:'doughnut',
-            data:{ labels:catKeys.map(k=>CAT_LABELS[k]||k), datasets:[{ data:catKeys.map(k=>despCats[k]), backgroundColor:catKeys.map(k=>(CAT_CORES[k]||'#9ca3af')+'cc'), borderColor:catKeys.map(k=>CAT_CORES[k]||'#9ca3af'), borderWidth:2, hoverOffset:6 }]},
+            data:{ labels:catKeys.map(k=>CAT_LABELS[k]||k), datasets:[{ data:catKeys.map(k=>despCats[k]), backgroundColor:catKeys.map(k=>(CAT_CORES[k]||'#8F8F8F')+'cc'), borderColor:catKeys.map(k=>CAT_CORES[k]||'#8F8F8F'), borderWidth:2, hoverOffset:6 }]},
             options:{ responsive:true, maintainAspectRatio:true, cutout:'65%', plugins:{ legend:{ position:'bottom', labels:{ font:{size:10}, padding:7, boxWidth:10 }}, centerText:{ text:'R$ '+fmt(totalDesp), subtext:'Total' }}},
             plugins:[_finCenterTextPlugin]
         }) : null;
         if (!catKeys.length) {
             const p = ctxDesp.parentElement.querySelector('p.fin-sem-desp');
-            if (!p) { const el=document.createElement('p'); el.className='fin-sem-desp'; el.style.cssText='color:#9ca3af;font-size:12px;text-align:center;padding:20px 0'; el.textContent='Sem despesas no período.'; ctxDesp.after(el); }
+            if (!p) { const el=document.createElement('p'); el.className='fin-sem-desp'; el.style.cssText='color:#8F8F8F;font-size:12px;text-align:center;padding:20px 0'; el.textContent='Sem despesas no período.'; ctxDesp.after(el); }
         }
     }
 
@@ -8045,7 +8046,7 @@ function renderDashboardFinanceiro() {
             return `<tr class="${at?'fin-atrasado':''}">
                 <td>${new Date(cr.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR')}</td>
                 <td>${escapeHtml(cr.cliente_nome)}</td>
-                <td style="font-size:12px;color:#6b7280">${escapeHtml(cr.descricao)}</td>
+                <td style="font-size:12px;color:#8F8F8F">${escapeHtml(cr.descricao)}</td>
                 <td style="text-align:right"><strong>R$ ${fmt(cr.valor)}</strong></td>
                 <td><span class="fin-badge fin-badge-${at?'red':'pending'}">${cr.status}</span></td>
             </tr>`;
@@ -8066,7 +8067,7 @@ function renderDashboardFinanceiro() {
             return `<tr class="${at?'fin-atrasado':''}">
                 <td>${new Date(cp.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR')}</td>
                 <td>${escapeHtml(cp.credor_nome||cp.categoria||'—')}</td>
-                <td style="font-size:12px;color:#6b7280">${escapeHtml(cp.descricao)}</td>
+                <td style="font-size:12px;color:#8F8F8F">${escapeHtml(cp.descricao)}</td>
                 <td style="text-align:right"><strong>R$ ${fmt(cp.valor)}</strong></td>
                 <td><span class="fin-badge fin-badge-${at?'red':'pending'}">${cp.status}</span></td>
             </tr>`;
@@ -8088,7 +8089,7 @@ function renderContasReceber() {
     const totPend = lista.filter(cr=>cr.status!=='Pago').reduce((s,cr)=>s+cr.valor,0);
     const totRec  = lista.filter(cr=>cr.status==='Pago').reduce((s,cr)=>s+cr.valor,0);
     const res = document.getElementById('cr-resumo');
-    if (res) res.innerHTML = `<span style="color:#059669">✓ Recebido: <strong>R$ ${totRec.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>&nbsp;&nbsp;<span style="color:#d97706">⏳ Pendente: <strong>R$ ${totPend.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>`;
+    if (res) res.innerHTML = `<span style="color:#005D3B">✓ Recebido: <strong>R$ ${totRec.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>&nbsp;&nbsp;<span style="color:#F2C924">⏳ Pendente: <strong>R$ ${totPend.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>`;
     if (!lista.length) { tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:#999;padding:24px">Nenhum registro encontrado.</td></tr>'; return; }
     const podeEditar = temAcesso('a_receber', 'completo');
     tb.innerHTML = lista.map(cr => {
@@ -8098,7 +8099,7 @@ function renderContasReceber() {
             <td><strong>${escapeHtml(cr.cliente_nome)}</strong></td>
             <td>${escapeHtml(cr.descricao)}</td>
             <td style="text-align:right"><strong>R$ ${cr.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
-            <td>${pago?`<span style="color:#059669;font-size:12px">✓ ${new Date(cr.data_pagamento+'T12:00:00').toLocaleDateString('pt-BR')}</span>`:`<span class="fin-badge fin-badge-${at?'red':'pending'}">${cr.status}</span>`}</td>
+            <td>${pago?`<span style="color:#005D3B;font-size:12px">✓ ${new Date(cr.data_pagamento+'T12:00:00').toLocaleDateString('pt-BR')}</span>`:`<span class="fin-badge fin-badge-${at?'red':'pending'}">${cr.status}</span>`}</td>
             <td>${podeEditar ? `${!pago?`<button class="btn btn-sm btn-success" onclick="marcarCRPago(${cr.id})" title="Confirmar recebimento">✓ Recebido</button>`:''}<button class="btn btn-outline btn-sm btn-danger" onclick="excluirCR(${cr.id})" title="Excluir" style="margin-left:4px">🗑️</button>` : ''}</td>
         </tr>`;
     }).join('');
@@ -8118,7 +8119,7 @@ function renderContasPagar() {
     const totPend = lista.filter(cp=>cp.status!=='Pago').reduce((s,cp)=>s+cp.valor,0);
     const totPago = lista.filter(cp=>cp.status==='Pago').reduce((s,cp)=>s+cp.valor,0);
     const res = document.getElementById('cp-resumo');
-    if (res) res.innerHTML = `<span style="color:#dc2626">↑ Pago: <strong>R$ ${totPago.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>&nbsp;&nbsp;<span style="color:#d97706">⏳ A pagar: <strong>R$ ${totPend.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>`;
+    if (res) res.innerHTML = `<span style="color:#F43927">↑ Pago: <strong>R$ ${totPago.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>&nbsp;&nbsp;<span style="color:#F2C924">⏳ A pagar: <strong>R$ ${totPend.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>`;
     if (!lista.length) { tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:#999;padding:24px">Nenhum registro encontrado.</td></tr>'; return; }
     const podeEditar = temAcesso('a_pagar', 'completo');
     tb.innerHTML = lista.map(cp => {
@@ -8137,7 +8138,7 @@ function renderContasPagar() {
             <td>${escapeHtml(cp.credor_nome||'—')}</td>
             <td style="text-align:right"><strong>R$ ${cp.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
             <td>${tipoTag}</td>
-            <td>${pago?`<span style="color:#059669;font-size:12px">✓ ${new Date(cp.data_pagamento+'T12:00:00').toLocaleDateString('pt-BR')}</span>`:`<span class="fin-badge fin-badge-${at?'red':'pending'}">${cp.status}</span>`}</td>
+            <td>${pago?`<span style="color:#005D3B;font-size:12px">✓ ${new Date(cp.data_pagamento+'T12:00:00').toLocaleDateString('pt-BR')}</span>`:`<span class="fin-badge fin-badge-${at?'red':'pending'}">${cp.status}</span>`}</td>
             <td>${acoes}</td>
         </tr>`;
     }).join('');
@@ -8178,7 +8179,7 @@ function renderDRE() {
         const custo     = custoMat+custoMao+custoRT+custoExtra;
         const lucro     = receita-custo;
         const margem    = receita>0?(lucro/receita*100):0;
-        const cor       = margem>=30?'#059669':margem>=15?'#d97706':'#dc2626';
+        const cor       = margem>=30?'#005D3B':margem>=15?'#F2C924':'#F43927';
         totRec+=receita; totCusto+=custo; totLucro+=lucro;
         return `<tr>
             <td style="font-size:12px;color:#888">#${formatPedidoId(p.id)}</td>
@@ -8192,9 +8193,9 @@ function renderDRE() {
         </tr>`;
     });
     const totM = totRec>0?(totLucro/totRec*100):0;
-    const corT = totM>=30?'#059669':totM>=15?'#d97706':'#dc2626';
+    const corT = totM>=30?'#005D3B':totM>=15?'#F2C924':'#F43927';
     tb.innerHTML = rows.join('') + `
-        <tr style="border-top:2px solid #374151;background:#f9fafb;font-weight:700">
+        <tr style="border-top:2px solid #242424;background:#FAFAFA;font-weight:700">
             <td colspan="2">TOTAL (${pedidos.length} pedidos)</td>
             <td style="text-align:right">R$ ${totRec.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
             <td colspan="3" style="text-align:right;color:#888">Custos: R$ ${totCusto.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>

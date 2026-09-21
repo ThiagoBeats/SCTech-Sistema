@@ -234,19 +234,19 @@ function _dashComercial() {
     // Funil — só aplica filtro de vendedor (filtrar por status tornaria o funil inútil)
     const pedsVend = vendFiltro ? db.pedidos.filter(p=>String(p.vendedor_id)===vendFiltro) : db.pedidos;
     const STATUS_P = ['Orçamento','Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Pagamento','Instalado'];
-    const CORES_F  = ['#94a3b8','#60a5fa','#a78bfa','#f472b6','#34d399','#fbbf24','#22c55e'];
+    const CORES_F  = ['#F2C924','#2D77C1','#FF7F08','#9B31C8','#005D3B','#FF575F','#159912'];
     const countsF  = STATUS_P.map(s=>pedsVend.filter(p=>normalizarStatus(p.status)===s).length);
     const valoresF = STATUS_P.map(s=>pedsVend.filter(p=>normalizarStatus(p.status)===s).reduce((a,p)=>a+(p.valor||0),0));
     _mkChart('dc-funil',{type:'bar',data:{labels:STATUS_P.map(s=>s.length>14?s.slice(0,14)+'…':s),datasets:[
-        {label:'Qtd. Pedidos',data:countsF,backgroundColor:CORES_F.map(c=>c+'cc'),borderColor:CORES_F,borderWidth:1,borderRadius:4,yAxisID:'y'},
-        {label:'Valor Total (R$)',data:valoresF,backgroundColor:'rgba(42,92,130,0.15)',borderColor:'#2A5C82',borderWidth:2,type:'line',yAxisID:'y2',tension:0.3}
-    ]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}},tooltip:{callbacks:{label:ctx=>ctx.datasetIndex===0?` ${ctx.raw} pedidos`:` ${_fmtR(ctx.raw)}`}}},scales:{y:{ticks:{font:{size:10}},grid:{display:false}},y2:{position:'right',beginAtZero:true,ticks:{callback:v=>_fmtR(v),font:{size:9}},grid:{display:false}}}}});
+        {label:'Qtd. Pedidos',data:countsF,backgroundColor:CORES_F.map(c=>c+'cc'),borderColor:CORES_F,borderWidth:1,borderRadius:6,yAxisID:'y'},
+        {label:'Valor Total (R$)',data:valoresF,backgroundColor:'rgba(0,93,59,0.12)',borderColor:'#005D3B',borderWidth:2,type:'line',yAxisID:'y2',tension:0.3}
+    ]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11,family:'"Nunito",sans-serif'},boxWidth:10}},tooltip:{callbacks:{label:ctx=>ctx.datasetIndex===0?` ${ctx.raw} pedidos`:` ${_fmtR(ctx.raw)}`}}},scales:{y:{ticks:{font:{size:10,family:'"Nunito",sans-serif'}},grid:{display:false}},y2:{position:'right',beginAtZero:true,ticks:{callback:v=>_fmtR(v),font:{size:9,family:'"Nunito",sans-serif'}},grid:{display:false}}}}});
 
     // Aging orçamentos
     const agFaixas = ['0–7 dias','8–15 dias','16–30 dias','+30 dias'];
     const agCount  = [0,0,0,0];
     orcsAbertos.forEach(p=>{ const d=_diasAberto(p.data_criacao||p.id); if(d<=7)agCount[0]++;else if(d<=15)agCount[1]++;else if(d<=30)agCount[2]++;else agCount[3]++; });
-    _mkChart('dc-aging-orc',{type:'doughnut',data:{labels:agFaixas,datasets:[{data:agCount,backgroundColor:['#22c55ecc','#f59e0bcc','#ef4444cc','#991b1bcc'],borderWidth:2,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:10}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.raw} orçamento(s)`}}}}});
+    _mkChart('dc-aging-orc',{type:'doughnut',data:{labels:agFaixas,datasets:[{data:agCount,backgroundColor:['#005D3Bcc','#F2C924cc','#FF7F08cc','#F43927cc'],borderWidth:2,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{font:{size:11,family:'"Nunito",sans-serif'},boxWidth:10}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.raw} orçamento(s)`}}}}});
 
     // Faturamento mensal — aplica filtro de vendedor
     const mes12 = _meses(12);
@@ -254,9 +254,9 @@ function _dashComercial() {
     const cntM  = mes12.map(m=>pedsVend.filter(p=>normalizarStatus(p.status)==='Instalado'&&p.data_instalado&&new Date(p.data_instalado).toISOString().slice(0,7)===m.key).length);
     const tkM   = fatM.map((f,i)=>cntM[i]?f/cntM[i]:0);
     _mkChart('dc-fat-mes',{data:{labels:mes12.map(m=>m.label),datasets:[
-        {type:'bar',label:'Faturamento',data:fatM,backgroundColor:'#86efaccc',borderColor:'#22c55e',borderWidth:1,borderRadius:3,yAxisID:'y'},
-        {type:'line',label:'Ticket Médio',data:tkM,borderColor:'#7c3aed',backgroundColor:'rgba(124,58,237,0.07)',borderWidth:2,pointRadius:3,fill:true,tension:0.3,yAxisID:'y2'}
-    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}},tooltip:{callbacks:{label:ctx=>` ${_fmtR(ctx.raw)}`}}},scales:{y:{..._scaleY,position:'left'},y2:{position:'right',beginAtZero:true,ticks:{callback:v=>_fmtR(v),font:{size:9}},grid:{display:false}},x:{..._scaleX}}}});
+        {type:'bar',label:'Faturamento',data:fatM,backgroundColor:'rgba(0,93,59,0.85)',borderColor:'#005D3B',borderWidth:1,borderRadius:6,yAxisID:'y'},
+        {type:'line',label:'Ticket Médio',data:tkM,borderColor:'#9B31C8',backgroundColor:'rgba(155,49,200,0.07)',borderWidth:2,pointRadius:3,fill:true,tension:0.3,yAxisID:'y2'}
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11,family:'"Nunito",sans-serif'},boxWidth:10}},tooltip:{callbacks:{label:ctx=>` ${_fmtR(ctx.raw)}`}}},scales:{y:{..._scaleY,position:'left'},y2:{position:'right',beginAtZero:true,ticks:{callback:v=>_fmtR(v),font:{size:9,family:'"Nunito",sans-serif'}},grid:{display:false}},x:{..._scaleX}}}});
 
     // Performance vendedor — aplica filtro de período (instalações no período) e de vendedor
     const vendMap={};
@@ -271,9 +271,9 @@ function _dashComercial() {
     const vendRows=Object.entries(vendMap).sort(([,a],[,b])=>b.fat-a.fat);
     if(vendRows.length){
         _mkChart('dc-vend-perf',{type:'bar',data:{labels:vendRows.map(([n])=>n),datasets:[
-            {label:'Faturado',data:vendRows.map(([,d])=>d.fat),backgroundColor:'#2A5C82cc',borderColor:'#2A5C82',borderWidth:1,borderRadius:4,yAxisID:'y'},
-            {label:'Pedidos',data:vendRows.map(([,d])=>d.q),backgroundColor:'#f59e0bcc',borderColor:'#f59e0b',borderWidth:1,borderRadius:4,type:'line',yAxisID:'y2',tension:0.3}
-        ]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}},tooltip:{callbacks:{label:ctx=>ctx.datasetIndex===0?` ${_fmtR(ctx.raw)}`:` ${ctx.raw} pedidos`}}},scales:{y:{ticks:{font:{size:11}},grid:{display:false}},y2:{position:'right',beginAtZero:true,ticks:{stepSize:1,font:{size:9}},grid:{display:false}}}}});
+            {label:'Faturado',data:vendRows.map(([,d])=>d.fat),backgroundColor:'#005D3Bcc',borderColor:'#005D3B',borderWidth:1,borderRadius:6,yAxisID:'y'},
+            {label:'Pedidos',data:vendRows.map(([,d])=>d.q),backgroundColor:'#C9F775cc',borderColor:'#48E101',borderWidth:1,borderRadius:6,type:'line',yAxisID:'y2',tension:0.3}
+        ]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11,family:'"Nunito",sans-serif'},boxWidth:10}},tooltip:{callbacks:{label:ctx=>ctx.datasetIndex===0?` ${_fmtR(ctx.raw)}`:` ${ctx.raw} pedidos`}}},scales:{y:{ticks:{font:{size:11,family:'"Nunito",sans-serif'}},grid:{display:false}},y2:{position:'right',beginAtZero:true,ticks:{stepSize:1,font:{size:9,family:'"Nunito",sans-serif'}},grid:{display:false}}}}});
     }
 }
 
@@ -367,7 +367,7 @@ function _dashProducao() {
         return true;
     });
     // Status dist
-    const stCores = {'Medição':'#60a5fa','Aguardando Tecido':'#a78bfa','Na Costura':'#f472b6','Pronto p/ Instalação':'#34d399','Aguardando Pagamento':'#fbbf24'};
+    const stCores = {'Medição':'#2D77C1','Aguardando Tecido':'#FF7F08','Na Costura':'#9B31C8','Pronto p/ Instalação':'#005D3B','Aguardando Pagamento':'#FF575F'};
     const stData  = EM_PROD.map(s=>({s,q:pedsBase.filter(p=>normalizarStatus(p.status)===s).length}));
     _mkChart('dc-pcp-status',{type:'bar',data:{labels:stData.map(d=>d.s.length>14?d.s.slice(0,14)+'…':d.s),datasets:[
         {label:'Qtd.',data:stData.map(d=>d.q),backgroundColor:EM_PROD.map(s=>stCores[s]+'cc'),borderColor:EM_PROD.map(s=>stCores[s]),borderWidth:1,borderRadius:4,yAxisID:'y'}
@@ -384,18 +384,18 @@ function _dashProducao() {
         }).filter(d=>d&&d>0&&d<365);
         return ts.length ? Math.round(ts.reduce((s,d)=>s+d,0)/ts.length) : 0;
     });
-    _mkChart('dc-pcp-tempo',{type:'bar',data:{labels:etapaLabels,datasets:[{label:'Dias médios',data:etapaTmps,backgroundColor:['#60a5facc','#a78bfacc','#f472b6cc','#34d399cc','#22c55ecc'],borderColor:['#60a5fa','#a78bfa','#f472b6','#34d399','#22c55e'],borderWidth:1,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.raw} dias médios`}}},scales:{y:{beginAtZero:true,ticks:{stepSize:1,font:{size:10}},grid:{color:'rgba(0,0,0,0.05)'}},x:{..._scaleX}}}});
+    _mkChart('dc-pcp-tempo',{type:'bar',data:{labels:etapaLabels,datasets:[{label:'Dias médios',data:etapaTmps,backgroundColor:['#5E9BD4cc','#B65FE6cc','#FF575Fcc','#159912cc','#159912cc'],borderColor:['#5E9BD4','#B65FE6','#FF575F','#159912','#159912'],borderWidth:1,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.raw} dias médios`}}},scales:{y:{beginAtZero:true,ticks:{stepSize:1,font:{size:10}},grid:{color:'rgba(0,0,0,0.05)'}},x:{..._scaleX}}}});
 
     // Volume semanal — usa lista filtrada (pedsBase)
     const sem8 = _semanas(8);
     const volSem = sem8.map(s=>pedsBase.filter(p=>{const d=p.data_criacao?new Date(p.data_criacao).toISOString().split('T')[0]:null;return d&&d>=s.ini&&d<=s.fim;}).length);
-    _mkChart('dc-pcp-semanas',{type:'line',data:{labels:sem8.map(s=>s.label),datasets:[{label:'Novos pedidos',data:volSem,borderColor:'#2A5C82',backgroundColor:'rgba(42,92,130,0.1)',borderWidth:2,pointRadius:4,fill:true,tension:0.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}},tooltip:{..._tooltipN}},scales:{y:{..._scaleYN},x:{..._scaleX}}}});
+    _mkChart('dc-pcp-semanas',{type:'line',data:{labels:sem8.map(s=>s.label),datasets:[{label:'Novos pedidos',data:volSem,borderColor:'#005D3B',backgroundColor:'rgba(0,93,59,0.1)',borderWidth:2,pointRadius:4,fill:true,tension:0.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11,family:'"Nunito",sans-serif'},boxWidth:10}},tooltip:{..._tooltipN}},scales:{y:{..._scaleYN},x:{..._scaleX}}}});
 
     // Tecidos mais usados — usa lista filtrada (pedsBase)
     const tecMap={};
     pedsBase.forEach(p=>(p.ambientes||[]).forEach(a=>(a.tecidos||[]).forEach(t=>{if(t.tecidoNome){tecMap[t.tecidoNome]=(tecMap[t.tecidoNome]||0)+1;}})));
     const topTec=Object.entries(tecMap).sort(([,a],[,b])=>b-a).slice(0,8);
-    if(topTec.length) _mkChart('dc-pcp-tec',{type:'doughnut',data:{labels:topTec.map(([n])=>n.length>16?n.slice(0,16)+'…':n),datasets:[{data:topTec.map(([,v])=>v),backgroundColor:['#2563ebcc','#7c3aedcc','#db2777cc','#059669cc','#d97706cc','#dc2626cc','#0891b2cc','#6b7280cc'],borderWidth:2,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.raw} pedidos`}}}}});
+    if(topTec.length) _mkChart('dc-pcp-tec',{type:'doughnut',data:{labels:topTec.map(([n])=>n.length>16?n.slice(0,16)+'…':n),datasets:[{data:topTec.map(([,v])=>v),backgroundColor:['#2D77C1cc','#9B31C8cc','#db2777cc','#005D3Bcc','#F2C924cc','#F43927cc','#17E8FFcc','#8F8F8Fcc'],borderWidth:2,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.raw} pedidos`}}}}});
 }
 
 // ─── ESTOQUE ──────────────────────────────────────────────────────────────────
@@ -482,15 +482,15 @@ function _dashEstoque() {
         const dispArr = topTecs.map(c=>estoqueDisponivel(c.id));
         const minArr  = topTecs.map(c=>c.min_estoque||0);
         _mkChart('dc-est-tec',{type:'bar',data:{labels:topTecs.map(c=>c.nome.length>18?c.nome.slice(0,18)+'…':c.nome),datasets:[
-            {label:'Disponível (m)',data:dispArr,backgroundColor:dispArr.map((d,i)=>d<minArr[i]?'#ef4444cc':'#22c55ecc'),borderColor:dispArr.map((d,i)=>d<minArr[i]?'#ef4444':'#22c55e'),borderWidth:1,borderRadius:4},
-            {label:'Mínimo (m)',data:minArr,backgroundColor:'rgba(0,0,0,0)',borderColor:'#f59e0b',borderWidth:2,type:'line',pointRadius:4,tension:0}
+            {label:'Disponível (m)',data:dispArr,backgroundColor:dispArr.map((d,i)=>d<minArr[i]?'#F43927cc':'#159912cc'),borderColor:dispArr.map((d,i)=>d<minArr[i]?'#F43927':'#159912'),borderWidth:1,borderRadius:4},
+            {label:'Mínimo (m)',data:minArr,backgroundColor:'rgba(0,0,0,0)',borderColor:'#F2C924',borderWidth:2,type:'line',pointRadius:4,tension:0}
         ]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}},tooltip:{callbacks:{label:ctx=>` ${ctx.raw.toFixed(2)} m`}}},scales:{y:{ticks:{font:{size:10}},grid:{display:false}},x:{beginAtZero:true,ticks:{font:{size:10}},grid:{color:'rgba(0,0,0,0.05)'}}}}});
     }
 
     // Materiais críticos %
     if(matCrit.length){
         const pcts = matCrit.map(m=>Math.min(200,((m.estoque_atual||0)/m.min_estoque*100)));
-        _mkChart('dc-est-mat-crit',{type:'bar',data:{labels:matCrit.map(m=>m.nome.length>16?m.nome.slice(0,16)+'…':m.nome),datasets:[{label:'% do mínimo',data:pcts,backgroundColor:pcts.map(p=>p<50?'#ef4444cc':'#f59e0bcc'),borderColor:pcts.map(p=>p<50?'#ef4444':'#f59e0b'),borderWidth:1,borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.raw.toFixed(1)}% do mínimo`}}},scales:{y:{ticks:{font:{size:10}},grid:{display:false}},x:{beginAtZero:true,max:110,ticks:{callback:v=>v+'%',font:{size:10}},grid:{color:'rgba(0,0,0,0.05)'}}}}});
+        _mkChart('dc-est-mat-crit',{type:'bar',data:{labels:matCrit.map(m=>m.nome.length>16?m.nome.slice(0,16)+'…':m.nome),datasets:[{label:'% do mínimo',data:pcts,backgroundColor:pcts.map(p=>p<50?'#F43927cc':'#F2C924cc'),borderColor:pcts.map(p=>p<50?'#F43927':'#F2C924'),borderWidth:1,borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.raw.toFixed(1)}% do mínimo`}}},scales:{y:{ticks:{font:{size:10}},grid:{display:false}},x:{beginAtZero:true,max:110,ticks:{callback:v=>v+'%',font:{size:10}},grid:{color:'rgba(0,0,0,0.05)'}}}}});
     }
 
     // Movimentos últimos 30 dias
@@ -499,8 +499,8 @@ function _dashEstoque() {
     const movE=dias30.map(d=>db.movimentos.filter(m=>m.tipo==='Entrada'&&new Date(m.data).toISOString().split('T')[0]===d).length);
     const movS=dias30.map(d=>db.movimentos.filter(m=>m.tipo!=='Entrada'&&new Date(m.data).toISOString().split('T')[0]===d).length);
     _mkChart('dc-est-mov',{type:'line',data:{labels:dias30.filter((_,i)=>i%5===0).map(d=>d.slice(5).split('-').reverse().join('/')),datasets:[
-        {label:'Entradas',data:dias30.filter((_,i)=>i%5===0).map((_,i)=>movE.slice(i*5,(i+1)*5).reduce((a,b)=>a+b,0)),borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,0.1)',borderWidth:2,pointRadius:3,fill:true,tension:0.3},
-        {label:'Saídas',data:dias30.filter((_,i)=>i%5===0).map((_,i)=>movS.slice(i*5,(i+1)*5).reduce((a,b)=>a+b,0)),borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,0.1)',borderWidth:2,pointRadius:3,fill:true,tension:0.3}
+        {label:'Entradas',data:dias30.filter((_,i)=>i%5===0).map((_,i)=>movE.slice(i*5,(i+1)*5).reduce((a,b)=>a+b,0)),borderColor:'#159912',backgroundColor:'rgba(21,153,18,0.1)',borderWidth:2,pointRadius:3,fill:true,tension:0.3},
+        {label:'Saídas',data:dias30.filter((_,i)=>i%5===0).map((_,i)=>movS.slice(i*5,(i+1)*5).reduce((a,b)=>a+b,0)),borderColor:'#F43927',backgroundColor:'rgba(244,57,39,0.1)',borderWidth:2,pointRadius:3,fill:true,tension:0.3}
     ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}},tooltip:{..._tooltipN}},scales:{y:{..._scaleYN},x:{..._scaleX}}}});
 }
 
@@ -573,12 +573,12 @@ function _dashInstalacoes() {
     const prox30=[]; const base=new Date(); base.setHours(0,0,0,0);
     for(let i=0;i<30;i++){const d=new Date(base);d.setDate(d.getDate()+i);prox30.push(d.toISOString().split('T')[0]);}
     const carga=prox30.map(d=>lista.filter(p=>p.data_entrega===d).length);
-    _mkChart('dc-inst-carga',{type:'bar',data:{labels:prox30.map(d=>d.slice(5).split('-').reverse().join('/')),datasets:[{label:'Instalações',data:carga,backgroundColor:carga.map(v=>v>2?'#ef4444cc':v>0?'#2563ebcc':'#e5e7eb'),borderColor:carga.map(v=>v>2?'#ef4444':v>0?'#2563eb':'#d1d5db'),borderWidth:1,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.raw} instalação(ões)`}}},scales:{y:{..._scaleYN},x:{ticks:{font:{size:8},maxRotation:45},grid:{display:false}}}}});
+    _mkChart('dc-inst-carga',{type:'bar',data:{labels:prox30.map(d=>d.slice(5).split('-').reverse().join('/')),datasets:[{label:'Instalações',data:carga,backgroundColor:carga.map(v=>v>2?'#F43927cc':v>0?'#2D77C1cc':'#E0E0E0'),borderColor:carga.map(v=>v>2?'#F43927':v>0?'#2D77C1':'#E0E0E0'),borderWidth:1,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.raw} instalação(ões)`}}},scales:{y:{..._scaleYN},x:{ticks:{font:{size:8},maxRotation:45},grid:{display:false}}}}});
 
     // Status pagamento donut
     const pgCnt={pago:0,pendente:0,atrasado:0};
     agendadas.forEach(p=>{pgCnt[pagStatus(p)]++;});
-    _mkChart('dc-inst-pag',{type:'doughnut',data:{labels:['Pago','Pendente','Atrasado'],datasets:[{data:[pgCnt.pago,pgCnt.pendente,pgCnt.atrasado],backgroundColor:['#22c55ecc','#f59e0bcc','#ef4444cc'],borderWidth:2,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:10}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.raw} pedido(s)`}}}}});
+    _mkChart('dc-inst-pag',{type:'doughnut',data:{labels:['Pago','Pendente','Atrasado'],datasets:[{data:[pgCnt.pago,pgCnt.pendente,pgCnt.atrasado],backgroundColor:['#159912cc','#F2C924cc','#F43927cc'],borderWidth:2,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:10}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.raw} pedido(s)`}}}}});
 
     // Semanas — usa pedidos instalados filtrados pelo período do filtro de pagamento
     const sem8=_semanas(8);
@@ -591,7 +591,7 @@ function _dashInstalacoes() {
             return true;
         }).length;
     });
-    _mkChart('dc-inst-sem',{type:'line',data:{labels:sem8.map(s=>s.label),datasets:[{label:'Instalações realizadas',data:instSem,borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,0.1)',borderWidth:2,pointRadius:4,fill:true,tension:0.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}},tooltip:{..._tooltipN}},scales:{y:{..._scaleYN},x:{..._scaleX}}}});
+    _mkChart('dc-inst-sem',{type:'line',data:{labels:sem8.map(s=>s.label),datasets:[{label:'Instalações realizadas',data:instSem,borderColor:'#159912',backgroundColor:'rgba(21,153,18,0.1)',borderWidth:2,pointRadius:4,fill:true,tension:0.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}},tooltip:{..._tooltipN}},scales:{y:{..._scaleYN},x:{..._scaleX}}}});
 }
 
 // ─── COMPRAS ──────────────────────────────────────────────────────────────────
@@ -665,8 +665,8 @@ function _dashCompras() {
 
     // Déficit de recompra
     const reporItems=[
-        ...tecCrit.map(c=>({nome:c.nome.length>16?c.nome.slice(0,16)+'…':c.nome,def:c.min_estoque-estoqueDisponivel(c.id),cor:'#2563ebcc',bor:'#2563eb'})),
-        ...matCrit.map(m=>({nome:m.nome.length>16?m.nome.slice(0,16)+'…':m.nome,def:m.min_estoque-(m.estoque_atual||0),cor:'#f59e0bcc',bor:'#f59e0b'}))
+        ...tecCrit.map(c=>({nome:c.nome.length>16?c.nome.slice(0,16)+'…':c.nome,def:c.min_estoque-estoqueDisponivel(c.id),cor:'#2D77C1cc',bor:'#2D77C1'})),
+        ...matCrit.map(m=>({nome:m.nome.length>16?m.nome.slice(0,16)+'…':m.nome,def:m.min_estoque-(m.estoque_atual||0),cor:'#F2C924cc',bor:'#F2C924'}))
     ].filter(x=>x.def>0).sort((a,b)=>b.def-a.def);
     if(reporItems.length) _mkChart('dc-cmp-repor',{type:'bar',data:{labels:reporItems.map(x=>x.nome),datasets:[{label:'Déficit',data:reporItems.map(x=>x.def),backgroundColor:reporItems.map(x=>x.cor),borderColor:reporItems.map(x=>x.bor),borderWidth:1,borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`Déficit: ${ctx.raw.toFixed(2)}`}}},scales:{y:{ticks:{font:{size:10}},grid:{display:false}},x:{beginAtZero:true,ticks:{font:{size:10}},grid:{color:'rgba(0,0,0,0.05)'}}}}});
 
@@ -674,12 +674,12 @@ function _dashCompras() {
     const fornMap={};
     pcs.forEach(pc=>{const f=db.fornecedores.find(x=>x.id==pc.fornecedor_id);const n=f?.nome_fantasia||f?.razao_social||'Sem fornecedor';fornMap[n]=(fornMap[n]||0)+1;});
     const fornRows=Object.entries(fornMap).sort(([,a],[,b])=>b-a).slice(0,8);
-    if(fornRows.length) _mkChart('dc-cmp-forn',{type:'bar',data:{labels:fornRows.map(([n])=>n.length>14?n.slice(0,14)+'…':n),datasets:[{label:'Pedidos de Compra',data:fornRows.map(([,v])=>v),backgroundColor:'#2A5C82cc',borderColor:'#2A5C82',borderWidth:1,borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.raw} PC(s)`}}},scales:{y:{ticks:{font:{size:10}},grid:{display:false}},x:{beginAtZero:true,ticks:{stepSize:1,font:{size:10}},grid:{color:'rgba(0,0,0,0.05)'}}}}});
+    if(fornRows.length) _mkChart('dc-cmp-forn',{type:'bar',data:{labels:fornRows.map(([n])=>n.length>14?n.slice(0,14)+'…':n),datasets:[{label:'Pedidos de Compra',data:fornRows.map(([,v])=>v),backgroundColor:'#005D3Bcc',borderColor:'#005D3B',borderWidth:1,borderRadius:6}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.raw} PC(s)`}}},scales:{y:{ticks:{font:{size:10,family:'"Nunito",sans-serif'}},grid:{display:false}},x:{beginAtZero:true,ticks:{stepSize:1,font:{size:10,family:'"Nunito",sans-serif'}},grid:{color:'rgba(0,0,0,0.05)'}}}}});
 
     // Entradas 6 meses
     const mes6H=_meses(6);
     const entMes6=mes6H.map(m=>db.movimentos.filter(mv=>mv.tipo==='Entrada'&&new Date(mv.data).toISOString().slice(0,7)===m.key).length);
-    _mkChart('dc-cmp-ent',{type:'line',data:{labels:mes6H.map(m=>m.label),datasets:[{label:'Entradas de estoque',data:entMes6,borderColor:'#059669',backgroundColor:'rgba(5,150,105,0.1)',borderWidth:2,pointRadius:4,fill:true,tension:0.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}},tooltip:{..._tooltipN}},scales:{y:{..._scaleYN},x:{..._scaleX}}}});
+    _mkChart('dc-cmp-ent',{type:'line',data:{labels:mes6H.map(m=>m.label),datasets:[{label:'Entradas de estoque',data:entMes6,borderColor:'#005D3B',backgroundColor:'rgba(0,93,59,0.1)',borderWidth:2,pointRadius:4,fill:true,tension:0.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}},tooltip:{..._tooltipN}},scales:{y:{..._scaleYN},x:{..._scaleX}}}});
 }
 
 // ─── GERENCIAL ────────────────────────────────────────────────────────────────
@@ -715,19 +715,19 @@ function _dashGerencial() {
 
     const el = document.getElementById('dash-content');
     el.innerHTML = `
-    <div style="margin-bottom:6px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px">💼 Financeiro</div>
+    <div style="margin-bottom:6px;font-size:11px;color:#8F8F8F;font-weight:600;text-transform:uppercase;letter-spacing:.5px">💼 Financeiro</div>
     <div class="dkpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:8px">${
         _kpi('Faturamento', _fmtR(recebido), 'recebido no período', 'green') +
         _kpi('Lucro (Caixa)', _fmtR(lucro), recebido>0?_fmtPct(margemPct)+' margem':'sem receita', lucro>=0?'teal':'red') +
         _kpi('Inadimplência', _fmtPct(inadimpl), _fmtR(totalAtras)+' atrasado', inadimpl>20?'red':inadimpl>10?'orange':'green')
     }</div>
-    <div style="margin-bottom:6px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px">🏭 Produção</div>
+    <div style="margin-bottom:6px;font-size:11px;color:#8F8F8F;font-weight:600;text-transform:uppercase;letter-spacing:.5px">🏭 Produção</div>
     <div class="dkpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:8px">${
         _kpi('Em Produção', _fmtN(emProd), 'pedidos ativos', 'blue') +
         _kpi('Atrasados', _fmtN(atrasados), 'entrega vencida', atrasados>0?'red':'green') +
         _kpi('Conversão', _fmtPct(conv), 'orçamentos aprovados', conv>=70?'green':conv>=50?'blue':'orange')
     }</div>
-    <div style="margin-bottom:6px;font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px">📦 Estoque &amp; Caixa</div>
+    <div style="margin-bottom:6px;font-size:11px;color:#8F8F8F;font-weight:600;text-transform:uppercase;letter-spacing:.5px">📦 Estoque &amp; Caixa</div>
     <div class="dkpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">${
         _kpi('Estoque Crítico', _fmtN(estCrit), 'itens abaixo do mínimo', estCrit>0?'red':'green') +
         _kpi('A Receber', _fmtR(aReceber), 'contas pendentes', 'orange') +
@@ -761,14 +761,14 @@ function _dashGerencial() {
     let acc=0;
     const saldoMes = fatMes.map((f,i)=>{acc+=f-despMes[i];return acc;});
     _mkChart('dc-ger-fin',{data:{labels:mes12.map(m=>m.label),datasets:[
-        {type:'bar',label:'Entradas',data:fatMes,backgroundColor:'#86efaccc',borderColor:'#22c55e',borderWidth:1,borderRadius:3,yAxisID:'y'},
-        {type:'bar',label:'Saídas',data:despMes,backgroundColor:'#fca5a5cc',borderColor:'#ef4444',borderWidth:1,borderRadius:3,yAxisID:'y'},
-        {type:'line',label:'Saldo Acum.',data:saldoMes,borderColor:'#2A5C82',backgroundColor:'rgba(42,92,130,0.06)',borderWidth:2,pointRadius:3,fill:true,tension:0.35,yAxisID:'y'}
-    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}},tooltip:{callbacks:{label:ctx=>` ${_fmtR(ctx.raw)}`}}},scales:{y:{..._scaleY,position:'left'},x:{..._scaleX}}}});
+        {type:'bar',label:'Entradas',data:fatMes,backgroundColor:'rgba(0,93,59,0.85)',borderColor:'#005D3B',borderWidth:1,borderRadius:6,yAxisID:'y'},
+        {type:'bar',label:'Saídas',data:despMes,backgroundColor:'rgba(244,57,39,0.85)',borderColor:'#F43927',borderWidth:1,borderRadius:6,yAxisID:'y'},
+        {type:'line',label:'Saldo Acum.',data:saldoMes,borderColor:'#242424',backgroundColor:'rgba(36,36,36,0.06)',borderWidth:2,pointRadius:3,fill:true,tension:0.35,yAxisID:'y'}
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11,family:'"Nunito",sans-serif'},boxWidth:10}},tooltip:{callbacks:{label:ctx=>` ${_fmtR(ctx.raw)}`}}},scales:{y:{..._scaleY,position:'left'},x:{..._scaleX}}}});
 
     // Pipeline
     const allStatus=['Orçamento','Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Pagamento','Instalado'];
-    const coresPip=['#94a3b8','#60a5fa','#a78bfa','#f472b6','#34d399','#fbbf24','#22c55e'];
+    const coresPip=['#8F8F8F','#5E9BD4','#B65FE6','#FF575F','#159912','#F2C924','#159912'];
     const cntPip=allStatus.map(s=>db.pedidos.filter(p=>normalizarStatus(p.status)===s).length);
     _mkChart('dc-ger-pipeline',{type:'bar',data:{labels:allStatus.map(s=>s.length>14?s.slice(0,14)+'…':s),datasets:[{label:'Pedidos',data:cntPip,backgroundColor:coresPip.map(c=>c+'cc'),borderColor:coresPip,borderWidth:1,borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.raw} pedido(s)`}}},scales:{y:{ticks:{font:{size:10}},grid:{display:false}},x:{..._scaleYN}}}});
 
@@ -778,7 +778,7 @@ function _dashGerencial() {
     const CAT_L={tecido:'Tecido/Mat.',salario:'Salário',comissao_rt:'Comissão RT',aluguel:'Aluguel',conta:'Contas',outro:'Outros',costureira:'Costureira',instalador:'Instalador'};
     db.contas_pagar.filter(cp=>cp.status==='Pago'&&inR(cp.data_pagamento)).forEach(cp=>{const c=CAT_L[cp.categoria||'outro']||'Outros';despCat[c]=(despCat[c]||0)+cp.valor;});
     const dLabels=Object.keys(despCat); const dVals=Object.values(despCat);
-    _mkChart('dc-ger-categ',{type:'doughnut',data:{labels:dLabels,datasets:[{data:dVals,backgroundColor:['#6366f1cc','#f59e0bcc','#8b5cf6cc','#ef4444cc','#3b82f6cc','#6b7280cc','#ec4899cc','#f97316cc'],borderWidth:2,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${_fmtR(ctx.raw)}`}}}}});
+    _mkChart('dc-ger-categ',{type:'doughnut',data:{labels:dLabels,datasets:[{data:dVals,backgroundColor:['#9B31C8cc','#F2C924cc','#9B31C8cc','#F43927cc','#2D77C1cc','#8F8F8Fcc','#D70085cc','#FF7F08cc'],borderWidth:2,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${_fmtR(ctx.raw)}`}}}}});
 }
 
 function _gerAlertas(hoje) {
@@ -796,9 +796,9 @@ function _gerAlertas(hoje) {
     const semData=db.pedidos.filter(p=>EM_PROD.includes(normalizarStatus(p.status))&&!p.data_entrega);
     if(semData.length) al.push({t:'info',ic:'📅',txt:`<strong>${semData.length} pedido(s)</strong> em produção sem data de entrega definida`});
     if(!al.length) return `<div class="dash-empty">🎉 Nenhum alerta crítico no momento!</div>`;
-    const corMap={danger:'#fff1f2',warning:'#fef3c7',info:'#dbeafe'};
-    const bordMap={danger:'#fca5a5',warning:'#fcd34d',info:'#93c5fd'};
-    const txtMap={danger:'#991b1b',warning:'#92400e',info:'#1e40af'};
+    const corMap={danger:'#FEF4F2',warning:'#FEF6D8',info:'#E4EFF9'};
+    const bordMap={danger:'#F79B90',warning:'#F2C924',info:'#9FC4E5'};
+    const txtMap={danger:'#B3160A',warning:'#8A6A00',info:'#1F5A96'};
     return al.map(a=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:8px;background:${corMap[a.t]};border:1px solid ${bordMap[a.t]};border-radius:8px;font-size:13px;color:${txtMap[a.t]}">
         <span style="font-size:18px;flex-shrink:0">${a.ic}</span><span>${a.txt}</span></div>`).join('');
 }

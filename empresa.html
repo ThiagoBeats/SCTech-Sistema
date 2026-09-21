@@ -15,14 +15,14 @@
             align-items: center;
             gap: 20px;
             flex-wrap: wrap;
-            background: #fafbfc;
+            background: #FAFAFA;
             cursor: pointer;
             transition: border-color .2s, background .2s;
         }
-        .logo-upload-area:hover { border-color: var(--primary); background: #eff6ff; }
+        .logo-upload-area:hover { border-color: var(--primary); background: #EDF5FC; }
         #emp-logo-preview { min-width: 100px; min-height: 60px; display: flex; align-items: center; justify-content: center; }
-        .logo-placeholder { width: 100px; height: 60px; background: #e5e7eb; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 24px; }
-        .remove-logo-btn { font-size: 12px; color: #dc2626; cursor: pointer; background: none; border: none; padding: 0; margin-top: 4px; }
+        .logo-placeholder { width: 100px; height: 60px; background: #E0E0E0; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #8F8F8F; font-size: 24px; }
+        .remove-logo-btn { font-size: 12px; color: #F43927; cursor: pointer; background: none; border: none; padding: 0; margin-top: 4px; }
         .remove-logo-btn:hover { text-decoration: underline; }
     </style>
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
@@ -37,9 +37,9 @@
             <div class="logo-upload-area" onclick="document.getElementById('emp-logo-input').click()">
                 <div id="emp-logo-preview"><div class="logo-placeholder">🏢</div></div>
                 <div>
-                    <div style="font-weight:600;color:#374151;margin-bottom:4px">Clique para selecionar a logo</div>
-                    <div style="font-size:12px;color:#6b7280">PNG, JPG ou SVG · Recomendado: fundo transparente · Máx. 2 MB</div>
-                    <div style="font-size:12px;color:#6b7280;margin-top:2px">Será exibida nos pedidos, orçamentos e documentos impressos.</div>
+                    <div style="font-weight:600;color:var(--dark);margin-bottom:4px">Clique para selecionar a logo</div>
+                    <div style="font-size:12px;color:#8F8F8F">PNG, JPG ou SVG · Recomendado: fundo transparente · Máx. 2 MB</div>
+                    <div style="font-size:12px;color:#8F8F8F;margin-top:2px">Será exibida nos pedidos, orçamentos e documentos impressos.</div>
                     <button class="remove-logo-btn" id="emp-remove-logo" style="display:none" onclick="event.stopPropagation();removerLogoEmpresa()">✕ Remover logo</button>
                 </div>
             </div>
@@ -51,7 +51,7 @@
 
             <div class="grid" style="margin-bottom:0">
                 <div class="form-group">
-                    <label>Razão Social <span style="color:#dc2626">*</span></label>
+                    <label>Razão Social <span style="color:#F43927">*</span></label>
                     <input type="text" id="emp-razao" placeholder="Nome oficial da empresa">
                 </div>
                 <div class="form-group">
@@ -88,15 +88,15 @@
 
             <div style="margin-top:8px;display:flex;gap:10px;align-items:center">
                 <button class="btn btn-success" onclick="salvarEmpresaConfigs()">💾 Salvar Configurações</button>
-                <span style="font-size:12px;color:#6b7280">As informações serão aplicadas imediatamente em todos os documentos gerados.</span>
+                <span style="font-size:12px;color:#8F8F8F">As informações serão aplicadas imediatamente em todos os documentos gerados.</span>
             </div>
         </div>
 
         <div class="card" style="max-width:860px">
             <h3 style="margin-bottom:6px;color:var(--primary)">📄 Condições Gerais da Proposta</h3>
-            <p style="font-size:12px;color:#6b7280;margin-bottom:12px">
+            <p style="font-size:12px;color:#8F8F8F;margin-bottom:12px">
                 Texto exibido na seção "Condições Gerais" de todas as propostas comerciais geradas.<br>
-                Cada linha vira um item da lista. Use <code style="background:#f3f4f6;padding:1px 5px;border-radius:3px">{diasValidade}</code> para inserir o prazo de validade automaticamente.
+                Cada linha vira um item da lista. Use <code style="background:#F1F1F1;padding:1px 5px;border-radius:3px">{diasValidade}</code> para inserir o prazo de validade automaticamente.
             </p>
             <textarea id="emp-condicoes-gerais" rows="7"
                 style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;line-height:1.6;background:var(--white);color:var(--dark)"></textarea>
@@ -108,13 +108,13 @@
 
         <div class="card" style="max-width:860px">
             <h3 style="margin-bottom:6px;color:var(--primary)">🔔 Preferências de Alertas</h3>
-            <p style="font-size:12px;color:#6b7280;margin-bottom:16px">Escolha quais alertas devem ser exibidos no sistema. Alertas desabilitados mostrarão um indicador 🔕 no cabeçalho de todas as páginas.</p>
+            <p style="font-size:12px;color:#8F8F8F;margin-bottom:16px">Escolha quais alertas devem ser exibidos no sistema. Alertas desabilitados mostrarão um indicador 🔕 no cabeçalho de todas as páginas.</p>
             <div id="emp-alertas-cfg"></div>
         </div>
 
         <div class="card" style="max-width:860px">
             <h3 style="margin-bottom:6px;color:var(--primary)">🏠 Cards da Página Inicial</h3>
-            <p style="font-size:12px;color:#6b7280;margin-bottom:16px">Escolha quais cards e painéis devem ser exibidos na Página Inicial (Dashboard).</p>
+            <p style="font-size:12px;color:#8F8F8F;margin-bottom:16px">Escolha quais cards e painéis devem ser exibidos na Página Inicial (Dashboard).</p>
             <div id="emp-dashcards-cfg"></div>
         </div>
 

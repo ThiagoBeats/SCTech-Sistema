@@ -76,16 +76,16 @@
 
         <div class="charts-grid">
             <div class="card chart-card dash-alertas-card" id="card-alertas">
-                <h3 style="margin:0 0 12px;color:#374151;font-size:15px;flex-shrink:0;display:flex;align-items:center;gap:8px">
+                <h3 style="margin:0 0 12px;color:var(--dark);font-size:15px;flex-shrink:0;display:flex;align-items:center;gap:8px">
                     🔔 Alertas do Sistema
-                    <span id="dash-alertas-count" style="font-size:11px;font-weight:600;padding:1px 8px;border-radius:10px;background:#f3f4f6;color:#6b7280"></span>
+                    <span id="dash-alertas-count" style="font-size:11px;font-weight:600;padding:1px 8px;border-radius:10px;background:#F1F1F1;color:#8F8F8F"></span>
                 </h3>
                 <div class="dash-alertas-scroll" id="dashboard-alertas"></div>
             </div>
             <div class="card chart-card" id="card-chart-status">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:10px;flex-wrap:wrap">
-                    <h3 style="color:#374151;font-size:15px;margin:0">Pedidos por Status</h3>
-                    <select id="chart-status-filtro" onchange="renderChartStatus()" style="font-size:12px;padding:4px 8px;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#374151;cursor:pointer"></select>
+                    <h3 style="color:var(--dark);font-size:15px;margin:0">Pedidos por Status</h3>
+                    <select id="chart-status-filtro" onchange="renderChartStatus()" style="font-size:12px;padding:4px 8px;border:1px solid #E0E0E0;border-radius:6px;background:#fff;color:var(--dark);cursor:pointer"></select>
                 </div>
                 <canvas id="chart-status"></canvas>
             </div>
@@ -95,11 +95,11 @@
         <div id="dashboard-instalacoes" style="display:none"></div>
 
         <div class="card">
-            <h3 style="margin-bottom:14px;color:#374151;font-size:15px">Painel de Pedidos</h3>
+            <h3 style="margin-bottom:14px;color:var(--dark);font-size:15px">Painel de Pedidos</h3>
             <div class="filter-bar">
                 <div style="min-width:150px">
-                    <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Vendedor</label>
-                    <select id="filtro-vendedor" onchange="renderDashboard()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:var(--white);color:var(--dark)">
+                    <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Vendedor</label>
+                    <select id="filtro-vendedor" onchange="renderDashboard()" style="width:100%;padding:7px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px;background:var(--white);color:var(--dark)">
                         <option value="">Todos</option>
                     </select>
                 </div>

@@ -59,7 +59,7 @@
                     </div>
                     <div class="form-group">
                         <label>Preço de Venda (R$/m) <span class="info-tag">calculado</span></label>
-                        <div id="est-preco-venda-display" style="padding:8px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;font-weight:700;color:#059669;font-size:14px">R$ 0,00</div>
+                        <div id="est-preco-venda-display" style="padding:8px 10px;background:#F0FBEF;border:1px solid #8FD98D;border-radius:4px;font-weight:700;color:#005D3B;font-size:14px">R$ 0,00</div>
                     </div>
                     <div class="form-group">
                         <label>Data de Entrada</label>
@@ -119,7 +119,7 @@
                     </div>
                     <div class="form-group">
                         <label>Preço de Venda <span class="info-tag">calculado</span></label>
-                        <div id="est-mat-preco-venda-display" style="padding:8px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;font-weight:700;color:#059669;font-size:14px">R$ 0,00</div>
+                        <div id="est-mat-preco-venda-display" style="padding:8px 10px;background:#F0FBEF;border:1px solid #8FD98D;border-radius:4px;font-weight:700;color:#005D3B;font-size:14px">R$ 0,00</div>
                     </div>
                     <div class="form-group">
                         <label>Data de Entrada</label>
@@ -284,15 +284,15 @@
         <!-- ══════════════ ABA: BACKUP ══════════════ -->
         <div id="tab-backup" class="tab-panel">
             <div class="card backup-card">
-                <div class="logo-box" style="margin:0 auto 16px;background:#059669">⬇️</div>
+                <div class="logo-box" style="margin:0 auto 16px;background:#005D3B">⬇️</div>
                 <h3 style="margin-bottom:0">Exportar Dados</h3>
                 <p>Faz o download de todos os dados do sistema em formato JSON. Guarde o arquivo em local seguro.</p>
                 <button class="btn btn-success" onclick="exportarDados()">Exportar Backup JSON</button>
             </div>
             <div class="card backup-card">
-                <div class="logo-box" style="margin:0 auto 16px;background:#2A5C82">⬆️</div>
+                <div class="logo-box" style="margin:0 auto 16px;background:#005D3B">⬆️</div>
                 <h3 style="margin-bottom:0">Importar Dados</h3>
-                <p>Restaura os dados a partir de um arquivo JSON exportado anteriormente. <strong style="color:#dc2626">Atenção: substituirá TODOS os dados atuais.</strong></p>
+                <p>Restaura os dados a partir de um arquivo JSON exportado anteriormente. <strong style="color:#F43927">Atenção: substituirá TODOS os dados atuais.</strong></p>
                 <input type="file" id="importar-arquivo" accept=".json" style="display:none" onchange="importarDados(event)">
                 <button class="btn" onclick="document.getElementById('importar-arquivo').click()">Selecionar Arquivo JSON</button>
             </div>

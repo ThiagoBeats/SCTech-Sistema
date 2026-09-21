@@ -6,16 +6,16 @@
     <title>Sobre — SCTech</title>
     <style>
         :root {
-            --primary: #2A5C82;
-            --primary-dark: #1a3d5c;
-            --primary-light: #4A90E2;
-            --accent: #27ae60;
-            --dark: #1a2332;
-            --text: #374151;
-            --muted: #6b7280;
-            --border: #e5e7eb;
-            --white: #ffffff;
-            --light: #f8fafc;
+            --primary: #005D3B;
+            --primary-dark: #00452B;
+            --primary-light: #005D3B;
+            --accent: #005D3B;
+            --dark: #1D1F23;
+            --text: #242424;
+            --muted: #8F8F8F;
+            --border: #E0E0E0;
+            --white: #FEFFFF;
+            --light: #FAFAFA;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -59,14 +59,14 @@
             background: var(--primary); color: white;
             text-decoration: none;
             transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
-            box-shadow: 0 2px 8px rgba(42,92,130,0.25);
+            box-shadow: 0 2px 8px rgba(0,93,59,0.25);
         }
-        .sobre-nav-links a:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(42,92,130,0.35); }
+        .sobre-nav-links a:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,93,59,0.35); }
 
         /* ── HERO ── */
         .hero {
             position: relative;
-            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 50%, #3a7db5 100%);
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 50%, #2D77C1 100%);
             padding: 80px 40px 100px;
             text-align: center;
             overflow: hidden;
@@ -75,7 +75,7 @@
             content: '';
             position: absolute; inset: 0;
             background:
-                radial-gradient(circle at 20% 50%, rgba(74,144,226,0.25) 0%, transparent 50%),
+                radial-gradient(circle at 20% 50%, rgba(0,93,59,0.25) 0%, transparent 50%),
                 radial-gradient(circle at 80% 20%, rgba(255,255,255,0.08) 0%, transparent 40%),
                 radial-gradient(circle at 60% 80%, rgba(26,62,92,0.4) 0%, transparent 50%);
             pointer-events: none;
@@ -124,8 +124,8 @@
             animation: fadeDown 0.6s ease 0.3s both;
         }
         .badge { padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; backdrop-filter: blur(4px); }
-        .badge-version { background: rgba(39,174,96,0.3); color: #a7f3d0; border: 1px solid rgba(39,174,96,0.4); }
-        .badge-status  { background: rgba(74,144,226,0.3); color: #bfdbfe; border: 1px solid rgba(74,144,226,0.4); }
+        .badge-version { background: rgba(0,93,59,0.3); color: #8FD98D; border: 1px solid rgba(0,93,59,0.4); }
+        .badge-status  { background: rgba(0,93,59,0.3); color: #9FC4E5; border: 1px solid rgba(0,93,59,0.4); }
         .badge-build   { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.2); }
 
         @keyframes fadeDown {
@@ -154,10 +154,10 @@
             display: flex; align-items: center; justify-content: center;
             font-size: 20px; flex-shrink: 0;
         }
-        .si-blue   { background: #eff6ff; }
-        .si-green  { background: #f0fdf4; }
-        .si-purple { background: #faf5ff; }
-        .si-orange { background: #fff7ed; }
+        .si-blue   { background: #EDF5FC; }
+        .si-green  { background: #F0FBEF; }
+        .si-purple { background: #F2E6F9; }
+        .si-orange { background: #FFF6EE; }
         .stat-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
         .stat-value { font-size: 15px; font-weight: 700; color: var(--dark); margin-top: 2px; }
 
@@ -192,15 +192,15 @@
             width: 40px; height: 40px; border-radius: 10px;
             display: flex; align-items: center; justify-content: center; font-size: 18px;
         }
-        .chi-blue   { background: #eff6ff; }
-        .chi-green  { background: #f0fdf4; }
-        .chi-gray   { background: #f3f4f6; }
-        .chi-purple { background: #faf5ff; }
+        .chi-blue   { background: #EDF5FC; }
+        .chi-green  { background: #F0FBEF; }
+        .chi-gray   { background: #F1F1F1; }
+        .chi-purple { background: #F2E6F9; }
         .card-header h3 { font-size: 15px; font-weight: 700; color: var(--dark); }
         .card-header p  { font-size: 12px; color: var(--muted); margin-top: 1px; }
 
         /* ── INFO ROWS ── */
-        .info-row { display: flex; align-items: flex-start; gap: 12px; padding: 11px 0; border-bottom: 1px solid #f1f5f9; }
+        .info-row { display: flex; align-items: flex-start; gap: 12px; padding: 11px 0; border-bottom: 1px solid #F1F1F1; }
         .info-row:last-child { border-bottom: none; padding-bottom: 0; }
         .info-row-icon { font-size: 16px; width: 22px; flex-shrink: 0; margin-top: 1px; }
         .info-row-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); }
@@ -210,7 +210,7 @@
 
         /* ── MISSION CARD ── */
         .mission-card {
-            background: linear-gradient(135deg, var(--primary) 0%, #3a7db5 100%);
+            background: linear-gradient(135deg, var(--primary) 0%, #2D77C1 100%);
             border-radius: 14px; padding: 32px; color: white;
             margin-bottom: 32px; position: relative; overflow: hidden;
         }
@@ -240,7 +240,7 @@
         }
         .logo-showcase-wrap:hover {
             animation: logoShake 0.55s ease-in-out;
-            box-shadow: 0 12px 40px rgba(42,92,130,0.28);
+            box-shadow: 0 12px 40px rgba(0,93,59,0.28);
         }
         .logo-showcase-wrap img { width: 96px; height: 96px; object-fit: contain; }
         .logo-showcase-name {
@@ -280,12 +280,12 @@
 
         /* ── CHANGELOG ── */
         .changelog { list-style: none; }
-        .changelog li { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+        .changelog li { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid #F1F1F1; font-size: 13px; }
         .changelog li:last-child { border-bottom: none; }
         .cl-tag { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; flex-shrink: 0; margin-top: 1px; white-space: nowrap; }
-        .cl-new    { background: #d1fae5; color: #065f46; }
-        .cl-fix    { background: #fee2e2; color: #991b1b; }
-        .cl-improve{ background: #dbeafe; color: #1e40af; }
+        .cl-new    { background: #E3F7E2; color: #0F6B0D; }
+        .cl-fix    { background: #FDE8E5; color: #B3160A; }
+        .cl-improve{ background: #E4EFF9; color: #1F5A96; }
 
         /* ── TECH STACK ── */
         .tech-pills { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -295,7 +295,7 @@
             background: var(--light); border: 1px solid var(--border);
             color: var(--text); transition: border-color 0.2s, background 0.2s;
         }
-        .tech-pill:hover { background: #eff6ff; border-color: var(--primary); color: var(--primary); }
+        .tech-pill:hover { background: #EDF5FC; border-color: var(--primary); color: var(--primary); }
         .tech-pill span { font-size: 15px; }
 
         /* ── FOOTER ── */
@@ -319,7 +319,7 @@
                 <img src="images/logo.png" alt="SCTech">
                 <span>SCTech</span>
             </a>
-            <a href="index.html" style="padding:7px 18px;border-radius:8px;font-size:13px;font-weight:700;background:var(--primary);color:white;text-decoration:none;transition:background 0.15s;box-shadow:0 2px 8px rgba(42,92,130,0.25)" onmouseover="this.style.background='#1a3d5c'" onmouseout="this.style.background='#2A5C82'">← Voltar ao sistema</a>
+            <a href="index.html" style="padding:7px 18px;border-radius:8px;font-size:13px;font-weight:700;background:var(--primary);color:white;text-decoration:none;transition:background 0.15s;box-shadow:0 2px 8px rgba(0,93,59,0.25)" onmouseover="this.style.background='#00452B'" onmouseout="this.style.background='#005D3B'">← Voltar ao sistema</a>
         </div>
     </header>
 
@@ -345,7 +345,7 @@
     <!-- WAVE SEPARATOR -->
     <div class="wave">
         <svg viewBox="0 0 1440 60" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
-            <path d="M0,30 C360,60 1080,0 1440,30 L1440,60 L0,60 Z" fill="#2A5C82"/>
+            <path d="M0,30 C360,60 1080,0 1440,30 L1440,60 L0,60 Z" fill="#005D3B"/>
             <path d="M0,40 C360,10 1080,60 1440,20 L1440,60 L0,60 Z" fill="white"/>
         </svg>
     </div>

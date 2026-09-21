@@ -27,7 +27,7 @@
                 <!-- Linha CNPJ + busca -->
                 <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
                     <div class="form-group" style="width:220px;margin-bottom:0">
-                        <label>CNPJ <span style="color:#dc2626">*</span></label>
+                        <label>CNPJ <span style="color:#F43927">*</span></label>
                         <input type="text" id="forn-cnpj" placeholder="00.000.000/0000-00" maxlength="18" oninput="mascaraCNPJ(this)">
                     </div>
                     <button class="btn" id="forn-btn-buscar-cnpj" onclick="buscarCNPJ()" style="margin-bottom:0">🔍 Buscar CNPJ</button>
@@ -37,7 +37,7 @@
                 <!-- Razão Social + Nome Fantasia -->
                 <div class="grid" style="margin-bottom:0">
                     <div class="form-group">
-                        <label>Razão Social <span style="color:#dc2626">*</span></label>
+                        <label>Razão Social <span style="color:#F43927">*</span></label>
                         <input type="text" id="forn-nome" placeholder="Nome oficial da empresa">
                     </div>
                     <div class="form-group">
@@ -158,7 +158,7 @@
                                oninput="mascaraCNPJ(this);filtrarFornecedorPorCNPJ(this.value)">
                     </div>
                     <div class="form-group" style="flex:1;min-width:220px;margin-bottom:0">
-                        <label>Fornecedor <span style="color:#dc2626">*</span></label>
+                        <label>Fornecedor <span style="color:#F43927">*</span></label>
                         <select id="pc-fornecedor" onchange="document.getElementById('pc-busca-cnpj').value=''">
                             <option value="">— Selecione o fornecedor —</option>
                         </select>

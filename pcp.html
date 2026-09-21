@@ -27,30 +27,30 @@
             <!-- Filtros do Kanban -->
             <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;padding:12px 0 4px">
                 <div style="flex:1;min-width:160px">
-                    <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Cliente</label>
+                    <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Cliente</label>
                     <input id="kf-cliente" type="text" placeholder="🔍 Buscar cliente..."
-                           style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"
+                           style="width:100%;padding:7px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px"
                            oninput="aplicarFiltroKanban()">
                 </div>
                 <div style="flex:1;min-width:140px">
-                    <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Vendedor</label>
+                    <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Vendedor</label>
                     <select id="kf-vendedor"
-                            style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:#fff"
+                            style="width:100%;padding:7px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px;background:#fff"
                             onchange="aplicarFiltroKanban()">
                         <option value="">Todos</option>
                     </select>
                 </div>
                 <div style="flex:1;min-width:140px">
-                    <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Tecido</label>
+                    <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Tecido</label>
                     <select id="kf-tecido"
-                            style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:#fff"
+                            style="width:100%;padding:7px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px;background:#fff"
                             onchange="aplicarFiltroKanban()">
                         <option value="">Todos</option>
                     </select>
                 </div>
                 <div style="display:flex;align-items:flex-end;gap:8px;padding-bottom:1px">
                     <button class="btn btn-outline btn-sm" onclick="limparFiltroKanban()" style="white-space:nowrap">✕ Limpar</button>
-                    <span id="kf-resultado" style="font-size:12px;color:#6b7280;white-space:nowrap;line-height:32px"></span>
+                    <span id="kf-resultado" style="font-size:12px;color:#8F8F8F;white-space:nowrap;line-height:32px"></span>
                 </div>
             </div>
             <div id="kanban-board" class="kanban-board"></div>
@@ -59,23 +59,23 @@
             <!-- Filtros da Agenda de Instalações -->
             <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;padding:12px 0 4px">
                 <div style="flex:1;min-width:160px">
-                    <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Cliente</label>
+                    <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Cliente</label>
                     <input id="ag-cliente" type="text" placeholder="🔍 Buscar cliente..."
-                           style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"
+                           style="width:100%;padding:7px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px"
                            oninput="aplicarFiltroAgenda()">
                 </div>
                 <div style="flex:1;min-width:140px">
-                    <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Vendedor</label>
+                    <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Vendedor</label>
                     <select id="ag-vendedor"
-                            style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:#fff"
+                            style="width:100%;padding:7px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px;background:#fff"
                             onchange="aplicarFiltroAgenda()">
                         <option value="">Todos</option>
                     </select>
                 </div>
                 <div style="flex:1;min-width:140px">
-                    <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Número do pedido</label>
+                    <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Número do pedido</label>
                     <input id="ag-pedido" type="text" placeholder="Ex: 26001 ou #26001"
-                           style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"
+                           style="width:100%;padding:7px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px"
                            oninput="aplicarFiltroAgenda()">
                 </div>
                 <div style="display:flex;align-items:flex-end;gap:8px;padding-bottom:1px">
@@ -102,7 +102,7 @@
                 <!-- Cliente existente -->
                 <div id="med-grupo-existente">
                     <div class="form-group" style="max-width:400px">
-                        <label>Cliente <span style="color:#dc2626">*</span></label>
+                        <label>Cliente <span style="color:#F43927">*</span></label>
                         <select id="med-cliente-id" onchange="onMedClienteChange()">
                             <option value="">— Selecione o cliente —</option>
                         </select>
@@ -113,7 +113,7 @@
                 <div id="med-grupo-novo" style="display:none">
                     <div class="grid" style="max-width:600px">
                         <div class="form-group">
-                            <label>Nome do cliente <span style="color:#dc2626">*</span></label>
+                            <label>Nome do cliente <span style="color:#F43927">*</span></label>
                             <input type="text" id="med-novo-nome" placeholder="Nome completo">
                         </div>
                         <div class="form-group">
@@ -129,13 +129,13 @@
                             <input type="email" id="med-novo-email" placeholder="cliente@email.com">
                         </div>
                     </div>
-                    <p style="font-size:11px;color:#6b7280;margin:-4px 0 8px">O cliente será cadastrado automaticamente ao agendar.</p>
+                    <p style="font-size:11px;color:#8F8F8F;margin:-4px 0 8px">O cliente será cadastrado automaticamente ao agendar.</p>
                 </div>
 
                 <!-- Data / Hora / Endereço / Obs -->
                 <div class="grid" style="margin-top:4px">
                     <div class="form-group">
-                        <label>Data da visita <span style="color:#dc2626">*</span></label>
+                        <label>Data da visita <span style="color:#F43927">*</span></label>
                         <input type="date" id="med-data">
                     </div>
                     <div class="form-group">
@@ -143,7 +143,7 @@
                         <input type="time" id="med-hora">
                     </div>
                     <div class="form-group">
-                        <label>Endereço da visita <span style="color:#dc2626">*</span></label>
+                        <label>Endereço da visita <span style="color:#F43927">*</span></label>
                         <input type="text" id="med-end" placeholder="Rua, nº, bairro, cidade…">
                     </div>
                 </div>
@@ -158,9 +158,9 @@
             <!-- Filtro do Agendamento de Medições -->
             <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;padding:16px 0 4px">
                 <div style="flex:1;min-width:200px;max-width:320px">
-                    <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Cliente</label>
+                    <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Cliente</label>
                     <input id="mf-cliente" type="text" placeholder="🔍 Buscar cliente..."
-                           style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"
+                           style="width:100%;padding:7px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px"
                            oninput="aplicarFiltroMedicoes()">
                 </div>
                 <div style="display:flex;align-items:flex-end;gap:8px;padding-bottom:1px">

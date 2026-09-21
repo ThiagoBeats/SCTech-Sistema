@@ -23,8 +23,8 @@
             <!-- Donut: Pedidos por Status -->
             <div class="card chart-card" style="padding:20px">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px;flex-wrap:wrap">
-                    <h3 style="color:#374151;font-size:14px;margin:0;font-weight:700">Pedidos por Status</h3>
-                    <select id="chart-status-filtro" onchange="renderChartStatus()" style="font-size:11px;padding:3px 7px;border:1px solid #d1d5db;border-radius:6px;background:var(--white);color:var(--dark);cursor:pointer"></select>
+                    <h3 style="color:var(--dark);font-size:14px;margin:0;font-weight:700">Pedidos por Status</h3>
+                    <select id="chart-status-filtro" onchange="renderChartStatus()" style="font-size:11px;padding:3px 7px;border:1px solid #E0E0E0;border-radius:6px;background:var(--white);color:var(--dark);cursor:pointer"></select>
                 </div>
                 <canvas id="chart-status"></canvas>
             </div>
@@ -36,8 +36,8 @@
                 <div class="card" style="padding:16px 20px">
                     <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
                         <div style="min-width:150px">
-                            <label style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Vendedor</label>
-                            <select id="filtro-vendedor" onchange="renderDashboard()" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:var(--white);color:var(--dark)">
+                            <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Vendedor</label>
+                            <select id="filtro-vendedor" onchange="renderDashboard()" style="width:100%;padding:7px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px;background:var(--white);color:var(--dark)">
                                 <option value="">Todos</option>
                             </select>
                         </div>
@@ -84,13 +84,13 @@
     <script src="js/app.js"></script>
     <script>
         const STATUS_CARDS_CFG = [
-            { key:'Orçamento',             label:'Orçamento',       ic:'📋', bg:'#f1f5f9', bord:'#cbd5e1', clr:'#475569' },
-            { key:'Medição',               label:'Medição',         ic:'📐', bg:'#dbeafe', bord:'#93c5fd', clr:'#1e40af' },
-            { key:'Aguardando Tecido',     label:'Ag. Tecido',      ic:'🧵', bg:'#ede9fe', bord:'#c4b5fd', clr:'#5b21b6' },
-            { key:'Na Costura',            label:'Na Costura',      ic:'✂️', bg:'#fce7f3', bord:'#f9a8d4', clr:'#9d174d' },
-            { key:'Pronto p/ Instalação',  label:'Pronto p/ Inst.', ic:'📦', bg:'#dcfce7', bord:'#86efac', clr:'#166534' },
-            { key:'Aguardando Pagamento',  label:'Ag. Pagamento',   ic:'💳', bg:'#fef9c3', bord:'#fde047', clr:'#854d0e' },
-            { key:'Instalado',             label:'Instalado',       ic:'✅', bg:'#d1fae5', bord:'#6ee7b7', clr:'#065f46' },
+            { key:'Orçamento',             label:'Orçamento',       ic:'📋', bg:'#FEF6D8', bord:'#F2C924', clr:'#8A6A00' },
+            { key:'Medição',               label:'Medição',         ic:'📐', bg:'#E4EFF9', bord:'#9FC4E5', clr:'#1F5A96' },
+            { key:'Aguardando Tecido',     label:'Ag. Tecido',      ic:'🧵', bg:'#FFF0E0', bord:'#FFC28A', clr:'#8A4300' },
+            { key:'Na Costura',            label:'Na Costura',      ic:'✂️', bg:'#F2E6F9', bord:'#C89BE0', clr:'#6B1F8C' },
+            { key:'Pronto p/ Instalação',  label:'Pronto p/ Inst.', ic:'📦', bg:'#F0FBEF', bord:'#8FD98D', clr:'#005D3B' },
+            { key:'Aguardando Pagamento',  label:'Ag. Pagamento',   ic:'💳', bg:'#FEF4F2', bord:'#F79B90', clr:'#9C0F5C' },
+            { key:'Instalado',             label:'Instalado',       ic:'✅', bg:'#E3F7E2', bord:'#8FD98D', clr:'#0F6B0D' },
         ];
 
         function renderStatusCards() {
