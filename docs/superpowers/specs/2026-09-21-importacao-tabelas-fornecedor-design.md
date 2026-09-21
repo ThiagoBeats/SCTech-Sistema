@@ -58,6 +58,10 @@ Nenhum campo novo em tecido ou material. O importador grava nos campos existente
 
 O importador **não altera estoque**. Metragem continua entrando por "entrada de rolo".
 
+O cadastro manual (`salvarCatalogo`, `salvarMaterial`) já rejeita **nome duplicado**
+e **referência duplicada**. O importador respeita as duas regras: um item cujo nome
+já pertence a outro produto é bloqueado na conferência até o usuário editar o nome.
+
 ### Regra de markup
 
 - **Item novo:** usa o markup informado na importação.
@@ -106,6 +110,7 @@ Pelo código normalizado, que é único no sistema inteiro:
 | Novo | código não existe | cria com o markup da importação |
 | Atualizado | código existe, mesmo fornecedor | atualiza custo, recalcula venda preservando o markup |
 | Conflito | código existe, outro fornecedor | bloqueia até o usuário escolher: substituir o existente ou editar o código que entra |
+| Nome repetido | nome já usado por outro item | bloqueia até o usuário editar o nome |
 | Sem markup | existe, `preco_custo = 0` | usuário define o markup na tela |
 | Com problema | preço ausente, `--` ou não numérico | entra desmarcado, com o motivo escrito na linha |
 | Sumiu | existe no sistema, ausente na tabela | apenas aviso, nada é alterado |
