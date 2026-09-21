@@ -147,9 +147,18 @@
                         <input type="text" id="med-end" placeholder="Rua, nº, bairro, cidade…">
                     </div>
                 </div>
-                <div class="form-group" style="margin-top:0">
-                    <label>Observações</label>
-                    <input type="text" id="med-obs" placeholder="Referências, ponto de encontro, instruções…">
+                <div class="grid" style="margin-top:0">
+                    <div class="form-group">
+                        <label>Responsável pela medição</label>
+                        <select id="med-usuario">
+                            <option value="">— A definir —</option>
+                        </select>
+                        <small style="font-size:11px;color:var(--muted);margin-top:4px">A visita aparece como alerta para esta pessoa.</small>
+                    </div>
+                    <div class="form-group" style="grid-column:span 2">
+                        <label>Observações</label>
+                        <input type="text" id="med-obs" placeholder="Referências, ponto de encontro, instruções…">
+                    </div>
                 </div>
 
                 <button class="btn btn-success" onclick="salvarMedicao()">📐 Agendar Visita</button>

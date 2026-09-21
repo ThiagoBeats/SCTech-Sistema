@@ -1,15 +1,65 @@
 // --- CONTROLE DE ACESSO: módulos, ações restritas e papéis padrão ---
 // (definidos antes de `db` porque o seed inicial de `papeis` usa papeisPadrao())
+// Árvore de módulos do sistema. Cada módulo pode ter sub-abas; a permissão de
+// uma sub-aba é opcional — quando não definida, ela herda o nível do módulo.
+// A chave da sub-aba é sempre "modulo.sub".
 const MODULOS_PERMISSAO = [
-    { key: 'visao_geral',    label: 'Visão Geral' },
-    { key: 'a_receber',      label: 'A Receber' },
-    { key: 'a_pagar',        label: 'A Pagar' },
-    { key: 'despesas_fixas', label: 'Despesas Fixas' },
-    { key: 'dre_pedido',     label: 'DRE por Pedido' },
-    { key: 'pedidos',        label: 'Pedidos' },
-    { key: 'clientes',       label: 'Clientes' },
-    { key: 'configuracoes',  label: 'Configurações' },
+    { key: 'inicio',        label: 'Página Inicial',     subs: [] },
+    { key: 'pedidos',       label: 'Pedidos',            subs: [] },
+    { key: 'producao',      label: 'Produção',           subs: [
+        { key: 'kanban',   label: 'Status dos pedidos' },
+        { key: 'agenda',   label: 'Agenda de Instalações' },
+        { key: 'medicoes', label: 'Agendamento de Medições' },
+    ]},
+    { key: 'estoque',       label: 'Estoque',            subs: [
+        { key: 'tecidos',   label: 'Tecidos' },
+        { key: 'materiais', label: 'Materiais' },
+        { key: 'kits',      label: 'Kits' },
+        { key: 'historico', label: 'Histórico' },
+        { key: 'consulta',  label: 'Consulta de Estoque' },
+        { key: 'futuro',    label: 'Estoque Futuro' },
+        { key: 'backup',    label: 'Backup' },
+    ]},
+    { key: 'clientes',      label: 'Clientes',           subs: [] },
+    { key: 'catalogo',      label: 'Cadastro/Catálogo',  subs: [
+        { key: 'tecidos',   label: 'Tecidos' },
+        { key: 'materiais', label: 'Materiais e Acessórios' },
+    ]},
+    { key: 'vendedores',    label: 'Vendedores',         subs: [
+        { key: 'lista',     label: 'Vendedores' },
+        { key: 'pendentes', label: 'Comissões Pendentes' },
+        { key: 'historico', label: 'Histórico de Pagamentos' },
+    ]},
+    { key: 'fornecedores',  label: 'Fornecedores',       subs: [
+        { key: 'lista',   label: 'Fornecedores' },
+        { key: 'pedidos', label: 'Pedidos de Compra' },
+    ]},
+    { key: 'financeiro',    label: 'Financeiro',         subs: [
+        { key: 'dashboard', label: 'Visão Geral' },
+        { key: 'receber',   label: 'A Receber' },
+        { key: 'pagar',     label: 'A Pagar' },
+        { key: 'fixas',     label: 'Despesas Fixas' },
+        { key: 'dre',       label: 'DRE por Pedido' },
+    ]},
+    { key: 'relatorios',    label: 'Relatórios',         subs: [
+        { key: 'faturamento', label: 'Faturamento Mensal' },
+        { key: 'recebiveis',  label: 'Contas a Receber' },
+        { key: 'vendedores',  label: 'Por Vendedor' },
+    ]},
+    { key: 'configuracoes', label: 'Configurações',      subs: [
+        { key: 'usuarios', label: 'Usuários' },
+        { key: 'papeis',   label: 'Papéis' },
+    ]},
 ];
+
+// Chaves antigas (modelo plano) → novas, para migrar papéis/usuários já salvos.
+const MAPA_MODULOS_LEGADO = {
+    visao_geral:    'financeiro.dashboard',
+    a_receber:      'financeiro.receber',
+    a_pagar:        'financeiro.pagar',
+    despesas_fixas: 'financeiro.fixas',
+    dre_pedido:     'financeiro.dre',
+};
 
 // Ações liberadas individualmente (independente do nível), para papéis que só
 // podem executar uma ação bem específica dentro de um módulo (ex.: Produção só
@@ -29,32 +79,94 @@ function permTodos(nivel) {
     return o;
 }
 
+// Define o módulo inteiro num nível e, opcionalmente, sub-abas em níveis diferentes.
+function permModulo(nivel, subs) {
+    const o = { nivel, acoes_restritas: [] };
+    return { o, subs: subs || {} };
+}
+
 function papeisPadrao() {
+    const base = nivel => permTodos(nivel);
+    const comSubs = (perms, mapa) => {
+        Object.entries(mapa).forEach(([k, v]) => { perms[k] = typeof v === 'string' ? { nivel: v, acoes_restritas: [] } : v; });
+        return perms;
+    };
     return [
-        { id: 1, nome: 'Administrador', permissoes: permTodos('completo') },
-        { id: 2, nome: 'Financeiro', permissoes: {
-            ...permTodos('completo'),
-            pedidos:       { nivel: 'visualizar', acoes_restritas: [] },
-            clientes:      { nivel: 'visualizar', acoes_restritas: [] },
-            configuracoes: { nivel: 'sem_acesso',  acoes_restritas: [] },
-        }},
-        { id: 3, nome: 'Vendedor/Atendimento', permissoes: {
-            ...permTodos('sem_acesso'),
-            a_receber: { nivel: 'visualizar', acoes_restritas: [] },
-            pedidos:   { nivel: 'completo',   acoes_restritas: [] },
-            clientes:  { nivel: 'completo',   acoes_restritas: [] },
-        }},
-        { id: 4, nome: 'Produção/Costura', permissoes: {
-            ...permTodos('sem_acesso'),
-            pedidos:  { nivel: 'visualizar', acoes_restritas: ['mudar_status'] },
-            clientes: { nivel: 'visualizar', acoes_restritas: [] },
-        }},
-        { id: 5, nome: 'Instalação', permissoes: {
-            ...permTodos('sem_acesso'),
-            pedidos:  { nivel: 'visualizar', acoes_restritas: ['marcar_instalado'] },
-            clientes: { nivel: 'visualizar', acoes_restritas: [] },
-        }},
+        { id: 1, nome: 'Administrador', permissoes: base('completo') },
+        { id: 2, nome: 'Financeiro', permissoes: comSubs(base('completo'), {
+            pedidos:       'visualizar',
+            clientes:      'visualizar',
+            configuracoes: 'sem_acesso',
+        })},
+        { id: 3, nome: 'Vendedor/Atendimento', permissoes: comSubs(base('sem_acesso'), {
+            inicio:                'completo',
+            pedidos:               'completo',
+            clientes:              'completo',
+            financeiro:            'visualizar',
+            'financeiro.dashboard':'sem_acesso',
+            'financeiro.pagar':    'sem_acesso',
+            'financeiro.fixas':    'sem_acesso',
+            'financeiro.dre':      'sem_acesso',
+            producao:              'visualizar',
+            catalogo:              'visualizar',
+        })},
+        { id: 4, nome: 'Produção/Costura', permissoes: comSubs(base('sem_acesso'), {
+            inicio:    'completo',
+            pedidos:   { nivel: 'visualizar', acoes_restritas: ['mudar_status'] },
+            clientes:  'visualizar',
+            producao:  'completo',
+            estoque:   'visualizar',
+            catalogo:  'visualizar',
+        })},
+        { id: 5, nome: 'Instalação', permissoes: comSubs(base('sem_acesso'), {
+            inicio:            'completo',
+            pedidos:           { nivel: 'visualizar', acoes_restritas: ['marcar_instalado'] },
+            clientes:          'visualizar',
+            producao:          'visualizar',
+            'producao.agenda': 'completo',
+        })},
     ];
+}
+
+// Migra permissões salvas no modelo antigo (abas do Financeiro soltas) para a
+// árvore atual. Módulos que não existiam antes entram liberados, para ninguém
+// perder acesso na atualização — o administrador restringe depois se quiser.
+function migrarPermissoesParaArvore(permissoes) {
+    if (!permissoes || typeof permissoes !== 'object') return permTodos('sem_acesso');
+    const legadoPresente = Object.keys(MAPA_MODULOS_LEGADO).some(k => k in permissoes);
+    if (!legadoPresente) return permissoes;
+
+    const novo = { ...permissoes };
+    let nivelFinanceiro = 'sem_acesso';
+    Object.entries(MAPA_MODULOS_LEGADO).forEach(([antigo, novoKey]) => {
+        const p = permissoes[antigo];
+        if (!p) return;
+        novo[novoKey] = { nivel: p.nivel, acoes_restritas: p.acoes_restritas || [] };
+        if (NIVEL_ORDEM[p.nivel] > NIVEL_ORDEM[nivelFinanceiro]) nivelFinanceiro = p.nivel;
+        delete novo[antigo];
+    });
+    novo.financeiro = { nivel: nivelFinanceiro, acoes_restritas: [] };
+
+    MODULOS_PERMISSAO.forEach(m => { if (!novo[m.key]) novo[m.key] = { nivel: 'completo', acoes_restritas: [] }; });
+    return novo;
+}
+
+function migrarPermissoesSalvas() {
+    let mudou = false;
+    (db.papeis || []).forEach(p => {
+        const antes = JSON.stringify(p.permissoes);
+        p.permissoes = migrarPermissoesParaArvore(p.permissoes);
+        if (JSON.stringify(p.permissoes) !== antes) mudou = true;
+    });
+    (db.usuarios || []).forEach(u => {
+        if (!u.permissoes_extras) return;
+        const novo = {};
+        Object.entries(u.permissoes_extras).forEach(([k, v]) => {
+            novo[MAPA_MODULOS_LEGADO[k] || k] = v;
+        });
+        if (JSON.stringify(novo) !== JSON.stringify(u.permissoes_extras)) { u.permissoes_extras = novo; mudou = true; }
+    });
+    if (mudou) syncDB();
 }
 
 // --- BANCO DE DADOS (LocalStorage) ---
@@ -289,16 +401,16 @@ function navIcon(name, size) {
 }
 
 const SIDEBAR_MODULOS = [
-    { href: 'index.html',       icon: 'home',         label: 'Página Inicial' },
-    { href: 'pedidos.html',     icon: 'pedidos',      label: 'Pedidos',   permModulo: 'pedidos' },
-    { href: 'pcp.html',         icon: 'producao',     label: 'Produção' },
-    { href: 'estoque.html',     icon: 'estoque',      label: 'Estoque' },
-    { href: 'clientes.html',    icon: 'clientes',     label: 'Clientes',  permModulo: 'clientes' },
-    { href: 'catalogo.html',    icon: 'catalogo',     label: 'Cadastro/Catálogo' },
-    { href: 'vendedores.html',  icon: 'vendedores',   label: 'Vendedores' },
-    { href: 'fornecedores.html', icon: 'fornecedores', label: 'Fornecedores' },
-    { href: 'financeiro.html',  icon: 'financeiro',   label: 'Financeiro', permModulo: ['visao_geral', 'a_receber', 'a_pagar', 'despesas_fixas', 'dre_pedido'] },
-    { href: 'configuracoes.html', icon: 'settings',   label: 'Configurações', permModulo: 'configuracoes' },
+    { href: 'index.html',       icon: 'home',         label: 'Página Inicial',    permModulo: 'inicio' },
+    { href: 'pedidos.html',     icon: 'pedidos',      label: 'Pedidos',           permModulo: 'pedidos' },
+    { href: 'pcp.html',         icon: 'producao',     label: 'Produção',          permModulo: 'producao' },
+    { href: 'estoque.html',     icon: 'estoque',      label: 'Estoque',           permModulo: 'estoque' },
+    { href: 'clientes.html',    icon: 'clientes',     label: 'Clientes',          permModulo: 'clientes' },
+    { href: 'catalogo.html',    icon: 'catalogo',     label: 'Cadastro/Catálogo', permModulo: 'catalogo' },
+    { href: 'vendedores.html',  icon: 'vendedores',   label: 'Vendedores',        permModulo: 'vendedores' },
+    { href: 'fornecedores.html', icon: 'fornecedores', label: 'Fornecedores',     permModulo: 'fornecedores' },
+    { href: 'financeiro.html',  icon: 'financeiro',   label: 'Financeiro',        permModulo: 'financeiro' },
+    { href: 'configuracoes.html', icon: 'settings',   label: 'Configurações',     permModulo: 'configuracoes' },
 ];
 
 function getSidebarCollapsed() {
@@ -326,7 +438,7 @@ function renderSidebar() {
     const navHTML = SIDEBAR_MODULOS.filter(m => {
         if (!m.permModulo) return true;
         const lista = Array.isArray(m.permModulo) ? m.permModulo : [m.permModulo];
-        return lista.some(mod => temAcesso(mod, 'visualizar', usuarioAtual));
+        return lista.some(mod => temAcessoAlgumaSub(mod, 'visualizar', usuarioAtual));
     }).map(m => {
         const active = m.href.toLowerCase() === currentFile;
         return `<a href="${m.href}" class="nav-item${active ? ' active' : ''}" title="${escapeHtml(m.label)}">${navIcon(m.icon)}<span class="nav-text">${escapeHtml(m.label)}</span></a>`;
@@ -458,13 +570,20 @@ function salvarERecarregar(msg = 'Salvo com sucesso!') {
 // não guardar a senha em texto puro; quando o sistema migrar para um banco de
 // dados/backend real, a autenticação deve ser refeita lá (hash forte no
 // servidor, verificação em cada rota) e este arquivo deixa de ser a fonte da verdade.
-const FIN_TAB_MODULO = { dashboard: 'visao_geral', receber: 'a_receber', pagar: 'a_pagar', fixas: 'despesas_fixas', dre: 'dre_pedido' };
+const FIN_TAB_MODULO = { dashboard: 'financeiro.dashboard', receber: 'financeiro.receber', pagar: 'financeiro.pagar', fixas: 'financeiro.fixas', dre: 'financeiro.dre' };
 
 const PAGINA_MODULO = {
+    'index.html':         'inicio',
     'pedidos.html':       'pedidos',
     'pedido.html':        'pedidos',
+    'pcp.html':           'producao',
+    'estoque.html':       'estoque',
     'clientes.html':      'clientes',
-    'financeiro.html':    ['visao_geral', 'a_receber', 'a_pagar', 'despesas_fixas', 'dre_pedido'],
+    'catalogo.html':      'catalogo',
+    'vendedores.html':    'vendedores',
+    'fornecedores.html':  'fornecedores',
+    'financeiro.html':    'financeiro',
+    'relatorios.html':    'relatorios',
     'configuracoes.html': 'configuracoes',
 };
 
@@ -476,6 +595,7 @@ async function hashSenha(senha) {
 // Cria o primeiro usuário (Administrador) automaticamente na primeira vez que o
 // sistema roda com login — preserva o acesso que já existia antes desta feature.
 async function garantirMigracaoUsuarios() {
+    migrarPermissoesSalvas();
     if (db.usuarios.length > 0) return;
     const papelAdmin = db.papeis.find(p => p.nome === 'Administrador') || db.papeis[0];
     db.usuarios.push({
@@ -494,13 +614,32 @@ function getUsuarioLogado() {
 }
 
 // Resolução: permissão específica do usuário sobrescreve o papel quando presente.
+// Resolve a permissão de um módulo ou sub-aba ("modulo.sub").
+// Ordem: permissão específica do usuário → permissão do papel → herança do
+// módulo pai (quando a chave é de sub-aba) → sem acesso.
 function resolverPermissao(modulo, usuario) {
     usuario = usuario === undefined ? getUsuarioLogado() : usuario;
     const vazio = { nivel: 'sem_acesso', acoes_restritas: [] };
     if (!usuario) return vazio;
-    if (usuario.permissoes_extras && usuario.permissoes_extras[modulo]) return usuario.permissoes_extras[modulo];
     const papel = db.papeis.find(p => p.id === usuario.papel_id);
-    return (papel && papel.permissoes[modulo]) || vazio;
+    const extras = usuario.permissoes_extras || {};
+    const buscar = chave => extras[chave] || (papel && papel.permissoes && papel.permissoes[chave]);
+
+    const direta = buscar(modulo);
+    if (direta) return direta;
+    if (modulo.includes('.')) {
+        const pai = buscar(modulo.split('.')[0]);
+        if (pai) return pai;
+    }
+    return vazio;
+}
+
+// Verdadeiro se o usuário alcança o nível em QUALQUER sub-aba do módulo
+// (usado para decidir se o módulo aparece no menu).
+function temAcessoAlgumaSub(moduloKey, nivelMinimo, usuario) {
+    if (temAcesso(moduloKey, nivelMinimo, usuario)) return true;
+    const mod = MODULOS_PERMISSAO.find(m => m.key === moduloKey);
+    return !!(mod && (mod.subs || []).some(s => temAcesso(`${moduloKey}.${s.key}`, nivelMinimo, usuario)));
 }
 
 function temAcesso(modulo, nivelMinimo, usuario) {
@@ -529,13 +668,14 @@ async function exigirPermissao(modulo, nivelMinimo) {
 
 function checkAuth() {
     if (!sessionStorage.getItem('sc_user')) { window.location.replace('login.html'); return; }
+    migrarPermissoesSalvas();
     const usuario = getUsuarioLogado();
     if (!usuario || !usuario.ativo) { logout(); return; }
     const arquivo  = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
     const exigidos = PAGINA_MODULO[arquivo];
     if (exigidos) {
         const lista = Array.isArray(exigidos) ? exigidos : [exigidos];
-        if (!lista.some(m => temAcesso(m, 'visualizar', usuario))) { window.location.replace('index.html'); return; }
+        if (!lista.some(m => temAcessoAlgumaSub(m, 'visualizar', usuario))) { window.location.replace('index.html'); return; }
     }
 }
 
@@ -573,56 +713,84 @@ function mostrarTabConfig(tab) {
     else if (tab === 'papeis') renderConfigPapeis();
 }
 
-function _linhaMatrizPermissao(modulo, prefix, valorNivel, valorAcoes, opts) {
+// Lista plana de linhas da matriz: cada módulo seguido de suas sub-abas.
+function _linhasMatriz() {
+    const linhas = [];
+    MODULOS_PERMISSAO.forEach(m => {
+        linhas.push({ key: m.key, label: m.label, isSub: false, acoes: ACOES_RESTRITAS_POR_MODULO[m.key] || [] });
+        (m.subs || []).forEach(s => linhas.push({ key: `${m.key}.${s.key}`, label: s.label, isSub: true, pai: m.key, acoes: [] }));
+    });
+    return linhas;
+}
+
+function _linhaMatrizPermissao(linha, prefix, valorNivel, valorAcoes, opts) {
     opts = opts || {};
-    const acoesDisponiveis = ACOES_RESTRITAS_POR_MODULO[modulo.key] || [];
     const dis = opts.disabled ? 'disabled' : '';
-    const niveis = [['sem_acesso', 'Sem acesso'], ['visualizar', 'Visualizar'], ['completo', 'Completo']];
+    // Sub-aba ganha a opção "Herdar" (não grava chave e segue o nível do módulo).
+    const niveis = linha.isSub
+        ? [['', 'Herdar'], ['sem_acesso', 'Sem acesso'], ['visualizar', 'Visualizar'], ['completo', 'Completo']]
+        : [['sem_acesso', 'Sem acesso'], ['visualizar', 'Visualizar'], ['completo', 'Completo']];
+    const sel = valorNivel === undefined || valorNivel === null ? '' : valorNivel;
     const radiosHtml = niveis.map(([v, lbl]) =>
-        `<label class="cfg-radio"><input type="radio" name="${prefix}-nivel-${modulo.key}" value="${v}" ${valorNivel === v ? 'checked' : ''} ${dis}> ${lbl}</label>`
+        `<label class="cfg-radio"><input type="radio" name="${prefix}-nivel-${linha.key}" value="${v}" ${sel === v ? 'checked' : ''} ${dis}> ${lbl}</label>`
     ).join('');
-    const acoesHtml = acoesDisponiveis.length
-        ? `<div class="cfg-acoes-restritas">${acoesDisponiveis.map(a =>
-            `<label class="cfg-check"><input type="checkbox" class="cfg-acao-chk" data-modulo="${modulo.key}" data-acao="${a.id}" ${(valorAcoes || []).includes(a.id) ? 'checked' : ''} ${dis}> ${escapeHtml(a.label)}</label>`
+    const acoesHtml = linha.acoes.length
+        ? `<div class="cfg-acoes-restritas">${linha.acoes.map(a =>
+            `<label class="cfg-check"><input type="checkbox" class="cfg-acao-chk" data-modulo="${linha.key}" data-acao="${a.id}" ${(valorAcoes || []).includes(a.id) ? 'checked' : ''} ${dis}> ${escapeHtml(a.label)}</label>`
           ).join('')}</div>`
         : '<span style="color:#8F8F8F;font-size:11px">—</span>';
     return { radiosHtml, acoesHtml };
 }
 
-// Matriz totalmente editável — usada no formulário de Papel (não há "herança" aqui, o papel É a base).
+// Matriz totalmente editável — usada no formulário de Papel (o papel É a base).
 function _matrizPapelHTML(permissoesAtual) {
     permissoesAtual = permissoesAtual || permTodos('sem_acesso');
-    return `<table class="cfg-matriz"><thead><tr><th>Módulo</th><th>Nível de acesso</th><th>Ações restritas</th></tr></thead><tbody>
-        ${MODULOS_PERMISSAO.map(m => {
-            const p = permissoesAtual[m.key] || { nivel: 'sem_acesso', acoes_restritas: [] };
-            const { radiosHtml, acoesHtml } = _linhaMatrizPermissao(m, 'papel', p.nivel, p.acoes_restritas);
-            return `<tr><td><strong>${escapeHtml(m.label)}</strong></td><td><div class="cfg-radio-group">${radiosHtml}</div></td><td>${acoesHtml}</td></tr>`;
+    return `<table class="cfg-matriz"><thead><tr><th>Módulo / sub-aba</th><th>Nível de acesso</th><th>Ações restritas</th></tr></thead><tbody>
+        ${_linhasMatriz().map(l => {
+            const p = permissoesAtual[l.key];
+            const nivel = p ? p.nivel : (l.isSub ? '' : 'sem_acesso');
+            const { radiosHtml, acoesHtml } = _linhaMatrizPermissao(l, 'papel', nivel, p && p.acoes_restritas);
+            const nSubs = l.isSub ? 0 : (MODULOS_PERMISSAO.find(m => m.key === l.key)?.subs || []).length;
+            const nome = l.isSub
+                ? `<span class="cfg-sub-label">${escapeHtml(l.label)}</span>`
+                : `<strong>${escapeHtml(l.label)}</strong>${nSubs ? ` <button type="button" class="cfg-exp-btn" onclick="_toggleSubsModulo(this,'${l.key}')" title="Mostrar/ocultar sub-abas">▸ ${nSubs}</button>` : ''}`;
+            const attrs = l.isSub ? ` data-pai="${l.pai}" style="display:none"` : '';
+            return `<tr class="${l.isSub ? 'cfg-row-sub' : 'cfg-row-mod'}"${attrs}><td>${nome}</td><td><div class="cfg-radio-group">${radiosHtml}</div></td><td>${acoesHtml}</td></tr>`;
         }).join('')}
     </tbody></table>`;
 }
 
 function _lerMatrizPapelForm() {
     const permissoes = {};
-    MODULOS_PERMISSAO.forEach(m => {
-        let nivel = 'sem_acesso';
-        document.getElementsByName(`papel-nivel-${m.key}`).forEach(r => { if (r.checked) nivel = r.value; });
-        const acoes = Array.from(document.querySelectorAll(`.cfg-acao-chk[data-modulo="${m.key}"]`)).filter(c => c.checked).map(c => c.dataset.acao);
-        permissoes[m.key] = { nivel, acoes_restritas: acoes };
+    _linhasMatriz().forEach(l => {
+        let nivel = l.isSub ? '' : 'sem_acesso';
+        document.getElementsByName(`papel-nivel-${l.key}`).forEach(r => { if (r.checked) nivel = r.value; });
+        if (l.isSub && nivel === '') return; // "Herdar": não grava chave
+        const acoes = Array.from(document.querySelectorAll(`.cfg-acao-chk[data-modulo="${l.key}"]`)).filter(c => c.checked).map(c => c.dataset.acao);
+        permissoes[l.key] = { nivel, acoes_restritas: acoes };
     });
     return permissoes;
 }
 
 // Matriz do usuário: cada linha herda do papel por padrão; "Personalizar" libera a
-// edição daquela linha e grava a sobrescrita em permissoes_extras[modulo].
+// edição daquela linha e grava a sobrescrita em permissoes_extras[chave].
 function _matrizUsuarioHTML(papelBase, permissoesExtras) {
     permissoesExtras = permissoesExtras || {};
-    return `<table class="cfg-matriz" id="usr-matriz"><thead><tr><th>Módulo</th><th>Personalizar</th><th>Nível de acesso</th><th>Ações restritas</th></tr></thead><tbody>
-        ${MODULOS_PERMISSAO.map(m => {
-            const isOverride = !!permissoesExtras[m.key];
-            const valor = isOverride ? permissoesExtras[m.key] : ((papelBase && papelBase.permissoes[m.key]) || { nivel: 'sem_acesso', acoes_restritas: [] });
-            const { radiosHtml, acoesHtml } = _linhaMatrizPermissao(m, 'usr', valor.nivel, valor.acoes_restritas, { disabled: !isOverride });
-            return `<tr class="cfg-row${isOverride ? ' cfg-row-personalizado' : ''}" data-modulo="${m.key}">
-                <td><strong>${escapeHtml(m.label)}</strong></td>
+    const doPapel = k => (papelBase && papelBase.permissoes && papelBase.permissoes[k]) || null;
+    return `<table class="cfg-matriz" id="usr-matriz"><thead><tr><th>Módulo / sub-aba</th><th>Personalizar</th><th>Nível de acesso</th><th>Ações restritas</th></tr></thead><tbody>
+        ${_linhasMatriz().map(l => {
+            const isOverride = !!permissoesExtras[l.key];
+            const herdado = doPapel(l.key) || (l.isSub ? doPapel(l.pai) : null) || { nivel: 'sem_acesso', acoes_restritas: [] };
+            const valor = isOverride ? permissoesExtras[l.key] : herdado;
+            const { radiosHtml, acoesHtml } = _linhaMatrizPermissao(l, 'usr', valor.nivel, valor.acoes_restritas, { disabled: !isOverride });
+            const nSubs = l.isSub ? 0 : (MODULOS_PERMISSAO.find(m => m.key === l.key)?.subs || []).length;
+            const nome = l.isSub
+                ? `<span class="cfg-sub-label">${escapeHtml(l.label)}</span>`
+                : `<strong>${escapeHtml(l.label)}</strong>${nSubs ? ` <button type="button" class="cfg-exp-btn" onclick="_toggleSubsModulo(this,'${l.key}')" title="Mostrar/ocultar sub-abas">▸ ${nSubs}</button>` : ''}`;
+            const oculta = l.isSub && !isOverride;
+            const attrs = l.isSub ? ` data-pai="${l.pai}"${oculta ? ' style="display:none"' : ''}` : '';
+            return `<tr class="cfg-row ${l.isSub ? 'cfg-row-sub' : 'cfg-row-mod'}${isOverride ? ' cfg-row-personalizado' : ''}" data-modulo="${l.key}"${attrs}>
+                <td>${nome}</td>
                 <td>
                     <label class="cfg-override-toggle">
                         <input type="checkbox" class="cfg-override-chk" onchange="_onTogglePersonalizarLinha(this)" ${isOverride ? 'checked' : ''}>
@@ -634,6 +802,16 @@ function _matrizUsuarioHTML(papelBase, permissoesExtras) {
             </tr>`;
         }).join('')}
     </tbody></table>`;
+}
+
+// Mostra/oculta as sub-abas de um módulo na matriz de permissões.
+function _toggleSubsModulo(btn, moduloKey) {
+    const tabela = btn.closest('table');
+    if (!tabela) return;
+    const subs = tabela.querySelectorAll(`tr[data-pai="${moduloKey}"]`);
+    const abrindo = subs.length && subs[0].style.display === 'none';
+    subs.forEach(tr => { tr.style.display = abrindo ? '' : 'none'; });
+    btn.textContent = `${abrindo ? '▾' : '▸'} ${subs.length}`;
 }
 
 function _onTogglePersonalizarLinha(chk) {
@@ -652,11 +830,11 @@ function onPapelUsuarioFormChange() {
     const papelId = parseInt(document.getElementById('usr-papel')?.value);
     const papel = db.papeis.find(p => p.id === papelId);
     if (!papel) return;
-    MODULOS_PERMISSAO.forEach(m => {
-        const tr = document.querySelector(`#usr-matriz tr[data-modulo="${m.key}"]`);
+    _linhasMatriz().forEach(l => {
+        const tr = document.querySelector(`#usr-matriz tr[data-modulo="${l.key}"]`);
         if (!tr) return;
         if (tr.querySelector('.cfg-override-chk')?.checked) return;
-        const p = papel.permissoes[m.key] || { nivel: 'sem_acesso', acoes_restritas: [] };
+        const p = papel.permissoes[l.key] || (l.isSub ? papel.permissoes[l.pai] : null) || { nivel: 'sem_acesso', acoes_restritas: [] };
         tr.querySelectorAll('input[type=radio]').forEach(r => { r.checked = (r.value === p.nivel); });
         tr.querySelectorAll('.cfg-acao-chk').forEach(c => { c.checked = (p.acoes_restritas || []).includes(c.dataset.acao); });
     });
@@ -664,13 +842,14 @@ function onPapelUsuarioFormChange() {
 
 function _lerMatrizUsuarioForm() {
     const permissoes_extras = {};
-    MODULOS_PERMISSAO.forEach(m => {
-        const tr = document.querySelector(`#usr-matriz tr[data-modulo="${m.key}"]`);
+    _linhasMatriz().forEach(l => {
+        const tr = document.querySelector(`#usr-matriz tr[data-modulo="${l.key}"]`);
         if (!tr || !tr.querySelector('.cfg-override-chk')?.checked) return;
-        let nivel = 'sem_acesso';
+        let nivel = l.isSub ? '' : 'sem_acesso';
         tr.querySelectorAll('input[type=radio]').forEach(r => { if (r.checked) nivel = r.value; });
+        if (l.isSub && nivel === '') return;
         const acoes = Array.from(tr.querySelectorAll('.cfg-acao-chk')).filter(c => c.checked).map(c => c.dataset.acao);
-        permissoes_extras[m.key] = { nivel, acoes_restritas: acoes };
+        permissoes_extras[l.key] = { nivel, acoes_restritas: acoes };
     });
     return permissoes_extras;
 }
@@ -689,6 +868,7 @@ function renderConfigUsuarios() {
             <td>
                 <button class="btn btn-outline btn-sm" onclick="abrirModalUsuario(${u.id})" title="Editar">✏️</button>
                 <button class="btn btn-outline btn-sm" onclick="toggleAtivoUsuario(${u.id})" title="${u.ativo ? 'Desativar' : 'Ativar'}">${u.ativo ? '🚫' : '✅'}</button>
+                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirUsuario(${u.id})" title="Excluir">🗑️</button>
             </td>
         </tr>`;
     }).join('') || '<tr><td colspan="5" style="text-align:center;color:#999;padding:20px">Nenhum usuário cadastrado.</td></tr>';
@@ -704,7 +884,7 @@ function abrirModalUsuario(id) {
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay.innerHTML = `<div class="modal-box" style="max-width:680px">
+    overlay.innerHTML = `<div class="modal-box" style="max-width:860px">
         <div class="modal-header">
             <h3>${editando ? 'Editar Usuário' : 'Novo Usuário'}</h3>
             <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
@@ -779,6 +959,111 @@ async function toggleAtivoUsuario(id) {
     salvarERecarregar(u.ativo ? 'Usuário ativado!' : 'Usuário desativado.');
 }
 
+// --- RESPONSÁVEIS: vínculo entre trabalho e conta de acesso ---
+
+// Preenche um <select> com os usuários ativos do sistema.
+function preencherSelectUsuarios(selectId, labelVazio, apenasPapeis) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    const valorAtual = sel.value;
+    const lista = db.usuarios.filter(u => u.ativo).filter(u => {
+        if (!apenasPapeis || !apenasPapeis.length) return true;
+        const papel = db.papeis.find(p => p.id === u.papel_id);
+        return papel && apenasPapeis.includes(papel.nome);
+    });
+    sel.innerHTML = `<option value="">${escapeHtml(labelVazio || '— Nenhum —')}</option>` +
+        lista.map(u => `<option value="${u.id}">${escapeHtml(u.nome)}</option>`).join('');
+    if (valorAtual) sel.value = valorAtual;
+}
+
+// Nome de exibição de um usuário pelo id (vazio quando não atribuído).
+function nomeUsuario(id) {
+    if (!id) return '';
+    const u = db.usuarios.find(x => x.id === id);
+    return u ? u.nome : 'Usuário removido';
+}
+
+// Conta de acesso do vendedor responsável por um pedido (quando vinculada).
+function usuarioDoVendedor(vendedorId) {
+    if (!vendedorId) return null;
+    const v = db.vendedores.find(x => x.id == vendedorId);
+    return v && v.usuario_id ? v.usuario_id : null;
+}
+
+// Quem tem visão global dos alertas: quem administra o sistema (acesso ao
+// módulo Configurações). Vendedor e instalador têm "Completo" em Pedidos para
+// trabalhar, então esse não serve de critério — só o acesso à administração
+// separa quem precisa do panorama de quem precisa da própria agenda.
+function vePainelCompleto(usuario) {
+    return temAcesso('configuracoes', 'visualizar', usuario === undefined ? getUsuarioLogado() : usuario);
+}
+
+// O pedido é responsabilidade do usuário logado? (vendedor vinculado,
+// instalador designado ou quem criou o pedido).
+function pedidoEhMeu(ped, usuario) {
+    const u = usuario === undefined ? getUsuarioLogado() : usuario;
+    if (!u || !ped) return false;
+    return usuarioDoVendedor(ped.vendedor_id) === u.id
+        || ped.usuario_instalacao_id === u.id
+        || ped.criado_por === u.id;
+}
+
+function medicaoEhMinha(med, usuario) {
+    const u = usuario === undefined ? getUsuarioLogado() : usuario;
+    if (!u || !med) return false;
+    return med.usuario_id === u.id;
+}
+
+// Aplica o escopo aos pedidos/medições exibidos em alertas e widgets do painel.
+function filtrarPedidosVisiveis(lista) {
+    if (vePainelCompleto()) return lista;
+    return lista.filter(p => pedidoEhMeu(p));
+}
+
+function filtrarMedicoesVisiveis(lista) {
+    if (vePainelCompleto()) return lista;
+    return lista.filter(m => medicaoEhMinha(m));
+}
+
+// Lista os vínculos que impedem a exclusão definitiva de um usuário.
+// Só quem nunca foi usado em nenhum registro pode ser excluído — os demais
+// devem ser desativados, para não deixar referência quebrada no histórico.
+function _vinculosUsuario(id) {
+    const v = [];
+    const nVend = (db.vendedores || []).filter(x => x.usuario_id === id).length;
+    if (nVend) v.push(`${nVend} vendedor(es) vinculado(s) a esta conta`);
+    const nMed = (db.medicoes || []).filter(m => m.usuario_id === id).length;
+    if (nMed) v.push(`${nMed} medição(ões) atribuída(s)`);
+    const nInst = (db.pedidos || []).filter(p => p.usuario_instalacao_id === id).length;
+    if (nInst) v.push(`${nInst} instalação(ões) atribuída(s)`);
+    const nCriou = (db.pedidos || []).filter(p => p.criado_por === id).length;
+    if (nCriou) v.push(`${nCriou} pedido(s) criado(s) por ele`);
+    return v;
+}
+
+async function excluirUsuario(id) {
+    const u = db.usuarios.find(x => x.id === id);
+    if (!u) return;
+    const logado = getUsuarioLogado();
+    if (logado && logado.id === u.id) { await showAlert('Você não pode excluir o seu próprio usuário.', '🚫'); return; }
+
+    const papelAdmin = db.papeis.find(p => p.nome === 'Administrador');
+    if (papelAdmin && u.papel_id === papelAdmin.id) {
+        const outrosAdmins = db.usuarios.filter(x => x.papel_id === papelAdmin.id && x.ativo && x.id !== u.id).length;
+        if (!outrosAdmins) { await showAlert('Este é o único administrador ativo. Promova outro usuário a Administrador antes de excluir este.', '🚫'); return; }
+    }
+
+    const vinculos = _vinculosUsuario(id);
+    if (vinculos.length) {
+        await showAlert(`Não é possível excluir "${u.nome}" porque há registros ligados a ele:\n\n• ${vinculos.join('\n• ')}\n\nPara preservar o histórico, desative o usuário em vez de excluir.`, '🚫');
+        return;
+    }
+
+    if (!await showConfirm(`Excluir definitivamente o usuário "${u.nome}"?\n\nEsta ação não pode ser desfeita.`, '🗑️', 'Excluir')) return;
+    db.usuarios = db.usuarios.filter(x => x.id !== id);
+    salvarERecarregar('Usuário excluído.');
+}
+
 function renderConfigPapeis() {
     const tb = document.getElementById('tb-papeis');
     if (!tb) return;
@@ -801,7 +1086,7 @@ function abrirModalPapel(id) {
     if (editando && !p) return;
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-    overlay.innerHTML = `<div class="modal-box" style="max-width:760px">
+    overlay.innerHTML = `<div class="modal-box" style="max-width:860px">
         <div class="modal-header">
             <h3>${editando ? 'Editar Papel' : 'Novo Papel'}</h3>
             <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
@@ -1494,9 +1779,16 @@ function mostrarModalAgendarInstalacao(ped, callback) {
                 <label style="font-size:12px;font-weight:bold;color:#666">Horário (opcional)</label>
                 <input type="time" id="mai-hora" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box">
             </div>
-            <div class="form-group" style="margin-bottom:18px">
+            <div class="form-group" style="margin-bottom:10px">
                 <label style="font-size:12px;font-weight:bold;color:#666">Endereço da Instalação</label>
                 <input type="text" id="mai-end" placeholder="${cli && cli.end ? escapeHtml(cli.end) : 'Endereço da instalação…'}" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box">
+            </div>
+            <div class="form-group" style="margin-bottom:18px">
+                <label style="font-size:12px;font-weight:bold;color:#666">Quem vai instalar</label>
+                <select id="mai-usuario" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box">
+                    <option value="">— A definir —</option>
+                </select>
+                <small style="font-size:11px;color:var(--muted);display:block;margin-top:4px">A instalação aparece como alerta para esta pessoa.</small>
             </div>
             <div style="display:flex;flex-direction:column;gap:10px">
                 <button id="mai-salvar" class="btn btn-success" style="padding:11px;font-size:14px">📅 Agendar Instalação</button>
@@ -1504,6 +1796,9 @@ function mostrarModalAgendarInstalacao(ped, callback) {
             </div>
         </div>`;
     document.body.appendChild(overlay);
+    preencherSelectUsuarios('mai-usuario', '— A definir —');
+    const selInstalador = document.getElementById('mai-usuario');
+    if (selInstalador && ped.usuario_instalacao_id) selInstalador.value = String(ped.usuario_instalacao_id);
     const dataEl = document.getElementById('mai-data');
     dataEl.focus();
     overlay.querySelector('#mai-salvar').onclick = () => {
@@ -1511,8 +1806,9 @@ function mostrarModalAgendarInstalacao(ped, callback) {
         if (!data) { dataEl.style.borderColor = '#F43927'; return; }
         const hora = document.getElementById('mai-hora').value;
         const end  = document.getElementById('mai-end').value.trim();
+        const usuario_instalacao_id = parseInt(document.getElementById('mai-usuario').value) || null;
         document.body.removeChild(overlay);
-        callback({ data, hora, end });
+        callback({ data, hora, end, usuario_instalacao_id });
     };
     overlay.querySelector('#mai-pular').onclick = () => { document.body.removeChild(overlay); callback(null); };
     overlay.addEventListener('click', e => { if (e.target === overlay) { document.body.removeChild(overlay); callback(null); } });
@@ -1583,13 +1879,16 @@ async function moverStatus(id, direcao) {
         }
     }
 
-    // ── Na Costura → Pronto p/ Instalação: verificar se já existe agenda de instalação
-    if (STATUS_PIPELINE[idx] === 'Na Costura' && STATUS_PIPELINE[novoIdx] === 'Pronto p/ Instalação' && !ped.data_entrega) {
+    // ── Na Costura → Pronto p/ Instalação: agendar e definir quem instala.
+    // Roda também quando já existe data, para o instalador nunca ficar sem dono.
+    if (STATUS_PIPELINE[idx] === 'Na Costura' && STATUS_PIPELINE[novoIdx] === 'Pronto p/ Instalação'
+        && (!ped.data_entrega || !ped.usuario_instalacao_id)) {
         const agendamento = await ofertarAgendamentoInstalacao(ped);
         if (agendamento) {
             ped.data_entrega = agendamento.data;
             if (agendamento.hora) ped.inst_hora = agendamento.hora;
             if (agendamento.end)  ped.inst_endereco = agendamento.end;
+            ped.usuario_instalacao_id = agendamento.usuario_instalacao_id || null;
         }
     }
 
@@ -2095,7 +2394,7 @@ function renderDashboardAlertas() {
 
     // Pedidos com entrega atrasada ou hoje
     if (alertaAtivo('entrega')) {
-        const entregasAtrasadas = db.pedidos.filter(p => {
+        const entregasAtrasadas = filtrarPedidosVisiveis(db.pedidos).filter(p => {
             if (!p.data_entrega || normalizarStatus(p.status) === 'Instalado') return false;
             return p.data_entrega < hojeStr;
         });
@@ -2110,7 +2409,7 @@ function renderDashboardAlertas() {
                 `<strong>${entregasAtrasadas.length} entrega(s) atrasada(s):</strong>`, itens));
         }
 
-        const entregasHoje = db.pedidos.filter(p => {
+        const entregasHoje = filtrarPedidosVisiveis(db.pedidos).filter(p => {
             if (!p.data_entrega || normalizarStatus(p.status) === 'Instalado') return false;
             return p.data_entrega === hojeStr;
         });
@@ -2125,7 +2424,7 @@ function renderDashboardAlertas() {
 
     // Medições atrasadas + hoje
     if (alertaAtivo('medicao')) {
-        const medicAtrasadas = db.medicoes.filter(m => m.status === 'Agendado' && m.data < hojeStr);
+        const medicAtrasadas = filtrarMedicoesVisiveis(db.medicoes).filter(m => m.status === 'Agendado' && m.data < hojeStr);
         if (medicAtrasadas.length) {
             const itens = medicAtrasadas.map(m =>
                 `<span style="cursor:pointer;color:#B3160A;font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')} (${m.data.split('-').reverse().join('/')})</span>`
@@ -2133,7 +2432,7 @@ function renderDashboardAlertas() {
             banners.push(mkBanner('📐', '#FEF4F2', '#F79B90', '#B3160A',
                 `<strong>${medicAtrasadas.length} medição(ões)</strong> atrasada(s):`, itens));
         }
-        const medicHoje = db.medicoes.filter(m => m.status === 'Agendado' && m.data === hojeStr);
+        const medicHoje = filtrarMedicoesVisiveis(db.medicoes).filter(m => m.status === 'Agendado' && m.data === hojeStr);
         if (medicHoje.length) {
             const itens = medicHoje.map(m =>
                 `<span style="cursor:pointer;color:#2D77C1;font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')}${m.hora ? ' às ' + m.hora : ''}</span>`
@@ -2146,7 +2445,7 @@ function renderDashboardAlertas() {
     // Instalações atrasadas + hoje
     if (alertaAtivo('instalacao')) {
         const instStatus = ['Pronto p/ Instalação', 'Aguardando Pagamento'];
-        const instAtrasadas = db.pedidos.filter(p =>
+        const instAtrasadas = filtrarPedidosVisiveis(db.pedidos).filter(p =>
             instStatus.includes(normalizarStatus(p.status)) && p.data_entrega && p.data_entrega < hojeStr);
         if (instAtrasadas.length) {
             const itens = instAtrasadas.map(p =>
@@ -2155,7 +2454,7 @@ function renderDashboardAlertas() {
             banners.push(mkBanner('🔧', '#FEF4F2', '#F79B90', '#B3160A',
                 `<strong>${instAtrasadas.length} instalação(ões)</strong> atrasada(s):`, itens));
         }
-        const instHoje = db.pedidos.filter(p =>
+        const instHoje = filtrarPedidosVisiveis(db.pedidos).filter(p =>
             instStatus.includes(normalizarStatus(p.status)) && p.data_entrega === hojeStr);
         if (instHoje.length) {
             const itens = instHoje.map(p =>
@@ -3718,6 +4017,7 @@ async function salvarPedido() {
     } else {
         dadosPedido.id = gerarNumeroPedido();
         dadosPedido.data_criacao = Date.now();
+        dadosPedido.criado_por = getUsuarioLogado()?.id || null;
         if (dadosPedido.status === 'Na Costura') {
             realizarBaixaEstoque(dadosPedido);
         }
@@ -4582,15 +4882,16 @@ async function salvarVendedor() {
     if (!nome) { await showAlert('Informe o nome do vendedor.', '⚠️'); return; }
     const comissao_pct = parseFloat(document.getElementById('vend-comissao')?.value) || 0;
     const tel = document.getElementById('vend-tel')?.value.trim() || '';
+    const usuario_id = parseInt(document.getElementById('vend-usuario')?.value) || null;
     if (editandoIdVendedor) {
         const idx = db.vendedores.findIndex(v => v.id == editandoIdVendedor);
-        if (idx !== -1) db.vendedores[idx] = { ...db.vendedores[idx], nome, comissao_pct, tel };
+        if (idx !== -1) db.vendedores[idx] = { ...db.vendedores[idx], nome, comissao_pct, tel, usuario_id };
         cancelarEdicaoVendedor();
         salvarERecarregar('Vendedor atualizado!');
     } else {
         const dup = db.vendedores.find(v => v.nome.trim().toLowerCase() === nome.toLowerCase());
         if (dup) { await showAlert(`Já existe um vendedor com o nome "${dup.nome}".`, '⚠️'); return; }
-        db.vendedores.push({ id: Date.now(), nome, comissao_pct, tel });
+        db.vendedores.push({ id: Date.now(), nome, comissao_pct, tel, usuario_id });
         salvarERecarregar('Vendedor cadastrado!');
     }
 }
@@ -4602,6 +4903,8 @@ function editarVendedor(id) {
     document.getElementById('vend-nome').value      = v.nome || '';
     document.getElementById('vend-comissao').value  = v.comissao_pct || 0;
     document.getElementById('vend-tel').value       = v.tel || '';
+    const selUsu = document.getElementById('vend-usuario');
+    if (selUsu) selUsu.value = v.usuario_id ? String(v.usuario_id) : '';
     const tit = document.getElementById('vend-form-titulo');
     const btn = document.getElementById('vend-btn-salvar');
     const cnc = document.getElementById('vend-btn-cancelar');
@@ -4614,7 +4917,7 @@ function editarVendedor(id) {
 
 function cancelarEdicaoVendedor() {
     editandoIdVendedor = null;
-    ['vend-nome','vend-tel'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['vend-nome','vend-tel','vend-usuario'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     const comEl = document.getElementById('vend-comissao');
     if (comEl) comEl.value = '0';
     const tit = document.getElementById('vend-form-titulo');
@@ -5333,8 +5636,10 @@ async function salvarMedicao() {
         if (cliNovo) cliNovo.end = end;
     }
 
-    db.medicoes.push({ id: Date.now(), clienteId, clienteNome, clienteTel, endereco: end, data, hora, obs, status: 'Agendado' });
+    const usuarioMedicao = parseInt(document.getElementById('med-usuario')?.value) || null;
+    db.medicoes.push({ id: Date.now(), clienteId, clienteNome, clienteTel, endereco: end, data, hora, obs, status: 'Agendado', usuario_id: usuarioMedicao });
 
+    const usuEl   = document.getElementById('med-usuario');    if (usuEl)   usuEl.value   = '';
     const nomeEl  = document.getElementById('med-novo-nome');  if (nomeEl)  nomeEl.value  = '';
     const telEl   = document.getElementById('med-novo-tel');   if (telEl)   telEl.value   = '';
     const cpfEl   = document.getElementById('med-novo-cpf');   if (cpfEl)   cpfEl.value   = '';
@@ -5515,6 +5820,7 @@ function renderMedicoes() {
                         ${v.clienteTel ? `<div style="font-size:13px;color:#555">📱 ${escapeHtml(v.clienteTel)}</div>` : ''}
                         ${v.endereco   ? `<div style="font-size:13px;color:var(--dark);margin-top:3px">📍 ${escapeHtml(v.endereco)}</div>` : ''}
                         ${v.obs        ? `<div style="font-size:13px;color:#8F8F8F;margin-top:3px">📝 ${escapeHtml(v.obs)}</div>` : ''}
+                        <div style="font-size:12.5px;color:#8F8F8F;margin-top:4px">👤 ${escapeHtml(nomeUsuario(v.usuario_id) || 'Responsável a definir')}</div>
                     </div>
                     <div style="text-align:right">
                         <div style="font-weight:700;font-size:15px;color:var(--dark)">${dataFmt}</div>
@@ -5551,11 +5857,11 @@ function renderDashboardMedicoes() {
     const hojeStr = new Date().toISOString().split('T')[0];
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
 
-    const atrasadas = db.medicoes
+    const atrasadas = filtrarMedicoesVisiveis(db.medicoes)
         .filter(m => m.status === 'Agendado' && m.data < hojeStr)
         .sort((a, b) => (a.data + (a.hora || '99:99')) > (b.data + (b.hora || '99:99')) ? -1 : 1);
 
-    const proximas = db.medicoes
+    const proximas = filtrarMedicoesVisiveis(db.medicoes)
         .filter(m => m.status === 'Agendado' && m.data >= hojeStr)
         .sort((a, b) => (a.data + (a.hora || '99:99')) < (b.data + (b.hora || '99:99')) ? -1 : 1)
         .slice(0, 6);
@@ -5624,16 +5930,16 @@ function renderDashboardInstalacoes() {
     const hoje    = new Date(); hoje.setHours(0, 0, 0, 0);
     const statuses = ['Pronto p/ Instalação', 'Aguardando Pagamento'];
 
-    const atrasados = db.pedidos
+    const atrasados = filtrarPedidosVisiveis(db.pedidos)
         .filter(p => statuses.includes(normalizarStatus(p.status)) && p.data_entrega && p.data_entrega < hojeStr)
         .sort((a, b) => b.data_entrega < a.data_entrega ? -1 : 1);
 
-    const proximos = db.pedidos
+    const proximos = filtrarPedidosVisiveis(db.pedidos)
         .filter(p => statuses.includes(normalizarStatus(p.status)) && p.data_entrega && p.data_entrega >= hojeStr)
         .sort((a, b) => a.data_entrega < b.data_entrega ? -1 : 1)
         .slice(0, 6);
 
-    const semData = db.pedidos
+    const semData = filtrarPedidosVisiveis(db.pedidos)
         .filter(p => statuses.includes(normalizarStatus(p.status)) && !p.data_entrega)
         .slice(0, 3);
 
@@ -5847,6 +6153,7 @@ function renderAgenda() {
                         <div style="font-weight:bold;font-size:15px;margin:2px 0">${escapeHtml(p.clienteNome||'—')}</div>
                         <div style="font-size:13px;color:#555">${escapeHtml(p.amb||'—')}</div>
                         ${cli?.tel ? `<div style="font-size:12px;color:#8F8F8F;margin-top:2px">📱 ${escapeHtml(cli.tel)}</div>` : ''}
+                        <div style="font-size:12px;color:#8F8F8F;margin-top:2px">👤 ${escapeHtml(nomeUsuario(p.usuario_instalacao_id) || 'Instalador a definir')}</div>
                     </div>
                     <div style="text-align:right">
                         <div style="font-weight:bold">R$ ${(p.valor||0).toFixed(2)}</div>
@@ -6109,6 +6416,7 @@ document.addEventListener('DOMContentLoaded', () => {
             db.clientes.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
         const dataEl = document.getElementById('med-data');
         if (dataEl) dataEl.value = new Date().toISOString().split('T')[0];
+        preencherSelectUsuarios('med-usuario', '— A definir —');
         renderMedicoes();
         const urlView = new URLSearchParams(window.location.search).get('view');
         if (urlView) mostrarViewPCP(urlView);
@@ -6121,6 +6429,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (el) el.innerHTML = '<option value="">Todos os vendedores</option>' +
                 db.vendedores.map(v => `<option value="${v.id}">${v.nome}</option>`).join('');
         });
+        preencherSelectUsuarios('vend-usuario', '— Sem conta de acesso —');
         mostrarTabVendedores('lista');
     }
 
@@ -6165,8 +6474,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const abaInicial = abasVisiveis.some(([t]) => t === 'dashboard') ? 'dashboard' : (abasVisiveis[0]?.[0] || 'dashboard');
         mostrarTabFinanceiro(abaInicial);
-        if (!temAcesso('a_pagar', 'completo')) document.getElementById('cp-toolbar')?.style.setProperty('display', 'none');
-        if (!temAcesso('despesas_fixas', 'completo')) document.getElementById('df-form-card')?.style.setProperty('display', 'none');
+        if (!temAcesso('financeiro.pagar', 'completo')) document.getElementById('cp-toolbar')?.style.setProperty('display', 'none');
+        if (!temAcesso('financeiro.fixas', 'completo')) document.getElementById('df-form-card')?.style.setProperty('display', 'none');
     }
 });
 
@@ -6501,7 +6810,7 @@ function atualizarStatusVencimentos() {
 }
 
 function marcarCRPago(id) {
-    if (!temAcesso('a_receber', 'completo')) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
+    if (!temAcesso('financeiro.receber', 'completo')) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
     const cr = db.contas_receber.find(x => x.id == id);
     if (!cr) return;
     const dataStr = prompt('Data de recebimento (AAAA-MM-DD):', new Date().toISOString().split('T')[0]);
@@ -6529,7 +6838,7 @@ function marcarCRPago(id) {
 }
 
 async function excluirCR(id) {
-    if (!await exigirPermissao('a_receber', 'completo')) return;
+    if (!await exigirPermissao('financeiro.receber', 'completo')) return;
     if (!await showConfirm('Remover este lançamento a receber?', '🗑️', 'Remover', 'Cancelar')) return;
     db.contas_receber = db.contas_receber.filter(x => x.id != id);
     salvarERecarregar('Lançamento removido.');
@@ -6675,7 +6984,7 @@ function gerarOcorrenciasRecorrentes(dataInicioStr, periodicidade, dataFimStr) {
 }
 
 function marcarCPPago(id) {
-    if (!temAcesso('a_pagar', 'completo')) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
+    if (!temAcesso('financeiro.pagar', 'completo')) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
     const cp = db.contas_pagar.find(x => x.id == id);
     if (!cp) return;
     const dataStr = prompt('Data de pagamento (AAAA-MM-DD):', new Date().toISOString().split('T')[0]);
@@ -6686,14 +6995,14 @@ function marcarCPPago(id) {
 }
 
 async function excluirCP(id) {
-    if (!await exigirPermissao('a_pagar', 'completo')) return;
+    if (!await exigirPermissao('financeiro.pagar', 'completo')) return;
     if (!await showConfirm('Remover este lançamento a pagar?', '🗑️', 'Remover', 'Cancelar')) return;
     db.contas_pagar = db.contas_pagar.filter(x => x.id != id);
     salvarERecarregar('Lançamento removido.');
 }
 
 async function excluirGrupoCP(paiId) {
-    if (!await exigirPermissao('a_pagar', 'completo')) return;
+    if (!await exigirPermissao('financeiro.pagar', 'completo')) return;
     const grupo = db.contas_pagar.filter(x => x.lancamento_pai_id === paiId);
     if (!grupo.length) return;
     if (!await showConfirm(`Remover todos os ${grupo.length} lançamentos deste grupo (parcelas ou recorrência)?\n\nEsta ação não pode ser desfeita.`, '🗑️', 'Remover grupo', 'Cancelar')) return;
@@ -6703,7 +7012,7 @@ async function excluirGrupoCP(paiId) {
 }
 
 async function salvarDespesaFixa() {
-    if (!await exigirPermissao('despesas_fixas', 'completo')) return;
+    if (!await exigirPermissao('financeiro.fixas', 'completo')) return;
     const descricao = document.getElementById('df-descricao')?.value.trim();
     const valor = parseFloat(document.getElementById('df-valor')?.value) || 0;
     const dia = parseInt(document.getElementById('df-dia')?.value) || 1;
@@ -6715,14 +7024,14 @@ async function salvarDespesaFixa() {
 }
 
 async function excluirDespesaFixa(id) {
-    if (!await exigirPermissao('despesas_fixas', 'completo')) return;
+    if (!await exigirPermissao('financeiro.fixas', 'completo')) return;
     if (!await showConfirm('Remover esta despesa fixa recorrente?', '🗑️', 'Remover', 'Cancelar')) return;
     db.despesas_fixas = db.despesas_fixas.filter(x => x.id != id);
     salvarERecarregar('Despesa removida.');
 }
 
 async function gerarContasPagarDoMes() {
-    if (!await exigirPermissao('a_pagar', 'completo')) return;
+    if (!await exigirPermissao('financeiro.pagar', 'completo')) return;
     const hoje = new Date();
     const mes = String(hoje.getMonth() + 1).padStart(2, '0');
     const ano = hoje.getFullYear();
@@ -6952,7 +7261,7 @@ function onDocContaPagarInput() {
 }
 
 async function adicionarContaPagarManual() {
-    if (!await exigirPermissao('a_pagar', 'completo')) return;
+    if (!await exigirPermissao('financeiro.pagar', 'completo')) return;
     const descricao   = document.getElementById('cpm-descricao')?.value.trim();
     const cnpjFornecedor = document.getElementById('cpm-cnpj')?.value.trim() || '';
     const credor      = document.getElementById('cpm-credor')?.value.trim() || '';
@@ -7494,7 +7803,7 @@ function aplicarFiltroCustom() {
 }
 
 function salvarMetaMes() {
-    if (!temAcesso('visao_geral', 'completo')) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
+    if (!temAcesso('financeiro.dashboard', 'completo')) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
     const hoje = new Date();
     const key = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
     const val = parseFloat(document.getElementById('fin-meta-valor')?.value) || 0;
@@ -7653,7 +7962,7 @@ function renderDashboardFinanceiro() {
     if (typeof Chart === 'undefined') return;
     _migrarFinanceiroPedidos();
     atualizarStatusVencimentos();
-    document.getElementById('fin-meta-edit-btn')?.style.setProperty('display', temAcesso('visao_geral', 'completo') ? '' : 'none');
+    document.getElementById('fin-meta-edit-btn')?.style.setProperty('display', temAcesso('financeiro.dashboard', 'completo') ? '' : 'none');
     try { _finMetas = JSON.parse(localStorage.getItem('sc_fin_metas') || '{}'); } catch(e) { _finMetas = {}; }
 
     const { ini, fim, label } = getFinPeriodo();
@@ -8091,7 +8400,7 @@ function renderContasReceber() {
     const res = document.getElementById('cr-resumo');
     if (res) res.innerHTML = `<span style="color:#005D3B">✓ Recebido: <strong>R$ ${totRec.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>&nbsp;&nbsp;<span style="color:#F2C924">⏳ Pendente: <strong>R$ ${totPend.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>`;
     if (!lista.length) { tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:#999;padding:24px">Nenhum registro encontrado.</td></tr>'; return; }
-    const podeEditar = temAcesso('a_receber', 'completo');
+    const podeEditar = temAcesso('financeiro.receber', 'completo');
     tb.innerHTML = lista.map(cr => {
         const at=cr.status==='Atrasado', pago=cr.status==='Pago';
         return `<tr class="${at?'fin-atrasado':''}">
@@ -8121,7 +8430,7 @@ function renderContasPagar() {
     const res = document.getElementById('cp-resumo');
     if (res) res.innerHTML = `<span style="color:#F43927">↑ Pago: <strong>R$ ${totPago.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>&nbsp;&nbsp;<span style="color:#F2C924">⏳ A pagar: <strong>R$ ${totPend.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>`;
     if (!lista.length) { tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:#999;padding:24px">Nenhum registro encontrado.</td></tr>'; return; }
-    const podeEditar = temAcesso('a_pagar', 'completo');
+    const podeEditar = temAcesso('financeiro.pagar', 'completo');
     tb.innerHTML = lista.map(cp => {
         const at=cp.status==='Atrasado', pago=cp.status==='Pago', isRT=cp.categoria==='comissao_rt';
         const tipoTag = cp.tipo==='fixo' ? '<span class="fin-badge fin-badge-gray">Fixo</span>' : '<span class="fin-badge fin-badge-blue">Variável</span>';
@@ -8148,7 +8457,7 @@ function renderDespesasFixas() {
     const tb = document.getElementById('tb-despesas-fixas');
     if (!tb) return;
     if (!db.despesas_fixas.length) { tb.innerHTML='<tr><td colspan="5" style="text-align:center;color:#999;padding:24px">Nenhuma despesa fixa cadastrada.</td></tr>'; return; }
-    const podeEditar = temAcesso('despesas_fixas', 'completo');
+    const podeEditar = temAcesso('financeiro.fixas', 'completo');
     tb.innerHTML = db.despesas_fixas.map(df=>`
         <tr>
             <td><strong>${escapeHtml(df.descricao)}</strong></td>

@@ -36,6 +36,13 @@
                         <label>Telefone / WhatsApp</label>
                         <input type="text" id="vend-tel" placeholder="Ex: (11) 99999-9999">
                     </div>
+                    <div class="form-group">
+                        <label>Usuário do sistema</label>
+                        <select id="vend-usuario">
+                            <option value="">— Sem conta de acesso —</option>
+                        </select>
+                        <small style="font-size:11px;color:var(--muted);margin-top:4px">Os alertas dos pedidos deste vendedor vão para esta conta.</small>
+                    </div>
                 </div>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
                     <button class="btn" id="vend-btn-salvar" onclick="salvarVendedor()">Salvar Vendedor</button>

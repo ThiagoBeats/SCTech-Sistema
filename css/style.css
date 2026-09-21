@@ -837,6 +837,18 @@ body.login-page {
 .cfg-radio input:disabled, .cfg-check input:disabled { cursor: not-allowed; opacity: .5; }
 .cfg-acoes-restritas { display: flex; flex-direction: column; gap: 4px; }
 .cfg-override-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; }
+.cfg-exp-btn {
+    background: var(--light); border: 1px solid var(--border); color: var(--muted);
+    font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: var(--radius-pill);
+    cursor: pointer; margin-left: 6px; font-family: inherit; white-space: nowrap;
+}
+.cfg-exp-btn:hover { background: var(--secondary); color: var(--dark); border-color: var(--secondary); }
+.cfg-row-mod td { border-top: 1px solid var(--border); }
+.cfg-row-mod td:first-child { font-size: 13.5px; }
+.cfg-row-sub td { padding-top: 5px; padding-bottom: 5px; }
+.cfg-row-sub td:first-child { padding-left: 30px; }
+.cfg-sub-label { font-size: 12.5px; color: var(--muted); }
+.cfg-sub-label::before { content: '└ '; opacity: .5; }
 .cfg-row.cfg-row-personalizado { background: #FEFAE9; }
 html[data-theme="dark"] .cfg-row.cfg-row-personalizado { background: rgba(217,119,6,0.12); }
 .cfg-badge-personalizado { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 10.5px; font-weight: 700; background: #FEF6D8; color: #8A6A00; white-space: nowrap; }
