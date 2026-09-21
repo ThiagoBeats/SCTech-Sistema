@@ -4,6 +4,6 @@
   "private": true,
   "description": "Sistema de gestao para cortineiros - HTML/CSS/JS sem build",
   "scripts": {
-    "test": "node --test tests/"
+    "test": "node --test"
   }
 }
