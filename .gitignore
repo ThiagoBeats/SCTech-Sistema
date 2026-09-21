@@ -3,3 +3,6 @@ LandingPage/
 
 # Configuração local do Claude Code (específica desta máquina)
 .claude/settings.local.json
+
+# Worktrees do Claude Code (copias locais do repositorio)
+.claude/worktrees/
