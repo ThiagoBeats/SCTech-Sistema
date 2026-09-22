@@ -517,7 +517,30 @@
         return erros;
     }
 
-    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup, indexarExistentes, classificar, aplicarImportacao, resolverAcao, validarDecisoes };
+    function assinaturaDoLayout(colunas) {
+        return (colunas || []).map(c => normalizarNome(c)).join('|');
+    }
+
+    function montarPerfil(opcoes) {
+        const o = opcoes || {};
+        return {
+            id: o.id || Date.now(),
+            nome: normalizarNome(o.nome),
+            fornecedor_id: o.fornecedorId === undefined ? null : o.fornecedorId,
+            abas: o.abas || {},
+            layouts: o.layouts || [],
+            cores: o.cores || {},
+            markup_padrao: Number(o.markupPadrao) || 0
+        };
+    }
+
+    function perfilDoFornecedor(perfis, fornecedorId) {
+        if (!perfis || fornecedorId === null || fornecedorId === undefined) return null;
+        const alvo = String(fornecedorId);
+        return perfis.find(p => String(p.fornecedor_id) === alvo) || null;
+    }
+
+    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup, indexarExistentes, classificar, aplicarImportacao, resolverAcao, validarDecisoes, assinaturaDoLayout, montarPerfil, perfilDoFornecedor };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ImportadorCore = api;

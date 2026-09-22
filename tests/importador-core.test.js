@@ -862,3 +862,41 @@ test('REGR-MINOR 3: validarDecisoes deduplica erros de codigo duplicado', () => 
     assert.ok(erros.some(e => /VUD01.*4 vezes/.test(e)), 'deve relatar VUD01 com 4 vezes');
     assert.ok(erros.some(e => /VUD02.*3 vezes/.test(e)), 'deve relatar VUD02 com 3 vezes');
 });
+
+test('montarPerfil normaliza os campos e preenche os defaults', () => {
+    const p = C.montarPerfil({ id: 1, nome: '  RC  ', fornecedorId: 7 });
+    assert.strictEqual(p.id, 1);
+    assert.strictEqual(p.nome, 'RC');
+    assert.strictEqual(p.fornecedor_id, 7);
+    assert.deepStrictEqual(p.abas, {});
+    assert.deepStrictEqual(p.layouts, []);
+    assert.deepStrictEqual(p.cores, {});
+    assert.strictEqual(p.markup_padrao, 0);
+});
+
+test('perfilDoFornecedor acha pelo id do fornecedor', () => {
+    const perfis = [
+        C.montarPerfil({ id: 1, nome: 'A', fornecedorId: 7 }),
+        C.montarPerfil({ id: 2, nome: 'B', fornecedorId: 9 })
+    ];
+    assert.strictEqual(C.perfilDoFornecedor(perfis, 9).id, 2);
+    assert.strictEqual(C.perfilDoFornecedor(perfis, '7').id, 1, 'compara sem se importar com o tipo');
+    assert.strictEqual(C.perfilDoFornecedor(perfis, 123), null);
+    assert.strictEqual(C.perfilDoFornecedor(null, 7), null);
+});
+
+test('assinaturaDoLayout junta os rotulos do cabecalho', () => {
+    assert.strictEqual(
+        C.assinaturaDoLayout(['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE', 'PEÇA']),
+        'CODIGO|DESCRIÇÃO||LARGURA|CORTE|PEÇA'
+    );
+});
+
+test('as 7 abas de tecido da planilha real compartilham uma assinatura', () => {
+    const { abas } = lerXlsx(PLANILHA);
+    const assinaturas = new Set();
+    for (const aba of ['Book 10', 'Book 12', 'Book 13', 'Book 14', 'Book 15', 'Book 16']) {
+        assinaturas.add(C.assinaturaDoLayout(C.detectarCabecalho(abas[aba]).colunas));
+    }
+    assert.strictEqual(assinaturas.size, 1, 'um mapeamento so deveria servir para todas');
+});
