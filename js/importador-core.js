@@ -565,12 +565,19 @@
         const o = opcoes || {};
         const toleranciaY = o.toleranciaY === undefined ? 3 : o.toleranciaY;
         const toleranciaX = o.toleranciaX === undefined ? 12 : o.toleranciaX;
+        const LARGURA_NOMINAL = 5; // fallback quando o fragmento nao traz largura (px por caractere)
 
         const uteis = (fragmentos || [])
-            .map(f => ({ texto: normalizarNome(f.texto), x: Number(f.x), y: Number(f.y) }))
+            .map(f => ({ texto: normalizarNome(f.texto), x: Number(f.x), y: Number(f.y), largura: Number(f.largura) }))
             .filter(f => f.texto !== '' && isFinite(f.x) && isFinite(f.y));
 
         if (uteis.length === 0) return [];
+
+        // se a largura vier ausente ou zerada, aproxima por 5px por caractere para
+        // ainda assim clusterizar com sentido (em vez de lançar ou colapsar tudo em 0)
+        uteis.forEach(f => {
+            if (!isFinite(f.largura) || f.largura <= 0) f.largura = Math.max(LARGURA_NOMINAL, f.texto.length * LARGURA_NOMINAL);
+        });
 
         // agrupa por y (no PDF, y cresce de baixo para cima)
         const grupos = [];
@@ -580,78 +587,84 @@
             else grupos.push({ y: f.y, itens: [f] });
         });
 
-        // constrói as linhas com cells merged, guardando x para clustering posterior
+        // constrói as linhas com células mescladas, guardando o span [inicio, fim]
+        // de cada célula (usado a seguir para o agrupamento de colunas por sobreposição)
         const linhasComCelulas = grupos.map(grupo => {
-            const ordenados = grupo.itens.sort((a, b) => a.x - b.x);
+            const ordenados = grupo.itens.slice().sort((a, b) => a.x - b.x);
             const celulas = [];
             let atual = null;
-            let fimAnterior = null;
             ordenados.forEach(f => {
-                if (atual !== null && fimAnterior !== null && (f.x - fimAnterior) < toleranciaX) {
+                const fim = f.x + f.largura;
+                if (atual !== null && (f.x - atual.fim) < toleranciaX) {
                     atual.texto += ' ' + f.texto;
+                    atual.fim = Math.max(atual.fim, fim);
                 } else {
-                    atual = { texto: f.texto, x: f.x };
+                    atual = { texto: f.texto, inicio: f.x, fim };
                     celulas.push(atual);
                 }
-                // aproxima a largura do fragmento por 5px por caractere
-                fimAnterior = f.x + f.texto.length * 5;
             });
             return celulas;
         });
 
-        // detecta as posições das colunas agrupando x-starts com duas passagens
-        const xStartsSet = new Set();
-        linhasComCelulas.forEach(linha => {
-            linha.forEach(celula => {
-                xStartsSet.add(celula.x);
+        function sobreposicao(a, b) {
+            return Math.min(a.fim, b.fim) - Math.max(a.inicio, b.inicio);
+        }
+
+        // PASSO A: constrói o conjunto de colunas por SOBREPOSIÇÃO DE SPAN (não por
+        // posição inicial): um rótulo de cabeçalho centralizado e os valores
+        // alinhados à esquerda abaixo dele começam em x diferentes, mas seus spans
+        // se cruzam. Processa as linhas com MAIS células primeiro — normalmente o
+        // cabeçalho e as linhas de produto "limpas" (uma só linha física) — para que
+        // elas estabeleçam as colunas antes de qualquer título de seção ou resto de
+        // linha quebrada (poucas células, geralmente uma só, e larga) ser processado.
+        // Uma célula que sobrepõe exatamente UMA coluna existente pode fazê-la
+        // crescer; uma célula que sobrepõe VÁRIAS colunas é apenas atribuída à que
+        // mais se sobrepõe, sem alterar nenhuma delas — isso é o que impede uma
+        // descrição comprida (ou um título) de engolir a coluna vizinha.
+        const ordemConstrucao = linhasComCelulas.slice().sort((a, b) => b.length - a.length);
+        const colunas = []; // { inicio, fim }
+        ordemConstrucao.forEach(celulas => {
+            celulas.forEach(celula => {
+                let melhorIndice = -1;
+                let melhorSobreposicao = 0;
+                let qtdSobrepostas = 0;
+                colunas.forEach((col, i) => {
+                    const s = sobreposicao(celula, col);
+                    if (s > 0) {
+                        qtdSobrepostas++;
+                        if (s > melhorSobreposicao) { melhorSobreposicao = s; melhorIndice = i; }
+                    }
+                });
+                if (melhorIndice === -1) {
+                    colunas.push({ inicio: celula.inicio, fim: celula.fim });
+                } else if (qtdSobrepostas === 1) {
+                    colunas[melhorIndice].inicio = Math.min(colunas[melhorIndice].inicio, celula.inicio);
+                    colunas[melhorIndice].fim = Math.max(colunas[melhorIndice].fim, celula.fim);
+                }
             });
         });
-        const xStarts = Array.from(xStartsSet).sort((a, b) => a - b);
+        colunas.sort((a, b) => a.inicio - b.inicio);
 
-        // primeira passagem: agrupa x-starts em clusters com toleranciaX
-        let colunas = [];
-        for (let x of xStarts) {
-            let encontrou = false;
-            for (let i = 0; i < colunas.length; i++) {
-                if (Math.abs(colunas[i] - x) <= toleranciaX) {
-                    // media os valores para encontrar o center do cluster
-                    colunas[i] = (colunas[i] + x) / 2;
-                    encontrou = true;
-                    break;
-                }
-            }
-            if (!encontrou) {
-                colunas.push(x);
-            }
-        }
-
-        // segunda passagem: agrupa clusters próximos em colunas principais (com maior tolerância)
-        const colunasFinais = [];
-        for (let col of colunas) {
-            let encontrou = false;
-            for (let i = 0; i < colunasFinais.length; i++) {
-                if (Math.abs(colunasFinais[i] - col) <= Math.max(20, 2 * toleranciaX)) {
-                    // media para encontrar o center da coluna final
-                    colunasFinais[i] = (colunasFinais[i] + col) / 2;
-                    encontrou = true;
-                    break;
-                }
-            }
-            if (!encontrou) {
-                colunasFinais.push(col);
-            }
-        }
-
-        // mapeia cada celula para o indice da sua coluna final
-        return linhasComCelulas.map(celulas => {
-            const resultado = new Array(colunasFinais.length).fill('');
-            celulas.forEach(celula => {
-                const colIndex = colunasFinais.findIndex(col => Math.abs(col - celula.x) <= toleranciaX);
-                if (colIndex >= 0) {
-                    resultado[colIndex] = celula.texto;
-                }
+        // PASSO B: com as colunas finais definidas, percorre a página na ordem
+        // natural (de cima para baixo, esquerda para direita) e encaixa cada célula
+        // na coluna com que mais se sobrepõe.
+        function acharColuna(celula) {
+            let melhorIndice = -1;
+            let melhorSobreposicao = 0;
+            colunas.forEach((col, i) => {
+                const s = sobreposicao(celula, col);
+                if (s > melhorSobreposicao) { melhorSobreposicao = s; melhorIndice = i; }
             });
-            return resultado;
+            return melhorIndice;
+        }
+
+        return linhasComCelulas.map(celulas => {
+            const linha = new Array(colunas.length).fill('');
+            celulas.forEach(celula => {
+                const idx = acharColuna(celula);
+                if (idx >= 0) linha[idx] = linha[idx] ? linha[idx] + ' ' + celula.texto : celula.texto;
+            });
+            return linha;
         });
     }
 

@@ -1017,3 +1017,49 @@ test('agruparLinhasPdf mantém índices de coluna quando uma linha está vazia n
     assert.strictEqual(linhas[1][2], 'Z');
     assert.deepStrictEqual(linhas[1], ['X', '', 'Z']);
 });
+
+test('agruparLinhasPdf agrupa rotulo de cabecalho centralizado na mesma coluna dos valores alinhados a esquerda', () => {
+    // Caso real de tabela de fornecedor em PDF: o rotulo "DESCRIÇÃO" fica CENTRALIZADO
+    // sobre a coluna (span 208-268), enquanto os nomes de produto ficam ALINHADOS A
+    // ESQUERDA logo abaixo (span 82-229) - x inicial bem diferente, mas os spans se
+    // cruzam. Sem a sobreposicao de span, essas duas coisas cairiam em colunas distintas
+    // e sugerirMapeamento nunca acharia a coluna de nome (ela ficaria sempre vazia).
+    const linhas = C.agruparLinhasPdf([
+        { texto: 'CODIGO', x: 30, y: 200, largura: 40 },
+        { texto: 'DESCRIÇÃO', x: 208, y: 200, largura: 60 },
+        { texto: 'LARGURA', x: 401, y: 200, largura: 50 },
+        { texto: '10001', x: 35, y: 180, largura: 30 },
+        { texto: 'TRICÔ HERA (PROMOCIONAL)', x: 82, y: 180, largura: 147 },
+        { texto: '1,40', x: 416, y: 180, largura: 19 }
+    ]);
+    assert.deepStrictEqual(linhas, [
+        ['CODIGO', 'DESCRIÇÃO', 'LARGURA'],
+        ['10001', 'TRICÔ HERA (PROMOCIONAL)', '1,40']
+    ]);
+});
+
+test('agruparLinhasPdf nao funde duas colunas quando uma celula larga toca as duas', () => {
+    // Uma descricao de produto excepcionalmente comprida pode alcancar o span da
+    // coluna vizinha (LARGURA). Isso NUNCA pode fundir as duas colunas em uma so -
+    // a celula larga e so ATRIBUIDA a coluna com que mais se sobrepoe (DESCRICAO),
+    // sem alterar nenhuma das duas colunas envolvidas.
+    const linhas = C.agruparLinhasPdf([
+        { texto: 'CODIGO', x: 30, y: 200, largura: 40 },
+        { texto: 'DESCRIÇÃO', x: 80, y: 200, largura: 60 },
+        { texto: 'LARGURA', x: 400, y: 200, largura: 50 },
+        { texto: '10001', x: 35, y: 180, largura: 30 },
+        { texto: 'TRICÔ HERA', x: 80, y: 180, largura: 60 },
+        { texto: '1,40', x: 416, y: 180, largura: 19 },
+        { texto: '10002', x: 35, y: 160, largura: 30 },
+        { texto: 'LINHO PAPIRO', x: 80, y: 160, largura: 70 },
+        { texto: '1,45', x: 416, y: 160, largura: 19 },
+        { texto: '10003', x: 35, y: 140, largura: 30 },
+        { texto: 'TRICÔ HÓRUS (PROMOCIONAL) (CORES FORA DE LINHA)', x: 80, y: 140, largura: 325 },
+        { texto: '2,80', x: 418, y: 140, largura: 19 }
+    ]);
+    assert.strictEqual(linhas.length, 4);
+    assert.strictEqual(linhas[0].length, 3); // continua em 3 colunas, LARGURA nao foi engolida
+    assert.strictEqual(linhas[3][0], '10003');
+    assert.strictEqual(linhas[3][1], 'TRICÔ HÓRUS (PROMOCIONAL) (CORES FORA DE LINHA)');
+    assert.strictEqual(linhas[3][2], '2,80');
+});
