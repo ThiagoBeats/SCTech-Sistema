@@ -76,7 +76,39 @@
         return { valor, aviso };
     }
 
-    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura };
+    // Rotulos que indicam que a linha e um cabecalho de tabela.
+    const ROTULOS_CABECALHO = [
+        /C[OÓ]D/i, /DESCRI/i, /NOME/i, /LARGURA/i, /PRE[CÇ]O/i,
+        /CORTE/i, /PE[CÇ]A/i, /UNID/i, /QUANT/i, /COR/i, /REF/i
+    ];
+
+    function _rotulosDaLinha(linha) {
+        return (linha || []).map(c => normalizarNome(c));
+    }
+
+    function detectarCabecalho(linhas) {
+        const limite = Math.min((linhas || []).length, 15);
+        let melhor = { indice: -1, pontos: 0, colunas: [] };
+        for (let i = 0; i < limite; i++) {
+            const colunas = _rotulosDaLinha(linhas[i]);
+            const preenchidas = colunas.filter(c => c !== '').length;
+            if (preenchidas < 2) continue;
+            const pontos = colunas.filter(c => c && ROTULOS_CABECALHO.some(r => r.test(c))).length;
+            if (pontos >= 2 && pontos > melhor.pontos) melhor = { indice: i, pontos, colunas };
+        }
+        return melhor.indice === -1
+            ? { indice: -1, colunas: [] }
+            : { indice: melhor.indice, colunas: melhor.colunas };
+    }
+
+    function ehLinhaDeProduto(linha, mapa) {
+        if (!linha || !mapa) return false;
+        const codigo = mapa.codigo >= 0 ? normalizarCodigo(linha[mapa.codigo]).codigo : '';
+        const nome = mapa.nome >= 0 ? normalizarNome(linha[mapa.nome]) : '';
+        return codigo !== '' && nome !== '';
+    }
+
+    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ImportadorCore = api;

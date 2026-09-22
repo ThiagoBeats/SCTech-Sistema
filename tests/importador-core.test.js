@@ -71,3 +71,41 @@ test('normalizarPreco e normalizarLargura rejeitam valores negativos (Finding B)
     // Width: negative values should return null
     assert.deepStrictEqual(C.normalizarLargura(-5), { valor: null, aviso: null });
 });
+
+const path = require('node:path');
+const { lerXlsx } = require('./xlsx-min.js');
+const PLANILHA = path.join(__dirname, '..', 'docs', 'Tabela RC - SETEMBRO - 2024.xlsx');
+
+test('detectarCabecalho acha a linha 2 nas abas de tecido', () => {
+    const { abas } = lerXlsx(PLANILHA);
+    for (const aba of ['Book 10', 'Book 12', 'Book 13', 'Book 14', 'Book 15', 'Book 16']) {
+        const r = C.detectarCabecalho(abas[aba]);
+        assert.strictEqual(r.indice, 1, `${aba}: cabecalho deveria estar no indice 1`);
+        assert.ok(r.colunas.some(c => /C[OÓ]DIGO/i.test(c)), `${aba}: faltou CODIGO`);
+    }
+});
+
+test('detectarCabecalho devolve -1 quando nao ha cabecalho', () => {
+    const r = C.detectarCabecalho([['', ''], ['algum texto solto'], ['']]);
+    assert.strictEqual(r.indice, -1);
+    assert.deepStrictEqual(r.colunas, []);
+});
+
+test('ehLinhaDeProduto exige codigo e nome', () => {
+    const mapa = { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 };
+    assert.strictEqual(C.ehLinhaDeProduto(['AC1', 'Linho', '', '2.8', '78,90'], mapa), true);
+    assert.strictEqual(C.ehLinhaDeProduto(['AC1', '', '', '', ''], mapa), false);
+    assert.strictEqual(C.ehLinhaDeProduto(['', 'Linho', '', '', '78,90'], mapa), false);
+    assert.strictEqual(C.ehLinhaDeProduto([], mapa), false);
+});
+
+test('a observacao do MODELO WAVE PLUS nao passa por linha de produto', () => {
+    const mapa = { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 };
+    const obs = ['MODELO WAVE PLUS NAO ACOMPANHA A ENTRETELA'];
+    assert.strictEqual(C.ehLinhaDeProduto(obs, mapa), false);
+});
+
+test('linha com preco invalido continua sendo linha de produto', () => {
+    const mapa = { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 };
+    assert.strictEqual(C.ehLinhaDeProduto(['AC1', 'Linho', '', '2.8', '--'], mapa), true);
+});
