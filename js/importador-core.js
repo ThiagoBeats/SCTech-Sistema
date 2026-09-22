@@ -557,7 +557,46 @@
         return codigo;
     }
 
-    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup, indexarExistentes, classificar, aplicarImportacao, resolverAcao, validarDecisoes, assinaturaDoLayout, montarPerfil, perfilDoFornecedor, codigoLivre };
+    // Agrupa fragmentos de texto do PDF em linhas e colunas.
+    // Fragmentos com y similar viram a mesma linha, ordenada por x.
+    // Fragmentos horizontalmente adjacentes viram uma so celula.
+    function agruparLinhasPdf(fragmentos, opcoes) {
+        const o = opcoes || {};
+        const toleranciaY = o.toleranciaY === undefined ? 3 : o.toleranciaY;
+        const toleranciaX = o.toleranciaX === undefined ? 12 : o.toleranciaX;
+
+        const uteis = (fragmentos || [])
+            .map(f => ({ texto: normalizarNome(f.texto), x: Number(f.x), y: Number(f.y) }))
+            .filter(f => f.texto !== '' && isFinite(f.x) && isFinite(f.y));
+
+        // agrupa por y (no PDF, y cresce de baixo para cima)
+        const grupos = [];
+        uteis.slice().sort((a, b) => b.y - a.y).forEach(f => {
+            const grupo = grupos.find(g => Math.abs(g.y - f.y) <= toleranciaY);
+            if (grupo) grupo.itens.push(f);
+            else grupos.push({ y: f.y, itens: [f] });
+        });
+
+        return grupos.map(grupo => {
+            const ordenados = grupo.itens.sort((a, b) => a.x - b.x);
+            const celulas = [];
+            let atual = null;
+            let fimAnterior = null;
+            ordenados.forEach(f => {
+                if (atual !== null && fimAnterior !== null && (f.x - fimAnterior) < toleranciaX) {
+                    atual.texto += ' ' + f.texto;
+                } else {
+                    atual = { texto: f.texto };
+                    celulas.push(atual);
+                }
+                // aproxima a largura do fragmento por 5px por caractere
+                fimAnterior = f.x + f.texto.length * 5;
+            });
+            return celulas.map(c => c.texto);
+        });
+    }
+
+    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup, indexarExistentes, classificar, aplicarImportacao, resolverAcao, validarDecisoes, assinaturaDoLayout, montarPerfil, perfilDoFornecedor, codigoLivre, agruparLinhasPdf };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ImportadorCore = api;

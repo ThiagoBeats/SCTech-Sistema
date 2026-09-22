@@ -949,3 +949,49 @@ test('codigoLivre nao entra em laco infinito com base vazia', () => {
     assert.ok(typeof r === 'string');
     assert.ok(r.length > 0);
 });
+
+test('agruparLinhasPdf junta fragmentos da mesma altura', () => {
+    const linhas = C.agruparLinhasPdf([
+        { texto: 'AC1', x: 10, y: 100 },
+        { texto: 'Linho', x: 80, y: 100 },
+        { texto: '78,90', x: 200, y: 100 },
+        { texto: 'AC2', x: 10, y: 80 },
+        { texto: 'Voil', x: 80, y: 80 },
+        { texto: '50,00', x: 200, y: 80 }
+    ]);
+    assert.deepStrictEqual(linhas, [['AC1', 'Linho', '78,90'], ['AC2', 'Voil', '50,00']]);
+});
+
+test('agruparLinhasPdf tolera diferenca pequena de y', () => {
+    const linhas = C.agruparLinhasPdf([
+        { texto: 'A', x: 10, y: 100 },
+        { texto: 'B', x: 80, y: 101.5 }
+    ]);
+    assert.deepStrictEqual(linhas, [['A', 'B']]);
+});
+
+test('agruparLinhasPdf concatena fragmentos colados na mesma celula', () => {
+    const linhas = C.agruparLinhasPdf([
+        { texto: 'LINHO', x: 80, y: 100 },
+        { texto: 'BELGA', x: 86, y: 100 },
+        { texto: '78,90', x: 300, y: 100 }
+    ]);
+    assert.deepStrictEqual(linhas, [['LINHO BELGA', '78,90']]);
+});
+
+test('agruparLinhasPdf ordena de cima para baixo e da esquerda para a direita', () => {
+    const linhas = C.agruparLinhasPdf([
+        { texto: 'z', x: 300, y: 10 },
+        { texto: 'a', x: 10, y: 200 },
+        { texto: 'b', x: 150, y: 200 }
+    ]);
+    assert.deepStrictEqual(linhas, [['a', 'b'], ['z']]);
+});
+
+test('agruparLinhasPdf descarta fragmentos vazios', () => {
+    const linhas = C.agruparLinhasPdf([
+        { texto: '  ', x: 10, y: 100 },
+        { texto: 'A', x: 80, y: 100 }
+    ]);
+    assert.deepStrictEqual(linhas, [['A']]);
+});
