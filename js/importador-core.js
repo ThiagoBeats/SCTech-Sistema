@@ -402,7 +402,13 @@
         const catalogo = (opcoes.catalogo || []).map(r => Object.assign({}, r));
         const materiais = (opcoes.materiais || []).map(r => Object.assign({}, r));
         const fornecedor = opcoes.fornecedor || null;
-        let proximoId = Number(opcoes.agora) || Date.now();
+
+        // Encontra o maior ID existente nas duas listas para evitar colisao
+        let maiorIdExistente = -1;
+        catalogo.forEach(r => { if (r.id > maiorIdExistente) maiorIdExistente = r.id; });
+        materiais.forEach(r => { if (r.id > maiorIdExistente) maiorIdExistente = r.id; });
+        let proximoId = Math.max(Number(opcoes.agora) || Date.now(), maiorIdExistente + 1);
+
         const resumo = { criados: 0, atualizados: 0, ignorados: 0 };
 
         (opcoes.decisoes || []).forEach(decisao => {
@@ -411,12 +417,13 @@
 
             const precoCusto = Number(item.preco_custo) || 0;
             const preco = aplicarMarkup(precoCusto, decisao.markup);
+            const codigoNormalizado = normalizarCodigo(item.codigo).codigo;
             const lista = item.tipo === 'tecido' ? catalogo : materiais;
 
             if (decisao.acao === 'atualizar' && decisao.existente) {
                 const alvo = lista.find(r => r.id === decisao.existente.id);
                 if (!alvo) return;
-                alvo.referencia = item.codigo;
+                alvo.referencia = codigoNormalizado;
                 alvo.nome = item.nome;
                 alvo.preco_custo = precoCusto;
                 alvo.preco = preco;
@@ -432,7 +439,7 @@
 
             const base = {
                 id: proximoId++,
-                referencia: item.codigo,
+                referencia: codigoNormalizado,
                 nome: item.nome,
                 preco_custo: precoCusto,
                 preco,
@@ -459,7 +466,8 @@
     // produto" funcionarem sem reclassificar a conferencia inteira.
     function resolverAcao(item, catalogo, materiais) {
         const { porCodigo } = indexarExistentes(catalogo, materiais);
-        const achado = porCodigo.get(item.codigo);
+        const codigoNormalizado = normalizarCodigo(item.codigo).codigo;
+        const achado = porCodigo.get(codigoNormalizado);
         return achado
             ? { acao: 'atualizar', existente: achado.registro }
             : { acao: 'criar', existente: null };
@@ -469,24 +477,40 @@
     function validarDecisoes(decisoes, catalogo, materiais) {
         const { porNome } = indexarExistentes(catalogo, materiais);
         const erros = [];
-        const codigosDoLote = new Map();
+        const codigosDoLote = new Map(); // codigo normalizado -> { count, nomes[] }
+        const nomesDuplicados = new Set(); // rascunho: codigos com duplicata reportada
 
         (decisoes || []).forEach(d => {
             if (!d.item || d.acao === 'ignorar') return;
             const item = d.item;
+            const codigoNormalizado = normalizarCodigo(item.codigo).codigo;
+            const nomeNormalizado = normalizarNome(item.nome);
 
-            if (codigosDoLote.has(item.codigo)) {
-                erros.push('O código ' + item.codigo + ' aparece duas vezes nesta importação ("'
-                    + codigosDoLote.get(item.codigo) + '" e "' + item.nome + '"). Edite um dos dois.');
+            // Rastreia codigos duplicados no lote (deduplicado depois)
+            if (codigosDoLote.has(codigoNormalizado)) {
+                const info = codigosDoLote.get(codigoNormalizado);
+                info.count++;
+                if (!info.nomes.includes(nomeNormalizado)) {
+                    info.nomes.push(nomeNormalizado);
+                }
             } else {
-                codigosDoLote.set(item.codigo, item.nome);
+                codigosDoLote.set(codigoNormalizado, { count: 1, nomes: [nomeNormalizado] });
             }
 
-            const dono = porNome.get(item.tipo + '|' + item.nome.toLowerCase());
+            // Verifica colisao de nome com outro registro (ignorando o item sendo atualizado)
+            const dono = porNome.get(item.tipo + '|' + nomeNormalizado.toLowerCase());
             const ehOProprio = dono && d.existente && dono.registro.id === d.existente.id;
             if (dono && !ehOProprio) {
-                erros.push('O nome "' + item.nome + '" já pertence ao código '
+                erros.push('O nome "' + nomeNormalizado + '" já pertence ao código '
                     + (dono.registro.referencia || '(sem código)') + '. Edite o nome.');
+            }
+        });
+
+        // Relata cada codigo duplicado UMA VEZ, com contagem
+        codigosDoLote.forEach((info, codigo) => {
+            if (info.count > 1) {
+                erros.push('O código ' + codigo + ' aparece ' + info.count + ' vezes nesta importação ('
+                    + info.nomes.join(', ') + '). Edite um dos códigos.');
             }
         });
 

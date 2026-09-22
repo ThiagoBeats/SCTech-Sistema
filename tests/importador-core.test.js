@@ -758,3 +758,107 @@ test('validarDecisoes ignora as decisoes marcadas como ignorar', () => {
     ];
     assert.deepStrictEqual(C.validarDecisoes(decisoes, [], []), []);
 });
+
+test('REGR-CRITICAL 1a: resolverAcao normaliza codigo antes de lookup', () => {
+    const catalogo = [{ id: 1, referencia: 'AC1', nome: 'Linho', preco_custo: 90, preco: 162, fornecedor_id: 99 }];
+
+    // Minusculas
+    let r = C.resolverAcao(itemDeTeste({ codigo: 'ac1' }), catalogo, []);
+    assert.strictEqual(r.acao, 'atualizar', 'codigo minusculo ac1 deve achar AC1');
+    assert.strictEqual(r.existente.id, 1);
+
+    // Com asterisco
+    r = C.resolverAcao(itemDeTeste({ codigo: '*AC1' }), catalogo, []);
+    assert.strictEqual(r.acao, 'atualizar', 'codigo *AC1 deve achar AC1');
+    assert.strictEqual(r.existente.id, 1);
+
+    // Com espacos
+    r = C.resolverAcao(itemDeTeste({ codigo: ' AC 1 ' }), catalogo, []);
+    assert.strictEqual(r.acao, 'atualizar', 'codigo " AC 1 " deve achar AC1');
+    assert.strictEqual(r.existente.id, 1);
+});
+
+test('REGR-CRITICAL 1b: validarDecisoes normaliza codigo antes de comparacao', () => {
+    const decisoes = [
+        { item: itemDeTeste({ codigo: 'AC1', nome: 'Um' }), existente: null, markup: 0, acao: 'criar' },
+        { item: itemDeTeste({ codigo: 'ac1', nome: 'Dois' }), existente: null, markup: 0, acao: 'criar' }
+    ];
+    const erros = C.validarDecisoes(decisoes, [], []);
+    assert.strictEqual(erros.length, 1, 'AC1 e ac1 sao duplicatas');
+    assert.match(erros[0], /aparece 2 vezes/);
+});
+
+test('REGR-CRITICAL 1c: validarDecisoes normaliza codigo com asterisco', () => {
+    const decisoes = [
+        { item: itemDeTeste({ codigo: 'AC1', nome: 'Um' }), existente: null, markup: 0, acao: 'criar' },
+        { item: itemDeTeste({ codigo: '*AC1', nome: 'Dois' }), existente: null, markup: 0, acao: 'criar' }
+    ];
+    const erros = C.validarDecisoes(decisoes, [], []);
+    assert.strictEqual(erros.length, 1, 'AC1 e *AC1 sao duplicatas');
+    assert.match(erros[0], /aparece 2 vezes/);
+});
+
+test('REGR-CRITICAL 1d: aplicarImportacao armazena codigo normalizado', () => {
+    const r = C.aplicarImportacao({
+        decisoes: [{ item: itemDeTeste({ codigo: '*ac1 ', nome: 'Voil' }), existente: null, markup: 80, acao: 'criar' }],
+        catalogo: [], materiais: [], fornecedor: null, agora: 7000
+    });
+    assert.strictEqual(r.catalogo.length, 1);
+    assert.strictEqual(r.catalogo[0].referencia, 'AC1', 'referencia deve ser normalizada (sem *, sem espacos, uppercase)');
+});
+
+test('REGR-CRITICAL 2: aplicarImportacao evita colisao de id com registros existentes', () => {
+    const catalogoExistente = [
+        { id: 5000, referencia: 'XY1', nome: 'Existente', preco_custo: 100, preco: 180, largura_rolo: 2.8 }
+    ];
+    const r = C.aplicarImportacao({
+        decisoes: [
+            { item: itemDeTeste({ codigo: 'A1', nome: 'Um' }), existente: null, markup: 0, acao: 'criar' },
+            { item: itemDeTeste({ codigo: 'A2', nome: 'Dois' }), existente: null, markup: 0, acao: 'criar' }
+        ],
+        catalogo: catalogoExistente, materiais: [], fornecedor: null, agora: 5000
+    });
+
+    assert.strictEqual(r.catalogo.length, 3, 'tem 1 existente + 2 novos');
+    const ids = r.catalogo.map(r => r.id);
+    // Todos os IDs devem ser unicos
+    assert.strictEqual(new Set(ids).size, 3, 'todos os 3 IDs devem ser distintos');
+    // O primeiro (original) pode ser 5000, mas os novos (indices 1 e 2) devem ser maiores
+    assert.strictEqual(ids[0], 5000, 'item copiado mantém seu id');
+    assert.ok(ids[1] > 5000 && ids[2] > 5000 && ids[2] > ids[1], 'novos IDs devem ser sequenciais e maiores que o maximo existente');
+});
+
+test('REGR-CRITICAL 2b: aplicarImportacao com 200 itens gera 200 ids distintos', () => {
+    const decisoes = [];
+    for (let i = 0; i < 200; i++) {
+        decisoes.push({
+            item: itemDeTeste({ codigo: 'CODE' + i, nome: 'Item ' + i }),
+            existente: null, markup: 0, acao: 'criar'
+        });
+    }
+    const r = C.aplicarImportacao({
+        decisoes, catalogo: [], materiais: [], fornecedor: null, agora: 10000
+    });
+
+    const ids = r.catalogo.map(r => r.id);
+    assert.strictEqual(ids.length, 200);
+    assert.strictEqual(new Set(ids).size, 200, 'todos os 200 IDs devem ser distintos');
+});
+
+test('REGR-MINOR 3: validarDecisoes deduplica erros de codigo duplicado', () => {
+    const decisoes = [
+        { item: itemDeTeste({ codigo: 'VUD01', nome: 'A' }), existente: null, markup: 0, acao: 'criar' },
+        { item: itemDeTeste({ codigo: 'VUD01', nome: 'B' }), existente: null, markup: 0, acao: 'criar' },
+        { item: itemDeTeste({ codigo: 'VUD01', nome: 'C' }), existente: null, markup: 0, acao: 'criar' },
+        { item: itemDeTeste({ codigo: 'VUD01', nome: 'D' }), existente: null, markup: 0, acao: 'criar' },
+        { item: itemDeTeste({ codigo: 'VUD02', nome: 'X' }), existente: null, markup: 0, acao: 'criar' },
+        { item: itemDeTeste({ codigo: 'VUD02', nome: 'Y' }), existente: null, markup: 0, acao: 'criar' },
+        { item: itemDeTeste({ codigo: 'VUD02', nome: 'Z' }), existente: null, markup: 0, acao: 'criar' }
+    ];
+    const erros = C.validarDecisoes(decisoes, [], []);
+
+    // Deve ter 2 erros: um para VUD01 (aparece 4 vezes) e um para VUD02 (aparece 3 vezes)
+    assert.strictEqual(erros.length, 2, 'deve ter 2 erros de codigo duplicado, nao 6');
+    assert.ok(erros.some(e => /VUD01.*4 vezes/.test(e)), 'deve relatar VUD01 com 4 vezes');
+    assert.ok(erros.some(e => /VUD02.*3 vezes/.test(e)), 'deve relatar VUD02 com 3 vezes');
+});
