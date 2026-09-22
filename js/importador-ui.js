@@ -109,6 +109,7 @@ function _impRenderPasso(n) {
     if (!corpo) return;
     if (n === 1) corpo.innerHTML = _impTrilha(1) + _impPasso1HTML();
     if (n === 2) corpo.innerHTML = _impTrilha(2) + _impPasso2HTML();
+    if (n === 3) corpo.innerHTML = _impTrilha(3) + _impPasso3HTML();
 }
 
 // ── Passo 1: arquivo e fornecedor ────────────────────────────────────────────
@@ -280,4 +281,116 @@ async function _impConcluirPasso2() {
     const usadas = Object.values(_impEstado.abas).filter(t => t !== 'ignorar');
     if (usadas.length === 0) { await showAlert('Marque ao menos uma aba como Tecido ou Material.', '⚠️'); return; }
     _impRenderPasso(3);
+}
+
+// ── Passo 3: mapeamento de colunas ───────────────────────────────────────────
+const _IMP_PAPEIS = [
+    { valor: 'ignorar', rotulo: 'Ignorar' },
+    { valor: 'codigo',  rotulo: 'Código' },
+    { valor: 'nome',    rotulo: 'Nome' },
+    { valor: 'largura', rotulo: 'Largura' },
+    { valor: 'preco',   rotulo: 'Preço' },
+    { valor: 'unidade', rotulo: 'Unidade' }
+];
+
+// Agrupa as abas em uso por assinatura de cabecalho: as 7 abas de tecido
+// compartilham a mesma, entao o usuario mapeia uma vez so.
+function _impLayoutsDistintos() {
+    const C = window.ImportadorCore;
+    const porAssinatura = {};
+    _impEstado.planilha.ordem.forEach(nome => {
+        const tipo = _impEstado.abas[nome];
+        if (tipo === 'ignorar') return;
+        const dados = _impEstado.planilha.abas[nome];
+        const { indice, colunas } = C.detectarCabecalho(dados);
+        const assinatura = C.assinaturaDoLayout(colunas) + '#' + tipo;
+        if (!porAssinatura[assinatura]) {
+            porAssinatura[assinatura] = { assinatura, colunas, cabecalhoIndice: indice, abas: [], tipo };
+        }
+        porAssinatura[assinatura].abas.push(nome);
+    });
+    return Object.values(porAssinatura);
+}
+
+function _impMapaDoLayout(layout) {
+    const C = window.ImportadorCore;
+    if (_impEstado.layouts[layout.assinatura]) return _impEstado.layouts[layout.assinatura].mapa;
+    return C.sugerirMapeamento(layout.colunas);
+}
+
+function _impPasso3HTML() {
+    const C = window.ImportadorCore;
+    const layouts = _impLayoutsDistintos();
+    const blocos = layouts.map((layout, li) => {
+        const mapa = _impMapaDoLayout(layout);
+        const dados = _impEstado.planilha.abas[layout.abas[0]];
+        const inicio = layout.cabecalhoIndice + 1;
+        const amostra = dados.slice(inicio, inicio + 3);
+
+        const papelDaColuna = ci => {
+            const achado = Object.keys(mapa).find(k => mapa[k] === ci);
+            return achado || 'ignorar';
+        };
+
+        const cabecalhos = layout.colunas.map((rotulo, ci) => {
+            const atual = papelDaColuna(ci);
+            const opcoes = _IMP_PAPEIS.map(p => `<option value="${p.valor}" ${p.valor === atual ? 'selected' : ''}>${p.rotulo}</option>`).join('');
+            return `<th style="min-width:120px">
+                <div style="font-size:11px;color:var(--muted);margin-bottom:4px">${escapeHtml(rotulo || '(sem título)')}</div>
+                <select style="width:100%;font-size:12px" onchange="_impTrocarPapel(${li}, ${ci}, this.value)">${opcoes}</select>
+            </th>`;
+        }).join('');
+
+        const corpo = amostra.map(linha =>
+            '<tr>' + layout.colunas.map((_, ci) => `<td style="font-size:12px">${escapeHtml(String(linha[ci] === undefined ? '' : linha[ci]))}</td>`).join('') + '</tr>'
+        ).join('');
+
+        const qtd = C.montarItens({ linhas: dados, cabecalhoIndice: layout.cabecalhoIndice, mapa, tipo: layout.tipo, aba: layout.abas[0] }).length;
+
+        return `<div class="card" style="margin-bottom:14px">
+            <h4 style="margin:0 0 4px;color:var(--dark)">${layout.tipo === 'tecido' ? 'Tecidos' : 'Materiais'} — ${layout.abas.length} aba(s)</h4>
+            <p style="font-size:12px;color:var(--muted);margin:0 0 10px">${escapeHtml(layout.abas.join(', '))}</p>
+            <div style="overflow-x:auto"><table><thead><tr>${cabecalhos}</tr></thead><tbody>${corpo}</tbody></table></div>
+            <p style="font-size:12px;color:var(--muted);margin:8px 0 0">${qtd} item(ns) na primeira aba deste layout.</p>
+        </div>`;
+    }).join('');
+
+    return `
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Diga o que é cada coluna. Abas com o mesmo cabeçalho são mapeadas juntas.</p>
+    ${blocos}
+    <div style="display:flex;justify-content:space-between;margin-top:8px">
+        <button class="btn btn-outline" onclick="_impRenderPasso(2)">Voltar</button>
+        <button class="btn btn-success" onclick="_impConcluirPasso3()">Continuar</button>
+    </div>`;
+}
+
+function _impTrocarPapel(indiceLayout, indiceColuna, papel) {
+    const layout = _impLayoutsDistintos()[indiceLayout];
+    const mapa = Object.assign({}, _impMapaDoLayout(layout));
+    // um papel pertence a uma coluna so: limpa quem estava com ele
+    Object.keys(mapa).forEach(k => { if (mapa[k] === indiceColuna) mapa[k] = -1; });
+    if (papel !== 'ignorar') mapa[papel] = indiceColuna;
+    _impEstado.layouts[layout.assinatura] = { mapa, cabecalhoIndice: layout.cabecalhoIndice };
+    _impRenderPasso(3);
+}
+
+async function _impConcluirPasso3() {
+    const layouts = _impLayoutsDistintos();
+    for (const layout of layouts) {
+        const mapa = _impMapaDoLayout(layout);
+        if (mapa.codigo < 0 || mapa.nome < 0 || mapa.preco < 0) {
+            // Abas sem cabecalho reconhecivel caem aqui: a saida prevista e
+            // marca-las como "Ignorar" no passo 2 (ou, na Fase 2, apontar a
+            // linha do cabecalho na mao).
+            const semCabecalho = layout.cabecalhoIndice < 0;
+            await showAlert(
+                `Não dá para mapear ${semCabecalho ? 'estas abas, que não têm cabeçalho reconhecível' : 'este layout'}:\n\n`
+                + layout.abas.join(', ')
+                + `\n\nMarque ao menos as colunas de Código, Nome e Preço — ou volte ao passo 2 e marque estas abas como "Ignorar".`,
+                '⚠️');
+            return;
+        }
+        _impEstado.layouts[layout.assinatura] = { mapa, cabecalhoIndice: layout.cabecalhoIndice };
+    }
+    _impRenderPasso(4);
 }
