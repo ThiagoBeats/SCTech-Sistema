@@ -167,8 +167,8 @@
     function sugerirMapeamento(colunas) {
         const cols = (colunas || []).map(c => normalizarNome(c));
         return {
-            codigo:  _acharColuna(cols, [/^C[OÓ]D/i, /REFER/i]),
-            nome:    _acharColuna(cols, [/DESCRI/i, /^NOME/i, /PRODUTO/i]),
+            codigo:  _acharColuna(cols, PADROES_CODIGO_CABECALHO),
+            nome:    _acharColuna(cols, PADROES_NOME_CABECALHO),
             largura: _acharColuna(cols, [/LARGURA/i]),
             // CORTE (preco do metro cortado) e o padrao definido na spec
             preco:   _acharColuna(cols, [/CORTE/i, /PRE[CÇ]O/i, /VALOR/i, /PE[CÇ]A/i]),

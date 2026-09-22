@@ -238,3 +238,34 @@ test('todas as abas de tecido da planilha real sao sugeridas como tecido', () =>
         assert.strictEqual(C.sugerirTipoAba(aba, colunas), 'tecido', aba);
     }
 });
+
+test('detectarCabecalho e sugerirMapeamento concordam sobre ARTIGO (real do Cor Metal)', () => {
+    // ARTIGO é usado como coluna de nome na planilha real (Cor Metal, row 59)
+    // Ambas as funções devem reconhecer esta linha como cabeçalho
+    const linhaComArtigo = ['CÓD.', 'ARTIGO', 'PREÇO'];
+
+    // detectarCabecalho deve reconhecer como cabeçalho
+    const r = C.detectarCabecalho([linhaComArtigo]);
+    assert.strictEqual(r.indice, 0, 'detectarCabecalho deve reconhecer ARTIGO como cabeçalho');
+
+    // sugerirMapeamento deve encontrar ARTIGO como coluna de nome
+    const m = C.sugerirMapeamento(linhaComArtigo);
+    assert.strictEqual(m.codigo, 0, 'deve encontrar CÓD. como codigo');
+    assert.strictEqual(m.nome, 1, 'deve encontrar ARTIGO como nome');
+    assert.strictEqual(m.preco, 2, 'deve encontrar PREÇO como preco');
+});
+
+test('detectarCabecalho e sugerirMapeamento concordam sobre REF (bare, sem ERENCIA)', () => {
+    // REF deve ser reconhecido como codigo (padrão REF(ER[EÊ]NCIA)? permite isso)
+    const linhaComRef = ['REF', 'DESCRIÇÃO', 'PREÇO'];
+
+    // detectarCabecalho deve reconhecer como cabeçalho
+    const r = C.detectarCabecalho([linhaComRef]);
+    assert.strictEqual(r.indice, 0, 'detectarCabecalho deve reconhecer REF como cabeçalho');
+
+    // sugerirMapeamento deve encontrar REF como coluna de codigo
+    const m = C.sugerirMapeamento(linhaComRef);
+    assert.strictEqual(m.codigo, 0, 'deve encontrar REF como codigo');
+    assert.strictEqual(m.nome, 1, 'deve encontrar DESCRIÇÃO como nome');
+    assert.strictEqual(m.preco, 2, 'deve encontrar PREÇO como preco');
+});
