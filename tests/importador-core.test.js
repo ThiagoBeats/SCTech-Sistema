@@ -456,3 +456,28 @@ test('montarItens adiciona aviso de nome numerico', () => {
     assert.strictEqual(itens[1].avisos.length, 0, 'item 1 com nome "2.5m" nao e puramente numerico');
     assert.strictEqual(itens[2].avisos.length, 0, 'item 2 com nome normal nao tem aviso numerico');
 });
+
+test('markupDeExistente deriva o percentual do item salvo', () => {
+    assert.strictEqual(C.markupDeExistente({ preco_custo: 100, preco: 180 }), 80);
+    assert.strictEqual(C.markupDeExistente({ preco_custo: 50, preco: 50 }), 0);
+});
+
+test('markupDeExistente devolve null quando nao da para derivar', () => {
+    assert.strictEqual(C.markupDeExistente({ preco_custo: 0, preco: 180 }), null);
+    assert.strictEqual(C.markupDeExistente({ preco: 180 }), null);
+    assert.strictEqual(C.markupDeExistente({ preco_custo: 100 }), null);
+    assert.strictEqual(C.markupDeExistente({ preco_custo: 100, preco: 0 }), null);
+    assert.strictEqual(C.markupDeExistente(null), null);
+});
+
+test('aplicarMarkup calcula a venda a partir do custo', () => {
+    assert.strictEqual(C.aplicarMarkup(100, 80), 180);
+    assert.strictEqual(C.aplicarMarkup(78.9, 0), 78.9);
+    assert.strictEqual(C.aplicarMarkup(33.33, 50), 50);
+});
+
+test('custo novo preserva o markup do item existente', () => {
+    const existente = { preco_custo: 100, preco: 180 };
+    const markup = C.markupDeExistente(existente);
+    assert.strictEqual(C.aplicarMarkup(120, markup), 216);
+});

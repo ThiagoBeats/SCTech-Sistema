@@ -300,7 +300,22 @@
         return itens;
     }
 
-    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens };
+    function markupDeExistente(registro) {
+        if (!registro) return null;
+        const custo = Number(registro.preco_custo);
+        const venda = Number(registro.preco);
+        if (!isFinite(custo) || custo <= 0) return null;
+        if (!isFinite(venda) || venda <= 0) return null;
+        return Math.round(((venda / custo) - 1) * 10000) / 100;
+    }
+
+    function aplicarMarkup(precoCusto, markupPercentual) {
+        const custo = Number(precoCusto) || 0;
+        const markup = Number(markupPercentual) || 0;
+        return Math.round(custo * (1 + markup / 100) * 100) / 100;
+    }
+
+    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ImportadorCore = api;
