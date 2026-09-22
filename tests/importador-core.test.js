@@ -1117,10 +1117,9 @@ test('expandirPorCor mantem o aviso de promocional', () => {
 // Cada bloco abaixo falha contra o codigo anterior a esta rodada.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const FRAGMENTOS_PDF = path.join(
-    __dirname, '..', '.superpowers', 'sdd', '2026-09-21-importacao-tabelas-fornecedor',
-    'pdf-fragmentos-reais.json'
-);
+// Fragmentos de texto extraidos do PDF real do fornecedor com o proprio
+// pdf.js, versionados em tests/fixtures para a suite ser auto-contida.
+const FRAGMENTOS_PDF = path.join(__dirname, 'fixtures', 'pdf-fragmentos-reais.json');
 
 function itemParaAplicar(extra) {
     return Object.assign({
