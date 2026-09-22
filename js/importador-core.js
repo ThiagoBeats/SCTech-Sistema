@@ -546,7 +546,18 @@
         return perfis.find(p => String(p.fornecedor_id) === alvo) || null;
     }
 
-    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup, indexarExistentes, classificar, aplicarImportacao, resolverAcao, validarDecisoes, assinaturaDoLayout, montarPerfil, perfilDoFornecedor };
+    // Acrescenta "D" ao fim ate o codigo ficar livre. Usado na resolucao em
+    // massa de codigos repetidos: a primeira ocorrencia fica com o codigo
+    // original e as seguintes ganham sufixo.
+    function codigoLivre(base, ocupados) {
+        let codigo = normalizarCodigo(base).codigo;
+        if (!codigo) codigo = 'SEMCODIGO';
+        const usados = ocupados || new Set();
+        while (usados.has(codigo)) codigo += 'D';
+        return codigo;
+    }
+
+    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup, indexarExistentes, classificar, aplicarImportacao, resolverAcao, validarDecisoes, assinaturaDoLayout, montarPerfil, perfilDoFornecedor, codigoLivre };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ImportadorCore = api;

@@ -454,6 +454,94 @@ const _IMP_GRUPOS = [
     { chave: 'problemas',       titulo: 'Com problema',            ajuda: 'Preço ilegível. Corrija o valor ou deixe desmarcado.' }
 ];
 
+// Percorre as linhas marcadas na ordem de importacao (ordem dos grupos e,
+// dentro de cada grupo, ordem do array — que veio de _impColetarItens).
+function _impLinhasMarcadas() {
+    const linhas = [];
+    _IMP_GRUPOS.forEach(def => {
+        (_impEstado.grupos[def.chave] || []).forEach((entrada, indice) => {
+            if (entrada.marcado && entrada.item) linhas.push({ chave: def.chave, indice, entrada });
+        });
+    });
+    return linhas;
+}
+
+// Codigos que aparecem mais de uma vez entre as linhas marcadas.
+function _impDuplicadosNoLote() {
+    const porCodigo = new Map();
+    _impLinhasMarcadas().forEach(l => {
+        const c = l.entrada.item.codigo;
+        if (!porCodigo.has(c)) porCodigo.set(c, []);
+        porCodigo.get(c).push({ chave: l.chave, indice: l.indice });
+    });
+    const dups = [];
+    porCodigo.forEach((ocorrencias, codigo) => {
+        if (ocorrencias.length > 1) dups.push({ codigo, ocorrencias });
+    });
+    return dups;
+}
+
+// Conjunto de codigos ja ocupados: o catalogo, os materiais e as linhas marcadas.
+function _impCodigosOcupados() {
+    const C = window.ImportadorCore;
+    const { porCodigo } = C.indexarExistentes(db.catalogo, db.materiais);
+    const ocupados = new Set(porCodigo.keys());
+    _impLinhasMarcadas().forEach(l => ocupados.add(l.entrada.item.codigo));
+    return ocupados;
+}
+
+function _impDiferenciarDuplicados() {
+    const C = window.ImportadorCore;
+    const dups = _impDuplicadosNoLote();
+    if (!dups.length) return;
+    const ocupados = _impCodigosOcupados();
+    let renomeados = 0;
+    dups.forEach(d => {
+        // a primeira ocorrencia mantem o codigo; da segunda em diante, sufixo
+        d.ocorrencias.slice(1).forEach(o => {
+            const entrada = _impEstado.grupos[o.chave][o.indice];
+            const novo = C.codigoLivre(entrada.item.codigo + 'D', ocupados);
+            entrada.item.codigo = novo;
+            ocupados.add(novo);
+            renomeados++;
+        });
+    });
+    _impRenderPasso(4);
+    toast(`${renomeados} código(s) diferenciado(s) com "D".`, 'success');
+}
+
+function _impDescartarDuplicados() {
+    const dups = _impDuplicadosNoLote();
+    if (!dups.length) return;
+    let descartados = 0;
+    dups.forEach(d => {
+        d.ocorrencias.slice(1).forEach(o => {
+            _impEstado.grupos[o.chave][o.indice].marcado = false;
+            descartados++;
+        });
+    });
+    _impRenderPasso(4);
+    toast(`${descartados} linha(s) repetida(s) desmarcada(s).`, 'info');
+}
+
+// Painel que aparece no topo do passo 4 quando ha codigo repetido no lote.
+function _impPainelDuplicadosHTML() {
+    const dups = _impDuplicadosNoLote();
+    if (!dups.length) return '';
+    const lista = dups.slice(0, 10)
+        .map(d => `${escapeHtml(d.codigo)} (${d.ocorrencias.length}×)`).join(' · ');
+    const resto = dups.length > 10 ? ` e mais ${dups.length - 10}` : '';
+    return `<div class="card" style="margin-bottom:14px;border-left:4px solid var(--primary)">
+        <h4 style="margin:0 0 4px;color:var(--dark)">Códigos repetidos nesta importação <span style="color:var(--muted);font-weight:400">(${dups.length})</span></h4>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 8px">${lista}${resto}</p>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 10px">Código é único no sistema, então a gravação fica bloqueada enquanto houver repetição. A primeira ocorrência de cada código é sempre preservada.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-sm" onclick="_impDiferenciarDuplicados()">Diferenciar com "D"</button>
+            <button class="btn btn-outline btn-sm" onclick="_impDescartarDuplicados()">Descartar os repetidos</button>
+        </div>
+    </div>`;
+}
+
 function _impPasso4HTML() {
     const g = _impEstado.grupos;
     const blocos = _IMP_GRUPOS.map(def => {
@@ -498,6 +586,7 @@ function _impPasso4HTML() {
 
     return `
     <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Confira e ajuste o que quiser. Só as linhas marcadas serão gravadas.</p>
+    ${_impPainelDuplicadosHTML()}
     ${blocos}${sumiram}
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0 14px;cursor:pointer">
         <input type="checkbox" id="imp-salvar-perfil" checked> Salvar este mapeamento como perfil deste fornecedor

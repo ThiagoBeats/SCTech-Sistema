@@ -927,3 +927,25 @@ test('as 7 abas de tecido da planilha real compartilham uma assinatura', () => {
     }
     assert.strictEqual(assinaturas.size, 1, 'um mapeamento so deveria servir para todas');
 });
+
+test('codigoLivre devolve a base quando ela esta livre', () => {
+    assert.strictEqual(C.codigoLivre('1037', new Set()), '1037');
+    assert.strictEqual(C.codigoLivre('1037', new Set(['9999'])), '1037');
+});
+
+test('codigoLivre acrescenta D ate achar espaco', () => {
+    assert.strictEqual(C.codigoLivre('1037', new Set(['1037'])), '1037D');
+    assert.strictEqual(C.codigoLivre('1037', new Set(['1037', '1037D'])), '1037DD');
+    assert.strictEqual(C.codigoLivre('1037', new Set(['1037', '1037D', '1037DD'])), '1037DDD');
+});
+
+test('codigoLivre normaliza a base e compara normalizado', () => {
+    assert.strictEqual(C.codigoLivre('*1037', new Set(['1037'])), '1037D');
+    assert.strictEqual(C.codigoLivre(' 10 37 ', new Set(['1037'])), '1037D');
+});
+
+test('codigoLivre nao entra em laco infinito com base vazia', () => {
+    const r = C.codigoLivre('', new Set(['']));
+    assert.ok(typeof r === 'string');
+    assert.ok(r.length > 0);
+});
