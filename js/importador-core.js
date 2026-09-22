@@ -156,7 +156,35 @@
         return true;
     }
 
-    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto };
+    function _acharColuna(colunas, padroes) {
+        for (const padrao of padroes) {
+            const i = colunas.findIndex(c => c && padrao.test(c));
+            if (i !== -1) return i;
+        }
+        return -1;
+    }
+
+    function sugerirMapeamento(colunas) {
+        const cols = (colunas || []).map(c => normalizarNome(c));
+        return {
+            codigo:  _acharColuna(cols, [/^C[OÓ]D/i, /REFER/i]),
+            nome:    _acharColuna(cols, [/DESCRI/i, /^NOME/i, /PRODUTO/i]),
+            largura: _acharColuna(cols, [/LARGURA/i]),
+            // CORTE (preco do metro cortado) e o padrao definido na spec
+            preco:   _acharColuna(cols, [/CORTE/i, /PRE[CÇ]O/i, /VALOR/i, /PE[CÇ]A/i]),
+            unidade: _acharColuna(cols, [/UNID/i, /^UN$/i])
+        };
+    }
+
+    function sugerirTipoAba(nomeAba, colunas) {
+        const nome = normalizarNome(nomeAba).toUpperCase();
+        if (nome === 'CAPA' || nome === '') return 'ignorar';
+        const cols = (colunas || []).map(c => normalizarNome(c));
+        if (cols.some(c => /LARGURA/i.test(c))) return 'tecido';
+        return 'material';
+    }
+
+    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ImportadorCore = api;

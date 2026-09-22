@@ -199,3 +199,42 @@ test('todas as 22 abas tem cabecalho nas posicoes esperadas (regressao)', () => 
         assert.strictEqual(resultados[aba], esperado, `${aba}: esperado ${esperado}, obteve ${resultados[aba]}`);
     }
 });
+
+test('sugerirMapeamento identifica as colunas do layout de tecido', () => {
+    const colunas = ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE', 'PEÇA'];
+    assert.deepStrictEqual(C.sugerirMapeamento(colunas), {
+        codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1
+    });
+});
+
+test('sugerirMapeamento prefere CORTE a PECA quando os dois existem', () => {
+    const m = C.sugerirMapeamento(['CÓDIGO', 'DESCRIÇÃO', '', 'LARGURA', 'PEÇA', 'CORTE']);
+    assert.strictEqual(m.preco, 5);
+});
+
+test('sugerirMapeamento cai para PRECO quando nao ha CORTE', () => {
+    const m = C.sugerirMapeamento(['CÓD', 'DESCRIÇÃO', 'CORES', 'QUANT.', 'PREÇO']);
+    assert.strictEqual(m.codigo, 0);
+    assert.strictEqual(m.nome, 1);
+    assert.strictEqual(m.preco, 4);
+    assert.strictEqual(m.largura, -1);
+});
+
+test('sugerirMapeamento devolve -1 para o que nao achou', () => {
+    const m = C.sugerirMapeamento(['A', 'B', 'C']);
+    assert.deepStrictEqual(m, { codigo: -1, nome: -1, largura: -1, preco: -1, unidade: -1 });
+});
+
+test('sugerirTipoAba separa tecido, material e Capa', () => {
+    assert.strictEqual(C.sugerirTipoAba('Book 10', ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE']), 'tecido');
+    assert.strictEqual(C.sugerirTipoAba('Trilhos', ['CÓD', 'DESCRIÇÃO', 'CORES', 'PREÇO']), 'material');
+    assert.strictEqual(C.sugerirTipoAba('Capa', []), 'ignorar');
+});
+
+test('todas as abas de tecido da planilha real sao sugeridas como tecido', () => {
+    const { abas } = lerXlsx(PLANILHA);
+    for (const aba of ['Book 10', 'Book 12', 'Book 13', 'Book 14', 'Book 15', 'Book 16']) {
+        const { colunas } = C.detectarCabecalho(abas[aba]);
+        assert.strictEqual(C.sugerirTipoAba(aba, colunas), 'tecido', aba);
+    }
+});
