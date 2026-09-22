@@ -98,14 +98,6 @@
         return rotulo && PADROES_NOME_CABECALHO.some(r => r.test(rotulo));
     }
 
-    function _ehLinhaComAspectoDeCabecalho(linha) {
-        // Verifica se uma linha parece ser um cabeçalho (muitas células combinam com ROTULOS_CABECALHO)
-        const rotulosNaLinha = (linha || []).map(c => normalizarNome(c));
-        const contagemRotulos = rotulosNaLinha.filter(r => r && ROTULOS_CABECALHO.some(padrao => padrao.test(r))).length;
-        // Se 2+ células parecem ser rótulos de coluna, é provável que seja um cabeçalho
-        return contagemRotulos >= 2;
-    }
-
     function detectarCabecalho(linhas) {
         const limite = Math.min((linhas || []).length, 15);
         let melhor = { indice: -1, pontos: 0, colunas: [] };
@@ -213,31 +205,35 @@
         for (let i = inicio; i < linhas.length; i++) {
             const linha = linhas[i];
             const ehProduto = ehLinhaDeProduto(linha, mapa);
-            const pareceHeader = _ehLinhaComAspectoDeCabecalho(linha);
 
-            // Se não é produto OU parece ser um cabeçalho, tenta remapear
-            if (!ehProduto || pareceHeader) {
+            // Verifica se a célula na coluna de código é um rótulo de código puro (sinal de cabeçalho)
+            // Só detecta como header se a célula é EXATAMENTE um rótulo conhecido, não contém outras letras/números
+            const codigoNaLinha = mapa.codigo >= 0 ? normalizarNome(linha[mapa.codigo]) : '';
+            const ehCabecalhoMarcado = codigoNaLinha && /^(C[OÓ]DIGO?|REF(ER[EÊ]NCIA)?)$/i.test(codigoNaLinha);
+
+            // Se não é produto OU a coluna de código tem um rótulo de cabeçalho, tenta remapear
+            if (!ehProduto || ehCabecalhoMarcado) {
                 // Tenta derivar um novo mapeamento desta linha (possível cabeçalho)
                 const colunasCandidata = _rotulosDaLinha(linha);
                 const mapaCandidata = sugerirMapeamento(colunasCandidata);
 
-                // Se o novo mapeamento é usável (tem codigo E nome) E é diferente do atual, adopta
-                if (mapaCandidata.codigo >= 0 && mapaCandidata.nome >= 0 &&
+                // Se o novo mapeamento é usável (tem codigo) E é diferente do atual, adopta
+                if (mapaCandidata.codigo >= 0 &&
                     JSON.stringify(mapaCandidata) !== JSON.stringify(mapa)) {
                     mapa = mapaCandidata;
                     linhaRemapeamento = i; // Registra que remapeamento ocorreu nesta linha
                 }
 
-                // Se não passou no teste de produto OU parece ser cabeçalho, pula esta linha
-                if (!ehProduto || pareceHeader) continue;
+                // Se não passou no teste de produto OU é cabeçalho marcado, pula esta linha
+                if (!ehProduto || ehCabecalhoMarcado) continue;
             }
 
             const cod = normalizarCodigo(linha[mapa.codigo]);
             const avisos = [];
             if (cod.promocional) avisos.push('Código veio marcado como promocional (com *) na tabela');
 
-            // Aviso se a linha corrente usa um mapeamento derivado (remapeamento ocorreu)
-            if (linhaRemapeamento >= 0) {
+            // Aviso se a linha corrente usa um mapeamento derivado que TEM coluna de nome
+            if (linhaRemapeamento >= 0 && mapa.nome >= 0) {
                 avisos.push('Remapeamento de colunas detectado a partir da linha ' + (linhaRemapeamento + 1) + ' da planilha');
             }
 
@@ -252,11 +248,18 @@
                 ? normalizarPreco(linha[mapa.preco])
                 : { valor: null, ok: false, motivo: 'A planilha não tem coluna de preço mapeada' };
 
-            const nome = normalizarNome(linha[mapa.nome]);
+            let nome = mapa.nome >= 0 ? normalizarNome(linha[mapa.nome]) : '';
+            let problema = p.ok ? null : p.motivo;
 
             // Aviso se o nome é puramente numérico (possível mapeamento errado)
             if (nome && /^\d+[.,]?\d*$/.test(nome)) {
                 avisos.push('Nome do produto é puramente numérico; verifique se o mapeamento de colunas está correto');
+            }
+
+            // Se foi feito remapeamento e o novo mapeamento NÃO tem coluna de nome
+            if (linhaRemapeamento >= 0 && mapa.nome === -1) {
+                nome = '';
+                problema = 'A partir da linha ' + (linhaRemapeamento + 1) + ' a planilha não possui coluna de nome. Forneça um nome antes de importar.';
             }
 
             itens.push({
@@ -270,7 +273,7 @@
                 tipo,
                 promocional: cod.promocional,
                 avisos,
-                problema: p.ok ? null : p.motivo
+                problema
             });
         }
         return itens;

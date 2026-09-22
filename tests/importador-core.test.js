@@ -374,22 +374,27 @@ test('montarItens remapeia quando encontra um cabecalho com layout diferente', (
         'deve ter aviso de nome numerico');
 });
 
-test('montarItens nao remapeia se encontra o mesmo cabecalho duas vezes', () => {
+test('montarItens nao trata produtos com nomes contendo substrings de rótulos como headers', () => {
+    // Reproduz o caso real de ABRAÇADEIRA CORAÇÃO (contém COR que match /COR/i)
+    // e UNIDADE (que match /UNID/i) na linha de dados
     const itens = C.montarItens({
         linhas: [
             ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE'],
             ['AC1', 'Real um', '', '2,80', '10,00'],
-            ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE'],  // Mesmo header repetido
-            ['AC2', 'Real dois', '', '3,00', '15,00']
+            ['REF-PROD-99', 'ABRAÇADEIRA CORAÇÃO DECORATIVA', '', '2,50', '12,00'],
+            ['AC3', 'Produto normal', '', '2,60', '9,00']
         ],
         cabecalhoIndice: 0, mapa: { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 },
         tipo: 'tecido', aba: 'Teste'
     });
-    assert.strictEqual(itens.length, 2);
-    assert.strictEqual(itens[0].nome, 'Real um');
-    assert.strictEqual(itens[1].nome, 'Real dois');
-    assert.strictEqual(itens[0].avisos.length, 0);
-    assert.strictEqual(itens[1].avisos.length, 0, 'header identico nao gera aviso de remapeamento');
+    assert.strictEqual(itens.length, 3, 'todos 3 produtos devem ser incluídos');
+    assert.strictEqual(itens[0].codigo, 'AC1');
+    assert.strictEqual(itens[1].codigo, 'REF-PROD-99', 'ABRAÇADEIRA CORAÇÃO não deve ser tratado como header');
+    assert.strictEqual(itens[1].nome, 'ABRAÇADEIRA CORAÇÃO DECORATIVA');
+    assert.strictEqual(itens[2].codigo, 'AC3');
+    itens.forEach(i => {
+        assert.strictEqual(i.avisos.length, 0, 'nenhum item deve ter aviso de remapeamento');
+    });
 });
 
 test('montarItens adiciona aviso de nome numerico', () => {
