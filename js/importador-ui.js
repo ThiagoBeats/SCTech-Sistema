@@ -26,11 +26,57 @@ async function _impGarantirSheetJs() {
     await _impSheetJsPronto;
 }
 
+let _impPdfJsPronto = null;
+
+async function _impGarantirPdfJs() {
+    if (window.pdfjsLib) return;
+    if (!_impPdfJsPronto) {
+        _impPdfJsPronto = new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
+            s.onload = resolve;
+            s.onerror = () => reject(new Error('Não foi possível carregar o leitor de PDF — verifique sua conexão.'));
+            document.head.appendChild(s);
+        }).then(() => {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+        });
+    }
+    await _impPdfJsPronto;
+}
+
+// Cada pagina do PDF vira uma "aba", para reusar todo o fluxo da planilha.
+async function _impLerPdf(file) {
+    await _impGarantirPdfJs();
+    const buf = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+    const abas = {};
+    const ordem = [];
+    let vazias = 0;
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const pagina = await pdf.getPage(i);
+        const conteudo = await pagina.getTextContent();
+        const fragmentos = conteudo.items.map(it => ({ texto: it.str, x: it.transform[4], y: it.transform[5], largura: it.width }));
+        const linhas = window.ImportadorCore.agruparLinhasPdf(fragmentos);
+        if (linhas.length === 0) vazias++;
+        const nome = 'Página ' + i;
+        abas[nome] = linhas;
+        ordem.push(nome);
+    }
+    if (vazias === pdf.numPages) {
+        throw new Error('Este PDF não tem camada de texto — não dá para ler a tabela dele. Peça o arquivo em Excel ao fornecedor.');
+    }
+    if (vazias > 0) {
+        toast(`${vazias} página(s) do PDF vieram sem texto e ficaram vazias.`, 'warning', 6000);
+    }
+    return { ordem, abas };
+}
+
 // Converte a planilha em { ordem, abas }, o mesmo formato consumido pelo core.
 async function _impLerArquivo(file) {
     const ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (ext === 'pdf') return _impLerPdf(file);
     if (!['xlsx', 'xls', 'csv'].includes(ext)) {
-        throw new Error('Formato não suportado nesta etapa: .' + ext);
+        throw new Error('Formato não suportado: .' + ext + '. Use .xlsx, .csv ou .pdf.');
     }
     await _impGarantirSheetJs();
     const buf = await file.arrayBuffer();
@@ -132,7 +178,7 @@ function _impPasso1HTML() {
     return `
     <div class="form-group">
         <label>Arquivo da tabela</label>
-        <input type="file" id="imp-file" accept=".xlsx,.xls,.csv" onchange="_impArquivoEscolhido(this)">
+        <input type="file" id="imp-file" accept=".xlsx,.xls,.csv,.pdf" onchange="_impArquivoEscolhido(this)">
         ${nomeArquivo ? `<p style="font-size:12px;color:var(--muted);margin-top:6px">Lido: ${nomeArquivo} — ${_impEstado.planilha.ordem.length} aba(s)</p>` : ''}
     </div>
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px">
@@ -336,14 +382,31 @@ function _impPasso3HTML() {
         const inicio = layout.cabecalhoIndice + 1;
         const amostra = dados.slice(inicio, inicio + 3);
 
+        const modoCor = !!_impEstado.cores[layout.assinatura];
+        const coresColunas = _impEstado.cores[layout.assinatura] || [];
+        const papeis = modoCor ? _IMP_PAPEIS.concat([{ valor: 'cor', rotulo: 'Cor' }]) : _IMP_PAPEIS;
+
         const papelDaColuna = ci => {
+            if (coresColunas.includes(ci)) return 'cor';
             const achado = Object.keys(mapa).find(k => mapa[k] === ci);
             return achado || 'ignorar';
         };
 
+        const opcoesLinha = dados.slice(0, 12).map((_, li2) =>
+            `<option value="${li2}" ${li2 === layout.cabecalhoIndice ? 'selected' : ''}>Linha ${li2 + 1}</option>`).join('');
+        const controles = `
+            <div style="display:flex;gap:16px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer">
+                    <input type="checkbox" ${modoCor ? 'checked' : ''} onchange="_impAlternarModoCor(${li})"> Esta aba tem preço por cor
+                </label>
+                <label style="display:flex;align-items:center;gap:7px;font-size:13px">
+                    Cabeçalho: <select onchange="_impTrocarCabecalho(${li}, this.value)">${opcoesLinha}</select>
+                </label>
+            </div>`;
+
         const cabecalhos = layout.colunas.map((rotulo, ci) => {
             const atual = papelDaColuna(ci);
-            const opcoes = _IMP_PAPEIS.map(p => `<option value="${p.valor}" ${p.valor === atual ? 'selected' : ''}>${p.rotulo}</option>`).join('');
+            const opcoes = papeis.map(p => `<option value="${p.valor}" ${p.valor === atual ? 'selected' : ''}>${p.rotulo}</option>`).join('');
             return `<th style="min-width:120px">
                 <div style="font-size:11px;color:var(--muted);margin-bottom:4px">${escapeHtml(rotulo || '(sem título)')}</div>
                 <select style="width:100%;font-size:12px" onchange="_impTrocarPapel(${li}, ${ci}, this.value)">${opcoes}</select>
@@ -354,11 +417,14 @@ function _impPasso3HTML() {
             '<tr>' + layout.colunas.map((_, ci) => `<td style="font-size:12px">${escapeHtml(String(linha[ci] === undefined ? '' : linha[ci]))}</td>`).join('') + '</tr>'
         ).join('');
 
-        const qtd = C.montarItens({ linhas: dados, cabecalhoIndice: layout.cabecalhoIndice, mapa, tipo: layout.tipo, aba: layout.abas[0] }).length;
+        const qtd = modoCor
+            ? C.expandirPorCor({ linhas: dados, cabecalhoIndice: layout.cabecalhoIndice, mapa, colunasCor: coresColunas, colunas: layout.colunas, tipo: layout.tipo, aba: layout.abas[0] }).length
+            : C.montarItens({ linhas: dados, cabecalhoIndice: layout.cabecalhoIndice, mapa, tipo: layout.tipo, aba: layout.abas[0] }).length;
 
         return `<div class="card" style="margin-bottom:14px">
             <h4 style="margin:0 0 4px;color:var(--dark)">${layout.tipo === 'tecido' ? 'Tecidos' : 'Materiais'} — ${layout.abas.length} aba(s)</h4>
             <p style="font-size:12px;color:var(--muted);margin:0 0 10px">${escapeHtml(layout.abas.join(', '))}</p>
+            ${controles}
             <div style="overflow-x:auto"><table><thead><tr>${cabecalhos}</tr></thead><tbody>${corpo}</tbody></table></div>
             <p style="font-size:12px;color:var(--muted);margin:8px 0 0">${qtd} item(ns) na primeira aba deste layout.</p>
         </div>`;
@@ -373,13 +439,36 @@ function _impPasso3HTML() {
     </div>`;
 }
 
+function _impAlternarModoCor(indiceLayout) {
+    const layout = _impLayoutsDistintos()[indiceLayout];
+    if (_impEstado.cores[layout.assinatura]) delete _impEstado.cores[layout.assinatura];
+    else _impEstado.cores[layout.assinatura] = [];
+    _impRenderPasso(3);
+}
+
+function _impTrocarCabecalho(indiceLayout, valor) {
+    const C = window.ImportadorCore;
+    const layout = _impLayoutsDistintos()[indiceLayout];
+    const indice = parseInt(valor, 10);
+    const dados = _impEstado.planilha.abas[layout.abas[0]];
+    const colunas = (dados[indice] || []).map(c => C.normalizarNome(c));
+    _impEstado.layouts[layout.assinatura] = {
+        mapa: C.sugerirMapeamento(colunas),
+        cabecalhoIndice: indice
+    };
+    _impRenderPasso(3);
+}
+
 function _impTrocarPapel(indiceLayout, indiceColuna, papel) {
     const layout = _impLayoutsDistintos()[indiceLayout];
     const mapa = Object.assign({}, _impMapaDoLayout(layout));
+    const cores = (_impEstado.cores[layout.assinatura] || []).filter(c => c !== indiceColuna);
     // um papel pertence a uma coluna so: limpa quem estava com ele
     Object.keys(mapa).forEach(k => { if (mapa[k] === indiceColuna) mapa[k] = -1; });
-    if (papel !== 'ignorar') mapa[papel] = indiceColuna;
+    if (papel === 'cor') cores.push(indiceColuna);
+    else if (papel !== 'ignorar') mapa[papel] = indiceColuna;
     _impEstado.layouts[layout.assinatura] = { mapa, cabecalhoIndice: layout.cabecalhoIndice };
+    if (_impEstado.cores[layout.assinatura]) _impEstado.cores[layout.assinatura] = cores.sort((a, b) => a - b);
     _impRenderPasso(3);
 }
 
@@ -387,7 +476,8 @@ async function _impConcluirPasso3() {
     const layouts = _impLayoutsDistintos();
     for (const layout of layouts) {
         const mapa = _impMapaDoLayout(layout);
-        if (mapa.codigo < 0 || mapa.nome < 0 || mapa.preco < 0) {
+        const emCor = (_impEstado.cores[layout.assinatura] || []).length > 0;
+        if (mapa.codigo < 0 || mapa.nome < 0 || (!emCor && mapa.preco < 0)) {
             // Abas sem cabecalho reconhecivel caem aqui: a saida prevista e
             // marca-las como "Ignorar" no passo 2 (ou, na Fase 2, apontar a
             // linha do cabecalho na mao).
@@ -395,7 +485,7 @@ async function _impConcluirPasso3() {
             await showAlert(
                 `Não dá para mapear ${semCabecalho ? 'estas abas, que não têm cabeçalho reconhecível' : 'este layout'}:\n\n`
                 + layout.abas.join(', ')
-                + `\n\nMarque ao menos as colunas de Código, Nome e Preço — ou volte ao passo 2 e marque estas abas como "Ignorar".`,
+                + `\n\nMarque ao menos as colunas de Código, Nome e Preço (ou marque as colunas de Cor) — ou volte ao passo 2 e marque estas abas como "Ignorar".`,
                 '⚠️');
             return;
         }
@@ -418,7 +508,12 @@ function _impColetarItens() {
         const assinatura = C.assinaturaDoLayout(colunas) + '#' + tipo;
         const layout = _impEstado.layouts[assinatura];
         if (!layout) return;
-        itens.push(...C.montarItens({ linhas: dados, cabecalhoIndice: layout.cabecalhoIndice, mapa: layout.mapa, tipo, aba }));
+        const cores = _impEstado.cores[assinatura];
+        if (cores && cores.length) {
+            itens.push(...C.expandirPorCor({ linhas: dados, cabecalhoIndice: layout.cabecalhoIndice, mapa: layout.mapa, colunasCor: cores, colunas, tipo, aba }));
+        } else {
+            itens.push(...C.montarItens({ linhas: dados, cabecalhoIndice: layout.cabecalhoIndice, mapa: layout.mapa, tipo, aba }));
+        }
     });
     return itens;
 }
@@ -692,7 +787,7 @@ function _impSalvarPerfil() {
         fornecedorId: _impEstado.fornecedor.id,
         abas: _impEstado.abas,
         layouts,
-        cores: existente ? existente.cores : {},
+        cores: _impEstado.cores,
         markupPadrao: _impEstado.markupPadrao
     });
     if (existente) db.import_perfis[db.import_perfis.indexOf(existente)] = perfil;
