@@ -345,3 +345,65 @@ test('montarItens usa a coluna de unidade quando o tipo e material', () => {
     assert.strictEqual(itens[1].unidade, 'un');
     assert.strictEqual(itens[0].largura, null);
 });
+
+test('montarItens remapeia quando encontra um cabecalho com layout diferente', () => {
+    const itens = C.montarItens({
+        linhas: [
+            ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE'],
+            ['AC1', 'Real um', '', '2,80', '10,00'],
+            ['Secao dois'],
+            ['CODIGO', 'NOME', 'CORTE', 'PRECO'],  // Header com ordem diferente (NOME no index 1, CORTE no 2)
+            ['AC2', '2,5', '20,00', '19,00']  // Usa o novo layout
+        ],
+        cabecalhoIndice: 0, mapa: { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 },
+        tipo: 'tecido', aba: 'Teste'
+    });
+    assert.strictEqual(itens.length, 2);
+    assert.strictEqual(itens[0].codigo, 'AC1');
+    assert.strictEqual(itens[0].nome, 'Real um');
+    assert.strictEqual(itens[0].preco_custo, 10.0);
+    assert.strictEqual(itens[0].avisos.length, 0, 'primeira secao nao tem remapeamento');
+
+    assert.strictEqual(itens[1].codigo, 'AC2');
+    assert.strictEqual(itens[1].nome, '2,5', 'nome agora vem da coluna 1 (LARGURA) com novo mapeamento');
+    assert.strictEqual(itens[1].largura, null, 'largura nao tem coluna mapeada (-1)');
+    assert.strictEqual(itens[1].preco_custo, 20.0, 'preco vem da coluna 2 (CORTE)');
+    assert.ok(itens[1].avisos.some(a => /remapeamento/i.test(a) && /linha 4/.test(a)),
+        'deve ter aviso de remapeamento da linha 4');
+    assert.ok(itens[1].avisos.some(a => /puramente numérico/i.test(a)),
+        'deve ter aviso de nome numerico');
+});
+
+test('montarItens nao remapeia se encontra o mesmo cabecalho duas vezes', () => {
+    const itens = C.montarItens({
+        linhas: [
+            ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE'],
+            ['AC1', 'Real um', '', '2,80', '10,00'],
+            ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE'],  // Mesmo header repetido
+            ['AC2', 'Real dois', '', '3,00', '15,00']
+        ],
+        cabecalhoIndice: 0, mapa: { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 },
+        tipo: 'tecido', aba: 'Teste'
+    });
+    assert.strictEqual(itens.length, 2);
+    assert.strictEqual(itens[0].nome, 'Real um');
+    assert.strictEqual(itens[1].nome, 'Real dois');
+    assert.strictEqual(itens[0].avisos.length, 0);
+    assert.strictEqual(itens[1].avisos.length, 0, 'header identico nao gera aviso de remapeamento');
+});
+
+test('montarItens adiciona aviso de nome numerico', () => {
+    const itens = C.montarItens({
+        linhas: [
+            ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE'],
+            ['AC1', '1.4', '', '2,80', '10,00'],
+            ['AC2', '2.5m', '', '3,00', '15,00'],
+            ['AC3', 'Normal', '', '2,50', '12,00']
+        ],
+        cabecalhoIndice: 0, mapa: { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 },
+        tipo: 'tecido', aba: 'Teste'
+    });
+    assert.ok(itens[0].avisos.some(a => /puramente numérico/i.test(a)), 'item 0 com nome "1.4" deve ter aviso');
+    assert.strictEqual(itens[1].avisos.length, 0, 'item 1 com nome "2.5m" nao e puramente numerico');
+    assert.strictEqual(itens[2].avisos.length, 0, 'item 2 com nome normal nao tem aviso numerico');
+});

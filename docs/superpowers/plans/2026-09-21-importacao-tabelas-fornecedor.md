@@ -34,7 +34,7 @@
 | `js/app.js` (modificar) | `db.import_perfis` no bootstrap e em `syncDB()`. |
 | `tests/xlsx-min.js` (criar) | Leitor mínimo de `.xlsx` usado **só pelos testes**, para que o Node leia a planilha real sem instalar nada. |
 | `tests/importador-core.test.js` (criar) | Testes das funções puras contra a planilha real. |
-| `package.json` (criar) | Só `"scripts": { "test": "node --test tests/" }`. Sem dependências. |
+| `package.json` (criar) | Só `"scripts": { "test": "node --test" }`. Sem dependências. |
 
 A divisão em `-core` e `-ui` é um refinamento do que a spec chamou de `js/importador.js`: separar o que é testável fora do navegador do que exige DOM.
 
@@ -76,10 +76,15 @@ Só registra o comando de teste. Não instala nada.
   "private": true,
   "description": "Sistema de gestao para cortineiros - HTML/CSS/JS sem build",
   "scripts": {
-    "test": "node --test tests/"
+    "test": "node --test"
   }
 }
 ```
+
+> `node --test` sem argumento, de propósito: no Node v25 do Windows, passar
+> `tests/` faz o runner tentar `require()` o diretório em vez de varrê-lo, e
+> tudo falha. A descoberta padrão acha `**/*.test.js` e ignora `*.spec.js`,
+> então as specs do Playwright das Tasks 14 e 18 não são executadas por aqui.
 
 - [ ] **Step 3: Escrever o teste do leitor**
 

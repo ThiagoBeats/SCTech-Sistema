@@ -98,6 +98,14 @@
         return rotulo && PADROES_NOME_CABECALHO.some(r => r.test(rotulo));
     }
 
+    function _ehLinhaComAspectoDeCabecalho(linha) {
+        // Verifica se uma linha parece ser um cabeçalho (muitas células combinam com ROTULOS_CABECALHO)
+        const rotulosNaLinha = (linha || []).map(c => normalizarNome(c));
+        const contagemRotulos = rotulosNaLinha.filter(r => r && ROTULOS_CABECALHO.some(padrao => padrao.test(r))).length;
+        // Se 2+ células parecem ser rótulos de coluna, é provável que seja um cabeçalho
+        return contagemRotulos >= 2;
+    }
+
     function detectarCabecalho(linhas) {
         const limite = Math.min((linhas || []).length, 15);
         let melhor = { indice: -1, pontos: 0, colunas: [] };
@@ -194,19 +202,44 @@
 
     function montarItens(opcoes) {
         const linhas = opcoes.linhas || [];
-        const mapa = opcoes.mapa;
+        let mapa = opcoes.mapa;
         const tipo = opcoes.tipo;
         const aba = opcoes.aba || '';
         const inicio = (opcoes.cabecalhoIndice >= 0 ? opcoes.cabecalhoIndice : -1) + 1;
         const itens = [];
+        const mapaOriginal = opcoes.mapa; // Guarda o mapeamento original para comparação
+        let linhaRemapeamento = -1; // Linha onde o remapeamento foi detectado
 
         for (let i = inicio; i < linhas.length; i++) {
             const linha = linhas[i];
-            if (!ehLinhaDeProduto(linha, mapa)) continue;
+            const ehProduto = ehLinhaDeProduto(linha, mapa);
+            const pareceHeader = _ehLinhaComAspectoDeCabecalho(linha);
+
+            // Se não é produto OU parece ser um cabeçalho, tenta remapear
+            if (!ehProduto || pareceHeader) {
+                // Tenta derivar um novo mapeamento desta linha (possível cabeçalho)
+                const colunasCandidata = _rotulosDaLinha(linha);
+                const mapaCandidata = sugerirMapeamento(colunasCandidata);
+
+                // Se o novo mapeamento é usável (tem codigo E nome) E é diferente do atual, adopta
+                if (mapaCandidata.codigo >= 0 && mapaCandidata.nome >= 0 &&
+                    JSON.stringify(mapaCandidata) !== JSON.stringify(mapa)) {
+                    mapa = mapaCandidata;
+                    linhaRemapeamento = i; // Registra que remapeamento ocorreu nesta linha
+                }
+
+                // Se não passou no teste de produto OU parece ser cabeçalho, pula esta linha
+                if (!ehProduto || pareceHeader) continue;
+            }
 
             const cod = normalizarCodigo(linha[mapa.codigo]);
             const avisos = [];
             if (cod.promocional) avisos.push('Código veio marcado como promocional (com *) na tabela');
+
+            // Aviso se a linha corrente usa um mapeamento derivado (remapeamento ocorreu)
+            if (linhaRemapeamento >= 0) {
+                avisos.push('Remapeamento de colunas detectado a partir da linha ' + (linhaRemapeamento + 1) + ' da planilha');
+            }
 
             let largura = null;
             if (mapa.largura >= 0) {
@@ -219,11 +252,18 @@
                 ? normalizarPreco(linha[mapa.preco])
                 : { valor: null, ok: false, motivo: 'A planilha não tem coluna de preço mapeada' };
 
+            const nome = normalizarNome(linha[mapa.nome]);
+
+            // Aviso se o nome é puramente numérico (possível mapeamento errado)
+            if (nome && /^\d+[.,]?\d*$/.test(nome)) {
+                avisos.push('Nome do produto é puramente numérico; verifique se o mapeamento de colunas está correto');
+            }
+
             itens.push({
                 aba,
                 linha: i,
                 codigo: cod.codigo,
-                nome: normalizarNome(linha[mapa.nome]),
+                nome,
                 largura,
                 preco_custo: p.ok ? p.valor : null,
                 unidade: _normalizarUnidade(mapa.unidade >= 0 ? linha[mapa.unidade] : '', tipo),
