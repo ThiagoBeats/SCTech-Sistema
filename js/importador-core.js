@@ -192,50 +192,71 @@
         return UNIDADES_VALIDAS.includes(u) ? u : 'un';
     }
 
+    // Indexacao direta (sem .map) para que "buracos" de celulas mescladas/ausentes
+    // e strings vazias sejam tratados da mesma forma ao comparar dois cabecalhos.
+    function _celulasParaComparar(linha) {
+        const tamanho = (linha || []).length;
+        const out = [];
+        for (let i = 0; i < tamanho; i++) out.push(normalizarNome(linha[i]));
+        return out;
+    }
+
     function montarItens(opcoes) {
         const linhas = opcoes.linhas || [];
-        let mapa = opcoes.mapa;
+        const mapa = opcoes.mapa; // UM UNICO mapeamento para a aba inteira: nao ha remapeamento adaptativo.
         const tipo = opcoes.tipo;
         const aba = opcoes.aba || '';
-        const inicio = (opcoes.cabecalhoIndice >= 0 ? opcoes.cabecalhoIndice : -1) + 1;
+        const cabecalhoIndice = opcoes.cabecalhoIndice;
+        const inicio = (cabecalhoIndice >= 0 ? cabecalhoIndice : -1) + 1;
         const itens = [];
-        const mapaOriginal = opcoes.mapa; // Guarda o mapeamento original para comparação
-        let linhaRemapeamento = -1; // Linha onde o remapeamento foi detectado
+
+        // Cabecalho com que a aba comecou, para comparar com possiveis cabecalhos repetidos
+        // no meio da planilha (algumas planilhas repetem o cabecalho identico a cada secao).
+        const cabecalhoOriginal = cabecalhoIndice >= 0 ? _celulasParaComparar(linhas[cabecalhoIndice]) : null;
+
+        // -1 = nenhuma mudanca de layout encontrada ainda; senao, indice da linha
+        // (0-based) onde um cabecalho DIFERENTE do original apareceu no meio da planilha.
+        let linhaMudancaLayout = -1;
 
         for (let i = inicio; i < linhas.length; i++) {
             const linha = linhas[i];
-            const ehProduto = ehLinhaDeProduto(linha, mapa);
 
-            // Verifica se a célula na coluna de código é um rótulo de código puro (sinal de cabeçalho)
-            // Só detecta como header se a célula é EXATAMENTE um rótulo conhecido, não contém outras letras/números
+            // Deteccao de cabecalho no meio da planilha: a celula na coluna de codigo
+            // (posicao definida pelo mapa) e um ROTULO puro de codigo, nao um codigo de produto.
+            //
+            // Usa um teste ANCORADO (^...$), propositalmente diferente do PADROES_CODIGO_CABECALHO
+            // compartilhado (que e uma busca de substring, usada em outros lugares para achar a
+            // linha de cabecalho original). Um teste sem ancora aqui destruiria produtos reais:
+            // "REF001", "COD-99" e "CODIGO123" sao codigos de produto legitimos e todos contêm
+            // "COD"/"REF" como substring. So uma celula que e EXATAMENTE um rotulo de codigo
+            // ("CODIGO", "CÓD", "REF", "REFERENCIA"...) conta como cabecalho. Nao "unificar"
+            // com PADROES_CODIGO_CABECALHO — isso ja causou perda de dados numa tentativa anterior.
             const codigoNaLinha = mapa.codigo >= 0 ? normalizarNome(linha[mapa.codigo]) : '';
             const ehCabecalhoMarcado = codigoNaLinha && /^(C[OÓ]DIGO?|REF(ER[EÊ]NCIA)?)$/i.test(codigoNaLinha);
 
-            // Se não é produto OU a coluna de código tem um rótulo de cabeçalho, tenta remapear
-            if (!ehProduto || ehCabecalhoMarcado) {
-                // Tenta derivar um novo mapeamento desta linha (possível cabeçalho)
-                const colunasCandidata = _rotulosDaLinha(linha);
-                const mapaCandidata = sugerirMapeamento(colunasCandidata);
-
-                // Se o novo mapeamento é usável (tem codigo) E é diferente do atual, adopta
-                if (mapaCandidata.codigo >= 0 &&
-                    JSON.stringify(mapaCandidata) !== JSON.stringify(mapa)) {
-                    mapa = mapaCandidata;
-                    linhaRemapeamento = i; // Registra que remapeamento ocorreu nesta linha
+            if (ehCabecalhoMarcado) {
+                // Linha de cabecalho no meio da planilha nunca vira item; so serve para
+                // avisar (nao para remapear) quando o layout muda.
+                if (linhaMudancaLayout === -1) {
+                    const colunasAqui = _celulasParaComparar(linha);
+                    const igualAoOriginal = cabecalhoOriginal !== null &&
+                        JSON.stringify(colunasAqui) === JSON.stringify(cabecalhoOriginal);
+                    if (!igualAoOriginal) {
+                        // Cabecalho repetido mas DIFERENTE do original (ou nao ha original para
+                        // comparar): a partir daqui os itens continuam usando o MESMO `mapa`,
+                        // porem marcados com `problema` para conferencia manual.
+                        linhaMudancaLayout = i;
+                    }
+                    // Se for identico ao original, nao muda nada: so pula a linha, sem aviso.
                 }
-
-                // Se não passou no teste de produto OU é cabeçalho marcado, pula esta linha
-                if (!ehProduto || ehCabecalhoMarcado) continue;
+                continue;
             }
+
+            if (!ehLinhaDeProduto(linha, mapa)) continue;
 
             const cod = normalizarCodigo(linha[mapa.codigo]);
             const avisos = [];
             if (cod.promocional) avisos.push('Código veio marcado como promocional (com *) na tabela');
-
-            // Aviso se a linha corrente usa um mapeamento derivado que TEM coluna de nome
-            if (linhaRemapeamento >= 0 && mapa.nome >= 0) {
-                avisos.push('Remapeamento de colunas detectado a partir da linha ' + (linhaRemapeamento + 1) + ' da planilha');
-            }
 
             let largura = null;
             if (mapa.largura >= 0) {
@@ -248,18 +269,18 @@
                 ? normalizarPreco(linha[mapa.preco])
                 : { valor: null, ok: false, motivo: 'A planilha não tem coluna de preço mapeada' };
 
-            let nome = mapa.nome >= 0 ? normalizarNome(linha[mapa.nome]) : '';
-            let problema = p.ok ? null : p.motivo;
+            const nome = normalizarNome(linha[mapa.nome]);
 
             // Aviso se o nome é puramente numérico (possível mapeamento errado)
             if (nome && /^\d+[.,]?\d*$/.test(nome)) {
                 avisos.push('Nome do produto é puramente numérico; verifique se o mapeamento de colunas está correto');
             }
 
-            // Se foi feito remapeamento e o novo mapeamento NÃO tem coluna de nome
-            if (linhaRemapeamento >= 0 && mapa.nome === -1) {
-                nome = '';
-                problema = 'A partir da linha ' + (linhaRemapeamento + 1) + ' a planilha não possui coluna de nome. Forneça um nome antes de importar.';
+            let problema = p.ok ? null : p.motivo;
+            if (linhaMudancaLayout >= 0) {
+                const avisoLayout = 'A planilha muda de layout a partir da linha ' + (linhaMudancaLayout + 1) +
+                    '; confira os valores desta linha antes de importar.';
+                problema = problema ? problema + ' ' + avisoLayout : avisoLayout;
             }
 
             itens.push({

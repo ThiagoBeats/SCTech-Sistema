@@ -346,32 +346,75 @@ test('montarItens usa a coluna de unidade quando o tipo e material', () => {
     assert.strictEqual(itens[0].largura, null);
 });
 
-test('montarItens remapeia quando encontra um cabecalho com layout diferente', () => {
+test('montarItens NAO remapeia: mudanca de layout no meio da planilha so marca problema, com o mapa original', () => {
+    // Reproduz o defeito real da Promocionais-Book 06: uma segunda sub-tabela comeca
+    // com um cabecalho repetido mas em ORDEM DIFERENTE (sem coluna de nome, largura e
+    // preco deslocados). O mapa original continua sendo usado para TODAS as linhas —
+    // os itens da segunda secao entram, mas marcados com `problema` para conferencia.
     const itens = C.montarItens({
         linhas: [
             ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE'],
             ['AC1', 'Real um', '', '2,80', '10,00'],
             ['Secao dois'],
-            ['CODIGO', 'NOME', 'CORTE', 'PRECO'],  // Header com ordem diferente (NOME no index 1, CORTE no 2)
-            ['AC2', '2,5', '20,00', '19,00']  // Usa o novo layout
+            ['CODIGO', 'LARGURA', 'CORTE', '', 'PEÇA'],  // cabecalho diferente do original
+            ['AC2', '2,5', '20,00', '', '19,00']          // continua usando o mapa ORIGINAL
         ],
         cabecalhoIndice: 0, mapa: { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 },
         tipo: 'tecido', aba: 'Teste'
     });
-    assert.strictEqual(itens.length, 2);
+    assert.strictEqual(itens.length, 2, 'nenhum item foi perdido');
+
     assert.strictEqual(itens[0].codigo, 'AC1');
     assert.strictEqual(itens[0].nome, 'Real um');
     assert.strictEqual(itens[0].preco_custo, 10.0);
-    assert.strictEqual(itens[0].avisos.length, 0, 'primeira secao nao tem remapeamento');
+    assert.strictEqual(itens[0].problema, null, 'primeira secao nao tem problema');
 
-    assert.strictEqual(itens[1].codigo, 'AC2');
-    assert.strictEqual(itens[1].nome, '2,5', 'nome agora vem da coluna 1 (LARGURA) com novo mapeamento');
-    assert.strictEqual(itens[1].largura, null, 'largura nao tem coluna mapeada (-1)');
-    assert.strictEqual(itens[1].preco_custo, 20.0, 'preco vem da coluna 2 (CORTE)');
-    assert.ok(itens[1].avisos.some(a => /remapeamento/i.test(a) && /linha 4/.test(a)),
-        'deve ter aviso de remapeamento da linha 4');
+    assert.strictEqual(itens[1].codigo, 'AC2', 'item da segunda secao esta presente');
+    assert.strictEqual(itens[1].nome, '2,5', 'nome ainda vem da coluna 1 do mapa ORIGINAL (nao houve remapeamento)');
+    assert.strictEqual(itens[1].largura, null, 'largura ainda le a coluna 3 do mapa original (vazia nesta linha)');
+    assert.strictEqual(itens[1].preco_custo, 19.0, 'preco ainda le a coluna 4 do mapa original');
+    assert.ok(itens[1].problema, 'item da segunda secao precisa entrar com problema marcado');
+    assert.match(itens[1].problema, /muda de layout/i);
+    assert.match(itens[1].problema, /linha 4/);
     assert.ok(itens[1].avisos.some(a => /puramente numérico/i.test(a)),
-        'deve ter aviso de nome numerico');
+        'nome numerico ainda gera o aviso de sempre');
+});
+
+test('montarItens nao marca problema quando o cabecalho repetido e identico ao original', () => {
+    // Cor Metal e Cor Madeira repetem o MESMO cabecalho no meio da planilha (ex.: CÓD./ARTIGO
+    // varias vezes). Isso nao e mudanca de layout: nao deve gerar nenhum aviso nem problema.
+    const itens = C.montarItens({
+        linhas: [
+            ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE'],
+            ['AC1', 'Real um', '', '2,80', '10,00'],
+            ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE'],  // cabecalho repetido, identico
+            ['AC2', 'Real dois', '', '2,60', '12,00']
+        ],
+        cabecalhoIndice: 0, mapa: { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 },
+        tipo: 'tecido', aba: 'Teste'
+    });
+    assert.strictEqual(itens.length, 2, 'a linha de cabecalho repetido nao vira item');
+    assert.strictEqual(itens[0].problema, null);
+    assert.strictEqual(itens[1].problema, null, 'cabecalho identico nao gera problema');
+    assert.strictEqual(itens[1].codigo, 'AC2');
+    assert.strictEqual(itens[1].nome, 'Real dois');
+});
+
+test('montarItens nunca trata codigos de produto como REF001 ou COD-99 como cabecalho', () => {
+    const itens = C.montarItens({
+        linhas: [
+            ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE'],
+            ['REF001', 'Algodão', '', '2,80', '10,00'],
+            ['COD-99', 'Seda', '', '2,50', '12,00']
+        ],
+        cabecalhoIndice: 0, mapa: { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 },
+        tipo: 'tecido', aba: 'Teste'
+    });
+    assert.strictEqual(itens.length, 2, 'REF001 e COD-99 sao codigos de produto, nao cabecalhos');
+    assert.strictEqual(itens[0].codigo, 'REF001');
+    assert.strictEqual(itens[0].problema, null);
+    assert.strictEqual(itens[1].codigo, 'COD-99');
+    assert.strictEqual(itens[1].problema, null);
 });
 
 test('montarItens nao trata produtos com nomes contendo substrings de rótulos como headers', () => {
@@ -393,7 +436,8 @@ test('montarItens nao trata produtos com nomes contendo substrings de rótulos c
     assert.strictEqual(itens[1].nome, 'ABRAÇADEIRA CORAÇÃO DECORATIVA');
     assert.strictEqual(itens[2].codigo, 'AC3');
     itens.forEach(i => {
-        assert.strictEqual(i.avisos.length, 0, 'nenhum item deve ter aviso de remapeamento');
+        assert.strictEqual(i.avisos.length, 0, 'nenhum item deve ter aviso');
+        assert.strictEqual(i.problema, null, 'nenhum item deve estar marcado com problema');
     });
 });
 
