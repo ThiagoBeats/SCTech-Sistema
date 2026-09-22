@@ -35,35 +35,46 @@
         return { valor: Math.round(n * 100) / 100, ok: true, motivo: null };
     }
 
-    function normalizarLargura(bruto) {
-        // Rejeita valores negativos e vazio
-        if (bruto === null || bruto === undefined || bruto === '') return { valor: null, aviso: null };
+    // Leitura completa da largura: alem de `valor`/`aviso` devolve tambem `motivo`,
+    // que separa CELULA VAZIA (motivo null — nada a dizer) de CELULA ILEGIVEL
+    // (havia conteudo e nao deu para ler). Essa diferenca e o que impede a
+    // largura padrao de 2,80 m de ser aplicada em silencio a uma celula como
+    // "2,65/2,70" (Promocionais-Book 06, codigo 1031).
+    function _lerLargura(bruto) {
+        const vazio = { valor: null, aviso: null, motivo: null };
+        const ilegivel = texto => ({
+            valor: null, aviso: null,
+            motivo: 'Largura "' + texto + '" não pôde ser lida; confira a largura antes de importar'
+        });
+
+        if (bruto === null || bruto === undefined || bruto === '') return vazio;
 
         // Se é número, valida e processa
         if (typeof bruto === 'number') {
-            if (!isFinite(bruto) || bruto < 0) return { valor: null, aviso: null };
+            if (!isFinite(bruto) || bruto < 0) return ilegivel(String(bruto));
             const aviso = bruto > 10
                 ? 'Largura ' + bruto + ' parece estar em centímetros; confira se deveria ser em metros'
                 : null;
-            return { valor: bruto, aviso };
+            return { valor: bruto, aviso, motivo: null };
         }
 
         // String: rejeita R$ (coluna mapeada errado), aceita unidades de comprimento
         const texto = String(bruto).trim();
-        if (!texto || /R\$/.test(texto)) return { valor: null, aviso: null };
+        if (!texto) return vazio;
+        if (/R\$/.test(texto)) return ilegivel(texto);
 
         // Parse: número com vírgula ou ponto como decimal, opcionalmente seguido de espaço e unidade (m, cm, mm)
         const match = texto.match(/^([\d]+[.,]?[\d]*)\s*([a-z]*)$/i);
-        if (!match) return { valor: null, aviso: null };
+        if (!match) return ilegivel(texto);
 
         const numPart = match[1];
-        if (!numPart) return { valor: null, aviso: null };
+        if (!numPart) return ilegivel(texto);
 
         // Converte vírgula em ponto e valida número
         const limpo = numPart.replace(',', '.');
         const n = Number(limpo);
 
-        if (!isFinite(n) || n < 0) return { valor: null, aviso: null };
+        if (!isFinite(n) || n < 0) return ilegivel(texto);
 
         // Arredonda para 2 casas decimais
         const valor = Math.round(n * 100) / 100;
@@ -73,7 +84,20 @@
             ? 'Largura ' + valor + ' parece estar em centímetros; confira se deveria ser em metros'
             : null;
 
-        return { valor, aviso };
+        return { valor, aviso, motivo: null };
+    }
+
+    // Contrato publico historico: { valor, aviso }. O motivo da recusa fica em
+    // `motivoLarguraIlegivel`, funcao irma, para nao mudar a forma deste retorno.
+    function normalizarLargura(bruto) {
+        const r = _lerLargura(bruto);
+        return { valor: r.valor, aviso: r.aviso };
+    }
+
+    // Devolve o motivo quando a celula TINHA conteudo e nao pôde ser lida como
+    // largura; devolve null para celula vazia e para largura lida com sucesso.
+    function motivoLarguraIlegivel(bruto) {
+        return _lerLargura(bruto).motivo;
     }
 
     // Rotulos que indicam que a linha e um cabecalho de tabela.
@@ -156,6 +180,30 @@
         return true;
     }
 
+    // Motivo pelo qual uma linha RECUSADA por ehLinhaDeProduto ainda assim deve
+    // chegar a conferencia, ou null quando ela e mesmo ruido de formatacao.
+    // Regra: preco legivel E pelo menos um entre codigo e nome. Linha sem os
+    // tres continua descartada; linha de cabecalho repetido (codigo-rotulo E
+    // nome-rotulo) tambem, porque nao e produto.
+    function _motivoLinhaIncompleta(linha, mapa) {
+        if (!linha || !mapa) return null;
+
+        const codigoBruto = mapa.codigo >= 0 ? linha[mapa.codigo] : undefined;
+        const nomeBruto = mapa.nome >= 0 ? linha[mapa.nome] : undefined;
+        const codigo = normalizarCodigo(codigoBruto).codigo;
+        const nome = normalizarNome(nomeBruto);
+
+        if (codigo !== '' && nome !== '') return null; // cabecalho repetido: nao e produto
+        if (codigo === '' && nome === '') return null; // linha sem nada: ruido
+
+        if (mapa.preco < 0) return null;
+        if (!normalizarPreco(linha[mapa.preco]).ok) return null;
+
+        return codigo === ''
+            ? 'Linha com preço mas sem código — complete o código ou deixe desmarcada'
+            : 'Linha com preço mas sem nome — complete o nome ou deixe desmarcada';
+    }
+
     function _acharColuna(colunas, padroes) {
         for (const padrao of padroes) {
             const i = colunas.findIndex(c => c && padrao.test(c));
@@ -186,10 +234,21 @@
 
     const UNIDADES_VALIDAS = ['un', 'm', 'cm', 'kg', 'cj', 'cx', 'par'];
 
-    function _normalizarUnidade(bruto, tipo) {
-        if (tipo === 'tecido') return 'm';
-        const u = normalizarNome(bruto).toLowerCase().replace(/\./g, '');
-        return UNIDADES_VALIDAS.includes(u) ? u : 'un';
+    // Devolve { unidade, aviso }. `unidade` null significa "a tabela nao disse
+    // nada de confiavel sobre a unidade" — quem grava deve PRESERVAR a unidade
+    // que o registro ja tem em vez de assumir 'un'. Isso evita que um material
+    // que o dono ajustou a mao para 'cx' volte a 'un' na reimportacao mensal.
+    function _lerUnidade(bruto, tipo, temColuna) {
+        if (tipo === 'tecido') return { unidade: 'm', aviso: null };
+        if (!temColuna) return { unidade: null, aviso: null };
+        const texto = normalizarNome(bruto);
+        if (!texto) return { unidade: 'un', aviso: null };
+        const u = texto.toLowerCase().replace(/\./g, '');
+        if (UNIDADES_VALIDAS.includes(u)) return { unidade: u, aviso: null };
+        return {
+            unidade: null,
+            aviso: 'Unidade "' + texto + '" não é reconhecida; a unidade atual do item será mantida'
+        };
     }
 
     // Indexacao direta (sem .map) para que "buracos" de celulas mescladas/ausentes
@@ -231,8 +290,13 @@
             // "COD"/"REF" como substring. So uma celula que e EXATAMENTE um rotulo de codigo
             // ("CODIGO", "CÓD", "REF", "REFERENCIA"...) conta como cabecalho. Nao "unificar"
             // com PADROES_CODIGO_CABECALHO — isso ja causou perda de dados numa tentativa anterior.
+            // "CÓD." — abreviado E com ponto final — e o rotulo usado em TODAS as
+            // abas de material do arquivo real. Duas mudancas sao necessarias para
+            // reconhece-lo: o ponto final opcional (`\.?$`) e a abreviacao (o antigo
+            // `C[OÓ]DIGO?` exigia pelo menos "CODIG" e nunca casou "CÓD"). Continua
+            // ancorado, entao "REF001" e "CODIGO123" seguem sendo produto, nao cabecalho.
             const codigoNaLinha = mapa.codigo >= 0 ? normalizarNome(linha[mapa.codigo]) : '';
-            const ehCabecalhoMarcado = codigoNaLinha && /^(C[OÓ]DIGO?|REF(ER[EÊ]NCIA)?)$/i.test(codigoNaLinha);
+            const ehCabecalhoMarcado = codigoNaLinha && /^(C[OÓ]D(IGO?)?|REF(ER[EÊ]NCIA)?)\.?$/i.test(codigoNaLinha);
 
             if (ehCabecalhoMarcado) {
                 // Linha de cabecalho no meio da planilha nunca vira item; so serve para
@@ -252,17 +316,28 @@
                 continue;
             }
 
-            if (!ehLinhaDeProduto(linha, mapa)) continue;
+            // Linha que nao passa em ehLinhaDeProduto ainda pode ser um produto
+            // real cujo codigo ou nome ficou noutra linha fisica (celula mesclada
+            // no Excel, descricao quebrada no PDF). Se ela tem PRECO LEGIVEL e ao
+            // menos um entre codigo e nome, entra na conferencia com `problema`
+            // preenchido, desmarcada, em vez de sumir calada.
+            let faltando = null;
+            if (!ehLinhaDeProduto(linha, mapa)) {
+                faltando = _motivoLinhaIncompleta(linha, mapa);
+                if (!faltando) continue;
+            }
 
             const cod = normalizarCodigo(linha[mapa.codigo]);
             const avisos = [];
             if (cod.promocional) avisos.push('Código veio marcado como promocional (com *) na tabela');
 
             let largura = null;
+            let larguraIlegivel = false;
             if (mapa.largura >= 0) {
-                const l = normalizarLargura(linha[mapa.largura]);
+                const l = _lerLargura(linha[mapa.largura]);
                 largura = l.valor;
                 if (l.aviso) avisos.push(l.aviso);
+                if (l.motivo) { larguraIlegivel = true; avisos.push(l.motivo); }
             }
 
             const p = mapa.preco >= 0
@@ -276,7 +351,11 @@
                 avisos.push('Nome do produto é puramente numérico; verifique se o mapeamento de colunas está correto');
             }
 
+            const u = _lerUnidade(mapa.unidade >= 0 ? linha[mapa.unidade] : '', tipo, mapa.unidade >= 0);
+            if (u.aviso) avisos.push(u.aviso);
+
             let problema = p.ok ? null : p.motivo;
+            if (faltando) problema = problema ? problema + ' ' + faltando : faltando;
             if (linhaMudancaLayout >= 0) {
                 const avisoLayout = 'A planilha muda de layout a partir da linha ' + (linhaMudancaLayout + 1) +
                     '; confira os valores desta linha antes de importar.';
@@ -289,8 +368,9 @@
                 codigo: cod.codigo,
                 nome,
                 largura,
+                largura_ilegivel: larguraIlegivel,
                 preco_custo: p.ok ? p.valor : null,
-                unidade: _normalizarUnidade(mapa.unidade >= 0 ? linha[mapa.unidade] : '', tipo),
+                unidade: u.unidade,
                 tipo,
                 promocional: cod.promocional,
                 avisos,
@@ -354,6 +434,18 @@
             if (achado) {
                 vistos.add(codigoNormalizado);
                 const existente = achado.registro;
+                // Codigo e unico no sistema inteiro: catalogo e materiais dividem o
+                // mesmo espaco de nomes. Um codigo que ja existe sob o OUTRO tipo nao
+                // pode virar atualizacao — nada seria gravado. E conflito: o usuario
+                // decide se edita o codigo.
+                if (achado.tipo !== item.tipo) {
+                    r.conflitos.push({
+                        item, existente,
+                        motivo: 'O código ' + codigoNormalizado + ' já pertence a "' + existente.nome + '", cadastrado como '
+                            + (achado.tipo === 'tecido' ? 'tecido' : 'material') + '. Edite o código.'
+                    });
+                    return;
+                }
                 const idExistenteNormalizado = normalizarIdFornecedor(existente.fornecedor_id);
                 const mesmoFornecedor = idExistenteNormalizado === idFornecedorNormalizado;
                 if (!mesmoFornecedor) {
@@ -398,6 +490,22 @@
 
     const LARGURA_PADRAO = 2.80;
 
+    // Unicos campos que o importador escreve num registro. Tudo o que esta fora
+    // desta lista — id, min_estoque, imagem, estoque_atual — pertence ao dia a dia
+    // do negocio e nunca e tocado, nem ao gravar nem ao desfazer.
+    const CAMPOS_DO_IMPORTADOR = [
+        'referencia', 'nome', 'preco_custo', 'preco', 'unidade', 'largura_rolo',
+        'fornecedor_id', 'fornecedor_nome'
+    ];
+
+    function _fotografarCampos(registro) {
+        const antes = {};
+        CAMPOS_DO_IMPORTADOR.forEach(campo => {
+            if (Object.prototype.hasOwnProperty.call(registro, campo)) antes[campo] = registro[campo];
+        });
+        return antes;
+    }
+
     function aplicarImportacao(opcoes) {
         const catalogo = (opcoes.catalogo || []).map(r => Object.assign({}, r));
         const materiais = (opcoes.materiais || []).map(r => Object.assign({}, r));
@@ -410,26 +518,51 @@
         let proximoId = Math.max(Number(opcoes.agora) || Date.now(), maiorIdExistente + 1);
 
         const resumo = { criados: 0, atualizados: 0, ignorados: 0 };
+        // Registro cirurgico do que mudou, para o desfazer nao precisar substituir
+        // listas inteiras (e assim nunca devolver estoque velho).
+        const mudancas = { criados: [], atualizados: [] };
+        // Toda decisao que NAO pôde ser aplicada precisa aparecer aqui: sem isto o
+        // resumo mente ("0 criado(s), 0 atualizado(s)") sem que nada tenha sido feito.
+        const naoAplicadas = [];
+
+        const ignorar = (item, motivo) => {
+            resumo.ignorados++;
+            if (motivo) naoAplicadas.push({ item: item || null, motivo });
+        };
 
         (opcoes.decisoes || []).forEach(decisao => {
             const item = decisao.item;
-            if (!item || decisao.acao === 'ignorar') { resumo.ignorados++; return; }
+            if (!item) { ignorar(null, 'Decisão sem item — nada a gravar'); return; }
+            if (decisao.acao === 'ignorar') { resumo.ignorados++; return; }
 
             const precoCusto = Number(item.preco_custo) || 0;
             const preco = aplicarMarkup(precoCusto, decisao.markup);
             const codigoNormalizado = normalizarCodigo(item.codigo).codigo;
             const lista = item.tipo === 'tecido' ? catalogo : materiais;
 
-            if (decisao.acao === 'atualizar' && decisao.existente) {
-                const alvo = lista.find(r => r.id === decisao.existente.id);
-                if (!alvo) return;
+            if (decisao.acao !== 'criar' && decisao.acao !== 'atualizar') {
+                ignorar(item, decisao.motivo || ('O código ' + codigoNormalizado + ' não pôde ser gravado nesta importação'));
+                return;
+            }
+
+            if (decisao.acao === 'atualizar') {
+                const alvo = decisao.existente ? lista.find(r => r.id === decisao.existente.id) : null;
+                if (!alvo) {
+                    ignorar(item, 'O item ' + codigoNormalizado
+                        + ' seria atualizado, mas o registro não foi encontrado na lista de '
+                        + (item.tipo === 'tecido' ? 'tecidos' : 'materiais') + '; nada foi alterado nele');
+                    return;
+                }
+                mudancas.atualizados.push({ tipo: item.tipo, id: alvo.id, antes: _fotografarCampos(alvo) });
                 alvo.referencia = codigoNormalizado;
                 alvo.nome = item.nome;
                 alvo.preco_custo = precoCusto;
                 alvo.preco = preco;
                 if (item.tipo === 'tecido') {
                     if (item.largura !== null) alvo.largura_rolo = item.largura;
-                } else {
+                } else if (item.unidade) {
+                    // unidade so e escrita quando a tabela realmente informou uma
+                    // unidade reconhecivel; senao a do registro vivo e preservada.
                     alvo.unidade = item.unidade;
                 }
                 if (fornecedor) { alvo.fornecedor_id = fornecedor.id; alvo.fornecedor_nome = fornecedor.nome; }
@@ -448,14 +581,55 @@
                 fornecedor_nome: fornecedor ? fornecedor.nome : ''
             };
             if (item.tipo === 'tecido') {
+                // A largura padrao so vale para celula VAZIA. Celula ilegivel
+                // ("2,65/2,70", "ate 3,00", "-") nao pode virar 2,80 em silencio:
+                // a largura comanda todo o calculo de corte.
+                const larguraPadraoPermitida = item.largura === null && !item.largura_ilegivel;
                 catalogo.push(Object.assign(base, {
-                    largura_rolo: item.largura === null ? LARGURA_PADRAO : item.largura,
+                    largura_rolo: item.largura !== null ? item.largura : (larguraPadraoPermitida ? LARGURA_PADRAO : null),
                     imagem: ''
                 }));
             } else {
-                materiais.push(Object.assign(base, { unidade: item.unidade, estoque_atual: 0 }));
+                materiais.push(Object.assign(base, { unidade: item.unidade || 'un', estoque_atual: 0 }));
             }
+            mudancas.criados.push({ tipo: item.tipo, id: base.id });
             resumo.criados++;
+        });
+
+        return { catalogo, materiais, resumo, mudancas, naoAplicadas };
+    }
+
+    // Desfaz cirurgicamente uma importacao a partir de `mudancas`: remove o que
+    // foi criado e devolve aos atualizados SO os campos que o importador escreveu.
+    // Nunca toca em estoque_atual, min_estoque, imagem ou id de registro vivo, e
+    // nunca substitui as listas inteiras.
+    function desfazerImportacao(opcoes) {
+        const catalogo = (opcoes.catalogo || []).map(r => Object.assign({}, r));
+        const materiais = (opcoes.materiais || []).map(r => Object.assign({}, r));
+        const mudancas = opcoes.mudancas || { criados: [], atualizados: [] };
+        const resumo = { removidos: 0, revertidos: 0, sumidos: 0, mantidos: 0 };
+
+        const listaDe = tipo => (tipo === 'tecido' ? catalogo : materiais);
+
+        (mudancas.criados || []).forEach(c => {
+            const lista = listaDe(c.tipo);
+            const i = lista.findIndex(r => r.id === c.id);
+            if (i === -1) { resumo.sumidos++; return; }
+            // Se o item criado ja movimentou estoque, apagar o cadastro deixaria
+            // saldo orfao: o registro fica, e o desfazer avisa quantos ficaram.
+            if (Number(lista[i].estoque_atual) > 0) { resumo.mantidos++; return; }
+            lista.splice(i, 1);
+            resumo.removidos++;
+        });
+
+        (mudancas.atualizados || []).forEach(a => {
+            const alvo = listaDe(a.tipo).find(r => r.id === a.id);
+            if (!alvo) { resumo.sumidos++; return; }
+            CAMPOS_DO_IMPORTADOR.forEach(campo => {
+                if (Object.prototype.hasOwnProperty.call(a.antes || {}, campo)) alvo[campo] = a.antes[campo];
+                else delete alvo[campo];
+            });
+            resumo.revertidos++;
         });
 
         return { catalogo, materiais, resumo };
@@ -468,17 +642,26 @@
         const { porCodigo } = indexarExistentes(catalogo, materiais);
         const codigoNormalizado = normalizarCodigo(item.codigo).codigo;
         const achado = porCodigo.get(codigoNormalizado);
-        return achado
-            ? { acao: 'atualizar', existente: achado.registro }
-            : { acao: 'criar', existente: null };
+        if (!achado) return { acao: 'criar', existente: null, motivo: null };
+        // Mesmo codigo sob o OUTRO tipo: conflito, nunca atualizacao. Atualizar
+        // procuraria o registro na lista errada e nao acharia nada.
+        if (achado.tipo !== item.tipo) {
+            return {
+                acao: 'conflito', existente: achado.registro,
+                motivo: 'O código ' + codigoNormalizado + ' já pertence a "' + achado.registro.nome + '", cadastrado como '
+                    + (achado.tipo === 'tecido' ? 'tecido' : 'material') + '. Edite o código.'
+            };
+        }
+        return { acao: 'atualizar', existente: achado.registro, motivo: null };
     }
 
     // Guarda da regra "nao pode haver codigo duplicado no sistema".
     function validarDecisoes(decisoes, catalogo, materiais) {
         const { porNome } = indexarExistentes(catalogo, materiais);
         const erros = [];
+        const errosDeNomeNoBanco = [];
         const codigosDoLote = new Map(); // codigo normalizado -> { count, nomes[] }
-        const nomesDuplicados = new Set(); // rascunho: codigos com duplicata reportada
+        const nomesDoLote = new Map();   // tipo|nome minusculo -> { nome, codigos: Set }
 
         (decisoes || []).forEach(d => {
             if (!d.item || d.acao === 'ignorar') return;
@@ -497,20 +680,41 @@
                 codigosDoLote.set(codigoNormalizado, { count: 1, nomes: [nomeNormalizado] });
             }
 
+            // Rastreia nomes repetidos DENTRO do lote, do mesmo jeito que os codigos.
+            // So conta como repetido quando o mesmo nome aparece sob codigos
+            // DIFERENTES: varias linhas do mesmo codigo ja sao relatadas acima, e
+            // relatar de novo pelo nome seria ruido.
+            const chaveNome = item.tipo + '|' + nomeNormalizado.toLowerCase();
+            if (nomeNormalizado) {
+                if (!nomesDoLote.has(chaveNome)) nomesDoLote.set(chaveNome, { nome: nomeNormalizado, codigos: new Set() });
+                nomesDoLote.get(chaveNome).codigos.add(codigoNormalizado);
+            }
+
             // Verifica colisao de nome com outro registro (ignorando o item sendo atualizado)
-            const dono = porNome.get(item.tipo + '|' + nomeNormalizado.toLowerCase());
+            const dono = porNome.get(chaveNome);
             const ehOProprio = dono && d.existente && dono.registro.id === d.existente.id;
             if (dono && !ehOProprio) {
-                erros.push('O nome "' + nomeNormalizado + '" já pertence ao código '
+                errosDeNomeNoBanco.push('O nome "' + nomeNormalizado + '" já pertence ao código '
                     + (dono.registro.referencia || '(sem código)') + '. Edite o nome.');
             }
         });
+
+        errosDeNomeNoBanco.forEach(e => erros.push(e));
 
         // Relata cada codigo duplicado UMA VEZ, com contagem
         codigosDoLote.forEach((info, codigo) => {
             if (info.count > 1) {
                 erros.push('O código ' + codigo + ' aparece ' + info.count + ' vezes nesta importação ('
                     + info.nomes.join(', ') + '). Edite um dos códigos.');
+            }
+        });
+
+        // Relata cada nome repetido no lote UMA VEZ, com os codigos envolvidos
+        nomesDoLote.forEach(info => {
+            if (info.codigos.size > 1) {
+                erros.push('O nome "' + info.nome + '" aparece em ' + info.codigos.size
+                    + ' códigos diferentes nesta importação (' + Array.from(info.codigos).join(', ')
+                    + '). Edite um dos nomes.');
             }
         });
 
@@ -557,7 +761,180 @@
         return codigo;
     }
 
-    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup, indexarExistentes, classificar, aplicarImportacao, resolverAcao, validarDecisoes, assinaturaDoLayout, montarPerfil, perfilDoFornecedor, codigoLivre };
+    // Irma de `codigoLivre` para o NOME: acrescenta " (2)", " (3)"... ate o nome
+    // ficar livre. Sem isto, diferenciar os codigos repetidos deixa tres produtos
+    // com o mesmo nome — que passam neste mes e travam a importacao do mes seguinte.
+    // A comparacao e feita em minusculas, como em indexarExistentes.
+    function nomeLivre(base, ocupados) {
+        const original = normalizarNome(base) || 'SEM NOME';
+        const usados = ocupados || new Set();
+        if (!usados.has(original.toLowerCase())) return original;
+        let n = 2;
+        let nome = original + ' (' + n + ')';
+        while (usados.has(nome.toLowerCase())) {
+            n++;
+            nome = original + ' (' + n + ')';
+        }
+        return nome;
+    }
+
+    // Agrupa fragmentos de texto do PDF em linhas e colunas.
+    // Fragmentos com y similar viram a mesma linha, ordenada por x.
+    // Fragmentos horizontalmente adjacentes viram uma so celula.
+    // Cada célula é colocada no índice de sua coluna (detectada por clustering de x).
+    function agruparLinhasPdf(fragmentos, opcoes) {
+        const o = opcoes || {};
+        const toleranciaY = o.toleranciaY === undefined ? 3 : o.toleranciaY;
+        const toleranciaX = o.toleranciaX === undefined ? 12 : o.toleranciaX;
+        const LARGURA_NOMINAL = 5; // fallback quando o fragmento nao traz largura (px por caractere)
+
+        const uteis = (fragmentos || [])
+            .map(f => ({ texto: normalizarNome(f.texto), x: Number(f.x), y: Number(f.y), largura: Number(f.largura) }))
+            .filter(f => f.texto !== '' && isFinite(f.x) && isFinite(f.y));
+
+        if (uteis.length === 0) return [];
+
+        // se a largura vier ausente ou zerada, aproxima por 5px por caractere para
+        // ainda assim clusterizar com sentido (em vez de lançar ou colapsar tudo em 0)
+        uteis.forEach(f => {
+            if (!isFinite(f.largura) || f.largura <= 0) f.largura = Math.max(LARGURA_NOMINAL, f.texto.length * LARGURA_NOMINAL);
+        });
+
+        // agrupa por y (no PDF, y cresce de baixo para cima)
+        const grupos = [];
+        uteis.slice().sort((a, b) => b.y - a.y).forEach(f => {
+            const grupo = grupos.find(g => Math.abs(g.y - f.y) <= toleranciaY);
+            if (grupo) grupo.itens.push(f);
+            else grupos.push({ y: f.y, itens: [f] });
+        });
+
+        // constrói as linhas com células mescladas, guardando o span [inicio, fim]
+        // de cada célula (usado a seguir para o agrupamento de colunas por sobreposição)
+        const linhasComCelulas = grupos.map(grupo => {
+            const ordenados = grupo.itens.slice().sort((a, b) => a.x - b.x);
+            const celulas = [];
+            let atual = null;
+            ordenados.forEach(f => {
+                const fim = f.x + f.largura;
+                if (atual !== null && (f.x - atual.fim) < toleranciaX) {
+                    atual.texto += ' ' + f.texto;
+                    atual.fim = Math.max(atual.fim, fim);
+                } else {
+                    atual = { texto: f.texto, inicio: f.x, fim };
+                    celulas.push(atual);
+                }
+            });
+            return celulas;
+        });
+
+        function sobreposicao(a, b) {
+            return Math.min(a.fim, b.fim) - Math.max(a.inicio, b.inicio);
+        }
+
+        // PASSO A: constrói o conjunto de colunas por SOBREPOSIÇÃO DE SPAN (não por
+        // posição inicial): um rótulo de cabeçalho centralizado e os valores
+        // alinhados à esquerda abaixo dele começam em x diferentes, mas seus spans
+        // se cruzam. Processa as linhas com MAIS células primeiro — normalmente o
+        // cabeçalho e as linhas de produto "limpas" (uma só linha física) — para que
+        // elas estabeleçam as colunas antes de qualquer título de seção ou resto de
+        // linha quebrada (poucas células, geralmente uma só, e larga) ser processado.
+        // Uma célula que sobrepõe exatamente UMA coluna existente pode fazê-la
+        // crescer; uma célula que sobrepõe VÁRIAS colunas é apenas atribuída à que
+        // mais se sobrepõe, sem alterar nenhuma delas — isso é o que impede uma
+        // descrição comprida (ou um título) de engolir a coluna vizinha.
+        const ordemConstrucao = linhasComCelulas.slice().sort((a, b) => b.length - a.length);
+        const colunas = []; // { inicio, fim }
+        ordemConstrucao.forEach(celulas => {
+            celulas.forEach(celula => {
+                let melhorIndice = -1;
+                let melhorSobreposicao = 0;
+                let qtdSobrepostas = 0;
+                colunas.forEach((col, i) => {
+                    const s = sobreposicao(celula, col);
+                    if (s > 0) {
+                        qtdSobrepostas++;
+                        if (s > melhorSobreposicao) { melhorSobreposicao = s; melhorIndice = i; }
+                    }
+                });
+                if (melhorIndice === -1) {
+                    colunas.push({ inicio: celula.inicio, fim: celula.fim });
+                } else if (qtdSobrepostas === 1) {
+                    colunas[melhorIndice].inicio = Math.min(colunas[melhorIndice].inicio, celula.inicio);
+                    colunas[melhorIndice].fim = Math.max(colunas[melhorIndice].fim, celula.fim);
+                }
+            });
+        });
+        colunas.sort((a, b) => a.inicio - b.inicio);
+
+        // PASSO B: com as colunas finais definidas, percorre a página na ordem
+        // natural (de cima para baixo, esquerda para direita) e encaixa cada célula
+        // na coluna com que mais se sobrepõe.
+        function acharColuna(celula) {
+            let melhorIndice = -1;
+            let melhorSobreposicao = 0;
+            colunas.forEach((col, i) => {
+                const s = sobreposicao(celula, col);
+                if (s > melhorSobreposicao) { melhorSobreposicao = s; melhorIndice = i; }
+            });
+            return melhorIndice;
+        }
+
+        return linhasComCelulas.map(celulas => {
+            const linha = new Array(colunas.length).fill('');
+            celulas.forEach(celula => {
+                const idx = acharColuna(celula);
+                if (idx >= 0) linha[idx] = linha[idx] ? linha[idx] + ' ' + celula.texto : celula.texto;
+            });
+            return linha;
+        });
+    }
+
+    // Expande as linhas de uma aba com colunas de cores em multiplos itens (um por cor).
+    // Usado para importacao de tabelas de fornecedor que listam cores como colunas.
+    // Exemplo: uma linha com AC1 | Fita | 10.00 | 15.00 | 12.00 (DOURADO, CROMADO, PALHA)
+    // vira 3 itens: AC1-DOURADO/Fita(DOURADO), AC1-CROMADO/Fita(CROMADO), AC1-PALHA/Fita(PALHA).
+    function expandirPorCor(opcoes) {
+        const linhas = opcoes.linhas || [];
+        const mapa = opcoes.mapa;
+        const colunas = (opcoes.colunas || []).map(c => normalizarNome(c));
+        const colunasCor = opcoes.colunasCor || [];
+        const tipo = opcoes.tipo;
+        const aba = opcoes.aba || '';
+        const inicio = (opcoes.cabecalhoIndice >= 0 ? opcoes.cabecalhoIndice : -1) + 1;
+        const itens = [];
+
+        for (let i = inicio; i < linhas.length; i++) {
+            const linha = linhas[i];
+            if (!ehLinhaDeProduto(linha, mapa)) continue;
+            const cod = normalizarCodigo(linha[mapa.codigo]);
+            const nomeBase = normalizarNome(linha[mapa.nome]);
+
+            colunasCor.forEach(ci => {
+                const cor = normalizarNome(colunas[ci]).toUpperCase();
+                if (!cor) return;
+                const p = normalizarPreco(linha[ci]);
+                if (!p.ok) return;
+                const avisos = [];
+                if (cod.promocional) avisos.push('Código veio marcado como promocional (com *) na tabela');
+                itens.push({
+                    aba,
+                    linha: i,
+                    codigo: cod.codigo + '-' + cor.replace(/\s+/g, ''),
+                    nome: nomeBase + ' (' + cor + ')',
+                    largura: null,
+                    preco_custo: p.valor,
+                    unidade: tipo === 'tecido' ? 'm' : 'un',
+                    tipo,
+                    promocional: cod.promocional,
+                    avisos,
+                    problema: null
+                });
+            });
+        }
+        return itens;
+    }
+
+    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, motivoLarguraIlegivel, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup, indexarExistentes, classificar, aplicarImportacao, desfazerImportacao, resolverAcao, validarDecisoes, assinaturaDoLayout, montarPerfil, perfilDoFornecedor, codigoLivre, nomeLivre, agruparLinhasPdf, expandirPorCor, CAMPOS_DO_IMPORTADOR };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ImportadorCore = api;
