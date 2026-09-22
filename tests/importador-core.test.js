@@ -269,3 +269,79 @@ test('detectarCabecalho e sugerirMapeamento concordam sobre REF (bare, sem ERENC
     assert.strictEqual(m.nome, 1, 'deve encontrar DESCRIÇÃO como nome');
     assert.strictEqual(m.preco, 2, 'deve encontrar PREÇO como preco');
 });
+
+const MAPA_TECIDO = { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 };
+
+test('montarItens converte as linhas do Book 10 em itens', () => {
+    const { abas } = lerXlsx(PLANILHA);
+    const itens = C.montarItens({
+        linhas: abas['Book 10'], cabecalhoIndice: 1, mapa: MAPA_TECIDO, tipo: 'tecido', aba: 'Book 10'
+    });
+    assert.ok(itens.length >= 30, `esperava 30+ itens, veio ${itens.length}`);
+    assert.ok(itens.every(i => i.codigo), 'todo item precisa ter codigo');
+    assert.ok(itens.every(i => i.nome), 'todo item precisa ter nome');
+    assert.ok(itens.every(i => i.tipo === 'tecido'));
+    assert.ok(itens.every(i => i.unidade === 'm'), 'tecido e sempre vendido por metro');
+});
+
+test('montarItens marca com problema as linhas de preco --', () => {
+    const itens = C.montarItens({
+        linhas: [
+            ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE'],
+            ['AC1', 'Com preco', '', '2,80', '78,90'],
+            ['AC2', 'Sem preco', '', '2,80', '--']
+        ],
+        cabecalhoIndice: 0, mapa: MAPA_TECIDO, tipo: 'tecido', aba: 'Teste'
+    });
+    assert.strictEqual(itens.length, 2);
+    assert.strictEqual(itens[0].problema, null);
+    assert.strictEqual(itens[0].preco_custo, 78.9);
+    assert.ok(itens[1].problema, 'o item sem preco precisa de um motivo escrito');
+    assert.strictEqual(itens[1].preco_custo, null);
+});
+
+test('montarItens guarda o aviso de promocional e o de largura em cm', () => {
+    const itens = C.montarItens({
+        linhas: [
+            ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE'],
+            ['*AC9', 'Promo', '', '280', '50,00']
+        ],
+        cabecalhoIndice: 0, mapa: MAPA_TECIDO, tipo: 'tecido', aba: 'Teste'
+    });
+    assert.strictEqual(itens[0].codigo, 'AC9');
+    assert.strictEqual(itens[0].promocional, true);
+    assert.strictEqual(itens[0].avisos.length, 2);
+    assert.ok(itens[0].avisos.some(a => /promo/i.test(a)));
+    assert.ok(itens[0].avisos.some(a => /cent[ií]metro/i.test(a)));
+});
+
+test('montarItens ignora observacoes e linhas em branco', () => {
+    const itens = C.montarItens({
+        linhas: [
+            ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE'],
+            ['AC1', 'Real', '', '2,80', '10,00'],
+            ['MODELO WAVE PLUS NAO ACOMPANHA A ENTRETELA'],
+            [],
+            ['', '', '', '', '']
+        ],
+        cabecalhoIndice: 0, mapa: MAPA_TECIDO, tipo: 'tecido', aba: 'Teste'
+    });
+    assert.strictEqual(itens.length, 1);
+    assert.strictEqual(itens[0].codigo, 'AC1');
+});
+
+test('montarItens usa a coluna de unidade quando o tipo e material', () => {
+    const itens = C.montarItens({
+        linhas: [
+            ['CÓD', 'DESCRIÇÃO', 'UNID.', 'PREÇO'],
+            ['TR1', 'Trilho', 'm', '25,00'],
+            ['TR2', 'Suporte', '', '3,00']
+        ],
+        cabecalhoIndice: 0,
+        mapa: { codigo: 0, nome: 1, largura: -1, preco: 3, unidade: 2 },
+        tipo: 'material', aba: 'Trilhos'
+    });
+    assert.strictEqual(itens[0].unidade, 'm');
+    assert.strictEqual(itens[1].unidade, 'un');
+    assert.strictEqual(itens[0].largura, null);
+});

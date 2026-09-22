@@ -184,7 +184,59 @@
         return 'material';
     }
 
-    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba };
+    const UNIDADES_VALIDAS = ['un', 'm', 'cm', 'kg', 'cj', 'cx', 'par'];
+
+    function _normalizarUnidade(bruto, tipo) {
+        if (tipo === 'tecido') return 'm';
+        const u = normalizarNome(bruto).toLowerCase().replace(/\./g, '');
+        return UNIDADES_VALIDAS.includes(u) ? u : 'un';
+    }
+
+    function montarItens(opcoes) {
+        const linhas = opcoes.linhas || [];
+        const mapa = opcoes.mapa;
+        const tipo = opcoes.tipo;
+        const aba = opcoes.aba || '';
+        const inicio = (opcoes.cabecalhoIndice >= 0 ? opcoes.cabecalhoIndice : -1) + 1;
+        const itens = [];
+
+        for (let i = inicio; i < linhas.length; i++) {
+            const linha = linhas[i];
+            if (!ehLinhaDeProduto(linha, mapa)) continue;
+
+            const cod = normalizarCodigo(linha[mapa.codigo]);
+            const avisos = [];
+            if (cod.promocional) avisos.push('Código veio marcado como promocional (com *) na tabela');
+
+            let largura = null;
+            if (mapa.largura >= 0) {
+                const l = normalizarLargura(linha[mapa.largura]);
+                largura = l.valor;
+                if (l.aviso) avisos.push(l.aviso);
+            }
+
+            const p = mapa.preco >= 0
+                ? normalizarPreco(linha[mapa.preco])
+                : { valor: null, ok: false, motivo: 'A planilha não tem coluna de preço mapeada' };
+
+            itens.push({
+                aba,
+                linha: i,
+                codigo: cod.codigo,
+                nome: normalizarNome(linha[mapa.nome]),
+                largura,
+                preco_custo: p.ok ? p.valor : null,
+                unidade: _normalizarUnidade(mapa.unidade >= 0 ? linha[mapa.unidade] : '', tipo),
+                tipo,
+                promocional: cod.promocional,
+                avisos,
+                problema: p.ok ? null : p.motivo
+            });
+        }
+        return itens;
+    }
+
+    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ImportadorCore = api;
