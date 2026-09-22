@@ -135,17 +135,30 @@ test('linha que parece cabecalho (rotulos de COD e DESCRICAO) e rejeitada como p
     assert.strictEqual(C.ehLinhaDeProduto(linhaRotulos, mapa), false, 'linha com rotulos de cabecalho deve ser rejeitada');
 });
 
-test('produto com codigo contendo "CODIGO" em seu nome passa (nao e um puro rotulo)', () => {
-    const mapa = { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 };
-    // Um codigo como "CODIGO-123" contem a palavra CODIGO mas nao E APENAS "CODIGO"
-    assert.strictEqual(C.ehLinhaDeProduto(['CODIGO-123', 'Descricao Produto', '', '2.8', '100'], mapa), true);
+test('linha com CÓD. e ARTIGO (real da planilha Cor Metal) e rejeitada', () => {
+    const mapa = { codigo: 0, nome: 1 };
+    // Real: row 59 de "Cor Metal" tem exatamente isso
+    assert.strictEqual(C.ehLinhaDeProduto(['CÓD.', 'ARTIGO'], mapa), false, 'linha CÓD./ARTIGO e um header duplicado');
 });
 
-test('nome que e exatamente um rotulo (DESCRICAO, NOME, PRODUTO) e rejeitado', () => {
-    const mapa = { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 };
-    assert.strictEqual(C.ehLinhaDeProduto(['AC1', 'DESCRIÇÃO'], mapa), false, 'nome DESCRIÇÃO e um rotulo');
-    assert.strictEqual(C.ehLinhaDeProduto(['AC2', 'NOME'], mapa), false, 'nome NOME e um rotulo');
-    assert.strictEqual(C.ehLinhaDeProduto(['AC3', 'PRODUTO'], mapa), false, 'nome PRODUTO e um rotulo');
+test('produto com nome PRODUTO (isolado) passa porque codigo nao e rotulo', () => {
+    const mapa = { codigo: 0, nome: 1 };
+    // "AC1" nao e um rotulo de codigo (nao tem COD/REF), entao mesmo que PRODUTO seja rotulo de nome, passa
+    assert.strictEqual(C.ehLinhaDeProduto(['AC1', 'PRODUTO'], mapa), true, 'produto com nome PRODUTO e valido se codigo nao e rotulo');
+});
+
+test('codigo que contem COD (como CODIGO-123) passa porque nome nao e rotulo', () => {
+    const mapa = { codigo: 0, nome: 1 };
+    // "CODIGO-123" match /C[OÓ]D/i, mas "Linho Belga" nao match nenhum rotulo de nome, entao passa
+    assert.strictEqual(C.ehLinhaDeProduto(['CODIGO-123', 'Linho Belga'], mapa), true);
+});
+
+test('codigos como REF001, CODIGO123, COD-99, REFORCO com nome normal passam', () => {
+    const mapa = { codigo: 0, nome: 1 };
+    assert.strictEqual(C.ehLinhaDeProduto(['REF001', 'Algodao'], mapa), true);
+    assert.strictEqual(C.ehLinhaDeProduto(['CODIGO123', 'Poliester'], mapa), true);
+    assert.strictEqual(C.ehLinhaDeProduto(['COD-99', 'Seda'], mapa), true);
+    assert.strictEqual(C.ehLinhaDeProduto(['REFORCO', 'Reforcado'], mapa), true);
 });
 
 test('todas as 22 abas tem cabecalho nas posicoes esperadas (regressao)', () => {

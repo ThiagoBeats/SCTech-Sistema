@@ -84,11 +84,7 @@
 
     // Padroes para detectar se um rotulo e de codigo ou de nome (para detectarCabecalho)
     const PADROES_CODIGO_CABECALHO = [/C[OÓ]D/i, /REF(ER[EÊ]NCIA)?/i];
-    const PADROES_NOME_CABECALHO = [/DESCRI/i, /NOME/i, /PRODUTO/i];
-
-    // Valores exatos que indicam um rotulo de cabecalho (para rejeitar em ehLinhaDeProduto)
-    const ROTULOS_CODIGO_EXATOS = ['COD', 'CÓDIGO', 'CÓD', 'REF', 'REFERÊNCIA'];
-    const ROTULOS_NOME_EXATOS = ['DESCRIÇÃO', 'DESCRICAO', 'NOME', 'PRODUTO'];
+    const PADROES_NOME_CABECALHO = [/DESCRI/i, /NOME/i, /PRODUTO/i, /ARTIGO/i];
 
     function _rotulosDaLinha(linha) {
         return (linha || []).map(c => normalizarNome(c));
@@ -100,16 +96,6 @@
 
     function _ehRotuloNome(rotulo) {
         return rotulo && PADROES_NOME_CABECALHO.some(r => r.test(rotulo));
-    }
-
-    function _ehRotuloCodigoExato(valor) {
-        const norm = normalizarNome(valor);
-        return ROTULOS_CODIGO_EXATOS.includes(norm);
-    }
-
-    function _ehRotuloNomeExato(valor) {
-        const norm = normalizarNome(valor);
-        return ROTULOS_NOME_EXATOS.includes(norm);
     }
 
     function detectarCabecalho(linhas) {
@@ -155,13 +141,15 @@
         // Rejeita se nao tem codigo ou nome
         if (codigo === '' || nome === '') return false;
 
-        // Rejeita se a linha parece ser um rotulo de cabecalho
-        // O codigo nao deve ser exatamente um rotulo de codigo (ex: "COD", "CÓDIGO", "REF")
-        if (_ehRotuloCodigoExato(codigoBruto)) {
-            return false;
-        }
-        // O nome nao deve ser exatamente um rotulo de nome (ex: "DESCRIÇÃO", "NOME", "PRODUTO")
-        if (_ehRotuloNomeExato(nomeBruto)) {
+        // Rejeita se AMBAS as células parecem ser rótulos de cabeçalho.
+        // Uma linha de cabeçalho duplicado tem tanto um código-rótulo (CÓD, REF, etc)
+        // quanto um nome-rótulo (DESCRIÇÃO, NOME, ARTIGO, etc).
+        // Mas um produto real pode ter um código como "CODIGO-123" ou um nome como "PRODUTO"
+        // isoladamente — só rejeitamos se ambos parecem rótulos.
+        const codigoEhRotulo = _ehRotuloCodigo(normalizarNome(codigoBruto));
+        const nomeEhRotulo = _ehRotuloNome(normalizarNome(nomeBruto));
+
+        if (codigoEhRotulo && nomeEhRotulo) {
             return false;
         }
 
