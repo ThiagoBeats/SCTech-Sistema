@@ -105,7 +105,23 @@ test('trocar o papel de uma coluna limpa o papel anterior', async ({ page }) => 
 
 test('o passo 3 barra layout sem codigo, nome ou preco e nomeia as abas', async ({ page }) => {
     await ateOPasso2(page);
-    // NAO ignora as abas sem cabecalho: elas nao tem como ser mapeadas
+    // Abas sem cabecalho ja chegam como "Ignorar" (elas produzem zero itens).
+    // Aqui o usuario as tira do Ignorar de proposito, que e o unico jeito de
+    // um layout nao-mapeavel chegar ao passo 3.
+    const reativadas = await page.evaluate(() => {
+        const C = window.ImportadorCore;
+        const nomes = [];
+        _impEstado.planilha.ordem.forEach(aba => {
+            if (C.detectarCabecalho(_impEstado.planilha.abas[aba]).indice === -1 && aba !== 'Capa') {
+                _impEstado.abas[aba] = 'material';
+                nomes.push(aba);
+            }
+        });
+        _impRenderPasso(2);
+        return nomes;
+    });
+    expect(reativadas.length).toBeGreaterThan(0);
+
     await page.click('#imp-corpo button:has-text("Continuar")');
     await expect(page.locator('#imp-corpo')).toContainText('Continuar');
 

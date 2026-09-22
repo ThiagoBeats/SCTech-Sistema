@@ -239,12 +239,30 @@ async function _impArquivoEscolhido(input) {
     }
 }
 
+// Conta quantos itens a aba produziria com a deteccao automatica. E a mesma
+// conta exibida na coluna "Itens" do passo 2, isolada aqui para a sugestao de
+// tipo e a tela usarem exatamente o mesmo numero.
+function _impContarItensDaAba(nome, tipo) {
+    const C = window.ImportadorCore;
+    const dados = _impEstado.planilha.abas[nome];
+    const { indice, colunas } = C.detectarCabecalho(dados);
+    if (indice === -1) return 0;
+    const mapa = C.sugerirMapeamento(colunas);
+    return C.montarItens({
+        linhas: dados, cabecalhoIndice: indice, mapa,
+        tipo: tipo === 'ignorar' ? 'material' : tipo, aba: nome
+    }).length;
+}
+
 function _impSugerirAbas() {
     const C = window.ImportadorCore;
     _impEstado.abas = {};
     _impEstado.planilha.ordem.forEach(nome => {
         const { colunas } = C.detectarCabecalho(_impEstado.planilha.abas[nome]);
-        _impEstado.abas[nome] = C.sugerirTipoAba(nome, colunas);
+        const tipo = C.sugerirTipoAba(nome, colunas);
+        // Aba que nao produz nenhum item so daria trabalho no mapeamento: ja
+        // vem como "Ignorar". E so a sugestao — o usuario pode mudar.
+        _impEstado.abas[nome] = _impContarItensDaAba(nome, tipo) === 0 ? 'ignorar' : tipo;
     });
 }
 
@@ -309,10 +327,9 @@ function _impPasso2HTML() {
     const C = window.ImportadorCore;
     const linhas = _impEstado.planilha.ordem.map((nome, ai) => {
         const dados = _impEstado.planilha.abas[nome];
-        const { indice, colunas } = C.detectarCabecalho(dados);
+        const { indice } = C.detectarCabecalho(dados);
         const tipo = _impEstado.abas[nome];
-        const mapa = C.sugerirMapeamento(colunas);
-        const qtd = indice === -1 ? 0 : C.montarItens({ linhas: dados, cabecalhoIndice: indice, mapa, tipo: tipo === 'ignorar' ? 'material' : tipo, aba: nome }).length;
+        const qtd = _impContarItensDaAba(nome, tipo);
         const sel = t => tipo === t ? 'selected' : '';
         return `<tr>
             <td>${escapeHtml(nome)}</td>

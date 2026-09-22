@@ -43,7 +43,7 @@ TESTDIR=<projeto>/tests/e2e \
   npx playwright test --config=repo.config.js
 ```
 
-Esperado: **32 passando**.
+Esperado: **38 passando**.
 
 ## Sessão autenticada é obrigatória
 
@@ -84,4 +84,4 @@ navegar. Ele semeia um usuário com papel 1 (Administrador, que vem de
 | `passo-4-duplicados.spec.js` | Painel de repetidos, sufixo `D`/`DD`, não colidir com código já existente, descartar preservando a primeira, gravar depois de resolver, e não destruir edições anteriores |
 | `fase2-pdf-e-cor.spec.js` | PDF real virando uma aba por página, a página do Book 10 dando os mesmos 38 itens da planilha, modo preço por cor gerando 235 materiais sem repetir código, seleção manual de cabeçalho, e a planilha continuando a funcionar |
 
-Esperado no total: **32 passando**.
+Esperado no total: **38 passando**.
