@@ -47,6 +47,7 @@ const _impEstado = {
     file: null,
     planilha: null,      // { ordem, abas }
     fornecedor: null,    // { id, nome }
+    fornecedorId: null,  // id escolhido no select antes de confirmar no passo 1
     markupPadrao: 80,
     abas: {},            // { [nomeAba]: 'tecido' | 'material' | 'ignorar' }
     layouts: {},         // { [assinatura]: { mapa, cabecalhoIndice } }
@@ -59,6 +60,7 @@ function _impResetar() {
     _impEstado.file = null;
     _impEstado.planilha = null;
     _impEstado.fornecedor = null;
+    _impEstado.fornecedorId = null;
     _impEstado.markupPadrao = 80;
     _impEstado.abas = {};
     _impEstado.layouts = {};
@@ -112,7 +114,10 @@ function _impRenderPasso(n) {
 // ── Passo 1: arquivo e fornecedor ────────────────────────────────────────────
 function _impPasso1HTML() {
     const opcoes = (db.fornecedores || [])
-        .map(f => `<option value="${f.id}">${escapeHtml(f.nome)}</option>`).join('');
+        .map(f => {
+            const sel = (f.id === _impEstado.fornecedorId) ? ' selected' : '';
+            return `<option value="${f.id}"${sel}>${escapeHtml(f.nome)}</option>`;
+        }).join('');
     const nomeArquivo = _impEstado.file ? escapeHtml(_impEstado.file.name) : '';
     return `
     <div class="form-group">
@@ -148,6 +153,16 @@ async function _impArquivoEscolhido(input) {
     const file = input.files && input.files[0];
     if (!file) return;
     try {
+        // Captura valores da forma antes de re-renderizar (ao carregar arquivo)
+        const selFornecedor = document.getElementById('imp-fornecedor');
+        const selMarkup = document.getElementById('imp-markup');
+        if (selFornecedor && selFornecedor.value) {
+            _impEstado.fornecedorId = parseInt(selFornecedor.value, 10);
+        }
+        if (selMarkup && selMarkup.value) {
+            _impEstado.markupPadrao = parseFloat(selMarkup.value) || 80;
+        }
+
         _impEstado.file = file;
         _impEstado.planilha = await _impLerArquivo(file);
         _impSugerirAbas();
@@ -180,6 +195,7 @@ async function _impCriarFornecedorInline() {
     db.fornecedores.push(novo);
     syncDB();
     _impEstado.fornecedor = { id: novo.id, nome: novo.nome };
+    _impEstado.fornecedorId = novo.id;
     _impRenderPasso(1);
     const sel = document.getElementById('imp-fornecedor');
     if (sel) sel.value = String(novo.id);
@@ -193,6 +209,7 @@ async function _impConcluirPasso1() {
     if (!id) { await showAlert('Escolha o fornecedor desta tabela.', '⚠️'); return; }
     const f = db.fornecedores.find(x => x.id === id);
     _impEstado.fornecedor = { id: f.id, nome: f.nome };
+    _impEstado.fornecedorId = id;
     _impEstado.markupPadrao = parseFloat(document.getElementById('imp-markup').value) || 0;
 
     const perfil = C.perfilDoFornecedor(db.import_perfis, id);
