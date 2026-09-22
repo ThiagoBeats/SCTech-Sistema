@@ -110,7 +110,15 @@ function _impRenderPasso(n) {
     if (n === 1) corpo.innerHTML = _impTrilha(1) + _impPasso1HTML();
     if (n === 2) corpo.innerHTML = _impTrilha(2) + _impPasso2HTML();
     if (n === 3) corpo.innerHTML = _impTrilha(3) + _impPasso3HTML();
-    if (n === 4) { _impPrepararConferencia(); corpo.innerHTML = _impTrilha(4) + _impPasso4HTML(); }
+    if (n === 4) {
+        // So reclassifica ao ENTRAR no passo 4 — recalcular a cada render
+        // jogaria fora as edicoes que o usuario acabou de fazer na tela
+        // (marcar/desmarcar, editar custo/codigo/nome). Voltar ao passo 3 e
+        // avancar de novo limpa _impEstado.grupos (ver _impVoltarAoPasso3),
+        // entao o mapeamento alterado e reclassificado aqui.
+        if (!_impEstado.grupos) _impPrepararConferencia();
+        corpo.innerHTML = _impTrilha(4) + _impPasso4HTML();
+    }
 }
 
 // ── Passo 1: arquivo e fornecedor ────────────────────────────────────────────
@@ -495,9 +503,16 @@ function _impPasso4HTML() {
         <input type="checkbox" id="imp-salvar-perfil" checked> Salvar este mapeamento como perfil deste fornecedor
     </label>
     <div style="display:flex;justify-content:space-between;align-items:center">
-        <button class="btn btn-outline" onclick="_impRenderPasso(3)">Voltar</button>
+        <button class="btn btn-outline" onclick="_impVoltarAoPasso3()">Voltar</button>
         <button class="btn btn-success" onclick="_impGravar()">Gravar ${marcados} item(ns)</button>
     </div>`;
+}
+
+// Voltar do passo 4 para o 3 pode mudar o mapeamento de colunas — limpa os
+// grupos para que a proxima entrada no passo 4 reclassifique do zero.
+function _impVoltarAoPasso3() {
+    _impEstado.grupos = null;
+    _impRenderPasso(3);
 }
 
 function _impAlternarMarcado(chave, i) {
