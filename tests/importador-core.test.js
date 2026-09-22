@@ -109,3 +109,80 @@ test('linha com preco invalido continua sendo linha de produto', () => {
     const mapa = { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 };
     assert.strictEqual(C.ehLinhaDeProduto(['AC1', 'Linho', '', '2.8', '--'], mapa), true);
 });
+
+test('SUPPVC-Retangular-Unic cabecalho agora detecta na linha 1 (nao mais 9)', () => {
+    const { abas } = lerXlsx(PLANILHA);
+    const r = C.detectarCabecalho(abas['SUPPVC-Retangular-Unic']);
+    assert.strictEqual(r.indice, 1, 'cabecalho deve estar no indice 1');
+});
+
+test('primeira linha de produto apos cabecalho do SUPPVC e SP001', () => {
+    const { abas } = lerXlsx(PLANILHA);
+    const aba = abas['SUPPVC-Retangular-Unic'];
+    const r = C.detectarCabecalho(aba);
+    const mapa = { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 };
+    // Proxima linha apos cabecalho deve ser SP001
+    const proximaLinha = aba[r.indice + 1];
+    assert.ok(proximaLinha && proximaLinha[0], 'tem uma proxima linha');
+    const { codigo } = C.normalizarCodigo(proximaLinha[0]);
+    assert.strictEqual(codigo, 'SP001', 'primeira linha de produto e SP001');
+});
+
+test('linha que parece cabecalho (rotulos de COD e DESCRICAO) e rejeitada como produto', () => {
+    const mapa = { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 };
+    // Uma linha que tem os rotulos de cabecalho como valores
+    const linhaRotulos = ['CÓD.', 'DESCRIÇÃO', 'DOURADO', 'CROMADO', 'AÇO ESC.', 'OURO VELHO', 'BRANCO', 'PRETO'];
+    assert.strictEqual(C.ehLinhaDeProduto(linhaRotulos, mapa), false, 'linha com rotulos de cabecalho deve ser rejeitada');
+});
+
+test('produto com codigo contendo "CODIGO" em seu nome passa (nao e um puro rotulo)', () => {
+    const mapa = { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 };
+    // Um codigo como "CODIGO-123" contem a palavra CODIGO mas nao E APENAS "CODIGO"
+    assert.strictEqual(C.ehLinhaDeProduto(['CODIGO-123', 'Descricao Produto', '', '2.8', '100'], mapa), true);
+});
+
+test('nome que e exatamente um rotulo (DESCRICAO, NOME, PRODUTO) e rejeitado', () => {
+    const mapa = { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 };
+    assert.strictEqual(C.ehLinhaDeProduto(['AC1', 'DESCRIÇÃO'], mapa), false, 'nome DESCRIÇÃO e um rotulo');
+    assert.strictEqual(C.ehLinhaDeProduto(['AC2', 'NOME'], mapa), false, 'nome NOME e um rotulo');
+    assert.strictEqual(C.ehLinhaDeProduto(['AC3', 'PRODUTO'], mapa), false, 'nome PRODUTO e um rotulo');
+});
+
+test('todas as 22 abas tem cabecalho nas posicoes esperadas (regressao)', () => {
+    const { abas } = lerXlsx(PLANILHA);
+    const resultados = {};
+    for (const [aba, linhas] of Object.entries(abas)) {
+        const r = C.detectarCabecalho(linhas);
+        resultados[aba] = r.indice;
+    }
+
+    // Posicoes esperadas: o SUPPVC agora deve retornar 1, todos os others devem manter seus valores
+    const esperados = {
+        'Capa': -1,
+        'Promocionais-Book 06': 1,
+        'Book 10': 1,
+        'Book 12': 1,
+        'Book 13': 1,
+        'Book 14': 1,
+        'Book 15': 1,
+        'Book 16': 1,
+        'Trilho Motorizado': -1,
+        'Varão Prime Montado': -1,
+        'Trilho Slim Montado': -1,
+        'Trilho Square Montado': -1,
+        'Varão Unic 19mm Montado': -1,
+        'Wave-Square-Retangular': 1,
+        'Trilhos': 2,
+        'SUPPVC-Retangular-Unic': 1,
+        'Cor Metal': 2,
+        'Abraçadeira-Ponteira': 1,
+        'Cor Madeira': 2,
+        'Barras': 3,
+        'Broca-Bucha-Parafuso': 1,
+        'Aviamentos-Pingentes': 1
+    };
+
+    for (const [aba, esperado] of Object.entries(esperados)) {
+        assert.strictEqual(resultados[aba], esperado, `${aba}: esperado ${esperado}, obteve ${resultados[aba]}`);
+    }
+});

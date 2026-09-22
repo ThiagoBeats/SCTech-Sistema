@@ -82,19 +82,59 @@
         /CORTE/i, /PE[CÇ]A/i, /UNID/i, /QUANT/i, /COR/i, /REF/i
     ];
 
+    // Padroes para detectar se um rotulo e de codigo ou de nome (para detectarCabecalho)
+    const PADROES_CODIGO_CABECALHO = [/C[OÓ]D/i, /REF(ER[EÊ]NCIA)?/i];
+    const PADROES_NOME_CABECALHO = [/DESCRI/i, /NOME/i, /PRODUTO/i];
+
+    // Valores exatos que indicam um rotulo de cabecalho (para rejeitar em ehLinhaDeProduto)
+    const ROTULOS_CODIGO_EXATOS = ['COD', 'CÓDIGO', 'CÓD', 'REF', 'REFERÊNCIA'];
+    const ROTULOS_NOME_EXATOS = ['DESCRIÇÃO', 'DESCRICAO', 'NOME', 'PRODUTO'];
+
     function _rotulosDaLinha(linha) {
         return (linha || []).map(c => normalizarNome(c));
+    }
+
+    function _ehRotuloCodigo(rotulo) {
+        return rotulo && PADROES_CODIGO_CABECALHO.some(r => r.test(rotulo));
+    }
+
+    function _ehRotuloNome(rotulo) {
+        return rotulo && PADROES_NOME_CABECALHO.some(r => r.test(rotulo));
+    }
+
+    function _ehRotuloCodigoExato(valor) {
+        const norm = normalizarNome(valor);
+        return ROTULOS_CODIGO_EXATOS.includes(norm);
+    }
+
+    function _ehRotuloNomeExato(valor) {
+        const norm = normalizarNome(valor);
+        return ROTULOS_NOME_EXATOS.includes(norm);
     }
 
     function detectarCabecalho(linhas) {
         const limite = Math.min((linhas || []).length, 15);
         let melhor = { indice: -1, pontos: 0, colunas: [] };
+        let primeiroComCodigoENome = null;
+
         for (let i = 0; i < limite; i++) {
             const colunas = _rotulosDaLinha(linhas[i]);
             const preenchidas = colunas.filter(c => c !== '').length;
             if (preenchidas < 2) continue;
             const pontos = colunas.filter(c => c && ROTULOS_CABECALHO.some(r => r.test(c))).length;
             if (pontos >= 2 && pontos > melhor.pontos) melhor = { indice: i, pontos, colunas };
+
+            // Verifica se esta linha tem AMBOS um rotulo de codigo E um rotulo de nome
+            const temCodigo = colunas.some(c => _ehRotuloCodigo(c));
+            const temNome = colunas.some(c => _ehRotuloNome(c));
+            if (temCodigo && temNome && !primeiroComCodigoENome) {
+                primeiroComCodigoENome = { indice: i, colunas };
+            }
+        }
+
+        // Prefere o primeiro cabecalho com AMBOS codigo e nome, senao usa o melhor por pontos
+        if (primeiroComCodigoENome) {
+            return { indice: primeiroComCodigoENome.indice, colunas: primeiroComCodigoENome.colunas };
         }
         return melhor.indice === -1
             ? { indice: -1, colunas: [] }
@@ -103,9 +143,29 @@
 
     function ehLinhaDeProduto(linha, mapa) {
         if (!linha || !mapa) return false;
-        const codigo = mapa.codigo >= 0 ? normalizarCodigo(linha[mapa.codigo]).codigo : '';
-        const nome = mapa.nome >= 0 ? normalizarNome(linha[mapa.nome]) : '';
-        return codigo !== '' && nome !== '';
+
+        // Extrai o codigo e nome da linha
+        const codigoBruto = mapa.codigo >= 0 ? linha[mapa.codigo] : undefined;
+        const nomeBruto = mapa.nome >= 0 ? linha[mapa.nome] : undefined;
+
+        // Normaliza
+        const { codigo } = normalizarCodigo(codigoBruto);
+        const nome = normalizarNome(nomeBruto);
+
+        // Rejeita se nao tem codigo ou nome
+        if (codigo === '' || nome === '') return false;
+
+        // Rejeita se a linha parece ser um rotulo de cabecalho
+        // O codigo nao deve ser exatamente um rotulo de codigo (ex: "COD", "CÓDIGO", "REF")
+        if (_ehRotuloCodigoExato(codigoBruto)) {
+            return false;
+        }
+        // O nome nao deve ser exatamente um rotulo de nome (ex: "DESCRIÇÃO", "NOME", "PRODUTO")
+        if (_ehRotuloNomeExato(nomeBruto)) {
+            return false;
+        }
+
+        return true;
     }
 
     const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto };
