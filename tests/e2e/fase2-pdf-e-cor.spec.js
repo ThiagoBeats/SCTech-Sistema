@@ -183,3 +183,65 @@ test('a planilha continua funcionando como na Fase 1', async ({ page }) => {
     const qtd = await page.evaluate(() => JSON.parse(localStorage.getItem('sc_cat')).length);
     expect(qtd).toBe(38);
 });
+
+// C1 (correcao-final.md): repro exato do revisor. Uma aba com um bloco de
+// cabecalho velho (REF|PRODUTO|PRECO) na linha 2 e o cabecalho real
+// (CÓD.|DESCRIÇÃO|CORES|QUANT.|PREÇO) na linha 5. O usuario escolhe a linha 5
+// na mao; ANTES da correcao, "Continuar" (do passo 3 para o passo 4) revertia
+// a escolha para a linha 2 (a deteccao automatica) e o produto de R$ 9,90
+// entrava a R$ 100,00 — este teste so passa se a escolha sobreviver ao clique.
+test('C1: escolha manual de cabecalho sobrevive ao Continuar do passo 3', async ({ page }) => {
+    test.setTimeout(120000);
+    await abrir(page);
+    await page.setInputFiles('#imp-file', PLANILHA);
+    await expect(page.locator('#imp-corpo')).toContainText('22 aba');
+    await page.selectOption('#imp-fornecedor', '7');
+    await page.click('#imp-corpo button:has-text("Continuar")');
+
+    // Injeta a aba sintetica do repro no lugar das abas reais, mantendo o
+    // restante do fluxo (passo 2 -> passo 3 -> passo 4) intocado.
+    await page.evaluate(() => {
+        const dados = [
+            ['TABELA ANTIGA - NAO USAR'],
+            ['REF', 'PRODUTO', 'PRECO'],
+            ['X1', 'Produto velho', '9.90'],
+            [''],
+            ['CÓD.', 'DESCRIÇÃO', 'CORES', 'QUANT.', 'PREÇO'],
+            ['1000', 'Produto real', 'AZUL', '10', '9.90']
+        ];
+        _impEstado.planilha = { abas: { 'Aba C1': dados }, ordem: ['Aba C1'] };
+        _impEstado.abas = { 'Aba C1': 'material' };
+        _impRenderPasso(2);
+    });
+    await page.click('#imp-corpo button:has-text("Continuar")');
+    await expect(page.locator('#imp-corpo')).toContainText('Cabeçalho');
+
+    // A deteccao automatica cai no bloco velho (linha 2 = indice 1).
+    const auto = await page.evaluate(() => _impLayoutsDistintos()[0].cabecalhoIndice);
+    expect(auto, 'deteccao automatica deveria cair no bloco velho').toBe(1);
+
+    // Usuario escolhe a linha 5 (indice 4) na mao.
+    await page.evaluate(() => _impTrocarCabecalho(0, 4));
+    const indiceEscolhido = await page.evaluate(() => {
+        const l = _impLayoutsDistintos()[0];
+        return _impEstado.layouts[l.assinatura].cabecalhoIndice;
+    });
+    expect(indiceEscolhido).toBe(4);
+
+    // Clica em "Continuar" — e o ponto que a correcao final tinha de blindar.
+    await page.click('#imp-corpo button:has-text("Continuar")');
+    await page.waitForFunction(() => _impEstado.passo === 4);
+
+    const estado = await page.evaluate(() => {
+        const grupos = _impEstado.grupos;
+        const todos = [].concat(grupos.novos, grupos.atualizados, grupos.problemas, grupos.conflitos);
+        return todos.map(e => ({ codigo: e.item.codigo, preco_custo: e.item.preco_custo }));
+    });
+    // Se o indice tivesse revertido para a linha 2 (bloco velho), a linha "X1"
+    // (que nao e produto nenhum, e o cabecalho velho) entraria como item extra
+    // e/ou o preco do 1000 viria de outra celula. So passa com EXATAMENTE um
+    // item, o 1000 com o preco da linha 5.
+    expect(estado, 'so o produto real (1000) pode aparecer; nada do bloco velho').toEqual([
+        { codigo: '1000', preco_custo: 9.9 }
+    ]);
+});
