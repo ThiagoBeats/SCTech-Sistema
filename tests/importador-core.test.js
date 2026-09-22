@@ -892,6 +892,33 @@ test('assinaturaDoLayout junta os rotulos do cabecalho', () => {
     );
 });
 
+test('assinaturaDoLayout remove colunas vazias no final', () => {
+    assert.strictEqual(
+        C.assinaturaDoLayout(['A', 'B', '', '']),
+        'A|B'
+    );
+});
+
+test('assinaturaDoLayout preserva colunas vazias no meio', () => {
+    assert.strictEqual(
+        C.assinaturaDoLayout(['A', '', 'B']),
+        'A||B'
+    );
+});
+
+test('assinaturaDoLayout com todas as colunas vazias devolve string vazia', () => {
+    assert.strictEqual(
+        C.assinaturaDoLayout(['', '', '']),
+        ''
+    );
+});
+
+test('assinaturaDoLayout ignora trailing empties — two columns differing only in trailing blanks share signature', () => {
+    const sig1 = C.assinaturaDoLayout(['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE', 'PEÇA']);
+    const sig2 = C.assinaturaDoLayout(['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE', 'PEÇA', '', '']);
+    assert.strictEqual(sig1, sig2, 'signatures must be identical');
+});
+
 test('as 7 abas de tecido da planilha real compartilham uma assinatura', () => {
     const { abas } = lerXlsx(PLANILHA);
     const assinaturas = new Set();

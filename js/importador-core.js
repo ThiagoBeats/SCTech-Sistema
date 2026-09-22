@@ -518,7 +518,13 @@
     }
 
     function assinaturaDoLayout(colunas) {
-        return (colunas || []).map(c => normalizarNome(c)).join('|');
+        const normalized = (colunas || []).map(c => normalizarNome(c));
+        // Remove trailing empty segments — empty columns in the MIDDLE must be preserved
+        // as they carry positional information for the mapping
+        while (normalized.length > 0 && normalized[normalized.length - 1] === '') {
+            normalized.pop();
+        }
+        return normalized.join('|');
     }
 
     function montarPerfil(opcoes) {
