@@ -2417,6 +2417,12 @@ Sirva o projeto e rode o teste apontando para ele:
 
 `tests/e2e/importador.spec.js`:
 
+> **Sessão autenticada é obrigatória.** O SCTech redireciona para `login.html`
+> quando não há sessão, então um teste que navega direto para `catalogo.html`
+> encontra a tela de login e falha com `window._impLerArquivo is not a function`.
+> Semeie a sessão antes de cada navegação. Papel 1 é o Administrador que vem de
+> `papeisPadrao()`, com tudo em "completo".
+
 ```js
 const { test, expect } = require('@playwright/test');
 const path = require('node:path');
@@ -2425,7 +2431,20 @@ const BASE = process.env.BASE || 'http://localhost:8123';
 const RAIZ = process.env.RAIZ || path.join(__dirname, '..', '..');
 const PLANILHA = path.join(RAIZ, 'docs', 'Tabela RC - SETEMBRO - 2024.xlsx');
 
+// Semeia a sessao. Sem isto, toda navegacao cai em login.html.
+async function entrar(page) {
+    await page.goto(BASE + '/login.html');
+    await page.evaluate(() => {
+        localStorage.setItem('sc_usr', JSON.stringify([{
+            id: 1, nome: 'Teste', email: 'teste@sctech.local',
+            papel_id: 1, ativo: true, permissoes_extras: {}, senha_hash: ''
+        }]));
+        sessionStorage.setItem('sc_user', JSON.stringify({ id: 1 }));
+    });
+}
+
 test('importa a tabela real do fornecedor para o catalogo', async ({ page }) => {
+    await entrar(page);
     await page.goto(BASE + '/catalogo.html');
 
     // fornecedor conhecido, catalogo e materiais limpos
@@ -2489,6 +2508,7 @@ test('importa a tabela real do fornecedor para o catalogo', async ({ page }) => 
 });
 
 test('desfaz a importacao e devolve o catalogo ao estado anterior', async ({ page }) => {
+    await entrar(page);
     await page.goto(BASE + '/catalogo.html');
     const antes = await page.evaluate(() => JSON.parse(localStorage.getItem('sc_cat') || '[]').length);
     expect(antes).toBeGreaterThan(0);
@@ -3011,6 +3031,7 @@ test('o PDF produz os mesmos codigos que a planilha', async ({ page }) => {
     const PDF = path.join(RAIZ, 'docs', 'Tabela de preços RC TECIDOS PDF.pdf');
 
     const importar = async arquivo => {
+        await entrar(page);
         await page.goto(BASE + '/catalogo.html');
         await page.evaluate(() => {
             localStorage.setItem('sc_forn', JSON.stringify([{ id: 7, nome: 'RC Tecidos' }]));
@@ -3047,6 +3068,7 @@ test('o PDF produz os mesmos codigos que a planilha', async ({ page }) => {
 });
 
 test('modo preco por cor grava um material por cor', async ({ page }) => {
+    await entrar(page);
     await page.goto(BASE + '/catalogo.html');
     await page.evaluate(() => {
         localStorage.setItem('sc_forn', JSON.stringify([{ id: 7, nome: 'RC Tecidos' }]));
