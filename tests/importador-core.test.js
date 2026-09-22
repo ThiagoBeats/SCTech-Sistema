@@ -1064,62 +1064,50 @@ test('agruparLinhasPdf nao funde duas colunas quando uma celula larga toca as du
     assert.strictEqual(linhas[3][2], '2,80');
 });
 
-test('expandirPorCor expande uma linha com multiplas cores em varios itens', () => {
-    const mapa = { codigo: 0, nome: 1, largura: -1, preco: -1, unidade: -1 };
-    const cores = { 2: 'DOURADO', 3: 'CROMADO', 4: 'PALHA' };
+const COLUNAS_COR = ['CÓD', 'DESCRIÇÃO', 'DOURADO', 'CROMADO', 'BRANCO'];
+const MAPA_COR = { codigo: 0, nome: 1, largura: -1, preco: -1, unidade: -1 };
+
+test('expandirPorCor cria um item por cor com preco', () => {
     const itens = C.expandirPorCor({
-        linha: ['AC1', 'Fita', '10,00', '15,00', '12,00'],
-        cores, mapa, tipo: 'material', aba: 'Acessórios', linhaNum: 5
+        linhas: [COLUNAS_COR, ['AC123', 'Ponteira', '10,00', '12,00', '9,50']],
+        cabecalhoIndice: 0, mapa: MAPA_COR, colunasCor: [2, 3, 4], colunas: COLUNAS_COR,
+        tipo: 'material', aba: 'Cor Metal'
     });
-    assert.strictEqual(itens.length, 3, 'deve expandir em 3 itens (uma por cor)');
+    assert.strictEqual(itens.length, 3);
+    assert.strictEqual(itens[0].codigo, 'AC123-DOURADO');
+    assert.strictEqual(itens[0].nome, 'Ponteira (DOURADO)');
+    assert.strictEqual(itens[0].preco_custo, 10);
+    assert.strictEqual(itens[2].codigo, 'AC123-BRANCO');
+    assert.strictEqual(itens[2].preco_custo, 9.5);
+});
+
+test('expandirPorCor pula a cor sem preco naquela linha', () => {
+    const itens = C.expandirPorCor({
+        linhas: [COLUNAS_COR, ['AC123', 'Ponteira', '10,00', '--', '']],
+        cabecalhoIndice: 0, mapa: MAPA_COR, colunasCor: [2, 3, 4], colunas: COLUNAS_COR,
+        tipo: 'material', aba: 'Cor Metal'
+    });
+    assert.strictEqual(itens.length, 1);
+    assert.strictEqual(itens[0].codigo, 'AC123-DOURADO');
+});
+
+test('expandirPorCor ignora linhas que nao sao produto', () => {
+    const itens = C.expandirPorCor({
+        linhas: [COLUNAS_COR, ['OBSERVACAO SOLTA'], [], ['AC1', 'Real', '5,00', '', '']],
+        cabecalhoIndice: 0, mapa: MAPA_COR, colunasCor: [2, 3, 4], colunas: COLUNAS_COR,
+        tipo: 'material', aba: 'Cor Metal'
+    });
+    assert.strictEqual(itens.length, 1);
     assert.strictEqual(itens[0].codigo, 'AC1-DOURADO');
-    assert.strictEqual(itens[0].nome, 'Fita (DOURADO)');
-    assert.strictEqual(itens[0].preco_custo, 10.00);
-    assert.strictEqual(itens[1].codigo, 'AC1-CROMADO');
-    assert.strictEqual(itens[1].preco_custo, 15.00);
-    assert.strictEqual(itens[2].codigo, 'AC1-PALHA');
-    assert.strictEqual(itens[2].preco_custo, 12.00);
 });
 
-test('expandirPorCor pula cores sem preco legivel', () => {
-    const mapa = { codigo: 0, nome: 1, largura: -1, preco: -1, unidade: -1 };
-    const cores = { 2: 'DOURADO', 3: 'CROMADO', 4: 'PALHA' };
+test('expandirPorCor mantem o aviso de promocional', () => {
     const itens = C.expandirPorCor({
-        linha: ['AC2', 'Fita', '10,00', '--', '12,00'],
-        cores, mapa, tipo: 'material', aba: 'Acessórios', linhaNum: 6
+        linhas: [COLUNAS_COR, ['*AC9', 'Promo', '5,00', '', '']],
+        cabecalhoIndice: 0, mapa: MAPA_COR, colunasCor: [2, 3, 4], colunas: COLUNAS_COR,
+        tipo: 'material', aba: 'Cor Metal'
     });
-    assert.strictEqual(itens.length, 2, 'deve ter apenas 2 itens (CROMADO pulado)');
-    assert.strictEqual(itens[0].codigo, 'AC2-DOURADO');
-    assert.strictEqual(itens[1].codigo, 'AC2-PALHA');
-});
-
-test('expandirPorCor rejeita linhas que nao sao produtos', () => {
-    const mapa = { codigo: 0, nome: 1, largura: -1, preco: -1, unidade: -1 };
-    const cores = { 2: 'DOURADO', 3: 'CROMADO' };
-    const itens1 = C.expandirPorCor({
-        linha: ['', 'Fita', '10,00', '15,00'],
-        cores, mapa, tipo: 'material', aba: 'Acessórios', linhaNum: 7
-    });
-    assert.strictEqual(itens1.length, 0, 'linha sem codigo nao vira item');
-    const itens2 = C.expandirPorCor({
-        linha: ['AC3', '', '10,00', '15,00'],
-        cores, mapa, tipo: 'material', aba: 'Acessórios', linhaNum: 8
-    });
-    assert.strictEqual(itens2.length, 0, 'linha sem nome nao vira item');
-});
-
-test('expandirPorCor mantém aviso de promocional em cada variante de cor', () => {
-    const mapa = { codigo: 0, nome: 1, largura: -1, preco: -1, unidade: -1 };
-    const cores = { 2: 'DOURADO', 3: 'CROMADO' };
-    const itens = C.expandirPorCor({
-        linha: ['*AC4', 'Fita', '10,00', '15,00'],
-        cores, mapa, tipo: 'material', aba: 'Acessórios', linhaNum: 9
-    });
-    assert.strictEqual(itens.length, 2);
-    assert.strictEqual(itens[0].codigo, 'AC4-DOURADO');
+    assert.strictEqual(itens[0].codigo, 'AC9-DOURADO');
     assert.strictEqual(itens[0].promocional, true);
-    assert.ok(itens[0].avisos.some(a => /promo/i.test(a)), 'primeiro item tem aviso de promocional');
-    assert.strictEqual(itens[1].codigo, 'AC4-CROMADO');
-    assert.strictEqual(itens[1].promocional, true);
-    assert.ok(itens[1].avisos.some(a => /promo/i.test(a)), 'segundo item tem aviso de promocional');
+    assert.ok(itens[0].avisos.some(a => /promo/i.test(a)));
 });

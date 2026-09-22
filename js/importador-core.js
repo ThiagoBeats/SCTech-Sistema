@@ -668,65 +668,48 @@
         });
     }
 
-    // Expande uma linha com colunas de cores em multiplos itens (um por cor).
+    // Expande as linhas de uma aba com colunas de cores em multiplos itens (um por cor).
     // Usado para importacao de tabelas de fornecedor que listam cores como colunas.
     // Exemplo: uma linha com AC1 | Fita | 10.00 | 15.00 | 12.00 (DOURADO, CROMADO, PALHA)
     // vira 3 itens: AC1-DOURADO/Fita(DOURADO), AC1-CROMADO/Fita(CROMADO), AC1-PALHA/Fita(PALHA).
     function expandirPorCor(opcoes) {
-        const linha = opcoes.linha || [];
-        const cores = opcoes.cores || {}; // { indiceColuna: 'NOME DA COR' }
-        const mapa = opcoes.mapa || {};
-        const tipo = opcoes.tipo || 'material';
+        const linhas = opcoes.linhas || [];
+        const mapa = opcoes.mapa;
+        const colunas = (opcoes.colunas || []).map(c => normalizarNome(c));
+        const colunasCor = opcoes.colunasCor || [];
+        const tipo = opcoes.tipo;
         const aba = opcoes.aba || '';
-        const linhaNum = opcoes.linhaNum || -1;
-
-        // Se a linha nao e um produto, nao expande nada
-        if (!ehLinhaDeProduto(linha, mapa)) return [];
-
-        // Extrai codigo e nome da linha
-        const codigoBruto = mapa.codigo >= 0 ? linha[mapa.codigo] : '';
-        const nomeBruto = mapa.nome >= 0 ? linha[mapa.nome] : '';
-        const { codigo: codigoNormalizado, promocional } = normalizarCodigo(codigoBruto);
-        const nomeBase = normalizarNome(nomeBruto);
-
-        // Para cada cor definida
+        const inicio = (opcoes.cabecalhoIndice >= 0 ? opcoes.cabecalhoIndice : -1) + 1;
         const itens = [];
-        for (const [indiceColuna, nomeCor] of Object.entries(cores)) {
-            const idx = Number(indiceColuna);
-            if (idx < 0 || !isFinite(idx)) continue;
 
-            // Extrai o preco para esta cor
-            const precoBruto = idx < linha.length ? linha[idx] : '';
-            const preco = normalizarPreco(precoBruto);
+        for (let i = inicio; i < linhas.length; i++) {
+            const linha = linhas[i];
+            if (!ehLinhaDeProduto(linha, mapa)) continue;
+            const cod = normalizarCodigo(linha[mapa.codigo]);
+            const nomeBase = normalizarNome(linha[mapa.nome]);
 
-            // Pula cores sem preco legivel (silenciosamente)
-            if (!preco.ok) continue;
-
-            // Normaliza o nome da cor
-            const corNormalizada = normalizarNome(nomeCor).toUpperCase();
-            const corSemEspacos = corNormalizada.replace(/\s+/g, '');
-
-            // Monta o item
-            const avisos = [];
-            if (promocional) {
-                avisos.push('Código veio marcado como promocional (com *) na tabela');
-            }
-
-            itens.push({
-                aba,
-                linha: linhaNum,
-                codigo: codigoNormalizado + '-' + corSemEspacos,
-                nome: nomeBase + ' (' + corNormalizada + ')',
-                largura: null,
-                preco_custo: preco.valor,
-                unidade: _normalizarUnidade(mapa.unidade >= 0 ? linha[mapa.unidade] : '', tipo),
-                tipo,
-                promocional,
-                avisos,
-                problema: null
+            colunasCor.forEach(ci => {
+                const cor = normalizarNome(colunas[ci]).toUpperCase();
+                if (!cor) return;
+                const p = normalizarPreco(linha[ci]);
+                if (!p.ok) return;
+                const avisos = [];
+                if (cod.promocional) avisos.push('Código veio marcado como promocional (com *) na tabela');
+                itens.push({
+                    aba,
+                    linha: i,
+                    codigo: cod.codigo + '-' + cor.replace(/\s+/g, ''),
+                    nome: nomeBase + ' (' + cor + ')',
+                    largura: null,
+                    preco_custo: p.valor,
+                    unidade: tipo === 'tecido' ? 'm' : 'un',
+                    tipo,
+                    promocional: cod.promocional,
+                    avisos,
+                    problema: null
+                });
             });
         }
-
         return itens;
     }
 
