@@ -556,3 +556,75 @@ test('classificar casa codigos ignorando o asterisco e a caixa', () => {
     const r = C.classificar({ itens: [itemDeTeste({ codigo: 'AC1' })], catalogo, materiais: [], fornecedorId: 7 });
     assert.strictEqual(r.atualizados.length, 1);
 });
+
+test('classificar trata fornecedor_id: 0 como fornecedor distinct (FIX 1)', () => {
+    // Quando o registro tem fornecedor_id: 0, deve ser tratado como um fornecedor específico,
+    // não como "sem fornecedor". Isso é importante para sistemas que usam ids sequenciais.
+    const catalogo = [
+        { id: 1, referencia: 'AC1', nome: 'Linho', preco_custo: 90, preco: 162, fornecedor_id: 0 },
+        { id: 2, referencia: 'AC2', nome: 'Voil', preco_custo: 50, preco: 90, fornecedor_id: 7 }
+    ];
+    
+    // Caso 1: 0 vs 0 deve ser mesmo fornecedor (atualizados)
+    const r1 = C.classificar({
+        itens: [itemDeTeste({ codigo: 'AC1' })],
+        catalogo, materiais: [], fornecedorId: 0
+    });
+    assert.strictEqual(r1.atualizados.length, 1, 'fornecedor_id: 0 vs fornecedorId: 0 deve ser atualizados');
+    assert.strictEqual(r1.conflitos.length, 0);
+    
+    // Caso 2: 0 vs null deve ser conflito (fornecedores diferentes)
+    const r2 = C.classificar({
+        itens: [itemDeTeste({ codigo: 'AC1' })],
+        catalogo, materiais: [], fornecedorId: null
+    });
+    assert.strictEqual(r2.conflitos.length, 1, 'fornecedor_id: 0 vs fornecedorId: null deve ser conflito');
+    assert.strictEqual(r2.atualizados.length, 0);
+    
+    // Caso 3: 0 vs undefined deve ser conflito
+    const r3 = C.classificar({
+        itens: [itemDeTeste({ codigo: 'AC1' })],
+        catalogo, materiais: [], fornecedorId: undefined
+    });
+    assert.strictEqual(r3.conflitos.length, 1, 'fornecedor_id: 0 vs fornecedorId: undefined deve ser conflito');
+    
+    // Caso 4: 0 vs '' (string vazia) deve ser conflito
+    const r4 = C.classificar({
+        itens: [itemDeTeste({ codigo: 'AC1' })],
+        catalogo, materiais: [], fornecedorId: ''
+    });
+    assert.strictEqual(r4.conflitos.length, 1, 'fornecedor_id: 0 vs fornecedorId: "" deve ser conflito');
+    
+    // Caso 5: null vs undefined deve ser mesmo fornecedor (ambos representam "sem fornecedor")
+    const r5 = C.classificar({
+        itens: [itemDeTeste({ codigo: 'AC1' })],
+        catalogo: [{ id: 1, referencia: 'AC1', nome: 'Linho', preco_custo: 90, preco: 162, fornecedor_id: null }],
+        materiais: [], fornecedorId: undefined
+    });
+    assert.strictEqual(r5.atualizados.length, 1, 'fornecedor_id: null vs fornecedorId: undefined deve ser atualizados');
+});
+
+test('classificar normaliza codigo e nome do item antes de classificar (FIX 2)', () => {
+    // Se o item vem com codigo nao normalizado (com asterisco, minusculas, espacos),
+    // deve ser normalizado antes de comparar com os registros indexados.
+    const catalogo = [
+        { id: 1, referencia: 'ac1', nome: 'Linho', preco_custo: 90, preco: 162, fornecedor_id: 7 }
+    ];
+    
+    const itemNaoNormalizado = {
+        aba: 'Teste', linha: 1, codigo: '*AC1', nome: 'linho ', largura: 2.8,
+        preco_custo: 100, unidade: 'm', tipo: 'tecido', promocional: false,
+        avisos: [], problema: null
+    };
+    
+    const r = C.classificar({
+        itens: [itemNaoNormalizado],
+        catalogo, materiais: [], fornecedorId: 7
+    });
+    
+    // O item com codigo '*AC1' e nome 'linho ' deve ser normalizado e encontrado como atualizacao
+    assert.strictEqual(r.atualizados.length, 1, 'item nao normalizado deve ser encontrado como atualizados');
+    assert.strictEqual(r.atualizados[0].existente.id, 1);
+    // Nao deve ficar em sumiram porque foi "visto" apos normalizacao
+    assert.strictEqual(r.sumiram.length, 0, 'sumiram deve estar vazio quando o item foi normalizado e encontrado');
+});

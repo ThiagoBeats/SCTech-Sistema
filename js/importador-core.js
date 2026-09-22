@@ -336,21 +336,30 @@
         const fornecedorId = opcoes.fornecedorId === undefined ? null : opcoes.fornecedorId;
         const { porCodigo, porNome } = indexarExistentes(opcoes.catalogo, opcoes.materiais);
 
+        // Helper para normalizar IDs de fornecedor sem confundir 0 com ausente
+        const normalizarIdFornecedor = v => (v === null || v === undefined) ? '' : String(v);
+        const idFornecedorNormalizado = normalizarIdFornecedor(fornecedorId);
+
         const r = { novos: [], atualizados: [], conflitos: [], nomes_repetidos: [], sem_markup: [], problemas: [], sumiram: [] };
         const vistos = new Set();
 
         itens.forEach(item => {
             if (item.problema) { r.problemas.push({ item, existente: null, motivo: item.problema }); return; }
 
-            const achado = porCodigo.get(item.codigo);
+            // Normaliza o codigo e nome do item antes de procurar nos indices
+            const codigoNormalizado = normalizarCodigo(item.codigo).codigo;
+            const nomeNormalizado = normalizarNome(item.nome);
+
+            const achado = porCodigo.get(codigoNormalizado);
             if (achado) {
-                vistos.add(item.codigo);
+                vistos.add(codigoNormalizado);
                 const existente = achado.registro;
-                const mesmoFornecedor = String(existente.fornecedor_id || '') === String(fornecedorId || '');
+                const idExistenteNormalizado = normalizarIdFornecedor(existente.fornecedor_id);
+                const mesmoFornecedor = idExistenteNormalizado === idFornecedorNormalizado;
                 if (!mesmoFornecedor) {
                     r.conflitos.push({
                         item, existente,
-                        motivo: 'O código ' + item.codigo + ' já pertence a "' + existente.nome + '" de outro fornecedor'
+                        motivo: 'O código ' + codigoNormalizado + ' já pertence a "' + existente.nome + '" de outro fornecedor'
                     });
                     return;
                 }
@@ -362,11 +371,11 @@
                 return;
             }
 
-            const donoDoNome = porNome.get(item.tipo + '|' + item.nome.toLowerCase());
+            const donoDoNome = porNome.get(item.tipo + '|' + nomeNormalizado.toLowerCase());
             if (donoDoNome) {
                 r.nomes_repetidos.push({
                     item, existente: donoDoNome.registro,
-                    motivo: 'O nome "' + item.nome + '" já é usado pelo código ' + (donoDoNome.registro.referencia || '(sem código)')
+                    motivo: 'O nome "' + nomeNormalizado + '" já é usado pelo código ' + (donoDoNome.registro.referencia || '(sem código)')
                 });
                 return;
             }
@@ -376,7 +385,8 @@
 
         porCodigo.forEach((achado, codigo) => {
             if (vistos.has(codigo)) return;
-            if (String(achado.registro.fornecedor_id || '') !== String(fornecedorId || '')) return;
+            const idExistenteNormalizado = normalizarIdFornecedor(achado.registro.fornecedor_id);
+            if (idExistenteNormalizado !== idFornecedorNormalizado) return;
             r.sumiram.push({
                 item: null, existente: achado.registro,
                 motivo: 'Está cadastrado mas não veio nesta tabela — nada será alterado'
