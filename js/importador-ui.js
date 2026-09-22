@@ -89,12 +89,14 @@ async function _impLerArquivo(file) {
     return { ordem: wb.SheetNames.slice(), abas };
 }
 
+const IMP_MARKUP_PADRAO = 80;
+
 const _impEstado = {
     file: null,
     planilha: null,      // { ordem, abas }
     fornecedor: null,    // { id, nome }
     fornecedorId: null,  // id escolhido no select antes de confirmar no passo 1
-    markupPadrao: 80,
+    markupPadrao: IMP_MARKUP_PADRAO,
     abas: {},            // { [nomeAba]: 'tecido' | 'material' | 'ignorar' }
     layouts: {},         // { [assinatura]: { mapa, cabecalhoIndice } }
     cores: {},           // { [assinatura]: [indices de coluna que sao cor] }
@@ -107,7 +109,7 @@ function _impResetar() {
     _impEstado.planilha = null;
     _impEstado.fornecedor = null;
     _impEstado.fornecedorId = null;
-    _impEstado.markupPadrao = 80;
+    _impEstado.markupPadrao = IMP_MARKUP_PADRAO;
     _impEstado.abas = {};
     _impEstado.layouts = {};
     _impEstado.cores = {};
@@ -205,20 +207,27 @@ function _impPasso1HTML() {
     </div>`;
 }
 
+// Guarda o que o usuario ja digitou no passo 1 antes de qualquer re-render.
+// TODO caminho que redesenha o passo 1 precisa chamar isto, senao a escolha de
+// fornecedor ou o markup digitado somem sem aviso. Regra unica de padrao: campo
+// em branco ou ilegivel vira IMP_MARKUP_PADRAO; um 0 digitado de proposito fica 0.
+function _impCapturarPasso1() {
+    const selFornecedor = document.getElementById('imp-fornecedor');
+    if (selFornecedor && selFornecedor.value) {
+        _impEstado.fornecedorId = parseInt(selFornecedor.value, 10);
+    }
+    const campoMarkup = document.getElementById('imp-markup');
+    if (campoMarkup) {
+        const v = parseFloat(campoMarkup.value);
+        _impEstado.markupPadrao = (isFinite(v) && v >= 0) ? v : IMP_MARKUP_PADRAO;
+    }
+}
+
 async function _impArquivoEscolhido(input) {
     const file = input.files && input.files[0];
     if (!file) return;
     try {
-        // Captura valores da forma antes de re-renderizar (ao carregar arquivo)
-        const selFornecedor = document.getElementById('imp-fornecedor');
-        const selMarkup = document.getElementById('imp-markup');
-        if (selFornecedor && selFornecedor.value) {
-            _impEstado.fornecedorId = parseInt(selFornecedor.value, 10);
-        }
-        if (selMarkup && selMarkup.value) {
-            _impEstado.markupPadrao = parseFloat(selMarkup.value) || 80;
-        }
-
+        _impCapturarPasso1();
         _impEstado.file = file;
         _impEstado.planilha = await _impLerArquivo(file);
         _impSugerirAbas();
@@ -240,6 +249,9 @@ function _impSugerirAbas() {
 }
 
 async function _impCriarFornecedorInline() {
+    // Este caminho tambem redesenha o passo 1: sem capturar antes, o markup que
+    // o usuario acabou de digitar voltaria ao padrao em silencio.
+    _impCapturarPasso1();
     const campo = document.getElementById('imp-novo-fornecedor');
     const limpo = (campo?.value || '').trim();
     if (!limpo) { await showAlert('Escreva o nome do novo fornecedor.', '⚠️'); return; }
@@ -265,8 +277,8 @@ async function _impConcluirPasso1() {
     if (!id) { await showAlert('Escolha o fornecedor desta tabela.', '⚠️'); return; }
     const f = db.fornecedores.find(x => x.id === id);
     _impEstado.fornecedor = { id: f.id, nome: f.nome };
+    _impCapturarPasso1();
     _impEstado.fornecedorId = id;
-    _impEstado.markupPadrao = parseFloat(document.getElementById('imp-markup').value) || 0;
 
     const perfil = C.perfilDoFornecedor(db.import_perfis, id);
     if (perfil) {
@@ -357,10 +369,21 @@ function _impLayoutsDistintos() {
         const tipo = _impEstado.abas[nome];
         if (tipo === 'ignorar') return;
         const dados = _impEstado.planilha.abas[nome];
+        // A assinatura continua vindo da deteccao automatica: ela e a IDENTIDADE do
+        // layout, a mesma chave usada por _impColetarItens e pelos perfis salvos.
         const { indice, colunas } = C.detectarCabecalho(dados);
         const assinatura = C.assinaturaDoLayout(colunas) + '#' + tipo;
         if (!porAssinatura[assinatura]) {
-            porAssinatura[assinatura] = { assinatura, colunas, cabecalhoIndice: indice, abas: [], tipo };
+            // Mas a LINHA DE CABECALHO em uso e a que o usuario escolheu (ou a que
+            // veio do perfil), quando houver. Re-detectar aqui apagaria a escolha
+            // manual a cada render e no "Continuar" do passo 3.
+            const guardado = _impEstado.layouts[assinatura];
+            const escolhido = guardado && Number.isInteger(guardado.cabecalhoIndice)
+                ? guardado.cabecalhoIndice : indice;
+            const colunasEmUso = escolhido === indice
+                ? colunas
+                : (dados[escolhido] || []).map(c => C.normalizarNome(c));
+            porAssinatura[assinatura] = { assinatura, colunas: colunasEmUso, cabecalhoIndice: escolhido, abas: [], tipo };
         }
         porAssinatura[assinatura].abas.push(nome);
     });
@@ -392,7 +415,10 @@ function _impPasso3HTML() {
             return achado || 'ignorar';
         };
 
-        const opcoesLinha = dados.slice(0, 12).map((_, li2) =>
+        // Mostra ao menos ate a linha escolhida, para que uma escolha manual
+        // abaixo da 12a continue visivel (e selecionada) no seletor.
+        const ateLinha = Math.min(dados.length, Math.max(12, layout.cabecalhoIndice + 1));
+        const opcoesLinha = dados.slice(0, ateLinha).map((_, li2) =>
             `<option value="${li2}" ${li2 === layout.cabecalhoIndice ? 'selected' : ''}>Linha ${li2 + 1}</option>`).join('');
         const controles = `
             <div style="display:flex;gap:16px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
@@ -544,9 +570,9 @@ const _IMP_GRUPOS = [
     { chave: 'novos',           titulo: 'Novos',                   ajuda: 'Serão criados com o markup informado.' },
     { chave: 'atualizados',     titulo: 'Atualizados',             ajuda: 'Custo novo, venda recalculada com o markup atual do item.' },
     { chave: 'sem_markup',      titulo: 'Sem markup registrado',   ajuda: 'O item já existe mas não tem markup. Defina um para cada linha.' },
-    { chave: 'conflitos',       titulo: 'Conflitos de código',     ajuda: 'O código já é de outro fornecedor. Edite o código ou desmarque.' },
+    { chave: 'conflitos',       titulo: 'Conflitos de código',     ajuda: 'O código já é de outro fornecedor, ou já pertence a um item do outro tipo. Edite o código ou desmarque.' },
     { chave: 'nomes_repetidos', titulo: 'Nomes repetidos',         ajuda: 'O nome já pertence a outro produto. Edite o nome ou desmarque.' },
-    { chave: 'problemas',       titulo: 'Com problema',            ajuda: 'Preço ilegível. Corrija o valor ou deixe desmarcado.' }
+    { chave: 'problemas',       titulo: 'Com problema',            ajuda: 'Preço ilegível, código ou nome faltando, ou mudança de layout na planilha. Corrija o que falta ou deixe desmarcado.' }
 ];
 
 // Percorre as linhas marcadas na ordem de importacao (ordem dos grupos e,
@@ -585,11 +611,29 @@ function _impCodigosOcupados() {
     return ocupados;
 }
 
+// Quantas vezes cada nome (em minusculas) aparece no catalogo, nos materiais e
+// nas linhas marcadas. E contagem, nao conjunto, para saber se um nome colide
+// com OUTRA linha ou se a unica ocorrencia e a propria linha sendo renomeada.
+function _impContagemDeNomes() {
+    const C = window.ImportadorCore;
+    const { porNome } = C.indexarExistentes(db.catalogo, db.materiais);
+    const contagem = new Map();
+    const somar = nome => {
+        const chave = C.normalizarNome(nome).toLowerCase();
+        if (!chave) return;
+        contagem.set(chave, (contagem.get(chave) || 0) + 1);
+    };
+    porNome.forEach(achado => somar(achado.registro.nome));
+    _impLinhasMarcadas().forEach(l => somar(l.entrada.item.nome));
+    return contagem;
+}
+
 function _impDiferenciarDuplicados() {
     const C = window.ImportadorCore;
     const dups = _impDuplicadosNoLote();
     if (!dups.length) return;
     const ocupados = _impCodigosOcupados();
+    const nomes = _impContagemDeNomes();
     let renomeados = 0;
     dups.forEach(d => {
         // a primeira ocorrencia mantem o codigo; da segunda em diante, sufixo
@@ -599,6 +643,17 @@ function _impDiferenciarDuplicados() {
             entrada.item.codigo = novo;
             ocupados.add(novo);
             renomeados++;
+
+            // O nome tambem precisa ser diferenciado: codigos distintos com o
+            // mesmo nome passam hoje e travam a importacao do mes seguinte.
+            // So renomeia quando o nome e mesmo compartilhado com outra linha.
+            const chave = C.normalizarNome(entrada.item.nome).toLowerCase();
+            if ((nomes.get(chave) || 0) > 1) {
+                const nomeNovo = C.nomeLivre(entrada.item.nome, new Set(nomes.keys()));
+                nomes.set(chave, nomes.get(chave) - 1);
+                nomes.set(nomeNovo.toLowerCase(), 1);
+                entrada.item.nome = nomeNovo;
+            }
         });
     });
     _impRenderPasso(4);
@@ -720,12 +775,21 @@ function _impEditarCampo(chave, i, campo, valor) {
 }
 
 // ── Gravacao, snapshot e desfazer ────────────────────────────────────────────
-function _impSalvarSnapshot(resumo) {
+
+// O desfazer expira: depois disto o botao some. Sem prazo, um clique feito
+// semanas depois desfaz sobre um catalogo que ja mudou muito.
+const PRAZO_DESFAZER_DIAS = 7;
+
+// O snapshot guarda SO o que o importador escreveu: os ids criados e, para os
+// atualizados, os valores anteriores dos campos do importador. Nao copia mais o
+// catalogo e os materiais inteiros — que traziam cada imagem em base64 e, pior,
+// devolviam saldo de estoque velho ao desfazer.
+function _impSalvarSnapshot(resumo, mudancas) {
     localStorage.setItem(CHAVE_SNAPSHOT, JSON.stringify({
         quando: new Date().toISOString(),
+        versao: 2,
         resumo,
-        catalogo: db.catalogo,
-        materiais: db.materiais
+        mudancas
     }));
 }
 
@@ -764,13 +828,41 @@ async function _impGravar() {
         agora: Date.now()
     });
 
-    _impSalvarSnapshot(r.resumo);
-    db.catalogo = r.catalogo;
-    db.materiais = r.materiais;
+    // Snapshot antes de tocar no db: se ele nao couber no armazenamento, nada e
+    // gravado — melhor não importar do que importar sem poder desfazer.
+    try {
+        _impSalvarSnapshot(r.resumo, r.mudancas);
+    } catch (e) {
+        await showAlert('Não foi possível preparar o "desfazer" desta importação'
+            + (e && e.message ? ' (' + e.message + ')' : '')
+            + '.\n\nNada foi gravado. Libere espaço no navegador e tente de novo.', '⚠️');
+        return;
+    }
 
-    if (document.getElementById('imp-salvar-perfil')?.checked) _impSalvarPerfil();
-
-    salvarERecarregar(`Importação concluída: ${r.resumo.criados} criado(s), ${r.resumo.atualizados} atualizado(s).`);
+    // A gravacao em si tambem pode falhar (cota do navegador). Se falhar, o db em
+    // memoria volta ao que era e o usuario e avisado de que nada foi gravado.
+    const catalogoAntes = db.catalogo;
+    const materiaisAntes = db.materiais;
+    try {
+        db.catalogo = r.catalogo;
+        db.materiais = r.materiais;
+        if (document.getElementById('imp-salvar-perfil')?.checked) _impSalvarPerfil();
+        // O resumo tem de fechar com o numero de decisoes: linhas que nao puderam
+        // ser aplicadas aparecem como ignoradas, nunca somem da conta.
+        const naoAplicadas = (r.naoAplicadas || []).length;
+        salvarERecarregar(`Importação concluída: ${r.resumo.criados} criado(s), ${r.resumo.atualizados} atualizado(s).`
+            + (naoAplicadas ? ` ${naoAplicadas} linha(s) não puderam ser gravadas.` : ''));
+    } catch (e) {
+        db.catalogo = catalogoAntes;
+        db.materiais = materiaisAntes;
+        // Tenta devolver o armazenamento ao estado anterior: syncDB grava sc_cat
+        // antes de sc_mat, entao uma falha no meio pode ter persistido so metade.
+        try { syncDB(); } catch (e2) { /* nada mais a fazer aqui */ }
+        try { localStorage.removeItem(CHAVE_SNAPSHOT); } catch (e3) { /* idem */ }
+        await showAlert('Não foi possível gravar a importação'
+            + (e && e.message ? ' (' + e.message + ')' : '')
+            + '.\n\nNada foi gravado no catálogo. Libere espaço no navegador e tente de novo.', '⚠️');
+    }
 }
 
 function _impSalvarPerfil() {
@@ -794,20 +886,55 @@ function _impSalvarPerfil() {
     else db.import_perfis.push(perfil);
 }
 
+// Devolve o snapshot so quando ele ainda pode ser desfeito com segurança:
+// formato novo (com `mudancas`) e dentro do prazo. Um snapshot antigo ou
+// vencido e descartado — desfazer sobre um catalogo que ja mudou muito faria
+// mais estrago do que a importacao que se quer reverter.
 function _impSnapshot() {
-    try { return JSON.parse(localStorage.getItem(CHAVE_SNAPSHOT)); } catch (e) { return null; }
+    let snap = null;
+    try { snap = JSON.parse(localStorage.getItem(CHAVE_SNAPSHOT)); } catch (e) { return null; }
+    if (!snap || !snap.mudancas) return null;
+    const quando = Date.parse(snap.quando);
+    if (!isFinite(quando)) return null;
+    if (Date.now() - quando > PRAZO_DESFAZER_DIAS * 24 * 60 * 60 * 1000) return null;
+    return snap;
 }
 
 async function desfazerUltimaImportacao() {
+    const C = window.ImportadorCore;
     const snap = _impSnapshot();
-    if (!snap) { await showAlert('Não há importação para desfazer.', 'ℹ️'); return; }
+    if (!snap) { await showAlert('Não há importação recente para desfazer.', 'ℹ️'); return; }
     const quando = new Date(snap.quando).toLocaleString('pt-BR');
-    const msg = `Desfazer a importação de ${quando}?\n${snap.resumo.criados} criado(s) e ${snap.resumo.atualizados} atualizado(s) voltarão ao estado anterior.`;
+    const msg = `Desfazer a importação de ${quando}?\n\n`
+        + `${snap.resumo.criados} item(ns) criado(s) serão apagados e `
+        + `${snap.resumo.atualizados} item(ns) atualizado(s) voltarão ao preço, nome e unidade anteriores.\n\n`
+        + `Atenção: qualquer alteração feita nesses produtos depois da importação será perdida. `
+        + `O estoque e as movimentações não são tocados.`;
     if (!await showConfirm(msg, '↩️', 'Desfazer', 'Cancelar')) return;
-    db.catalogo = snap.catalogo;
-    db.materiais = snap.materiais;
-    localStorage.removeItem(CHAVE_SNAPSHOT);
-    salvarERecarregar('Importação desfeita.');
+
+    const r = C.desfazerImportacao({ catalogo: db.catalogo, materiais: db.materiais, mudancas: snap.mudancas });
+
+    const catalogoAntes = db.catalogo;
+    const materiaisAntes = db.materiais;
+    const snapshotBruto = localStorage.getItem(CHAVE_SNAPSHOT);
+    try {
+        db.catalogo = r.catalogo;
+        db.materiais = r.materiais;
+        localStorage.removeItem(CHAVE_SNAPSHOT);
+        const extras = [];
+        if (r.resumo.mantidos) extras.push(`${r.resumo.mantidos} item(ns) foram mantidos por já terem estoque`);
+        if (r.resumo.sumidos) extras.push(`${r.resumo.sumidos} item(ns) já não existiam`);
+        salvarERecarregar('Importação desfeita.' + (extras.length ? ' ' + extras.join('; ') + '.' : ''));
+    } catch (e) {
+        db.catalogo = catalogoAntes;
+        db.materiais = materiaisAntes;
+        try { syncDB(); } catch (e2) { /* nada mais a fazer aqui */ }
+        // o desfazer continua disponivel: nada foi revertido
+        try { if (snapshotBruto) localStorage.setItem(CHAVE_SNAPSHOT, snapshotBruto); } catch (e3) { /* idem */ }
+        await showAlert('Não foi possível desfazer a importação'
+            + (e && e.message ? ' (' + e.message + ')' : '')
+            + '.\n\nNada foi alterado no catálogo.', '⚠️');
+    }
 }
 
 function _impAtualizarBotaoDesfazer() {

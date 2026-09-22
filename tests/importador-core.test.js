@@ -1111,3 +1111,505 @@ test('expandirPorCor mantem o aviso de promocional', () => {
     assert.strictEqual(itens[0].promocional, true);
     assert.ok(itens[0].avisos.some(a => /promo/i.test(a)));
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Regressao da correcao final (review de branch inteira).
+// Cada bloco abaixo falha contra o codigo anterior a esta rodada.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const FRAGMENTOS_PDF = path.join(
+    __dirname, '..', '.superpowers', 'sdd', '2026-09-21-importacao-tabelas-fornecedor',
+    'pdf-fragmentos-reais.json'
+);
+
+function itemParaAplicar(extra) {
+    return Object.assign({
+        aba: 'Teste', linha: 1, codigo: 'AC1', nome: 'Linho', largura: null,
+        largura_ilegivel: false, preco_custo: 100, unidade: null, tipo: 'tecido',
+        promocional: false, avisos: [], problema: null
+    }, extra || {});
+}
+
+// ── C3: largura ilegivel nunca vira 2,80 em silencio ─────────────────────────
+
+test('C3: motivoLarguraIlegivel separa celula vazia de celula ilegivel', () => {
+    for (const vazio of ['', null, undefined, '   ']) {
+        assert.strictEqual(C.motivoLarguraIlegivel(vazio), null,
+            `celula vazia ${JSON.stringify(vazio)} nao tem motivo`);
+    }
+    for (const ilegivel of ['2,65/2,70', '1,40/2,80', 'ate 3,00', '-', 'R$ 2,80', -5]) {
+        const motivo = C.motivoLarguraIlegivel(ilegivel);
+        assert.ok(motivo && motivo.length > 0,
+            `celula ${JSON.stringify(ilegivel)} precisa de um motivo escrito`);
+        assert.match(motivo, /largura/i);
+    }
+    assert.strictEqual(C.motivoLarguraIlegivel('2,80'), null, 'largura lida nao tem motivo');
+});
+
+test('C3: montarItens avisa quando a largura tinha conteudo ilegivel', () => {
+    const itens = C.montarItens({
+        linhas: [
+            ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE'],
+            ['1031', 'Voil amassado', '', '2,65/2,70', '8,89'],
+            ['1032', 'Voil sem largura', '', '', '9,90']
+        ],
+        cabecalhoIndice: 0, mapa: MAPA_TECIDO, tipo: 'tecido', aba: 'Teste'
+    });
+    assert.strictEqual(itens[0].largura, null);
+    assert.strictEqual(itens[0].largura_ilegivel, true, 'a celula tinha conteudo e nao pôde ser lida');
+    assert.ok(itens[0].avisos.some(a => /2,65\/2,70/.test(a)), 'o aviso precisa citar a celula');
+    assert.strictEqual(itens[1].largura_ilegivel, false, 'celula vazia nao e ilegivel');
+    assert.strictEqual(itens[1].avisos.length, 0);
+});
+
+test('C3: aplicarImportacao nao aplica 2,80 quando a largura era ilegivel', () => {
+    const r = C.aplicarImportacao({
+        decisoes: [
+            { item: itemParaAplicar({ codigo: 'ILEG', nome: 'Ilegivel', largura: null, largura_ilegivel: true }), existente: null, markup: 0, acao: 'criar' },
+            { item: itemParaAplicar({ codigo: 'VAZIA', nome: 'Vazia', largura: null, largura_ilegivel: false }), existente: null, markup: 0, acao: 'criar' }
+        ],
+        catalogo: [], materiais: [], fornecedor: null, agora: 900000
+    });
+    const ilegivel = r.catalogo.find(t => t.referencia === 'ILEG');
+    const vazia = r.catalogo.find(t => t.referencia === 'VAZIA');
+    assert.notStrictEqual(ilegivel.largura_rolo, 2.8, 'largura ilegivel nao pode virar 2,80 calado');
+    assert.strictEqual(ilegivel.largura_rolo, null);
+    assert.strictEqual(vazia.largura_rolo, 2.8, 'celula vazia continua usando o padrao de 2,80');
+});
+
+test('C3: o codigo 1031 real de Promocionais-Book 06 chega avisado, nao com 2,80', () => {
+    const { abas } = lerXlsx(PLANILHA);
+    const dados = abas['Promocionais-Book 06'];
+    const cab = C.detectarCabecalho(dados);
+    const itens = C.montarItens({
+        linhas: dados, cabecalhoIndice: cab.indice, mapa: C.sugerirMapeamento(cab.colunas),
+        tipo: 'tecido', aba: 'Promocionais-Book 06'
+    });
+    const it = itens.find(i => i.codigo === '1031');
+    assert.ok(it, 'o codigo 1031 precisa existir');
+    assert.strictEqual(it.largura, null);
+    assert.strictEqual(it.largura_ilegivel, true);
+    assert.ok(it.avisos.some(a => /2,65\/2,70/.test(a)), 'a celula "2,65/2,70" precisa gerar aviso visivel');
+
+    const r = C.aplicarImportacao({
+        decisoes: [{ item: it, existente: null, markup: 80, acao: 'criar' }],
+        catalogo: [], materiais: [], fornecedor: { id: 7, nome: 'RC' }, agora: 901000
+    });
+    assert.notStrictEqual(r.catalogo[0].largura_rolo, 2.8,
+        'o 1031 nao pode ser gravado como rolo de 2,80 m');
+});
+
+// ── I4 + PARKED: linha com preco mas sem codigo OU sem nome nao some ──────────
+
+test('I4: linha com preco e so codigo entra com problema, em vez de sumir', () => {
+    const itens = C.montarItens({
+        linhas: [
+            ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE'],
+            ['1031', '', '', '2,65', '8,89']
+        ],
+        cabecalhoIndice: 0, mapa: MAPA_TECIDO, tipo: 'tecido', aba: 'Teste'
+    });
+    assert.strictEqual(itens.length, 1, 'a linha nao pode sumir calada');
+    assert.strictEqual(itens[0].codigo, '1031');
+    assert.ok(itens[0].problema, 'precisa chegar a conferencia com problema preenchido');
+    assert.match(itens[0].problema, /nome/i);
+});
+
+test('I4: linha com preco e so nome entra com problema', () => {
+    const itens = C.montarItens({
+        linhas: [
+            ['CÓD.', 'DESCRIÇÃO', '', 'QUANT.', 'PREÇO'],
+            ['', 'PACOTE C/ 100 RODIZIO ZINCADO', '', 'CENTO', '27,80']
+        ],
+        cabecalhoIndice: 0, mapa: { codigo: 0, nome: 1, largura: -1, preco: 4, unidade: -1 },
+        tipo: 'material', aba: 'Teste'
+    });
+    assert.strictEqual(itens.length, 1);
+    assert.strictEqual(itens[0].nome, 'PACOTE C/ 100 RODIZIO ZINCADO');
+    assert.ok(itens[0].problema);
+    assert.match(itens[0].problema, /c[óo]digo/i);
+});
+
+test('I4: linha sem codigo, sem nome e sem preco continua descartada', () => {
+    const itens = C.montarItens({
+        linhas: [
+            ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE'],
+            ['', '', '', '', ''],
+            ['MODELO WAVE PLUS NAO ACOMPANHA A ENTRETELA'],
+            [],
+            ['', '', '', '2,80', ''],
+            ['AC1', 'Produto real', '', '2,80', '10,00']
+        ],
+        cabecalhoIndice: 0, mapa: MAPA_TECIDO, tipo: 'tecido', aba: 'Teste'
+    });
+    assert.strictEqual(itens.length, 1, 'so o produto real entra; ruido de formatacao continua fora');
+    assert.strictEqual(itens[0].codigo, 'AC1');
+});
+
+test('I4: a linha 51 de Trilhos (codigo mesclado) passa a aparecer marcada com problema', () => {
+    const { abas } = lerXlsx(PLANILHA);
+    const dados = abas['Trilhos'];
+    const cab = C.detectarCabecalho(dados);
+    const itens = C.montarItens({
+        linhas: dados, cabecalhoIndice: cab.indice, mapa: C.sugerirMapeamento(cab.colunas),
+        tipo: 'material', aba: 'Trilhos'
+    });
+    const l51 = itens.find(i => i.linha === 50);
+    assert.ok(l51, 'PACOTE C/ 100 RODIZIO ZINCADO nao pode sumir da conferencia');
+    assert.strictEqual(l51.nome, 'PACOTE C/ 100 RODIZIO ZINCADO');
+    assert.strictEqual(l51.preco_custo, 27.8);
+    assert.ok(l51.problema, 'precisa chegar desmarcada, com o motivo escrito');
+});
+
+test('I4: 1031 e as DUAS linhas 1037 da pagina 2 do PDF real aparecem', () => {
+    const frag = require(FRAGMENTOS_PDF);
+    const pagina2 = frag.paginas.find(p => p.pagina === 2);
+    assert.ok(pagina2, 'o fragmento da pagina 2 precisa existir');
+    const linhas = C.agruparLinhasPdf(pagina2.fragmentos);
+    const cab = C.detectarCabecalho(linhas);
+    const itens = C.montarItens({
+        linhas, cabecalhoIndice: cab.indice, mapa: C.sugerirMapeamento(cab.colunas),
+        tipo: 'tecido', aba: 'Página 2'
+    });
+
+    const c1031 = itens.filter(i => i.codigo === '1031');
+    assert.strictEqual(c1031.length, 1, 'o 1031 do PDF nao pode sumir');
+    assert.ok(c1031[0].problema, 'ele chega com problema porque a descricao ficou noutra linha');
+
+    const c1037 = itens.filter(i => i.codigo === '1037');
+    assert.strictEqual(c1037.length, 2, 'o PDF tem DUAS linhas 1037, como o Excel');
+    const precos = c1037.map(i => i.preco_custo).sort((a, b) => a - b);
+    assert.deepStrictEqual(precos, [7.28, 11.6], 'as duas 1037 do PDF sao de R$ 7,28 e R$ 11,60');
+});
+
+test('PARKED L143: "CÓD." com ponto e reconhecido como cabecalho no meio da aba', () => {
+    const linhas = [
+        ['CÓD.', 'DESCRIÇÃO', 'PREÇO'],
+        ['AC1', 'Produto um', '10,00'],
+        ['CÓD.', 'DESCRIÇÃO', 'VALOR'],      // cabecalho repetido, layout diferente
+        ['AC2', 'Produto dois', '20,00']
+    ];
+    const itens = C.montarItens({
+        linhas, cabecalhoIndice: 0, mapa: { codigo: 0, nome: 1, largura: -1, preco: 2, unidade: -1 },
+        tipo: 'material', aba: 'Trilhos'
+    });
+    assert.deepStrictEqual(itens.map(i => i.codigo), ['AC1', 'AC2'],
+        'a linha "CÓD." e cabecalho, nunca produto');
+    assert.strictEqual(itens[0].problema, null);
+    assert.match(itens[1].problema, /layout/i, 'depois do cabecalho diferente, avisa mudanca de layout');
+});
+
+test('PARKED L143: REF001 e CODIGO123 continuam sendo produto, nao cabecalho', () => {
+    const itens = C.montarItens({
+        linhas: [
+            ['CÓD.', 'DESCRIÇÃO', 'PREÇO'],
+            ['REF001', 'Trilho um', '10,00'],
+            ['CODIGO123', 'Trilho dois', '20,00'],
+            ['COD-99', 'Trilho tres', '30,00']
+        ],
+        cabecalhoIndice: 0, mapa: { codigo: 0, nome: 1, largura: -1, preco: 2, unidade: -1 },
+        tipo: 'material', aba: 'Trilhos'
+    });
+    assert.deepStrictEqual(itens.map(i => i.codigo), ['REF001', 'CODIGO123', 'COD-99']);
+    assert.ok(itens.every(i => i.problema === null), 'nenhum aviso de layout deve disparar aqui');
+});
+
+// ── I1: codigo existente sob o outro tipo e conflito, e o resumo nunca mente ──
+
+test('I1: codigo de material que ja existe como tecido vira conflito', () => {
+    const catalogo = [{ id: 1, referencia: 'AC019', nome: 'Voil AC019', preco_custo: 10, preco: 18, fornecedor_id: 7 }];
+    const item = itemParaAplicar({ codigo: 'AC019', nome: 'Trilho ultra', tipo: 'material' });
+
+    const g = C.classificar({ itens: [item], catalogo, materiais: [], fornecedorId: 7 });
+    assert.strictEqual(g.conflitos.length, 1, 'mesmo codigo sob outro tipo e conflito');
+    assert.strictEqual(g.atualizados.length, 0, 'nunca pode virar atualizacao');
+    assert.match(g.conflitos[0].motivo, /tecido/i);
+
+    const r = C.resolverAcao(item, catalogo, []);
+    assert.strictEqual(r.acao, 'conflito');
+    assert.ok(r.motivo);
+});
+
+test('I1: aplicarImportacao contabiliza TODA decisao no resumo', () => {
+    const catalogo = [{ id: 1, referencia: 'AC019', nome: 'Voil AC019', preco_custo: 10, preco: 18, fornecedor_id: 7 }];
+    const item = itemParaAplicar({ codigo: 'AC019', nome: 'Trilho ultra', tipo: 'material' });
+    const acao = C.resolverAcao(item, catalogo, []);
+    const decisoes = [{ item, existente: acao.existente, markup: 80, acao: acao.acao, motivo: acao.motivo }];
+
+    const r = C.aplicarImportacao({
+        decisoes, catalogo, materiais: [], fornecedor: { id: 7, nome: 'RC' }, agora: 902000
+    });
+    const soma = r.resumo.criados + r.resumo.atualizados + r.resumo.ignorados;
+    assert.strictEqual(soma, decisoes.length, 'criados + atualizados + ignorados tem de fechar com as decisoes');
+    assert.strictEqual(r.resumo.ignorados, 1);
+    assert.strictEqual(r.naoAplicadas.length, 1, 'o motivo de nao ter sido aplicada precisa voltar');
+    assert.match(r.naoAplicadas[0].motivo, /AC019/);
+});
+
+test('I1: atualizar cujo registro nao esta na lista conta como ignorado, nao some', () => {
+    const decisoes = [{
+        item: itemParaAplicar({ codigo: 'SUM1', tipo: 'tecido' }),
+        existente: { id: 12345, referencia: 'SUM1', nome: 'Fantasma' },
+        markup: 80, acao: 'atualizar'
+    }];
+    const r = C.aplicarImportacao({ decisoes, catalogo: [], materiais: [], fornecedor: null, agora: 903000 });
+    const soma = r.resumo.criados + r.resumo.atualizados + r.resumo.ignorados;
+    assert.strictEqual(soma, 1);
+    assert.strictEqual(r.resumo.ignorados, 1);
+    assert.strictEqual(r.naoAplicadas.length, 1);
+});
+
+// ── I2: a unidade so e escrita quando a tabela realmente informou uma ─────────
+
+test('I2: sem coluna de unidade mapeada o item nao afirma unidade nenhuma', () => {
+    const itens = C.montarItens({
+        linhas: [
+            ['CÓD.', 'DESCRIÇÃO', 'PREÇO'],
+            ['TR1', 'Trilho', '25,00']
+        ],
+        cabecalhoIndice: 0, mapa: { codigo: 0, nome: 1, largura: -1, preco: 2, unidade: -1 },
+        tipo: 'material', aba: 'Trilhos'
+    });
+    assert.strictEqual(itens[0].unidade, null, 'sem coluna mapeada nao da para saber a unidade');
+});
+
+test('I2: valor de unidade nao reconhecido vira aviso, nao "un" calado', () => {
+    const itens = C.montarItens({
+        linhas: [
+            ['CÓD.', 'DESCRIÇÃO', 'QUANT.', 'PREÇO'],
+            ['AC010', 'Pacote c/ 1000 rodizio', 'MIL', '259,00']
+        ],
+        cabecalhoIndice: 0, mapa: { codigo: 0, nome: 1, largura: -1, preco: 3, unidade: 2 },
+        tipo: 'material', aba: 'Trilhos'
+    });
+    assert.strictEqual(itens[0].unidade, null, '"MIL" nao pode virar "un" em silencio');
+    assert.ok(itens[0].avisos.some(a => /MIL/.test(a)), 'o valor nao reconhecido precisa aparecer na conferencia');
+});
+
+test('I2: atualizar material sem unidade informada preserva a unidade do registro', () => {
+    const materiais = [{
+        id: 1, referencia: 'AC010', nome: 'Pacote', preco_custo: 200, preco: 360,
+        unidade: 'cx', estoque_atual: 42, min_estoque: 5, fornecedor_id: 7, fornecedor_nome: 'RC'
+    }];
+    const r = C.aplicarImportacao({
+        decisoes: [{
+            item: itemParaAplicar({ codigo: 'AC010', nome: 'Pacote', tipo: 'material', unidade: null, preco_custo: 259 }),
+            existente: materiais[0], markup: 80, acao: 'atualizar'
+        }],
+        catalogo: [], materiais, fornecedor: { id: 7, nome: 'RC' }, agora: 904000
+    });
+    const m = r.materiais[0];
+    assert.strictEqual(m.unidade, 'cx', 'a unidade ajustada a mao nao pode voltar para "un"');
+    assert.strictEqual(m.estoque_atual, 42, 'o importador nunca toca no estoque');
+    assert.strictEqual(m.min_estoque, 5);
+    assert.strictEqual(m.preco_custo, 259);
+});
+
+test('I2: atualizar material COM unidade informada escreve a unidade nova', () => {
+    const materiais = [{
+        id: 1, referencia: 'AC010', nome: 'Pacote', preco_custo: 200, preco: 360,
+        unidade: 'cx', estoque_atual: 42, min_estoque: 5, fornecedor_id: 7, fornecedor_nome: 'RC'
+    }];
+    const r = C.aplicarImportacao({
+        decisoes: [{
+            item: itemParaAplicar({ codigo: 'AC010', nome: 'Pacote', tipo: 'material', unidade: 'm', preco_custo: 259 }),
+            existente: materiais[0], markup: 80, acao: 'atualizar'
+        }],
+        catalogo: [], materiais, fornecedor: { id: 7, nome: 'RC' }, agora: 905000
+    });
+    assert.strictEqual(r.materiais[0].unidade, 'm');
+});
+
+test('I2: criar material sem unidade informada cai no padrao "un"', () => {
+    const r = C.aplicarImportacao({
+        decisoes: [{
+            item: itemParaAplicar({ codigo: 'NOVO1', nome: 'Novo', tipo: 'material', unidade: null }),
+            existente: null, markup: 0, acao: 'criar'
+        }],
+        catalogo: [], materiais: [], fornecedor: null, agora: 906000
+    });
+    assert.strictEqual(r.materiais[0].unidade, 'un');
+});
+
+// ── I3: nome repetido dentro do proprio lote ─────────────────────────────────
+
+test('I3: validarDecisoes pega nome repetido DENTRO do lote', () => {
+    const decisoes = ['VUD01', 'VUD01D', 'VUD01DD'].map(codigo => ({
+        item: itemParaAplicar({ codigo, nome: 'VARAO WAVE 28MM', tipo: 'material' }),
+        existente: null, markup: 0, acao: 'criar'
+    }));
+    const erros = C.validarDecisoes(decisoes, [], []);
+    assert.strictEqual(erros.length, 1, 'tres codigos com o mesmo nome tem de ser um erro');
+    assert.match(erros[0], /VARAO WAVE 28MM/);
+    assert.match(erros[0], /VUD01DD/);
+});
+
+test('I3: nome igual sob o MESMO codigo nao vira erro de nome (o de codigo ja cobre)', () => {
+    const decisoes = [
+        { item: itemParaAplicar({ codigo: 'VUD01', nome: 'VARAO WAVE 28MM', tipo: 'material' }), existente: null, markup: 0, acao: 'criar' },
+        { item: itemParaAplicar({ codigo: 'VUD01', nome: 'VARAO WAVE 28MM', tipo: 'material' }), existente: null, markup: 0, acao: 'criar' }
+    ];
+    const erros = C.validarDecisoes(decisoes, [], []);
+    assert.strictEqual(erros.length, 1, 'so o erro de codigo repetido');
+    assert.match(erros[0], /c[óo]digo/i);
+});
+
+test('I3: nomes iguais sob tipos diferentes nao colidem', () => {
+    const decisoes = [
+        { item: itemParaAplicar({ codigo: 'T1', nome: 'Wave', tipo: 'tecido' }), existente: null, markup: 0, acao: 'criar' },
+        { item: itemParaAplicar({ codigo: 'M1', nome: 'Wave', tipo: 'material' }), existente: null, markup: 0, acao: 'criar' }
+    ];
+    assert.deepStrictEqual(C.validarDecisoes(decisoes, [], []), []);
+});
+
+test('I3: nomeLivre acrescenta um sufixo legivel ate o nome ficar livre', () => {
+    assert.strictEqual(C.nomeLivre('VARAO WAVE 28MM', new Set()), 'VARAO WAVE 28MM');
+    const ocupados = new Set(['varao wave 28mm']);
+    assert.strictEqual(C.nomeLivre('VARAO WAVE 28MM', ocupados), 'VARAO WAVE 28MM (2)');
+    ocupados.add('varao wave 28mm (2)');
+    assert.strictEqual(C.nomeLivre('VARAO WAVE 28MM', ocupados), 'VARAO WAVE 28MM (3)');
+    assert.strictEqual(C.nomeLivre('  Linho  ', new Set()), 'Linho', 'normaliza a base');
+    assert.ok(C.nomeLivre('', new Set()).length > 0, 'nao devolve nome vazio');
+});
+
+test('I3: diferenciar codigo E nome faz o lote passar em validarDecisoes', () => {
+    const nomes = new Set();
+    const decisoes = ['VUD01', 'VUD01D', 'VUD01DD'].map(codigo => {
+        const nome = C.nomeLivre('VARAO WAVE 28MM', nomes);
+        nomes.add(nome.toLowerCase());
+        return {
+            item: itemParaAplicar({ codigo, nome, tipo: 'material' }),
+            existente: null, markup: 0, acao: 'criar'
+        };
+    });
+    assert.deepStrictEqual(C.validarDecisoes(decisoes, [], []), []);
+});
+
+// ── C2: desfazer cirurgico, sem devolver estoque velho ───────────────────────
+
+test('C2: desfazerImportacao remove os criados e nao toca no resto', () => {
+    const materiais = [
+        { id: 1, referencia: 'VELHO', nome: 'Velho', preco_custo: 5, preco: 9, unidade: 'm', estoque_atual: 70, min_estoque: 2 },
+        { id: 2, referencia: 'NOVO', nome: 'Novo', preco_custo: 10, preco: 18, unidade: 'un', estoque_atual: 0, min_estoque: 0 }
+    ];
+    const r = C.desfazerImportacao({
+        catalogo: [], materiais,
+        mudancas: { criados: [{ tipo: 'material', id: 2 }], atualizados: [] }
+    });
+    assert.strictEqual(r.materiais.length, 1);
+    assert.strictEqual(r.materiais[0].id, 1);
+    assert.strictEqual(r.materiais[0].estoque_atual, 70, 'o saldo do registro que ficou nao muda');
+    assert.strictEqual(r.resumo.removidos, 1);
+});
+
+test('C2: desfazerImportacao devolve SO os campos do importador e preserva o estoque', () => {
+    const materiais = [{
+        id: 1, referencia: 'AC010', nome: 'Pacote NOVO', preco_custo: 259, preco: 466.2,
+        unidade: 'un', estoque_atual: 137, min_estoque: 5, imagem: 'foto',
+        fornecedor_id: 7, fornecedor_nome: 'RC'
+    }];
+    const r = C.desfazerImportacao({
+        catalogo: [], materiais,
+        mudancas: {
+            criados: [],
+            atualizados: [{
+                tipo: 'material', id: 1,
+                antes: { referencia: 'AC010', nome: 'Pacote', preco_custo: 200, preco: 360, unidade: 'cx', fornecedor_id: 7, fornecedor_nome: 'RC' }
+            }]
+        }
+    });
+    const m = r.materiais[0];
+    assert.strictEqual(m.nome, 'Pacote');
+    assert.strictEqual(m.preco_custo, 200);
+    assert.strictEqual(m.preco, 360);
+    assert.strictEqual(m.unidade, 'cx');
+    assert.strictEqual(m.estoque_atual, 137, 'desfazer NUNCA pode devolver saldo de estoque velho');
+    assert.strictEqual(m.min_estoque, 5);
+    assert.strictEqual(m.imagem, 'foto');
+    assert.strictEqual(m.id, 1);
+    assert.strictEqual(r.resumo.revertidos, 1);
+});
+
+test('C2: desfazer nao apaga um item criado que ja movimentou estoque', () => {
+    const materiais = [{ id: 2, referencia: 'NOVO', nome: 'Novo', preco_custo: 10, preco: 18, unidade: 'un', estoque_atual: 12, min_estoque: 0 }];
+    const r = C.desfazerImportacao({
+        catalogo: [], materiais,
+        mudancas: { criados: [{ tipo: 'material', id: 2 }], atualizados: [] }
+    });
+    assert.strictEqual(r.materiais.length, 1, 'apagar deixaria saldo orfao');
+    assert.strictEqual(r.resumo.mantidos, 1);
+    assert.strictEqual(r.resumo.removidos, 0);
+});
+
+test('C2: desfazer ignora em silencio o que ja nao existe, sem quebrar', () => {
+    const r = C.desfazerImportacao({
+        catalogo: [], materiais: [],
+        mudancas: {
+            criados: [{ tipo: 'material', id: 99 }],
+            atualizados: [{ tipo: 'tecido', id: 98, antes: { nome: 'X' } }]
+        }
+    });
+    assert.strictEqual(r.resumo.sumidos, 2);
+    assert.strictEqual(r.resumo.removidos, 0);
+    assert.strictEqual(r.resumo.revertidos, 0);
+});
+
+test('C2: aplicarImportacao devolve as mudancas necessarias para desfazer', () => {
+    const catalogo = [{ id: 1, referencia: 'AC1', nome: 'Linho', preco_custo: 100, preco: 180, largura_rolo: 2.8, min_estoque: 5, imagem: 'foto', fornecedor_id: 7, fornecedor_nome: 'RC' }];
+    const r = C.aplicarImportacao({
+        decisoes: [
+            { item: itemParaAplicar({ codigo: 'AC1', nome: 'Linho novo', preco_custo: 120, largura: 2.9 }), existente: catalogo[0], markup: 80, acao: 'atualizar' },
+            { item: itemParaAplicar({ codigo: 'AC2', nome: 'Voil', preco_custo: 50, largura: 3 }), existente: null, markup: 80, acao: 'criar' }
+        ],
+        catalogo, materiais: [], fornecedor: { id: 7, nome: 'RC' }, agora: 907000
+    });
+    assert.strictEqual(r.mudancas.criados.length, 1);
+    assert.strictEqual(r.mudancas.atualizados.length, 1);
+    assert.strictEqual(r.mudancas.atualizados[0].antes.nome, 'Linho');
+    assert.strictEqual(r.mudancas.atualizados[0].antes.preco_custo, 100);
+    assert.ok(!('estoque_atual' in r.mudancas.atualizados[0].antes), 'o snapshot nunca guarda estoque');
+    assert.ok(!('min_estoque' in r.mudancas.atualizados[0].antes), 'nem estoque minimo');
+    assert.ok(!('imagem' in r.mudancas.atualizados[0].antes), 'nem imagem');
+
+    // e o ciclo fecha: desfazer volta ao estado original
+    const d = C.desfazerImportacao({ catalogo: r.catalogo, materiais: r.materiais, mudancas: r.mudancas });
+    assert.strictEqual(d.catalogo.length, 1);
+    assert.deepStrictEqual(
+        { nome: d.catalogo[0].nome, preco_custo: d.catalogo[0].preco_custo, preco: d.catalogo[0].preco, largura_rolo: d.catalogo[0].largura_rolo },
+        { nome: 'Linho', preco_custo: 100, preco: 180, largura_rolo: 2.8 }
+    );
+    assert.strictEqual(d.catalogo[0].min_estoque, 5);
+    assert.strictEqual(d.catalogo[0].imagem, 'foto');
+});
+
+// ── Regressao de contagem contra os arquivos reais ───────────────────────────
+
+test('REGRESSAO: Book 10 continua dando 38 itens com os mesmos codigos, larguras e precos', () => {
+    const { abas } = lerXlsx(PLANILHA);
+    const dados = abas['Book 10'];
+    const cab = C.detectarCabecalho(dados);
+    const itens = C.montarItens({
+        linhas: dados, cabecalhoIndice: cab.indice, mapa: C.sugerirMapeamento(cab.colunas),
+        tipo: 'tecido', aba: 'Book 10'
+    });
+    assert.strictEqual(itens.length, 38);
+    assert.strictEqual(itens.filter(i => i.problema).length, 0, 'nenhum item do Book 10 pode virar problema');
+    assert.ok(itens.every(i => i.largura !== null), 'toda largura do Book 10 e legivel');
+    assert.ok(itens.every(i => i.preco_custo > 0));
+    assert.strictEqual(itens[0].codigo, '10001');
+    assert.strictEqual(itens[0].largura, 1.4);
+    assert.strictEqual(itens[0].preco_custo, 83.65);
+});
+
+test('REGRESSAO: Cor Metal com colunasCor [3..8] continua dando 235 itens sem codigo repetido', () => {
+    const { abas } = lerXlsx(PLANILHA);
+    const dados = abas['Cor Metal'];
+    const cab = C.detectarCabecalho(dados);
+    const itens = C.expandirPorCor({
+        linhas: dados, cabecalhoIndice: cab.indice, mapa: C.sugerirMapeamento(cab.colunas),
+        colunasCor: [3, 4, 5, 6, 7, 8], colunas: cab.colunas, tipo: 'material', aba: 'Cor Metal'
+    });
+    assert.strictEqual(itens.length, 235);
+    const codigos = itens.map(i => i.codigo);
+    assert.strictEqual(new Set(codigos).size, 235, 'nenhum codigo repetido depois da expansao por cor');
+});
