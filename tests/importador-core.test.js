@@ -533,7 +533,7 @@ test('classificar bloqueia nome repetido de outro item', () => {
 
 test('classificar poe o item com problema no grupo de problemas', () => {
     const r = C.classificar({
-        itens: [itemDeTeste({ preco_custo: null, problema: 'Preço "--" — item sem preço na tabela' })],
+        itens: [itemDeTeste({ preco_custo: null, problema: 'Preï¿½o "--" ï¿½ item sem preï¿½o na tabela' })],
         catalogo: [], materiais: [], fornecedorId: 7
     });
     assert.strictEqual(r.problemas.length, 1);
@@ -558,8 +558,8 @@ test('classificar casa codigos ignorando o asterisco e a caixa', () => {
 });
 
 test('classificar trata fornecedor_id: 0 como fornecedor distinct (FIX 1)', () => {
-    // Quando o registro tem fornecedor_id: 0, deve ser tratado como um fornecedor específico,
-    // não como "sem fornecedor". Isso é importante para sistemas que usam ids sequenciais.
+    // Quando o registro tem fornecedor_id: 0, deve ser tratado como um fornecedor especï¿½fico,
+    // nï¿½o como "sem fornecedor". Isso ï¿½ importante para sistemas que usam ids sequenciais.
     const catalogo = [
         { id: 1, referencia: 'AC1', nome: 'Linho', preco_custo: 90, preco: 162, fornecedor_id: 0 },
         { id: 2, referencia: 'AC2', nome: 'Voil', preco_custo: 50, preco: 90, fornecedor_id: 7 }
@@ -610,21 +610,151 @@ test('classificar normaliza codigo e nome do item antes de classificar (FIX 2)',
     const catalogo = [
         { id: 1, referencia: 'ac1', nome: 'Linho', preco_custo: 90, preco: 162, fornecedor_id: 7 }
     ];
-    
+
     const itemNaoNormalizado = {
         aba: 'Teste', linha: 1, codigo: '*AC1', nome: 'linho ', largura: 2.8,
         preco_custo: 100, unidade: 'm', tipo: 'tecido', promocional: false,
         avisos: [], problema: null
     };
-    
+
     const r = C.classificar({
         itens: [itemNaoNormalizado],
         catalogo, materiais: [], fornecedorId: 7
     });
-    
+
     // O item com codigo '*AC1' e nome 'linho ' deve ser normalizado e encontrado como atualizacao
     assert.strictEqual(r.atualizados.length, 1, 'item nao normalizado deve ser encontrado como atualizados');
     assert.strictEqual(r.atualizados[0].existente.id, 1);
     // Nao deve ficar em sumiram porque foi "visto" apos normalizacao
     assert.strictEqual(r.sumiram.length, 0, 'sumiram deve estar vazio quando o item foi normalizado e encontrado');
+});
+
+test('aplicarImportacao cria tecido novo com o markup informado', () => {
+    const r = C.aplicarImportacao({
+        decisoes: [{ item: itemDeTeste({ codigo: 'AC2', nome: 'Voil', preco_custo: 100 }), existente: null, markup: 80, acao: 'criar' }],
+        catalogo: [], materiais: [], fornecedor: { id: 7, nome: 'RC' }, agora: 1000
+    });
+    assert.strictEqual(r.catalogo.length, 1);
+    const t = r.catalogo[0];
+    assert.strictEqual(t.referencia, 'AC2');
+    assert.strictEqual(t.preco_custo, 100);
+    assert.strictEqual(t.preco, 180);
+    assert.strictEqual(t.largura_rolo, 2.8);
+    assert.strictEqual(t.fornecedor_id, 7);
+    assert.strictEqual(t.fornecedor_nome, 'RC');
+    assert.strictEqual(t.min_estoque, 0);
+    assert.strictEqual(t.id, 1000);
+    assert.deepStrictEqual(r.resumo, { criados: 1, atualizados: 0, ignorados: 0 });
+});
+
+test('aplicarImportacao cria material novo com unidade e estoque zerado', () => {
+    const r = C.aplicarImportacao({
+        decisoes: [{ item: itemDeTeste({ codigo: 'TR1', nome: 'Trilho', tipo: 'material', unidade: 'm', preco_custo: 20, largura: null }), existente: null, markup: 50, acao: 'criar' }],
+        catalogo: [], materiais: [], fornecedor: { id: 7, nome: 'RC' }, agora: 2000
+    });
+    assert.strictEqual(r.materiais.length, 1);
+    assert.strictEqual(r.catalogo.length, 0);
+    const m = r.materiais[0];
+    assert.strictEqual(m.unidade, 'm');
+    assert.strictEqual(m.preco, 30);
+    assert.strictEqual(m.estoque_atual, 0);
+});
+
+test('aplicarImportacao atualiza custo e recalcula venda preservando o markup', () => {
+    const catalogo = [{ id: 1, referencia: 'AC1', nome: 'Linho', preco_custo: 100, preco: 180, largura_rolo: 2.8, min_estoque: 5, fornecedor_id: 7, fornecedor_nome: 'RC', imagem: 'foto' }];
+    const r = C.aplicarImportacao({
+        decisoes: [{ item: itemDeTeste({ codigo: 'AC1', preco_custo: 120 }), existente: catalogo[0], markup: 80, acao: 'atualizar' }],
+        catalogo, materiais: [], fornecedor: { id: 7, nome: 'RC' }, agora: 3000
+    });
+    const t = r.catalogo[0];
+    assert.strictEqual(t.id, 1, 'atualizar nao troca o id');
+    assert.strictEqual(t.preco_custo, 120);
+    assert.strictEqual(t.preco, 216);
+    assert.strictEqual(t.min_estoque, 5, 'estoque minimo nao e tocado');
+    assert.strictEqual(t.imagem, 'foto', 'a foto nao e apagada');
+    assert.deepStrictEqual(r.resumo, { criados: 0, atualizados: 1, ignorados: 0 });
+});
+
+test('aplicarImportacao nao mexe nas listas originais', () => {
+    const catalogo = [];
+    const r = C.aplicarImportacao({
+        decisoes: [{ item: itemDeTeste({ codigo: 'AC2' }), existente: null, markup: 80, acao: 'criar' }],
+        catalogo, materiais: [], fornecedor: null, agora: 4000
+    });
+    assert.strictEqual(catalogo.length, 0, 'a lista recebida continua intacta');
+    assert.strictEqual(r.catalogo.length, 1);
+});
+
+test('aplicarImportacao respeita acao ignorar', () => {
+    const r = C.aplicarImportacao({
+        decisoes: [{ item: itemDeTeste({ codigo: 'AC9' }), existente: null, markup: 80, acao: 'ignorar' }],
+        catalogo: [], materiais: [], fornecedor: null, agora: 5000
+    });
+    assert.strictEqual(r.catalogo.length, 0);
+    assert.deepStrictEqual(r.resumo, { criados: 0, atualizados: 0, ignorados: 1 });
+});
+
+test('aplicarImportacao da ids diferentes para itens criados no mesmo lote', () => {
+    const r = C.aplicarImportacao({
+        decisoes: [
+            { item: itemDeTeste({ codigo: 'A1', nome: 'Um' }), existente: null, markup: 0, acao: 'criar' },
+            { item: itemDeTeste({ codigo: 'A2', nome: 'Dois' }), existente: null, markup: 0, acao: 'criar' }
+        ],
+        catalogo: [], materiais: [], fornecedor: null, agora: 6000
+    });
+    assert.notStrictEqual(r.catalogo[0].id, r.catalogo[1].id);
+});
+
+test('resolverAcao vira atualizar quando o codigo bate com um registro existente', () => {
+    const catalogo = [{ id: 1, referencia: 'AC1', nome: 'Linho', preco_custo: 90, preco: 162, fornecedor_id: 99 }];
+    const r = C.resolverAcao(itemDeTeste({ codigo: 'AC1' }), catalogo, []);
+    assert.strictEqual(r.acao, 'atualizar');
+    assert.strictEqual(r.existente.id, 1);
+});
+
+test('resolverAcao vira criar quando o usuario editou o codigo para um livre', () => {
+    const catalogo = [{ id: 1, referencia: 'AC1', nome: 'Linho', preco_custo: 90, preco: 162, fornecedor_id: 99 }];
+    const r = C.resolverAcao(itemDeTeste({ codigo: 'AC1-NOVO' }), catalogo, []);
+    assert.strictEqual(r.acao, 'criar');
+    assert.strictEqual(r.existente, null);
+});
+
+test('validarDecisoes aceita um lote limpo', () => {
+    const decisoes = [
+        { item: itemDeTeste({ codigo: 'A1', nome: 'Um' }), existente: null, markup: 0, acao: 'criar' },
+        { item: itemDeTeste({ codigo: 'A2', nome: 'Dois' }), existente: null, markup: 0, acao: 'criar' }
+    ];
+    assert.deepStrictEqual(C.validarDecisoes(decisoes, [], []), []);
+});
+
+test('validarDecisoes pega codigo repetido dentro do proprio lote', () => {
+    const decisoes = [
+        { item: itemDeTeste({ codigo: 'A1', nome: 'Um' }), existente: null, markup: 0, acao: 'criar' },
+        { item: itemDeTeste({ codigo: 'A1', nome: 'Dois' }), existente: null, markup: 0, acao: 'criar' }
+    ];
+    const erros = C.validarDecisoes(decisoes, [], []);
+    assert.strictEqual(erros.length, 1);
+    assert.match(erros[0], /A1/);
+});
+
+test('validarDecisoes pega nome que colide com outro registro', () => {
+    const catalogo = [{ id: 1, referencia: 'ZZ9', nome: 'Linho', preco_custo: 90, preco: 162, fornecedor_id: 7 }];
+    const decisoes = [{ item: itemDeTeste({ codigo: 'A1', nome: 'Linho' }), existente: null, markup: 0, acao: 'criar' }];
+    const erros = C.validarDecisoes(decisoes, catalogo, []);
+    assert.strictEqual(erros.length, 1);
+    assert.match(erros[0], /Linho/);
+});
+
+test('validarDecisoes deixa passar o nome do proprio item que esta sendo atualizado', () => {
+    const catalogo = [{ id: 1, referencia: 'A1', nome: 'Linho', preco_custo: 90, preco: 162, fornecedor_id: 7 }];
+    const decisoes = [{ item: itemDeTeste({ codigo: 'A1', nome: 'Linho' }), existente: catalogo[0], markup: 0, acao: 'atualizar' }];
+    assert.deepStrictEqual(C.validarDecisoes(decisoes, catalogo, []), []);
+});
+
+test('validarDecisoes ignora as decisoes marcadas como ignorar', () => {
+    const decisoes = [
+        { item: itemDeTeste({ codigo: 'A1', nome: 'Um' }), existente: null, markup: 0, acao: 'criar' },
+        { item: itemDeTeste({ codigo: 'A1', nome: 'Dois' }), existente: null, markup: 0, acao: 'ignorar' }
+    ];
+    assert.deepStrictEqual(C.validarDecisoes(decisoes, [], []), []);
 });

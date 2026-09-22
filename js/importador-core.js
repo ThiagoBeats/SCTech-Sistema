@@ -396,7 +396,104 @@
         return r;
     }
 
-    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup, indexarExistentes, classificar };
+    const LARGURA_PADRAO = 2.80;
+
+    function aplicarImportacao(opcoes) {
+        const catalogo = (opcoes.catalogo || []).map(r => Object.assign({}, r));
+        const materiais = (opcoes.materiais || []).map(r => Object.assign({}, r));
+        const fornecedor = opcoes.fornecedor || null;
+        let proximoId = Number(opcoes.agora) || Date.now();
+        const resumo = { criados: 0, atualizados: 0, ignorados: 0 };
+
+        (opcoes.decisoes || []).forEach(decisao => {
+            const item = decisao.item;
+            if (!item || decisao.acao === 'ignorar') { resumo.ignorados++; return; }
+
+            const precoCusto = Number(item.preco_custo) || 0;
+            const preco = aplicarMarkup(precoCusto, decisao.markup);
+            const lista = item.tipo === 'tecido' ? catalogo : materiais;
+
+            if (decisao.acao === 'atualizar' && decisao.existente) {
+                const alvo = lista.find(r => r.id === decisao.existente.id);
+                if (!alvo) return;
+                alvo.referencia = item.codigo;
+                alvo.nome = item.nome;
+                alvo.preco_custo = precoCusto;
+                alvo.preco = preco;
+                if (item.tipo === 'tecido') {
+                    if (item.largura !== null) alvo.largura_rolo = item.largura;
+                } else {
+                    alvo.unidade = item.unidade;
+                }
+                if (fornecedor) { alvo.fornecedor_id = fornecedor.id; alvo.fornecedor_nome = fornecedor.nome; }
+                resumo.atualizados++;
+                return;
+            }
+
+            const base = {
+                id: proximoId++,
+                referencia: item.codigo,
+                nome: item.nome,
+                preco_custo: precoCusto,
+                preco,
+                min_estoque: 0,
+                fornecedor_id: fornecedor ? fornecedor.id : null,
+                fornecedor_nome: fornecedor ? fornecedor.nome : ''
+            };
+            if (item.tipo === 'tecido') {
+                catalogo.push(Object.assign(base, {
+                    largura_rolo: item.largura === null ? LARGURA_PADRAO : item.largura,
+                    imagem: ''
+                }));
+            } else {
+                materiais.push(Object.assign(base, { unidade: item.unidade, estoque_atual: 0 }));
+            }
+            resumo.criados++;
+        });
+
+        return { catalogo, materiais, resumo };
+    }
+
+    // Decide pelo codigo atual do item, nao pelo grupo em que ele caiu na tela.
+    // E o que faz "substituir o existente" e "editei o codigo, agora e outro
+    // produto" funcionarem sem reclassificar a conferencia inteira.
+    function resolverAcao(item, catalogo, materiais) {
+        const { porCodigo } = indexarExistentes(catalogo, materiais);
+        const achado = porCodigo.get(item.codigo);
+        return achado
+            ? { acao: 'atualizar', existente: achado.registro }
+            : { acao: 'criar', existente: null };
+    }
+
+    // Guarda da regra "nao pode haver codigo duplicado no sistema".
+    function validarDecisoes(decisoes, catalogo, materiais) {
+        const { porNome } = indexarExistentes(catalogo, materiais);
+        const erros = [];
+        const codigosDoLote = new Map();
+
+        (decisoes || []).forEach(d => {
+            if (!d.item || d.acao === 'ignorar') return;
+            const item = d.item;
+
+            if (codigosDoLote.has(item.codigo)) {
+                erros.push('O código ' + item.codigo + ' aparece duas vezes nesta importação ("'
+                    + codigosDoLote.get(item.codigo) + '" e "' + item.nome + '"). Edite um dos dois.');
+            } else {
+                codigosDoLote.set(item.codigo, item.nome);
+            }
+
+            const dono = porNome.get(item.tipo + '|' + item.nome.toLowerCase());
+            const ehOProprio = dono && d.existente && dono.registro.id === d.existente.id;
+            if (dono && !ehOProprio) {
+                erros.push('O nome "' + item.nome + '" já pertence ao código '
+                    + (dono.registro.referencia || '(sem código)') + '. Edite o nome.');
+            }
+        });
+
+        return erros;
+    }
+
+    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup, indexarExistentes, classificar, aplicarImportacao, resolverAcao, validarDecisoes };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ImportadorCore = api;
