@@ -1,0 +1,9 @@
+{
+  "name": "sctech",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sistema de gestao para cortineiros - HTML/CSS/JS sem build",
+  "scripts": {
+    "test": "node --test"
+  }
+}

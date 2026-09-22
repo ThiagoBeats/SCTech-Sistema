@@ -11,7 +11,11 @@
 <body>
     <aside class="sidebar" id="main-sidebar"></aside>
     <main class="main">
-        <div class="header"><h2>Cadastro — Catálogo e Preços</h2></div>
+        <div class="header">
+            <h2>Cadastro — Catálogo e Preços</h2>
+            <button class="btn btn-outline" id="btn-desfazer-import" style="display:none" onclick="desfazerUltimaImportacao()">↩️ Desfazer importação</button>
+            <button class="btn btn-outline" onclick="abrirImportadorTabela()">📥 Importar tabela</button>
+        </div>
 
         <div class="tab-nav">
             <button class="tab-btn active" data-tab="cat-tecidos"   onclick="mostrarTabCatalogo('tecidos')">📚 Tecidos</button>
@@ -138,5 +142,7 @@
         </div>
     </main>
     <script src="js/app.js"></script>
+    <script src="js/importador-core.js"></script>
+    <script src="js/importador-ui.js"></script>
 </body>
 </html>

@@ -34,7 +34,7 @@
 | `js/app.js` (modificar) | `db.import_perfis` no bootstrap e em `syncDB()`. |
 | `tests/xlsx-min.js` (criar) | Leitor mínimo de `.xlsx` usado **só pelos testes**, para que o Node leia a planilha real sem instalar nada. |
 | `tests/importador-core.test.js` (criar) | Testes das funções puras contra a planilha real. |
-| `package.json` (criar) | Só `"scripts": { "test": "node --test tests/" }`. Sem dependências. |
+| `package.json` (criar) | Só `"scripts": { "test": "node --test" }`. Sem dependências. |
 
 A divisão em `-core` e `-ui` é um refinamento do que a spec chamou de `js/importador.js`: separar o que é testável fora do navegador do que exige DOM.
 
@@ -50,7 +50,7 @@ Sem isso, nenhum teste consegue abrir a planilha real, porque o projeto não tem
 - Create: `tests/xlsx-min.js`
 - Create: `tests/xlsx-min.test.js`
 - Create: `package.json`
-- Modify: `.gitignore` (nada a remover; confirmar que `Docs/` não está ignorado)
+- Modify: `.gitignore` (nada a remover; confirmar que `docs/` não está ignorado)
 
 **Interfaces:**
 - Consumes: nada.
@@ -61,7 +61,7 @@ Sem isso, nenhum teste consegue abrir a planilha real, porque o projeto não tem
 Os testes leem a planilha real. Ela precisa estar no repositório.
 
 ```bash
-git add "Docs/Tabela RC - SETEMBRO - 2024.xlsx" "Docs/Tabela de preços RC TECIDOS PDF.pdf"
+git add "docs/Tabela RC - SETEMBRO - 2024.xlsx" "docs/Tabela de preços RC TECIDOS PDF.pdf"
 git commit -m "test: versiona tabela real do fornecedor usada nos testes do importador"
 ```
 
@@ -76,10 +76,15 @@ Só registra o comando de teste. Não instala nada.
   "private": true,
   "description": "Sistema de gestao para cortineiros - HTML/CSS/JS sem build",
   "scripts": {
-    "test": "node --test tests/"
+    "test": "node --test"
   }
 }
 ```
+
+> `node --test` sem argumento, de propósito: no Node v25 do Windows, passar
+> `tests/` faz o runner tentar `require()` o diretório em vez de varrê-lo, e
+> tudo falha. A descoberta padrão acha `**/*.test.js` e ignora `*.spec.js`,
+> então as specs do Playwright das Tasks 14 e 18 não são executadas por aqui.
 
 - [ ] **Step 3: Escrever o teste do leitor**
 
@@ -92,7 +97,7 @@ const assert = require('node:assert');
 const path = require('node:path');
 const { lerXlsx } = require('./xlsx-min.js');
 
-const PLANILHA = path.join(__dirname, '..', 'Docs', 'Tabela RC - SETEMBRO - 2024.xlsx');
+const PLANILHA = path.join(__dirname, '..', 'docs', 'Tabela RC - SETEMBRO - 2024.xlsx');
 
 test('le as 22 abas da planilha real', () => {
     const { ordem } = lerXlsx(PLANILHA);
@@ -431,7 +436,7 @@ Acrescente ao fim de `tests/importador-core.test.js`:
 ```js
 const path = require('node:path');
 const { lerXlsx } = require('./xlsx-min.js');
-const PLANILHA = path.join(__dirname, '..', 'Docs', 'Tabela RC - SETEMBRO - 2024.xlsx');
+const PLANILHA = path.join(__dirname, '..', 'docs', 'Tabela RC - SETEMBRO - 2024.xlsx');
 
 test('detectarCabecalho acha a linha 2 nas abas de tecido', () => {
     const { abas } = lerXlsx(PLANILHA);
@@ -1676,7 +1681,7 @@ Esperado: sem saída do `node --check` e testes PASS (o core não mudou).
 
 - [ ] **Step 4: Conferir no navegador**
 
-Abra `catalogo.html`, clique em "📥 Importar tabela", escolha `Docs/Tabela RC - SETEMBRO - 2024.xlsx`.
+Abra `catalogo.html`, clique em "📥 Importar tabela", escolha `docs/Tabela RC - SETEMBRO - 2024.xlsx`.
 Esperado: toast "Planilha lida: 22 aba(s)."
 
 - [ ] **Step 5: Commit**
@@ -1940,7 +1945,7 @@ Esperado: sem saída.
 - [ ] **Step 3: Conferir no navegador**
 
 Abra `catalogo.html` → "📥 Importar tabela" → escolha a planilha → selecione um fornecedor → Continuar.
-Esperado: passo 2 lista 22 abas, `Capa` vem como "Ignorar", os 7 Books vêm como "Tecido", as demais como "Material", e a contagem de itens de Book 10 fica em torno de 38. "Continuar" dá erro por enquanto (passo 3 ainda não existe) — isso é o esperado nesta task.
+Esperado: passo 2 lista 22 abas, `Capa` vem como "Ignorar", os 7 Books vêm como "Tecido", as demais como "Material", e a contagem de itens de Book 10 fica em torno de 38. Clicar em "Continuar" no passo 2 não faz nada visível ainda — `_impRenderPasso(3)` não tem ramo correspondente até a Task 12, então a tela fica parada sem erro no console. É o esperado nesta task.
 
 - [ ] **Step 4: Commit**
 
@@ -2064,7 +2069,15 @@ async function _impConcluirPasso3() {
     for (const layout of layouts) {
         const mapa = _impMapaDoLayout(layout);
         if (mapa.codigo < 0 || mapa.nome < 0 || mapa.preco < 0) {
-            await showAlert(`No layout de ${layout.abas[0]}, marque ao menos as colunas de Código, Nome e Preço.`, '⚠️');
+            // Abas sem cabecalho reconhecivel caem aqui: a saida prevista e
+            // marca-las como "Ignorar" no passo 2 (ou, na Fase 2, apontar a
+            // linha do cabecalho na mao).
+            const semCabecalho = layout.cabecalhoIndice < 0;
+            await showAlert(
+                `Não dá para mapear ${semCabecalho ? 'estas abas, que não têm cabeçalho reconhecível' : 'este layout'}:\n\n`
+                + layout.abas.join(', ')
+                + `\n\nMarque ao menos as colunas de Código, Nome e Preço — ou volte ao passo 2 e marque estas abas como "Ignorar".`,
+                '⚠️');
             return;
         }
         _impEstado.layouts[layout.assinatura] = { mapa, cabecalhoIndice: layout.cabecalhoIndice };
@@ -2404,15 +2417,34 @@ Sirva o projeto e rode o teste apontando para ele:
 
 `tests/e2e/importador.spec.js`:
 
+> **Sessão autenticada é obrigatória.** O SCTech redireciona para `login.html`
+> quando não há sessão, então um teste que navega direto para `catalogo.html`
+> encontra a tela de login e falha com `window._impLerArquivo is not a function`.
+> Semeie a sessão antes de cada navegação. Papel 1 é o Administrador que vem de
+> `papeisPadrao()`, com tudo em "completo".
+
 ```js
 const { test, expect } = require('@playwright/test');
 const path = require('node:path');
 
 const BASE = process.env.BASE || 'http://localhost:8123';
 const RAIZ = process.env.RAIZ || path.join(__dirname, '..', '..');
-const PLANILHA = path.join(RAIZ, 'Docs', 'Tabela RC - SETEMBRO - 2024.xlsx');
+const PLANILHA = path.join(RAIZ, 'docs', 'Tabela RC - SETEMBRO - 2024.xlsx');
+
+// Semeia a sessao. Sem isto, toda navegacao cai em login.html.
+async function entrar(page) {
+    await page.goto(BASE + '/login.html');
+    await page.evaluate(() => {
+        localStorage.setItem('sc_usr', JSON.stringify([{
+            id: 1, nome: 'Teste', email: 'teste@sctech.local',
+            papel_id: 1, ativo: true, permissoes_extras: {}, senha_hash: ''
+        }]));
+        sessionStorage.setItem('sc_user', JSON.stringify({ id: 1 }));
+    });
+}
 
 test('importa a tabela real do fornecedor para o catalogo', async ({ page }) => {
+    await entrar(page);
     await page.goto(BASE + '/catalogo.html');
 
     // fornecedor conhecido, catalogo e materiais limpos
@@ -2434,6 +2466,23 @@ test('importa a tabela real do fornecedor para o catalogo', async ({ page }) => 
     await page.click('text=Continuar');                    // passo 2
 
     await expect(page.locator('#imp-corpo')).toContainText('Capa');
+
+    // Cinco abas da planilha real nao tem cabecalho reconhecivel; na Fase 1 a
+    // saida prevista para elas e "Ignorar" (a Fase 2 traz o cabecalho manual).
+    const ignoradas = await page.evaluate(() => {
+        const C = window.ImportadorCore;
+        const semCabecalho = [];
+        _impEstado.planilha.ordem.forEach(aba => {
+            if (C.detectarCabecalho(_impEstado.planilha.abas[aba]).indice === -1) {
+                _impEstado.abas[aba] = 'ignorar';
+                semCabecalho.push(aba);
+            }
+        });
+        _impRenderPasso(2);
+        return semCabecalho;
+    });
+    expect(ignoradas.length).toBeGreaterThan(0);
+
     await page.click('text=Continuar');                    // passo 3
     await expect(page.locator('#imp-corpo')).toContainText('Tecidos');
     await page.click('text=Continuar');                    // passo 4
@@ -2459,6 +2508,7 @@ test('importa a tabela real do fornecedor para o catalogo', async ({ page }) => 
 });
 
 test('desfaz a importacao e devolve o catalogo ao estado anterior', async ({ page }) => {
+    await entrar(page);
     await page.goto(BASE + '/catalogo.html');
     const antes = await page.evaluate(() => JSON.parse(localStorage.getItem('sc_cat') || '[]').length);
     expect(antes).toBeGreaterThan(0);
@@ -2952,7 +3002,7 @@ Esperado: sem saída do `node --check` e testes PASS.
 
 - [ ] **Step 5: Conferir no navegador**
 
-1. Importe `Docs/Tabela de preços RC TECIDOS PDF.pdf`. Esperado: 22 "abas" (`Página 1`…`Página 22`), e o passo 3 mostrando as colunas reconhecidas.
+1. Importe `docs/Tabela de preços RC TECIDOS PDF.pdf`. Esperado: 22 "abas" (`Página 1`…`Página 22`), e o passo 3 mostrando as colunas reconhecidas.
 2. Importe a planilha, vá até o passo 3, marque "Esta aba tem preço por cor" no bloco de `Cor Metal`, marque as colunas de cor e confira que a contagem sobe para linhas × cores.
 3. Numa aba sem cabeçalho detectado (`Trilho Motorizado`), troque o seletor de linha do cabeçalho e veja o mapeamento ser sugerido de novo.
 
@@ -2978,9 +3028,10 @@ git commit -m "feat(importador): importacao de PDF, preco por cor e cabecalho ma
 
 ```js
 test('o PDF produz os mesmos codigos que a planilha', async ({ page }) => {
-    const PDF = path.join(RAIZ, 'Docs', 'Tabela de preços RC TECIDOS PDF.pdf');
+    const PDF = path.join(RAIZ, 'docs', 'Tabela de preços RC TECIDOS PDF.pdf');
 
     const importar = async arquivo => {
+        await entrar(page);
         await page.goto(BASE + '/catalogo.html');
         await page.evaluate(() => {
             localStorage.setItem('sc_forn', JSON.stringify([{ id: 7, nome: 'RC Tecidos' }]));
@@ -2993,6 +3044,13 @@ test('o PDF produz os mesmos codigos que a planilha', async ({ page }) => {
         await page.setInputFiles('#imp-file', arquivo);
         await page.selectOption('#imp-fornecedor', '7');
         await page.click('text=Continuar');
+        await page.evaluate(() => {
+            const C = window.ImportadorCore;
+            _impEstado.planilha.ordem.forEach(aba => {
+                if (C.detectarCabecalho(_impEstado.planilha.abas[aba]).indice === -1) _impEstado.abas[aba] = 'ignorar';
+            });
+            _impRenderPasso(2);
+        });
         await page.click('text=Continuar');
         await page.click('text=Continuar');
         await page.click('button:has-text("Gravar")');
@@ -3010,6 +3068,7 @@ test('o PDF produz os mesmos codigos que a planilha', async ({ page }) => {
 });
 
 test('modo preco por cor grava um material por cor', async ({ page }) => {
+    await entrar(page);
     await page.goto(BASE + '/catalogo.html');
     await page.evaluate(() => {
         localStorage.setItem('sc_forn', JSON.stringify([{ id: 7, nome: 'RC Tecidos' }]));

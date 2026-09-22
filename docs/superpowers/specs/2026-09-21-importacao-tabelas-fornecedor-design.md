@@ -101,6 +101,28 @@ Conflitos · Sem markup registrado · Com problema (desmarcados) · Sumiram da t
 (apenas aviso). Qualquer célula é editável. Nada é gravado até a confirmação final.
 Ao final, o assistente oferece salvar o perfil.
 
+### Resolução em massa de códigos repetidos
+
+A tabela real traz o mesmo código em várias linhas — variantes de cor que
+compartilham código. Resolver uma a uma é inviável: a tabela de referência
+produz 11 grupos de código repetido numa importação. Então, quando o lote tem
+código repetido entre as linhas marcadas, o passo 4 mostra um painel no topo,
+listando os códigos e quantas vezes cada um aparece, com duas saídas:
+
+- **Diferenciar com "D".** A primeira ocorrência mantém o código; a segunda vira
+  `<código>D`, a terceira `<código>DD`, e assim por diante. O sufixo cresce até o
+  código ficar livre — livre significa não usado por outra linha do lote **nem**
+  já existente em `db.catalogo`/`db.materiais`, porque código é único no sistema
+  inteiro.
+- **Descartar os repetidos.** A primeira ocorrência continua marcada e as demais
+  são desmarcadas. Nada é apagado: as linhas seguem visíveis e o usuário pode
+  remarcar.
+
+"Primeira" é a ordem em que a linha aparece na importação — ordem das abas e, dentro
+da aba, ordem das linhas. O painel some quando não há mais repetição. As duas ações
+só mexem em linhas marcadas, porque linha desmarcada não é gravada e portanto não
+gera duplicidade.
+
 ## Classificação
 
 Pelo código normalizado, que é único no sistema inteiro:

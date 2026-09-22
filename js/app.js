@@ -188,7 +188,8 @@ let db = {
     despesas_fixas:  JSON.parse(localStorage.getItem('sc_df'))   || [],
     medicoes:        JSON.parse(localStorage.getItem('sc_med'))  || [],
     papeis:          JSON.parse(localStorage.getItem('sc_pap'))  || papeisPadrao(),
-    usuarios:        JSON.parse(localStorage.getItem('sc_usr'))  || []
+    usuarios:        JSON.parse(localStorage.getItem('sc_usr'))  || [],
+    import_perfis:   JSON.parse(localStorage.getItem('sc_imp_perfis')) || []
 };
 
 function gerarNumeroPedido() {
@@ -219,6 +220,7 @@ function syncDB() {
     localStorage.setItem('sc_med',  JSON.stringify(db.medicoes));
     localStorage.setItem('sc_pap',  JSON.stringify(db.papeis));
     localStorage.setItem('sc_usr',  JSON.stringify(db.usuarios));
+    localStorage.setItem('sc_imp_perfis', JSON.stringify(db.import_perfis));
 }
 
 // --- CONFIGURAÇÕES DA EMPRESA ---
