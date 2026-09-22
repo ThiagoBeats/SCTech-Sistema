@@ -985,7 +985,10 @@ test('agruparLinhasPdf ordena de cima para baixo e da esquerda para a direita', 
         { texto: 'a', x: 10, y: 200 },
         { texto: 'b', x: 150, y: 200 }
     ]);
-    assert.deepStrictEqual(linhas, [['a', 'b'], ['z']]);
+    // Detecta 3 colunas: x=10, x=150, x=300
+    // Linha 1 (y=200): a na col 0, b na col 1, col 2 vazia
+    // Linha 2 (y=10): col 0 e 1 vazias, z na col 2
+    assert.deepStrictEqual(linhas, [['a', 'b', ''], ['', '', 'z']]);
 });
 
 test('agruparLinhasPdf descarta fragmentos vazios', () => {
@@ -994,4 +997,23 @@ test('agruparLinhasPdf descarta fragmentos vazios', () => {
         { texto: 'A', x: 80, y: 100 }
     ]);
     assert.deepStrictEqual(linhas, [['A']]);
+});
+
+test('agruparLinhasPdf mantém índices de coluna quando uma linha está vazia no meio', () => {
+    const linhas = C.agruparLinhasPdf([
+        { texto: 'A', x: 10, y: 100 },
+        { texto: 'B', x: 80, y: 100 },
+        { texto: 'C', x: 150, y: 100 },
+        { texto: 'X', x: 10, y: 80 },
+        { texto: 'Z', x: 150, y: 80 }
+    ]);
+    // Primeira linha tem células nas colunas 0, 1, 2
+    assert.strictEqual(linhas[0][0], 'A');
+    assert.strictEqual(linhas[0][1], 'B');
+    assert.strictEqual(linhas[0][2], 'C');
+    // Segunda linha tem X na coluna 0 e Z na coluna 2, coluna 1 fica vazia
+    assert.strictEqual(linhas[1][0], 'X');
+    assert.strictEqual(linhas[1][1], '');
+    assert.strictEqual(linhas[1][2], 'Z');
+    assert.deepStrictEqual(linhas[1], ['X', '', 'Z']);
 });

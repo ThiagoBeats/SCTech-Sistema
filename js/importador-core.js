@@ -560,6 +560,7 @@
     // Agrupa fragmentos de texto do PDF em linhas e colunas.
     // Fragmentos com y similar viram a mesma linha, ordenada por x.
     // Fragmentos horizontalmente adjacentes viram uma so celula.
+    // Cada célula é colocada no índice de sua coluna (detectada por clustering de x).
     function agruparLinhasPdf(fragmentos, opcoes) {
         const o = opcoes || {};
         const toleranciaY = o.toleranciaY === undefined ? 3 : o.toleranciaY;
@@ -569,6 +570,8 @@
             .map(f => ({ texto: normalizarNome(f.texto), x: Number(f.x), y: Number(f.y) }))
             .filter(f => f.texto !== '' && isFinite(f.x) && isFinite(f.y));
 
+        if (uteis.length === 0) return [];
+
         // agrupa por y (no PDF, y cresce de baixo para cima)
         const grupos = [];
         uteis.slice().sort((a, b) => b.y - a.y).forEach(f => {
@@ -577,7 +580,8 @@
             else grupos.push({ y: f.y, itens: [f] });
         });
 
-        return grupos.map(grupo => {
+        // constrói as linhas com cells merged, guardando x para clustering posterior
+        const linhasComCelulas = grupos.map(grupo => {
             const ordenados = grupo.itens.sort((a, b) => a.x - b.x);
             const celulas = [];
             let atual = null;
@@ -586,13 +590,68 @@
                 if (atual !== null && fimAnterior !== null && (f.x - fimAnterior) < toleranciaX) {
                     atual.texto += ' ' + f.texto;
                 } else {
-                    atual = { texto: f.texto };
+                    atual = { texto: f.texto, x: f.x };
                     celulas.push(atual);
                 }
                 // aproxima a largura do fragmento por 5px por caractere
                 fimAnterior = f.x + f.texto.length * 5;
             });
-            return celulas.map(c => c.texto);
+            return celulas;
+        });
+
+        // detecta as posições das colunas agrupando x-starts com duas passagens
+        const xStartsSet = new Set();
+        linhasComCelulas.forEach(linha => {
+            linha.forEach(celula => {
+                xStartsSet.add(celula.x);
+            });
+        });
+        const xStarts = Array.from(xStartsSet).sort((a, b) => a - b);
+
+        // primeira passagem: agrupa x-starts em clusters com toleranciaX
+        let colunas = [];
+        for (let x of xStarts) {
+            let encontrou = false;
+            for (let i = 0; i < colunas.length; i++) {
+                if (Math.abs(colunas[i] - x) <= toleranciaX) {
+                    // media os valores para encontrar o center do cluster
+                    colunas[i] = (colunas[i] + x) / 2;
+                    encontrou = true;
+                    break;
+                }
+            }
+            if (!encontrou) {
+                colunas.push(x);
+            }
+        }
+
+        // segunda passagem: agrupa clusters próximos em colunas principais (com maior tolerância)
+        const colunasFinais = [];
+        for (let col of colunas) {
+            let encontrou = false;
+            for (let i = 0; i < colunasFinais.length; i++) {
+                if (Math.abs(colunasFinais[i] - col) <= Math.max(20, 2 * toleranciaX)) {
+                    // media para encontrar o center da coluna final
+                    colunasFinais[i] = (colunasFinais[i] + col) / 2;
+                    encontrou = true;
+                    break;
+                }
+            }
+            if (!encontrou) {
+                colunasFinais.push(col);
+            }
+        }
+
+        // mapeia cada celula para o indice da sua coluna final
+        return linhasComCelulas.map(celulas => {
+            const resultado = new Array(colunasFinais.length).fill('');
+            celulas.forEach(celula => {
+                const colIndex = colunasFinais.findIndex(col => Math.abs(col - celula.x) <= toleranciaX);
+                if (colIndex >= 0) {
+                    resultado[colIndex] = celula.texto;
+                }
+            });
+            return resultado;
         });
     }
 
