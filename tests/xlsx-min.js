@@ -58,13 +58,21 @@ function colunaParaIndice(ref) {
 
 function lerPlanilha(xml, strings) {
     const linhas = [];
-    for (const mLinha of xml.matchAll(/<row[^>]*\br="(\d+)"[^>]*>([\s\S]*?)<\/row>/g)) {
+    // Linhas vazias vem como tag auto-fechada (<row r="65" spans="1:2"/>). Remove
+    // antes de casar, senao a regex de linha abaixo (que exige um "</row>" de
+    // fechamento) engole a proxima linha real ao procurar o proximo "</row>"
+    // seguinte, perdendo a linha vazia e misatribuindo o conteudo da linha
+    // seguinte ao indice da linha vazia.
+    const xmlSemLinhasVazias = xml.replace(/<row\b[^>]*\/>/g, '');
+    for (const mLinha of xmlSemLinhasVazias.matchAll(/<row[^>]*\br="(\d+)"[^>]*>([\s\S]*?)<\/row>/g)) {
         const idx = Number(mLinha[1]) - 1;
         const celulas = [];
-        // Celulas vazias vem como tag auto-fechada (<c r="C2" s="562"/>). Normaliza
-        // para forma aberta/fechada antes de casar, senao a regex de celula abaixo
-        // engole a proxima celula real ao procurar o primeiro "</c>" seguinte.
-        const linhaXml = mLinha[2].replace(/<c\b([^>]*)\/>/g, '<c$1></c>');
+        // Celulas vazias vem como tag auto-fechada (<c r="C2" s="562"/>). Remove (em
+        // vez de normalizar para <c></c>) antes de casar: assim a regex de celula
+        // abaixo nao engole a proxima celula real ao procurar o primeiro "</c>"
+        // seguinte, E a coluna correspondente fica como buraco no array (== o
+        // "undefined" que o contrato pede para celula vazia), em vez de virar ''.
+        const linhaXml = mLinha[2].replace(/<c\b[^>]*\/>/g, '');
         for (const mCel of linhaXml.matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/g)) {
             const attrs = mCel[1];
             const ref = (attrs.match(/\br="([A-Z]+\d+)"/) || [])[1];
