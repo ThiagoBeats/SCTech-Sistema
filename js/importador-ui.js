@@ -110,6 +110,7 @@ function _impRenderPasso(n) {
     if (n === 1) corpo.innerHTML = _impTrilha(1) + _impPasso1HTML();
     if (n === 2) corpo.innerHTML = _impTrilha(2) + _impPasso2HTML();
     if (n === 3) corpo.innerHTML = _impTrilha(3) + _impPasso3HTML();
+    if (n === 4) { _impPrepararConferencia(); corpo.innerHTML = _impTrilha(4) + _impPasso4HTML(); }
 }
 
 // ── Passo 1: arquivo e fornecedor ────────────────────────────────────────────
@@ -394,3 +395,225 @@ async function _impConcluirPasso3() {
     }
     _impRenderPasso(4);
 }
+
+// ── Passo 4: conferencia ─────────────────────────────────────────────────────
+const CHAVE_SNAPSHOT = 'sc_imp_snap';
+
+function _impColetarItens() {
+    const C = window.ImportadorCore;
+    const itens = [];
+    _impEstado.planilha.ordem.forEach(aba => {
+        const tipo = _impEstado.abas[aba];
+        if (tipo === 'ignorar') return;
+        const dados = _impEstado.planilha.abas[aba];
+        const { colunas } = C.detectarCabecalho(dados);
+        const assinatura = C.assinaturaDoLayout(colunas) + '#' + tipo;
+        const layout = _impEstado.layouts[assinatura];
+        if (!layout) return;
+        itens.push(...C.montarItens({ linhas: dados, cabecalhoIndice: layout.cabecalhoIndice, mapa: layout.mapa, tipo, aba }));
+    });
+    return itens;
+}
+
+function _impPrepararConferencia() {
+    const C = window.ImportadorCore;
+    const grupos = C.classificar({
+        itens: _impColetarItens(),
+        catalogo: db.catalogo,
+        materiais: db.materiais,
+        fornecedorId: _impEstado.fornecedor.id
+    });
+    // marcado/markup por entrada, decididos aqui e editaveis na tela
+    const preparar = (lista, marcadoPadrao, markupFn) => lista.forEach(e => {
+        e.marcado = marcadoPadrao;
+        e.markup = markupFn(e);
+    });
+    preparar(grupos.novos, true, () => _impEstado.markupPadrao);
+    preparar(grupos.atualizados, true, e => C.markupDeExistente(e.existente));
+    preparar(grupos.sem_markup, true, () => _impEstado.markupPadrao);
+    preparar(grupos.conflitos, false, () => _impEstado.markupPadrao);
+    preparar(grupos.nomes_repetidos, false, () => _impEstado.markupPadrao);
+    preparar(grupos.problemas, false, () => _impEstado.markupPadrao);
+    _impEstado.grupos = grupos;
+}
+
+const _IMP_GRUPOS = [
+    { chave: 'novos',           titulo: 'Novos',                   ajuda: 'Serão criados com o markup informado.' },
+    { chave: 'atualizados',     titulo: 'Atualizados',             ajuda: 'Custo novo, venda recalculada com o markup atual do item.' },
+    { chave: 'sem_markup',      titulo: 'Sem markup registrado',   ajuda: 'O item já existe mas não tem markup. Defina um para cada linha.' },
+    { chave: 'conflitos',       titulo: 'Conflitos de código',     ajuda: 'O código já é de outro fornecedor. Edite o código ou desmarque.' },
+    { chave: 'nomes_repetidos', titulo: 'Nomes repetidos',         ajuda: 'O nome já pertence a outro produto. Edite o nome ou desmarque.' },
+    { chave: 'problemas',       titulo: 'Com problema',            ajuda: 'Preço ilegível. Corrija o valor ou deixe desmarcado.' }
+];
+
+function _impPasso4HTML() {
+    const g = _impEstado.grupos;
+    const blocos = _IMP_GRUPOS.map(def => {
+        const lista = g[def.chave];
+        if (!lista.length) return '';
+        const linhas = lista.map((e, i) => {
+            const it = e.item;
+            const venda = window.ImportadorCore.aplicarMarkup(it.preco_custo, e.markup);
+            const antes = e.existente
+                ? `<div style="font-size:11px;color:var(--muted)">antes: custo ${_impMoeda(e.existente.preco_custo || 0)} · venda ${_impMoeda(e.existente.preco || 0)}</div>`
+                : '';
+            const alerta = (e.motivo ? [e.motivo] : []).concat(it.avisos)
+                .map(a => `<div style="font-size:11px;color:var(--muted)">⚠ ${escapeHtml(a)}</div>`).join('');
+            return `<tr>
+                <td><input type="checkbox" ${e.marcado ? 'checked' : ''} onchange="_impAlternarMarcado('${def.chave}', ${i})"></td>
+                <td style="font-size:12px;color:var(--muted)">${escapeHtml(it.aba)}</td>
+                <td><input value="${escapeHtml(it.codigo)}" style="width:110px;font-size:12px" onchange="_impEditarCampo('${def.chave}', ${i}, 'codigo', this.value)"></td>
+                <td><input value="${escapeHtml(it.nome)}" style="width:220px;font-size:12px" onchange="_impEditarCampo('${def.chave}', ${i}, 'nome', this.value)">${alerta}</td>
+                <td><input type="number" step="0.01" value="${it.preco_custo === null ? '' : it.preco_custo}" style="width:90px;font-size:12px" onchange="_impEditarCampo('${def.chave}', ${i}, 'preco_custo', this.value)"></td>
+                <td><input type="number" step="1" value="${e.markup === null ? '' : e.markup}" style="width:70px;font-size:12px" onchange="_impEditarCampo('${def.chave}', ${i}, 'markup', this.value)"></td>
+                <td>${_impMoeda(venda)}${antes}</td>
+            </tr>`;
+        }).join('');
+        return `<div class="card" style="margin-bottom:14px">
+            <h4 style="margin:0 0 2px;color:var(--dark)">${def.titulo} <span style="color:var(--muted);font-weight:400">(${lista.length})</span></h4>
+            <p style="font-size:12px;color:var(--muted);margin:0 0 10px">${def.ajuda}</p>
+            <div style="max-height:260px;overflow:auto"><table>
+                <thead><tr><th></th><th>Aba</th><th>Código</th><th>Nome</th><th>Custo</th><th>Markup %</th><th>Venda</th></tr></thead>
+                <tbody>${linhas}</tbody>
+            </table></div>
+        </div>`;
+    }).join('');
+
+    const sumiram = g.sumiram.length
+        ? `<div class="card" style="margin-bottom:14px">
+            <h4 style="margin:0 0 2px;color:var(--dark)">Sumiram da tabela <span style="color:var(--muted);font-weight:400">(${g.sumiram.length})</span></h4>
+            <p style="font-size:12px;color:var(--muted);margin:0">Estão cadastrados e não vieram nesta tabela. Nada será alterado neles.</p>
+            <p style="font-size:12px;margin:8px 0 0">${g.sumiram.slice(0, 20).map(e => escapeHtml(e.existente.referencia || e.existente.nome)).join(', ')}${g.sumiram.length > 20 ? '…' : ''}</p>
+        </div>` : '';
+
+    const marcados = _IMP_GRUPOS.reduce((n, d) => n + g[d.chave].filter(e => e.marcado).length, 0);
+
+    return `
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Confira e ajuste o que quiser. Só as linhas marcadas serão gravadas.</p>
+    ${blocos}${sumiram}
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0 14px;cursor:pointer">
+        <input type="checkbox" id="imp-salvar-perfil" checked> Salvar este mapeamento como perfil deste fornecedor
+    </label>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+        <button class="btn btn-outline" onclick="_impRenderPasso(3)">Voltar</button>
+        <button class="btn btn-success" onclick="_impGravar()">Gravar ${marcados} item(ns)</button>
+    </div>`;
+}
+
+function _impAlternarMarcado(chave, i) {
+    const e = _impEstado.grupos[chave][i];
+    e.marcado = !e.marcado;
+    _impRenderPasso(4);
+}
+
+function _impEditarCampo(chave, i, campo, valor) {
+    const C = window.ImportadorCore;
+    const e = _impEstado.grupos[chave][i];
+    if (campo === 'markup') { e.markup = parseFloat(valor); if (!isFinite(e.markup)) e.markup = 0; }
+    else if (campo === 'preco_custo') {
+        const p = C.normalizarPreco(valor);
+        e.item.preco_custo = p.ok ? p.valor : null;
+        e.item.problema = p.ok ? null : p.motivo;
+    }
+    else if (campo === 'codigo') e.item.codigo = C.normalizarCodigo(valor).codigo;
+    else if (campo === 'nome') e.item.nome = C.normalizarNome(valor);
+    _impRenderPasso(4);
+}
+
+// ── Gravacao, snapshot e desfazer ────────────────────────────────────────────
+function _impSalvarSnapshot(resumo) {
+    localStorage.setItem(CHAVE_SNAPSHOT, JSON.stringify({
+        quando: new Date().toISOString(),
+        resumo,
+        catalogo: db.catalogo,
+        materiais: db.materiais
+    }));
+}
+
+async function _impGravar() {
+    const C = window.ImportadorCore;
+    const g = _impEstado.grupos;
+    const decisoes = [];
+    _IMP_GRUPOS.forEach(def => {
+        g[def.chave].forEach(e => {
+            const ignorar = { item: e.item, existente: e.existente, markup: e.markup, acao: 'ignorar' };
+            if (!e.marcado || e.item.preco_custo === null) { decisoes.push(ignorar); return; }
+            // a acao sai do codigo atual do item, nao do grupo: se o usuario
+            // editou o codigo de um conflito, isto vira "criar" sozinho
+            const r = C.resolverAcao(e.item, db.catalogo, db.materiais);
+            decisoes.push({ item: e.item, existente: r.existente, markup: e.markup, acao: r.acao });
+        });
+    });
+
+    const vaiGravar = decisoes.filter(d => d.acao !== 'ignorar').length;
+    if (!vaiGravar) { await showAlert('Nenhuma linha marcada para gravar.', '⚠️'); return; }
+
+    const erros = C.validarDecisoes(decisoes, db.catalogo, db.materiais);
+    if (erros.length) {
+        await showAlert('Corrija antes de gravar:\n\n' + erros.slice(0, 8).join('\n')
+            + (erros.length > 8 ? `\n\n…e mais ${erros.length - 8}.` : ''), '⚠️');
+        return;
+    }
+
+    if (!await showConfirm(`Gravar ${vaiGravar} item(ns) no catálogo?`, '📥', 'Gravar', 'Cancelar')) return;
+
+    const r = C.aplicarImportacao({
+        decisoes,
+        catalogo: db.catalogo,
+        materiais: db.materiais,
+        fornecedor: _impEstado.fornecedor,
+        agora: Date.now()
+    });
+
+    _impSalvarSnapshot(r.resumo);
+    db.catalogo = r.catalogo;
+    db.materiais = r.materiais;
+
+    if (document.getElementById('imp-salvar-perfil')?.checked) _impSalvarPerfil();
+
+    salvarERecarregar(`Importação concluída: ${r.resumo.criados} criado(s), ${r.resumo.atualizados} atualizado(s).`);
+}
+
+function _impSalvarPerfil() {
+    const C = window.ImportadorCore;
+    const layouts = Object.keys(_impEstado.layouts).map(assinatura => ({
+        assinatura,
+        mapa: _impEstado.layouts[assinatura].mapa,
+        cabecalhoIndice: _impEstado.layouts[assinatura].cabecalhoIndice
+    }));
+    const existente = C.perfilDoFornecedor(db.import_perfis, _impEstado.fornecedor.id);
+    const perfil = C.montarPerfil({
+        id: existente ? existente.id : Date.now(),
+        nome: _impEstado.fornecedor.nome,
+        fornecedorId: _impEstado.fornecedor.id,
+        abas: _impEstado.abas,
+        layouts,
+        cores: existente ? existente.cores : {},
+        markupPadrao: _impEstado.markupPadrao
+    });
+    if (existente) db.import_perfis[db.import_perfis.indexOf(existente)] = perfil;
+    else db.import_perfis.push(perfil);
+}
+
+function _impSnapshot() {
+    try { return JSON.parse(localStorage.getItem(CHAVE_SNAPSHOT)); } catch (e) { return null; }
+}
+
+async function desfazerUltimaImportacao() {
+    const snap = _impSnapshot();
+    if (!snap) { await showAlert('Não há importação para desfazer.', 'ℹ️'); return; }
+    const quando = new Date(snap.quando).toLocaleString('pt-BR');
+    const msg = `Desfazer a importação de ${quando}?\n${snap.resumo.criados} criado(s) e ${snap.resumo.atualizados} atualizado(s) voltarão ao estado anterior.`;
+    if (!await showConfirm(msg, '↩️', 'Desfazer', 'Cancelar')) return;
+    db.catalogo = snap.catalogo;
+    db.materiais = snap.materiais;
+    localStorage.removeItem(CHAVE_SNAPSHOT);
+    salvarERecarregar('Importação desfeita.');
+}
+
+function _impAtualizarBotaoDesfazer() {
+    const btn = document.getElementById('btn-desfazer-import');
+    if (!btn) return;
+    btn.style.display = _impSnapshot() ? '' : 'none';
+}
+document.addEventListener('DOMContentLoaded', _impAtualizarBotaoDesfazer);
