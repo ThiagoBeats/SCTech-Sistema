@@ -668,7 +668,69 @@
         });
     }
 
-    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup, indexarExistentes, classificar, aplicarImportacao, resolverAcao, validarDecisoes, assinaturaDoLayout, montarPerfil, perfilDoFornecedor, codigoLivre, agruparLinhasPdf };
+    // Expande uma linha com colunas de cores em multiplos itens (um por cor).
+    // Usado para importacao de tabelas de fornecedor que listam cores como colunas.
+    // Exemplo: uma linha com AC1 | Fita | 10.00 | 15.00 | 12.00 (DOURADO, CROMADO, PALHA)
+    // vira 3 itens: AC1-DOURADO/Fita(DOURADO), AC1-CROMADO/Fita(CROMADO), AC1-PALHA/Fita(PALHA).
+    function expandirPorCor(opcoes) {
+        const linha = opcoes.linha || [];
+        const cores = opcoes.cores || {}; // { indiceColuna: 'NOME DA COR' }
+        const mapa = opcoes.mapa || {};
+        const tipo = opcoes.tipo || 'material';
+        const aba = opcoes.aba || '';
+        const linhaNum = opcoes.linhaNum || -1;
+
+        // Se a linha nao e um produto, nao expande nada
+        if (!ehLinhaDeProduto(linha, mapa)) return [];
+
+        // Extrai codigo e nome da linha
+        const codigoBruto = mapa.codigo >= 0 ? linha[mapa.codigo] : '';
+        const nomeBruto = mapa.nome >= 0 ? linha[mapa.nome] : '';
+        const { codigo: codigoNormalizado, promocional } = normalizarCodigo(codigoBruto);
+        const nomeBase = normalizarNome(nomeBruto);
+
+        // Para cada cor definida
+        const itens = [];
+        for (const [indiceColuna, nomeCor] of Object.entries(cores)) {
+            const idx = Number(indiceColuna);
+            if (idx < 0 || !isFinite(idx)) continue;
+
+            // Extrai o preco para esta cor
+            const precoBruto = idx < linha.length ? linha[idx] : '';
+            const preco = normalizarPreco(precoBruto);
+
+            // Pula cores sem preco legivel (silenciosamente)
+            if (!preco.ok) continue;
+
+            // Normaliza o nome da cor
+            const corNormalizada = normalizarNome(nomeCor).toUpperCase();
+            const corSemEspacos = corNormalizada.replace(/\s+/g, '');
+
+            // Monta o item
+            const avisos = [];
+            if (promocional) {
+                avisos.push('Código veio marcado como promocional (com *) na tabela');
+            }
+
+            itens.push({
+                aba,
+                linha: linhaNum,
+                codigo: codigoNormalizado + '-' + corSemEspacos,
+                nome: nomeBase + ' (' + corNormalizada + ')',
+                largura: null,
+                preco_custo: preco.valor,
+                unidade: _normalizarUnidade(mapa.unidade >= 0 ? linha[mapa.unidade] : '', tipo),
+                tipo,
+                promocional,
+                avisos,
+                problema: null
+            });
+        }
+
+        return itens;
+    }
+
+    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup, indexarExistentes, classificar, aplicarImportacao, resolverAcao, validarDecisoes, assinaturaDoLayout, montarPerfil, perfilDoFornecedor, codigoLivre, agruparLinhasPdf, expandirPorCor };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ImportadorCore = api;
