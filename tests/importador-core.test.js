@@ -481,3 +481,78 @@ test('custo novo preserva o markup do item existente', () => {
     const markup = C.markupDeExistente(existente);
     assert.strictEqual(C.aplicarMarkup(120, markup), 216);
 });
+
+function itemDeTeste(extra) {
+    return Object.assign({
+        aba: 'Teste', linha: 1, codigo: 'AC1', nome: 'Linho', largura: 2.8,
+        preco_custo: 100, unidade: 'm', tipo: 'tecido', promocional: false,
+        avisos: [], problema: null
+    }, extra || {});
+}
+
+test('classificar separa novo de atualizado', () => {
+    const catalogo = [{ id: 1, referencia: 'AC1', nome: 'Linho', preco_custo: 90, preco: 162, fornecedor_id: 7 }];
+    const r = C.classificar({
+        itens: [itemDeTeste({ codigo: 'AC1' }), itemDeTeste({ codigo: 'AC2', nome: 'Voil' })],
+        catalogo, materiais: [], fornecedorId: 7
+    });
+    assert.strictEqual(r.atualizados.length, 1);
+    assert.strictEqual(r.atualizados[0].existente.id, 1);
+    assert.strictEqual(r.novos.length, 1);
+    assert.strictEqual(r.novos[0].item.codigo, 'AC2');
+});
+
+test('classificar marca conflito quando o codigo e de outro fornecedor', () => {
+    const catalogo = [{ id: 1, referencia: 'AC1', nome: 'Linho', preco_custo: 90, preco: 162, fornecedor_id: 99 }];
+    const r = C.classificar({ itens: [itemDeTeste()], catalogo, materiais: [], fornecedorId: 7 });
+    assert.strictEqual(r.conflitos.length, 1);
+    assert.strictEqual(r.atualizados.length, 0);
+    assert.match(r.conflitos[0].motivo, /fornecedor/i);
+});
+
+test('classificar acha conflito tambem entre tecido e material', () => {
+    const materiais = [{ id: 5, referencia: 'AC1', nome: 'Trilho', preco_custo: 10, preco: 18, fornecedor_id: 99 }];
+    const r = C.classificar({ itens: [itemDeTeste()], catalogo: [], materiais, fornecedorId: 7 });
+    assert.strictEqual(r.conflitos.length, 1, 'codigo e unico somando catalogo e materiais');
+});
+
+test('classificar separa item existente sem markup derivavel', () => {
+    const catalogo = [{ id: 1, referencia: 'AC1', nome: 'Linho', preco_custo: 0, preco: 0, fornecedor_id: 7 }];
+    const r = C.classificar({ itens: [itemDeTeste()], catalogo, materiais: [], fornecedorId: 7 });
+    assert.strictEqual(r.sem_markup.length, 1);
+    assert.strictEqual(r.atualizados.length, 0);
+});
+
+test('classificar bloqueia nome repetido de outro item', () => {
+    const catalogo = [{ id: 1, referencia: 'ZZ9', nome: 'Linho', preco_custo: 90, preco: 162, fornecedor_id: 7 }];
+    const r = C.classificar({ itens: [itemDeTeste({ codigo: 'AC1', nome: 'linho' })], catalogo, materiais: [], fornecedorId: 7 });
+    assert.strictEqual(r.nomes_repetidos.length, 1);
+    assert.strictEqual(r.novos.length, 0);
+    assert.match(r.nomes_repetidos[0].motivo, /nome/i);
+});
+
+test('classificar poe o item com problema no grupo de problemas', () => {
+    const r = C.classificar({
+        itens: [itemDeTeste({ preco_custo: null, problema: 'Preço "--" — item sem preço na tabela' })],
+        catalogo: [], materiais: [], fornecedorId: 7
+    });
+    assert.strictEqual(r.problemas.length, 1);
+    assert.strictEqual(r.novos.length, 0);
+});
+
+test('classificar lista o que sumiu da tabela do mesmo fornecedor', () => {
+    const catalogo = [
+        { id: 1, referencia: 'AC1', nome: 'Linho', preco_custo: 90, preco: 162, fornecedor_id: 7 },
+        { id: 2, referencia: 'AC2', nome: 'Voil', preco_custo: 50, preco: 90, fornecedor_id: 7 },
+        { id: 3, referencia: 'XX1', nome: 'De outro', preco_custo: 50, preco: 90, fornecedor_id: 99 }
+    ];
+    const r = C.classificar({ itens: [itemDeTeste({ codigo: 'AC1' })], catalogo, materiais: [], fornecedorId: 7 });
+    assert.strictEqual(r.sumiram.length, 1);
+    assert.strictEqual(r.sumiram[0].existente.referencia, 'AC2');
+});
+
+test('classificar casa codigos ignorando o asterisco e a caixa', () => {
+    const catalogo = [{ id: 1, referencia: 'ac1', nome: 'Linho', preco_custo: 90, preco: 162, fornecedor_id: 7 }];
+    const r = C.classificar({ itens: [itemDeTeste({ codigo: 'AC1' })], catalogo, materiais: [], fornecedorId: 7 });
+    assert.strictEqual(r.atualizados.length, 1);
+});

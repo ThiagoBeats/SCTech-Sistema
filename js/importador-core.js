@@ -315,7 +315,78 @@
         return Math.round(custo * (1 + markup / 100) * 100) / 100;
     }
 
-    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup };
+    function indexarExistentes(catalogo, materiais) {
+        const porCodigo = new Map();
+        const porNome = new Map();
+        const registrar = (lista, tipo) => {
+            (lista || []).forEach(registro => {
+                const cod = normalizarCodigo(registro.referencia).codigo;
+                if (cod) porCodigo.set(cod, { registro, tipo });
+                const nome = normalizarNome(registro.nome).toLowerCase();
+                if (nome) porNome.set(tipo + '|' + nome, { registro, tipo });
+            });
+        };
+        registrar(catalogo, 'tecido');
+        registrar(materiais, 'material');
+        return { porCodigo, porNome };
+    }
+
+    function classificar(opcoes) {
+        const itens = opcoes.itens || [];
+        const fornecedorId = opcoes.fornecedorId === undefined ? null : opcoes.fornecedorId;
+        const { porCodigo, porNome } = indexarExistentes(opcoes.catalogo, opcoes.materiais);
+
+        const r = { novos: [], atualizados: [], conflitos: [], nomes_repetidos: [], sem_markup: [], problemas: [], sumiram: [] };
+        const vistos = new Set();
+
+        itens.forEach(item => {
+            if (item.problema) { r.problemas.push({ item, existente: null, motivo: item.problema }); return; }
+
+            const achado = porCodigo.get(item.codigo);
+            if (achado) {
+                vistos.add(item.codigo);
+                const existente = achado.registro;
+                const mesmoFornecedor = String(existente.fornecedor_id || '') === String(fornecedorId || '');
+                if (!mesmoFornecedor) {
+                    r.conflitos.push({
+                        item, existente,
+                        motivo: 'O código ' + item.codigo + ' já pertence a "' + existente.nome + '" de outro fornecedor'
+                    });
+                    return;
+                }
+                if (markupDeExistente(existente) === null) {
+                    r.sem_markup.push({ item, existente, motivo: 'Item sem markup registrado — defina o markup para calcular a venda' });
+                    return;
+                }
+                r.atualizados.push({ item, existente, motivo: null });
+                return;
+            }
+
+            const donoDoNome = porNome.get(item.tipo + '|' + item.nome.toLowerCase());
+            if (donoDoNome) {
+                r.nomes_repetidos.push({
+                    item, existente: donoDoNome.registro,
+                    motivo: 'O nome "' + item.nome + '" já é usado pelo código ' + (donoDoNome.registro.referencia || '(sem código)')
+                });
+                return;
+            }
+
+            r.novos.push({ item, existente: null, motivo: null });
+        });
+
+        porCodigo.forEach((achado, codigo) => {
+            if (vistos.has(codigo)) return;
+            if (String(achado.registro.fornecedor_id || '') !== String(fornecedorId || '')) return;
+            r.sumiram.push({
+                item: null, existente: achado.registro,
+                motivo: 'Está cadastrado mas não veio nesta tabela — nada será alterado'
+            });
+        });
+
+        return r;
+    }
+
+    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup, indexarExistentes, classificar };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ImportadorCore = api;
