@@ -656,7 +656,11 @@
     }
 
     // Guarda da regra "nao pode haver codigo duplicado no sistema".
-    function validarDecisoes(decisoes, catalogo, materiais) {
+    // Devolve cada pendencia com o `codigo` e/ou `nome` que identificam a linha
+    // culpada, para a interface poder rolar ate ela. Um dos dois pode vir null
+    // quando o erro nao aponta para uma unica linha por aquele campo (ex.: um
+    // nome repetido em varios codigos differentes nao tem UM codigo culpado).
+    function validarDecisoesDetalhado(decisoes, catalogo, materiais) {
         const { porNome } = indexarExistentes(catalogo, materiais);
         const erros = [];
         const errosDeNomeNoBanco = [];
@@ -694,8 +698,12 @@
             const dono = porNome.get(chaveNome);
             const ehOProprio = dono && d.existente && dono.registro.id === d.existente.id;
             if (dono && !ehOProprio) {
-                errosDeNomeNoBanco.push('O nome "' + nomeNormalizado + '" já pertence ao código '
-                    + (dono.registro.referencia || '(sem código)') + '. Edite o nome.');
+                errosDeNomeNoBanco.push({
+                    mensagem: 'O nome "' + nomeNormalizado + '" já pertence ao código '
+                        + (dono.registro.referencia || '(sem código)') + '. Edite o nome.',
+                    codigo: codigoNormalizado,
+                    nome: nomeNormalizado
+                });
             }
         });
 
@@ -704,21 +712,35 @@
         // Relata cada codigo duplicado UMA VEZ, com contagem
         codigosDoLote.forEach((info, codigo) => {
             if (info.count > 1) {
-                erros.push('O código ' + codigo + ' aparece ' + info.count + ' vezes nesta importação ('
-                    + info.nomes.join(', ') + '). Edite um dos códigos.');
+                erros.push({
+                    mensagem: 'O código ' + codigo + ' aparece ' + info.count + ' vezes nesta importação ('
+                        + info.nomes.join(', ') + '). Edite um dos códigos.',
+                    codigo: codigo,
+                    nome: null
+                });
             }
         });
 
         // Relata cada nome repetido no lote UMA VEZ, com os codigos envolvidos
         nomesDoLote.forEach(info => {
             if (info.codigos.size > 1) {
-                erros.push('O nome "' + info.nome + '" aparece em ' + info.codigos.size
-                    + ' códigos diferentes nesta importação (' + Array.from(info.codigos).join(', ')
-                    + '). Edite um dos nomes.');
+                erros.push({
+                    mensagem: 'O nome "' + info.nome + '" aparece em ' + info.codigos.size
+                        + ' códigos diferentes nesta importação (' + Array.from(info.codigos).join(', ')
+                        + '). Edite um dos nomes.',
+                    codigo: null,
+                    nome: info.nome
+                });
             }
         });
 
         return erros;
+    }
+
+    // Involucro historico: so as mensagens, na mesma ordem. Mantido para nenhum
+    // teste existente mudar — quem precisa da linha culpada usa a versao detalhada.
+    function validarDecisoes(decisoes, catalogo, materiais) {
+        return validarDecisoesDetalhado(decisoes, catalogo, materiais).map(e => e.mensagem);
     }
 
     function assinaturaDoLayout(colunas) {
@@ -934,7 +956,51 @@
         return itens;
     }
 
-    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, motivoLarguraIlegivel, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup, indexarExistentes, classificar, aplicarImportacao, desfazerImportacao, resolverAcao, validarDecisoes, assinaturaDoLayout, montarPerfil, perfilDoFornecedor, codigoLivre, nomeLivre, agruparLinhasPdf, expandirPorCor, CAMPOS_DO_IMPORTADOR };
+    // Le texto colado direto da planilha (Ctrl+C / Ctrl+V) e devolve o MESMO
+    // formato que a leitura de arquivo: { ordem: ['Dados colados'], abas: {...} }.
+    // Dados colados normalmente NAO tem linha de titulo — o resto do fluxo
+    // (deteccao de cabecalho, mapeamento) trata isso na camada de UI.
+    function lerColados(texto) {
+        if (texto === null || texto === undefined || !String(texto).trim()) {
+            return { ordem: [], abas: {} };
+        }
+
+        // Quebra por linha aceitando \r\n e \n.
+        const brutas = String(texto).split(/\r\n|\n/);
+
+        // Linhas totalmente vazias no FIM sao descartadas; no meio, preservadas
+        // (podem ser separador de secao — o resto do fluxo ja sabe ignorar).
+        while (brutas.length > 0 && brutas[brutas.length - 1].trim() === '') {
+            brutas.pop();
+        }
+        if (brutas.length === 0) return { ordem: [], abas: {} };
+
+        // Separador: tabulacao, a menos que a MAIORIA das linhas com conteudo
+        // nao tenha nenhuma — nesse caso cai para dois ou mais espacos.
+        const naoVazias = brutas.filter(l => l.trim() !== '');
+        const comTab = naoVazias.filter(l => l.includes('\t')).length;
+        const usarTab = naoVazias.length === 0 ? true : comTab > naoVazias.length / 2;
+
+        const linhas = brutas.map(l => {
+            if (l.trim() === '') return [];
+            return usarTab ? l.split('\t') : l.split(/ {2,}/).map(c => c.trim());
+        });
+
+        // Preenche todas as linhas ate a largura da linha mais larga, para a
+        // grade ficar retangular — inclusive preservando colunas vazias no meio,
+        // que ja vieram assim do split acima.
+        let largura = 0;
+        linhas.forEach(l => { if (l.length > largura) largura = l.length; });
+        const retangular = linhas.map(l => {
+            const copia = l.slice();
+            while (copia.length < largura) copia.push('');
+            return copia;
+        });
+
+        return { ordem: ['Dados colados'], abas: { 'Dados colados': retangular } };
+    }
+
+    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, motivoLarguraIlegivel, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup, indexarExistentes, classificar, aplicarImportacao, desfazerImportacao, resolverAcao, validarDecisoes, validarDecisoesDetalhado, assinaturaDoLayout, montarPerfil, perfilDoFornecedor, codigoLivre, nomeLivre, agruparLinhasPdf, expandirPorCor, lerColados, CAMPOS_DO_IMPORTADOR };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ImportadorCore = api;

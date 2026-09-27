@@ -1032,6 +1032,9 @@ html[data-theme="dark"] .fin-periodo-btn.active { background: var(--secondary); 
     .sidebar .logo, .sidebar .nav-item, .sidebar .sidebar-toggle { justify-content: center; padding-left: 0; padding-right: 0; }
 }
 
+/* Importador de tabelas — destaque temporario da linha alvo de uma pendencia */
+.imp-linha-destaque { outline: 3px solid var(--primary); outline-offset: -1px; transition: outline-color 0.4s ease; }
+
 @media (max-width: 600px) {
     .main { padding: 12px; }
     .card { padding: 12px; }

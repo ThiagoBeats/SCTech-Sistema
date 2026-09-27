@@ -94,6 +94,8 @@ const IMP_MARKUP_PADRAO = 80;
 const _impEstado = {
     file: null,
     planilha: null,      // { ordem, abas }
+    origem: null,        // 'arquivo' | 'colado' — qual fonte gerou `planilha`
+    textoColado: '',     // texto bruto colado no passo 1, preservado entre redesenhos
     fornecedor: null,    // { id, nome }
     fornecedorId: null,  // id escolhido no select antes de confirmar no passo 1
     markupPadrao: IMP_MARKUP_PADRAO,
@@ -101,12 +103,15 @@ const _impEstado = {
     layouts: {},         // { [assinatura]: { mapa, cabecalhoIndice } }
     cores: {},           // { [assinatura]: [indices de coluna que sao cor] }
     grupos: null,        // saida de ImportadorCore.classificar
+    busca: '',           // filtro por codigo/nome no passo 4 — so visual
     passo: 1
 };
 
 function _impResetar() {
     _impEstado.file = null;
     _impEstado.planilha = null;
+    _impEstado.origem = null;
+    _impEstado.textoColado = '';
     _impEstado.fornecedor = null;
     _impEstado.fornecedorId = null;
     _impEstado.markupPadrao = IMP_MARKUP_PADRAO;
@@ -114,6 +119,7 @@ function _impResetar() {
     _impEstado.layouts = {};
     _impEstado.cores = {};
     _impEstado.grupos = null;
+    _impEstado.busca = '';
     _impEstado.passo = 1;
 }
 
@@ -177,12 +183,28 @@ function _impPasso1HTML() {
             return `<option value="${f.id}"${sel}>${escapeHtml(f.nome)}</option>`;
         }).join('');
     const nomeArquivo = _impEstado.file ? escapeHtml(_impEstado.file.name) : '';
+    // Mostra qual fonte esta em uso agora — escolher arquivo depois de colar
+    // substitui os dados, e vice-versa; o usuario precisa ver qual valeu.
+    let origemLinha = '';
+    if (_impEstado.planilha && _impEstado.origem === 'colado') {
+        const linhas = (_impEstado.planilha.abas['Dados colados'] || []).length;
+        origemLinha = `<p style="font-size:12px;color:var(--muted);margin-top:6px">Fonte atual: texto colado — ${linhas} linha(s)</p>`;
+    } else if (_impEstado.planilha && _impEstado.origem === 'arquivo') {
+        origemLinha = `<p style="font-size:12px;color:var(--muted);margin-top:6px">Fonte atual: arquivo ${nomeArquivo} — ${_impEstado.planilha.ordem.length} aba(s)</p>`;
+    }
     return `
     <div class="form-group">
         <label>Arquivo da tabela</label>
         <input type="file" id="imp-file" accept=".xlsx,.xls,.csv,.pdf" onchange="_impArquivoEscolhido(this)">
-        ${nomeArquivo ? `<p style="font-size:12px;color:var(--muted);margin-top:6px">Lido: ${nomeArquivo} — ${_impEstado.planilha.ordem.length} aba(s)</p>` : ''}
     </div>
+    <div class="form-group">
+        <label>Ou cole os dados direto da planilha</label>
+        <textarea id="imp-colar" rows="6" placeholder="Copie as linhas na planilha (Ctrl+C) e cole aqui (Ctrl+V)" style="width:100%;font-family:monospace;font-size:12px">${escapeHtml(_impEstado.textoColado || '')}</textarea>
+        <div style="display:flex;justify-content:flex-end;margin-top:6px">
+            <button type="button" class="btn btn-outline btn-sm" onclick="_impUsarColado()">Usar texto colado</button>
+        </div>
+    </div>
+    ${origemLinha}
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px">
         <div class="form-group">
             <label>Fornecedor desta tabela</label>
@@ -221,6 +243,11 @@ function _impCapturarPasso1() {
         const v = parseFloat(campoMarkup.value);
         _impEstado.markupPadrao = (isFinite(v) && v >= 0) ? v : IMP_MARKUP_PADRAO;
     }
+    // Preserva o texto colado entre redesenhos do passo 1, do mesmo jeito que
+    // fornecedor e markup — perder o que o usuario acabou de colar seria o
+    // mesmo defeito ja corrigido para o markup.
+    const campoColar = document.getElementById('imp-colar');
+    if (campoColar) _impEstado.textoColado = campoColar.value;
 }
 
 async function _impArquivoEscolhido(input) {
@@ -230,13 +257,36 @@ async function _impArquivoEscolhido(input) {
         _impCapturarPasso1();
         _impEstado.file = file;
         _impEstado.planilha = await _impLerArquivo(file);
+        _impEstado.origem = 'arquivo';
         _impSugerirAbas();
         _impRenderPasso(1);
     } catch (e) {
         _impEstado.file = null;
         _impEstado.planilha = null;
+        _impEstado.origem = null;
         await showAlert(e.message, '⚠️');
     }
+}
+
+// Usa o texto colado no lugar do arquivo — mesmo formato { ordem, abas }, o
+// resto do fluxo (passo 2, 3, 4) nao muda nada. Escolher um arquivo depois
+// substitui estes dados, e vice-versa.
+async function _impUsarColado() {
+    _impCapturarPasso1();
+    const C = window.ImportadorCore;
+    const resultado = C.lerColados(_impEstado.textoColado || '');
+    if (!resultado.ordem.length) {
+        await showAlert('Cole ao menos uma linha de dados antes de usar.', '⚠️');
+        return;
+    }
+    _impEstado.file = null;
+    const campoArquivo = document.getElementById('imp-file');
+    if (campoArquivo) campoArquivo.value = '';
+    _impEstado.planilha = resultado;
+    _impEstado.origem = 'colado';
+    _impSugerirAbas();
+    _impRenderPasso(1);
+    toast(`Dados colados carregados — ${resultado.abas['Dados colados'].length} linha(s).`, 'success');
 }
 
 // Conta quantos itens a aba produziria com a deteccao automatica. E a mesma
@@ -262,7 +312,13 @@ function _impSugerirAbas() {
         const tipo = C.sugerirTipoAba(nome, colunas);
         // Aba que nao produz nenhum item so daria trabalho no mapeamento: ja
         // vem como "Ignorar". E so a sugestao — o usuario pode mudar.
-        _impEstado.abas[nome] = _impContarItensDaAba(nome, tipo) === 0 ? 'ignorar' : tipo;
+        // Dados colados normalmente NAO tem linha de titulo, entao a contagem
+        // automatica sempre da zero (nao ha cabecalho para detectar). Se a
+        // regra do zero valesse aqui, a unica "aba" do colado ja viria
+        // ignorada e o usuario nao conseguiria seguir — por isso ela nao
+        // se aplica quando a origem e o texto colado.
+        const zeroVaiIgnorar = _impEstado.origem !== 'colado' && _impContarItensDaAba(nome, tipo) === 0;
+        _impEstado.abas[nome] = zeroVaiIgnorar ? 'ignorar' : tipo;
     });
 }
 
@@ -377,6 +433,18 @@ const _IMP_PAPEIS = [
     { valor: 'unidade', rotulo: 'Unidade' }
 ];
 
+// Sem cabecalho detectado nao ha rotulo de coluna nenhum para mapear — gera
+// rotulos posicionais (Coluna 1, Coluna 2...) a partir da linha de dados mais
+// larga, so para o usuario ter o que escolher no passo 3. Vale para qualquer
+// aba sem cabecalho reconhecivel, nao so para o texto colado.
+function _impRotulosPosicionais(dados) {
+    let largura = 0;
+    (dados || []).forEach(l => { if (l && l.length > largura) largura = l.length; });
+    const rotulos = [];
+    for (let i = 0; i < largura; i++) rotulos.push('Coluna ' + (i + 1));
+    return rotulos;
+}
+
 // Agrupa as abas em uso por assinatura de cabecalho: as 7 abas de tecido
 // compartilham a mesma, entao o usuario mapeia uma vez so.
 function _impLayoutsDistintos() {
@@ -388,7 +456,8 @@ function _impLayoutsDistintos() {
         const dados = _impEstado.planilha.abas[nome];
         // A assinatura continua vindo da deteccao automatica: ela e a IDENTIDADE do
         // layout, a mesma chave usada por _impColetarItens e pelos perfis salvos.
-        const { indice, colunas } = C.detectarCabecalho(dados);
+        const { indice, colunas: colunasDetectadas } = C.detectarCabecalho(dados);
+        const colunas = indice === -1 ? _impRotulosPosicionais(dados) : colunasDetectadas;
         const assinatura = C.assinaturaDoLayout(colunas) + '#' + tipo;
         if (!porAssinatura[assinatura]) {
             // Mas a LINHA DE CABECALHO em uso e a que o usuario escolheu (ou a que
@@ -435,7 +504,8 @@ function _impPasso3HTML() {
         // Mostra ao menos ate a linha escolhida, para que uma escolha manual
         // abaixo da 12a continue visivel (e selecionada) no seletor.
         const ateLinha = Math.min(dados.length, Math.max(12, layout.cabecalhoIndice + 1));
-        const opcoesLinha = dados.slice(0, ateLinha).map((_, li2) =>
+        const opcaoSemCabecalho = `<option value="-1" ${layout.cabecalhoIndice === -1 ? 'selected' : ''}>Sem cabeçalho (colunas 1, 2, 3…)</option>`;
+        const opcoesLinha = opcaoSemCabecalho + dados.slice(0, ateLinha).map((_, li2) =>
             `<option value="${li2}" ${li2 === layout.cabecalhoIndice ? 'selected' : ''}>Linha ${li2 + 1}</option>`).join('');
         const controles = `
             <div style="display:flex;gap:16px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
@@ -494,7 +564,10 @@ function _impTrocarCabecalho(indiceLayout, valor) {
     const layout = _impLayoutsDistintos()[indiceLayout];
     const indice = parseInt(valor, 10);
     const dados = _impEstado.planilha.abas[layout.abas[0]];
-    const colunas = (dados[indice] || []).map(c => C.normalizarNome(c));
+    // "Sem cabeçalho" (-1): sem linha de titulo nao ha rotulo nenhum vindo da
+    // planilha — usa os rotulos posicionais, do mesmo jeito que a deteccao
+    // automatica ja faz quando nao acha cabecalho nenhum.
+    const colunas = indice === -1 ? _impRotulosPosicionais(dados) : (dados[indice] || []).map(c => C.normalizarNome(c));
     _impEstado.layouts[layout.assinatura] = {
         mapa: C.sugerirMapeamento(colunas),
         cabecalhoIndice: indice
@@ -547,7 +620,12 @@ function _impColetarItens() {
         const tipo = _impEstado.abas[aba];
         if (tipo === 'ignorar') return;
         const dados = _impEstado.planilha.abas[aba];
-        const { colunas } = C.detectarCabecalho(dados);
+        // A assinatura precisa ser calculada do MESMO jeito que em
+        // _impLayoutsDistintos (colunas posicionais quando nao ha cabecalho),
+        // senao a chave nao bate com o que foi guardado em _impEstado.layouts
+        // e a aba inteira some da conferencia sem aviso.
+        const { indice, colunas: colunasDetectadas } = C.detectarCabecalho(dados);
+        const colunas = indice === -1 ? _impRotulosPosicionais(dados) : colunasDetectadas;
         const assinatura = C.assinaturaDoLayout(colunas) + '#' + tipo;
         const layout = _impEstado.layouts[assinatura];
         if (!layout) return;
@@ -645,35 +723,81 @@ function _impContagemDeNomes() {
     return contagem;
 }
 
+// Ponto unico por onde toda mudanca de estado do passo 4 passa antes de
+// redesenhar. Com centenas de linhas, um redesenho completo (innerHTML)
+// jogava o scroll — do corpo do modal e do painel rolavel de cada grupo — de
+// volta ao topo a cada marcar/desmarcar/editar. Captura a posicao antes,
+// aplica a mudanca, redesenha e restaura a posicao (e o foco/cursor da busca,
+// quando for o caso) depois.
+//
+// NAO substitui o redesenho completo por atualizacao cirurgica do DOM: o
+// invariante da Task 13 continua valendo — `_impRenderPasso(4)` so redesenha
+// a partir de `_impEstado.grupos`, nunca reclassifica.
+function _impRenderPasso4Preservando(mudar) {
+    const corpo = document.getElementById('imp-corpo');
+    const scrollCorpo = corpo ? corpo.scrollTop : 0;
+    const paineis = {};
+    if (corpo) {
+        corpo.querySelectorAll('[data-painel]').forEach(el => {
+            paineis[el.getAttribute('data-painel')] = el.scrollTop;
+        });
+    }
+    const campoBusca = document.getElementById('imp-busca');
+    const buscaComFoco = !!campoBusca && campoBusca === document.activeElement;
+    const selecao = campoBusca ? [campoBusca.selectionStart, campoBusca.selectionEnd] : null;
+
+    if (typeof mudar === 'function') mudar();
+    _impRenderPasso(4);
+
+    const corpoNovo = document.getElementById('imp-corpo');
+    if (corpoNovo) {
+        corpoNovo.scrollTop = scrollCorpo;
+        corpoNovo.querySelectorAll('[data-painel]').forEach(el => {
+            const chave = el.getAttribute('data-painel');
+            if (Object.prototype.hasOwnProperty.call(paineis, chave)) el.scrollTop = paineis[chave];
+        });
+    }
+    if (buscaComFoco) {
+        const campoBuscaNovo = document.getElementById('imp-busca');
+        if (campoBuscaNovo) {
+            campoBuscaNovo.focus();
+            if (selecao && selecao[0] !== null && selecao[0] !== undefined) {
+                try { campoBuscaNovo.setSelectionRange(selecao[0], selecao[1]); } catch (e) { /* alguns navegadores recusam — sem problema */ }
+            }
+        }
+    }
+}
+
 function _impDiferenciarDuplicados() {
     const C = window.ImportadorCore;
     const dups = _impDuplicadosNoLote();
     if (!dups.length) return;
-    const ocupados = _impCodigosOcupados();
-    const nomes = _impContagemDeNomes();
     let renomeados = 0;
-    dups.forEach(d => {
-        // a primeira ocorrencia mantem o codigo; da segunda em diante, sufixo
-        d.ocorrencias.slice(1).forEach(o => {
-            const entrada = _impEstado.grupos[o.chave][o.indice];
-            const novo = C.codigoLivre(entrada.item.codigo + 'D', ocupados);
-            entrada.item.codigo = novo;
-            ocupados.add(novo);
-            renomeados++;
+    _impRenderPasso4Preservando(() => {
+        const ocupados = _impCodigosOcupados();
+        const nomes = _impContagemDeNomes();
+        dups.forEach(d => {
+            // a primeira ocorrencia mantem o codigo; da segunda em diante, sufixo
+            d.ocorrencias.slice(1).forEach(o => {
+                const entrada = _impEstado.grupos[o.chave][o.indice];
+                const novo = C.codigoLivre(entrada.item.codigo + 'D', ocupados);
+                entrada.item.codigo = novo;
+                ocupados.add(novo);
+                renomeados++;
 
-            // O nome tambem precisa ser diferenciado: codigos distintos com o
-            // mesmo nome passam hoje e travam a importacao do mes seguinte.
-            // So renomeia quando o nome e mesmo compartilhado com outra linha.
-            const chave = C.normalizarNome(entrada.item.nome).toLowerCase();
-            if ((nomes.get(chave) || 0) > 1) {
-                const nomeNovo = C.nomeLivre(entrada.item.nome, new Set(nomes.keys()));
-                nomes.set(chave, nomes.get(chave) - 1);
-                nomes.set(nomeNovo.toLowerCase(), 1);
-                entrada.item.nome = nomeNovo;
-            }
+                // O nome tambem precisa ser diferenciado: codigos distintos com o
+                // mesmo nome passam hoje e travam a importacao do mes seguinte.
+                // So renomeia quando o nome e mesmo compartilhado com outra linha.
+                const chave = C.normalizarNome(entrada.item.nome).toLowerCase();
+                if ((nomes.get(chave) || 0) > 1) {
+                    const nomeNovo = C.nomeLivre(entrada.item.nome, new Set(nomes.keys()));
+                    nomes.set(chave, nomes.get(chave) - 1);
+                    nomes.set(nomeNovo.toLowerCase(), 1);
+                    entrada.item.nome = nomeNovo;
+                }
+            });
         });
     });
-    _impRenderPasso(4);
     toast(`${renomeados} código(s) diferenciado(s) com "D".`, 'success');
 }
 
@@ -681,13 +805,14 @@ function _impDescartarDuplicados() {
     const dups = _impDuplicadosNoLote();
     if (!dups.length) return;
     let descartados = 0;
-    dups.forEach(d => {
-        d.ocorrencias.slice(1).forEach(o => {
-            _impEstado.grupos[o.chave][o.indice].marcado = false;
-            descartados++;
+    _impRenderPasso4Preservando(() => {
+        dups.forEach(d => {
+            d.ocorrencias.slice(1).forEach(o => {
+                _impEstado.grupos[o.chave][o.indice].marcado = false;
+                descartados++;
+            });
         });
     });
-    _impRenderPasso(4);
     toast(`${descartados} linha(s) repetida(s) desmarcada(s).`, 'info');
 }
 
@@ -709,12 +834,138 @@ function _impPainelDuplicadosHTML() {
     </div>`;
 }
 
+// Monta as decisoes exatamente como _impGravar as gravaria, a partir do
+// estado ATUAL da tela (marcado/desmarcado, edicoes de codigo/nome/custo).
+// Usada tanto por _impGravar quanto pelo painel de pendencias, que precisa
+// refletir a cada redesenho o que seria gravado agora — nao so depois de
+// apertar o botao.
+function _impMontarDecisoes() {
+    const C = window.ImportadorCore;
+    const g = _impEstado.grupos;
+    const decisoes = [];
+    _IMP_GRUPOS.forEach(def => {
+        g[def.chave].forEach(e => {
+            if (!e.marcado || e.item.preco_custo === null) {
+                decisoes.push({ item: e.item, existente: e.existente, markup: e.markup, acao: 'ignorar' });
+                return;
+            }
+            // a acao sai do codigo atual do item, nao do grupo: se o usuario
+            // editou o codigo de um conflito, isto vira "criar" sozinho
+            const r = C.resolverAcao(e.item, db.catalogo, db.materiais);
+            decisoes.push({ item: e.item, existente: r.existente, markup: e.markup, acao: r.acao });
+        });
+    });
+    return decisoes;
+}
+
+// Pendencias que bloqueiam a gravacao, calculadas sobre as decisoes atuais.
+function _impPendenciasAtuais() {
+    const C = window.ImportadorCore;
+    return C.validarDecisoesDetalhado(_impMontarDecisoes(), db.catalogo, db.materiais);
+}
+
+// Acha, entre as linhas marcadas, a que corresponde a uma pendencia (pelo
+// codigo e/ou nome que validarDecisoesDetalhado devolveu).
+function _impLinhaDaPendencia(pendencia) {
+    return _impLinhasMarcadas().find(l => {
+        const it = l.entrada.item;
+        const codigoBate = pendencia.codigo === null || pendencia.codigo === undefined || it.codigo === pendencia.codigo;
+        const nomeBate = pendencia.nome === null || pendencia.nome === undefined || it.nome === pendencia.nome;
+        // ao menos um dos dois campos precisa ter vindo preenchido na pendencia
+        return (pendencia.codigo || pendencia.nome) && codigoBate && nomeBate;
+    });
+}
+
+// Painel fixo no topo do passo 4 com cada pendencia que impede gravar,
+// logo abaixo do painel de codigos repetidos. Aparece sempre que houver
+// pendencia (nao so depois de apertar Gravar) e some sozinho quando a
+// ultima for resolvida, porque e recalculado a cada redesenho.
+function _impPainelPendenciasHTML() {
+    const pendencias = _impPendenciasAtuais();
+    if (!pendencias.length) return '';
+    const linhas = pendencias.map((p, i) => {
+        const divisor = i > 0 ? 'border-top:1px solid var(--border)' : '';
+        return `<div style="padding:8px 2px;cursor:pointer;${divisor}" onclick="_impIrParaPendencia(${i})">
+            <span style="font-size:13px;color:var(--dark)">${escapeHtml(p.mensagem)}</span>
+        </div>`;
+    }).join('');
+    return `<div class="card" style="margin-bottom:14px;border-left:4px solid var(--danger)">
+        <h4 style="margin:0 0 4px;color:var(--dark)">Pendências que impedem gravar <span style="color:var(--muted);font-weight:400">(${pendencias.length})</span></h4>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Clique numa pendência para ir até a linha do produto.</p>
+        <div>${linhas}</div>
+    </div>`;
+}
+
+// Clique numa pendencia do painel: rola ate a linha do produto culpado e a
+// destaca por 2 segundos. Se a busca estiver escondendo a linha alvo, limpa
+// a busca antes de rolar — senao o clique nao leva a lugar nenhum.
+function _impIrParaPendencia(indice) {
+    const pendencias = _impPendenciasAtuais();
+    const p = pendencias[indice];
+    if (!p) return;
+    const alvo = _impLinhaDaPendencia(p);
+    if (!alvo) return;
+
+    if (_impEstado.busca) {
+        _impRenderPasso4Preservando(() => { _impEstado.busca = ''; });
+    }
+
+    const id = 'imp-linha-' + alvo.chave + '-' + alvo.indice;
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center' });
+    el.classList.add('imp-linha-destaque');
+    setTimeout(() => el.classList.remove('imp-linha-destaque'), 2000);
+}
+
+// Compara sem diferenciar maiusculas/minusculas nem acento, para a busca do
+// passo 4 achar "JACQUARD" digitando "jacquard" e "VOIL" digitando "voil".
+function _impNormalizarBusca(s) {
+    return String(s === null || s === undefined ? '' : s)
+        .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+// So filtra a TELA — nunca o que sera gravado. Preserva scroll e foco/cursor
+// do campo de busca, porque o oninput redesenha a cada letra digitada.
+function _impBuscar(valor) {
+    _impRenderPasso4Preservando(() => { _impEstado.busca = valor; });
+}
+
+function _impLimparBusca() {
+    _impRenderPasso4Preservando(() => { _impEstado.busca = ''; });
+}
+
 function _impPasso4HTML() {
     const g = _impEstado.grupos;
+    const buscaAtual = _impEstado.busca || '';
+    const buscaNormalizada = _impNormalizarBusca(buscaAtual);
+
+    const campoBuscaHTML = `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+        <input type="text" id="imp-busca" value="${escapeHtml(buscaAtual)}"
+            placeholder="Buscar por código ou nome…"
+            oninput="_impBuscar(this.value)"
+            onkeydown="if (event.key === 'Escape') _impLimparBusca();"
+            style="flex:1">
+        ${buscaAtual ? `<button type="button" class="btn btn-outline btn-sm" onclick="_impLimparBusca()">Limpar busca</button>` : ''}
+    </div>
+    ${buscaAtual ? `<p style="font-size:12px;color:var(--muted);margin:0 0 12px">Filtrando por «${escapeHtml(buscaAtual)}» — a gravação considera todos os itens, não só os visíveis.</p>` : ''}`;
+
     const blocos = _IMP_GRUPOS.map(def => {
         const lista = g[def.chave];
         if (!lista.length) return '';
-        const linhas = lista.map((e, i) => {
+
+        // O indice passado a _impAlternarMarcado/_impEditarCampo e sempre o
+        // indice REAL no array do grupo — nunca o da lista filtrada — para a
+        // busca continuar so visual.
+        const comIndice = lista.map((e, i) => ({ e, i }));
+        const visiveis = buscaNormalizada
+            ? comIndice.filter(({ e }) => _impNormalizarBusca(e.item.codigo).includes(buscaNormalizada)
+                || _impNormalizarBusca(e.item.nome).includes(buscaNormalizada))
+            : comIndice;
+        if (buscaNormalizada && !visiveis.length) return '';
+
+        const linhas = visiveis.map(({ e, i }) => {
             const it = e.item;
             const venda = window.ImportadorCore.aplicarMarkup(it.preco_custo, e.markup);
             const antes = e.existente
@@ -722,7 +973,7 @@ function _impPasso4HTML() {
                 : '';
             const alerta = (e.motivo ? [e.motivo] : []).concat(it.avisos)
                 .map(a => `<div style="font-size:11px;color:var(--muted)">⚠ ${escapeHtml(a)}</div>`).join('');
-            return `<tr>
+            return `<tr id="imp-linha-${def.chave}-${i}">
                 <td><input type="checkbox" ${e.marcado ? 'checked' : ''} onchange="_impAlternarMarcado('${def.chave}', ${i})"></td>
                 <td style="font-size:12px;color:var(--muted)">${escapeHtml(it.aba)}</td>
                 <td><input value="${escapeHtml(it.codigo)}" style="width:110px;font-size:12px" onchange="_impEditarCampo('${def.chave}', ${i}, 'codigo', this.value)"></td>
@@ -732,10 +983,15 @@ function _impPasso4HTML() {
                 <td>${_impMoeda(venda)}${antes}</td>
             </tr>`;
         }).join('');
+
+        const contagem = buscaNormalizada
+            ? `${visiveis.length} de ${lista.length}`
+            : `${lista.length}`;
+
         return `<div class="card" style="margin-bottom:14px">
-            <h4 style="margin:0 0 2px;color:var(--dark)">${def.titulo} <span style="color:var(--muted);font-weight:400">(${lista.length})</span></h4>
+            <h4 style="margin:0 0 2px;color:var(--dark)">${def.titulo} <span style="color:var(--muted);font-weight:400">(${contagem})</span></h4>
             <p style="font-size:12px;color:var(--muted);margin:0 0 10px">${def.ajuda}</p>
-            <div style="max-height:260px;overflow:auto"><table>
+            <div data-painel="${def.chave}" style="max-height:260px;overflow:auto"><table>
                 <thead><tr><th></th><th>Aba</th><th>Código</th><th>Nome</th><th>Custo</th><th>Markup %</th><th>Venda</th></tr></thead>
                 <tbody>${linhas}</tbody>
             </table></div>
@@ -753,7 +1009,9 @@ function _impPasso4HTML() {
 
     return `
     <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Confira e ajuste o que quiser. Só as linhas marcadas serão gravadas.</p>
+    ${campoBuscaHTML}
     ${_impPainelDuplicadosHTML()}
+    ${_impPainelPendenciasHTML()}
     ${blocos}${sumiram}
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0 14px;cursor:pointer">
         <input type="checkbox" id="imp-salvar-perfil" checked> Salvar este mapeamento como perfil deste fornecedor
@@ -772,23 +1030,25 @@ function _impVoltarAoPasso3() {
 }
 
 function _impAlternarMarcado(chave, i) {
-    const e = _impEstado.grupos[chave][i];
-    e.marcado = !e.marcado;
-    _impRenderPasso(4);
+    _impRenderPasso4Preservando(() => {
+        const e = _impEstado.grupos[chave][i];
+        e.marcado = !e.marcado;
+    });
 }
 
 function _impEditarCampo(chave, i, campo, valor) {
     const C = window.ImportadorCore;
-    const e = _impEstado.grupos[chave][i];
-    if (campo === 'markup') { e.markup = parseFloat(valor); if (!isFinite(e.markup)) e.markup = 0; }
-    else if (campo === 'preco_custo') {
-        const p = C.normalizarPreco(valor);
-        e.item.preco_custo = p.ok ? p.valor : null;
-        e.item.problema = p.ok ? null : p.motivo;
-    }
-    else if (campo === 'codigo') e.item.codigo = C.normalizarCodigo(valor).codigo;
-    else if (campo === 'nome') e.item.nome = C.normalizarNome(valor);
-    _impRenderPasso(4);
+    _impRenderPasso4Preservando(() => {
+        const e = _impEstado.grupos[chave][i];
+        if (campo === 'markup') { e.markup = parseFloat(valor); if (!isFinite(e.markup)) e.markup = 0; }
+        else if (campo === 'preco_custo') {
+            const p = C.normalizarPreco(valor);
+            e.item.preco_custo = p.ok ? p.valor : null;
+            e.item.problema = p.ok ? null : p.motivo;
+        }
+        else if (campo === 'codigo') e.item.codigo = C.normalizarCodigo(valor).codigo;
+        else if (campo === 'nome') e.item.nome = C.normalizarNome(valor);
+    });
 }
 
 // ── Gravacao, snapshot e desfazer ────────────────────────────────────────────
@@ -812,26 +1072,17 @@ function _impSalvarSnapshot(resumo, mudancas) {
 
 async function _impGravar() {
     const C = window.ImportadorCore;
-    const g = _impEstado.grupos;
-    const decisoes = [];
-    _IMP_GRUPOS.forEach(def => {
-        g[def.chave].forEach(e => {
-            const ignorar = { item: e.item, existente: e.existente, markup: e.markup, acao: 'ignorar' };
-            if (!e.marcado || e.item.preco_custo === null) { decisoes.push(ignorar); return; }
-            // a acao sai do codigo atual do item, nao do grupo: se o usuario
-            // editou o codigo de um conflito, isto vira "criar" sozinho
-            const r = C.resolverAcao(e.item, db.catalogo, db.materiais);
-            decisoes.push({ item: e.item, existente: r.existente, markup: e.markup, acao: r.acao });
-        });
-    });
+    const decisoes = _impMontarDecisoes();
 
     const vaiGravar = decisoes.filter(d => d.acao !== 'ignorar').length;
     if (!vaiGravar) { await showAlert('Nenhuma linha marcada para gravar.', '⚠️'); return; }
 
+    // A lista completa ja esta no painel fixo no topo da conferencia — a
+    // mensagem aqui pode ser curta. A recusa em si nao muda: continua
+    // bloqueando enquanto validarDecisoes reportar qualquer pendencia.
     const erros = C.validarDecisoes(decisoes, db.catalogo, db.materiais);
     if (erros.length) {
-        await showAlert('Corrija antes de gravar:\n\n' + erros.slice(0, 8).join('\n')
-            + (erros.length > 8 ? `\n\n…e mais ${erros.length - 8}.` : ''), '⚠️');
+        await showAlert('Há pendências que impedem a gravação — veja o painel no topo da conferência.', '⚠️');
         return;
     }
 

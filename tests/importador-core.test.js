@@ -1612,3 +1612,109 @@ test('REGRESSAO: Cor Metal com colunasCor [3..8] continua dando 235 itens sem co
     const codigos = itens.map(i => i.codigo);
     assert.strictEqual(new Set(codigos).size, 235, 'nenhum codigo repetido depois da expansao por cor');
 });
+
+// ── lerColados: colar direto da planilha ─────────────────────────────────────
+
+test('lerColados le o exemplo real do usuario (tabs, coluna vazia no meio)', () => {
+    const texto = [
+        '12003\tRUSTICO FLAME\t\t3,00\t19,39\t18,42',
+        '12004\tRUSTICO FLAME PRIME\t\t3,00\t40,95\t38,90',
+        '12005\tJACQUARD PARIS\t\t2,80\t50,06\t47,67',
+        '12006\tJACQUARD LYON\t\t2,80\t50,06\t47,67'
+    ].join('\n');
+    const r = C.lerColados(texto);
+    assert.deepStrictEqual(r.ordem, ['Dados colados']);
+    const linhas = r.abas['Dados colados'];
+    assert.strictEqual(linhas.length, 4);
+    linhas.forEach(l => assert.strictEqual(l.length, 6, 'cada linha deve ter 6 colunas'));
+    assert.strictEqual(linhas[0][0], '12003');
+    assert.strictEqual(linhas[0][1], 'RUSTICO FLAME');
+    assert.strictEqual(linhas[0][2], '', 'coluna 2 (indice) deve ficar vazia, preservada');
+    assert.strictEqual(linhas[0][3], '3,00');
+    assert.strictEqual(linhas[0][4], '19,39');
+    assert.strictEqual(linhas[0][5], '18,42');
+    assert.strictEqual(linhas[2][1], 'JACQUARD PARIS');
+});
+
+test('lerColados aceita \\r\\n e \\n misturados', () => {
+    const r = C.lerColados('A1\tNome1\r\nA2\tNome2\n');
+    assert.strictEqual(r.abas['Dados colados'].length, 2);
+    assert.deepStrictEqual(r.abas['Dados colados'][0], ['A1', 'Nome1']);
+    assert.deepStrictEqual(r.abas['Dados colados'][1], ['A2', 'Nome2']);
+});
+
+test('lerColados descarta linhas vazias so no final, preserva vazia no meio', () => {
+    const r = C.lerColados('A1\tNome1\n\nA2\tNome2\n\n\n');
+    const linhas = r.abas['Dados colados'];
+    assert.strictEqual(linhas.length, 3, 'a ultima linha vazia (e as seguintes) somem, a do meio fica');
+    assert.deepStrictEqual(linhas[0], ['A1', 'Nome1']);
+    assert.deepStrictEqual(linhas[1], ['', '']); // linha vazia do meio, preenchida ate a largura
+    assert.deepStrictEqual(linhas[2], ['A2', 'Nome2']);
+});
+
+test('lerColados cai para 2+ espacos quando a maioria das linhas nao tem tab', () => {
+    const texto = 'A1   Nome Um   3,00\nA2   Nome Dois   4,00';
+    const r = C.lerColados(texto);
+    const linhas = r.abas['Dados colados'];
+    assert.deepStrictEqual(linhas[0], ['A1', 'Nome Um', '3,00']);
+    assert.deepStrictEqual(linhas[1], ['A2', 'Nome Dois', '4,00']);
+});
+
+test('lerColados devolve vazio para texto vazio ou so espacos', () => {
+    assert.deepStrictEqual(C.lerColados(''), { ordem: [], abas: {} });
+    assert.deepStrictEqual(C.lerColados('   \n   \n'), { ordem: [], abas: {} });
+    assert.deepStrictEqual(C.lerColados(null), { ordem: [], abas: {} });
+    assert.deepStrictEqual(C.lerColados(undefined), { ordem: [], abas: {} });
+});
+
+test('lerColados preenche linhas curtas ate a largura da mais larga', () => {
+    const r = C.lerColados('A1\tNome1\t10,00\nA2\tNome2');
+    const linhas = r.abas['Dados colados'];
+    assert.strictEqual(linhas[0].length, 3);
+    assert.strictEqual(linhas[1].length, 3);
+    assert.strictEqual(linhas[1][2], '');
+});
+
+// ── validarDecisoesDetalhado: mensagens com a linha culpada ──────────────────
+
+test('validarDecisoesDetalhado aponta o codigo do codigo repetido no lote', () => {
+    const decisoes = [
+        { item: itemDeTeste({ codigo: 'A1', nome: 'Um' }), existente: null, markup: 0, acao: 'criar' },
+        { item: itemDeTeste({ codigo: 'A1', nome: 'Dois' }), existente: null, markup: 0, acao: 'criar' }
+    ];
+    const detalhado = C.validarDecisoesDetalhado(decisoes, [], []);
+    assert.strictEqual(detalhado.length, 1);
+    assert.strictEqual(detalhado[0].codigo, 'A1');
+    assert.match(detalhado[0].mensagem, /A1/);
+    // validarDecisoes continua devolvendo so as mensagens, na mesma ordem
+    assert.deepStrictEqual(C.validarDecisoes(decisoes, [], []), detalhado.map(e => e.mensagem));
+});
+
+test('validarDecisoesDetalhado aponta o nome do nome repetido no lote', () => {
+    const decisoes = [
+        { item: itemDeTeste({ codigo: 'A1', nome: 'Voil', tipo: 'tecido' }), existente: null, markup: 0, acao: 'criar' },
+        { item: itemDeTeste({ codigo: 'A2', nome: 'Voil', tipo: 'tecido' }), existente: null, markup: 0, acao: 'criar' }
+    ];
+    const detalhado = C.validarDecisoesDetalhado(decisoes, [], []);
+    assert.strictEqual(detalhado.length, 1);
+    assert.strictEqual(detalhado[0].nome, 'Voil');
+    assert.strictEqual(detalhado[0].codigo, null);
+    assert.match(detalhado[0].mensagem, /Voil/);
+});
+
+test('validarDecisoesDetalhado aponta codigo e nome do item que colide com o banco', () => {
+    const catalogo = [{ id: 1, referencia: 'ZZ9', nome: 'Linho', preco_custo: 90, preco: 162, fornecedor_id: 7 }];
+    const decisoes = [{ item: itemDeTeste({ codigo: 'A1', nome: 'Linho' }), existente: null, markup: 0, acao: 'criar' }];
+    const detalhado = C.validarDecisoesDetalhado(decisoes, catalogo, []);
+    assert.strictEqual(detalhado.length, 1);
+    assert.strictEqual(detalhado[0].codigo, 'A1');
+    assert.strictEqual(detalhado[0].nome, 'Linho');
+});
+
+test('validarDecisoesDetalhado devolve lista vazia para um lote limpo', () => {
+    const decisoes = [
+        { item: itemDeTeste({ codigo: 'A1', nome: 'Um' }), existente: null, markup: 0, acao: 'criar' },
+        { item: itemDeTeste({ codigo: 'A2', nome: 'Dois' }), existente: null, markup: 0, acao: 'criar' }
+    ];
+    assert.deepStrictEqual(C.validarDecisoesDetalhado(decisoes, [], []), []);
+});
