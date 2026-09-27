@@ -642,9 +642,35 @@ test('aplicarImportacao cria tecido novo com o markup informado', () => {
     assert.strictEqual(t.largura_rolo, 2.8);
     assert.strictEqual(t.fornecedor_id, 7);
     assert.strictEqual(t.fornecedor_nome, 'RC');
-    assert.strictEqual(t.min_estoque, 0);
+    // Tecido importado nasce com estoque minimo de 10 m, decisao do usuario.
+    assert.strictEqual(t.min_estoque, 10);
     assert.strictEqual(t.id, 1000);
     assert.deepStrictEqual(r.resumo, { criados: 1, atualizados: 0, ignorados: 0 });
+});
+
+test('tecido novo nasce com estoque minimo 10 e material com 0', () => {
+    const r = C.aplicarImportacao({
+        decisoes: [
+            { item: itemDeTeste({ codigo: 'T1', nome: 'Tecido um', tipo: 'tecido', preco_custo: 10 }), existente: null, markup: 0, acao: 'criar' },
+            { item: itemDeTeste({ codigo: 'M1', nome: 'Material um', tipo: 'material', preco_custo: 10, largura: null }), existente: null, markup: 0, acao: 'criar' }
+        ],
+        catalogo: [], materiais: [], fornecedor: null, agora: 7000
+    });
+    assert.strictEqual(r.catalogo[0].min_estoque, 10);
+    assert.strictEqual(r.materiais[0].min_estoque, 0);
+});
+
+test('atualizar um tecido preserva o estoque minimo ajustado a mao', () => {
+    const catalogo = [{
+        id: 1, referencia: 'T1', nome: 'Tecido um', preco_custo: 100, preco: 180,
+        largura_rolo: 2.8, min_estoque: 45, imagem: 'foto', fornecedor_id: 7, fornecedor_nome: 'RC'
+    }];
+    const r = C.aplicarImportacao({
+        decisoes: [{ item: itemDeTeste({ codigo: 'T1', nome: 'Tecido um', preco_custo: 120 }), existente: catalogo[0], markup: 80, acao: 'atualizar' }],
+        catalogo, materiais: [], fornecedor: { id: 7, nome: 'RC' }, agora: 8000
+    });
+    assert.strictEqual(r.catalogo[0].min_estoque, 45, 'atualizacao nao pode impor os 10 m');
+    assert.strictEqual(r.catalogo[0].preco_custo, 120);
 });
 
 test('aplicarImportacao cria material novo com unidade e estoque zerado', () => {

@@ -233,7 +233,7 @@ test('colar a tabela do usuario percorre o assistente e grava', async ({ page })
     const area = page.locator('#imp-colar');
     await expect(area).toBeVisible();
     await area.fill(COLADO);
-    await page.click('#imp-corpo button:has-text("Usar")');
+    // o texto colado passa a valer sozinho, sem botao
 
     // virou uma aba com 4 linhas de 6 colunas
     const lido = await page.evaluate(() => ({
@@ -308,7 +308,7 @@ test('colar com a linha de titulo ja vem mapeado', async ({ page }) => {
     await abrirAssistente(page);
     const comTitulo = 'CODIGO\tDESCRIÇÃO\t\tLARGURA\tCORTE\tPEÇA\n' + COLADO;
     await page.locator('#imp-colar').fill(comTitulo);
-    await page.click('#imp-corpo button:has-text("Usar")');
+    // o texto colado passa a valer sozinho, sem botao
     await page.selectOption('#imp-fornecedor', '7');
     await page.click('#imp-corpo button:has-text("Continuar")');
 

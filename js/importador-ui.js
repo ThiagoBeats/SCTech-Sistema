@@ -185,13 +185,7 @@ function _impPasso1HTML() {
     const nomeArquivo = _impEstado.file ? escapeHtml(_impEstado.file.name) : '';
     // Mostra qual fonte esta em uso agora — escolher arquivo depois de colar
     // substitui os dados, e vice-versa; o usuario precisa ver qual valeu.
-    let origemLinha = '';
-    if (_impEstado.planilha && _impEstado.origem === 'colado') {
-        const linhas = (_impEstado.planilha.abas['Dados colados'] || []).length;
-        origemLinha = `<p style="font-size:12px;color:var(--muted);margin-top:6px">Fonte atual: texto colado — ${linhas} linha(s)</p>`;
-    } else if (_impEstado.planilha && _impEstado.origem === 'arquivo') {
-        origemLinha = `<p style="font-size:12px;color:var(--muted);margin-top:6px">Fonte atual: arquivo ${nomeArquivo} — ${_impEstado.planilha.ordem.length} aba(s)</p>`;
-    }
+    const origemLinha = `<p id="imp-origem" style="font-size:12px;color:var(--muted);margin-top:6px">${_impTextoDaOrigem(nomeArquivo)}</p>`;
     return `
     <div class="form-group">
         <label>Arquivo da tabela</label>
@@ -199,10 +193,7 @@ function _impPasso1HTML() {
     </div>
     <div class="form-group">
         <label>Ou cole os dados direto da planilha</label>
-        <textarea id="imp-colar" rows="6" placeholder="Copie as linhas na planilha (Ctrl+C) e cole aqui (Ctrl+V)" style="width:100%;font-family:monospace;font-size:12px">${escapeHtml(_impEstado.textoColado || '')}</textarea>
-        <div style="display:flex;justify-content:flex-end;margin-top:6px">
-            <button type="button" class="btn btn-outline btn-sm" onclick="_impUsarColado()">Usar texto colado</button>
-        </div>
+        <textarea id="imp-colar" rows="6" placeholder="Copie as linhas na planilha (Ctrl+C) e cole aqui (Ctrl+V)" style="width:100%;font-family:monospace;font-size:12px" oninput="_impColadoMudou()">${escapeHtml(_impEstado.textoColado || '')}</textarea>
     </div>
     ${origemLinha}
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px">
@@ -271,22 +262,49 @@ async function _impArquivoEscolhido(input) {
 // Usa o texto colado no lugar do arquivo — mesmo formato { ordem, abas }, o
 // resto do fluxo (passo 2, 3, 4) nao muda nada. Escolher um arquivo depois
 // substitui estes dados, e vice-versa.
-async function _impUsarColado() {
-    _impCapturarPasso1();
-    const C = window.ImportadorCore;
-    const resultado = C.lerColados(_impEstado.textoColado || '');
-    if (!resultado.ordem.length) {
-        await showAlert('Cole ao menos uma linha de dados antes de usar.', '⚠️');
-        return;
+// Texto que descreve a fonte em uso. Escolher arquivo depois de colar
+// substitui os dados, e vice-versa; o usuario precisa ver qual valeu.
+function _impTextoDaOrigem(nomeArquivo) {
+    if (_impEstado.planilha && _impEstado.origem === 'colado') {
+        const linhas = (_impEstado.planilha.abas['Dados colados'] || []).length;
+        const cols = ((_impEstado.planilha.abas['Dados colados'] || [])[0] || []).length;
+        return `Fonte atual: texto colado — ${linhas} linha(s) e ${cols} coluna(s)`;
     }
-    _impEstado.file = null;
-    const campoArquivo = document.getElementById('imp-file');
-    if (campoArquivo) campoArquivo.value = '';
-    _impEstado.planilha = resultado;
-    _impEstado.origem = 'colado';
-    _impSugerirAbas();
-    _impRenderPasso(1);
-    toast(`Dados colados carregados — ${resultado.abas['Dados colados'].length} linha(s).`, 'success');
+    if (_impEstado.planilha && _impEstado.origem === 'arquivo') {
+        return `Fonte atual: arquivo ${nomeArquivo} — ${_impEstado.planilha.ordem.length} aba(s)`;
+    }
+    return '';
+}
+
+// O texto colado passa a valer sozinho, sem botao: qualquer digitacao ou
+// colagem na area ja carrega os dados. Atualizamos so a linha de status, em
+// vez de redesenhar o passo 1, porque redesenhar destruiria a area de texto e
+// o usuario perderia o foco e o cursor no meio da colagem.
+function _impColadoMudou() {
+    const C = window.ImportadorCore;
+    const campo = document.getElementById('imp-colar');
+    if (!campo) return;
+    _impEstado.textoColado = campo.value;
+
+    const resultado = C.lerColados(_impEstado.textoColado);
+    if (!resultado.ordem.length) {
+        // area esvaziada: so descarta se o que estava valendo era o colado
+        if (_impEstado.origem === 'colado') {
+            _impEstado.planilha = null;
+            _impEstado.origem = null;
+            _impEstado.abas = {};
+        }
+    } else {
+        _impEstado.file = null;
+        const campoArquivo = document.getElementById('imp-file');
+        if (campoArquivo) campoArquivo.value = '';
+        _impEstado.planilha = resultado;
+        _impEstado.origem = 'colado';
+        _impSugerirAbas();
+    }
+
+    const linha = document.getElementById('imp-origem');
+    if (linha) linha.textContent = _impTextoDaOrigem('');
 }
 
 // Conta quantos itens a aba produziria com a deteccao automatica. E a mesma
@@ -302,6 +320,28 @@ function _impContarItensDaAba(nome, tipo) {
         linhas: dados, cabecalhoIndice: indice, mapa,
         tipo: tipo === 'ignorar' ? 'material' : tipo, aba: nome
     }).length;
+}
+
+// Quantas linhas da aba tem algum conteudo. Usado so para informar quando a
+// contagem de itens ainda nao pode ser feita.
+function _impContarLinhasComDados(nome) {
+    const dados = _impEstado.planilha.abas[nome] || [];
+    return dados.filter(l => (l || []).some(c => String(c === undefined || c === null ? '' : c).trim() !== '')).length;
+}
+
+// O que mostrar na coluna "Itens" do passo 2.
+//
+// Sem cabecalho detectado nao da para saber quantos PRODUTOS a aba tem — isso
+// so se decide depois de o usuario mapear as colunas no passo 3. Mostrar "0"
+// ali seria mentira e passa a impressao de que nada foi lido. Mostramos entao
+// um traco com a contagem de linhas, que e o que de fato se sabe.
+function _impRotuloItensDaAba(nome, tipo) {
+    const C = window.ImportadorCore;
+    const { indice } = C.detectarCabecalho(_impEstado.planilha.abas[nome]);
+    if (indice !== -1) return String(_impContarItensDaAba(nome, tipo));
+    const linhas = _impContarLinhasComDados(nome);
+    if (!linhas) return '0';
+    return `<span style="color:var(--muted)">— <span style="font-size:11px">(${linhas} linha${linhas > 1 ? 's' : ''}, mapear no passo 3)</span></span>`;
 }
 
 function _impSugerirAbas() {
@@ -390,7 +430,7 @@ function _impPasso2HTML() {
         return `<tr>
             <td>${escapeHtml(nome)}</td>
             <td style="color:var(--muted)">${indice === -1 ? 'cabeçalho não encontrado' : 'linha ' + (indice + 1)}</td>
-            <td>${qtd}</td>
+            <td>${_impRotuloItensDaAba(nome, tipo)}</td>
             <td>
                 <select onchange="_impTrocarTipoAba(${ai}, this.value)">
                     <option value="tecido" ${sel('tecido')}>Tecido</option>

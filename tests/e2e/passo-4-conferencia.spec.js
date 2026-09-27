@@ -93,7 +93,7 @@ test('grava no catalogo com o preco de venda derivado do markup', async ({ page 
     expect(r.estoqueIntacto, 'o importador nao pode mexer no estoque').toBe(0);
     expect(r.temSnapshot).toBe(true);
     expect(r.amostra.largura_rolo).toBeGreaterThan(0);
-    expect(r.amostra.min_estoque).toBe(0);
+    expect(r.amostra.min_estoque, "tecido importado nasce com 10 m de estoque minimo").toBe(10);
 });
 
 test('desfazer restaura o catalogo anterior', async ({ page }) => {

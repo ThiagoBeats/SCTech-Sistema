@@ -489,6 +489,8 @@
     }
 
     const LARGURA_PADRAO = 2.80;
+    // Estoque minimo, em metros, com que todo tecido importado e criado.
+    const MIN_ESTOQUE_TECIDO = 10;
 
     // Unicos campos que o importador escreve num registro. Tudo o que esta fora
     // desta lista — id, min_estoque, imagem, estoque_atual — pertence ao dia a dia
@@ -576,7 +578,12 @@
                 nome: item.nome,
                 preco_custo: precoCusto,
                 preco,
-                min_estoque: 0,
+                // Tecido novo ja nasce com estoque minimo, para o alerta de
+                // ponto de pedido valer desde a importacao. Material continua
+                // em 0 — a quantidade minima de acessorio varia demais.
+                // Isto vale so na CRIACAO: numa atualizacao o minimo que o
+                // usuario ajustou a mao e preservado.
+                min_estoque: item.tipo === 'tecido' ? MIN_ESTOQUE_TECIDO : 0,
                 fornecedor_id: fornecedor ? fornecedor.id : null,
                 fornecedor_nome: fornecedor ? fornecedor.nome : ''
             };
