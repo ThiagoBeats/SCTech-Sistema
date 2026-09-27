@@ -123,12 +123,19 @@ test('codigos duplicados no lote bloqueiam a gravacao', async ({ page }) => {
     // (variantes de cor compartilhando codigo).
     await ateOPasso4(page, ['Wave-Square-Retangular'], 80, 'material');
 
+    // A lista de pendencias vive no painel fixo do topo; a recusa ao gravar
+    // apenas aponta para ele.
+    const painel = page.locator('#imp-corpo div[onclick^="_impIrParaPendencia"]');
+    expect(await painel.count(), 'o painel deveria listar as pendencias').toBeGreaterThan(0);
+    const textoPainel = await page.locator('#imp-corpo').innerText();
+    expect(textoPainel, 'o codigo repetido precisa estar visivel ao usuario').toMatch(/c[óo]digo/i);
+    expect(textoPainel).toMatch(/VUD01/);
+
     await page.click('#imp-corpo button:has-text("Gravar")');
 
     const msg = page.locator('#sc-modal-msg');
     await expect(msg).toBeVisible();
-    const texto = await msg.textContent();
-    expect(texto).toMatch(/c[óo]digo/i);
+    await expect(msg).toContainText(/pend[êe]ncia/i);
     await page.click('#sc-modal-ok');
 
     const gravou = await page.evaluate(() => JSON.parse(localStorage.getItem('sc_cat') || '[]').length);

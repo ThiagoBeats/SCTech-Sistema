@@ -135,9 +135,10 @@ test('descartar repetidos desmarca da segunda em diante e mantem a primeira', as
 test('depois de diferenciar, a gravacao passa e grava tudo', async ({ page }) => {
     await ateOPasso4ComDuplicados(page);
 
-    // antes: bloqueia
+    // antes: bloqueia, e o painel de pendencias mostra qual e o codigo
+    await expect(page.locator('#imp-corpo')).toContainText(/c[óo]digo/i);
     await page.click('#imp-corpo button:has-text("Gravar")');
-    await expect(page.locator('#sc-modal-msg')).toContainText(/c[óo]digo/i);
+    await expect(page.locator('#sc-modal-msg')).toContainText(/pend[êe]ncia/i);
     await page.click('#sc-modal-ok');
 
     // resolve e grava
