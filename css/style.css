@@ -41,6 +41,19 @@
     --kpi-pink: #FF575F;
     --kpi-red: #F43927;
     --kpi-turquoise: #17E8FF;
+    /* ── ESCALA TIPOGRÁFICA DO SISTEMA ──
+       Densidade de ERP: mais informação por tela, hierarquia preservada.
+       Vale para as telas de trabalho. A vitrine (landing, sobre, login) e os
+       documentos de impressão têm escala própria e não usam estes tokens. */
+    --fs-titulo-pagina: 21px;   /* título principal da página */
+    --fs-secao: 17px;           /* título de seção */
+    --fs-card: 15px;            /* título de card ou item */
+    --fs-texto: 14px;           /* corpo padrão */
+    --fs-texto-sm: 13px;        /* texto secundário, botões, abas */
+    --fs-label: 12px;           /* rótulos de campo */
+    --fs-aux: 11px;             /* texto auxiliar, legendas */
+    --fs-valor: 19px;           /* valor principal, número em destaque */
+    --fs-num: 17px;             /* número de destaque menor */
 }
 
 * {
@@ -53,7 +66,9 @@ body {
     color: var(--dark); overflow: hidden;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
-    font-size: 16px; font-weight: 500; /* Paragraph 4 — corpo padrão */
+    /* Tudo que não declara tamanho herda daqui — é a alavanca principal da
+       densidade, e não exige tocar em estilo embutido nenhum. */
+    font-size: var(--fs-texto); font-weight: 500;
 }
 
 /* ── ESCALA TIPOGRÁFICA OFICIAL ───────────────────────────────────
@@ -155,7 +170,7 @@ html[data-sidebar="collapsed"] .sidebar { width: var(--sidebar-w-collapsed); pad
     margin-bottom: 22px;
 }
 .header h2 {
-    font-size: 24px; font-weight: 800; color: var(--dark); letter-spacing: -0.3px;
+    font-size: var(--fs-titulo-pagina); font-weight: 800; color: var(--dark); letter-spacing: -0.3px;
 }
 
 /* ── CARDS & ELEMENTOS VISUAIS ────────────────────────────────── */
@@ -180,7 +195,7 @@ html[data-sidebar="collapsed"] .sidebar { width: var(--sidebar-w-collapsed); pad
     cursor: pointer;
     border: none;
     font-weight: 700;
-    font-size: 13.5px;
+    font-size: var(--fs-texto-sm);
     color: #FEFFFF;
     background: #242424; /* Botão primário dark sólido do Buyur */
     text-decoration: none;
@@ -230,7 +245,7 @@ html[data-sidebar="collapsed"] .sidebar { width: var(--sidebar-w-collapsed); pad
     border-radius: var(--radius-input);
     background: var(--white);
     color: var(--dark);
-    font-size: 14px;
+    font-size: var(--fs-texto-sm);
     transition: border-color 0.18s ease, box-shadow 0.18s ease;
     outline: none;
 }
@@ -462,7 +477,7 @@ td:last-child { white-space: nowrap; }
 /* Pedido: box do valor final */
 .valor-final-box { background: linear-gradient(135deg, #F0FBEF, #E3F7E2); border: 2px solid #8FD98D; border-radius: 10px; padding: 14px 22px; text-align: center; }
 .valor-final-box .valor-final-label { font-size: 11px; font-weight: 700; color: #0F6B0D; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
-.valor-final-box .valor-final-num { font-size: 28px; font-weight: 800; color: #0F6B0D; line-height: 1.1; }
+.valor-final-box .valor-final-num { font-size: 20px; font-weight: 800; color: #0F6B0D; line-height: 1.1; }
 
 /* Pedido: box do valor recebido / saldo */
 .recebido-box { background: #F0FBEF; border: 1px solid #8FD98D; border-radius: 8px; padding: 12px 16px; text-align: right; }
@@ -522,7 +537,7 @@ td:last-child { white-space: nowrap; }
     text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
 }
 .metric-value {
-    font-size: 26px; font-weight: 800; color: var(--dark);
+    font-size: var(--fs-valor); font-weight: 800; color: var(--dark);
     line-height: 1.15; letter-spacing: -0.5px;
 }
 

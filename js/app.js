@@ -1422,19 +1422,19 @@ function verDetalhesTecido(id) {
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
                 <div style="background:#FAFAFA;border-radius:8px;padding:10px 14px">
                     <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Preço de Venda</div>
-                    <div style="font-size:18px;font-weight:700;color:var(--primary)">R$ ${c.preco.toFixed(2)}<span style="font-size:13px;font-weight:400;color:#8F8F8F">/m</span></div>
+                    <div style="font-size:17px;font-weight:700;color:var(--primary)">R$ ${c.preco.toFixed(2)}<span style="font-size:13px;font-weight:400;color:#8F8F8F">/m</span></div>
                 </div>
                 <div style="background:#FAFAFA;border-radius:8px;padding:10px 14px">
                     <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Em Estoque</div>
-                    <div style="font-size:18px;font-weight:700;color:${abaixoMin ? '#F43927' : '#159912'}">${disp.toFixed(2)} m ${abaixoMin ? '<span style="font-size:12px">⚠ Abaixo do mínimo</span>' : ''}</div>
+                    <div style="font-size:17px;font-weight:700;color:${abaixoMin ? '#F43927' : '#159912'}">${disp.toFixed(2)} m ${abaixoMin ? '<span style="font-size:12px">⚠ Abaixo do mínimo</span>' : ''}</div>
                 </div>
                 <div style="background:#FAFAFA;border-radius:8px;padding:10px 14px">
                     <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Largura do Rolo</div>
-                    <div style="font-size:15px;font-weight:600">${(c.largura_rolo || 2.80).toFixed(2)} m</div>
+                    <div style="font-size:14px;font-weight:600">${(c.largura_rolo || 2.80).toFixed(2)} m</div>
                 </div>
                 <div style="background:#FAFAFA;border-radius:8px;padding:10px 14px">
                     <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Estoque Mínimo</div>
-                    <div style="font-size:15px;font-weight:600">${c.min_estoque ? c.min_estoque + ' m' : '—'}</div>
+                    <div style="font-size:14px;font-weight:600">${c.min_estoque ? c.min_estoque + ' m' : '—'}</div>
                 </div>
                 ${c.fornecedor_nome ? `<div style="background:#FAFAFA;border-radius:8px;padding:10px 14px;grid-column:1/-1">
                     <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Fornecedor</div>
@@ -2625,7 +2625,7 @@ function abrirBalanco() {
         <div class="modal-box" style="max-width:960px;width:100%">
             <div class="modal-header">
                 <div>
-                    <h3 style="margin:0;font-size:17px">📋 Balanço de Estoque</h3>
+                    <h3 style="margin:0;font-size:16px">📋 Balanço de Estoque</h3>
                     <p style="margin:4px 0 0;font-size:12px;color:#8F8F8F">${new Date().toLocaleDateString('pt-BR', {day:'2-digit',month:'long',year:'numeric'})}</p>
                 </div>
                 <div style="display:flex;gap:8px;align-items:center">
