@@ -1744,3 +1744,72 @@ test('validarDecisoesDetalhado devolve lista vazia para um lote limpo', () => {
     ];
     assert.deepStrictEqual(C.validarDecisoesDetalhado(decisoes, [], []), []);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// "Preco por peca": alternativa a coluna de preco. Marcar uma coluna como
+// preco_peca faz ELA valer como custo, no lugar da coluna de preco.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const LINHAS_CORTE_PECA = [
+    ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE', 'PEÇA'],
+    ['10001', 'TRICÔ HERA', '', '1,40', '83,65', '79,47'],
+    ['10003', 'TRICÔ PERSEU', '', '1,45', '78,90', '75,14']
+];
+
+test('sem preco_peca, o custo sai da coluna de preco', () => {
+    const itens = C.montarItens({
+        linhas: LINHAS_CORTE_PECA, cabecalhoIndice: 0,
+        mapa: { codigo: 0, nome: 1, largura: 3, preco: 4, unidade: -1 },
+        tipo: 'tecido', aba: 'T'
+    });
+    assert.strictEqual(itens.length, 2);
+    assert.strictEqual(itens[0].preco_custo, 83.65);
+    assert.ok(!itens[0].avisos.some(a => /peça/i.test(a)));
+});
+
+test('com preco_peca, o custo sai dela e nao da coluna de preco', () => {
+    const itens = C.montarItens({
+        linhas: LINHAS_CORTE_PECA, cabecalhoIndice: 0,
+        mapa: { codigo: 0, nome: 1, largura: 3, preco: -1, preco_peca: 5, unidade: -1 },
+        tipo: 'tecido', aba: 'T'
+    });
+    assert.strictEqual(itens.length, 2);
+    assert.strictEqual(itens[0].preco_custo, 79.47);
+    assert.strictEqual(itens[1].preco_custo, 75.14);
+    assert.ok(itens[0].avisos.some(a => /peça/i.test(a)),
+        'o item precisa avisar que o custo veio do preço por peça');
+});
+
+test('preco_peca vence quando as duas colunas estao mapeadas', () => {
+    const itens = C.montarItens({
+        linhas: LINHAS_CORTE_PECA, cabecalhoIndice: 0,
+        mapa: { codigo: 0, nome: 1, largura: 3, preco: 4, preco_peca: 5, unidade: -1 },
+        tipo: 'tecido', aba: 'T'
+    });
+    assert.strictEqual(itens[0].preco_custo, 79.47);
+});
+
+test('linha sem codigo mas com preco por peca vira pendencia, nao sumico', () => {
+    const itens = C.montarItens({
+        linhas: [
+            ['CODIGO', 'DESCRIÇÃO', '', 'LARGURA', 'CORTE', 'PEÇA'],
+            ['', 'SEM CODIGO', '', '1,40', '83,65', '79,47']
+        ],
+        cabecalhoIndice: 0,
+        mapa: { codigo: 0, nome: 1, largura: 3, preco: -1, preco_peca: 5, unidade: -1 },
+        tipo: 'tecido', aba: 'T'
+    });
+    assert.strictEqual(itens.length, 1);
+    assert.ok(itens[0].problema, 'deveria chegar marcada como pendencia');
+});
+
+test('sem nenhuma coluna de preco, o item fica com problema', () => {
+    const itens = C.montarItens({
+        linhas: LINHAS_CORTE_PECA, cabecalhoIndice: 0,
+        mapa: { codigo: 0, nome: 1, largura: 3, preco: -1, unidade: -1 },
+        tipo: 'tecido', aba: 'T'
+    });
+    assert.strictEqual(itens.length, 2);
+    assert.strictEqual(itens[0].preco_custo, null);
+    assert.match(itens[0].problema, /pre[çc]o/i);
+});

@@ -465,13 +465,17 @@ async function _impConcluirPasso2() {
 
 // ── Passo 3: mapeamento de colunas ───────────────────────────────────────────
 const _IMP_PAPEIS = [
-    { valor: 'ignorar', rotulo: 'Ignorar' },
-    { valor: 'codigo',  rotulo: 'Código' },
-    { valor: 'nome',    rotulo: 'Nome' },
-    { valor: 'largura', rotulo: 'Largura' },
-    { valor: 'preco',   rotulo: 'Preço' },
-    { valor: 'unidade', rotulo: 'Unidade' }
+    { valor: 'ignorar',    rotulo: 'Ignorar' },
+    { valor: 'codigo',     rotulo: 'Código' },
+    { valor: 'nome',       rotulo: 'Nome' },
+    { valor: 'largura',    rotulo: 'Largura' },
+    { valor: 'preco',      rotulo: 'Preço' },
+    { valor: 'preco_peca', rotulo: 'Preço por peça' },
+    { valor: 'unidade',    rotulo: 'Unidade' }
 ];
+
+// "Preço" e "Preço por peça" sao alternativas: o custo sai de uma ou de outra.
+const _IMP_PAPEIS_PRECO = ['preco', 'preco_peca'];
 
 // Sem cabecalho detectado nao ha rotulo de coluna nenhum para mapear — gera
 // rotulos posicionais (Coluna 1, Coluna 2...) a partir da linha de dados mais
@@ -529,7 +533,10 @@ function _impPasso3HTML() {
         const mapa = _impMapaDoLayout(layout);
         const dados = _impEstado.planilha.abas[layout.abas[0]];
         const inicio = layout.cabecalhoIndice + 1;
-        const amostra = dados.slice(inicio, inicio + 3);
+        // Todas as linhas, nao so uma amostra: o usuario precisa conferir se o
+        // mapeamento do cabecalho vale para o conteudo inteiro. A area tem
+        // rolagem propria, entao a janela em volta fica parada.
+        const amostra = dados.slice(inicio);
 
         const modoCor = !!_impEstado.cores[layout.assinatura];
         const coresColunas = _impEstado.cores[layout.assinatura] || [];
@@ -557,17 +564,19 @@ function _impPasso3HTML() {
                 </label>
             </div>`;
 
-        const cabecalhos = layout.colunas.map((rotulo, ci) => {
+        const cabecalhos = `<th class="imp-col-linha">Linha</th>` + layout.colunas.map((rotulo, ci) => {
             const atual = papelDaColuna(ci);
             const opcoes = papeis.map(p => `<option value="${p.valor}" ${p.valor === atual ? 'selected' : ''}>${p.rotulo}</option>`).join('');
-            return `<th style="min-width:120px">
+            return `<th style="min-width:130px">
                 <div style="font-size:11px;color:var(--muted);margin-bottom:4px">${escapeHtml(rotulo || '(sem título)')}</div>
                 <select style="width:100%;font-size:12px" onchange="_impTrocarPapel(${li}, ${ci}, this.value)">${opcoes}</select>
             </th>`;
         }).join('');
 
-        const corpo = amostra.map(linha =>
-            '<tr>' + layout.colunas.map((_, ci) => `<td style="font-size:12px">${escapeHtml(String(linha[ci] === undefined ? '' : linha[ci]))}</td>`).join('') + '</tr>'
+        const corpo = amostra.map((linha, idx) =>
+            `<tr><td class="imp-col-linha">${inicio + idx + 1}</td>`
+            + layout.colunas.map((_, ci) => `<td style="font-size:12px">${escapeHtml(String(linha[ci] === undefined ? '' : linha[ci]))}</td>`).join('')
+            + '</tr>'
         ).join('');
 
         const qtd = modoCor
@@ -578,8 +587,11 @@ function _impPasso3HTML() {
             <h4 style="margin:0 0 4px;color:var(--dark)">${layout.tipo === 'tecido' ? 'Tecidos' : 'Materiais'} — ${layout.abas.length} aba(s)</h4>
             <p style="font-size:12px;color:var(--muted);margin:0 0 10px">${escapeHtml(layout.abas.join(', '))}</p>
             ${controles}
-            <div style="overflow-x:auto"><table><thead><tr>${cabecalhos}</tr></thead><tbody>${corpo}</tbody></table></div>
-            <p style="font-size:12px;color:var(--muted);margin:8px 0 0">${qtd} item(ns) na primeira aba deste layout.</p>
+            <div class="imp-mapa-scroll"><table class="imp-mapa-tabela"><thead><tr>${cabecalhos}</tr></thead><tbody>${corpo}</tbody></table></div>
+            <p style="font-size:12px;color:var(--muted);margin:8px 0 0">
+                ${amostra.length} linha(s) de <strong>${escapeHtml(layout.abas[0])}</strong>${layout.abas.length > 1 ? ` — o mesmo mapeamento vale para as outras ${layout.abas.length - 1} aba(s)` : ''}.
+                Dá ${qtd} item(ns) com o mapeamento atual.
+            </p>
         </div>`;
     }).join('');
 
@@ -621,6 +633,11 @@ function _impTrocarPapel(indiceLayout, indiceColuna, papel) {
     const cores = (_impEstado.cores[layout.assinatura] || []).filter(c => c !== indiceColuna);
     // um papel pertence a uma coluna so: limpa quem estava com ele
     Object.keys(mapa).forEach(k => { if (mapa[k] === indiceColuna) mapa[k] = -1; });
+    // Preco e Preco por peca sao alternativas: escolher um libera o outro, para
+    // nunca ficar ambiguo de qual coluna sai o custo.
+    if (_IMP_PAPEIS_PRECO.includes(papel)) {
+        _IMP_PAPEIS_PRECO.forEach(p => { if (p !== papel) mapa[p] = -1; });
+    }
     if (papel === 'cor') cores.push(indiceColuna);
     else if (papel !== 'ignorar') mapa[papel] = indiceColuna;
     _impEstado.layouts[layout.assinatura] = { mapa, cabecalhoIndice: layout.cabecalhoIndice };
@@ -633,7 +650,9 @@ async function _impConcluirPasso3() {
     for (const layout of layouts) {
         const mapa = _impMapaDoLayout(layout);
         const emCor = (_impEstado.cores[layout.assinatura] || []).length > 0;
-        if (mapa.codigo < 0 || mapa.nome < 0 || (!emCor && mapa.preco < 0)) {
+        // Qualquer um dos dois papeis de preco serve: o custo sai de um ou do outro.
+        const temPreco = mapa.preco >= 0 || mapa.preco_peca >= 0;
+        if (mapa.codigo < 0 || mapa.nome < 0 || (!emCor && !temPreco)) {
             // Abas sem cabecalho reconhecivel caem aqui: a saida prevista e
             // marca-las como "Ignorar" no passo 2 (ou, na Fase 2, apontar a
             // linha do cabecalho na mao).
@@ -641,7 +660,7 @@ async function _impConcluirPasso3() {
             await showAlert(
                 `Não dá para mapear ${semCabecalho ? 'estas abas, que não têm cabeçalho reconhecível' : 'este layout'}:\n\n`
                 + layout.abas.join(', ')
-                + `\n\nMarque ao menos as colunas de Código, Nome e Preço (ou marque as colunas de Cor) — ou volte ao passo 2 e marque estas abas como "Ignorar".`,
+                + `\n\nMarque ao menos as colunas de Código, Nome e uma de preço — "Preço" ou "Preço por peça" (ou marque as colunas de Cor). Se preferir, volte ao passo 2 e marque estas abas como "Ignorar".`,
                 '⚠️');
             return;
         }

@@ -1129,3 +1129,35 @@ html[data-theme="dark"] .consulta-linha.aberta,
 html[data-theme="dark"] .consulta-sug-item:hover { background: #1D2024; }
 html[data-theme="dark"] .consulta-linha,
 html[data-theme="dark"] .consulta-sug-item + .consulta-sug-item { border-color: #282A2E; }
+
+/* ─── Importador, passo 3: area grande para conferir o mapeamento ──────── */
+/* Todas as linhas ficam disponiveis; a rolagem acontece dentro da area, com
+   o cabecalho dos seletores grudado no topo para nao sumir ao rolar. */
+
+.imp-mapa-scroll {
+    max-height: 46vh; min-height: 180px;
+    overflow: auto;                      /* vertical e horizontal */
+    border: 1px solid var(--border); border-radius: 10px; background: var(--white);
+}
+.imp-mapa-tabela { margin: 0; }
+.imp-mapa-tabela thead th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--light); border-bottom: 1px solid var(--border);
+    vertical-align: top; padding: 8px 10px;
+}
+.imp-mapa-tabela td { padding: 5px 10px; white-space: nowrap; }
+.imp-mapa-tabela tbody tr:nth-child(even) { background: rgba(0,0,0,.015); }
+
+/* numero da linha da planilha, para o usuario se localizar ao rolar */
+.imp-col-linha {
+    position: sticky; left: 0; z-index: 1;
+    width: 54px; min-width: 54px; text-align: right;
+    font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums;
+    background: var(--light);
+}
+.imp-mapa-tabela thead th.imp-col-linha { z-index: 3; font-weight: 700; }
+
+html[data-theme="dark"] .imp-mapa-scroll { background: #16181B; border-color: #282A2E; }
+html[data-theme="dark"] .imp-mapa-tabela thead th,
+html[data-theme="dark"] .imp-col-linha { background: #1D2024; border-color: #282A2E; }
+html[data-theme="dark"] .imp-mapa-tabela tbody tr:nth-child(even) { background: rgba(255,255,255,.02); }

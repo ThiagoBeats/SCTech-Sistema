@@ -196,12 +196,22 @@
         if (codigo !== '' && nome !== '') return null; // cabecalho repetido: nao e produto
         if (codigo === '' && nome === '') return null; // linha sem nada: ruido
 
-        if (mapa.preco < 0) return null;
-        if (!normalizarPreco(linha[mapa.preco]).ok) return null;
+        const fonte = _colunaDePreco(mapa);
+        if (fonte.indice < 0) return null;
+        if (!normalizarPreco(linha[fonte.indice]).ok) return null;
 
         return codigo === ''
             ? 'Linha com preço mas sem código — complete o código ou deixe desmarcada'
             : 'Linha com preço mas sem nome — complete o nome ou deixe desmarcada';
+    }
+
+    // De qual coluna sai o custo. "Preço por peça" e "Preço" sao alternativas:
+    // marcar uma coluna como preco_peca faz ELA valer como custo, no lugar da
+    // coluna de preco. So uma das duas vale por vez — quem mapeia decide qual.
+    function _colunaDePreco(mapa) {
+        const m = mapa || {};
+        if (m.preco_peca >= 0) return { indice: m.preco_peca, porPeca: true };
+        return { indice: m.preco >= 0 ? m.preco : -1, porPeca: false };
     }
 
     function _acharColuna(colunas, padroes) {
@@ -340,9 +350,13 @@
                 if (l.motivo) { larguraIlegivel = true; avisos.push(l.motivo); }
             }
 
-            const p = mapa.preco >= 0
-                ? normalizarPreco(linha[mapa.preco])
+            const fontePreco = _colunaDePreco(mapa);
+            const p = fontePreco.indice >= 0
+                ? normalizarPreco(linha[fontePreco.indice])
                 : { valor: null, ok: false, motivo: 'A planilha não tem coluna de preço mapeada' };
+            if (fontePreco.porPeca && p.ok) {
+                avisos.push('Custo veio da coluna de preço por peça, não da de preço por corte');
+            }
 
             const nome = normalizarNome(linha[mapa.nome]);
 
