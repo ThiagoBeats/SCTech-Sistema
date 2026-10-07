@@ -6533,137 +6533,245 @@ async function salvarEntradaMaterial() {
     salvarERecarregar('Entrada de material registrada!');
 }
 
+// ─── CONSULTA DE ESTOQUE ─────────────────────────────────────────────────────
+// Lista compacta de consulta rapida: uma linha por produto, com os detalhes
+// (fornecedor, custo, minimo e os rolos do tecido) escondidos ate o clique.
+
+// Qual linha esta expandida agora. So uma por vez.
+let _consultaAberto = null;
+
+function _consultaMoeda(v) {
+    return v != null && v > 0
+        ? 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : '—';
+}
+
+function _consultaNum(v, casas) {
+    return Number(v || 0).toLocaleString('pt-BR', {
+        minimumFractionDigits: casas === undefined ? 2 : casas,
+        maximumFractionDigits: casas === undefined ? 2 : casas
+    });
+}
+
+// Busca tolerante: ignora caixa e acento, para "trico" achar "TRICÔ".
+function _consultaNormaliza(s) {
+    return String(s === null || s === undefined ? '' : s)
+        .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+
+// Monta a lista unificada de tecidos e materiais no mesmo formato, para a
+// tela nao precisar saber de qual dos dois cadastros veio cada linha.
+function _consultaItens() {
+    const itens = [];
+
+    (db.catalogo || []).forEach(tec => {
+        const rolos = (db.estoque || []).filter(r => r.tecido_id == tec.id);
+        const disponivel = rolos.reduce((s, r) => s + (r.metragem_atual || 0), 0);
+        const ultimo = rolos.filter(r => r.data_entrada)
+            .sort((a, b) => b.data_entrada.localeCompare(a.data_entrada))[0];
+        itens.push({
+            tipo: 'tecido',
+            id: tec.id,
+            codigo: tec.referencia || '',
+            nome: tec.nome || '',
+            precoTxt: tec.preco > 0 ? _consultaMoeda(tec.preco) + '/m' : '—',
+            estoqueTxt: _consultaNum(disponivel) + ' m',
+            abaixoMin: tec.min_estoque > 0 && disponivel < tec.min_estoque,
+            ultimaEntrada: ultimo ? new Date(ultimo.data_entrada + 'T12:00:00').toLocaleDateString('pt-BR') : '—',
+            registro: tec,
+            rolos
+        });
+    });
+
+    (db.materiais || []).forEach(mat => {
+        const entradas = (db.movimentos || []).filter(mv =>
+            mv.tipo === 'Entrada' && mv.item_tipo === 'material' && mv.item_nome === mat.nome);
+        const ultimo = entradas.length ? entradas.sort((a, b) => b.data - a.data)[0] : null;
+        itens.push({
+            tipo: 'material',
+            id: mat.id,
+            codigo: mat.referencia || '',
+            nome: mat.nome || '',
+            precoTxt: mat.preco > 0 ? _consultaMoeda(mat.preco) : '—',
+            estoqueTxt: _consultaNum(mat.estoque_atual) + ' ' + (mat.unidade || ''),
+            abaixoMin: mat.min_estoque > 0 && (mat.estoque_atual || 0) < mat.min_estoque,
+            ultimaEntrada: ultimo ? new Date(ultimo.data).toLocaleDateString('pt-BR') : '—',
+            registro: mat,
+            rolos: null
+        });
+    });
+
+    // Ordem por codigo, com comparacao numerica para 0002 vir antes de 0010.
+    return itens.sort((a, b) =>
+        String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true, sensitivity: 'base' })
+        || String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+}
+
+// Aplica os tres filtros juntos: codigo E nome E tipo.
+function _consultaFiltrar(itens) {
+    const codigo = _consultaNormaliza(document.getElementById('consulta-codigo')?.value);
+    const nome   = _consultaNormaliza(document.getElementById('consulta-busca')?.value);
+    const tipo   = document.getElementById('consulta-tipo')?.value || '';
+    return itens.filter(i =>
+        (!tipo   || i.tipo === tipo) &&
+        (!codigo || _consultaNormaliza(i.codigo).includes(codigo)) &&
+        (!nome   || _consultaNormaliza(i.nome).includes(nome)));
+}
+
+function _consultaChave(item) { return item.tipo + '-' + item.id; }
+
+function _consultaDetalheHTML(item) {
+    const r = item.registro;
+    const campo = (rotulo, valor) =>
+        `<div class="consulta-info-item"><span class="consulta-info-label">${rotulo}</span><span>${valor}</span></div>`;
+
+    let campos = campo('Fornecedor', escapeHtml(r.fornecedor_nome || '—'));
+    campos += campo('Preço de custo', _consultaMoeda(r.preco_custo) + (item.tipo === 'tecido' ? '/m' : ''));
+
+    if (item.tipo === 'tecido') {
+        campos += campo('Estoque mínimo', r.min_estoque > 0 ? r.min_estoque + ' m' : '—');
+        campos += campo('Largura do rolo', r.largura_rolo ? _consultaNum(r.largura_rolo) + ' m' : '—');
+    } else {
+        campos += campo('Estoque mínimo', r.min_estoque > 0 ? r.min_estoque + ' ' + (r.unidade || '') : '—');
+        campos += campo('Unidade', escapeHtml(r.unidade || '—'));
+    }
+
+    let rolosHtml = '';
+    if (item.tipo === 'tecido') {
+        rolosHtml = item.rolos.length ? `
+        <table>
+            <thead><tr>
+                <th>Referência / Lote</th><th>Metragem inicial</th>
+                <th>Disponível</th><th>Data de entrada</th><th>Status</th>
+            </tr></thead>
+            <tbody>${item.rolos.map(ro => {
+                const pct = ro.metragem_inicial > 0 ? Math.round((ro.metragem_atual / ro.metragem_inicial) * 100) : 0;
+                const cor = pct > 40 ? 'var(--primary)' : pct > 15 ? 'var(--kpi-yellow)' : 'var(--danger)';
+                const status = ro.metragem_atual <= 0
+                    ? '<span class="badge-esgotado">Esgotado</span>'
+                    : `<span style="color:${cor};font-weight:600">${pct}% restante</span>`;
+                return `<tr>
+                    <td>${escapeHtml(ro.lote || '—')}</td>
+                    <td>${_consultaNum(ro.metragem_inicial)} m</td>
+                    <td><strong>${_consultaNum(ro.metragem_atual, 3)} m</strong></td>
+                    <td>${ro.data_entrada ? new Date(ro.data_entrada + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+                    <td>${status}</td>
+                </tr>`;
+            }).join('')}</tbody>
+        </table>`
+            : '<p style="font-size:12px;color:var(--muted);margin-top:12px">Nenhum rolo em estoque.</p>';
+    }
+
+    return `<div class="consulta-detalhe">
+        <div class="consulta-detalhe-grid">${campos}</div>
+        ${rolosHtml}
+    </div>`;
+}
+
 function renderConsultaEstoque() {
     const container = document.getElementById('consulta-resultados');
     if (!container) return;
 
-    const termo  = (document.getElementById('consulta-busca')?.value || '').toLowerCase().trim();
-    const codigo = (document.getElementById('consulta-codigo')?.value || '').toLowerCase().trim();
-    const tipo   = document.getElementById('consulta-tipo')?.value || '';
+    const itens = _consultaFiltrar(_consultaItens());
 
-    const fmt = v => v != null && v > 0 ? 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-    const fmtQtd = (v, un) => v != null ? Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + (un || '') : '—';
-
-    let html = '';
-
-    // ── TECIDOS ──────────────────────────────────────────────
-    if (tipo !== 'material') {
-        const tecidos = db.catalogo.filter(c => {
-            const nomeOk   = !termo  || c.nome.toLowerCase().includes(termo);
-            const codigoOk = !codigo || (c.referencia || '').toLowerCase().includes(codigo);
-            return nomeOk && codigoOk;
-        });
-
-        tecidos.forEach(tec => {
-            const rolos = db.estoque.filter(r => r.tecido_id == tec.id);
-            const totalDisp = rolos.reduce((s, r) => s + r.metragem_atual, 0);
-            const abaixoMin = tec.min_estoque > 0 && totalDisp < tec.min_estoque;
-
-            // última entrada — usa data_entrada dos rolos em estoque (mais preciso)
-            const ultRolo = rolos.filter(r => r.data_entrada).sort((a, b) => b.data_entrada.localeCompare(a.data_entrada))[0];
-            const ultData = ultRolo ? new Date(ultRolo.data_entrada + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
-
-            const rolosHtml = rolos.length ? `
-            <table style="margin-top:10px;font-size:13px">
-                <thead><tr>
-                    <th style="padding:4px 10px">Referência / Lote</th>
-                    <th style="padding:4px 10px">Metragem Inicial</th>
-                    <th style="padding:4px 10px">Disponível</th>
-                    <th style="padding:4px 10px">Data de Entrada</th>
-                    <th style="padding:4px 10px">Status</th>
-                </tr></thead>
-                <tbody>${rolos.map(r => {
-                    const pct = r.metragem_inicial > 0 ? Math.round((r.metragem_atual / r.metragem_inicial) * 100) : 0;
-                    const cor = pct > 40 ? '#005D3B' : pct > 15 ? '#F2C924' : '#F43927';
-                    const status = r.metragem_atual <= 0 ? '<span class="badge-esgotado">Esgotado</span>' : `<span style="color:${cor};font-weight:600">${pct}% restante</span>`;
-                    return `<tr>
-                        <td style="padding:4px 10px">${escapeHtml(r.lote)}</td>
-                        <td style="padding:4px 10px">${r.metragem_inicial.toFixed(2)} m</td>
-                        <td style="padding:4px 10px"><strong>${r.metragem_atual.toFixed(3)} m</strong></td>
-                        <td style="padding:4px 10px">${r.data_entrada ? new Date(r.data_entrada+'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
-                        <td style="padding:4px 10px">${status}</td>
-                    </tr>`;
-                }).join('')}</tbody>
-            </table>` : '<p style="font-size:13px;color:#999;margin-top:8px">Nenhum rolo em estoque.</p>';
-
-            html += `
-            <div class="card" style="margin-bottom:14px">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
-                    <div>
-                        <span style="font-size:11px;font-weight:700;color:#fff;background:#005D3B;padding:2px 8px;border-radius:12px;margin-right:8px">TECIDO</span>
-                        <strong style="font-size:16px">${escapeHtml(tec.nome)}</strong>
-                        ${tec.referencia ? `<span style="margin-left:10px;font-size:13px;color:#888">Ref: ${escapeHtml(tec.referencia)}</span>` : ''}
-                        ${abaixoMin ? `<span class="badge-alerta" style="margin-left:10px">⚠ Abaixo do mínimo</span>` : ''}
-                    </div>
-                    <div style="font-size:22px;font-weight:700;color:${abaixoMin?'#F43927':'#005D3B'}">${totalDisp.toFixed(2)} m</div>
-                </div>
-                <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-top:14px;gap:10px">
-                    <div class="consulta-info-item"><span class="consulta-info-label">Fornecedor</span><span>${escapeHtml(tec.fornecedor_nome||'—')}</span></div>
-                    <div class="consulta-info-item"><span class="consulta-info-label">Preço de Custo</span><span style="color:var(--dark);font-weight:600">${fmt(tec.preco_custo)}/m</span></div>
-                    <div class="consulta-info-item"><span class="consulta-info-label">Preço de Venda</span><span style="color:#005D3B;font-weight:700">${fmt(tec.preco)}/m</span></div>
-                    <div class="consulta-info-item"><span class="consulta-info-label">Largura do Rolo</span><span>${tec.largura_rolo ? tec.largura_rolo + ' m' : '—'}</span></div>
-                    <div class="consulta-info-item"><span class="consulta-info-label">Estoque Mínimo</span><span>${tec.min_estoque > 0 ? tec.min_estoque + ' m' : '—'}</span></div>
-                    <div class="consulta-info-item"><span class="consulta-info-label">Última Entrada</span><span>${ultData}</span></div>
-                </div>
-                ${rolosHtml}
-            </div>`;
-        });
-
-        if (!tecidos.length && tipo === 'tecido') {
-            html += `<div class="card" style="text-align:center;color:#999;padding:24px">Nenhum tecido encontrado${termo ? ` para "${termo}"` : ''}.</div>`;
-        }
+    if (!itens.length) {
+        container.innerHTML = `<div class="consulta-lista"><div class="consulta-vazio">
+            Nenhum item encontrado com esses filtros.
+        </div></div>`;
+        return;
     }
 
-    // ── MATERIAIS ────────────────────────────────────────────
-    if (tipo !== 'tecido') {
-        const mats = db.materiais.filter(m => {
-            const nomeOk   = !termo  || m.nome.toLowerCase().includes(termo);
-            const codigoOk = !codigo || (m.referencia || '').toLowerCase().includes(codigo);
-            return nomeOk && codigoOk;
-        });
+    const linhas = itens.map(item => {
+        const chave = _consultaChave(item);
+        const aberto = _consultaAberto === chave;
+        const tag = item.tipo === 'tecido'
+            ? '<span class="consulta-tag tec">TEC</span>'
+            : '<span class="consulta-tag mat">MAT</span>';
+        return `<div class="consulta-linha ${aberto ? 'aberta' : ''}" onclick="toggleConsultaDetalhe('${chave}')">
+                <span class="consulta-cod">${escapeHtml(item.codigo || '—')}</span>
+                <span class="consulta-nome">${tag}${escapeHtml(item.nome)}</span>
+                <span class="consulta-preco">${item.precoTxt}</span>
+                <span class="consulta-qtd ${item.abaixoMin ? 'baixo' : ''}">${item.estoqueTxt}${item.abaixoMin ? ' ⚠' : ''}</span>
+                <span class="consulta-data">${item.ultimaEntrada}</span>
+                <span class="consulta-seta">${aberto ? '▲' : '▼'}</span>
+            </div>
+            ${aberto ? _consultaDetalheHTML(item) : ''}`;
+    }).join('');
 
-        mats.forEach(m => {
-            const abaixoMin = m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque;
-
-            const ults = db.movimentos.filter(mv => mv.tipo === 'Entrada' && mv.item_tipo === 'material' && mv.item_nome === m.nome);
-            const ultEnt = ults.length ? ults.sort((a, b) => b.data - a.data)[0] : null;
-            const ultData = ultEnt ? new Date(ultEnt.data).toLocaleDateString('pt-BR') : '—';
-
-            html += `
-            <div class="card" style="margin-bottom:14px">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
-                    <div>
-                        <span style="font-size:11px;font-weight:700;color:#fff;background:#9B31C8;padding:2px 8px;border-radius:12px;margin-right:8px">MATERIAL</span>
-                        <strong style="font-size:16px">${escapeHtml(m.nome)}</strong>
-                        ${m.referencia ? `<span style="margin-left:10px;font-size:13px;color:#888">Ref: ${escapeHtml(m.referencia)}</span>` : ''}
-                        ${abaixoMin ? `<span class="badge-alerta" style="margin-left:10px">⚠ Abaixo do mínimo</span>` : ''}
-                    </div>
-                    <div style="font-size:22px;font-weight:700;color:${abaixoMin?'#F43927':'#005D3B'}">${fmtQtd(m.estoque_atual, m.unidade)}</div>
-                </div>
-                <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-top:14px;gap:10px">
-                    <div class="consulta-info-item"><span class="consulta-info-label">Fornecedor</span><span>${escapeHtml(m.fornecedor_nome||'—')}</span></div>
-                    <div class="consulta-info-item"><span class="consulta-info-label">Unidade</span><span>${escapeHtml(m.unidade||'—')}</span></div>
-                    <div class="consulta-info-item"><span class="consulta-info-label">Preço de Custo</span><span style="color:var(--dark);font-weight:600">${fmt(m.preco_custo)}</span></div>
-                    <div class="consulta-info-item"><span class="consulta-info-label">Preço de Venda</span><span style="color:#005D3B;font-weight:700">${fmt(m.preco)}</span></div>
-                    <div class="consulta-info-item"><span class="consulta-info-label">Estoque Mínimo</span><span>${m.min_estoque > 0 ? m.min_estoque + ' ' + m.unidade : '—'}</span></div>
-                    <div class="consulta-info-item"><span class="consulta-info-label">Última Entrada</span><span>${ultData}</span></div>
-                </div>
-            </div>`;
-        });
-
-        if (!mats.length && tipo === 'material') {
-            html += `<div class="card" style="text-align:center;color:#999;padding:24px">Nenhum material encontrado${termo ? ` para "${termo}"` : ''}.</div>`;
-        }
-    }
-
-    if (!html) {
-        html = `<div class="card" style="text-align:center;color:#999;padding:32px">
-            ${termo ? `Nenhum resultado para "<strong>${escapeHtml(termo)}</strong>".` : 'Digite um nome ou código para pesquisar.'}
-        </div>`;
-    }
-
-    container.innerHTML = html;
+    container.innerHTML = `<div class="consulta-lista">
+        <div class="consulta-cab">
+            <span>Código</span><span>Nome</span><span>Preço de venda</span>
+            <span>Estoque</span><span>Última entrada</span><span></span>
+        </div>
+        ${linhas}
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin:10px 2px">${itens.length} item(ns). Clique numa linha para ver fornecedor e detalhes.</p>`;
 }
+
+function toggleConsultaDetalhe(chave) {
+    _consultaAberto = _consultaAberto === chave ? null : chave;
+    renderConsultaEstoque();
+}
+
+// ── Vinculo entre os campos Codigo e Nome ───────────────────────────────────
+// Digitar em um deles sugere os itens correspondentes; escolher uma sugestao
+// preenche os dois. Enquanto o usuario nao escolhe, nada e preenchido sozinho:
+// preencher no meio da digitacao faria os dois filtros brigarem entre si.
+
+function consultaFiltroMudou(campo) {
+    consultaSugerir(campo);
+    renderConsultaEstoque();
+}
+
+function consultaSugerir(campo) {
+    const idCampo = campo === 'codigo' ? 'consulta-codigo' : 'consulta-busca';
+    const caixa = document.getElementById(campo === 'codigo' ? 'consulta-sug-codigo' : 'consulta-sug-nome');
+    if (!caixa) return;
+
+    const termo = _consultaNormaliza(document.getElementById(idCampo)?.value);
+    _consultaFecharSugestoes(campo === 'codigo' ? 'nome' : 'codigo');
+
+    if (!termo) { caixa.classList.remove('aberta'); caixa.innerHTML = ''; return; }
+
+    const tipo = document.getElementById('consulta-tipo')?.value || '';
+    const achados = _consultaItens().filter(i =>
+        (!tipo || i.tipo === tipo) &&
+        _consultaNormaliza(campo === 'codigo' ? i.codigo : i.nome).includes(termo)
+    ).slice(0, 12);
+
+    if (!achados.length) { caixa.classList.remove('aberta'); caixa.innerHTML = ''; return; }
+
+    caixa.innerHTML = achados.map(i => `
+        <div class="consulta-sug-item" onclick="consultaEscolherSugestao('${_consultaChave(i)}')">
+            <span class="consulta-sug-cod">${escapeHtml(i.codigo || '—')}</span>
+            <span class="consulta-sug-nome">${escapeHtml(i.nome)}</span>
+        </div>`).join('');
+    caixa.classList.add('aberta');
+}
+
+function consultaEscolherSugestao(chave) {
+    const item = _consultaItens().find(i => _consultaChave(i) === chave);
+    if (!item) return;
+    const campoCodigo = document.getElementById('consulta-codigo');
+    const campoNome   = document.getElementById('consulta-busca');
+    if (campoCodigo) campoCodigo.value = item.codigo;
+    if (campoNome)   campoNome.value = item.nome;
+    _consultaFecharSugestoes('codigo');
+    _consultaFecharSugestoes('nome');
+    renderConsultaEstoque();
+}
+
+function _consultaFecharSugestoes(campo) {
+    const caixa = document.getElementById(campo === 'codigo' ? 'consulta-sug-codigo' : 'consulta-sug-nome');
+    if (caixa) { caixa.classList.remove('aberta'); caixa.innerHTML = ''; }
+}
+
+// Clique fora fecha as sugestoes abertas.
+document.addEventListener('click', e => {
+    if (e.target.closest && e.target.closest('.consulta-campo')) return;
+    _consultaFecharSugestoes('codigo');
+    _consultaFecharSugestoes('nome');
+});
 
 function renderEstoqueMateriais() {
     const alertBox = document.getElementById('alertas-mat-min');

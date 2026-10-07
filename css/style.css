@@ -1046,3 +1046,86 @@ html[data-theme="dark"] .fin-periodo-btn.active { background: var(--secondary); 
     #doc-modal-scroll { padding: 14px 10px; }
     #doc-modal-paper { padding: 18px; }
 }
+
+/* ─── Consulta de Estoque: lista compacta ──────────────────────────────── */
+/* Uma linha por produto, para caber muita coisa na tela sem rolar. */
+
+.consulta-campo { position: relative; }
+
+.consulta-sugestoes {
+    display: none;
+    position: absolute; left: 0; right: 0; top: 100%; z-index: 30;
+    max-height: 260px; overflow-y: auto;
+    background: var(--white); border: 1px solid var(--border);
+    border-radius: 10px; box-shadow: var(--shadow-card-hover); margin-top: 4px;
+}
+.consulta-sugestoes.aberta { display: block; }
+.consulta-sug-item {
+    display: flex; gap: 10px; align-items: baseline;
+    padding: 7px 12px; cursor: pointer; font-size: 13px; line-height: 1.3;
+}
+.consulta-sug-item + .consulta-sug-item { border-top: 1px solid var(--border); }
+.consulta-sug-item:hover { background: var(--light); }
+.consulta-sug-cod { font-weight: 700; color: var(--dark); min-width: 76px; }
+.consulta-sug-nome { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.consulta-lista { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--white); }
+
+.consulta-cab, .consulta-linha {
+    display: grid;
+    grid-template-columns: 116px minmax(0,1fr) 124px 112px 108px 20px;
+    gap: 12px; align-items: center; padding: 7px 14px;
+}
+.consulta-cab {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--muted); background: var(--light); border-bottom: 1px solid var(--border);
+}
+.consulta-linha {
+    font-size: 13px; cursor: pointer; border-top: 1px solid var(--border);
+    transition: background .12s ease;
+}
+.consulta-lista .consulta-linha:first-of-type { border-top: none; }
+.consulta-linha:hover, .consulta-linha.aberta { background: var(--light); }
+
+.consulta-cod { font-weight: 700; color: var(--dark); font-variant-numeric: tabular-nums; }
+.consulta-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.consulta-preco, .consulta-qtd, .consulta-data { font-variant-numeric: tabular-nums; }
+.consulta-preco { color: var(--primary); font-weight: 600; }
+.consulta-qtd { font-weight: 600; color: var(--dark); }
+.consulta-qtd.baixo { color: var(--danger); }
+.consulta-data { color: var(--muted); }
+.consulta-seta { color: var(--muted); font-size: 10px; text-align: right; }
+
+/* Marcador de tipo: tecido e material aparecem juntos quando o filtro Tipo
+   esta em "Todos", e so o sufixo /m nao basta para distinguir. */
+.consulta-tag {
+    display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: .04em;
+    padding: 1px 5px; border-radius: 4px; margin-right: 7px; vertical-align: 1px;
+}
+.consulta-tag.tec { background: var(--primary); color: var(--white); }
+.consulta-tag.mat { background: var(--kpi-purple); color: var(--white); }
+
+.consulta-detalhe { padding: 0 14px 14px; background: var(--light); border-top: 1px dashed var(--border); }
+.consulta-detalhe-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 8px; padding-top: 12px;
+}
+.consulta-detalhe table { margin-top: 12px; font-size: 12px; }
+.consulta-detalhe th, .consulta-detalhe td { padding: 4px 10px; }
+.consulta-vazio { padding: 28px 14px; text-align: center; color: var(--muted); font-size: 14px; }
+
+@media (max-width: 820px) {
+    .consulta-cab { display: none; }
+    .consulta-linha { grid-template-columns: 96px minmax(0,1fr) 104px 18px; row-gap: 2px; }
+    .consulta-linha .consulta-data { display: none; }
+}
+
+html[data-theme="dark"] .consulta-lista,
+html[data-theme="dark"] .consulta-sugestoes { background: #16181B; border-color: #282A2E; }
+html[data-theme="dark"] .consulta-cab,
+html[data-theme="dark"] .consulta-detalhe,
+html[data-theme="dark"] .consulta-linha:hover,
+html[data-theme="dark"] .consulta-linha.aberta,
+html[data-theme="dark"] .consulta-sug-item:hover { background: #1D2024; }
+html[data-theme="dark"] .consulta-linha,
+html[data-theme="dark"] .consulta-sug-item + .consulta-sug-item { border-color: #282A2E; }

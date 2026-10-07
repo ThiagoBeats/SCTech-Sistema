@@ -254,14 +254,20 @@
         <!-- ══════════════ ABA: CONSULTA DE ESTOQUE ══════════════ -->
         <div id="tab-consulta" class="tab-panel">
             <div class="card">
-                <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-                    <div class="form-group" style="flex:2;min-width:220px;margin-bottom:0">
-                        <label>Buscar por nome</label>
-                        <input type="text" id="consulta-busca" placeholder="Ex: Linho Belga, Trilho Suíço…" oninput="renderConsultaEstoque()" autocomplete="off">
-                    </div>
-                    <div class="form-group" style="flex:1;min-width:160px;margin-bottom:0">
+                <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+                    <div class="form-group consulta-campo" style="flex:1;min-width:170px;margin-bottom:0">
                         <label>Código / Referência</label>
-                        <input type="text" id="consulta-codigo" placeholder="Ex: LB-001, TRILHO-SU-01" oninput="renderConsultaEstoque()" autocomplete="off" style="text-transform:uppercase">
+                        <input type="text" id="consulta-codigo" placeholder="Ex: 0001, LB-001, TRILHO-SU-01…"
+                               oninput="consultaFiltroMudou('codigo')" onfocus="consultaSugerir('codigo')"
+                               autocomplete="off" style="text-transform:uppercase">
+                        <div class="consulta-sugestoes" id="consulta-sug-codigo"></div>
+                    </div>
+                    <div class="form-group consulta-campo" style="flex:2;min-width:220px;margin-bottom:0">
+                        <label>Buscar por nome</label>
+                        <input type="text" id="consulta-busca" placeholder="Ex: Linho Belga, Tricô Hera…"
+                               oninput="consultaFiltroMudou('nome')" onfocus="consultaSugerir('nome')"
+                               autocomplete="off">
+                        <div class="consulta-sugestoes" id="consulta-sug-nome"></div>
                     </div>
                     <div class="form-group" style="min-width:140px;margin-bottom:0">
                         <label>Tipo</label>
