@@ -546,6 +546,34 @@ function showConfirm(msg, icon = '❓', okLabel = 'Confirmar', cancelLabel = 'Ca
         document.getElementById('sc-modal-ok').focus();
     });
 }
+// Modal com mais de duas saidas. Cada opcao e { rotulo, valor, destaque? }.
+// Devolve o valor da opcao escolhida, ou null se o usuario desistir.
+function showEscolha(msg, icon, opcoes, cancelLabel = 'Cancelar') {
+    return new Promise(resolve => {
+        const o = _getModal();
+        document.getElementById('sc-modal-icon').textContent = icon;
+        document.getElementById('sc-modal-msg').textContent = msg;
+        const btns = document.getElementById('sc-modal-btns');
+        btns.classList.toggle('sc-modal-btns-col', opcoes.length > 2);
+        btns.innerHTML = opcoes.map((op, i) =>
+            `<button class="btn ${op.destaque ? 'btn-success' : 'btn-outline'}" data-escolha="${i}">${escapeHtml(op.rotulo)}</button>`
+        ).join('') + `<button class="btn btn-outline sc-modal-cancelar" data-escolha="-1">${escapeHtml(cancelLabel)}</button>`;
+        o.style.display = 'flex';
+        const close = val => {
+            o.style.display = 'none';
+            btns.classList.remove('sc-modal-btns-col');
+            document.removeEventListener('keydown', esc);
+            resolve(val);
+        };
+        const esc = e => { if (e.key === 'Escape') close(null); };
+        btns.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+            const i = parseInt(b.dataset.escolha, 10);
+            close(i < 0 ? null : opcoes[i].valor);
+        }, { once: true }));
+        document.addEventListener('keydown', esc);
+        btns.querySelector('button')?.focus();
+    });
+}
 
 // --- TOAST ---
 function toast(msg, tipo = 'success', ms = 3000) {
@@ -1471,18 +1499,415 @@ function autoFillCatalogoPorReferencia() {
     if (fornSel && existing.fornecedor_id) fornSel.value = existing.fornecedor_id;
 }
 
-async function excluirCatalogo(id) {
-    const emUso = db.pedidos.find(p => {
+// Pedido de venda ainda aberto que consome este tecido, ou null. Um tecido
+// nesta situacao nao pode sair do catalogo: a exclusao em massa usa a mesma
+// regra da exclusao individual.
+function pedidoQueUsaTecido(id) {
+    return db.pedidos.find(p => {
         if (normalizarStatus(p.status) === 'Instalado') return false;
         return normalizarAmbientes(p).some(a => (a.tecidos||[]).some(t => t.tecidoId == id));
-    });
+    }) || null;
+}
+
+// "TRICÔ HERA — pedido #0012 (Maria)", para listar o que ficou de fora.
+function _motivoTecidoEmUso(c, pedido) {
+    const cli = db.clientes.find(x => x.id == pedido.clienteId);
+    return `• ${c.nome} — pedido #${formatPedidoId(pedido.id)} (${cli?.nome || 'cliente'})`;
+}
+
+async function excluirCatalogo(id) {
+    const emUso = pedidoQueUsaTecido(id);
     if (emUso) {
         const cli = db.clientes.find(c => c.id == emUso.clienteId);
         await showAlert(`Não é possível remover: este tecido está em uso no pedido #${formatPedidoId(emUso.id)} (${cli?.nome || 'cliente'}).`, '🚫'); return;
     }
     if (!await showConfirm('Remover este tecido do catálogo?', '🗑️', 'Remover')) return;
     db.catalogo = db.catalogo.filter(c => c.id != id);
+    catSelecao.tecido.delete(Number(id));
     salvarERecarregar('Tecido removido.');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CATÁLOGO — ordenação, filtros e seleção em massa
+// ═══════════════════════════════════════════════════════════════════════
+
+const catSortState = { col: 'nome', dir: 1 };
+
+// Ids marcados em cada aba. Como a marcacao e por id e nao por linha, ela
+// sobrevive a ordenar e a filtrar. Some ao recarregar a pagina, de proposito:
+// selecao e coisa do momento, nao estado salvo.
+const catSelecao = { tecido: new Set(), material: new Set() };
+
+// Ids que a ultima renderizacao deixou na tela. "Marcar todos" age sobre
+// estes, isto e, sobre o que o filtro atual mostra.
+const catVisiveis = { tecido: [], material: [] };
+
+const _CAT_ROTULO = {
+    tecido:   { um: 'tecido',   varios: 'tecidos'   },
+    material: { um: 'material', varios: 'materiais' }
+};
+
+function valorOrdenacaoTecido(c, col) {
+    switch (col) {
+        case 'preco':      return c.preco || 0;
+        case 'largura':    return c.largura_rolo || 2.80;
+        case 'minimo':     return c.min_estoque || 0;
+        case 'estoque':    return estoqueDisponivel(c.id);
+        case 'referencia': return (c.referencia || '').toLowerCase();
+        case 'fornecedor': return (c.fornecedor_nome || '').toLowerCase();
+        default:           return (c.nome || '').toLowerCase();
+    }
+}
+
+// Usado pela tabela do catalogo e pela do estoque, para que as duas ordenem
+// igual em qualquer coluna.
+function valorOrdenacaoMaterial(m, col) {
+    switch (col) {
+        case 'preco':      return m.preco || 0;
+        case 'estoque':    return m.estoque_atual || 0;
+        case 'referencia': return (m.referencia || '').toLowerCase();
+        case 'unidade':    return (m.unidade || '').toLowerCase();
+        case 'fornecedor': return (m.fornecedor_nome || '').toLowerCase();
+        default:           return (m.nome || '').toLowerCase();
+    }
+}
+
+function ordenarLista(lista, estado, valorDe) {
+    return [...lista].sort((a, b) => {
+        const va = valorDe(a, estado.col), vb = valorDe(b, estado.col);
+        return va < vb ? -estado.dir : va > vb ? estado.dir : 0;
+    });
+}
+
+// Marca a coluna ativa e vira a seta. O cabecalho e HTML estatico; so os
+// icones e a classe mudam, para nao remontar a tabela inteira.
+function pintarCabecalhoOrdenacao(seletorTabela, estado) {
+    document.querySelectorAll(`${seletorTabela} th[data-col]`).forEach(th => {
+        const ativo = th.dataset.col === estado.col;
+        th.classList.toggle('th-sort-mat-ativo', ativo);
+        const icone = th.querySelector('.sort-icon');
+        if (icone) icone.textContent = ativo ? (estado.dir === 1 ? '▲' : '▼') : '⇅';
+    });
+}
+
+function _catTxt(id) { return (document.getElementById(id)?.value || '').trim().toLowerCase(); }
+function _catNum(id) {
+    const v = parseFloat(document.getElementById(id)?.value);
+    return isNaN(v) ? null : v;
+}
+
+// Fornecedor do filtro: '' = todos, '__sem__' = os que nao tem fornecedor.
+function _catCasaFornecedor(item, escolha) {
+    if (!escolha) return true;
+    if (escolha === '__sem__') return !item.fornecedor_id;
+    return String(item.fornecedor_id || '') === escolha;
+}
+
+function _catCasaPreco(preco, min, max) {
+    if (min !== null && preco < min) return false;
+    if (max !== null && preco > max) return false;
+    return true;
+}
+
+function _catCasaBusca(item, termo) {
+    if (!termo) return true;
+    return (item.nome || '').toLowerCase().includes(termo)
+        || (item.referencia || '').toLowerCase().includes(termo);
+}
+
+function filtrarTecidos(lista) {
+    const termo = _catTxt('f-tec-busca');
+    const forn  = document.getElementById('f-tec-forn')?.value || '';
+    const larg  = document.getElementById('f-tec-largura')?.value || '';
+    const pmin  = _catNum('f-tec-pmin'), pmax = _catNum('f-tec-pmax');
+    return lista.filter(c =>
+        _catCasaBusca(c, termo) &&
+        _catCasaFornecedor(c, forn) &&
+        (!larg || (c.largura_rolo || 2.80).toFixed(2) === larg) &&
+        _catCasaPreco(c.preco || 0, pmin, pmax)
+    );
+}
+
+function filtrarMateriais(lista) {
+    const termo = _catTxt('f-mat-busca');
+    const forn  = document.getElementById('f-mat-forn')?.value || '';
+    const pmin  = _catNum('f-mat-pmin'), pmax = _catNum('f-mat-pmax');
+    return lista.filter(m =>
+        _catCasaBusca(m, termo) &&
+        _catCasaFornecedor(m, forn) &&
+        _catCasaPreco(m.preco || 0, pmin, pmax)
+    );
+}
+
+// Repovoa um select preservando o que ja estava escolhido.
+function _catPreencherSelect(id, opcoes) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const anterior = sel.value;
+    const fixa = sel.options[0] ? sel.options[0].outerHTML : '';
+    sel.innerHTML = fixa + opcoes.map(o => `<option value="${escapeHtml(o.valor)}">${escapeHtml(o.rotulo)}</option>`).join('');
+    if ([...sel.options].some(o => o.value === anterior)) sel.value = anterior;
+}
+
+// Opcoes de fornecedor tiradas do que realmente existe na lista.
+function _catOpcoesFornecedor(lista) {
+    const vistos = new Map();
+    let temSem = false;
+    lista.forEach(it => {
+        if (it.fornecedor_id) vistos.set(String(it.fornecedor_id), it.fornecedor_nome || 'Fornecedor ' + it.fornecedor_id);
+        else temSem = true;
+    });
+    const ops = [...vistos].map(([valor, rotulo]) => ({ valor, rotulo }))
+        .sort((a, b) => a.rotulo.localeCompare(b.rotulo, 'pt-BR'));
+    if (temSem) ops.push({ valor: '__sem__', rotulo: '— Sem fornecedor —' });
+    return ops;
+}
+
+function limparFiltrosTecidos() {
+    ['f-tec-busca', 'f-tec-pmin', 'f-tec-pmax'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+    ['f-tec-forn', 'f-tec-largura'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+    renderCatalogoTecidos();
+}
+
+function limparFiltrosMateriais() {
+    ['f-mat-busca', 'f-mat-pmin', 'f-mat-pmax'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+    const f = document.getElementById('f-mat-forn'); if (f) f.value = '';
+    renderMateriais();
+}
+
+function sortTecidos(col) {
+    if (catSortState.col === col) catSortState.dir *= -1;
+    else { catSortState.col = col; catSortState.dir = 1; }
+    renderCatalogoTecidos();
+}
+
+function renderCatalogoTecidos() {
+    const tb = document.getElementById('tb-catalogo');
+    if (!tb) return;
+
+    _catPreencherSelect('f-tec-forn', _catOpcoesFornecedor(db.catalogo));
+    const larguras = [...new Set(db.catalogo.map(c => (c.largura_rolo || 2.80).toFixed(2)))].sort((a, b) => a - b);
+    _catPreencherSelect('f-tec-largura', larguras.map(l => ({ valor: l, rotulo: l + ' m' })));
+
+    const lista = ordenarLista(filtrarTecidos(db.catalogo), catSortState, valorOrdenacaoTecido);
+    catVisiveis.tecido = lista.map(c => c.id);
+    pintarCabecalhoOrdenacao('#tabela-tecidos', catSortState);
+
+    const cont = document.getElementById('f-tec-contagem');
+    if (cont) cont.textContent = lista.length === db.catalogo.length
+        ? `${db.catalogo.length} tecido(s)`
+        : `${lista.length} de ${db.catalogo.length} tecido(s)`;
+
+    tb.innerHTML = lista.map(c => {
+        const disp    = estoqueDisponivel(c.id);
+        const dispTxt = db.estoque.some(r => r.tecido_id == c.id) ? `${disp.toFixed(2)} m` : '—';
+        const alertMin = c.min_estoque > 0 && disp < c.min_estoque ? `<span class="badge-alerta" style="margin-left:6px">⚠</span>` : '';
+        const thumb = c.imagem ? `<img src="${c.imagem}" style="width:32px;height:32px;object-fit:cover;border-radius:4px;margin-right:7px;vertical-align:middle;border:1px solid #E0E0E0">` : '';
+        const nomeClick = `<span style="cursor:pointer;color:var(--primary);font-weight:500;text-decoration:underline dotted" onclick="verDetalhesTecido(${c.id})" title="Ver detalhes">${escapeHtml(c.nome)}</span>`;
+        const marcado = catSelecao.tecido.has(c.id);
+        return `<tr class="${marcado ? 'cat-linha-marcada' : ''}">
+            <td class="cat-col-check"><input type="checkbox"${marcado ? ' checked' : ''} onchange="alternarSelecao('tecido',${c.id},this)"></td>
+            <td>${thumb}${nomeClick}</td>
+            <td style="font-size:12px;color:#555">${escapeHtml(c.referencia || '—')}</td>
+            <td style="white-space:nowrap">R$ ${(c.preco || 0).toFixed(2)}</td>
+            <td style="white-space:nowrap">${(c.largura_rolo || 2.80).toFixed(2)} m</td>
+            <td style="white-space:nowrap">${c.min_estoque ? c.min_estoque + ' m' : '—'}</td>
+            <td style="white-space:nowrap">${dispTxt}${alertMin}</td>
+            <td style="font-size:12px;color:#555">${escapeHtml(c.fornecedor_nome || '—')}</td>
+            <td>
+                <button class="btn btn-outline btn-sm" onclick="editarCatalogo(${c.id})" title="Editar">✏️ Editar</button>
+                <button class="btn btn-outline btn-sm" onclick="pedirTecido(${c.id})" title="Criar pedido de compra">🛒</button>
+                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirCatalogo(${c.id})" title="Remover do catálogo">Remover</button>
+            </td>
+        </tr>`;
+    }).join('') || `<tr><td colspan="9" style="text-align:center;color:#999;padding:20px;">${db.catalogo.length ? 'Nenhum tecido com esses filtros.' : 'Catálogo vazio.'}</td></tr>`;
+
+    atualizarBarraSelecao('tecido');
+}
+
+// ─── Seleção ────────────────────────────────────────────────────────────
+
+function alternarSelecao(tipo, id, caixa) {
+    if (caixa.checked) catSelecao[tipo].add(Number(id));
+    else catSelecao[tipo].delete(Number(id));
+    caixa.closest('tr')?.classList.toggle('cat-linha-marcada', caixa.checked);
+    atualizarBarraSelecao(tipo);
+}
+
+function marcarTodosVisiveis(tipo, marcado) {
+    catVisiveis[tipo].forEach(id => {
+        if (marcado) catSelecao[tipo].add(Number(id));
+        else catSelecao[tipo].delete(Number(id));
+    });
+    if (tipo === 'tecido') renderCatalogoTecidos(); else renderMateriais();
+}
+
+function limparSelecao(tipo) {
+    catSelecao[tipo].clear();
+    if (tipo === 'tecido') renderCatalogoTecidos(); else renderMateriais();
+}
+
+function atualizarBarraSelecao(tipo) {
+    const pre = tipo === 'tecido' ? 'tec' : 'mat';
+    const n   = catSelecao[tipo].size;
+
+    const barra = document.getElementById(`sel-${pre}-barra`);
+    if (barra) barra.style.display = n ? '' : 'none';
+
+    // Quantos marcados o filtro atual esconde. Sem esse aviso o usuario
+    // excluiria ou pediria itens que nao estao na tela.
+    const ocultos = [...catSelecao[tipo]].filter(id => !catVisiveis[tipo].includes(id)).length;
+    const rotulo = document.getElementById(`sel-${pre}-qtd`);
+    if (rotulo) rotulo.textContent = `${n} marcado(s)` + (ocultos ? ` (${ocultos} fora do filtro)` : '');
+
+    const todos = document.getElementById(`chk-${pre}-todos`);
+    if (todos) {
+        const vis = catVisiveis[tipo];
+        todos.checked = vis.length > 0 && vis.every(id => catSelecao[tipo].has(id));
+        todos.indeterminate = !todos.checked && vis.some(id => catSelecao[tipo].has(id));
+    }
+}
+
+// ─── Exclusão em massa ──────────────────────────────────────────────────
+
+async function excluirSelecionados(tipo) {
+    const ids = [...catSelecao[tipo]];
+    if (!ids.length) return;
+    if (tipo === 'tecido') await _excluirTecidosSelecionados(ids);
+    else await _excluirMateriaisSelecionados(ids);
+}
+
+async function _excluirTecidosSelecionados(ids) {
+    const podem = [], bloqueados = [];
+    ids.forEach(id => {
+        const c = db.catalogo.find(x => x.id == id);
+        if (!c) return;
+        const uso = pedidoQueUsaTecido(id);
+        if (uso) bloqueados.push(_motivoTecidoEmUso(c, uso));
+        else podem.push(c.id);
+    });
+
+    if (!podem.length) {
+        await showAlert(`Nenhum dos ${bloqueados.length} tecidos marcados pode ser removido — todos estão em pedidos:\n\n${bloqueados.join('\n')}`, '🚫');
+        return;
+    }
+    const aviso = bloqueados.length
+        ? `\n\n${bloqueados.length} será(ão) mantido(s) por estar(em) em pedidos:\n${bloqueados.join('\n')}`
+        : '';
+    if (!await showConfirm(`Remover ${podem.length} tecido(s) do catálogo?${aviso}`, '🗑️', 'Remover')) return;
+
+    const fora = new Set(podem.map(String));
+    db.catalogo = db.catalogo.filter(c => !fora.has(String(c.id)));
+    catSelecao.tecido.clear();
+    salvarERecarregar(`${podem.length} tecido(s) removido(s).` + (bloqueados.length ? ` ${bloqueados.length} mantido(s).` : ''));
+}
+
+async function _excluirMateriaisSelecionados(ids) {
+    const nomes = ids.map(id => db.materiais.find(m => m.id == id)).filter(Boolean).map(m => `• ${m.nome}`);
+    if (!nomes.length) return;
+    if (!await showConfirm(`Remover ${nomes.length} material(is)? Kits que os utilizam serão afetados.\n\n${nomes.join('\n')}`, '🗑️', 'Remover')) return;
+
+    const fora = new Set(ids.map(String));
+    db.materiais = db.materiais.filter(m => !fora.has(String(m.id)));
+    db.kits.forEach(k => { k.itens = k.itens.filter(i => !fora.has(String(i.materialId))); });
+    catSelecao.material.clear();
+    salvarERecarregar(`${nomes.length} material(is) removido(s).`);
+}
+
+// ─── Pedido de compra a partir da seleção ───────────────────────────────
+
+// Converte um item do cadastro em linha de pedido de compra. Os campos de
+// fornecedor so servem para agrupar aqui; salvarPedidoCompra os descarta.
+function itemParaPedido(tipo, id) {
+    if (tipo === 'tecido') {
+        const c = db.catalogo.find(x => x.id == id);
+        if (!c) return null;
+        const preco_unit = ultimoPrecoTecido(c.id);
+        return {
+            tipo: 'tecido', item_id: c.id, item_nome: c.nome, referencia: c.referencia || '',
+            unidade: 'm', preco_unit, quantidade: 1, subtotal: preco_unit,
+            fornecedor_id: c.fornecedor_id || null, fornecedor_nome: c.fornecedor_nome || ''
+        };
+    }
+    const m = db.materiais.find(x => x.id == id);
+    if (!m) return null;
+    const preco = m.preco || 0;
+    return {
+        tipo: 'material', item_id: m.id, item_nome: m.nome, referencia: m.referencia || '',
+        unidade: m.unidade, preco_unit: preco, quantidade: 1, subtotal: preco,
+        fornecedor_id: m.fornecedor_id || null, fornecedor_nome: m.fornecedor_nome || ''
+    };
+}
+
+function agruparPorFornecedor(itens) {
+    const mapa = new Map();
+    itens.forEach(i => {
+        const chave = String(i.fornecedor_id || '');
+        if (!mapa.has(chave)) {
+            mapa.set(chave, {
+                fornecedor_id: i.fornecedor_id || null,
+                fornecedor_nome: i.fornecedor_nome || 'Sem fornecedor',
+                itens: []
+            });
+        }
+        mapa.get(chave).itens.push(i);
+    });
+    return [...mapa.values()];
+}
+
+// Guarda os itens e manda para o formulario de pedido de compra.
+// fornId: id do fornecedor, 0 para pedido genérico, '' para o usuário escolher.
+function enviarParaFormularioPC(itens, fornId) {
+    localStorage.setItem('sc_pc_prefill', JSON.stringify(itens));
+    localStorage.setItem('sc_pc_prefill_forn', String(fornId));
+    window.location.href = 'fornecedores.html?tab=novo';
+}
+
+function lerFilaPC() {
+    try {
+        const f = JSON.parse(localStorage.getItem('sc_pc_fila') || 'null');
+        return f && Array.isArray(f.restantes) && f.restantes.length ? f : null;
+    } catch { return null; }
+}
+
+// Um pedido por fornecedor, feitos um de cada vez no formulario. A fila fica
+// no localStorage porque salvarPedidoCompra recarrega a pagina a cada gravacao.
+function criarFilaDePedidos(grupos) {
+    localStorage.setItem('sc_pc_fila', JSON.stringify({ total: grupos.length, feitos: 0, restantes: grupos }));
+    const primeiro = grupos[0];
+    enviarParaFormularioPC(primeiro.itens, primeiro.fornecedor_id || 0);
+}
+
+async function iniciarPedidoDeCompra(itens) {
+    if (!itens.length) return;
+    localStorage.removeItem('sc_pc_fila');
+    const grupos = agruparPorFornecedor(itens);
+
+    // Um fornecedor só (ou nenhum item com fornecedor): vai direto.
+    if (grupos.length === 1) {
+        enviarParaFormularioPC(itens, grupos[0].fornecedor_id || '');
+        return;
+    }
+
+    const resumo = grupos.map(g => `• ${g.fornecedor_nome}: ${g.itens.length} item(ns)`).join('\n');
+    const escolha = await showEscolha(
+        `Os ${itens.length} produtos marcados são de ${grupos.length} fornecedores diferentes:\n\n${resumo}\n\nComo você quer criar o pedido?`,
+        '🛒',
+        [
+            { rotulo: 'Um pedido para cada fornecedor', valor: 'separados', destaque: true },
+            { rotulo: 'Tudo para um fornecedor só (você escolhe)', valor: 'um' },
+            { rotulo: 'Pedido genérico, sem fornecedor (orçamento)', valor: 'generico' }
+        ]
+    );
+    if (!escolha) return;
+    if (escolha === 'separados')     criarFilaDePedidos(grupos);
+    else if (escolha === 'um')       enviarParaFormularioPC(itens, '');
+    else                             enviarParaFormularioPC(itens, 0);
+}
+
+function pedidoDaSelecao(tipo) {
+    const itens = [...catSelecao[tipo]].map(id => itemParaPedido(tipo, id)).filter(Boolean);
+    iniciarPedidoDeCompra(itens);
 }
 
 function editarCatalogo(id) {
@@ -3325,29 +3750,29 @@ function renderMateriais() {
         }
     }
 
-    if (!db.materiais.length) {
-        tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:24px;">Nenhum material cadastrado.</td></tr>';
-        return;
-    }
+    _catPreencherSelect('f-mat-forn', _catOpcoesFornecedor(db.materiais));
 
-    let lista = [...db.materiais];
-    const { col: mc, dir: md } = matSortState;
-    lista.sort((a,b) => {
-        const va = mc==='nome' ? a.nome.toLowerCase() : mc==='preco' ? (a.preco||0) : mc==='estoque' ? (a.estoque_atual||0) : 0;
-        const vb = mc==='nome' ? b.nome.toLowerCase() : mc==='preco' ? (b.preco||0) : mc==='estoque' ? (b.estoque_atual||0) : 0;
-        return va < vb ? -md : va > vb ? md : 0;
-    });
+    const lista = ordenarLista(filtrarMateriais(db.materiais), matSortState, valorOrdenacaoMaterial);
+    catVisiveis.material = lista.map(m => m.id);
+    pintarCabecalhoOrdenacao('#tabela-materiais', matSortState);
+
+    const cont = document.getElementById('f-mat-contagem');
+    if (cont) cont.textContent = lista.length === db.materiais.length
+        ? `${db.materiais.length} material(is)`
+        : `${lista.length} de ${db.materiais.length} material(is)`;
 
     tb.innerHTML = lista.map(m => {
         const abaixoMin = m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque;
         const corEstoque = abaixoMin ? '#F43927' : '#005D3B';
+        const marcado = catSelecao.material.has(m.id);
         return `
-        <tr>
-            <td><strong>${m.nome}</strong>${abaixoMin ? `<span class="badge-alerta" style="margin-left:8px">⚠</span>` : ''}</td>
+        <tr class="${marcado ? 'cat-linha-marcada' : ''}">
+            <td class="cat-col-check"><input type="checkbox"${marcado ? ' checked' : ''} onchange="alternarSelecao('material',${m.id},this)"></td>
+            <td><strong>${escapeHtml(m.nome)}</strong>${abaixoMin ? `<span class="badge-alerta" style="margin-left:8px">⚠</span>` : ''}</td>
             <td style="font-size:12px;color:#555">${escapeHtml(m.referencia || '—')}</td>
-            <td>${m.unidade}</td>
-            <td>R$ ${(m.preco || 0).toFixed(2)}</td>
-            <td style="color:${corEstoque}"><strong>${(m.estoque_atual || 0).toFixed(2)}</strong>
+            <td>${escapeHtml(m.unidade || '')}</td>
+            <td style="white-space:nowrap">R$ ${(m.preco || 0).toFixed(2)}</td>
+            <td style="color:${corEstoque};white-space:nowrap"><strong>${(m.estoque_atual || 0).toFixed(2)}</strong>
                 ${m.min_estoque > 0 ? `<span style="color:#888;font-size:12px"> / mín: ${m.min_estoque}</span>` : ''}
             </td>
             <td style="font-size:12px;color:#555">${escapeHtml(m.fornecedor_nome || '—')}</td>
@@ -3359,15 +3784,17 @@ function renderMateriais() {
             </td>
         </tr>
         <tr id="ajuste-${m.id}" class="ajuste-form" style="display:none">
-            <td colspan="7" class="baixa-form-cell">
-                <strong>${m.nome}</strong> — saldo: <strong>${(m.estoque_atual||0).toFixed(2)} ${m.unidade}</strong> &emsp;
+            <td colspan="8" class="baixa-form-cell">
+                <strong>${escapeHtml(m.nome)}</strong> — saldo: <strong>${(m.estoque_atual||0).toFixed(2)} ${m.unidade}</strong> &emsp;
                 Quantidade (+ entrada / − saída):
                 <input type="number" id="ajuste-qtd-${m.id}" placeholder="Ex: +10 ou -3" step="0.01" style="width:130px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;margin:0 8px">
                 <button class="btn btn-sm" style="background:#005D3B" onclick="confirmarAjuste(${m.id})">Confirmar</button>
                 <button class="btn btn-outline btn-sm" onclick="cancelarAjuste()">Cancelar</button>
             </td>
         </tr>`;
-    }).join('');
+    }).join('') || `<tr><td colspan="8" style="text-align:center;color:#999;padding:24px;">${db.materiais.length ? 'Nenhum material com esses filtros.' : 'Nenhum material cadastrado.'}</td></tr>`;
+
+    atualizarBarraSelecao('material');
 }
 
 function sortMateriais(col) {
@@ -5284,6 +5711,14 @@ function ultimoPrecoTecido(tecidoId) {
     return c?.preco_custo || 0;
 }
 
+// Opções do select de fornecedor do pedido de compra. A última, de valor 0,
+// é o pedido genérico — sem fornecedor, para mandar a vários como orçamento.
+function _pcOpcoesFornecedorHTML(lista) {
+    return '<option value="">— Selecione o fornecedor —</option>' +
+        lista.map(f => `<option value="${f.id}">${escapeHtml(f.nome)}${f.cnpj ? ' · ' + f.cnpj : ''}</option>`).join('') +
+        '<option value="0">— Sem fornecedor (orçamento para vários) —</option>';
+}
+
 function filtrarFornecedorPorCNPJ(val) {
     const busca = val.replace(/\D/g, '');
     const sel = document.getElementById('pc-fornecedor');
@@ -5291,8 +5726,7 @@ function filtrarFornecedorPorCNPJ(val) {
     const filtrados = busca
         ? db.fornecedores.filter(f => (f.cnpj || '').replace(/\D/g, '').includes(busca))
         : db.fornecedores;
-    sel.innerHTML = '<option value="">— Selecione o fornecedor —</option>' +
-        filtrados.map(f => `<option value="${f.id}">${escapeHtml(f.nome)}${f.cnpj ? ' · ' + f.cnpj : ''}</option>`).join('');
+    sel.innerHTML = _pcOpcoesFornecedorHTML(filtrados);
     if (busca && filtrados.length === 1) sel.value = filtrados[0].id;
 }
 
@@ -5404,22 +5838,65 @@ function buscarItemPorCodigoPC(val) {
     }
 }
 
+const PC_SEM_FORNECEDOR = 'Orçamento — sem fornecedor definido';
+
 async function salvarPedidoCompra() {
-    const fornId = parseInt(document.getElementById('pc-fornecedor')?.value);
-    if (!fornId) { await showAlert('Selecione o fornecedor.', '⚠️'); return; }
+    // "" = nada escolhido; "0" = pedido genérico, de propósito sem fornecedor.
+    const bruto = document.getElementById('pc-fornecedor')?.value ?? '';
+    if (bruto === '') { await showAlert('Selecione o fornecedor — ou escolha “Sem fornecedor” para um orçamento.', '⚠️'); return; }
     if (!pcDraftItens.length) { await showAlert('Adicione pelo menos um item ao pedido.', '⚠️'); return; }
+    const fornId = parseInt(bruto, 10) || 0;
     const forn = db.fornecedores.find(f => f.id === fornId);
     db.pedidos_compra.push({
         id:              Date.now(),
         fornecedor_id:   fornId,
-        fornecedor_nome: forn ? forn.nome : '',
+        fornecedor_nome: forn ? forn.nome : (fornId ? '' : PC_SEM_FORNECEDOR),
         data_criacao:    Date.now(),
         status:          'Rascunho',
-        itens:           pcDraftItens.map(i => ({ ...i })),
+        // fornecedor_id/nome do item só servem para agrupar no catálogo.
+        itens:           pcDraftItens.map(({ fornecedor_id, fornecedor_nome, ...i }) => i),
         observacoes:     document.getElementById('pc-obs')?.value.trim() || ''
     });
     pcDraftItens = [];
+
+    const fila = lerFilaPC();
+    if (fila) {
+        fila.restantes.shift();
+        fila.feitos++;
+        if (fila.restantes.length) {
+            localStorage.setItem('sc_pc_fila', JSON.stringify(fila));
+            salvarERecarregar(`Pedido ${fila.feitos} de ${fila.total} salvo. Agora: ${fila.restantes[0].fornecedor_nome}.`);
+        } else {
+            // Acabou a fila: leva para a lista, onde os pedidos estão.
+            localStorage.removeItem('sc_pc_fila');
+            syncDB();
+            toastReload(`${fila.total} pedidos de compra criados!`);
+            window.location.href = 'fornecedores.html?tab=pedidos';
+        }
+        return;
+    }
     salvarERecarregar('Pedido de compra criado!');
+}
+
+// Desiste dos pedidos que ainda faltam na fila.
+async function cancelarFilaPC() {
+    const fila = lerFilaPC();
+    if (!fila) return;
+    if (!await showConfirm(`Cancelar os ${fila.restantes.length} pedido(s) que ainda faltam? Os ${fila.feitos} já salvos continuam.`, '⚠️', 'Cancelar os restantes', 'Voltar')) return;
+    localStorage.removeItem('sc_pc_fila');
+    pcDraftItens = [];
+    salvarERecarregar('Fila de pedidos cancelada.');
+}
+
+// Faixa no topo do formulário indicando em que ponto da fila estamos.
+function renderBannerFilaPC() {
+    const el = document.getElementById('pc-fila-banner');
+    if (!el) return;
+    const fila = lerFilaPC();
+    if (!fila) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.style.display = '';
+    el.innerHTML = `<span>🛒 <strong>Pedido ${fila.feitos + 1} de ${fila.total}</strong> — ${escapeHtml(fila.restantes[0].fornecedor_nome)} (${fila.restantes[0].itens.length} item(ns)). Salve para ir ao próximo.</span>
+        <button class="btn btn-outline btn-sm" onclick="cancelarFilaPC()">Cancelar os restantes</button>`;
 }
 
 function renderListaPedidosCompra() {
@@ -5511,19 +5988,19 @@ function criarPCParaFornecedor(fornId) {
     if (pcFornSel) pcFornSel.value = fornId;
 }
 
+// Com itens marcados no catálogo, qualquer carrinho leva a seleção inteira.
+// Sem nada marcado, leva só o item clicado. Nas telas sem seleção (estoque)
+// o conjunto está sempre vazio, então o comportamento é o de sempre.
 function pedirMaterial(materialId) {
-    const m = db.materiais.find(x => x.id === materialId);
-    if (!m) return;
-    localStorage.setItem('sc_pc_prefill', JSON.stringify({ tipo: 'material', item_id: materialId, item_nome: m.nome, unidade: m.unidade, preco_unit: m.preco || 0 }));
-    window.location.href = 'fornecedores.html?tab=novo';
+    if (catSelecao.material.size) { pedidoDaSelecao('material'); return; }
+    const item = itemParaPedido('material', materialId);
+    if (item) iniciarPedidoDeCompra([item]);
 }
 
 function pedirTecido(tecidoId) {
-    const c = db.catalogo.find(x => x.id === tecidoId);
-    if (!c) return;
-    const preco_unit = ultimoPrecoTecido(tecidoId);
-    localStorage.setItem('sc_pc_prefill', JSON.stringify({ tipo: 'tecido', item_id: tecidoId, item_nome: c.nome, unidade: 'm', preco_unit, subtotal: preco_unit }));
-    window.location.href = 'fornecedores.html?tab=novo';
+    if (catSelecao.tecido.size) { pedidoDaSelecao('tecido'); return; }
+    const item = itemParaPedido('tecido', tecidoId);
+    if (item) iniciarPedidoDeCompra([item]);
 }
 
 function mostrarTabFornecedores(tab) {
@@ -5574,11 +6051,15 @@ function gerarHTMLPedidoCompra(id) {
         </div>
         <div class="pc-section">
             <div class="pc-section-title">Fornecedor</div>
-            <table class="pc-table">
+            ${pc.fornecedor_id ? `<table class="pc-table">
                 <tr><td class="pc-th">Razão Social / Nome</td><td><strong>${forn ? escapeHtml(forn.nome) : escapeHtml(pc.fornecedor_nome)}</strong></td><td class="pc-th" style="width:100px">CNPJ</td><td>${forn ? escapeHtml(forn.cnpj || '—') : '—'}</td></tr>
                 <tr><td class="pc-th">Telefone</td><td>${forn ? escapeHtml(forn.tel || '—') : '—'}</td><td class="pc-th">E-mail</td><td>${forn ? escapeHtml(forn.email || '—') : '—'}</td></tr>
                 ${forn?.end ? `<tr><td class="pc-th">Endereço</td><td colspan="3">${escapeHtml(forn.end)}</td></tr>` : ''}
+            </table>` : `<table class="pc-table">
+                <tr><td class="pc-th">Razão Social / Nome</td><td colspan="3" style="height:26px"></td></tr>
+                <tr><td class="pc-th">Telefone</td><td style="height:26px"></td><td class="pc-th" style="width:100px">E-mail</td><td></td></tr>
             </table>
+            <div style="font-size:11px;color:#888;margin-top:5px">Solicitação de orçamento — preencher os dados do fornecedor.</div>`}
         </div>
         <div class="pc-section">
             <div class="pc-section-title">Itens Solicitados</div>
@@ -6323,19 +6804,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const catFornSel = document.getElementById('cat-fornecedor');
         if (catFornSel) catFornSel.innerHTML = '<option value="">— Sem fornecedor —</option>' +
             db.fornecedores.map(f => `<option value="${f.id}">${f.nome}</option>`).join('');
-        const rows = db.catalogo.map(c => {
-            const disp = estoqueDisponivel(c.id);
-            const dispTxt = db.estoque.some(r=>r.tecido_id==c.id) ? `${disp.toFixed(2)} m` : '—';
-            const alertMin = c.min_estoque>0&&disp<c.min_estoque ? `<span class="badge-alerta" style="margin-left:6px">⚠</span>` : '';
-            const thumb = c.imagem ? `<img src="${c.imagem}" style="width:32px;height:32px;object-fit:cover;border-radius:4px;margin-right:7px;vertical-align:middle;border:1px solid #E0E0E0">` : '';
-            const nomeClick = `<span style="cursor:pointer;color:var(--primary);font-weight:500;text-decoration:underline dotted" onclick="verDetalhesTecido(${c.id})" title="Ver detalhes">${escapeHtml(c.nome)}</span>`;
-            return `<tr><td style="white-space:nowrap">${thumb}${nomeClick}</td><td style="font-size:12px;color:#555">${escapeHtml(c.referencia||'—')}</td><td>R$ ${c.preco.toFixed(2)}</td><td>${(c.largura_rolo||2.80).toFixed(2)} m</td><td>${c.min_estoque?c.min_estoque+' m':'—'}</td><td>${dispTxt}${alertMin}</td><td style="font-size:12px;color:#555">${escapeHtml(c.fornecedor_nome||'—')}</td><td>
-                <button class="btn btn-outline btn-sm" onclick="editarCatalogo(${c.id})" title="Editar">✏️ Editar</button>
-                <button class="btn btn-outline btn-sm" onclick="pedirTecido(${c.id})" title="Criar pedido de compra">🛒</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirCatalogo(${c.id})" title="Remover do catálogo">Remover</button>
-            </td></tr>`;
-        }).join('');
-        document.getElementById('tb-catalogo').innerHTML = rows || '<tr><td colspan="8" style="text-align:center;color:#999;padding:20px;">Catálogo vazio.</td></tr>';
+        renderCatalogoTecidos();
     }
 
     if (document.getElementById('tb-clientes')) {
@@ -6480,29 +6949,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (document.getElementById('tb-fornecedores')) {
         const pcFornSel = document.getElementById('pc-fornecedor');
-        if (pcFornSel) pcFornSel.innerHTML = '<option value="">— Selecione o fornecedor —</option>' +
-            db.fornecedores.map(f => `<option value="${f.id}">${f.nome}</option>`).join('');
+        if (pcFornSel) pcFornSel.innerHTML = _pcOpcoesFornecedorHTML(db.fornecedores);
         const filtroFornEl = document.getElementById('filtro-pc-forn');
         if (filtroFornEl) filtroFornEl.innerHTML = '<option value="">Todos os fornecedores</option>' +
             db.fornecedores.map(f => `<option value="${f.id}">${f.nome}</option>`).join('');
         const urlTab = new URLSearchParams(window.location.search).get('tab');
+
+        // Fila de "um pedido por fornecedor": cada recarga carrega o próximo.
+        const fila = lerFilaPC();
+        if (fila && !localStorage.getItem('sc_pc_prefill')) {
+            const g = fila.restantes[0];
+            localStorage.setItem('sc_pc_prefill', JSON.stringify(g.itens));
+            localStorage.setItem('sc_pc_prefill_forn', String(g.fornecedor_id || 0));
+        }
+
         const prefillItem = localStorage.getItem('sc_pc_prefill');
         if (urlTab === 'novo' || prefillItem) {
             mostrarTabFornecedores('novo');
             if (prefillItem) {
                 try {
-                    const pi = JSON.parse(prefillItem);
-                    pcDraftItens = [{ ...pi, quantidade: 1, subtotal: pi.preco_unit }];
+                    const bruto = JSON.parse(prefillItem);
+                    // Formato antigo: um item só, fora de lista.
+                    const itens = Array.isArray(bruto) ? bruto : [bruto];
+                    pcDraftItens = itens.map(({ fornecedor_id, fornecedor_nome, ...i }) => {
+                        const quantidade = i.quantidade || 1;
+                        return { ...i, quantidade, subtotal: quantidade * (i.preco_unit || 0) };
+                    });
                     renderItensPCDraft();
                     const tipoSel = document.getElementById('pc-item-tipo');
-                    if (tipoSel) { tipoSel.value = pi.tipo; atualizarSelectItemPC(); }
+                    if (tipoSel && itens[0]) { tipoSel.value = itens[0].tipo; atualizarSelectItemPC(); }
                 } catch {}
                 localStorage.removeItem('sc_pc_prefill');
             }
             const prefillForn = localStorage.getItem('sc_pc_prefill_forn');
-            if (prefillForn && pcFornSel) { pcFornSel.value = prefillForn; localStorage.removeItem('sc_pc_prefill_forn'); }
+            if (prefillForn !== null && pcFornSel) { pcFornSel.value = prefillForn; localStorage.removeItem('sc_pc_prefill_forn'); }
+            renderBannerFilaPC();
         } else {
-            mostrarTabFornecedores('lista');
+            mostrarTabFornecedores(urlTab === 'pedidos' ? 'pedidos' : 'lista');
         }
     }
 
@@ -6829,13 +7312,7 @@ function renderEstoqueMateriais() {
         tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;padding:24px">Nenhum material cadastrado. <a href="catalogo.html">Cadastre em Catálogo</a>.</td></tr>';
         return;
     }
-    let lista = [...db.materiais];
-    const { col: mc, dir: md } = matSortState;
-    lista.sort((a,b) => {
-        const va = mc==='nome'?a.nome.toLowerCase():mc==='preco'?(a.preco||0):mc==='estoque'?(a.estoque_atual||0):0;
-        const vb = mc==='nome'?b.nome.toLowerCase():mc==='preco'?(b.preco||0):mc==='estoque'?(b.estoque_atual||0):0;
-        return va<vb?-md:va>vb?md:0;
-    });
+    const lista = ordenarLista(db.materiais, matSortState, valorOrdenacaoMaterial);
     tb.innerHTML = lista.map(m => {
         const abaixoMin = m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque;
         const cor = abaixoMin ? '#F43927' : '#005D3B';

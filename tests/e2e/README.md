@@ -43,7 +43,7 @@ TESTDIR=<projeto>/tests/e2e \
   npx playwright test --config=repo.config.js
 ```
 
-Esperado: **82 passando**.
+Esperado: **105 passando**.
 
 ## Sessão autenticada é obrigatória
 
@@ -83,5 +83,6 @@ navegar. Ele semeia um usuário com papel 1 (Administrador, que vem de
 | `passo-4-conferencia.spec.js` | Agrupamento, gravação com markup, estoque intacto, desfazer, bloqueio por duplicidade, edição de custo, desmarcar linha |
 | `passo-4-duplicados.spec.js` | Painel de repetidos, sufixo `D`/`DD`, não colidir com código já existente, descartar preservando a primeira, gravar depois de resolver, e não destruir edições anteriores |
 | `fase2-pdf-e-cor.spec.js` | PDF real virando uma aba por página, a página do Book 10 dando os mesmos 38 itens da planilha, modo preço por cor gerando 235 materiais sem repetir código, seleção manual de cabeçalho, e a planilha continuando a funcionar |
+| `catalogo-selecao.spec.js` | Ordenação por coluna nas duas tabelas do catálogo, os filtros de nome/código, fornecedor, preço e largura, marcar itens e a marcação sobrevivendo a ordenar e filtrar, exclusão em massa respeitando o tecido em uso, e o pedido de compra vindo da seleção nos quatro caminhos (mesmo fornecedor, um por fornecedor, tudo para um, genérico) |
 
-Esperado no total: **82 passando**.
+Esperado no total: **105 passando**.

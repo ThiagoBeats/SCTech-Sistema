@@ -1193,3 +1193,55 @@ html[data-theme="dark"] .imp-mapa-scroll { background: #16181B; border-color: #2
 html[data-theme="dark"] .imp-mapa-tabela thead th,
 html[data-theme="dark"] .imp-col-linha { background: #1D2024; border-color: #282A2E; }
 html[data-theme="dark"] .imp-mapa-tabela tbody tr:nth-child(even) { background: rgba(255,255,255,.02); }
+
+/* ═══ Catálogo: filtros, seleção em massa e fila de pedidos ═══ */
+
+.cat-filtros {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding-bottom: 12px; margin-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+}
+.cat-filtros input, .cat-filtros select {
+    padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px;
+    font-size: var(--fs-texto-sm); background: var(--card); color: var(--dark);
+}
+.cat-f-busca { min-width: 190px; flex: 1 1 190px; max-width: 280px; }
+.cat-f-faixa {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: var(--fs-label); color: var(--muted); white-space: nowrap;
+}
+.cat-f-faixa input { width: 78px; }
+.cat-f-contagem { margin-left: auto; font-size: var(--fs-label); color: var(--muted); white-space: nowrap; }
+
+.cat-selecao {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding: 9px 12px; margin-bottom: 12px; border-radius: 6px;
+    background: rgba(201, 247, 117, .22); border: 1px solid var(--primary);
+    font-size: var(--fs-texto-sm);
+}
+.cat-selecao strong { margin-right: 4px; }
+
+.cat-col-check { width: 32px; text-align: center; padding-left: 6px; padding-right: 6px; }
+.cat-col-check input { cursor: pointer; width: 15px; height: 15px; }
+tr.cat-linha-marcada > td { background: rgba(201, 247, 117, .16); }
+
+.sc-modal-btns-col { flex-direction: column; align-items: stretch; }
+.sc-modal-btns-col .btn { width: 100%; }
+.sc-modal-btns-col .sc-modal-cancelar { margin-top: 4px; }
+
+.pc-fila-banner {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    padding: 9px 12px; margin-bottom: 14px; border-radius: 6px;
+    background: rgba(242, 201, 36, .16); border: 1px solid #F2C924;
+    font-size: var(--fs-texto-sm);
+}
+.pc-fila-banner span { flex: 1; min-width: 200px; }
+
+html[data-theme="dark"] .cat-selecao { background: rgba(201, 247, 117, .10); }
+html[data-theme="dark"] tr.cat-linha-marcada > td { background: rgba(201, 247, 117, .07); }
+html[data-theme="dark"] .pc-fila-banner { background: rgba(242, 201, 36, .10); }
+
+/* Os cabeçalhos do catálogo podem quebrar linha: com .th-sort-mat em nowrap
+   e mais a coluna de marcar, a tabela passava da largura do card. */
+#tabela-tecidos th.th-sort-mat,
+#tabela-materiais th.th-sort-mat { white-space: normal; }

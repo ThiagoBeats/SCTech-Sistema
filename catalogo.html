@@ -62,16 +62,35 @@
                 <button class="btn" onclick="salvarCatalogo()">Salvar no Catálogo</button>
             </div>
             <div class="card">
-                <table>
+                <div class="cat-filtros">
+                    <input type="text" id="f-tec-busca" class="cat-f-busca" placeholder="🔍 Nome ou código" oninput="renderCatalogoTecidos()">
+                    <select id="f-tec-forn" onchange="renderCatalogoTecidos()"><option value="">Todos os fornecedores</option></select>
+                    <select id="f-tec-largura" onchange="renderCatalogoTecidos()"><option value="">Todas as larguras</option></select>
+                    <span class="cat-f-faixa">R$
+                        <input type="number" id="f-tec-pmin" placeholder="de" step="0.01" min="0" oninput="renderCatalogoTecidos()">
+                        <span>a</span>
+                        <input type="number" id="f-tec-pmax" placeholder="até" step="0.01" min="0" oninput="renderCatalogoTecidos()">
+                    </span>
+                    <button class="btn btn-outline btn-sm" onclick="limparFiltrosTecidos()">Limpar</button>
+                    <span class="cat-f-contagem" id="f-tec-contagem"></span>
+                </div>
+                <div class="cat-selecao" id="sel-tec-barra" style="display:none">
+                    <strong id="sel-tec-qtd"></strong>
+                    <button class="btn btn-sm" onclick="pedidoDaSelecao('tecido')">🛒 Pedido de compra</button>
+                    <button class="btn btn-sm btn-danger" onclick="excluirSelecionados('tecido')">🗑️ Excluir marcados</button>
+                    <button class="btn btn-outline btn-sm" onclick="limparSelecao('tecido')">Limpar seleção</button>
+                </div>
+                <table id="tabela-tecidos">
                     <thead>
                         <tr>
-                            <th>Tecido</th>
-                            <th>Referência</th>
-                            <th>Preço (R$/m)</th>
-                            <th>Largura do Rolo</th>
-                            <th>Estoque Mín.</th>
-                            <th>Em Estoque</th>
-                            <th>Fornecedor</th>
+                            <th class="cat-col-check"><input type="checkbox" id="chk-tec-todos" onchange="marcarTodosVisiveis('tecido',this.checked)" title="Marcar os visíveis"></th>
+                            <th class="th-sort-mat" data-col="nome"       onclick="sortTecidos('nome')">Tecido <span class="sort-icon">⇅</span></th>
+                            <th class="th-sort-mat" data-col="referencia" onclick="sortTecidos('referencia')">Referência <span class="sort-icon">⇅</span></th>
+                            <th class="th-sort-mat" data-col="preco"      onclick="sortTecidos('preco')">Preço (R$/m) <span class="sort-icon">⇅</span></th>
+                            <th class="th-sort-mat" data-col="largura"    onclick="sortTecidos('largura')">Largura do Rolo <span class="sort-icon">⇅</span></th>
+                            <th class="th-sort-mat" data-col="minimo"     onclick="sortTecidos('minimo')">Estoque Mín. <span class="sort-icon">⇅</span></th>
+                            <th class="th-sort-mat" data-col="estoque"    onclick="sortTecidos('estoque')">Em Estoque <span class="sort-icon">⇅</span></th>
+                            <th class="th-sort-mat" data-col="fornecedor" onclick="sortTecidos('fornecedor')">Fornecedor <span class="sort-icon">⇅</span></th>
                             <th>Ação</th>
                         </tr>
                     </thead>
@@ -126,14 +145,32 @@
             </div>
 
             <div class="card">
-                <table>
+                <div class="cat-filtros">
+                    <input type="text" id="f-mat-busca" class="cat-f-busca" placeholder="🔍 Nome ou código" oninput="renderMateriais()">
+                    <select id="f-mat-forn" onchange="renderMateriais()"><option value="">Todos os fornecedores</option></select>
+                    <span class="cat-f-faixa">R$
+                        <input type="number" id="f-mat-pmin" placeholder="de" step="0.01" min="0" oninput="renderMateriais()">
+                        <span>a</span>
+                        <input type="number" id="f-mat-pmax" placeholder="até" step="0.01" min="0" oninput="renderMateriais()">
+                    </span>
+                    <button class="btn btn-outline btn-sm" onclick="limparFiltrosMateriais()">Limpar</button>
+                    <span class="cat-f-contagem" id="f-mat-contagem"></span>
+                </div>
+                <div class="cat-selecao" id="sel-mat-barra" style="display:none">
+                    <strong id="sel-mat-qtd"></strong>
+                    <button class="btn btn-sm" onclick="pedidoDaSelecao('material')">🛒 Pedido de compra</button>
+                    <button class="btn btn-sm btn-danger" onclick="excluirSelecionados('material')">🗑️ Excluir marcados</button>
+                    <button class="btn btn-outline btn-sm" onclick="limparSelecao('material')">Limpar seleção</button>
+                </div>
+                <table id="tabela-materiais">
                     <thead><tr>
-                        <th class="th-sort-mat" onclick="sortMateriais('nome')">Material <span class="sort-icon">⇅</span></th>
-                        <th>Referência</th>
-                        <th>Unidade</th>
-                        <th class="th-sort-mat" onclick="sortMateriais('preco')">Preço Unit. <span class="sort-icon">⇅</span></th>
-                        <th class="th-sort-mat" onclick="sortMateriais('estoque')">Estoque Atual <span class="sort-icon">⇅</span></th>
-                        <th>Fornecedor</th>
+                        <th class="cat-col-check"><input type="checkbox" id="chk-mat-todos" onchange="marcarTodosVisiveis('material',this.checked)" title="Marcar os visíveis"></th>
+                        <th class="th-sort-mat" data-col="nome"       onclick="sortMateriais('nome')">Material <span class="sort-icon">⇅</span></th>
+                        <th class="th-sort-mat" data-col="referencia" onclick="sortMateriais('referencia')">Referência <span class="sort-icon">⇅</span></th>
+                        <th class="th-sort-mat" data-col="unidade"    onclick="sortMateriais('unidade')">Unidade <span class="sort-icon">⇅</span></th>
+                        <th class="th-sort-mat" data-col="preco"      onclick="sortMateriais('preco')">Preço Unit. <span class="sort-icon">⇅</span></th>
+                        <th class="th-sort-mat" data-col="estoque"    onclick="sortMateriais('estoque')">Estoque Atual <span class="sort-icon">⇅</span></th>
+                        <th class="th-sort-mat" data-col="fornecedor" onclick="sortMateriais('fornecedor')">Fornecedor <span class="sort-icon">⇅</span></th>
                         <th>Ações</th>
                     </tr></thead>
                     <tbody id="tb-materiais"></tbody>
