@@ -126,12 +126,17 @@ test('o passo 3 barra layout sem codigo, nome ou preco e nomeia as abas', async 
     await expect(page.locator('#imp-corpo')).toContainText('Continuar');
 
     await page.click('#imp-corpo button:has-text("Continuar")');
-    const msg = page.locator('#sc-modal-msg');
-    await expect(msg).toBeVisible();
-    const texto = await msg.textContent();
+
+    // O bloqueio virou painel fixo no topo, no lugar de uma janela que some.
+    expect(await page.evaluate(() => _impEstado.passo), 'nao pode avancar').toBe(3);
+    const painel = page.locator('#imp-corpo div[onclick^="_impIrParaLayout"]');
+    expect(await painel.count(), 'o painel deveria listar os layouts incompletos').toBeGreaterThan(0);
+
+    const texto = await page.locator('#imp-corpo').innerText();
     // precisa nomear ao menos uma aba problematica e sugerir Ignorar
     expect(texto).toMatch(/Ignorar/i);
     expect(texto).toMatch(/Motorizado|Montado/i);
+    expect(texto).toMatch(/Mapeamentos incompletos/i);
 });
 
 // Na Fase 1 as abas de preco por cor nao tem coluna de preco mapeavel (as

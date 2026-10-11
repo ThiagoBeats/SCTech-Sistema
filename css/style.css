@@ -444,7 +444,18 @@ td:last-child { white-space: nowrap; }
 
 /* ── ESTOQUE ─────────────────────────────────────────────────────── */
 .alertas-ponto-pedido { background: #FEF4F2; border: 1px solid #F79B90; border-radius: 6px; padding: 12px 16px; margin-bottom: 16px; display: none; }
-.alerta-item { font-size: 14px; color: #B3160A; padding: 3px 0; }
+.alerta-item { font-size: 13px; color: #B3160A; padding: 3px 0; }
+.alertas-cabecalho {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    font-size: 13px; font-weight: 700; color: #B3160A;
+}
+.alertas-toggle {
+    background: none; border: 1px solid #F79B90; color: #B3160A;
+    font-size: 11px; font-weight: 700; padding: 3px 10px;
+    border-radius: var(--radius-pill); cursor: pointer; white-space: nowrap;
+}
+.alertas-toggle:hover { background: #FBE3DF; }
+.alertas-corpo { margin-top: 6px; }
 .estoque-grupo { background: #F1F1F1; }
 .estoque-grupo td { padding: 10px 14px; font-size: 14px; border-bottom: 2px solid var(--border); }
 .badge-alerta { background: #FDE8E5; color: #B3160A; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; margin-left: 8px; }
@@ -1163,9 +1174,15 @@ html[data-theme="dark"] .consulta-sug-item + .consulta-sug-item { border-color: 
 .imp-mapa-tabela td { padding: 5px 10px; white-space: nowrap; }
 .imp-mapa-tabela tbody tr:nth-child(even) { background: rgba(0,0,0,.015); }
 
+/* caixa por linha: desmarcar tira a linha da importacao */
+.imp-col-check { width: 34px; min-width: 34px; text-align: center; background: var(--light); }
+.imp-mapa-tabela thead th.imp-col-check { z-index: 3; }
+.imp-mapa-tabela tbody tr.imp-linha-fora td { opacity: .42; text-decoration: line-through; }
+.imp-mapa-tabela tbody tr.imp-linha-fora td.imp-col-check { opacity: 1; text-decoration: none; }
+
 /* numero da linha da planilha, para o usuario se localizar ao rolar */
 .imp-col-linha {
-    position: sticky; left: 0; z-index: 1;
+    position: sticky; left: 34px; z-index: 1;
     width: 54px; min-width: 54px; text-align: right;
     font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums;
     background: var(--light);

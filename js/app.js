@@ -3046,6 +3046,11 @@ function autoFillEntradaTecido() {
         if (metrosEl) metrosEl.value = ultimoRolo.metragem_inicial;
     }
     if (tec) {
+        // Escolher o tecido pelo nome preenche a referencia com o codigo dele,
+        // para nao ser preciso saber o codigo de cor. So preenche se o campo
+        // estiver VAZIO: se o usuario ja digitou um banho de cor, ele manda.
+        const refEl = document.getElementById('est-lote');
+        if (refEl && !refEl.value.trim() && tec.referencia) refEl.value = tec.referencia;
         const custoEl = document.getElementById('est-preco-custo');
         if (custoEl && tec.preco_custo) custoEl.value = tec.preco_custo;
         const markupEl = document.getElementById('est-markup');
@@ -3111,6 +3116,25 @@ async function removerRolo(id) {
     salvarERecarregar('Rolo removido.');
 }
 
+// Um tecido "já teve entrada" se existe rolo dele — mesmo zerado, porque rolo
+// esgotado continua sendo histórico de compra — ou se há movimento de entrada
+// registrado em nome dele.
+function teveEntradaDeTecido(tecidoId) {
+    if ((db.estoque || []).some(r => r.tecido_id == tecidoId)) return true;
+    const tec = (db.catalogo || []).find(c => c.id == tecidoId);
+    if (!tec) return false;
+    return (db.movimentos || []).some(mv =>
+        mv.tipo === 'Entrada' && mv.item_tipo === 'tecido' && mv.item_nome === tec.nome);
+}
+
+// Recolhe ou mostra a lista de alertas de estoque mínimo. A escolha fica
+// guardada, senão o usuário teria de recolher de novo a cada visita.
+function alternarAlertasTecido() {
+    const atual = localStorage.getItem('sc_alertas_tecido_recolhidos') === '1';
+    localStorage.setItem('sc_alertas_tecido_recolhidos', atual ? '0' : '1');
+    renderEstoque();
+}
+
 // --- ESTOQUE DE TECIDO: renderização ---
 function renderEstoque() {
     const tb = document.getElementById('tb-estoque');
@@ -3118,12 +3142,29 @@ function renderEstoque() {
 
     const alertBox = document.getElementById('alertas-ponto-pedido');
     if (alertBox) {
-        const criticos = db.catalogo.filter(c => c.min_estoque > 0 && estoqueDisponivel(c.id) < c.min_estoque);
+        // Só alerta tecido que JÁ TEVE entrada. Um tecido recém-cadastrado e
+        // nunca comprado não está "abaixo do mínimo" — está apenas por usar, e
+        // avisar sobre ele enche a tela de ruído.
+        const criticos = db.catalogo.filter(c =>
+            c.min_estoque > 0 && teveEntradaDeTecido(c.id) && estoqueDisponivel(c.id) < c.min_estoque);
         if (criticos.length) {
-            alertBox.innerHTML = criticos.map(c =>
-                `<div class="alerta-item">⚠ <strong>${c.nome}</strong>: ${estoqueDisponivel(c.id).toFixed(2)} m disponível — mínimo: ${c.min_estoque} m</div>`
-            ).join('');
+            const recolhido = localStorage.getItem('sc_alertas_tecido_recolhidos') === '1';
+            alertBox.innerHTML = `
+                <div class="alertas-cabecalho">
+                    <span>⚠ ${criticos.length} tecido(s) abaixo do estoque mínimo</span>
+                    <button type="button" class="alertas-toggle" onclick="alternarAlertasTecido()">
+                        ${recolhido ? 'Mostrar' : 'Recolher'}
+                    </button>
+                </div>
+                <div class="alertas-corpo" ${recolhido ? 'style="display:none"' : ''}>
+                    ${criticos.map(c =>
+                        `<div class="alerta-item">⚠ <strong>${escapeHtml(c.nome)}</strong>: ${estoqueDisponivel(c.id).toFixed(2)} m disponível — mínimo: ${c.min_estoque} m</div>`
+                    ).join('')}
+                </div>`;
             alertBox.style.display = 'block';
+        } else {
+            alertBox.innerHTML = '';
+            alertBox.style.display = 'none';
         }
     }
 

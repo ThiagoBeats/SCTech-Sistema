@@ -104,6 +104,8 @@ const _impEstado = {
     cores: {},           // { [assinatura]: [indices de coluna que sao cor] }
     grupos: null,        // saida de ImportadorCore.classificar
     busca: '',           // filtro por codigo/nome no passo 4 — so visual
+    excluidas: {},       // { [nomeAba]: [indices de linha tirados no passo 3] }
+    mostrarProblemas: false, // painel de layouts com problema, ligado ao tentar Continuar
     passo: 1
 };
 
@@ -120,6 +122,8 @@ function _impResetar() {
     _impEstado.cores = {};
     _impEstado.grupos = null;
     _impEstado.busca = '';
+    _impEstado.excluidas = {};
+    _impEstado.mostrarProblemas = false;
     _impEstado.passo = 1;
 }
 
@@ -477,6 +481,47 @@ const _IMP_PAPEIS = [
 // "Preço" e "Preço por peça" sao alternativas: o custo sai de uma ou de outra.
 const _IMP_PAPEIS_PRECO = ['preco', 'preco_peca'];
 
+// ── Linhas tiradas no passo 3 ───────────────────────────────────────────────
+// Desmarcar uma linha aqui a retira da importacao de vez: ela nao vira item e
+// nao aparece no passo 4. A exclusao e por ABA + indice de linha, nunca por
+// layout — um layout cobre varias abas, e a linha 5 de uma nao e a 5 da outra.
+
+function _impEscapaAspas(s) {
+    return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function _impLinhaExcluida(aba, indice) {
+    return (_impEstado.excluidas[aba] || []).includes(indice);
+}
+
+function _impAlternarLinha(aba, indice) {
+    const atuais = _impEstado.excluidas[aba] || [];
+    _impEstado.excluidas[aba] = atuais.includes(indice)
+        ? atuais.filter(i => i !== indice)
+        : atuais.concat(indice);
+    _impRenderPasso(3);
+}
+
+function _impTodasMarcadas(aba, inicio, quantas) {
+    const fora = _impEstado.excluidas[aba] || [];
+    for (let i = inicio; i < inicio + quantas; i++) if (fora.includes(i)) return false;
+    return true;
+}
+
+function _impAlternarTodasLinhas(aba, inicio, quantas, marcar) {
+    const fora = new Set(_impEstado.excluidas[aba] || []);
+    for (let i = inicio; i < inicio + quantas; i++) {
+        if (marcar) fora.delete(i); else fora.add(i);
+    }
+    _impEstado.excluidas[aba] = [...fora];
+    _impRenderPasso(3);
+}
+
+// Tira da lista os itens cujas linhas o usuario desmarcou no passo 3.
+function _impSemExcluidas(itens) {
+    return itens.filter(i => !_impLinhaExcluida(i.aba, i.linha));
+}
+
 // Sem cabecalho detectado nao ha rotulo de coluna nenhum para mapear — gera
 // rotulos posicionais (Coluna 1, Coluna 2...) a partir da linha de dados mais
 // larga, so para o usuario ter o que escolher no passo 3. Vale para qualquer
@@ -564,7 +609,11 @@ function _impPasso3HTML() {
                 </label>
             </div>`;
 
-        const cabecalhos = `<th class="imp-col-linha">Linha</th>` + layout.colunas.map((rotulo, ci) => {
+        const abaPreview = layout.abas[0];
+        const cabecalhos = `<th class="imp-col-check"><input type="checkbox" title="Marcar ou desmarcar todas"
+                ${_impTodasMarcadas(abaPreview, inicio, amostra.length) ? 'checked' : ''}
+                onchange="_impAlternarTodasLinhas('${_impEscapaAspas(abaPreview)}', ${inicio}, ${amostra.length}, this.checked)"></th>`
+            + `<th class="imp-col-linha">Linha</th>` + layout.colunas.map((rotulo, ci) => {
             const atual = papelDaColuna(ci);
             const opcoes = papeis.map(p => `<option value="${p.valor}" ${p.valor === atual ? 'selected' : ''}>${p.rotulo}</option>`).join('');
             return `<th style="min-width:130px">
@@ -573,30 +622,38 @@ function _impPasso3HTML() {
             </th>`;
         }).join('');
 
-        const corpo = amostra.map((linha, idx) =>
-            `<tr><td class="imp-col-linha">${inicio + idx + 1}</td>`
-            + layout.colunas.map((_, ci) => `<td style="font-size:12px">${escapeHtml(String(linha[ci] === undefined ? '' : linha[ci]))}</td>`).join('')
-            + '</tr>'
-        ).join('');
+        const corpo = amostra.map((linha, idx) => {
+            const iLinha = inicio + idx;
+            const fora = _impLinhaExcluida(abaPreview, iLinha);
+            return `<tr class="${fora ? 'imp-linha-fora' : ''}">`
+                + `<td class="imp-col-check"><input type="checkbox" ${fora ? '' : 'checked'}
+                    onchange="_impAlternarLinha('${_impEscapaAspas(abaPreview)}', ${iLinha})"></td>`
+                + `<td class="imp-col-linha">${iLinha + 1}</td>`
+                + layout.colunas.map((_, ci) => `<td style="font-size:12px">${escapeHtml(String(linha[ci] === undefined ? '' : linha[ci]))}</td>`).join('')
+                + '</tr>';
+        }).join('');
 
-        const qtd = modoCor
-            ? C.expandirPorCor({ linhas: dados, cabecalhoIndice: layout.cabecalhoIndice, mapa, colunasCor: coresColunas, colunas: layout.colunas, tipo: layout.tipo, aba: layout.abas[0] }).length
-            : C.montarItens({ linhas: dados, cabecalhoIndice: layout.cabecalhoIndice, mapa, tipo: layout.tipo, aba: layout.abas[0] }).length;
+        const itensDaPreview = modoCor
+            ? C.expandirPorCor({ linhas: dados, cabecalhoIndice: layout.cabecalhoIndice, mapa, colunasCor: coresColunas, colunas: layout.colunas, tipo: layout.tipo, aba: abaPreview })
+            : C.montarItens({ linhas: dados, cabecalhoIndice: layout.cabecalhoIndice, mapa, tipo: layout.tipo, aba: abaPreview });
+        const qtd = _impSemExcluidas(itensDaPreview).length;
+        const tirados = itensDaPreview.length - qtd;
 
-        return `<div class="card" style="margin-bottom:14px">
+        return `<div class="card" style="margin-bottom:14px" id="imp-layout-${li}">
             <h4 style="margin:0 0 4px;color:var(--dark)">${layout.tipo === 'tecido' ? 'Tecidos' : 'Materiais'} — ${layout.abas.length} aba(s)</h4>
             <p style="font-size:12px;color:var(--muted);margin:0 0 10px">${escapeHtml(layout.abas.join(', '))}</p>
             ${controles}
             <div class="imp-mapa-scroll"><table class="imp-mapa-tabela"><thead><tr>${cabecalhos}</tr></thead><tbody>${corpo}</tbody></table></div>
             <p style="font-size:12px;color:var(--muted);margin:8px 0 0">
                 ${amostra.length} linha(s) de <strong>${escapeHtml(layout.abas[0])}</strong>${layout.abas.length > 1 ? ` — o mesmo mapeamento vale para as outras ${layout.abas.length - 1} aba(s)` : ''}.
-                Dá ${qtd} item(ns) com o mapeamento atual.
+                Dá ${qtd} item(ns) com o mapeamento atual${tirados ? ` — ${tirados} linha(s) desmarcada(s) ficam de fora` : ''}.
             </p>
         </div>`;
     }).join('');
 
     return `
-    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Diga o que é cada coluna. Abas com o mesmo cabeçalho são mapeadas juntas.</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Diga o que é cada coluna — a escolha vale para a coluna inteira. Abas com o mesmo cabeçalho são mapeadas juntas. Desmarque as linhas que não quiser importar.</p>
+    ${_impPainelProblemasHTML()}
     ${blocos}
     <div style="display:flex;justify-content:space-between;margin-top:8px">
         <button class="btn btn-outline" onclick="_impRenderPasso(2)">Voltar</button>
@@ -645,6 +702,60 @@ function _impTrocarPapel(indiceLayout, indiceColuna, papel) {
     _impRenderPasso(3);
 }
 
+// O que falta num layout para ele poder ser importado. Devolve lista vazia
+// quando esta tudo certo. Usada pelo painel de problemas e pelo Continuar.
+function _impFaltasDoLayout(layout) {
+    const mapa = _impMapaDoLayout(layout);
+    const emCor = (_impEstado.cores[layout.assinatura] || []).length > 0;
+    const faltas = [];
+    if (mapa.codigo < 0) faltas.push('Código');
+    if (mapa.nome < 0) faltas.push('Nome');
+    // Qualquer um dos dois papeis de preco serve: o custo sai de um ou do outro.
+    if (!emCor && !(mapa.preco >= 0 || mapa.preco_peca >= 0)) faltas.push('Preço (ou Preço por peça)');
+    return faltas;
+}
+
+function _impLayoutsComProblema() {
+    return _impLayoutsDistintos()
+        .map((layout, li) => ({ li, layout, faltas: _impFaltasDoLayout(layout) }))
+        .filter(x => x.faltas.length);
+}
+
+// Painel no topo do passo 3 com cada layout que ainda nao da para importar.
+// So aparece depois de o usuario tentar Continuar, para nao poluir a tela na
+// primeira chegada, quando nada foi mapeado ainda. Some sozinho ao resolver.
+function _impPainelProblemasHTML() {
+    if (!_impEstado.mostrarProblemas) return '';
+    const problemas = _impLayoutsComProblema();
+    if (!problemas.length) return '';
+    const linhas = problemas.map((p, i) => {
+        const divisor = i > 0 ? 'border-top:1px solid var(--border)' : '';
+        const semCabecalho = p.layout.cabecalhoIndice < 0;
+        return `<div style="padding:8px 2px;cursor:pointer;${divisor}" onclick="_impIrParaLayout(${p.li})">
+            <div style="font-size:13px;color:var(--dark)">
+                <strong>${escapeHtml(p.layout.abas.join(', '))}</strong> — falta marcar: ${escapeHtml(p.faltas.join(', '))}
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">
+                ${semCabecalho ? 'Sem cabeçalho reconhecível. Escolha a linha do cabeçalho ou marque as colunas na mão.' : 'Clique para ir até esta tabela e ajustar.'}
+            </div>
+        </div>`;
+    }).join('');
+    return `<div class="card" style="margin-bottom:14px;border-left:4px solid var(--danger)">
+        <h4 style="margin:0 0 4px;color:var(--dark)">Mapeamentos incompletos <span style="color:var(--muted);font-weight:400">(${problemas.length})</span></h4>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Clique num item para ir até a tabela e corrigir ali mesmo. Se a aba não interessa, volte ao passo 2 e marque como "Ignorar".</p>
+        <div>${linhas}</div>
+    </div>`;
+}
+
+// Rola ate o bloco do layout e o destaca por 2 segundos.
+function _impIrParaLayout(indiceLayout) {
+    const el = document.getElementById('imp-layout-' + indiceLayout);
+    if (!el) return;
+    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    el.classList.add('imp-linha-destaque');
+    setTimeout(() => el.classList.remove('imp-linha-destaque'), 2000);
+}
+
 async function _impConcluirPasso3() {
     const layouts = _impLayoutsDistintos();
     for (const layout of layouts) {
@@ -653,19 +764,18 @@ async function _impConcluirPasso3() {
         // Qualquer um dos dois papeis de preco serve: o custo sai de um ou do outro.
         const temPreco = mapa.preco >= 0 || mapa.preco_peca >= 0;
         if (mapa.codigo < 0 || mapa.nome < 0 || (!emCor && !temPreco)) {
-            // Abas sem cabecalho reconhecivel caem aqui: a saida prevista e
-            // marca-las como "Ignorar" no passo 2 (ou, na Fase 2, apontar a
-            // linha do cabecalho na mao).
-            const semCabecalho = layout.cabecalhoIndice < 0;
-            await showAlert(
-                `Não dá para mapear ${semCabecalho ? 'estas abas, que não têm cabeçalho reconhecível' : 'este layout'}:\n\n`
-                + layout.abas.join(', ')
-                + `\n\nMarque ao menos as colunas de Código, Nome e uma de preço — "Preço" ou "Preço por peça" (ou marque as colunas de Cor). Se preferir, volte ao passo 2 e marque estas abas como "Ignorar".`,
-                '⚠️');
+            // Em vez de uma janela que some ao fechar, a lista de pendencias
+            // fica fixa no topo do passo 3, clicavel, levando ate a tabela.
+            _impEstado.mostrarProblemas = true;
+            _impRenderPasso(3);
+            const corpo = document.getElementById('imp-corpo');
+            if (corpo) corpo.scrollTop = 0;
+            toast('Há mapeamentos incompletos — veja a lista no topo da tela.', 'warning', 5000);
             return;
         }
         _impEstado.layouts[layout.assinatura] = { mapa, cabecalhoIndice: layout.cabecalhoIndice };
     }
+    _impEstado.mostrarProblemas = false;
     _impRenderPasso(4);
 }
 
@@ -695,7 +805,9 @@ function _impColetarItens() {
             itens.push(...C.montarItens({ linhas: dados, cabecalhoIndice: layout.cabecalhoIndice, mapa: layout.mapa, tipo, aba }));
         }
     });
-    return itens;
+    // As linhas desmarcadas no passo 3 saem da importacao de vez: nao viram
+    // item, nao aparecem na conferencia e nao entram em contagem nenhuma.
+    return _impSemExcluidas(itens);
 }
 
 function _impPrepararConferencia() {
