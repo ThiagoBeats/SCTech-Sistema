@@ -290,6 +290,51 @@ test('exclui varios materiais e limpa os kits', async ({ page }) => {
     expect(r.kit, 'o material removido sai do kit').toEqual([13]);
 });
 
+test('lista longa de exclusao rola por dentro e nao esconde os botoes', async ({ page }) => {
+    const muitos = Array.from({ length: 60 }, (_, i) => ({
+        id: 100 + i, referencia: 'M-' + i, nome: 'MATERIAL DE TESTE ' + i,
+        unidade: 'un', preco: 10, min_estoque: 0, estoque_atual: 1,
+        fornecedor_id: 7, fornecedor_nome: 'RC Tecidos'
+    }));
+    await abrirCatalogo(page, { mat: muitos });
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.click('button[data-tab="cat-materiais"]');
+    await page.check('#chk-mat-todos');
+    await page.click('#sel-mat-barra button:has-text("Excluir marcados")');
+
+    const m = await page.evaluate(() => {
+        const msg  = document.getElementById('sc-modal-msg');
+        const box  = document.querySelector('.sc-modal-box');
+        const btns = document.getElementById('sc-modal-btns');
+        return {
+            rola:      msg.scrollHeight > msg.clientHeight + 1,
+            altura:    msg.clientHeight,
+            metade:    Math.round(window.innerHeight * 0.5),
+            caixaCabe: box.getBoundingClientRect().bottom <= window.innerHeight + 1,
+            botoesVisiveis: btns.getBoundingClientRect().bottom <= window.innerHeight + 1
+        };
+    });
+    expect(m.rola, 'com 60 itens a mensagem precisa rolar').toBe(true);
+    expect(m.altura, 'a altura para em 50% da tela').toBeLessThanOrEqual(m.metade);
+    expect(m.caixaCabe, 'a janela inteira tem de caber na tela').toBe(true);
+    expect(m.botoesVisiveis, 'Remover e Cancelar nao podem ficar fora da tela').toBe(true);
+
+    // e ainda dá para confirmar normalmente
+    await page.click('#sc-modal-ok');
+    await page.waitForFunction(() => typeof db !== 'undefined' && db.materiais.length === 0);
+});
+
+test('mensagem curta nao ganha barra de rolagem', async ({ page }) => {
+    await abrirCatalogo(page);
+    await marcarTecido(page, 'TRICÔ HERA');
+    await page.click('#sel-tec-barra button:has-text("Excluir marcados")');
+    const rola = await page.evaluate(() => {
+        const msg = document.getElementById('sc-modal-msg');
+        return msg.scrollHeight > msg.clientHeight + 1;
+    });
+    expect(rola).toBe(false);
+});
+
 // ─── Pedido de compra a partir da seleção ───────────────────────────────
 
 test('sem nada marcado, o carrinho da linha leva so aquele item', async ({ page }) => {

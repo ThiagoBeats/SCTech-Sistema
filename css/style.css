@@ -745,7 +745,10 @@ body.login-page {
 .sc-modal-box { background:#fff;border-radius:8px;padding:32px 28px 24px;max-width:420px;width:92%;box-shadow:0 16px 44px rgba(0,0,0,.18);text-align:center;animation:scModalIn .15s ease; }
 @keyframes scModalIn { from{transform:scale(.9);opacity:0} to{transform:scale(1);opacity:1} }
 .sc-modal-icon { font-size:42px;margin-bottom:10px;line-height:1; }
-.sc-modal-msg { font-size:15px;color:#242424;margin:0 0 24px;line-height:1.6;white-space:pre-wrap;text-align:left; }
+/* A lista de itens de uma exclusão em massa pode ser longa demais para caber
+   na tela. A mensagem para em metade da altura da janela e rola por dentro,
+   para os botões continuarem visíveis. */
+.sc-modal-msg { font-size:15px;color:#242424;margin:0 0 24px;line-height:1.6;white-space:pre-wrap;text-align:left;max-height:50vh;overflow-y:auto;padding-right:6px;overscroll-behavior:contain; }
 .sc-modal-btns { display:flex;gap:10px;justify-content:center;flex-wrap:wrap; }
 .sc-modal-btns .btn { min-width:100px; }
 
