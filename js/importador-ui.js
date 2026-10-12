@@ -108,6 +108,7 @@ const _impEstado = {
     busca: '',           // filtro por codigo/nome no passo 4 — so visual
     excluidas: {},       // { [nomeAba]: [indices de linha tirados no passo 3] }
     mostrarProblemas: false, // painel de layouts com problema, ligado ao tentar Continuar
+    novaColunaEm: null,  // indice do layout com o form de nova coluna aberto
     passo: 1
 };
 
@@ -128,6 +129,7 @@ function _impResetar() {
     _impEstado.busca = '';
     _impEstado.excluidas = {};
     _impEstado.mostrarProblemas = false;
+    _impEstado.novaColunaEm = null;
     _impEstado.passo = 1;
 }
 
@@ -564,12 +566,13 @@ const _IMP_PAPEIS = [
     { valor: 'codigo',     rotulo: 'Código' },
     { valor: 'nome',       rotulo: 'Nome' },
     { valor: 'largura',    rotulo: 'Largura' },
-    { valor: 'preco',      rotulo: 'Preço' },
+    { valor: 'preco',      rotulo: 'Preço (corte)' },
     { valor: 'preco_peca', rotulo: 'Preço por peça' },
     { valor: 'unidade',    rotulo: 'Unidade' }
 ];
 
-// "Preço" e "Preço por peça" sao alternativas: o custo sai de uma ou de outra.
+// As duas colunas de preco podem conviver: ambas sao gravadas. Quando as duas
+// estao mapeadas, o CUSTO sai da de peca — regra de sempre, preservada.
 const _IMP_PAPEIS_PRECO = ['preco', 'preco_peca'];
 
 // ── Linhas tiradas no passo 3 ───────────────────────────────────────────────
@@ -590,7 +593,7 @@ function _impAlternarLinha(aba, indice) {
     _impEstado.excluidas[aba] = atuais.includes(indice)
         ? atuais.filter(i => i !== indice)
         : atuais.concat(indice);
-    _impRenderPasso(3);
+    _impRenderPreservandoRolagem(3);
 }
 
 function _impTodasMarcadas(aba, inicio, quantas) {
@@ -605,7 +608,7 @@ function _impAlternarTodasLinhas(aba, inicio, quantas, marcar) {
         if (marcar) fora.delete(i); else fora.add(i);
     }
     _impEstado.excluidas[aba] = [...fora];
-    _impRenderPasso(3);
+    _impRenderPreservandoRolagem(3);
 }
 
 // Tira da lista os itens cujas linhas o usuario desmarcou no passo 3.
@@ -617,6 +620,12 @@ function _impSemExcluidas(itens) {
 // rotulos posicionais (Coluna 1, Coluna 2...) a partir da linha de dados mais
 // larga, so para o usuario ter o que escolher no passo 3. Vale para qualquer
 // aba sem cabecalho reconhecivel, nao so para o texto colado.
+// Largura do campo em caracteres: input nao cresce sozinho com o conteudo, e
+// sem isto nomes longos ficavam cortados na tabela de mapeamento.
+function _impTamanhoDaCelula(texto) {
+    return Math.min(Math.max((texto || '').length, 8), 32);
+}
+
 function _impRotulosPosicionais(dados) {
     let largura = 0;
     (dados || []).forEach(l => { if (l && l.length > largura) largura = l.length; });
@@ -654,6 +663,78 @@ function _impLayoutsDistintos() {
         porAssinatura[assinatura].abas.push(nome);
     });
     return Object.values(porAssinatura);
+}
+
+// Escreve de volta na planilha lida. Não redesenha: o campo já mostra o que
+// foi digitado, e recriar a tabela tiraria o foco da célula seguinte.
+function _impEditarCelula(aba, linha, coluna, valor) {
+    const dados = _impEstado.planilha && _impEstado.planilha.abas[aba];
+    if (!dados) return;
+    if (!dados[linha]) dados[linha] = [];
+    dados[linha][coluna] = valor;
+    _impEstado.grupos = null;   // a conferência reclassifica do zero
+}
+
+function _impAlternarNovaColuna(li) {
+    _impEstado.novaColunaEm = _impEstado.novaColunaEm === li ? null : li;
+    _impRenderPreservandoRolagem(3);
+}
+
+// Acrescenta uma coluna que a planilha não trazia, em TODAS as abas do layout.
+// A assinatura do layout nasce dos rótulos do cabeçalho, então ela muda junto:
+// o mapeamento já feito é movido para a assinatura nova, senão a escolha do
+// usuário se perderia no redesenho seguinte.
+function _impAdicionarColuna(li) {
+    const C = window.ImportadorCore;
+    const layout = _impLayoutsDistintos()[li];
+    if (!layout) return;
+
+    const papel = document.getElementById('imp-nova-papel')?.value || '';
+    const valor = document.getElementById('imp-nova-valor')?.value ?? '';
+    const digitado = (document.getElementById('imp-nova-rotulo')?.value || '').trim();
+    const rotulo = digitado || (_IMP_PAPEIS.find(p => p.valor === papel) || {}).rotulo || 'Nova coluna';
+
+    const assinaturaAntiga = layout.assinatura;
+    const mapa = Object.assign({}, _impMapaDoLayout(layout));
+    const cores = (_impEstado.cores[assinaturaAntiga] || []).slice();
+
+    // O índice precisa ser o MESMO em todas as abas do layout, senão o
+    // mapeamento compartilhado apontaria para colunas diferentes em cada uma.
+    let indiceNovo = 0;
+    layout.abas.forEach(aba => {
+        (_impEstado.planilha.abas[aba] || []).forEach(l => {
+            if (l && l.length > indiceNovo) indiceNovo = l.length;
+        });
+    });
+
+    const cab = layout.cabecalhoIndice;
+    layout.abas.forEach(aba => {
+        const dados = _impEstado.planilha.abas[aba];
+        if (!dados) return;
+        dados.forEach((l, i) => {
+            if (!dados[i]) dados[i] = [];
+            if (cab >= 0 && i < cab) dados[i][indiceNovo] = '';
+            else if (i === cab) dados[i][indiceNovo] = rotulo;
+            else dados[i][indiceNovo] = valor;
+        });
+    });
+
+    const dadosPrimeira = _impEstado.planilha.abas[layout.abas[0]] || [];
+    const det = C.detectarCabecalho(dadosPrimeira);
+    const colunas = det.indice === -1 ? _impRotulosPosicionais(dadosPrimeira) : det.colunas;
+    const assinaturaNova = C.assinaturaDoLayout(colunas) + '#' + layout.tipo;
+
+    if (papel) mapa[papel] = indiceNovo;
+    delete _impEstado.layouts[assinaturaAntiga];
+    _impEstado.layouts[assinaturaNova] = { mapa, cabecalhoIndice: cab };
+    if (_impEstado.cores[assinaturaAntiga]) {
+        _impEstado.cores[assinaturaNova] = cores;
+        delete _impEstado.cores[assinaturaAntiga];
+    }
+
+    _impEstado.novaColunaEm = null;
+    _impEstado.grupos = null;
+    _impRenderPreservandoRolagem(3);
 }
 
 function _impMapaDoLayout(layout) {
@@ -698,7 +779,19 @@ function _impPasso3HTML() {
                 <label style="display:flex;align-items:center;gap:7px;font-size:13px">
                     Cabeçalho: <select onchange="_impTrocarCabecalho(${li}, this.value)">${opcoesLinha}</select>
                 </label>
-            </div>`;
+                <button class="btn btn-outline btn-sm" onclick="_impAlternarNovaColuna(${li})">+ Nova coluna</button>
+            </div>
+            ${_impEstado.novaColunaEm === li ? `<div class="imp-nova-coluna">
+                <span>Nova coluna:</span>
+                <input type="text" id="imp-nova-rotulo" placeholder="Título (opcional)">
+                <select id="imp-nova-papel">
+                    <option value="">— sem papel —</option>
+                    ${_IMP_PAPEIS.filter(p => p.valor !== 'ignorar').map(p => `<option value="${p.valor}">${p.rotulo}</option>`).join('')}
+                </select>
+                <input type="text" id="imp-nova-valor" placeholder="Valor para todas as linhas">
+                <button class="btn btn-sm" onclick="_impAdicionarColuna(${li})">Adicionar</button>
+                <button class="btn btn-outline btn-sm" onclick="_impAlternarNovaColuna(${li})">Cancelar</button>
+            </div>` : ''}`;
 
         const abaPreview = layout.abas[0];
         const cabecalhos = `<th class="imp-col-check"><input type="checkbox" title="Marcar ou desmarcar todas"
@@ -720,7 +813,11 @@ function _impPasso3HTML() {
                 + `<td class="imp-col-check"><input type="checkbox" ${fora ? '' : 'checked'}
                     onchange="_impAlternarLinha('${_impEscapaAspas(abaPreview)}', ${iLinha})"></td>`
                 + `<td class="imp-col-linha">${iLinha + 1}</td>`
-                + layout.colunas.map((_, ci) => `<td style="font-size:12px">${escapeHtml(String(linha[ci] === undefined ? '' : linha[ci]))}</td>`).join('')
+                + layout.colunas.map((_, ci) => {
+                    const bruto = String(linha[ci] === undefined ? '' : linha[ci]);
+                    return `<td><input class="imp-celula" size="${_impTamanhoDaCelula(bruto)}" value="${escapeHtml(bruto)}"
+                        title="${escapeHtml(bruto)}" onchange="_impEditarCelula('${_impEscapaAspas(abaPreview)}', ${iLinha}, ${ci}, this.value)"></td>`;
+                }).join('')
                 + '</tr>';
         }).join('');
 
@@ -739,6 +836,10 @@ function _impPasso3HTML() {
                 ${amostra.length} linha(s) de <strong>${escapeHtml(layout.abas[0])}</strong>${layout.abas.length > 1 ? ` — o mesmo mapeamento vale para as outras ${layout.abas.length - 1} aba(s)` : ''}.
                 Dá ${qtd} item(ns) com o mapeamento atual${tirados ? ` — ${tirados} linha(s) desmarcada(s) ficam de fora` : ''}.
             </p>
+            ${mapa.preco >= 0 && mapa.preco_peca >= 0 ? `<p class="imp-nota-preco">
+                As duas colunas de preço serão gravadas. O <strong>preço por peça</strong> é que forma o preço de venda;
+                o preço por corte fica registrado para orçamento, sem margem aplicada.
+            </p>` : ''}
         </div>`;
     }).join('');
 
@@ -756,7 +857,7 @@ function _impAlternarModoCor(indiceLayout) {
     const layout = _impLayoutsDistintos()[indiceLayout];
     if (_impEstado.cores[layout.assinatura]) delete _impEstado.cores[layout.assinatura];
     else _impEstado.cores[layout.assinatura] = [];
-    _impRenderPasso(3);
+    _impRenderPreservandoRolagem(3);
 }
 
 function _impTrocarCabecalho(indiceLayout, valor) {
@@ -772,7 +873,7 @@ function _impTrocarCabecalho(indiceLayout, valor) {
         mapa: C.sugerirMapeamento(colunas),
         cabecalhoIndice: indice
     };
-    _impRenderPasso(3);
+    _impRenderPreservandoRolagem(3);
 }
 
 function _impTrocarPapel(indiceLayout, indiceColuna, papel) {
@@ -781,16 +882,11 @@ function _impTrocarPapel(indiceLayout, indiceColuna, papel) {
     const cores = (_impEstado.cores[layout.assinatura] || []).filter(c => c !== indiceColuna);
     // um papel pertence a uma coluna so: limpa quem estava com ele
     Object.keys(mapa).forEach(k => { if (mapa[k] === indiceColuna) mapa[k] = -1; });
-    // Preco e Preco por peca sao alternativas: escolher um libera o outro, para
-    // nunca ficar ambiguo de qual coluna sai o custo.
-    if (_IMP_PAPEIS_PRECO.includes(papel)) {
-        _IMP_PAPEIS_PRECO.forEach(p => { if (p !== papel) mapa[p] = -1; });
-    }
     if (papel === 'cor') cores.push(indiceColuna);
     else if (papel !== 'ignorar') mapa[papel] = indiceColuna;
     _impEstado.layouts[layout.assinatura] = { mapa, cabecalhoIndice: layout.cabecalhoIndice };
     if (_impEstado.cores[layout.assinatura]) _impEstado.cores[layout.assinatura] = cores.sort((a, b) => a - b);
-    _impRenderPasso(3);
+    _impRenderPreservandoRolagem(3);
 }
 
 // O que falta num layout para ele poder ser importado. Devolve lista vazia
@@ -927,10 +1023,18 @@ function _impPrepararConferencia() {
     _impEstado.grupos = grupos;
 }
 
+// Quando a tabela trouxe os dois precos, mostra os dois sob o custo, para o
+// usuario ver o que ficara registrado alem do valor que forma a venda.
+function _impNotaDosPrecos(it) {
+    if (it.preco_corte === null || it.preco_corte === undefined) return '';
+    if (it.preco_peca === null || it.preco_peca === undefined) return '';
+    return `<div style="font-size:11px;color:var(--muted)">corte ${_impMoeda(it.preco_corte)} · peça ${_impMoeda(it.preco_peca)}</div>`;
+}
+
 const _IMP_GRUPOS = [
-    { chave: 'novos',           titulo: 'Novos',                   ajuda: 'Serão criados com o markup informado.' },
-    { chave: 'atualizados',     titulo: 'Atualizados',             ajuda: 'Custo novo, venda recalculada com o markup atual do item.' },
-    { chave: 'sem_markup',      titulo: 'Sem markup registrado',   ajuda: 'O item já existe mas não tem markup. Defina um para cada linha.' },
+    { chave: 'novos',           titulo: 'Novos',                   ajuda: 'Serão criados com a margem informada.' },
+    { chave: 'atualizados',     titulo: 'Atualizados',             ajuda: 'Custo novo, venda recalculada com a margem atual do item.' },
+    { chave: 'sem_markup',      titulo: 'Sem margem registrada',   ajuda: 'O item já existe mas não tem margem. Defina uma para cada linha.' },
     { chave: 'conflitos',       titulo: 'Conflitos de código',     ajuda: 'O código já é de outro fornecedor, ou já pertence a um item do outro tipo. Edite o código ou desmarque.' },
     { chave: 'nomes_repetidos', titulo: 'Nomes repetidos',         ajuda: 'O nome já pertence a outro produto. Edite o nome ou desmarque.' },
     { chave: 'problemas',       titulo: 'Com problema',            ajuda: 'Preço ilegível, código ou nome faltando, ou mudança de layout na planilha. Corrija o que falta ou deixe desmarcado.' }
@@ -940,7 +1044,7 @@ const _IMP_GRUPOS = [
 // grava a venda igual ao custo. O texto do grupo precisa dizer isso.
 function _impAjudaDoGrupo(def) {
     if (def.chave === 'novos' && _impEstado.margemModo === 'item') {
-        return 'Defina o markup de cada linha. Linha deixada em branco entra com a venda igual ao custo.';
+        return 'Defina a margem de cada linha. Linha deixada em branco entra com a venda igual ao custo.';
     }
     return def.ajuda;
 }
@@ -1009,27 +1113,51 @@ function _impContagemDeNomes() {
 // invariante da Task 13 continua valendo — `_impRenderPasso(4)` so redesenha
 // a partir de `_impEstado.grupos`, nunca reclassifica.
 function _impRenderPasso4Preservando(mudar) {
-    const corpo = document.getElementById('imp-corpo');
+    _impRenderPreservandoRolagem(4, mudar);
+}
+
+// Redesenha um passo devolvendo a rolagem ao ponto em que estava — a do corpo
+// do modal e a de cada area rolavel interna (tabelas do passo 3, paineis do
+// passo 4). Sem isto, escolher o papel de uma coluna la embaixo jogava a tela
+// de volta ao topo a cada clique.
+function _impRenderPreservandoRolagem(n, mudar) {
+    _impPreservandoRolagem('imp-corpo', () => {
+        if (typeof mudar === 'function') mudar();
+        _impRenderPasso(n);
+    });
+}
+
+// Guarda a rolagem (e o foco do campo de busca) em torno de um redesenho
+// qualquer. Usada pelo importador de produtos e pelo de kits.
+function _impPreservandoRolagem(corpoId, render) {
+    const corpo = document.getElementById(corpoId);
     const scrollCorpo = corpo ? corpo.scrollTop : 0;
     const paineis = {};
     if (corpo) {
         corpo.querySelectorAll('[data-painel]').forEach(el => {
             paineis[el.getAttribute('data-painel')] = el.scrollTop;
         });
+        corpo.querySelectorAll('.imp-mapa-scroll').forEach((el, i) => {
+            paineis['mapa-' + i] = el.scrollTop;
+            paineis['mapa-x-' + i] = el.scrollLeft;
+        });
     }
     const campoBusca = document.getElementById('imp-busca');
     const buscaComFoco = !!campoBusca && campoBusca === document.activeElement;
     const selecao = campoBusca ? [campoBusca.selectionStart, campoBusca.selectionEnd] : null;
 
-    if (typeof mudar === 'function') mudar();
-    _impRenderPasso(4);
+    render();
 
-    const corpoNovo = document.getElementById('imp-corpo');
+    const corpoNovo = document.getElementById(corpoId);
     if (corpoNovo) {
         corpoNovo.scrollTop = scrollCorpo;
         corpoNovo.querySelectorAll('[data-painel]').forEach(el => {
             const chave = el.getAttribute('data-painel');
             if (Object.prototype.hasOwnProperty.call(paineis, chave)) el.scrollTop = paineis[chave];
+        });
+        corpoNovo.querySelectorAll('.imp-mapa-scroll').forEach((el, i) => {
+            if (paineis['mapa-' + i] !== undefined) el.scrollTop = paineis['mapa-' + i];
+            if (paineis['mapa-x-' + i] !== undefined) el.scrollLeft = paineis['mapa-x-' + i];
         });
     }
     if (buscaComFoco) {
@@ -1253,7 +1381,7 @@ function _impPasso4HTML() {
                 <td style="font-size:12px;color:var(--muted)">${escapeHtml(it.aba)}</td>
                 <td><input value="${escapeHtml(it.codigo)}" style="width:110px;font-size:12px" onchange="_impEditarCampo('${def.chave}', ${i}, 'codigo', this.value)"></td>
                 <td><input value="${escapeHtml(it.nome)}" style="width:220px;font-size:12px" onchange="_impEditarCampo('${def.chave}', ${i}, 'nome', this.value)">${alerta}</td>
-                <td><input type="number" step="0.01" value="${it.preco_custo === null ? '' : it.preco_custo}" style="width:90px;font-size:12px" onchange="_impEditarCampo('${def.chave}', ${i}, 'preco_custo', this.value)"></td>
+                <td><input type="number" step="0.01" value="${it.preco_custo === null ? '' : it.preco_custo}" style="width:90px;font-size:12px" onchange="_impEditarCampo('${def.chave}', ${i}, 'preco_custo', this.value)">${_impNotaDosPrecos(it)}</td>
                 <td><input type="number" step="1" value="${e.markup === null ? '' : e.markup}" style="width:70px;font-size:12px" onchange="_impEditarCampo('${def.chave}', ${i}, 'markup', this.value)"></td>
                 <td>${_impMoeda(venda)}${antes}</td>
             </tr>`;
@@ -1267,7 +1395,7 @@ function _impPasso4HTML() {
             <h4 style="margin:0 0 2px;color:var(--dark)">${def.titulo} <span style="color:var(--muted);font-weight:400">(${contagem})</span></h4>
             <p style="font-size:12px;color:var(--muted);margin:0 0 10px">${_impAjudaDoGrupo(def)}</p>
             <div data-painel="${def.chave}" style="max-height:260px;overflow:auto"><table>
-                <thead><tr><th></th><th>Aba</th><th>Código</th><th>Nome</th><th>Custo</th><th>Markup %</th><th>Venda</th></tr></thead>
+                <thead><tr><th></th><th>Aba</th><th>Código</th><th>Nome</th><th>Custo</th><th>Margem %</th><th>Venda</th></tr></thead>
                 <tbody>${linhas}</tbody>
             </table></div>
         </div>`;

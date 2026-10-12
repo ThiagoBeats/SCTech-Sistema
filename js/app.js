@@ -1464,6 +1464,14 @@ function verDetalhesTecido(id) {
                     <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Estoque Mínimo</div>
                     <div style="font-size:14px;font-weight:600">${c.min_estoque ? c.min_estoque + ' m' : '—'}</div>
                 </div>
+                ${(c.preco_corte || c.preco_peca) ? `<div style="background:#FAFAFA;border-radius:8px;padding:10px 14px;grid-column:1/-1">
+                    <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Preços da tabela do fornecedor</div>
+                    <div style="font-size:14px;font-weight:600">
+                        Corte: ${c.preco_corte ? 'R$ ' + Number(c.preco_corte).toFixed(2) : '—'}
+                        &emsp;Peça: ${c.preco_peca ? 'R$ ' + Number(c.preco_peca).toFixed(2) : '—'}
+                    </div>
+                    <div style="font-size:11px;color:#8F8F8F;margin-top:2px">Registro da tabela, sem margem aplicada.</div>
+                </div>` : ''}
                 ${c.fornecedor_nome ? `<div style="background:#FAFAFA;border-radius:8px;padding:10px 14px;grid-column:1/-1">
                     <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Fornecedor</div>
                     <div style="font-size:14px;font-weight:500">${escapeHtml(c.fornecedor_nome)}</div>

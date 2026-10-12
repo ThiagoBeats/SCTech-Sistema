@@ -20,6 +20,7 @@ const _kitEstado = {
     cabecalhoIndice: -1,
     mapa: null,             // { codigo, nome, preco, medida, descricao }
     grupos: null,           // saída de classificarKits
+    novaColuna: false,      // form de nova coluna aberto no passo 2
     passo: 1
 };
 
@@ -27,7 +28,7 @@ function _kitResetar() {
     Object.assign(_kitEstado, {
         textoColado: '', planilha: null, fornecedor: null, fornecedorId: null,
         markupPadrao: null, margemModo: 'total', estoqueModo: 'ajustar',
-        cabecalhoIndice: -1, mapa: null, grupos: null, passo: 1
+        cabecalhoIndice: -1, mapa: null, grupos: null, novaColuna: false, passo: 1
     });
 }
 
@@ -99,10 +100,7 @@ function _kitPasso1HTML() {
         const sel = (f.id === _kitEstado.fornecedorId) ? ' selected' : '';
         return `<option value="${f.id}"${sel}>${escapeHtml(f.nome)}</option>`;
     }).join('');
-    const linhas = _kitLinhas().length;
-    const resumo = linhas
-        ? `<p style="font-size:12px;color:var(--muted);margin-top:6px">${linhas} linha(s) lida(s).</p>`
-        : '';
+    const resumo = `<p id="kit-resumo" style="font-size:12px;color:var(--muted);margin-top:6px">${_kitTextoResumo()}</p>`;
 
     return `
     <div class="form-group">
@@ -193,16 +191,25 @@ function _kitCapturarPasso1() {
     if (colar) _kitEstado.textoColado = colar.value;
 }
 
+function _kitTextoResumo() {
+    const n = _kitLinhas().length;
+    return n ? `${n} linha(s) lida(s).` : '';
+}
+
 // Colar já vale sozinho, sem botão — mesma regra do outro importador.
+// NÃO redesenha o passo: recriar a textarea a cada tecla jogava o cursor para
+// o fim do texto e tornava impossível corrigir algo no meio do que foi colado.
+// Só a linha de resumo é atualizada.
 function _kitColadoMudou() {
-    _kitCapturarPasso1();
+    const campo = document.getElementById('kit-colar');
+    if (!campo) return;
+    _kitEstado.textoColado = campo.value;
     const texto = _kitEstado.textoColado;
     _kitEstado.planilha = texto.trim() ? window.ImportadorCore.lerColados(texto) : null;
     _kitEstado.mapa = null;
     _kitEstado.grupos = null;
-    _kitRenderPasso(1);
-    const campo = document.getElementById('kit-colar');
-    if (campo) { campo.focus(); campo.selectionStart = campo.selectionEnd = campo.value.length; }
+    const resumo = document.getElementById('kit-resumo');
+    if (resumo) resumo.textContent = _kitTextoResumo();
 }
 
 async function _kitCriarFornecedorInline() {
@@ -279,13 +286,53 @@ function _kitTrocarPapel(indice, papel) {
     _KIT_PAPEIS.forEach(p => { if (m[p.chave] === indice) m[p.chave] = -1; });
     if (papel) m[papel] = indice;
     _kitEstado.grupos = null;
-    _kitRenderPasso(2);
+    _impPreservandoRolagem('kit-corpo', () => _kitRenderPasso(2));
+}
+
+// Escreve de volta na planilha lida. Não redesenha: o campo já mostra o que
+// foi digitado, e recriar a tabela tiraria o foco da célula seguinte.
+function _kitEditarCelula(linha, coluna, valor) {
+    const dados = _kitLinhas();
+    if (!dados[linha]) dados[linha] = [];
+    dados[linha][coluna] = valor;
+    _kitEstado.grupos = null;   // a conferência reclassifica do zero
+}
+
+// Acrescenta uma coluna que a planilha não trazia. O valor digitado preenche
+// todas as linhas e cada célula continua editável depois.
+function _kitAdicionarColuna() {
+    const papel = document.getElementById('kit-nova-papel')?.value || '';
+    const valor = document.getElementById('kit-nova-valor')?.value ?? '';
+    const rotulo = document.getElementById('kit-nova-rotulo')?.value.trim();
+    const dados = _kitLinhas();
+    if (!dados.length) return;
+
+    const nova = _kitNumColunas();
+    const cab = _kitEstado.cabecalhoIndice;
+    dados.forEach((l, i) => {
+        if (!dados[i]) dados[i] = [];
+        if (cab >= 0 && i <= cab) {
+            // A linha de título recebe o rótulo; o que vier antes dela fica vazio.
+            dados[i][nova] = (i === cab) ? (rotulo || _KIT_PAPEIS.find(p => p.chave === papel)?.rotulo || 'Nova coluna') : '';
+        } else {
+            dados[i][nova] = valor;
+        }
+    });
+    if (papel) _kitEstado.mapa[papel] = nova;
+    _kitEstado.grupos = null;
+    _kitEstado.novaColuna = false;
+    _impPreservandoRolagem('kit-corpo', () => _kitRenderPasso(2));
+}
+
+function _kitAlternarNovaColuna() {
+    _kitEstado.novaColuna = !_kitEstado.novaColuna;
+    _impPreservandoRolagem('kit-corpo', () => _kitRenderPasso(2));
 }
 
 function _kitMudarCabecalho(valor) {
     _kitEstado.cabecalhoIndice = parseInt(valor, 10);
     _kitEstado.grupos = null;
-    _kitRenderPasso(2);
+    _impPreservandoRolagem('kit-corpo', () => _kitRenderPasso(2));
 }
 
 function _kitFaltando() {
@@ -317,14 +364,19 @@ function _kitPasso2HTML() {
         </th>`);
     }
 
+    // Todas as linhas, e cada célula editável: é aqui que o usuário conserta o
+    // que veio torto da planilha, antes de a conferência classificar.
     const primeiraLinha = cab >= 0 ? cab + 1 : 0;
-    const amostra = linhas.slice(primeiraLinha, primeiraLinha + 25).map((l, i) => {
+    const amostra = linhas.slice(primeiraLinha).map((l, i) => {
+        const indiceReal = primeiraLinha + i;
         const celulas = [];
         for (let c = 0; c < nCols; c++) {
             const v = (l || [])[c];
-            celulas.push(`<td>${escapeHtml(v === undefined || v === null ? '' : String(v))}</td>`);
+            const bruto = (v === undefined || v === null) ? '' : String(v);
+            celulas.push(`<td><input class="kit-celula" size="${_impTamanhoDaCelula(bruto)}" value="${escapeHtml(bruto)}"
+                title="${escapeHtml(bruto)}" onchange="_kitEditarCelula(${indiceReal}, ${c}, this.value)"></td>`);
         }
-        return `<tr><td class="kit-col-linha">${primeiraLinha + i + 1}</td>${celulas.join('')}</tr>`;
+        return `<tr><td class="kit-col-linha">${indiceReal + 1}</td>${celulas.join('')}</tr>`;
     }).join('');
 
     const faltando = _kitFaltando();
@@ -332,12 +384,27 @@ function _kitPasso2HTML() {
         ? `<div class="kit-aviso">Falta dizer qual coluna é: <strong>${faltando.join(', ')}</strong>. Sem isso não dá para importar.</div>`
         : '';
 
+    const formNova = _kitEstado.novaColuna ? `
+    <div class="imp-nova-coluna">
+        <span>Nova coluna:</span>
+        <input type="text" id="kit-nova-rotulo" placeholder="Título (opcional)">
+        <select id="kit-nova-papel">
+            <option value="">— sem papel —</option>
+            ${_KIT_PAPEIS.map(p => `<option value="${p.chave}">${p.rotulo}</option>`).join('')}
+        </select>
+        <input type="text" id="kit-nova-valor" placeholder="Valor para todas as linhas">
+        <button class="btn btn-sm" onclick="_kitAdicionarColuna()">Adicionar</button>
+        <button class="btn btn-outline btn-sm" onclick="_kitAlternarNovaColuna()">Cancelar</button>
+    </div>` : '';
+
     return `
     <div class="kit-cab-linha">
         <label for="kit-cabecalho">Linha de título</label>
         <select id="kit-cabecalho" onchange="_kitMudarCabecalho(this.value)">${opcoesCabecalho}</select>
-        <span style="font-size:12px;color:var(--muted)">Código, Nome e Preço são obrigatórios. Medida e Descrição, opcionais.</span>
+        <button class="btn btn-outline btn-sm" onclick="_kitAlternarNovaColuna()">+ Nova coluna</button>
+        <span style="font-size:12px;color:var(--muted)">Código, Nome e Preço são obrigatórios. Medida e Descrição, opcionais. As células podem ser editadas.</span>
     </div>
+    ${formNova}
     ${aviso}
     <div class="imp-mapa-scroll">
         <table class="imp-mapa-tabela kit-mapa-tabela">
@@ -406,7 +473,7 @@ function _kitMarcados() {
 
 function _kitAjudaDoGrupo(def) {
     if (def.chave === 'novos' && _kitEstado.margemModo === 'item') {
-        return 'Defina o markup de cada linha. Linha deixada em branco entra com a venda igual ao custo.';
+        return 'Defina a margem de cada linha. Linha deixada em branco entra com a venda igual ao custo.';
     }
     return def.ajuda;
 }
@@ -439,7 +506,7 @@ function _kitPasso3HTML() {
             <h4 style="margin:0 0 2px;color:var(--dark)">${def.titulo} <span style="color:var(--muted);font-weight:400">(${lista.length})</span></h4>
             <p style="font-size:12px;color:var(--muted);margin:0 0 10px">${_kitAjudaDoGrupo(def)}</p>
             <div data-painel="${def.chave}" style="max-height:260px;overflow:auto"><table>
-                <thead><tr><th style="width:30px"></th><th>Código</th><th>Nome</th><th>Medida</th><th>Descrição</th><th>Custo</th><th>Markup %</th><th>Venda</th></tr></thead>
+                <thead><tr><th style="width:30px"></th><th>Código</th><th>Nome</th><th>Medida</th><th>Descrição</th><th>Custo</th><th>Margem %</th><th>Venda</th></tr></thead>
                 <tbody>${linhas}</tbody>
             </table></div>
         </div>`;

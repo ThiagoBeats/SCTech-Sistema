@@ -205,13 +205,22 @@
             : 'Linha com preço mas sem nome — complete o nome ou deixe desmarcada';
     }
 
-    // De qual coluna sai o custo. "Preço por peça" e "Preço" sao alternativas:
-    // marcar uma coluna como preco_peca faz ELA valer como custo, no lugar da
-    // coluna de preco. So uma das duas vale por vez — quem mapeia decide qual.
+    // De qual coluna sai o CUSTO que forma o preco de venda. As duas colunas
+    // podem ser mapeadas ao mesmo tempo e ambas sao gravadas, mas so uma vira
+    // custo: quando ha coluna de preco por peca, e ela que manda — regra de
+    // sempre, preservada para nao mexer no preco do que ja foi importado.
+    // A outra fica registrada crua, como veio, para orcamento e consulta.
     function _colunaDePreco(mapa) {
         const m = mapa || {};
-        if (m.preco_peca >= 0) return { indice: m.preco_peca, porPeca: true };
-        return { indice: m.preco >= 0 ? m.preco : -1, porPeca: false };
+        if (m.preco_peca >= 0) return { indice: m.preco_peca, porPeca: true, temCorte: m.preco >= 0 };
+        return { indice: m.preco >= 0 ? m.preco : -1, porPeca: false, temCorte: m.preco >= 0 };
+    }
+
+    // Valor cru de uma coluna de preco, ou null quando nao mapeada/ilegivel.
+    function _precoCru(linha, indice) {
+        if (!(indice >= 0)) return null;
+        const p = normalizarPreco(linha[indice]);
+        return p.ok ? p.valor : null;
     }
 
     function _acharColuna(colunas, padroes) {
@@ -354,7 +363,10 @@
             const p = fontePreco.indice >= 0
                 ? normalizarPreco(linha[fontePreco.indice])
                 : { valor: null, ok: false, motivo: 'A planilha não tem coluna de preço mapeada' };
-            if (fontePreco.porPeca && p.ok) {
+            // So avisa quando a coluna de corte NAO foi mapeada: ai o custo vir
+            // da peca pode ter sido descuido. Com as duas mapeadas a escolha e
+            // deliberada e o aviso viraria ruido em cada linha.
+            if (fontePreco.porPeca && p.ok && !fontePreco.temCorte) {
                 avisos.push('Custo veio da coluna de preço por peça, não da de preço por corte');
             }
 
@@ -384,6 +396,10 @@
                 largura,
                 largura_ilegivel: larguraIlegivel,
                 preco_custo: p.ok ? p.valor : null,
+                // Os dois valores da tabela, crus. O que nao virou custo fica
+                // aqui so para registro e orcamento; nenhuma margem incide nele.
+                preco_corte: _precoCru(linha, (mapa || {}).preco),
+                preco_peca: _precoCru(linha, (mapa || {}).preco_peca),
                 unidade: u.unidade,
                 tipo,
                 promocional: cod.promocional,
@@ -470,7 +486,7 @@
                     return;
                 }
                 if (markupDeExistente(existente) === null) {
-                    r.sem_markup.push({ item, existente, motivo: 'Item sem markup registrado — defina o markup para calcular a venda' });
+                    r.sem_markup.push({ item, existente, motivo: 'Item sem margem registrada — defina a margem para calcular a venda' });
                     return;
                 }
                 r.atualizados.push({ item, existente, motivo: null });
@@ -511,7 +527,8 @@
     // do negocio e nunca e tocado, nem ao gravar nem ao desfazer.
     const CAMPOS_DO_IMPORTADOR = [
         'referencia', 'nome', 'preco_custo', 'preco', 'unidade', 'largura_rolo',
-        'fornecedor_id', 'fornecedor_nome', 'estoque_infinito'
+        'fornecedor_id', 'fornecedor_nome', 'estoque_infinito',
+        'preco_corte', 'preco_peca'
     ];
 
     function _fotografarCampos(registro) {
@@ -576,6 +593,9 @@
                 alvo.nome = item.nome;
                 alvo.preco_custo = precoCusto;
                 alvo.preco = preco;
+                // Valor em branco na tabela nao apaga o que ja estava registrado.
+                if (item.preco_corte !== null && item.preco_corte !== undefined) alvo.preco_corte = item.preco_corte;
+                if (item.preco_peca !== null && item.preco_peca !== undefined) alvo.preco_peca = item.preco_peca;
                 if (item.tipo === 'tecido') {
                     if (item.largura !== null) alvo.largura_rolo = item.largura;
                 } else if (item.unidade) {
@@ -605,7 +625,11 @@
                 min_estoque: item.tipo === 'tecido' ? MIN_ESTOQUE_TECIDO : 0,
                 fornecedor_id: fornecedor ? fornecedor.id : null,
                 fornecedor_nome: fornecedor ? fornecedor.nome : '',
-                estoque_infinito: estoqueInfinito
+                estoque_infinito: estoqueInfinito,
+                // Preco por corte e por peca como vieram na tabela. Nenhum dos
+                // dois e recalculado: servem para orcamento e consulta.
+                preco_corte: item.preco_corte === undefined ? null : item.preco_corte,
+                preco_peca: item.preco_peca === undefined ? null : item.preco_peca
             };
             if (item.tipo === 'tecido') {
                 // A largura padrao so vale para celula VAZIA. Celula ilegivel

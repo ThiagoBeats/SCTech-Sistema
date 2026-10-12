@@ -1359,3 +1359,36 @@ html[data-theme="dark"] .imp-atalho-kits { background: #1D2024; border-color: #2
 html[data-theme="dark"] .kit-aviso { background: rgba(242, 201, 36, .10); }
 html[data-theme="dark"] .kit-selo { background: rgba(201, 247, 117, .12); border-color: var(--secondary); color: var(--secondary); }
 html[data-theme="dark"] .kit-selo-montagem { background: #1D2024; border-color: #282A2E; color: var(--muted); }
+
+.imp-nota-preco {
+    margin: 8px 0 0; padding: 7px 10px; border-radius: 5px;
+    background: rgba(201, 247, 117, .20); border: 1px solid var(--primary);
+    font-size: var(--fs-label); color: var(--dark);
+}
+html[data-theme="dark"] .imp-nota-preco { background: rgba(201, 247, 117, .09); border-color: var(--secondary); }
+
+.imp-nova-coluna {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding: 9px 12px; margin-bottom: 10px; border-radius: 6px;
+    background: var(--light); border: 1px dashed var(--border);
+    font-size: var(--fs-texto-sm);
+}
+.imp-nova-coluna span { color: var(--muted); font-weight: 600; }
+.imp-nova-coluna input, .imp-nova-coluna select {
+    padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px;
+    font-size: var(--fs-texto-sm); background: var(--card); color: var(--dark);
+}
+.imp-nova-coluna input { min-width: 150px; }
+
+/* Celulas editaveis das tabelas de mapeamento */
+.imp-celula, .kit-celula {
+    box-sizing: content-box;
+    padding: 3px 5px; border: 1px solid transparent; border-radius: 4px;
+    background: transparent; font-size: 12px; color: inherit;
+}
+.imp-celula:hover, .kit-celula:hover { border-color: var(--border); }
+.imp-celula:focus, .kit-celula:focus {
+    border-color: var(--primary); background: var(--card); outline: none;
+}
+
+html[data-theme="dark"] .imp-nova-coluna { background: #1D2024; border-color: #3A3D42; }

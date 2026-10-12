@@ -103,35 +103,57 @@ test('Preço por peça aparece no seletor e vira a fonte do custo', async ({ pag
     const opcoes = await page.locator('.imp-mapa-tabela thead select').first()
         .locator('option').allInnerTexts();
     expect(opcoes).toContain('Preço por peça');
-    expect(opcoes).toContain('Preço');
+    expect(opcoes).toContain('Preço (corte)');
 
     // marca a coluna PEÇA (indice 5) como preco por peca
     await page.locator('.imp-mapa-tabela thead select').nth(5).selectOption('preco_peca');
 
     const mapa = await page.evaluate(() => _impMapaDoLayout(_impLayoutsDistintos()[0]));
     expect(mapa.preco_peca).toBe(5);
-    expect(mapa.preco, 'escolher peça deveria liberar a coluna de preço').toBe(-1);
+    expect(mapa.preco, 'as duas colunas de preço convivem — as duas são gravadas').toBe(4);
 
     await page.click('#imp-corpo button:has-text("Continuar")');
     await page.waitForFunction(() => _impEstado.passo === 4);
 
     const r = await page.evaluate(() => {
         const e = _impEstado.grupos.novos.find(x => x.item.codigo === '10001');
-        return { custo: e.item.preco_custo, avisos: e.item.avisos };
+        return { custo: e.item.preco_custo, corte: e.item.preco_corte, peca: e.item.preco_peca, avisos: e.item.avisos };
     });
     expect(r.custo, 'o custo deveria vir da coluna PEÇA').toBe(79.47);
-    expect(r.avisos.some(a => /peça/i.test(a))).toBe(true);
+    expect(r.corte, 'o corte fica registrado ao lado').toBe(83.65);
+    expect(r.peca).toBe(79.47);
+    expect(r.avisos.some(a => /peça/i.test(a)),
+        'com as duas mapeadas a escolha é deliberada, sem aviso em cada linha').toBe(false);
 });
 
-test('escolher Preço de volta libera a coluna de peça', async ({ page }) => {
+test('com SO a coluna de peca mapeada, o aviso de origem do custo aparece', async ({ page }) => {
     await ateOPasso3(page, 'Book 10');
     await page.locator('.imp-mapa-tabela thead select').nth(5).selectOption('preco_peca');
-    expect(await page.evaluate(() => _impMapaDoLayout(_impLayoutsDistintos()[0]).preco)).toBe(-1);
+    await page.locator('.imp-mapa-tabela thead select').nth(4).selectOption('ignorar');
 
+    const mapa = await page.evaluate(() => _impMapaDoLayout(_impLayoutsDistintos()[0]));
+    expect(mapa.preco).toBe(-1);
+    expect(mapa.preco_peca).toBe(5);
+
+    await page.click('#imp-corpo button:has-text("Continuar")');
+    await page.waitForFunction(() => _impEstado.passo === 4);
+    const r = await page.evaluate(() => {
+        const e = _impEstado.grupos.novos.find(x => x.item.codigo === '10001');
+        return { custo: e.item.preco_custo, corte: e.item.preco_corte, avisos: e.item.avisos };
+    });
+    expect(r.custo).toBe(79.47);
+    expect(r.corte, 'coluna não mapeada não registra valor').toBeNull();
+    expect(r.avisos.some(a => /peça/i.test(a)), 'aqui o aviso ajuda: o corte ficou de fora').toBe(true);
+});
+
+test('as duas colunas de preco podem ser mapeadas ao mesmo tempo', async ({ page }) => {
+    await ateOPasso3(page, 'Book 10');
+    await page.locator('.imp-mapa-tabela thead select').nth(5).selectOption('preco_peca');
     await page.locator('.imp-mapa-tabela thead select').nth(4).selectOption('preco');
+
     const mapa = await page.evaluate(() => _impMapaDoLayout(_impLayoutsDistintos()[0]));
     expect(mapa.preco).toBe(4);
-    expect(mapa.preco_peca, 'so uma das duas vale por vez').toBe(-1);
+    expect(mapa.preco_peca, 'escolher uma não desfaz mais a outra').toBe(5);
 });
 
 test('o numero da linha da planilha aparece e ajuda a se localizar', async ({ page }) => {
