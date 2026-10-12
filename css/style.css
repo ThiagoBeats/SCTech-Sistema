@@ -1248,3 +1248,62 @@ html[data-theme="dark"] .pc-fila-banner { background: rgba(242, 201, 36, .10); }
    e mais a coluna de marcar, a tabela passava da largura do card. */
 #tabela-tecidos th.th-sort-mat,
 #tabela-materiais th.th-sort-mat { white-space: normal; }
+
+/* ═══ Importador — passo 1: configurações da importação ═══ */
+
+.imp-cfg-secao { margin-top: 18px; }
+.imp-cfg-secao-titulo { margin: 0 0 2px; font-size: var(--fs-card); font-weight: 700; color: var(--dark); }
+.imp-cfg-secao-ajuda  { margin: 0 0 12px; font-size: var(--fs-label); color: var(--muted); }
+
+.imp-cfg-grade {
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.imp-cfg-card {
+    display: block; cursor: pointer;
+    padding: 14px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--white); transition: border-color .15s, background .15s;
+}
+.imp-cfg-card:hover { border-color: #BDBDBD; }
+.imp-cfg-card-sel { border-color: var(--primary); background: rgba(201, 247, 117, .14); }
+.imp-cfg-card-sel:hover { border-color: var(--primary); }
+
+.imp-cfg-topo { display: flex; align-items: center; gap: 8px; }
+.imp-cfg-topo input[type="radio"] {
+    flex: 0 0 auto; width: 15px; height: 15px; margin: 0;
+    accent-color: var(--primary); cursor: pointer;
+}
+.imp-cfg-icone { flex: 0 0 auto; width: 20px; height: 20px; color: var(--dark); }
+.imp-cfg-titulo { font-size: var(--fs-texto-sm); font-weight: 700; color: var(--dark); line-height: 1.25; }
+.imp-cfg-desc {
+    margin: 9px 0 0; font-size: var(--fs-label); line-height: 1.5; color: var(--muted);
+}
+
+.imp-cfg-campo { margin-top: 12px; }
+.imp-cfg-campo label { display: block; font-size: var(--fs-aux); font-weight: 600; color: var(--dark); margin-bottom: 4px; }
+.imp-cfg-campo-caixa {
+    display: flex; align-items: center;
+    border: 1px solid var(--border); border-radius: 7px; background: var(--white);
+}
+.imp-cfg-campo-caixa input {
+    flex: 1; min-width: 0; border: 0; outline: none; background: transparent;
+    padding: 7px 8px; font-size: var(--fs-texto-sm); color: var(--dark);
+}
+.imp-cfg-sufixo { padding: 0 9px; font-size: var(--fs-texto-sm); color: var(--muted); }
+
+/* Rodapé do passo 1: fornecedor à esquerda, botões à direita */
+.imp-rodape { display: flex; align-items: flex-end; gap: 16px; margin-top: 18px; flex-wrap: wrap; }
+.imp-rodape-forn { flex: 1 1 340px; margin-bottom: 0; }
+.imp-rodape-botoes { display: flex; gap: 10px; margin-left: auto; }
+
+@media (max-width: 900px) {
+    .imp-cfg-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+html[data-theme="dark"] .imp-cfg-card { background: #1D2024; border-color: #282A2E; }
+html[data-theme="dark"] .imp-cfg-card-sel { background: rgba(201, 247, 117, .08); border-color: var(--secondary); }
+html[data-theme="dark"] .imp-cfg-icone,
+html[data-theme="dark"] .imp-cfg-titulo { color: #F5F6F8; }
+html[data-theme="dark"] .imp-cfg-campo-caixa { background: #16181B; border-color: #282A2E; }
+html[data-theme="dark"] .imp-cfg-campo-caixa input { color: #F5F6F8; }

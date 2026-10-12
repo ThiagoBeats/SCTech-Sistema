@@ -79,6 +79,7 @@ test('aba sem cabecalho mostra traco e a contagem de linhas, nao zero', async ({
     await abrirAssistente(page);
     await page.locator('#imp-colar').fill(COLADO);
     await page.selectOption('#imp-fornecedor', '7');
+    await page.fill('#imp-markup', '80');
     await page.click('#imp-corpo button:has-text("Continuar")');
 
     const linha = page.locator('tr', { hasText: 'Dados colados' }).first();
@@ -97,6 +98,7 @@ test('as abas de matriz de preco continuam vindo como Ignorar', async ({ page })
     await page.setInputFiles('#imp-file', PLANILHA);
     await expect(page.locator('#imp-corpo')).toContainText('22 aba');
     await page.selectOption('#imp-fornecedor', '7');
+    await page.fill('#imp-markup', '80');
     await page.click('#imp-corpo button:has-text("Continuar")');
 
     const r = await page.evaluate(() => {
@@ -160,6 +162,7 @@ test('material importado continua com estoque minimo 0', async ({ page }) => {
     await abrirAssistente(page);
     await page.locator('#imp-colar').fill(COLADO);
     await page.selectOption('#imp-fornecedor', '7');
+    await page.fill('#imp-markup', '80');
     await page.click('#imp-corpo button:has-text("Continuar")');
     await page.evaluate(() => {
         _impEstado.abas['Dados colados'] = 'material';

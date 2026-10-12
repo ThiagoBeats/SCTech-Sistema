@@ -1420,7 +1420,7 @@ function verDetalhesTecido(id) {
     const rolos = db.estoque.filter(r => r.tecido_id == c.id);
     const rolosAtivos = rolos.filter(r => r.metragem_atual > 0);
     const rolosEsgotados = rolos.filter(r => !(r.metragem_atual > 0));
-    const abaixoMin = c.min_estoque > 0 && disp < c.min_estoque;
+    const abaixoMin = !temEstoqueInfinito(c) && c.min_estoque > 0 && disp < c.min_estoque;
     const pedidosAtivos = db.pedidos.filter(p => {
         if (normalizarStatus(p.status) === 'Instalado' || normalizarStatus(p.status) === 'Orçamento') return false;
         return normalizarAmbientes(p).some(a => (a.tecidos || []).some(t => t.tecidoId == id));
@@ -1552,7 +1552,7 @@ function valorOrdenacaoTecido(c, col) {
         case 'preco':      return c.preco || 0;
         case 'largura':    return c.largura_rolo || 2.80;
         case 'minimo':     return c.min_estoque || 0;
-        case 'estoque':    return estoqueDisponivel(c.id);
+        case 'estoque':    return temEstoqueInfinito(c) ? Infinity : estoqueDisponivel(c.id);
         case 'referencia': return (c.referencia || '').toLowerCase();
         case 'fornecedor': return (c.fornecedor_nome || '').toLowerCase();
         default:           return (c.nome || '').toLowerCase();
@@ -1700,8 +1700,8 @@ function renderCatalogoTecidos() {
 
     tb.innerHTML = lista.map(c => {
         const disp    = estoqueDisponivel(c.id);
-        const dispTxt = db.estoque.some(r => r.tecido_id == c.id) ? `${disp.toFixed(2)} m` : '—';
-        const alertMin = c.min_estoque > 0 && disp < c.min_estoque ? `<span class="badge-alerta" style="margin-left:6px">⚠</span>` : '';
+        const dispTxt = textoSaldoTecido(c);
+        const alertMin = !temEstoqueInfinito(c) && c.min_estoque > 0 && disp < c.min_estoque ? `<span class="badge-alerta" style="margin-left:6px">⚠</span>` : '';
         const thumb = c.imagem ? `<img src="${c.imagem}" style="width:32px;height:32px;object-fit:cover;border-radius:4px;margin-right:7px;vertical-align:middle;border:1px solid #E0E0E0">` : '';
         const nomeClick = `<span style="cursor:pointer;color:var(--primary);font-weight:500;text-decoration:underline dotted" onclick="verDetalhesTecido(${c.id})" title="Ver detalhes">${escapeHtml(c.nome)}</span>`;
         const marcado = catSelecao.tecido.has(c.id);
@@ -2104,6 +2104,7 @@ function realizarBaixaTecidos(ped) {
     for (const a of ambientes) {
         for (const t of (a.tecidos || [])) {
             if (!t.tecidoId || !(t.consumo_linear > 0)) continue;
+            if (tecidoTemEstoqueInfinito(t.tecidoId)) continue;   // não há o que baixar
             let restante = t.consumo_linear;
             let totalBaixado = 0;
             const rolos = db.estoque
@@ -2127,7 +2128,7 @@ function realizarBaixaMateriais(ped) {
     const pedRef = ped.id ? `Pedido #${formatPedidoId(ped.id)}` : 'Pedido';
     for (const item of (ped.itens || [])) {
         const mat = db.materiais.find(m => m.id == item.materialId);
-        if (mat) {
+        if (mat && !temEstoqueInfinito(mat)) {
             mat.estoque_atual = Math.max(0, (mat.estoque_atual || 0) - item.quantidade);
             registrarMovimento('Baixa Pedido', mat.nome, 'material', item.quantidade, mat.unidade, pedRef);
         }
@@ -2259,6 +2260,7 @@ async function moverStatus(id, direcao) {
         for (const a of ambientes) {
             for (const t of (a.tecidos || [])) {
                 if (!t.tecidoId || !(t.consumo_linear > 0)) continue;
+                if (tecidoTemEstoqueInfinito(t.tecidoId)) continue;   // sempre disponível
                 const disp = estoqueDisponivel(t.tecidoId);
                 if (disp < t.consumo_linear) {
                     const tec = db.catalogo.find(c => c.id == t.tecidoId);
@@ -2273,7 +2275,7 @@ async function moverStatus(id, direcao) {
         const linhasTec = [];
         for (const a of ambientes)
             for (const t of (a.tecidos || []))
-                if (t.tecidoId && t.consumo_linear > 0) {
+                if (t.tecidoId && t.consumo_linear > 0 && !tecidoTemEstoqueInfinito(t.tecidoId)) {
                     const tec = db.catalogo.find(c => c.id == t.tecidoId);
                     linhasTec.push(`• ${tec?.nome || 'Tecido'}${a.amb ? ' (' + a.amb + ')' : ''}: ${t.consumo_linear.toFixed(2)} m`);
                 }
@@ -2291,6 +2293,7 @@ async function moverStatus(id, direcao) {
         const insufMat = [];
         for (const i of itensPed) {
             const mat = db.materiais.find(m => m.id == i.materialId);
+            if (temEstoqueInfinito(mat)) continue;   // sempre disponivel
             const estAtual = mat ? (mat.estoque_atual || 0) : 0;
             if (estAtual < i.quantidade)
                 insufMat.push(`• ${i.nome}: necessário ${i.quantidade} ${i.unidade}, disponível ${estAtual.toFixed(2)} ${i.unidade}`);
@@ -2372,8 +2375,8 @@ function renderMetrics() {
     const orcamentos = db.pedidos.filter(p => normalizarStatus(p.status) === 'Orçamento').length;
     const aprovados  = db.pedidos.filter(p => normalizarStatus(p.status) !== 'Orçamento' && (p.valor || 0) > 0);
     const ticketMedio = aprovados.length ? aprovados.reduce((s, p) => s + p.valor, 0) / aprovados.length : 0;
-    const estoqueCritico = db.catalogo.filter(c => c.min_estoque > 0 && estoqueDisponivel(c.id) < c.min_estoque).length
-        + db.materiais.filter(m => m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque).length;
+    const estoqueCritico = db.catalogo.filter(c => !temEstoqueInfinito(c) && c.min_estoque > 0 && estoqueDisponivel(c.id) < c.min_estoque).length
+        + db.materiais.filter(m => !temEstoqueInfinito(m) && m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque).length;
     const hojeM = new Date(); hojeM.setHours(0, 0, 0, 0);
     const atrasados = db.pedidos.filter(p =>
         p.data_entrega && normalizarStatus(p.status) !== 'Instalado' &&
@@ -2894,8 +2897,8 @@ function renderDashboardAlertas() {
 
     // Estoque crítico (tecidos + materiais)
     if (alertaAtivo('estoque')) {
-        const tecidosCriticos = db.catalogo.filter(c => c.min_estoque > 0 && estoqueDisponivel(c.id) < c.min_estoque);
-        const matCriticos     = db.materiais.filter(m => m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque);
+        const tecidosCriticos = db.catalogo.filter(c => !temEstoqueInfinito(c) && c.min_estoque > 0 && estoqueDisponivel(c.id) < c.min_estoque);
+        const matCriticos     = db.materiais.filter(m => !temEstoqueInfinito(m) && m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque);
         const totalCriticos   = tecidosCriticos.length + matCriticos.length;
         if (totalCriticos) {
             const itens = [
@@ -2968,6 +2971,21 @@ function filtrarMetrica(valor) {
 }
 
 // --- ESTOQUE DE TECIDO: helpers ---
+// Item marcado como "estoque infinito" na importação da tabela do fornecedor:
+// está sempre disponível, nunca sofre baixa e fica fora dos alertas de mínimo.
+// A flag é por registro, então nenhum item fora da importação é afetado.
+function temEstoqueInfinito(registro) {
+    return !!(registro && registro.estoque_infinito);
+}
+function tecidoTemEstoqueInfinito(tecidoId) {
+    return temEstoqueInfinito(db.catalogo.find(c => c.id == tecidoId));
+}
+// Saldo para mostrar na tela: "∞" quando o item não tem controle de estoque.
+function textoSaldoTecido(c) {
+    if (temEstoqueInfinito(c)) return '∞';
+    return db.estoque.some(r => r.tecido_id == c.id) ? `${estoqueDisponivel(c.id).toFixed(2)} m` : '—';
+}
+
 function estoqueDisponivel(tecidoId) {
     return db.estoque.filter(r => r.tecido_id == tecidoId && r.metragem_atual > 0).reduce((s, r) => s + r.metragem_atual, 0);
 }
@@ -3571,7 +3589,7 @@ function renderEstoque() {
         // nunca comprado não está "abaixo do mínimo" — está apenas por usar, e
         // avisar sobre ele enche a tela de ruído.
         const criticos = db.catalogo.filter(c =>
-            c.min_estoque > 0 && teveEntradaDeTecido(c.id) && estoqueDisponivel(c.id) < c.min_estoque);
+            !temEstoqueInfinito(c) && c.min_estoque > 0 && teveEntradaDeTecido(c.id) && estoqueDisponivel(c.id) < c.min_estoque);
         if (criticos.length) {
             const recolhido = localStorage.getItem('sc_alertas_tecido_recolhidos') === '1';
             alertBox.innerHTML = `
@@ -3741,7 +3759,7 @@ function renderMateriais() {
     // Alertas de mínimo
     const alertBox = document.getElementById('alertas-mat-min');
     if (alertBox) {
-        const criticos = db.materiais.filter(m => m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque);
+        const criticos = db.materiais.filter(m => !temEstoqueInfinito(m) && m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque);
         if (criticos.length) {
             alertBox.innerHTML = criticos.map(m =>
                 `<div class="alerta-item">⚠ <strong>${m.nome}</strong>: ${(m.estoque_atual||0).toFixed(2)} ${m.unidade} — mínimo: ${m.min_estoque} ${m.unidade}</div>`
@@ -3762,7 +3780,7 @@ function renderMateriais() {
         : `${lista.length} de ${db.materiais.length} material(is)`;
 
     tb.innerHTML = lista.map(m => {
-        const abaixoMin = m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque;
+        const abaixoMin = !temEstoqueInfinito(m) && m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque;
         const corEstoque = abaixoMin ? '#F43927' : '#005D3B';
         const marcado = catSelecao.material.has(m.id);
         return `
@@ -3772,8 +3790,9 @@ function renderMateriais() {
             <td style="font-size:12px;color:#555">${escapeHtml(m.referencia || '—')}</td>
             <td>${escapeHtml(m.unidade || '')}</td>
             <td style="white-space:nowrap">R$ ${(m.preco || 0).toFixed(2)}</td>
-            <td style="color:${corEstoque};white-space:nowrap"><strong>${(m.estoque_atual || 0).toFixed(2)}</strong>
-                ${m.min_estoque > 0 ? `<span style="color:#888;font-size:12px"> / mín: ${m.min_estoque}</span>` : ''}
+            <td style="color:${corEstoque};white-space:nowrap">${temEstoqueInfinito(m)
+                ? '<strong title="Estoque infinito">∞</strong>'
+                : `<strong>${(m.estoque_atual || 0).toFixed(2)}</strong>${m.min_estoque > 0 ? `<span style="color:#888;font-size:12px"> / mín: ${m.min_estoque}</span>` : ''}`}
             </td>
             <td style="font-size:12px;color:#555">${escapeHtml(m.fornecedor_nome || '—')}</td>
             <td>
@@ -3960,6 +3979,7 @@ function renderEstoqueFuturo() {
         const key = String(c.id);
         const info = consumoPorTecido[key];
         if (!info) return null;
+        const infinito = temEstoqueInfinito(c);
         const disponivel = estoqueDisponivel(c.id);
         const reservado = Math.round(info.total * 100) / 100;
         const saldo = Math.round((disponivel - reservado) * 100) / 100;
@@ -3968,8 +3988,8 @@ function renderEstoqueFuturo() {
             <td>${escapeHtml(c.nome)}<br><span style="font-size:11px;color:#8F8F8F">${escapeHtml(c.referencia||'')}</span></td>
             <td style="text-align:center">${info.pedidoIds.size}</td>
             <td>${reservado.toFixed(2)} m</td>
-            <td>${disponivel.toFixed(2)} m</td>
-            <td style="${saldoCss}">${saldo >= 0 ? '+' : ''}${saldo.toFixed(2)} m</td>
+            <td>${infinito ? '∞' : disponivel.toFixed(2) + ' m'}</td>
+            <td style="${infinito ? 'color:#159912' : saldoCss}">${infinito ? 'sem controle' : (saldo >= 0 ? '+' : '') + saldo.toFixed(2) + ' m'}</td>
         </tr>`;
     }).filter(Boolean).join('');
     el.innerHTML = `<div class="card">
@@ -4032,7 +4052,7 @@ function renderAmbienteBreakdown(a) {
     const parts = tecidos.map((t, tidx) => {
         if (!t.tecidoId) return '';
         const disp = estoqueDisponivel(t.tecidoId);
-        const stockColor = disp < (t.consumo_linear||0) ? '#F43927' : '#005D3B';
+        const stockColor = !tecidoTemEstoqueInfinito(t.tecidoId) && disp < (t.consumo_linear||0) ? '#F43927' : '#005D3B';
         const temConflito = verificarConflitoDeLote(t.tecidoId, t.consumo_linear||0);
         const alt_bruta = (a.altura||0) + (t.bainha_cm??15)/100 + (t.cabecote_cm??0)/100;
         const titulo = tecidos.length > 1 ? `<div class="breakdown-row" style="font-weight:bold;color:var(--primary);padding-bottom:6px;border-bottom:1px solid #dde">Tecido ${tidx+1}: ${escapeHtml(t.tecidoNome||'')}</div>` : '';
@@ -4112,7 +4132,7 @@ function renderAmbientes() {
         const tecidos = a.tecidos || [];
         const buildTecOpts = (selId) => '<option value="">— Selecione o Tecido —</option>' + db.catalogo.map(c => {
             const disp = estoqueDisponivel(c.id);
-            const stockInfo = db.estoque.some(r=>r.tecido_id==c.id) ? ` · est: ${disp.toFixed(1)} m` : '';
+            const stockInfo = temEstoqueInfinito(c) ? ' · est: ∞' : (db.estoque.some(r=>r.tecido_id==c.id) ? ` · est: ${disp.toFixed(1)} m` : '');
             return `<option value="${c.id}"${selId==c.id?' selected':''}>${c.nome}${c.referencia?' ['+c.referencia+']':''} — R$ ${c.preco.toFixed(2)}/m${stockInfo}</option>`;
         }).join('');
         const tecidosHTML = tecidos.map((t, tidx) => {
@@ -4655,6 +4675,7 @@ function renderKanban() {
                 for (const a of ambientes) {
                     for (const t of (a.tecidos||[])) {
                         if (!t.tecidoId) continue;
+                        if (tecidoTemEstoqueInfinito(t.tecidoId)) continue;
                         const disp = estoqueDisponivel(t.tecidoId);
                         if (disp < (t.consumo_linear||0)) { badgeEst = `<span class="badge-sem-estoque">⚠ Sem estoque</span>`; break; }
                         else if (!badgeEst && verificarConflitoDeLote(t.tecidoId, t.consumo_linear||0)) badgeEst = `<span class="badge-lote">⚠ Múltiplos lotes</span>`;
@@ -7099,8 +7120,8 @@ function _consultaItens() {
             codigo: tec.referencia || '',
             nome: tec.nome || '',
             precoTxt: tec.preco > 0 ? _consultaMoeda(tec.preco) + '/m' : '—',
-            estoqueTxt: _consultaNum(disponivel) + ' m',
-            abaixoMin: tec.min_estoque > 0 && disponivel < tec.min_estoque,
+            estoqueTxt: temEstoqueInfinito(tec) ? '∞' : _consultaNum(disponivel) + ' m',
+            abaixoMin: !temEstoqueInfinito(tec) && tec.min_estoque > 0 && disponivel < tec.min_estoque,
             ultimaEntrada: ultimo ? new Date(ultimo.data_entrada + 'T12:00:00').toLocaleDateString('pt-BR') : '—',
             registro: tec,
             rolos
@@ -7117,8 +7138,8 @@ function _consultaItens() {
             codigo: mat.referencia || '',
             nome: mat.nome || '',
             precoTxt: mat.preco > 0 ? _consultaMoeda(mat.preco) : '—',
-            estoqueTxt: _consultaNum(mat.estoque_atual) + ' ' + (mat.unidade || ''),
-            abaixoMin: mat.min_estoque > 0 && (mat.estoque_atual || 0) < mat.min_estoque,
+            estoqueTxt: temEstoqueInfinito(mat) ? '∞' : _consultaNum(mat.estoque_atual) + ' ' + (mat.unidade || ''),
+            abaixoMin: !temEstoqueInfinito(mat) && mat.min_estoque > 0 && (mat.estoque_atual || 0) < mat.min_estoque,
             ultimaEntrada: ultimo ? new Date(ultimo.data).toLocaleDateString('pt-BR') : '—',
             registro: mat,
             rolos: null
@@ -7300,7 +7321,7 @@ document.addEventListener('click', e => {
 function renderEstoqueMateriais() {
     const alertBox = document.getElementById('alertas-mat-min');
     if (alertBox) {
-        const criticos = db.materiais.filter(m => m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque);
+        const criticos = db.materiais.filter(m => !temEstoqueInfinito(m) && m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque);
         alertBox.innerHTML = criticos.length
             ? criticos.map(m => `<div class="alerta-item">⚠ <strong>${escapeHtml(m.nome)}</strong>: ${(m.estoque_atual||0).toFixed(2)} ${m.unidade} — mínimo: ${m.min_estoque} ${m.unidade}</div>`).join('')
             : '';
@@ -7314,14 +7335,16 @@ function renderEstoqueMateriais() {
     }
     const lista = ordenarLista(db.materiais, matSortState, valorOrdenacaoMaterial);
     tb.innerHTML = lista.map(m => {
-        const abaixoMin = m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque;
+        const abaixoMin = !temEstoqueInfinito(m) && m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque;
         const cor = abaixoMin ? '#F43927' : '#005D3B';
         return `<tr>
             <td><strong>${escapeHtml(m.nome)}</strong>${abaixoMin?`<span class="badge-alerta" style="margin-left:8px">⚠</span>`:''}</td>
             <td style="font-size:12px;color:#555">${escapeHtml(m.referencia||'—')}</td>
             <td>${m.unidade}</td>
             <td style="color:#005D3B;font-weight:600">${m.preco > 0 ? 'R$ '+m.preco.toFixed(2) : '—'}</td>
-            <td style="color:${cor}"><strong>${(m.estoque_atual||0).toFixed(2)}</strong>${m.min_estoque>0?`<span style="color:#888;font-size:12px"> / mín: ${m.min_estoque}</span>`:''}</td>
+            <td style="color:${cor}">${temEstoqueInfinito(m)
+                ? '<strong title="Estoque infinito">∞</strong>'
+                : `<strong>${(m.estoque_atual||0).toFixed(2)}</strong>${m.min_estoque>0?`<span style="color:#888;font-size:12px"> / mín: ${m.min_estoque}</span>`:''}`}</td>
             <td style="font-size:12px;color:#555">${escapeHtml(m.fornecedor_nome||'—')}</td>
             <td>
                 <button class="btn btn-outline btn-sm" onclick="mostrarAjusteForm(${m.id})" title="Ajustar estoque">± Ajustar</button>

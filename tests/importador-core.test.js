@@ -1813,3 +1813,104 @@ test('sem nenhuma coluna de preco, o item fica com problema', () => {
     assert.strictEqual(itens[0].preco_custo, null);
     assert.match(itens[0].problema, /pre[çc]o/i);
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// Regime de estoque escolhido no passo 1
+// ─────────────────────────────────────────────────────────────────────────
+
+test('estoqueInfinito marca os itens criados, tecido e material', () => {
+    const r = C.aplicarImportacao({
+        decisoes: [
+            { item: itemDeTeste({ codigo: 'T1', nome: 'Tecido um', tipo: 'tecido', preco_custo: 10 }), existente: null, markup: 0, acao: 'criar' },
+            { item: itemDeTeste({ codigo: 'M1', nome: 'Material um', tipo: 'material', preco_custo: 10, largura: null }), existente: null, markup: 0, acao: 'criar' }
+        ],
+        catalogo: [], materiais: [], fornecedor: null, estoqueInfinito: true, agora: 7000
+    });
+    assert.strictEqual(r.catalogo[0].estoque_infinito, true);
+    assert.strictEqual(r.materiais[0].estoque_infinito, true);
+});
+
+test('sem a opcao, o item nasce com controle de estoque normal', () => {
+    const r = C.aplicarImportacao({
+        decisoes: [{ item: itemDeTeste({ codigo: 'T1', nome: 'Tecido um', preco_custo: 10 }), existente: null, markup: 0, acao: 'criar' }],
+        catalogo: [], materiais: [], fornecedor: null, agora: 7000
+    });
+    assert.strictEqual(r.catalogo[0].estoque_infinito, false);
+});
+
+test('atualizar aplica o regime de estoque desta importacao ao item alcancado', () => {
+    const catalogo = [{
+        id: 1, referencia: 'T1', nome: 'Tecido um', preco_custo: 100, preco: 180,
+        largura_rolo: 2.8, min_estoque: 10, estoque_infinito: false
+    }];
+    const r = C.aplicarImportacao({
+        decisoes: [{
+            item: itemDeTeste({ codigo: 'T1', nome: 'Tecido um', preco_custo: 120 }),
+            existente: catalogo[0], markup: 50, acao: 'atualizar'
+        }],
+        catalogo, materiais: [], fornecedor: null, estoqueInfinito: true, agora: 7000
+    });
+    assert.strictEqual(r.catalogo[0].estoque_infinito, true);
+});
+
+test('item fora da importacao nao muda de regime', () => {
+    const catalogo = [
+        { id: 1, referencia: 'T1', nome: 'Tecido um', preco_custo: 100, preco: 180, largura_rolo: 2.8, estoque_infinito: false },
+        { id: 2, referencia: 'OUTRO', nome: 'Nao mexido', preco_custo: 50, preco: 90, largura_rolo: 2.8, estoque_infinito: false }
+    ];
+    const r = C.aplicarImportacao({
+        decisoes: [{
+            item: itemDeTeste({ codigo: 'T1', nome: 'Tecido um', preco_custo: 120 }),
+            existente: catalogo[0], markup: 50, acao: 'atualizar'
+        }],
+        catalogo, materiais: [], fornecedor: null, estoqueInfinito: true, agora: 7000
+    });
+    const intocado = r.catalogo.find(c => c.referencia === 'OUTRO');
+    assert.strictEqual(intocado.estoque_infinito, false, 'quem ficou fora da tabela nao vira infinito');
+});
+
+test('desfazer devolve o regime de estoque anterior', () => {
+    const catalogo = [{
+        id: 1, referencia: 'T1', nome: 'Tecido um', preco_custo: 100, preco: 180,
+        largura_rolo: 2.8, estoque_infinito: false
+    }];
+    const ap = C.aplicarImportacao({
+        decisoes: [{
+            item: itemDeTeste({ codigo: 'T1', nome: 'Tecido um', preco_custo: 120 }),
+            existente: catalogo[0], markup: 50, acao: 'atualizar'
+        }],
+        catalogo, materiais: [], fornecedor: null, estoqueInfinito: true, agora: 7000
+    });
+    assert.strictEqual(ap.catalogo[0].estoque_infinito, true);
+
+    const des = C.desfazerImportacao({
+        catalogo: ap.catalogo, materiais: ap.materiais, mudancas: ap.mudancas
+    });
+    assert.strictEqual(des.catalogo[0].estoque_infinito, false, 'o desfazer precisa devolver o regime antigo');
+});
+
+test('desfazer apaga a flag de um item que nao a tinha antes', () => {
+    const catalogo = [{ id: 1, referencia: 'T1', nome: 'Tecido um', preco_custo: 100, preco: 180, largura_rolo: 2.8 }];
+    const ap = C.aplicarImportacao({
+        decisoes: [{
+            item: itemDeTeste({ codigo: 'T1', nome: 'Tecido um', preco_custo: 120 }),
+            existente: catalogo[0], markup: 50, acao: 'atualizar'
+        }],
+        catalogo, materiais: [], fornecedor: null, estoqueInfinito: true, agora: 7000
+    });
+    const des = C.desfazerImportacao({ catalogo: ap.catalogo, materiais: ap.materiais, mudancas: ap.mudancas });
+    assert.ok(!('estoque_infinito' in des.catalogo[0]), 'campo que nao existia antes deve sumir no desfazer');
+});
+
+test('montarPerfil guarda as duas escolhas do passo 1', () => {
+    const p = C.montarPerfil({ id: 1, nome: 'RC', fornecedorId: 7, markupPadrao: 30, margemModo: 'item', estoqueModo: 'infinito' });
+    assert.strictEqual(p.margem_modo, 'item');
+    assert.strictEqual(p.estoque_modo, 'infinito');
+    assert.strictEqual(p.markup_padrao, 30);
+});
+
+test('montarPerfil cai no padrao quando as escolhas nao vem', () => {
+    const p = C.montarPerfil({ id: 1, nome: 'RC', fornecedorId: 7 });
+    assert.strictEqual(p.margem_modo, 'total');
+    assert.strictEqual(p.estoque_modo, 'ajustar');
+});

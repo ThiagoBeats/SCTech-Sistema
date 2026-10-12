@@ -511,7 +511,7 @@
     // do negocio e nunca e tocado, nem ao gravar nem ao desfazer.
     const CAMPOS_DO_IMPORTADOR = [
         'referencia', 'nome', 'preco_custo', 'preco', 'unidade', 'largura_rolo',
-        'fornecedor_id', 'fornecedor_nome'
+        'fornecedor_id', 'fornecedor_nome', 'estoque_infinito'
     ];
 
     function _fotografarCampos(registro) {
@@ -526,6 +526,8 @@
         const catalogo = (opcoes.catalogo || []).map(r => Object.assign({}, r));
         const materiais = (opcoes.materiais || []).map(r => Object.assign({}, r));
         const fornecedor = opcoes.fornecedor || null;
+        // Regime de estoque escolhido no passo 1 para esta tabela.
+        const estoqueInfinito = !!opcoes.estoqueInfinito;
 
         // Encontra o maior ID existente nas duas listas para evitar colisao
         let maiorIdExistente = -1;
@@ -582,6 +584,9 @@
                     alvo.unidade = item.unidade;
                 }
                 if (fornecedor) { alvo.fornecedor_id = fornecedor.id; alvo.fornecedor_nome = fornecedor.nome; }
+                // O regime de estoque vale para os itens desta importação, que
+                // são os únicos abrangidos pela operação.
+                alvo.estoque_infinito = estoqueInfinito;
                 resumo.atualizados++;
                 return;
             }
@@ -599,7 +604,8 @@
                 // usuario ajustou a mao e preservado.
                 min_estoque: item.tipo === 'tecido' ? MIN_ESTOQUE_TECIDO : 0,
                 fornecedor_id: fornecedor ? fornecedor.id : null,
-                fornecedor_nome: fornecedor ? fornecedor.nome : ''
+                fornecedor_nome: fornecedor ? fornecedor.nome : '',
+                estoque_infinito: estoqueInfinito
             };
             if (item.tipo === 'tecido') {
                 // A largura padrao so vale para celula VAZIA. Celula ilegivel
@@ -783,7 +789,9 @@
             abas: o.abas || {},
             layouts: o.layouts || [],
             cores: o.cores || {},
-            markup_padrao: Number(o.markupPadrao) || 0
+            markup_padrao: Number(o.markupPadrao) || 0,
+            margem_modo: o.margemModo === 'item' ? 'item' : 'total',
+            estoque_modo: o.estoqueModo === 'infinito' ? 'infinito' : 'ajustar'
         };
     }
 

@@ -131,6 +131,7 @@ test('selecao manual do cabecalho destrava uma aba sem cabecalho', async ({ page
     await page.setInputFiles('#imp-file', PLANILHA);
     await expect(page.locator('#imp-corpo')).toContainText('22 aba');
     await page.selectOption('#imp-fornecedor', '7');
+    await page.fill('#imp-markup', '80');
     await page.click('#imp-corpo button:has-text("Continuar")');
 
     await page.evaluate(() => {
@@ -196,6 +197,7 @@ test('C1: escolha manual de cabecalho sobrevive ao Continuar do passo 3', async 
     await page.setInputFiles('#imp-file', PLANILHA);
     await expect(page.locator('#imp-corpo')).toContainText('22 aba');
     await page.selectOption('#imp-fornecedor', '7');
+    await page.fill('#imp-markup', '80');
     await page.click('#imp-corpo button:has-text("Continuar")');
 
     // Injeta a aba sintetica do repro no lugar das abas reais, mantendo o

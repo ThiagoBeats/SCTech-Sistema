@@ -19,6 +19,7 @@ async function ateOPasso2(page, arquivo) {
     await page.setInputFiles('#imp-file', arquivo);
     await expect(page.locator('#imp-corpo')).toContainText('22 aba', { timeout: 60000 });
     await page.selectOption('#imp-fornecedor', '7');
+    await page.fill('#imp-markup', '80');
     await page.click('#imp-corpo button:has-text("Continuar")');
     await expect(page.locator('#imp-corpo')).toContainText('Itens');
 }

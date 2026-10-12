@@ -101,6 +101,7 @@ test('passo 2: trocar o tipo de uma aba usa indice e nao quebra com nome estranh
     await page.setInputFiles('#imp-file', PLANILHA);
     await expect(page.locator('#imp-corpo')).toContainText('22 aba');
     await page.selectOption('#imp-fornecedor', '7');
+    await page.fill('#imp-markup', '80');
     await page.click('#imp-corpo button:has-text("Continuar")');
 
     // troca via a funcao, por indice
@@ -126,6 +127,7 @@ test('passo 2: barra quando todas as abas estao como ignorar', async ({ page }) 
     await page.setInputFiles('#imp-file', PLANILHA);
     await expect(page.locator('#imp-corpo')).toContainText('22 aba');
     await page.selectOption('#imp-fornecedor', '7');
+    await page.fill('#imp-markup', '80');
     await page.click('#imp-corpo button:has-text("Continuar")');
 
     await page.evaluate(() => {

@@ -150,6 +150,7 @@ test('pendencias aparecem em painel, separadas, e levam ao produto', async ({ pa
     await page.setInputFiles('#imp-file', PLANILHA);
     await expect(page.locator('#imp-corpo')).toContainText('22 aba');
     await page.selectOption('#imp-fornecedor', '7');
+    await page.fill('#imp-markup', '80');
     await page.click('#imp-corpo button:has-text("Continuar")');
     await page.evaluate(() => {
         Object.keys(_impEstado.abas).forEach(a => { _impEstado.abas[a] = 'ignorar'; });
@@ -199,6 +200,7 @@ test('resolver as pendencias faz o painel sumir e libera a gravacao', async ({ p
     await page.setInputFiles('#imp-file', PLANILHA);
     await expect(page.locator('#imp-corpo')).toContainText('22 aba');
     await page.selectOption('#imp-fornecedor', '7');
+    await page.fill('#imp-markup', '80');
     await page.click('#imp-corpo button:has-text("Continuar")');
     await page.evaluate(() => {
         Object.keys(_impEstado.abas).forEach(a => { _impEstado.abas[a] = 'ignorar'; });
@@ -310,6 +312,7 @@ test('colar com a linha de titulo ja vem mapeado', async ({ page }) => {
     await page.locator('#imp-colar').fill(comTitulo);
     // o texto colado passa a valer sozinho, sem botao
     await page.selectOption('#imp-fornecedor', '7');
+    await page.fill('#imp-markup', '80');
     await page.click('#imp-corpo button:has-text("Continuar")');
 
     const tipo = await page.evaluate(() => _impEstado.abas[_impEstado.planilha.ordem[0]]);

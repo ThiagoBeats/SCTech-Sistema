@@ -89,8 +89,6 @@ async function _impLerArquivo(file) {
     return { ordem: wb.SheetNames.slice(), abas };
 }
 
-const IMP_MARKUP_PADRAO = 80;
-
 const _impEstado = {
     file: null,
     planilha: null,      // { ordem, abas }
@@ -98,7 +96,11 @@ const _impEstado = {
     textoColado: '',     // texto bruto colado no passo 1, preservado entre redesenhos
     fornecedor: null,    // { id, nome }
     fornecedorId: null,  // id escolhido no select antes de confirmar no passo 1
-    markupPadrao: IMP_MARKUP_PADRAO,
+    markupPadrao: null,     // margem total; em branco ate o usuario informar
+    margemModo: 'total',    // 'total' = uma margem para a tabela toda
+                            // 'item'  = cada item recebe a sua na conferência
+    estoqueModo: 'ajustar', // 'ajustar'  = controle normal de estoque
+                            // 'infinito' = item sempre disponível, sem baixa
     abas: {},            // { [nomeAba]: 'tecido' | 'material' | 'ignorar' }
     layouts: {},         // { [assinatura]: { mapa, cabecalhoIndice } }
     cores: {},           // { [assinatura]: [indices de coluna que sao cor] }
@@ -116,7 +118,9 @@ function _impResetar() {
     _impEstado.textoColado = '';
     _impEstado.fornecedor = null;
     _impEstado.fornecedorId = null;
-    _impEstado.markupPadrao = IMP_MARKUP_PADRAO;
+    _impEstado.markupPadrao = null;
+    _impEstado.margemModo = 'total';
+    _impEstado.estoqueModo = 'ajustar';
     _impEstado.abas = {};
     _impEstado.layouts = {};
     _impEstado.cores = {};
@@ -132,7 +136,7 @@ function abrirImportadorTabela() {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.id = 'imp-overlay';
-    overlay.innerHTML = `<div class="modal-box" style="max-width:980px">
+    overlay.innerHTML = `<div class="modal-box" style="max-width:1080px">
         <div class="modal-header">
             <h3>Importar tabela de fornecedor</h3>
             <button class="modal-close" onclick="_impFechar()">×</button>
@@ -200,8 +204,13 @@ function _impPasso1HTML() {
         <textarea id="imp-colar" rows="6" placeholder="Copie as linhas na planilha (Ctrl+C) e cole aqui (Ctrl+V)" style="width:100%;font-family:monospace;font-size:12px" oninput="_impColadoMudou()">${escapeHtml(_impEstado.textoColado || '')}</textarea>
     </div>
     ${origemLinha}
-    <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px">
-        <div class="form-group">
+    <div class="imp-cfg-secao">
+        <h4 class="imp-cfg-secao-titulo">Configurações da importação</h4>
+        <p class="imp-cfg-secao-ajuda">Escolha como deseja aplicar a margem de lucro e o controle de estoque para os itens desta tabela.</p>
+        <div id="imp-cfg" class="imp-cfg-grade">${_impCardsConfigHTML()}</div>
+    </div>
+    <div class="imp-rodape">
+        <div class="form-group imp-rodape-forn">
             <label>Fornecedor desta tabela</label>
             <select id="imp-fornecedor">
                 <option value="">— Selecione —</option>
@@ -212,22 +221,80 @@ function _impPasso1HTML() {
                 <button class="btn btn-outline btn-sm" onclick="_impCriarFornecedorInline()" style="white-space:nowrap">+ Cadastrar</button>
             </div>
         </div>
-        <div class="form-group">
-            <label>Markup dos itens novos (%)</label>
-            <input type="number" id="imp-markup" value="${_impEstado.markupPadrao}" min="0" step="1">
-            <small style="font-size:11px;color:var(--muted)">Itens que já existem mantêm o markup deles.</small>
+        <div class="imp-rodape-botoes">
+            <button class="btn btn-outline" onclick="_impFechar()">Cancelar</button>
+            <button class="btn btn-success" onclick="_impConcluirPasso1()">Continuar</button>
         </div>
-    </div>
-    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px">
-        <button class="btn btn-outline" onclick="_impFechar()">Cancelar</button>
-        <button class="btn btn-success" onclick="_impConcluirPasso1()">Continuar</button>
     </div>`;
+}
+
+// Icones dos cartoes de configuracao, em SVG de traco para ficarem com o mesmo
+// peso visual. Emoji variaria de desenho entre sistemas.
+const _IMP_ICONES = {
+    porcento: '<line x1="19" x2="5" y1="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
+    sliders: '<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>',
+    infinito: '<path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4Z"/>',
+    caixa: '<path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>'
+};
+
+function _impIcone(nome) {
+    return `<svg class="imp-cfg-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${_IMP_ICONES[nome]}</svg>`;
+}
+
+// Um cartao selecionavel. `grupo` e o name do radio: os dois primeiros cartoes
+// disputam a margem entre si e os dois ultimos o estoque, de modo que toda
+// importacao sai com uma regra de cada.
+function _impCardConfigHTML(grupo, valor, icone, titulo, descricao, extra) {
+    const atual = grupo === 'margem' ? _impEstado.margemModo : _impEstado.estoqueModo;
+    const sel = atual === valor;
+    return `<label class="imp-cfg-card${sel ? ' imp-cfg-card-sel' : ''}">
+        <div class="imp-cfg-topo">
+            <input type="radio" name="imp-cfg-${grupo}" value="${valor}"${sel ? ' checked' : ''}
+                   onchange="_impEscolherConfig('${grupo}','${valor}')">
+            ${_impIcone(icone)}
+            <span class="imp-cfg-titulo">${titulo}</span>
+        </div>
+        <p class="imp-cfg-desc">${descricao}</p>
+        ${sel && extra ? extra : ''}
+    </label>`;
+}
+
+function _impCardsConfigHTML() {
+    const campoMargem = `<div class="imp-cfg-campo">
+        <label for="imp-markup">Margem total (%)</label>
+        <div class="imp-cfg-campo-caixa">
+            <input type="number" id="imp-markup" value="${_impEstado.markupPadrao === null ? '' : _impEstado.markupPadrao}"
+                   min="0" step="1" placeholder="Ex.: 30" onclick="event.stopPropagation()">
+            <span class="imp-cfg-sufixo">%</span>
+        </div>
+    </div>`;
+    return [
+        _impCardConfigHTML('margem', 'total', 'porcento', 'Definir margem total',
+            'A mesma margem de lucro será aplicada em todos os itens da tabela, automaticamente.', campoMargem),
+        _impCardConfigHTML('margem', 'item', 'sliders', 'Definir margem por item',
+            'Você poderá definir margens diferentes para cada item, de forma manual, no momento da conferência ou após a importação.'),
+        _impCardConfigHTML('estoque', 'infinito', 'infinito', 'Estoque infinito',
+            'Todos os itens da tabela serão marcados como estoque infinito. Não haverá controle de estoque, baixa ou entrada de itens.'),
+        _impCardConfigHTML('estoque', 'ajustar', 'caixa', 'Ajustar estoque',
+            'O estoque será controlado para cada item. Você poderá dar entrada nos itens manualmente após a importação e o sistema fará a baixa ao sair nos pedidos.')
+    ].join('');
+}
+
+// Troca a escolha e redesenha so os cartoes, para o campo de margem aparecer
+// ou sumir sem recarregar o passo inteiro (o que perderia o texto colado).
+function _impEscolherConfig(grupo, valor) {
+    _impCapturarPasso1();
+    if (grupo === 'margem') _impEstado.margemModo = valor;
+    else _impEstado.estoqueModo = valor;
+    const alvo = document.getElementById('imp-cfg');
+    if (alvo) alvo.innerHTML = _impCardsConfigHTML();
 }
 
 // Guarda o que o usuario ja digitou no passo 1 antes de qualquer re-render.
 // TODO caminho que redesenha o passo 1 precisa chamar isto, senao a escolha de
-// fornecedor ou o markup digitado somem sem aviso. Regra unica de padrao: campo
-// em branco ou ilegivel vira IMP_MARKUP_PADRAO; um 0 digitado de proposito fica 0.
+// fornecedor ou a margem digitada somem sem aviso. Regra unica de padrao: campo
+// em branco ou ilegivel vira null e o Continuar cobra; um 0 de proposito fica 0.
 function _impCapturarPasso1() {
     const selFornecedor = document.getElementById('imp-fornecedor');
     if (selFornecedor && selFornecedor.value) {
@@ -235,8 +302,12 @@ function _impCapturarPasso1() {
     }
     const campoMarkup = document.getElementById('imp-markup');
     if (campoMarkup) {
-        const v = parseFloat(campoMarkup.value);
-        _impEstado.markupPadrao = (isFinite(v) && v >= 0) ? v : IMP_MARKUP_PADRAO;
+        const bruto = String(campoMarkup.value).trim();
+        const v = parseFloat(bruto);
+        // Em branco vira null de propósito: com "Definir margem total" escolhida,
+        // o Continuar cobra o valor em vez de assumir uma margem calada.
+        // Um 0 digitado de propósito continua valendo 0.
+        _impEstado.markupPadrao = (bruto !== '' && isFinite(v) && v >= 0) ? v : null;
     }
     // Preserva o texto colado entre redesenhos do passo 1, do mesmo jeito que
     // fornecedor e markup — perder o que o usuario acabou de colar seria o
@@ -404,16 +475,32 @@ async function _impConcluirPasso1() {
             if (_impEstado.abas[aba] !== undefined) _impEstado.abas[aba] = perfil.abas[aba];
         });
         (perfil.layouts || []).forEach(l => { _impEstado.layouts[l.assinatura] = { mapa: l.mapa, cabecalhoIndice: l.cabecalhoIndice }; });
-        if (perfil.markup_padrao) _impEstado.markupPadrao = perfil.markup_padrao;
+        // A margem salva só preenche o que ficou em branco: o que o usuário
+        // acabou de digitar nesta importação manda.
+        if (_impEstado.markupPadrao === null && perfil.markup_padrao) _impEstado.markupPadrao = perfil.markup_padrao;
+        if (perfil.margem_modo) _impEstado.margemModo = perfil.margem_modo;
+        if (perfil.estoque_modo) _impEstado.estoqueModo = perfil.estoque_modo;
         (perfil.cores && Object.keys(perfil.cores).forEach(a => { _impEstado.cores[a] = perfil.cores[a]; }));
         toast(`Perfil "${perfil.nome}" aplicado.`, 'info');
         // Perfil cobre abas e mapeamento: o usuario pode ir direto conferir.
         const pular = await showConfirm(
             `Há um perfil salvo para ${_impEstado.fornecedor.nome}. Ir direto para a conferência?`,
             '⚡', 'Ir para a conferência', 'Revisar os passos');
-        if (pular && _impPerfilCobreTudo()) { _impRenderPasso(4); return; }
+        if (pular && _impPerfilCobreTudo()) {
+            if (!await _impMargemTotalValida()) return;
+            _impRenderPasso(4);
+            return;
+        }
     }
+    if (!await _impMargemTotalValida()) return;
     _impRenderPasso(2);
+}
+
+// Só a margem total exige valor; as outras três configurações não têm campo.
+async function _impMargemTotalValida() {
+    if (_impEstado.margemModo !== 'total' || _impEstado.markupPadrao !== null) return true;
+    await showAlert('Informe a margem total (%) ou escolha “Definir margem por item”.', '⚠️');
+    return false;
 }
 
 // So pula se o perfil tiver mapeamento para todo layout que sera usado.
@@ -823,12 +910,16 @@ function _impPrepararConferencia() {
         e.marcado = marcadoPadrao;
         e.markup = markupFn(e);
     });
-    preparar(grupos.novos, true, () => _impEstado.markupPadrao);
+    // Com "margem por item" nenhuma linha nasce com margem: o usuário preenche
+    // uma a uma aqui na conferência. Item que já existe mantém a margem dele
+    // nos dois modos — atualizar um custo nunca mexe na margem antiga.
+    const margemInicial = () => (_impEstado.margemModo === 'item' ? null : _impEstado.markupPadrao);
+    preparar(grupos.novos, true, margemInicial);
     preparar(grupos.atualizados, true, e => C.markupDeExistente(e.existente));
-    preparar(grupos.sem_markup, true, () => _impEstado.markupPadrao);
-    preparar(grupos.conflitos, false, () => _impEstado.markupPadrao);
-    preparar(grupos.nomes_repetidos, false, () => _impEstado.markupPadrao);
-    preparar(grupos.problemas, false, () => _impEstado.markupPadrao);
+    preparar(grupos.sem_markup, true, margemInicial);
+    preparar(grupos.conflitos, false, margemInicial);
+    preparar(grupos.nomes_repetidos, false, margemInicial);
+    preparar(grupos.problemas, false, margemInicial);
     _impEstado.grupos = grupos;
 }
 
@@ -840,6 +931,15 @@ const _IMP_GRUPOS = [
     { chave: 'nomes_repetidos', titulo: 'Nomes repetidos',         ajuda: 'O nome já pertence a outro produto. Edite o nome ou desmarque.' },
     { chave: 'problemas',       titulo: 'Com problema',            ajuda: 'Preço ilegível, código ou nome faltando, ou mudança de layout na planilha. Corrija o que falta ou deixe desmarcado.' }
 ];
+
+// Com "margem por item" as linhas novas chegam sem markup, e deixar em branco
+// grava a venda igual ao custo. O texto do grupo precisa dizer isso.
+function _impAjudaDoGrupo(def) {
+    if (def.chave === 'novos' && _impEstado.margemModo === 'item') {
+        return 'Defina o markup de cada linha. Linha deixada em branco entra com a venda igual ao custo.';
+    }
+    return def.ajuda;
+}
 
 // Percorre as linhas marcadas na ordem de importacao (ordem dos grupos e,
 // dentro de cada grupo, ordem do array — que veio de _impColetarItens).
@@ -1161,7 +1261,7 @@ function _impPasso4HTML() {
 
         return `<div class="card" style="margin-bottom:14px">
             <h4 style="margin:0 0 2px;color:var(--dark)">${def.titulo} <span style="color:var(--muted);font-weight:400">(${contagem})</span></h4>
-            <p style="font-size:12px;color:var(--muted);margin:0 0 10px">${def.ajuda}</p>
+            <p style="font-size:12px;color:var(--muted);margin:0 0 10px">${_impAjudaDoGrupo(def)}</p>
             <div data-painel="${def.chave}" style="max-height:260px;overflow:auto"><table>
                 <thead><tr><th></th><th>Aba</th><th>Código</th><th>Nome</th><th>Custo</th><th>Markup %</th><th>Venda</th></tr></thead>
                 <tbody>${linhas}</tbody>
@@ -1264,6 +1364,7 @@ async function _impGravar() {
         catalogo: db.catalogo,
         materiais: db.materiais,
         fornecedor: _impEstado.fornecedor,
+        estoqueInfinito: _impEstado.estoqueModo === 'infinito',
         agora: Date.now()
     });
 
@@ -1319,7 +1420,9 @@ function _impSalvarPerfil() {
         abas: _impEstado.abas,
         layouts,
         cores: _impEstado.cores,
-        markupPadrao: _impEstado.markupPadrao
+        markupPadrao: _impEstado.markupPadrao,
+        margemModo: _impEstado.margemModo,
+        estoqueModo: _impEstado.estoqueModo
     });
     if (existente) db.import_perfis[db.import_perfis.indexOf(existente)] = perfil;
     else db.import_perfis.push(perfil);
