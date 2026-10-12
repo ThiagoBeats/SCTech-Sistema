@@ -105,6 +105,7 @@ const _impEstado = {
     layouts: {},         // { [assinatura]: { mapa, cabecalhoIndice } }
     cores: {},           // { [assinatura]: [indices de coluna que sao cor] }
     grupos: null,        // saida de ImportadorCore.classificar
+    gruposKit: null,     // saida de ImportadorCore.classificarKits, quando ha aba Kit
     busca: '',           // filtro por codigo/nome no passo 4 — so visual
     excluidas: {},       // { [nomeAba]: [indices de linha tirados no passo 3] }
     mostrarProblemas: false, // painel de layouts com problema, ligado ao tentar Continuar
@@ -126,6 +127,7 @@ function _impResetar() {
     _impEstado.layouts = {};
     _impEstado.cores = {};
     _impEstado.grupos = null;
+    _impEstado.gruposKit = null;
     _impEstado.busca = '';
     _impEstado.excluidas = {};
     _impEstado.mostrarProblemas = false;
@@ -197,10 +199,6 @@ function _impPasso1HTML() {
     // substitui os dados, e vice-versa; o usuario precisa ver qual valeu.
     const origemLinha = `<p id="imp-origem" style="font-size:12px;color:var(--muted);margin-top:6px">${_impTextoDaOrigem(nomeArquivo)}</p>`;
     return `
-    <div class="imp-atalho-kits">
-        <span>Vai importar <strong>kits prontos</strong>, com código e preço próprios?</span>
-        <button class="btn btn-outline btn-sm" onclick="abrirImportadorKits()">📦 Importar kits prontos</button>
-    </div>
     <div class="form-group">
         <label>Arquivo da tabela</label>
         <input type="file" id="imp-file" accept=".xlsx,.xls,.csv,.pdf" onchange="_impArquivoEscolhido(this)">
@@ -532,6 +530,7 @@ function _impPasso2HTML() {
                 <select onchange="_impTrocarTipoAba(${ai}, this.value)">
                     <option value="tecido" ${sel('tecido')}>Tecido</option>
                     <option value="material" ${sel('material')}>Material</option>
+                    <option value="kit" ${sel('kit')}>Kit</option>
                     <option value="ignorar" ${sel('ignorar')}>Ignorar</option>
                 </select>
             </td>
@@ -574,6 +573,16 @@ const _IMP_PAPEIS = [
 // As duas colunas de preco podem conviver: ambas sao gravadas. Quando as duas
 // estao mapeadas, o CUSTO sai da de peca — regra de sempre, preservada.
 const _IMP_PAPEIS_PRECO = ['preco', 'preco_peca'];
+
+// Papeis de uma aba marcada como Kit. Codigo, Nome e Preco sao obrigatorios.
+const _IMP_PAPEIS_KIT = [
+    { valor: 'ignorar',   rotulo: 'Ignorar' },
+    { valor: 'codigo',    rotulo: 'Código' },
+    { valor: 'nome',      rotulo: 'Nome' },
+    { valor: 'preco',     rotulo: 'Preço' },
+    { valor: 'medida',    rotulo: 'Medida' },
+    { valor: 'descricao', rotulo: 'Descrição' }
+];
 
 // ── Linhas tiradas no passo 3 ───────────────────────────────────────────────
 // Desmarcar uma linha aqui a retira da importacao de vez: ela nao vira item e
@@ -692,7 +701,8 @@ function _impAdicionarColuna(li) {
     const papel = document.getElementById('imp-nova-papel')?.value || '';
     const valor = document.getElementById('imp-nova-valor')?.value ?? '';
     const digitado = (document.getElementById('imp-nova-rotulo')?.value || '').trim();
-    const rotulo = digitado || (_IMP_PAPEIS.find(p => p.valor === papel) || {}).rotulo || 'Nova coluna';
+    const lista = layout.tipo === 'kit' ? _IMP_PAPEIS_KIT : _IMP_PAPEIS;
+    const rotulo = digitado || (lista.find(p => p.valor === papel) || {}).rotulo || 'Nova coluna';
 
     const assinaturaAntiga = layout.assinatura;
     const mapa = Object.assign({}, _impMapaDoLayout(layout));
@@ -740,7 +750,9 @@ function _impAdicionarColuna(li) {
 function _impMapaDoLayout(layout) {
     const C = window.ImportadorCore;
     if (_impEstado.layouts[layout.assinatura]) return _impEstado.layouts[layout.assinatura].mapa;
-    return C.sugerirMapeamento(layout.colunas);
+    return layout.tipo === 'kit'
+        ? C.sugerirMapeamentoKit(layout.colunas)
+        : C.sugerirMapeamento(layout.colunas);
 }
 
 function _impPasso3HTML() {
@@ -755,9 +767,12 @@ function _impPasso3HTML() {
         // rolagem propria, entao a janela em volta fica parada.
         const amostra = dados.slice(inicio);
 
-        const modoCor = !!_impEstado.cores[layout.assinatura];
+        const ehKit = layout.tipo === 'kit';
+        const modoCor = !ehKit && !!_impEstado.cores[layout.assinatura];
         const coresColunas = _impEstado.cores[layout.assinatura] || [];
-        const papeis = modoCor ? _IMP_PAPEIS.concat([{ valor: 'cor', rotulo: 'Cor' }]) : _IMP_PAPEIS;
+        // Kit tem campos proprios: nada de largura, unidade ou preco por peca.
+        const papeis = ehKit ? _IMP_PAPEIS_KIT
+            : (modoCor ? _IMP_PAPEIS.concat([{ valor: 'cor', rotulo: 'Cor' }]) : _IMP_PAPEIS);
 
         const papelDaColuna = ci => {
             if (coresColunas.includes(ci)) return 'cor';
@@ -786,7 +801,7 @@ function _impPasso3HTML() {
                 <input type="text" id="imp-nova-rotulo" placeholder="Título (opcional)">
                 <select id="imp-nova-papel">
                     <option value="">— sem papel —</option>
-                    ${_IMP_PAPEIS.filter(p => p.valor !== 'ignorar').map(p => `<option value="${p.valor}">${p.rotulo}</option>`).join('')}
+                    ${papeis.filter(p => p.valor !== 'ignorar').map(p => `<option value="${p.valor}">${p.rotulo}</option>`).join('')}
                 </select>
                 <input type="text" id="imp-nova-valor" placeholder="Valor para todas as linhas">
                 <button class="btn btn-sm" onclick="_impAdicionarColuna(${li})">Adicionar</button>
@@ -836,6 +851,7 @@ function _impPasso3HTML() {
                 ${amostra.length} linha(s) de <strong>${escapeHtml(layout.abas[0])}</strong>${layout.abas.length > 1 ? ` — o mesmo mapeamento vale para as outras ${layout.abas.length - 1} aba(s)` : ''}.
                 Dá ${qtd} item(ns) com o mapeamento atual${tirados ? ` — ${tirados} linha(s) desmarcada(s) ficam de fora` : ''}.
             </p>
+            ${qtd === 0 ? `<p class="imp-nota-zero">${_impPorQueZeroItens(layout, mapa, modoCor, coresColunas)}</p>` : ''}
             ${mapa.preco >= 0 && mapa.preco_peca >= 0 ? `<p class="imp-nota-preco">
                 As duas colunas de preço serão gravadas. O <strong>preço por peça</strong> é que forma o preço de venda;
                 o preço por corte fica registrado para orçamento, sem margem aplicada.
@@ -870,7 +886,7 @@ function _impTrocarCabecalho(indiceLayout, valor) {
     // automatica ja faz quando nao acha cabecalho nenhum.
     const colunas = indice === -1 ? _impRotulosPosicionais(dados) : (dados[indice] || []).map(c => C.normalizarNome(c));
     _impEstado.layouts[layout.assinatura] = {
-        mapa: C.sugerirMapeamento(colunas),
+        mapa: layout.tipo === 'kit' ? C.sugerirMapeamentoKit(colunas) : C.sugerirMapeamento(colunas),
         cabecalhoIndice: indice
     };
     _impRenderPreservandoRolagem(3);
@@ -891,12 +907,44 @@ function _impTrocarPapel(indiceLayout, indiceColuna, papel) {
 
 // O que falta num layout para ele poder ser importado. Devolve lista vazia
 // quando esta tudo certo. Usada pelo painel de problemas e pelo Continuar.
+// Zero itens com o mapeamento atual é quase sempre um mal-entendido, e dizer
+// só "Dá 0 item(ns)" deixa o usuário sem saída. Esta linha diz o porquê.
+function _impPorQueZeroItens(layout, mapa, modoCor, coresColunas) {
+    if (modoCor && !coresColunas.length) {
+        return 'Nenhuma coluna foi marcada como <strong>Cor</strong>. No modo "preço por cor" as cores são os '
+            + '<strong>títulos das colunas</strong>, com um preço embaixo de cada uma. Marque as colunas de cor '
+            + 'ou desmarque "Esta aba tem preço por cor".';
+    }
+    if (modoCor) {
+        return 'As colunas marcadas como Cor não têm preço legível nas linhas. No modo "preço por cor" espera-se '
+            + 'uma coluna por cor, com o preço daquela cor em cada linha. Se na sua tabela a cor é apenas um valor '
+            + 'ao lado do produto, <strong>desmarque "Esta aba tem preço por cor"</strong> e deixe essa coluna como Ignorar: '
+            + 'cada linha já é um produto.';
+    }
+    const faltas = _impFaltasDoLayout(layout);
+    if (faltas.length) return 'Falta dizer qual coluna é: <strong>' + faltas.join(', ') + '</strong>.';
+    return 'Nenhuma linha tem código, nome e preço ao mesmo tempo. Confira se a linha de cabeçalho está certa '
+        + 'e se as colunas apontam para os campos certos.';
+}
+
 function _impFaltasDoLayout(layout) {
     const mapa = _impMapaDoLayout(layout);
-    const emCor = (_impEstado.cores[layout.assinatura] || []).length > 0;
     const faltas = [];
     if (mapa.codigo < 0) faltas.push('Código');
     if (mapa.nome < 0) faltas.push('Nome');
+    if (layout.tipo === 'kit') {
+        // Kit nao tem preco por peca nem modo cor: o preco e obrigatorio e ponto.
+        if (!(mapa.preco >= 0)) faltas.push('Preço');
+        return faltas;
+    }
+    const modoCor = !!_impEstado.cores[layout.assinatura];
+    const emCor = (_impEstado.cores[layout.assinatura] || []).length > 0;
+    if (modoCor && !emCor) {
+        // Com "preco por cor" ligado e nenhuma coluna marcada como Cor, a aba
+        // produz zero itens. Sem isto o usuario so descobria na ultima tela.
+        faltas.push('ao menos uma coluna marcada como Cor');
+        return faltas;
+    }
     // Qualquer um dos dois papeis de preco serve: o custo sai de um ou do outro.
     if (!emCor && !(mapa.preco >= 0 || mapa.preco_peca >= 0)) faltas.push('Preço (ou Preço por peça)');
     return faltas;
@@ -947,10 +995,9 @@ async function _impConcluirPasso3() {
     const layouts = _impLayoutsDistintos();
     for (const layout of layouts) {
         const mapa = _impMapaDoLayout(layout);
-        const emCor = (_impEstado.cores[layout.assinatura] || []).length > 0;
-        // Qualquer um dos dois papeis de preco serve: o custo sai de um ou do outro.
-        const temPreco = mapa.preco >= 0 || mapa.preco_peca >= 0;
-        if (mapa.codigo < 0 || mapa.nome < 0 || (!emCor && !temPreco)) {
+        // Uma fonte so de verdade: o painel de pendencias e o bloqueio do
+        // Continuar leem a mesma funcao, senao divergem a cada regra nova.
+        if (_impFaltasDoLayout(layout).length) {
             // Em vez de uma janela que some ao fechar, a lista de pendencias
             // fica fixa no topo do passo 3, clicavel, levando ate a tabela.
             _impEstado.mostrarProblemas = true;
@@ -985,6 +1032,17 @@ function _impColetarItens() {
         const assinatura = C.assinaturaDoLayout(colunas) + '#' + tipo;
         const layout = _impEstado.layouts[assinatura];
         if (!layout) return;
+        if (tipo === 'kit') {
+            // Kit pronto tem campos proprios (medida, descricao) e vai para
+            // db.kits, nao para o catalogo: leitura e classificacao sao outras.
+            const kits = C.montarItensKit({
+                linhas: dados, mapa: layout.mapa,
+                inicio: layout.cabecalhoIndice >= 0 ? layout.cabecalhoIndice + 1 : 0
+            });
+            kits.forEach(k => { k.aba = aba; k.tipo = 'kit'; });
+            itens.push(...kits);
+            return;
+        }
         const cores = _impEstado.cores[assinatura];
         if (cores && cores.length) {
             itens.push(...C.expandirPorCor({ linhas: dados, cabecalhoIndice: layout.cabecalhoIndice, mapa: layout.mapa, colunasCor: cores, colunas, tipo, aba }));
@@ -999,12 +1057,17 @@ function _impColetarItens() {
 
 function _impPrepararConferencia() {
     const C = window.ImportadorCore;
+    const todos = _impColetarItens();
+    // Kits seguem por outra classificacao: o codigo deles disputa com kits,
+    // materiais e tecidos, e o destino e db.kits.
+    const itensKit = todos.filter(i => i.tipo === 'kit');
     const grupos = C.classificar({
-        itens: _impColetarItens(),
+        itens: todos.filter(i => i.tipo !== 'kit'),
         catalogo: db.catalogo,
         materiais: db.materiais,
         fornecedorId: _impEstado.fornecedor.id
     });
+    _impPrepararKits(itensKit);
     // marcado/markup por entrada, decididos aqui e editaveis na tela
     const preparar = (lista, marcadoPadrao, markupFn) => lista.forEach(e => {
         e.marcado = marcadoPadrao;
@@ -1029,6 +1092,152 @@ function _impNotaDosPrecos(it) {
     if (it.preco_corte === null || it.preco_corte === undefined) return '';
     if (it.preco_peca === null || it.preco_peca === undefined) return '';
     return `<div style="font-size:11px;color:var(--muted)">corte ${_impMoeda(it.preco_corte)} · peça ${_impMoeda(it.preco_peca)}</div>`;
+}
+
+// ── Kits dentro do fluxo normal ─────────────────────────────────────────────
+
+const _IMP_GRUPOS_KIT = [
+    { chave: 'novos',       titulo: 'Kits novos',            ajuda: 'Serão criados como kits prontos, disponíveis para os pedidos.' },
+    { chave: 'atualizados', titulo: 'Kits atualizados',      ajuda: 'Kit pronto que já existe com este código: preço e dados são atualizados. O saldo em estoque é preservado.' },
+    { chave: 'conflitos',   titulo: 'Kits com código em uso', ajuda: 'O código já pertence a outro item do sistema, ou aparece repetido nesta tabela. Edite o código ou deixe desmarcado.' },
+    { chave: 'problemas',   titulo: 'Kits com problema',     ajuda: 'Falta código, nome ou preço. Corrija o que falta ou deixe desmarcado.' }
+];
+
+function _impPrepararKits(itens) {
+    const C = window.ImportadorCore;
+    if (!itens.length) { _impEstado.gruposKit = null; return; }
+    const grupos = C.classificarKits({
+        itens, kits: db.kits, catalogo: db.catalogo, materiais: db.materiais
+    });
+    const margemInicial = () => (_impEstado.margemModo === 'item' ? null : _impEstado.markupPadrao);
+    const preparar = (lista, marcado) => lista.forEach(e => {
+        e.marcado = marcado;
+        // Kit que já existe mantém a margem dele; atualizar custo não mexe nela.
+        e.markup = e.existente ? C.markupDeExistente(e.existente) : margemInicial();
+    });
+    preparar(grupos.novos, true);
+    preparar(grupos.atualizados, true);
+    preparar(grupos.conflitos, false);
+    preparar(grupos.problemas, false);
+    _impEstado.gruposKit = grupos;
+}
+
+function _impTemKits() {
+    const g = _impEstado.gruposKit;
+    return !!g && _IMP_GRUPOS_KIT.some(d => (g[d.chave] || []).length);
+}
+
+function _impMarcadosKit() {
+    const g = _impEstado.gruposKit;
+    if (!g) return 0;
+    return _IMP_GRUPOS_KIT.reduce((n, d) => n + (g[d.chave] || []).filter(e => e.marcado).length, 0);
+}
+
+function _impBlocosDeKitHTML() {
+    const C = window.ImportadorCore;
+    if (!_impTemKits()) return '';
+    return _IMP_GRUPOS_KIT.map(def => {
+        const lista = _impEstado.gruposKit[def.chave] || [];
+        if (!lista.length) return '';
+        const linhas = lista.map((e, i) => {
+            const it = e.item;
+            const venda = C.aplicarMarkup(it.preco_custo, e.markup);
+            const motivo = e.motivo || it.problema;
+            const alerta = motivo ? `<div style="font-size:11px;color:var(--muted)">⚠ ${escapeHtml(motivo)}</div>` : '';
+            const antes = e.existente
+                ? `<div style="font-size:11px;color:var(--muted)">antes: custo ${_impMoeda(e.existente.preco_custo || 0)} · venda ${_impMoeda(e.existente.preco || 0)}</div>`
+                : '';
+            return `<tr>
+                <td><input type="checkbox" ${e.marcado ? 'checked' : ''} onchange="_impAlternarMarcadoKit('${def.chave}', ${i})"></td>
+                <td style="font-size:12px;color:var(--muted)">${escapeHtml(it.aba || '')}</td>
+                <td><input value="${escapeHtml(it.codigo)}" style="width:100px;font-size:12px" onchange="_impEditarCampoKit('${def.chave}', ${i}, 'codigo', this.value)"></td>
+                <td><input value="${escapeHtml(it.nome)}" style="width:130px;font-size:12px" onchange="_impEditarCampoKit('${def.chave}', ${i}, 'nome', this.value)">${alerta}</td>
+                <td><input value="${escapeHtml(it.medida || '')}" style="width:90px;font-size:12px" onchange="_impEditarCampoKit('${def.chave}', ${i}, 'medida', this.value)"></td>
+                <td><input value="${escapeHtml(it.descricao || '')}" style="width:95px;font-size:12px" onchange="_impEditarCampoKit('${def.chave}', ${i}, 'descricao', this.value)"></td>
+                <td><input type="number" step="0.01" value="${it.preco_custo === null ? '' : it.preco_custo}" style="width:85px;font-size:12px" onchange="_impEditarCampoKit('${def.chave}', ${i}, 'preco_custo', this.value)"></td>
+                <td><input type="number" step="1" value="${e.markup === null ? '' : e.markup}" style="width:65px;font-size:12px" onchange="_impEditarCampoKit('${def.chave}', ${i}, 'markup', this.value)"></td>
+                <td>${_impMoeda(venda)}${antes}</td>
+            </tr>`;
+        }).join('');
+        return `<div class="card" style="margin-bottom:14px">
+            <h4 style="margin:0 0 2px;color:var(--dark)">${def.titulo} <span style="color:var(--muted);font-weight:400">(${lista.length})</span></h4>
+            <p style="font-size:12px;color:var(--muted);margin:0 0 10px">${def.ajuda}</p>
+            <div data-painel="kit-${def.chave}" style="max-height:260px;overflow:auto"><table>
+                <thead><tr><th style="width:30px"></th><th>Aba</th><th>Código</th><th>Nome</th><th>Medida</th><th>Descrição</th><th>Custo</th><th>Margem %</th><th>Venda</th></tr></thead>
+                <tbody>${linhas}</tbody>
+            </table></div>
+        </div>`;
+    }).join('');
+}
+
+function _impAlternarMarcadoKit(chave, i) {
+    _impRenderPasso4Preservando(() => {
+        const e = _impEstado.gruposKit[chave][i];
+        e.marcado = !e.marcado;
+    });
+}
+
+function _impEditarCampoKit(chave, i, campo, valor) {
+    const C = window.ImportadorCore;
+    _impRenderPasso4Preservando(() => {
+        const e = _impEstado.gruposKit[chave][i];
+        if (campo === 'markup') {
+            const v = parseFloat(valor);
+            e.markup = isFinite(v) ? v : null;
+        } else if (campo === 'preco_custo') {
+            const p = C.normalizarPreco(valor);
+            e.item.preco_custo = p.ok ? p.valor : null;
+        } else if (campo === 'codigo') {
+            e.item.codigo = C.normalizarCodigo(valor).codigo;
+        } else if (campo === 'nome') {
+            e.item.nome = C.normalizarNome(valor);
+        } else {
+            e.item[campo] = String(valor).trim();
+        }
+        // Código, nome e custo mudam a classificação: reclassifica preservando
+        // margem e marcação, casadas pelo próprio objeto `item`.
+        if (campo === 'codigo' || campo === 'nome' || campo === 'preco_custo') _impReclassificarKits();
+    });
+}
+
+function _impReclassificarKits() {
+    const C = window.ImportadorCore;
+    const antes = new Map();
+    _IMP_GRUPOS_KIT.forEach(d => (_impEstado.gruposKit[d.chave] || []).forEach(e => {
+        antes.set(e.item, { markup: e.markup, marcado: e.marcado });
+    }));
+    const itens = [...antes.keys()];
+    itens.forEach(it => {
+        const faltas = [];
+        if (!it.codigo) faltas.push('código');
+        if (!it.nome) faltas.push('nome');
+        if (it.preco_custo === null) faltas.push('preço');
+        it.problema = faltas.length ? 'Falta ' + faltas.join(', ') : null;
+    });
+    const grupos = C.classificarKits({ itens, kits: db.kits, catalogo: db.catalogo, materiais: db.materiais });
+    _IMP_GRUPOS_KIT.forEach(d => (grupos[d.chave] || []).forEach(e => {
+        const guardado = antes.get(e.item);
+        e.markup = guardado ? guardado.markup : null;
+        e.marcado = guardado ? guardado.marcado : false;
+    }));
+    _impEstado.gruposKit = grupos;
+}
+
+// Decisões de kit a gravar, e as pendências que impedem a gravação.
+function _impDecisoesDeKit() {
+    const decisoes = [];
+    const barradas = [];
+    if (!_impEstado.gruposKit) return { decisoes, barradas };
+    _IMP_GRUPOS_KIT.forEach(def => (_impEstado.gruposKit[def.chave] || []).forEach(e => {
+        if (!e.marcado) return;
+        if (def.chave === 'conflitos' || def.chave === 'problemas') {
+            barradas.push('• ' + (e.item.codigo || '(sem código)') + ': ' + (e.motivo || e.item.problema || 'pendência'));
+            return;
+        }
+        decisoes.push({ item: e.item, existente: e.existente || null, markup: e.markup,
+                        acao: e.existente ? 'atualizar' : 'criar' });
+    }));
+    return { decisoes, barradas };
 }
 
 const _IMP_GRUPOS = [
@@ -1408,14 +1617,15 @@ function _impPasso4HTML() {
             <p style="font-size:12px;margin:8px 0 0">${g.sumiram.slice(0, 20).map(e => escapeHtml(e.existente.referencia || e.existente.nome)).join(', ')}${g.sumiram.length > 20 ? '…' : ''}</p>
         </div>` : '';
 
-    const marcados = _IMP_GRUPOS.reduce((n, d) => n + g[d.chave].filter(e => e.marcado).length, 0);
+    const marcados = _IMP_GRUPOS.reduce((n, d) => n + g[d.chave].filter(e => e.marcado).length, 0)
+        + _impMarcadosKit();
 
     return `
     <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Confira e ajuste o que quiser. Só as linhas marcadas serão gravadas.</p>
     ${campoBuscaHTML}
     ${_impPainelDuplicadosHTML()}
     ${_impPainelPendenciasHTML()}
-    ${blocos}${sumiram}
+    ${blocos}${sumiram}${_impBlocosDeKitHTML()}
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0 14px;cursor:pointer">
         <input type="checkbox" id="imp-salvar-perfil" checked> Salvar este mapeamento como perfil deste fornecedor
     </label>
@@ -1464,12 +1674,16 @@ const PRAZO_DESFAZER_DIAS = 7;
 // atualizados, os valores anteriores dos campos do importador. Nao copia mais o
 // catalogo e os materiais inteiros — que traziam cada imagem em base64 e, pior,
 // devolviam saldo de estoque velho ao desfazer.
-function _impSalvarSnapshot(resumo, mudancas) {
+function _impSalvarSnapshot(resumo, mudancas, rKit) {
     localStorage.setItem(CHAVE_SNAPSHOT, JSON.stringify({
         quando: new Date().toISOString(),
-        versao: 2,
+        versao: 3,
         resumo,
-        mudancas
+        mudancas,
+        // Uma importação pode trazer produtos e kits na mesma passada; o
+        // desfazer tem de reverter as duas coisas de uma vez.
+        resumoKit: rKit ? rKit.resumo : null,
+        mudancasKit: rKit ? rKit.mudancas : null
     }));
 }
 
@@ -1477,8 +1691,14 @@ async function _impGravar() {
     const C = window.ImportadorCore;
     const decisoes = _impMontarDecisoes();
 
-    const vaiGravar = decisoes.filter(d => d.acao !== 'ignorar').length;
+    const { decisoes: decisoesKit, barradas } = _impDecisoesDeKit();
+    const vaiGravar = decisoes.filter(d => d.acao !== 'ignorar').length + decisoesKit.length;
     if (!vaiGravar) { await showAlert('Nenhuma linha marcada para gravar.', '⚠️'); return; }
+
+    if (barradas.length) {
+        await showAlert('Resolva estas pendências nos kits antes de gravar:\n\n' + barradas.join('\n'), '⚠️');
+        return;
+    }
 
     // A lista completa ja esta no painel fixo no topo da conferencia — a
     // mensagem aqui pode ser curta. A recusa em si nao muda: continua
@@ -1489,7 +1709,15 @@ async function _impGravar() {
         return;
     }
 
-    if (!await showConfirm(`Gravar ${vaiGravar} item(ns) no catálogo?`, '📥', 'Gravar', 'Cancelar')) return;
+    if (!await showConfirm(`Gravar ${vaiGravar} item(ns)?`, '📥', 'Gravar', 'Cancelar')) return;
+
+    const rKit = decisoesKit.length ? C.aplicarImportacaoKits({
+        decisoes: decisoesKit,
+        kits: db.kits,
+        fornecedor: _impEstado.fornecedor,
+        estoqueInfinito: _impEstado.estoqueModo === 'infinito',
+        agora: Date.now()
+    }) : null;
 
     const r = C.aplicarImportacao({
         decisoes,
@@ -1503,7 +1731,7 @@ async function _impGravar() {
     // Snapshot antes de tocar no db: se ele nao couber no armazenamento, nada e
     // gravado — melhor não importar do que importar sem poder desfazer.
     try {
-        _impSalvarSnapshot(r.resumo, r.mudancas);
+        _impSalvarSnapshot(r.resumo, r.mudancas, rKit);
     } catch (e) {
         await showAlert('Não foi possível preparar o "desfazer" desta importação'
             + (e && e.message ? ' (' + e.message + ')' : '')
@@ -1515,18 +1743,27 @@ async function _impGravar() {
     // memoria volta ao que era e o usuario e avisado de que nada foi gravado.
     const catalogoAntes = db.catalogo;
     const materiaisAntes = db.materiais;
+    const kitsAntes = db.kits;
     try {
         db.catalogo = r.catalogo;
         db.materiais = r.materiais;
+        if (rKit) db.kits = rKit.kits;
         if (document.getElementById('imp-salvar-perfil')?.checked) _impSalvarPerfil();
         // O resumo tem de fechar com o numero de decisoes: linhas que nao puderam
         // ser aplicadas aparecem como ignoradas, nunca somem da conta.
         const naoAplicadas = (r.naoAplicadas || []).length;
-        salvarERecarregar(`Importação concluída: ${r.resumo.criados} criado(s), ${r.resumo.atualizados} atualizado(s).`
+        const criados = r.resumo.criados + (rKit ? rKit.resumo.criados : 0);
+        const atualizados = r.resumo.atualizados + (rKit ? rKit.resumo.atualizados : 0);
+        const sobreKits = rKit
+            ? ` ${rKit.resumo.criados + rKit.resumo.atualizados} kit(s) — veja em Cadastro › Kits.`
+            : '';
+        salvarERecarregar(`Importação concluída: ${criados} criado(s), ${atualizados} atualizado(s).`
+            + sobreKits
             + (naoAplicadas ? ` ${naoAplicadas} linha(s) não puderam ser gravadas.` : ''));
     } catch (e) {
         db.catalogo = catalogoAntes;
         db.materiais = materiaisAntes;
+        db.kits = kitsAntes;
         // Tenta devolver o armazenamento ao estado anterior: syncDB grava sc_cat
         // antes de sc_mat, entao uma falha no meio pode ter persistido so metade.
         try { syncDB(); } catch (e2) { /* nada mais a fazer aqui */ }
@@ -1574,46 +1811,46 @@ function _impSnapshot() {
     return snap;
 }
 
-// Snapshot de kits, quando o assistente de kits estiver carregado na página.
-function _impSnapshotDeKits() {
-    return typeof _kitSnapshot === 'function' ? _kitSnapshot() : null;
-}
-
 async function desfazerUltimaImportacao() {
     const C = window.ImportadorCore;
     const snap = _impSnapshot();
-    const snapKit = _impSnapshotDeKits();
-
-    // Um botão só para as duas importações: desfaz a mais recente.
-    if (snapKit && (!snap || Date.parse(snapKit.quando) > Date.parse(snap.quando))) {
-        await desfazerImportacaoDeKits();
-        return;
-    }
     if (!snap) { await showAlert('Não há importação recente para desfazer.', 'ℹ️'); return; }
+
+    // Uma importação pode ter trazido produtos e kits na mesma passada.
+    const temKits = !!(snap.mudancasKit && snap.resumoKit);
+    const criados = snap.resumo.criados + (temKits ? snap.resumoKit.criados : 0);
+    const atualizados = snap.resumo.atualizados + (temKits ? snap.resumoKit.atualizados : 0);
     const quando = new Date(snap.quando).toLocaleString('pt-BR');
     const msg = `Desfazer a importação de ${quando}?\n\n`
-        + `${snap.resumo.criados} item(ns) criado(s) serão apagados e `
-        + `${snap.resumo.atualizados} item(ns) atualizado(s) voltarão ao preço, nome e unidade anteriores.\n\n`
+        + `${criados} item(ns) criado(s) serão apagados e `
+        + `${atualizados} item(ns) atualizado(s) voltarão ao preço, nome e unidade anteriores.\n\n`
+        + (temKits ? 'Kit que já recebeu saldo em estoque é mantido.\n\n' : '')
         + `Atenção: qualquer alteração feita nesses produtos depois da importação será perdida. `
         + `O estoque e as movimentações não são tocados.`;
     if (!await showConfirm(msg, '↩️', 'Desfazer', 'Cancelar')) return;
 
     const r = C.desfazerImportacao({ catalogo: db.catalogo, materiais: db.materiais, mudancas: snap.mudancas });
+    const rKit = temKits ? C.desfazerImportacaoKits({ kits: db.kits, mudancas: snap.mudancasKit }) : null;
 
     const catalogoAntes = db.catalogo;
     const materiaisAntes = db.materiais;
+    const kitsAntes = db.kits;
     const snapshotBruto = localStorage.getItem(CHAVE_SNAPSHOT);
     try {
         db.catalogo = r.catalogo;
         db.materiais = r.materiais;
+        if (rKit) db.kits = rKit.kits;
         localStorage.removeItem(CHAVE_SNAPSHOT);
+        const mantidos = r.resumo.mantidos + (rKit ? rKit.resumo.mantidos : 0);
+        const sumidos = r.resumo.sumidos + (rKit ? rKit.resumo.sumidos : 0);
         const extras = [];
-        if (r.resumo.mantidos) extras.push(`${r.resumo.mantidos} item(ns) foram mantidos por já terem estoque`);
-        if (r.resumo.sumidos) extras.push(`${r.resumo.sumidos} item(ns) já não existiam`);
+        if (mantidos) extras.push(`${mantidos} item(ns) foram mantidos por já terem estoque`);
+        if (sumidos) extras.push(`${sumidos} item(ns) já não existiam`);
         salvarERecarregar('Importação desfeita.' + (extras.length ? ' ' + extras.join('; ') + '.' : ''));
     } catch (e) {
         db.catalogo = catalogoAntes;
         db.materiais = materiaisAntes;
+        db.kits = kitsAntes;
         try { syncDB(); } catch (e2) { /* nada mais a fazer aqui */ }
         // o desfazer continua disponivel: nada foi revertido
         try { if (snapshotBruto) localStorage.setItem(CHAVE_SNAPSHOT, snapshotBruto); } catch (e3) { /* idem */ }
@@ -1626,6 +1863,6 @@ async function desfazerUltimaImportacao() {
 function _impAtualizarBotaoDesfazer() {
     const btn = document.getElementById('btn-desfazer-import');
     if (!btn) return;
-    btn.style.display = (_impSnapshot() || _impSnapshotDeKits()) ? '' : 'none';
+    btn.style.display = _impSnapshot() ? '' : 'none';
 }
 document.addEventListener('DOMContentLoaded', _impAtualizarBotaoDesfazer);

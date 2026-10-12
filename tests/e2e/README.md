@@ -51,7 +51,7 @@ TESTDIR=<projeto>/tests/e2e \
   npx playwright test --config=repo.config.js
 ```
 
-Esperado: **173 passando**.
+Esperado: **165 passando**.
 
 ## Sessão autenticada é obrigatória
 
@@ -93,7 +93,7 @@ navegar. Ele semeia um usuário com papel 1 (Administrador, que vem de
 | `fase2-pdf-e-cor.spec.js` | PDF real virando uma aba por página, a página do Book 10 dando os mesmos 38 itens da planilha, modo preço por cor gerando 235 materiais sem repetir código, seleção manual de cabeçalho, e a planilha continuando a funcionar |
 | `catalogo-selecao.spec.js` | Ordenação por coluna nas duas tabelas do catálogo, os filtros de nome/código, fornecedor, preço e largura, marcar itens e a marcação sobrevivendo a ordenar e filtrar, exclusão em massa respeitando o tecido em uso, e o pedido de compra vindo da seleção nos quatro caminhos (mesmo fornecedor, um por fornecedor, tudo para um, genérico) |
 | `config-importacao.spec.js` | Os quatro cartões de configuração do passo 1 (textos, ícones, os dois grupos exclusivos), o sumiço do campo antigo de markup, a cobrança da margem total, a margem aplicada à tabela toda ou item a item, e o estoque infinito não bloqueando pedido, não sofrendo baixa e ficando fora do alerta de mínimo |
-| `importacao-kits.spec.js` | A porta de entrada na popup de produtos, o assistente de kit em três passos, os obrigatórios (código, nome, preço) e os opcionais (medida, descrição), conflito de código contra material, tecido e kit de montagem, a margem total e por item, o estoque infinito, o desfazer, e o kit pronto entrando no pedido como uma linha só com baixa do próprio saldo |
-| `ajustes-importacao.spec.js` | Células editáveis no mapeamento (kits e produtos), o cursor que não pula ao corrigir o texto colado, a rolagem de dentro da tabela preservada ao escolher o papel de uma coluna, a criação de coluna com valor para todas as linhas e ajuste célula a célula, a palavra "margem" no lugar de "markup", e o tecido registrando preço de corte e de peça ao mesmo tempo |
+| `importacao-kits.spec.js` | O tipo Kit no passo 2, os papéis de coluna próprios do kit, a conferência num bloco à parte, conflito de código contra material, tecido e kit de montagem, produtos e kits na mesma importação indo cada um para o seu lugar, o desfazer cobrindo os dois, a aba Kits no Catálogo e no Estoque, e o kit pronto entrando no pedido como uma linha só |
+| `ajustes-importacao.spec.js` | Células editáveis no mapeamento (kits e produtos), o cursor que não pula ao corrigir o texto colado, a rolagem de dentro da tabela preservada ao escolher o papel de uma coluna, a criação de coluna com valor para todas as linhas e ajuste célula a célula, a palavra "margem" no lugar de "markup", o tecido registrando preço de corte e de peça ao mesmo tempo, e o modo "preço por cor" explicando por que deu zero itens |
 
-Esperado no total: **173 passando**.
+Esperado no total: **165 passando**.

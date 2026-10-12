@@ -7130,6 +7130,7 @@ function mostrarTabCatalogo(tab) {
     document.getElementById('tab-cat-' + tab)?.classList.add('active');
     document.querySelector(`.tab-btn[data-tab="cat-${tab}"]`)?.classList.add('active');
     if (tab === 'materiais') renderMateriais();
+    if (tab === 'kits') renderKits();
     _tabBackBtn('.tab-nav', _prevTabCatalogo, () => mostrarTabCatalogo(_prevTabCatalogo));
 }
 

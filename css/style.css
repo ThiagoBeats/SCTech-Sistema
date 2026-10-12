@@ -1310,14 +1310,6 @@ html[data-theme="dark"] .imp-cfg-campo-caixa input { color: #F5F6F8; }
 
 /* ═══ Importação de kits prontos ═══ */
 
-.imp-atalho-kits {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-    padding: 9px 12px; margin-bottom: 16px; border-radius: 6px;
-    background: var(--light); border: 1px solid var(--border);
-    font-size: var(--fs-texto-sm); color: var(--dark);
-}
-.imp-atalho-kits span { flex: 1; min-width: 200px; color: var(--muted); }
-
 .kit-cab-linha {
     display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px;
 }
@@ -1355,7 +1347,6 @@ html[data-theme="dark"] .imp-cfg-campo-caixa input { color: #F5F6F8; }
 }
 .kit-selo-montagem { background: var(--light); border-color: var(--border); color: var(--muted); }
 
-html[data-theme="dark"] .imp-atalho-kits { background: #1D2024; border-color: #282A2E; }
 html[data-theme="dark"] .kit-aviso { background: rgba(242, 201, 36, .10); }
 html[data-theme="dark"] .kit-selo { background: rgba(201, 247, 117, .12); border-color: var(--secondary); color: var(--secondary); }
 html[data-theme="dark"] .kit-selo-montagem { background: #1D2024; border-color: #282A2E; color: var(--muted); }
@@ -1392,3 +1383,10 @@ html[data-theme="dark"] .imp-nota-preco { background: rgba(201, 247, 117, .09); 
 }
 
 html[data-theme="dark"] .imp-nova-coluna { background: #1D2024; border-color: #3A3D42; }
+
+.imp-nota-zero {
+    margin: 8px 0 0; padding: 8px 11px; border-radius: 5px;
+    background: rgba(242, 201, 36, .16); border: 1px solid #F2C924;
+    font-size: var(--fs-label); line-height: 1.5; color: var(--dark);
+}
+html[data-theme="dark"] .imp-nota-zero { background: rgba(242, 201, 36, .10); }

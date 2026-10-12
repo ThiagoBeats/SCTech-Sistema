@@ -23,7 +23,6 @@ async function abrirCatalogo(page) {
         localStorage.setItem('sc_est', JSON.stringify([]));
         localStorage.removeItem('sc_imp_perfis');
         localStorage.removeItem('sc_imp_snap');
-        localStorage.removeItem('sc_kit_snap');
     });
     await page.reload();
 }
@@ -46,57 +45,49 @@ async function ateOPasso3(page) {
     await expect(page.locator('.imp-mapa-scroll')).toBeVisible();
 }
 
-// Kits: até o passo 2 (colunas).
-async function ateOPasso2DeKits(page) {
+// Kits colados, marcados como Kit no passo 2, até o passo de colunas.
+async function ateOPasso3DeKits(page, texto) {
     await abrirCatalogo(page);
     await page.click('text=📥 Importar tabela');
-    await page.click('#imp-corpo button:has-text("Importar kits prontos")');
-    await page.locator('#kit-colar').fill(COLADO_KIT);
-    await page.selectOption('#kit-fornecedor', '7');
-    await page.fill('#kit-markup', '50');
-    await page.click('#kit-corpo button:has-text("Continuar")');
-    await expect(page.locator('.kit-mapa-tabela')).toBeVisible();
+    await page.locator('#imp-colar').fill(texto || COLADO_KIT);
+    await page.selectOption('#imp-fornecedor', '7');
+    await page.fill('#imp-markup', '50');
+    await page.click('#imp-corpo button:has-text("Continuar")');
+    await page.locator('#imp-corpo tbody select').first().selectOption('kit');
+    await page.click('#imp-corpo button:has-text("Continuar")');
+    await expect(page.locator('.imp-mapa-scroll')).toBeVisible();
 }
 
 // ─── 1. Editar os dados no passo de colunas ─────────────────────────────
 
-test('as celulas do passo 2 do kit sao editaveis e valem na importacao', async ({ page }) => {
+test('as celulas da aba de kit sao editaveis e valem na importacao', async ({ page }) => {
     const erros = [];
     page.on('pageerror', e => erros.push('pageerror: ' + e.message));
     page.on('console', m => { if (m.type() === 'error') erros.push('console: ' + m.text()); });
 
-    await ateOPasso2DeKits(page);
+    await ateOPasso3DeKits(page);
 
-    const celulas = page.locator('.kit-mapa-tabela tbody input');
-    expect(await celulas.count(), 'cada celula vira um campo').toBe(8);   // 2 linhas × 4 colunas
+    const linha1 = page.locator('.imp-mapa-tabela tbody tr').first();
+    await linha1.locator('input.imp-celula').nth(1).fill('KIT TRILHO CORRIGIDO');
+    await linha1.locator('input.imp-celula').nth(1).blur();
+    await linha1.locator('input.imp-celula').nth(3).fill('120,00');
+    await linha1.locator('input.imp-celula').nth(3).blur();
 
-    // corrige o nome e o preço do primeiro kit
-    await celulas.nth(1).fill('KIT TRILHO CORRIGIDO');
-    await celulas.nth(1).blur();
-    await celulas.nth(3).fill('120,00');
-    await celulas.nth(3).blur();
-
-    await page.click('#kit-corpo button:has-text("Continuar")');
-    const novos = await page.evaluate(() => _kitEstado.grupos.novos.map(e => ({ nome: e.item.nome, custo: e.item.preco_custo })));
+    await page.click('#imp-corpo button:has-text("Continuar")');
+    await page.waitForFunction(() => _impEstado.passo === 4);
+    const novos = await page.evaluate(() => _impEstado.gruposKit.novos.map(e => ({ nome: e.item.nome, custo: e.item.preco_custo })));
     expect(novos[0]).toEqual({ nome: 'KIT TRILHO CORRIGIDO', custo: 120 });
     expect(novos[1].nome, 'o outro kit nao pode ter sido tocado').toBe('KIT VARAO ROMANO');
 
     expect(erros, erros.join('\n')).toEqual([]);
 });
 
-test('o passo 2 do kit mostra todas as linhas, nao so as primeiras', async ({ page }) => {
-    await abrirCatalogo(page);
+test('a aba de kit mostra todas as linhas, nao so as primeiras', async ({ page }) => {
     const muitas = ['CODIGO\tNOME\tPRECO'].concat(
         Array.from({ length: 40 }, (_, i) => `90${String(i).padStart(2, '0')}\tKIT ${i}\t10,00`)
     ).join('\n');
-    await page.click('text=📥 Importar tabela');
-    await page.click('#imp-corpo button:has-text("Importar kits prontos")');
-    await page.locator('#kit-colar').fill(muitas);
-    await page.selectOption('#kit-fornecedor', '7');
-    await page.fill('#kit-markup', '50');
-    await page.click('#kit-corpo button:has-text("Continuar")');
-
-    await expect(page.locator('.kit-mapa-tabela tbody tr')).toHaveCount(40);
+    await ateOPasso3DeKits(page, muitas);
+    await expect(page.locator('.imp-mapa-tabela tbody tr')).toHaveCount(40);
 });
 
 test('as celulas do passo 3 de produtos tambem sao editaveis', async ({ page }) => {
@@ -115,24 +106,23 @@ test('as celulas do passo 3 de produtos tambem sao editaveis', async ({ page }) 
 test('editar o texto colado nao joga o cursor para o fim', async ({ page }) => {
     await abrirCatalogo(page);
     await page.click('text=📥 Importar tabela');
-    await page.click('#imp-corpo button:has-text("Importar kits prontos")');
-    await page.locator('#kit-colar').fill(COLADO_KIT);
+    await page.locator('#imp-colar').fill(COLADO_KIT);
 
     // põe o cursor no meio e digita uma letra, como quem corrige algo
     const posicao = await page.evaluate(() => {
-        const campo = document.getElementById('kit-colar');
+        const campo = document.getElementById('imp-colar');
         campo.focus();
         campo.setSelectionRange(10, 10);
         // simula a digitação de um caractere naquele ponto
         campo.value = campo.value.slice(0, 10) + 'X' + campo.value.slice(10);
         campo.setSelectionRange(11, 11);
         campo.dispatchEvent(new Event('input', { bubbles: true }));
-        return document.getElementById('kit-colar').selectionStart;
+        return document.getElementById('imp-colar').selectionStart;
     });
     expect(posicao, 'o cursor tem de ficar onde estava').toBe(11);
 
     // e o texto continua sendo lido
-    await expect(page.locator('#kit-resumo')).toContainText('linha(s) lida(s)');
+    await expect(page.locator('#imp-origem')).toContainText('texto colado');
 });
 
 // ─── 3. A rolagem ao escolher o papel de uma coluna ─────────────────────
@@ -242,19 +232,101 @@ test('a celula da coluna nova pode ser ajustada depois', async ({ page }) => {
     expect(r.segunda, 'as outras ficam com o valor geral').toBe('2.80');
 });
 
-test('nova coluna em kits entra no mapeamento e nos itens', async ({ page }) => {
-    await ateOPasso2DeKits(page);
-    await page.click('#kit-corpo button:has-text("+ Nova coluna")');
-    await page.fill('#kit-nova-rotulo', 'OBS');
-    await page.selectOption('#kit-nova-papel', 'descricao');
-    await page.fill('#kit-nova-valor', 'linha branca');
-    await page.click('#kit-corpo button:has-text("Adicionar")');
+test('nova coluna numa aba de kit entra no mapeamento e nos itens', async ({ page }) => {
+    await ateOPasso3DeKits(page);
+    await page.click('#imp-corpo button:has-text("+ Nova coluna")');
+    await page.fill('#imp-nova-rotulo', 'OBS');
+    await page.selectOption('#imp-nova-papel', 'descricao');
+    await page.fill('#imp-nova-valor', 'linha branca');
+    await page.click('#imp-corpo button:has-text("Adicionar")');
 
-    expect(await page.evaluate(() => _kitEstado.mapa.descricao)).toBe(4);
+    expect(await page.evaluate(() => _impMapaDoLayout(_impLayoutsDistintos()[0]).descricao)).toBe(4);
 
-    await page.click('#kit-corpo button:has-text("Continuar")');
-    const descricoes = await page.evaluate(() => _kitEstado.grupos.novos.map(e => e.item.descricao));
+    await page.click('#imp-corpo button:has-text("Continuar")');
+    await page.waitForFunction(() => _impEstado.passo === 4);
+    const descricoes = await page.evaluate(() => _impEstado.gruposKit.novos.map(e => e.item.descricao));
     expect(descricoes).toEqual(['linha branca', 'linha branca']);
+});
+
+// ─── Modo "preço por cor": zero itens precisa dizer o porquê ────────────
+
+// Tabela do usuário: a cor é um valor ao lado do produto, não um título de
+// coluna. Cada linha já é um produto. Marcar "preço por cor" aqui dá zero.
+const COLADO_COR = '6515\tTecido teste\t25,65\tbranco\n6516\tTecido teste 2\t25,65\tpreto';
+
+async function ateOPasso3Colado(page, texto) {
+    await abrirCatalogo(page);
+    await page.click('text=📥 Importar tabela');
+    await page.locator('#imp-colar').fill(texto);
+    await page.selectOption('#imp-fornecedor', '7');
+    await page.fill('#imp-markup', '80');
+    await page.click('#imp-corpo button:has-text("Continuar")');
+    await page.click('#imp-corpo button:has-text("Continuar")');
+    await expect(page.locator('.imp-mapa-scroll')).toBeVisible();
+}
+
+test('modo cor sem coluna de cor marcada explica o zero em vez de calar', async ({ page }) => {
+    await ateOPasso3Colado(page, COLADO_COR);
+    // mapeia o básico e liga o modo cor, como o usuário fez
+    await page.evaluate(() => {
+        _impTrocarPapel(0, 0, 'codigo');
+        _impTrocarPapel(0, 1, 'nome');
+        _impTrocarPapel(0, 2, 'preco');
+        _impAlternarModoCor(0);
+    });
+
+    await expect(page.locator('#imp-corpo')).toContainText('Dá 0 item(ns)');
+    const nota = page.locator('.imp-nota-zero');
+    await expect(nota).toBeVisible();
+    await expect(nota).toContainText('Nenhuma coluna foi marcada como');
+    await expect(nota).toContainText('títulos das colunas');
+});
+
+test('modo cor sem coluna de cor tambem barra o Continuar', async ({ page }) => {
+    await ateOPasso3Colado(page, COLADO_COR);
+    await page.evaluate(() => {
+        _impTrocarPapel(0, 0, 'codigo');
+        _impTrocarPapel(0, 1, 'nome');
+        _impTrocarPapel(0, 2, 'preco');
+        _impAlternarModoCor(0);
+    });
+    await page.click('#imp-corpo button:has-text("Continuar")');
+
+    expect(await page.evaluate(() => _impEstado.passo), 'nao pode cair no passo 4 com zero itens').toBe(3);
+    await expect(page.locator('#imp-corpo')).toContainText('Mapeamentos incompletos');
+    await expect(page.locator('#imp-corpo')).toContainText('coluna marcada como Cor');
+});
+
+test('marcando a coluna de cor, o aviso muda e diz o que fazer', async ({ page }) => {
+    await ateOPasso3Colado(page, COLADO_COR);
+    await page.evaluate(() => {
+        _impTrocarPapel(0, 0, 'codigo');
+        _impTrocarPapel(0, 1, 'nome');
+        _impTrocarPapel(0, 2, 'preco');
+        _impAlternarModoCor(0);
+        _impTrocarPapel(0, 3, 'cor');   // a coluna "branco/preto"
+    });
+
+    // a coluna de cor não tem preço embaixo: continua zero, com outro motivo
+    await expect(page.locator('#imp-corpo')).toContainText('Dá 0 item(ns)');
+    await expect(page.locator('.imp-nota-zero')).toContainText('desmarque "Esta aba tem preço por cor"');
+});
+
+test('sem o modo cor, a mesma tabela importa os dois produtos', async ({ page }) => {
+    await ateOPasso3Colado(page, COLADO_COR);
+    await page.evaluate(() => {
+        _impTrocarPapel(0, 0, 'codigo');
+        _impTrocarPapel(0, 1, 'nome');
+        _impTrocarPapel(0, 2, 'preco');
+    });
+
+    await expect(page.locator('#imp-corpo')).toContainText('Dá 2 item(ns)');
+    expect(await page.locator('.imp-nota-zero').count(), 'sem zero, sem aviso').toBe(0);
+
+    await page.click('#imp-corpo button:has-text("Continuar")');
+    await page.waitForFunction(() => _impEstado.passo === 4);
+    const r = await page.evaluate(() => _impEstado.grupos.novos.map(e => ({ cod: e.item.codigo, custo: e.item.preco_custo })));
+    expect(r).toEqual([{ cod: '6515', custo: 25.65 }, { cod: '6516', custo: 25.65 }]);
 });
 
 // ─── 5. "markup" virou "margem" ─────────────────────────────────────────
@@ -270,12 +342,14 @@ test('nenhum texto da importacao fala em markup', async ({ page }) => {
     expect(texto).toContain('margem informada');
 });
 
-test('na conferencia de kits tambem e margem', async ({ page }) => {
-    await ateOPasso2DeKits(page);
-    await page.click('#kit-corpo button:has-text("Continuar")');
-    const texto = await page.locator('#kit-corpo').innerText();
+test('no bloco de kits da conferencia tambem e margem', async ({ page }) => {
+    await ateOPasso3DeKits(page);
+    await page.click('#imp-corpo button:has-text("Continuar")');
+    await page.waitForFunction(() => _impEstado.passo === 4);
+    const texto = await page.locator('#imp-corpo').innerText();
     expect(texto.toLowerCase()).not.toContain('markup');
     expect(texto).toContain('Margem %');
+    expect(texto).toContain('Kits novos');
 });
 
 // ─── 6. Tecido com os dois preços ───────────────────────────────────────

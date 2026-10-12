@@ -20,6 +20,7 @@
         <div class="tab-nav">
             <button class="tab-btn active" data-tab="cat-tecidos"   onclick="mostrarTabCatalogo('tecidos')">📚 Tecidos</button>
             <button class="tab-btn"        data-tab="cat-materiais" onclick="mostrarTabCatalogo('materiais')">🔩 Materiais e Acessórios</button>
+            <button class="tab-btn"        data-tab="cat-kits"      onclick="mostrarTabCatalogo('kits')">📦 Kits</button>
         </div>
 
         <!-- ══════════════ ABA: TECIDOS ══════════════ -->
@@ -177,10 +178,70 @@
                 </table>
             </div>
         </div>
+
+        <!-- ══════════════ ABA: KITS ══════════════ -->
+        <!-- Mesma aba da tela de Estoque: os dois lugares mexem nos mesmos kits. -->
+        <div id="tab-cat-kits" class="tab-panel">
+
+            <div class="card">
+                <h3 style="margin-bottom:16px">Criar Kit</h3>
+                <div class="grid">
+                    <div class="form-group" style="grid-column:1/-1">
+                        <label>Nome do Kit</label>
+                        <input type="text" id="kit-nome" placeholder="Ex: Kit Trilho 2m, Kit Instalação Padrão…">
+                    </div>
+                    <div class="form-group" style="grid-column:1/-1">
+                        <label>Descrição (opcional)</label>
+                        <input type="text" id="kit-desc" placeholder="Breve descrição do kit">
+                    </div>
+                </div>
+
+                <h4 style="margin-bottom:10px;color:#555">Itens do Kit</h4>
+                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+                    <div class="form-group" style="flex:1;min-width:200px">
+                        <label>Material</label>
+                        <select id="kit-item-mat"></select>
+                    </div>
+                    <div class="form-group" style="width:120px">
+                        <label>Quantidade</label>
+                        <input type="number" id="kit-item-qtd" placeholder="Ex: 2" step="0.01" min="0.01" value="1">
+                    </div>
+                    <button class="btn btn-outline" style="margin-bottom:0" onclick="adicionarItemAoKit()">+ Adicionar Item</button>
+                </div>
+
+                <div style="margin-bottom:14px">
+                    <table>
+                        <thead>
+                            <tr><th>Material</th><th>Quantidade</th><th style="width:60px"></th></tr>
+                        </thead>
+                        <tbody id="tb-kit-draft"></tbody>
+                    </table>
+                </div>
+
+                <button class="btn btn-success" onclick="salvarKit()">Salvar Kit</button>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-bottom:16px">Kits Cadastrados</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:90px">Código</th>
+                            <th>Nome</th>
+                            <th style="width:110px">Medida</th>
+                            <th style="width:100px">Preço</th>
+                            <th style="width:90px">Estoque</th>
+                            <th>Composição</th>
+                            <th style="width:150px">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-kits"></tbody>
+                </table>
+            </div>
+        </div>
     </main>
     <script src="js/app.js"></script>
     <script src="js/importador-core.js"></script>
     <script src="js/importador-ui.js"></script>
-    <script src="js/importador-kits-ui.js"></script>
 </body>
 </html>
