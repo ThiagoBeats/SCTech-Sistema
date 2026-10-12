@@ -1307,3 +1307,55 @@ html[data-theme="dark"] .imp-cfg-icone,
 html[data-theme="dark"] .imp-cfg-titulo { color: #F5F6F8; }
 html[data-theme="dark"] .imp-cfg-campo-caixa { background: #16181B; border-color: #282A2E; }
 html[data-theme="dark"] .imp-cfg-campo-caixa input { color: #F5F6F8; }
+
+/* ═══ Importação de kits prontos ═══ */
+
+.imp-atalho-kits {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    padding: 9px 12px; margin-bottom: 16px; border-radius: 6px;
+    background: var(--light); border: 1px solid var(--border);
+    font-size: var(--fs-texto-sm); color: var(--dark);
+}
+.imp-atalho-kits span { flex: 1; min-width: 200px; color: var(--muted); }
+
+.kit-cab-linha {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px;
+}
+.kit-cab-linha label { font-size: var(--fs-label); font-weight: 600; color: var(--dark); }
+.kit-cab-linha select {
+    padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px;
+    font-size: var(--fs-texto-sm); max-width: 360px;
+}
+
+.kit-aviso {
+    padding: 9px 12px; margin-bottom: 12px; border-radius: 6px;
+    background: rgba(242, 201, 36, .16); border: 1px solid #F2C924;
+    font-size: var(--fs-texto-sm);
+}
+
+.kit-mapa-tabela th.kit-col-th { min-width: 150px; vertical-align: top; }
+.kit-col-rotulo {
+    font-size: var(--fs-aux); color: var(--muted); font-weight: 600;
+    margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kit-mapa-tabela th.kit-col-th select {
+    width: 100%; padding: 4px 6px; border: 1px solid var(--border);
+    border-radius: 5px; font-size: var(--fs-label);
+}
+.kit-col-linha {
+    width: 44px; min-width: 44px; text-align: right;
+    font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+
+.kit-selo {
+    display: inline-block; padding: 1px 7px; border-radius: var(--radius-pill);
+    background: rgba(201, 247, 117, .35); border: 1px solid var(--primary);
+    font-size: var(--fs-aux); font-weight: 600; color: var(--primary);
+    vertical-align: middle;
+}
+.kit-selo-montagem { background: var(--light); border-color: var(--border); color: var(--muted); }
+
+html[data-theme="dark"] .imp-atalho-kits { background: #1D2024; border-color: #282A2E; }
+html[data-theme="dark"] .kit-aviso { background: rgba(242, 201, 36, .10); }
+html[data-theme="dark"] .kit-selo { background: rgba(201, 247, 117, .12); border-color: var(--secondary); color: var(--secondary); }
+html[data-theme="dark"] .kit-selo-montagem { background: #1D2024; border-color: #282A2E; color: var(--muted); }

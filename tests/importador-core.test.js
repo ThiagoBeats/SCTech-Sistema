@@ -1914,3 +1914,183 @@ test('montarPerfil cai no padrao quando as escolhas nao vem', () => {
     assert.strictEqual(p.margem_modo, 'total');
     assert.strictEqual(p.estoque_modo, 'ajustar');
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// Kits prontos
+// ─────────────────────────────────────────────────────────────────────────
+
+const COLADO_KIT = [
+    'CODIGO\tNOME\tMEDIDA\tPRECO',
+    '5501\tKIT TRILHO SUICO\t1,00 a 1,50 m\t189,00',
+    '5502\tKIT TRILHO SUICO\t1,51 a 2,00 m\t219,00'
+].join('\n');
+
+function itensDoColado(texto) {
+    const p = C.lerColados(texto);
+    const linhas = p.abas['Dados colados'];
+    const cab = C.detectarCabecalho(linhas);
+    const mapa = C.sugerirMapeamentoKit(cab.colunas);
+    return { itens: C.montarItensKit({ linhas, mapa, inicio: cab.indice + 1 }), mapa, cab };
+}
+
+test('sugerirMapeamentoKit reconhece codigo, nome, medida e preco', () => {
+    const { mapa } = itensDoColado(COLADO_KIT);
+    assert.deepStrictEqual(mapa, { codigo: 0, nome: 1, preco: 3, medida: 2, descricao: -1 });
+});
+
+test('"Descricao" sozinha vale como nome do kit', () => {
+    const mapa = C.sugerirMapeamentoKit(['REF', 'DESCRIÇÃO', 'VALOR']);
+    assert.strictEqual(mapa.nome, 1, 'sem outra coluna de nome, a descricao assume');
+    assert.strictEqual(mapa.descricao, -1);
+});
+
+test('com NOME e OBSERVACAO, cada uma fica no seu papel', () => {
+    const mapa = C.sugerirMapeamentoKit(['REF', 'NOME', 'OBSERVAÇÃO', 'PREÇO']);
+    assert.strictEqual(mapa.nome, 1);
+    assert.strictEqual(mapa.descricao, 2);
+});
+
+test('montarItensKit le medida como texto, do jeito que veio', () => {
+    const { itens } = itensDoColado(COLADO_KIT);
+    assert.strictEqual(itens.length, 2);
+    assert.strictEqual(itens[0].codigo, '5501');
+    assert.strictEqual(itens[0].nome, 'KIT TRILHO SUICO');
+    assert.strictEqual(itens[0].medida, '1,00 a 1,50 m');
+    assert.strictEqual(itens[0].preco_custo, 189);
+    assert.strictEqual(itens[0].problema, null);
+});
+
+test('falta de campo obrigatorio vira problema, nao sumico', () => {
+    const { itens } = itensDoColado('CODIGO\tNOME\tPRECO\n\tSEM CODIGO\t10,00\n5502\t\t20,00\n5503\tSEM PRECO\t');
+    assert.strictEqual(itens.length, 3, 'as tres linhas precisam aparecer');
+    assert.match(itens[0].problema, /código/);
+    assert.match(itens[1].problema, /nome/);
+    assert.match(itens[2].problema, /preço/);
+});
+
+test('linha sem nenhum dos tres campos e separador, nao erro', () => {
+    const { itens } = itensDoColado('CODIGO\tNOME\tPRECO\n5501\tKIT A\t10,00\n\t\t\n5502\tKIT B\t20,00');
+    assert.strictEqual(itens.length, 2);
+});
+
+test('classificarKits separa novos, atualizados e conflitos', () => {
+    const { itens } = itensDoColado(COLADO_KIT);
+    const kits = [{ id: 1, tipo: 'pronto', referencia: '5502', nome: 'KIT ANTIGO', preco_custo: 100, preco: 180 }];
+    const r = C.classificarKits({ itens, kits, catalogo: [], materiais: [] });
+    assert.strictEqual(r.novos.length, 1);
+    assert.strictEqual(r.novos[0].item.codigo, '5501');
+    assert.strictEqual(r.atualizados.length, 1);
+    assert.strictEqual(r.atualizados[0].existente.id, 1);
+    assert.strictEqual(r.conflitos.length, 0);
+});
+
+test('codigo que ja e de material ou tecido vira conflito', () => {
+    const { itens } = itensDoColado(COLADO_KIT);
+    const r = C.classificarKits({
+        itens, kits: [],
+        catalogo: [{ id: 9, referencia: '5501', nome: 'LINHO BELGA' }],
+        materiais: [{ id: 8, referencia: '5502', nome: 'PONTEIRA' }]
+    });
+    assert.strictEqual(r.novos.length, 0);
+    assert.strictEqual(r.conflitos.length, 2);
+    assert.match(r.conflitos[0].motivo, /um tecido/);
+    assert.match(r.conflitos[1].motivo, /um material/);
+});
+
+test('codigo de kit de MONTAGEM tambem e conflito, nao atualizacao', () => {
+    const { itens } = itensDoColado(COLADO_KIT);
+    const kits = [{ id: 1, nome: 'Kit Cortina Sala', referencia: '5501', itens: [{ materialId: 3, quantidade: 2 }] }];
+    const r = C.classificarKits({ itens, kits, catalogo: [], materiais: [] });
+    assert.strictEqual(r.atualizados.length, 0);
+    assert.strictEqual(r.conflitos.length, 1);
+    assert.match(r.conflitos[0].motivo, /kit de montagem/);
+});
+
+test('codigo repetido dentro da mesma tabela vira conflito', () => {
+    const { itens } = itensDoColado('CODIGO\tNOME\tPRECO\n5501\tKIT A\t10,00\n5501\tKIT B\t20,00');
+    const r = C.classificarKits({ itens, kits: [], catalogo: [], materiais: [] });
+    assert.strictEqual(r.novos.length, 1, 'a primeira passa');
+    assert.strictEqual(r.conflitos.length, 1, 'a segunda e barrada');
+    assert.match(r.conflitos[0].motivo, /mais de uma vez/);
+});
+
+test('aplicarImportacaoKits cria kit pronto com preco de venda pelo markup', () => {
+    const { itens } = itensDoColado(COLADO_KIT);
+    const r = C.aplicarImportacaoKits({
+        decisoes: itens.map(item => ({ item, existente: null, markup: 40, acao: 'criar' })),
+        kits: [], fornecedor: { id: 7, nome: 'RC' }, agora: 5000
+    });
+    assert.strictEqual(r.kits.length, 2);
+    const k = r.kits[0];
+    assert.strictEqual(k.tipo, 'pronto');
+    assert.strictEqual(k.referencia, '5501');
+    assert.strictEqual(k.medida, '1,00 a 1,50 m');
+    assert.strictEqual(k.preco_custo, 189);
+    assert.strictEqual(k.preco, 264.6, '189 vezes 1,40');
+    assert.strictEqual(k.estoque_atual, 0);
+    assert.strictEqual(k.estoque_infinito, false);
+    assert.strictEqual(k.fornecedor_nome, 'RC');
+    assert.deepStrictEqual(k.itens, [], 'kit pronto nao tem componentes');
+    assert.deepStrictEqual(r.resumo, { criados: 2, atualizados: 0, ignorados: 0 });
+});
+
+test('estoqueInfinito marca os kits criados', () => {
+    const { itens } = itensDoColado(COLADO_KIT);
+    const r = C.aplicarImportacaoKits({
+        decisoes: itens.map(item => ({ item, existente: null, markup: 0, acao: 'criar' })),
+        kits: [], fornecedor: null, estoqueInfinito: true, agora: 5000
+    });
+    assert.ok(r.kits.every(k => k.estoque_infinito === true));
+});
+
+test('atualizar um kit preserva o saldo e nao apaga campo opcional em branco', () => {
+    const kits = [{
+        id: 1, tipo: 'pronto', referencia: '5501', nome: 'KIT VELHO',
+        descricao: 'anotacao antiga', medida: '1,00 a 1,50 m',
+        preco_custo: 100, preco: 180, estoque_atual: 7, itens: []
+    }];
+    const { itens } = itensDoColado('CODIGO\tNOME\tPRECO\n5501\tKIT NOVO\t200,00');
+    const r = C.aplicarImportacaoKits({
+        decisoes: [{ item: itens[0], existente: kits[0], markup: 50, acao: 'atualizar' }],
+        kits, fornecedor: null, agora: 5000
+    });
+    const k = r.kits[0];
+    assert.strictEqual(k.nome, 'KIT NOVO');
+    assert.strictEqual(k.preco_custo, 200);
+    assert.strictEqual(k.preco, 300);
+    assert.strictEqual(k.estoque_atual, 7, 'o saldo nao pode ser zerado por uma atualizacao de preco');
+    assert.strictEqual(k.medida, '1,00 a 1,50 m', 'medida em branco na tabela nao apaga a que existia');
+    assert.strictEqual(k.descricao, 'anotacao antiga');
+    assert.deepStrictEqual(r.resumo, { criados: 0, atualizados: 1, ignorados: 0 });
+});
+
+test('desfazer remove os kits criados e devolve os atualizados', () => {
+    const kits = [{ id: 1, tipo: 'pronto', referencia: '5502', nome: 'ANTIGO', preco_custo: 100, preco: 180, estoque_atual: 0, itens: [] }];
+    const { itens } = itensDoColado(COLADO_KIT);
+    const ap = C.aplicarImportacaoKits({
+        decisoes: [
+            { item: itens[0], existente: null, markup: 40, acao: 'criar' },
+            { item: itens[1], existente: kits[0], markup: 40, acao: 'atualizar' }
+        ],
+        kits, fornecedor: null, agora: 5000
+    });
+    assert.strictEqual(ap.kits.length, 2);
+
+    const des = C.desfazerImportacaoKits({ kits: ap.kits, mudancas: ap.mudancas });
+    assert.strictEqual(des.kits.length, 1, 'o criado sai');
+    assert.strictEqual(des.kits[0].nome, 'ANTIGO', 'o atualizado volta ao que era');
+    assert.strictEqual(des.kits[0].preco_custo, 100);
+    assert.deepStrictEqual(des.resumo, { removidos: 1, revertidos: 1, sumidos: 0, mantidos: 0 });
+});
+
+test('desfazer mantem o kit criado que ja tem saldo', () => {
+    const { itens } = itensDoColado(COLADO_KIT);
+    const ap = C.aplicarImportacaoKits({
+        decisoes: [{ item: itens[0], existente: null, markup: 0, acao: 'criar' }],
+        kits: [], fornecedor: null, agora: 5000
+    });
+    ap.kits[0].estoque_atual = 4;   // usuario deu entrada depois de importar
+    const des = C.desfazerImportacaoKits({ kits: ap.kits, mudancas: ap.mudancas });
+    assert.strictEqual(des.kits.length, 1, 'apagar deixaria saldo orfao');
+    assert.strictEqual(des.resumo.mantidos, 1);
+});

@@ -195,6 +195,10 @@ function _impPasso1HTML() {
     // substitui os dados, e vice-versa; o usuario precisa ver qual valeu.
     const origemLinha = `<p id="imp-origem" style="font-size:12px;color:var(--muted);margin-top:6px">${_impTextoDaOrigem(nomeArquivo)}</p>`;
     return `
+    <div class="imp-atalho-kits">
+        <span>Vai importar <strong>kits prontos</strong>, com código e preço próprios?</span>
+        <button class="btn btn-outline btn-sm" onclick="abrirImportadorKits()">📦 Importar kits prontos</button>
+    </div>
     <div class="form-group">
         <label>Arquivo da tabela</label>
         <input type="file" id="imp-file" accept=".xlsx,.xls,.csv,.pdf" onchange="_impArquivoEscolhido(this)">
@@ -1442,9 +1446,21 @@ function _impSnapshot() {
     return snap;
 }
 
+// Snapshot de kits, quando o assistente de kits estiver carregado na página.
+function _impSnapshotDeKits() {
+    return typeof _kitSnapshot === 'function' ? _kitSnapshot() : null;
+}
+
 async function desfazerUltimaImportacao() {
     const C = window.ImportadorCore;
     const snap = _impSnapshot();
+    const snapKit = _impSnapshotDeKits();
+
+    // Um botão só para as duas importações: desfaz a mais recente.
+    if (snapKit && (!snap || Date.parse(snapKit.quando) > Date.parse(snap.quando))) {
+        await desfazerImportacaoDeKits();
+        return;
+    }
     if (!snap) { await showAlert('Não há importação recente para desfazer.', 'ℹ️'); return; }
     const quando = new Date(snap.quando).toLocaleString('pt-BR');
     const msg = `Desfazer a importação de ${quando}?\n\n`
@@ -1482,6 +1498,6 @@ async function desfazerUltimaImportacao() {
 function _impAtualizarBotaoDesfazer() {
     const btn = document.getElementById('btn-desfazer-import');
     if (!btn) return;
-    btn.style.display = _impSnapshot() ? '' : 'none';
+    btn.style.display = (_impSnapshot() || _impSnapshotDeKits()) ? '' : 'none';
 }
 document.addEventListener('DOMContentLoaded', _impAtualizarBotaoDesfazer);

@@ -1029,7 +1029,236 @@
         return { ordem: ['Dados colados'], abas: { 'Dados colados': retangular } };
     }
 
-    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, motivoLarguraIlegivel, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup, indexarExistentes, classificar, aplicarImportacao, desfazerImportacao, resolverAcao, validarDecisoes, validarDecisoesDetalhado, assinaturaDoLayout, montarPerfil, perfilDoFornecedor, codigoLivre, nomeLivre, agruparLinhasPdf, expandirPorCor, lerColados, CAMPOS_DO_IMPORTADOR };
+    // ═══════════════════════════════════════════════════════════════════
+    // KITS PRONTOS
+    //
+    // Um kit pronto vem de uma tabela de fornecedor e, ao contrário do kit
+    // de montagem que o usuário compõe a partir de materiais, é um produto
+    // em si: tem código, nome e preço próprios e nenhum componente. Por
+    // isso ele entra no pedido como UMA linha, e não explodido em itens.
+    // ═══════════════════════════════════════════════════════════════════
+
+    const CAMPOS_DO_KIT = ['referencia', 'nome', 'descricao', 'medida', 'preco_custo', 'preco', 'estoque_infinito', 'fornecedor_id', 'fornecedor_nome'];
+
+    // Rótulos reconhecidos por papel, para sugerir o mapeamento das colunas.
+    const _ROTULOS_KIT = {
+        codigo:    [/^c[oó]d/i, /^ref/i, /^sku$/i, /^item$/i],
+        nome:      [/^nome/i, /^descri[cç][aã]o$/i, /^produto/i, /^kit$/i, /^modelo/i],
+        preco:     [/^pre[cç]o/i, /^valor/i, /^r\$/i, /^custo/i, /^tabela/i],
+        medida:    [/^medida/i, /^tamanho/i, /^faixa/i, /^dimens/i, /^larg/i, /^comprim/i, /^metragem/i],
+        descricao: [/^observa/i, /^detalhe/i, /^coment/i, /^especific/i, /^info/i]
+    };
+
+    // Sugere qual coluna é qual. "Descrição" sozinha vale como nome; só vira
+    // descrição quando já existe outra coluna melhor para o nome.
+    function sugerirMapeamentoKit(colunas) {
+        const rotulos = _rotulosDaLinha(colunas);
+        const mapa = { codigo: -1, nome: -1, preco: -1, medida: -1, descricao: -1 };
+        const tomadas = new Set();
+
+        ['codigo', 'nome', 'preco', 'medida', 'descricao'].forEach(papel => {
+            for (let i = 0; i < rotulos.length; i++) {
+                if (tomadas.has(i) || !rotulos[i]) continue;
+                if (_ROTULOS_KIT[papel].some(re => re.test(rotulos[i]))) {
+                    mapa[papel] = i;
+                    tomadas.add(i);
+                    break;
+                }
+            }
+        });
+        return mapa;
+    }
+
+    // Lê as linhas segundo o mapeamento. Cada item sai com `problema` quando
+    // falta um dos três campos obrigatórios, para a conferência mostrar o
+    // motivo em vez de a linha sumir em silêncio.
+    function montarItensKit(opcoes) {
+        const linhas = opcoes.linhas || [];
+        const mapa = opcoes.mapa || {};
+        const inicio = Number(opcoes.inicio) || 0;
+        const itens = [];
+
+        const celula = (linha, indice) => (indice >= 0 ? linha[indice] : undefined);
+
+        for (let i = inicio; i < linhas.length; i++) {
+            const linha = linhas[i];
+            if (!linha || !linha.length) continue;
+            if (linha.every(c => c === undefined || c === null || String(c).trim() === '')) continue;
+
+            const { codigo } = normalizarCodigo(celula(linha, mapa.codigo));
+            const nome = normalizarNome(celula(linha, mapa.nome));
+            const p = normalizarPreco(celula(linha, mapa.preco));
+
+            const faltas = [];
+            if (!codigo) faltas.push('código');
+            if (!nome) faltas.push('nome');
+            if (!p.ok) faltas.push('preço' + (p.motivo ? ' (' + p.motivo + ')' : ''));
+
+            // Linha sem NENHUM dos três é separador ou sobra da planilha, não erro.
+            if (faltas.length === 3) continue;
+
+            itens.push({
+                linha: i,
+                codigo,
+                nome,
+                descricao: normalizarNome(celula(linha, mapa.descricao)),
+                medida: String(celula(linha, mapa.medida) === undefined ? '' : celula(linha, mapa.medida)).trim(),
+                preco_custo: p.ok ? p.valor : null,
+                problema: faltas.length ? 'Falta ' + faltas.join(', ') : null
+            });
+        }
+        return itens;
+    }
+
+    // Índice dos códigos já ocupados no sistema inteiro: kits, materiais e
+    // tecidos. Código é único em todo o sistema, não só dentro dos kits.
+    function indexarCodigosOcupados(kits, catalogo, materiais) {
+        const porCodigo = new Map();
+        const registrar = (lista, tipo) => (lista || []).forEach(r => {
+            const cod = normalizarCodigo(r.referencia).codigo;
+            if (cod) porCodigo.set(cod, { registro: r, tipo });
+        });
+        registrar(kits, 'kit');
+        registrar(catalogo, 'tecido');
+        registrar(materiais, 'material');
+        return porCodigo;
+    }
+
+    // Separa o que será criado, atualizado e o que não pode entrar.
+    // `atualizar` só vale para um kit pronto do mesmo código: código que
+    // pertence a um tecido, a um material ou a um kit de montagem é conflito.
+    function classificarKits(opcoes) {
+        const itens = opcoes.itens || [];
+        const kits = opcoes.kits || [];
+        const porCodigo = indexarCodigosOcupados(kits, opcoes.catalogo, opcoes.materiais);
+        const r = { novos: [], atualizados: [], conflitos: [], problemas: [] };
+        const vistosNoLote = new Map();
+
+        itens.forEach(item => {
+            if (item.problema) { r.problemas.push({ item, motivo: item.problema }); return; }
+
+            if (vistosNoLote.has(item.codigo)) {
+                r.conflitos.push({ item, motivo: 'O código ' + item.codigo + ' aparece mais de uma vez nesta tabela' });
+                return;
+            }
+            vistosNoLote.set(item.codigo, true);
+
+            const dono = porCodigo.get(item.codigo);
+            if (!dono) { r.novos.push({ item, existente: null }); return; }
+
+            if (dono.tipo === 'kit' && dono.registro.tipo === 'pronto') {
+                r.atualizados.push({ item, existente: dono.registro });
+                return;
+            }
+            const deQuem = dono.tipo === 'tecido' ? 'um tecido'
+                : dono.tipo === 'material' ? 'um material'
+                : 'um kit de montagem';
+            r.conflitos.push({ item, motivo: 'O código ' + item.codigo + ' já é de ' + deQuem + ' ("' + (dono.registro.nome || '') + '")' });
+        });
+
+        return r;
+    }
+
+    function _fotografarKit(registro) {
+        const antes = {};
+        CAMPOS_DO_KIT.forEach(campo => {
+            if (Object.prototype.hasOwnProperty.call(registro, campo)) antes[campo] = registro[campo];
+        });
+        return antes;
+    }
+
+    // Grava os kits decididos. Devolve uma cópia da lista — quem chama é que
+    // troca a lista viva, como já acontece em aplicarImportacao.
+    function aplicarImportacaoKits(opcoes) {
+        const kits = (opcoes.kits || []).map(k => Object.assign({}, k));
+        const fornecedor = opcoes.fornecedor || null;
+        const estoqueInfinito = !!opcoes.estoqueInfinito;
+        const resumo = { criados: 0, atualizados: 0, ignorados: 0 };
+        const mudancas = { criados: [], atualizados: [] };
+
+        let maiorId = -1;
+        kits.forEach(k => { if (k.id > maiorId) maiorId = k.id; });
+        let proximoId = Math.max(Number(opcoes.agora) || Date.now(), maiorId + 1);
+
+        (opcoes.decisoes || []).forEach(decisao => {
+            const item = decisao.item;
+            if (!item || decisao.acao === 'ignorar') { resumo.ignorados++; return; }
+            if (decisao.acao !== 'criar' && decisao.acao !== 'atualizar') { resumo.ignorados++; return; }
+
+            const precoCusto = Number(item.preco_custo) || 0;
+            const preco = aplicarMarkup(precoCusto, decisao.markup);
+
+            if (decisao.acao === 'atualizar') {
+                const alvo = decisao.existente ? kits.find(k => k.id === decisao.existente.id) : null;
+                if (!alvo) { resumo.ignorados++; return; }
+                mudancas.atualizados.push({ id: alvo.id, antes: _fotografarKit(alvo) });
+                alvo.referencia = item.codigo;
+                alvo.nome = item.nome;
+                alvo.preco_custo = precoCusto;
+                alvo.preco = preco;
+                // Campo opcional em branco não apaga o que já estava lá.
+                if (item.medida) alvo.medida = item.medida;
+                if (item.descricao) alvo.descricao = item.descricao;
+                alvo.estoque_infinito = estoqueInfinito;
+                if (fornecedor) { alvo.fornecedor_id = fornecedor.id; alvo.fornecedor_nome = fornecedor.nome; }
+                resumo.atualizados++;
+                return;
+            }
+
+            const novo = {
+                id: proximoId++,
+                tipo: 'pronto',
+                referencia: item.codigo,
+                nome: item.nome,
+                descricao: item.descricao || '',
+                medida: item.medida || '',
+                preco_custo: precoCusto,
+                preco,
+                estoque_atual: 0,
+                estoque_infinito: estoqueInfinito,
+                fornecedor_id: fornecedor ? fornecedor.id : null,
+                fornecedor_nome: fornecedor ? fornecedor.nome : '',
+                // Kit pronto não tem componentes; a lista vazia existe para o
+                // código que lê k.itens continuar funcionando sem checagem.
+                itens: []
+            };
+            kits.push(novo);
+            mudancas.criados.push({ id: novo.id });
+            resumo.criados++;
+        });
+
+        return { kits, resumo, mudancas };
+    }
+
+    function desfazerImportacaoKits(opcoes) {
+        const kits = (opcoes.kits || []).map(k => Object.assign({}, k));
+        const mudancas = opcoes.mudancas || { criados: [], atualizados: [] };
+        const resumo = { removidos: 0, revertidos: 0, sumidos: 0, mantidos: 0 };
+
+        (mudancas.criados || []).forEach(c => {
+            const i = kits.findIndex(k => k.id === c.id);
+            if (i === -1) { resumo.sumidos++; return; }
+            // Kit que já movimentou estoque fica: apagá-lo deixaria saldo órfão.
+            if (Number(kits[i].estoque_atual) > 0) { resumo.mantidos++; return; }
+            kits.splice(i, 1);
+            resumo.removidos++;
+        });
+
+        (mudancas.atualizados || []).forEach(a => {
+            const alvo = kits.find(k => k.id === a.id);
+            if (!alvo) { resumo.sumidos++; return; }
+            CAMPOS_DO_KIT.forEach(campo => {
+                if (Object.prototype.hasOwnProperty.call(a.antes || {}, campo)) alvo[campo] = a.antes[campo];
+                else delete alvo[campo];
+            });
+            resumo.revertidos++;
+        });
+
+        return { kits, resumo };
+    }
+
+    const api = { normalizarNome, normalizarCodigo, normalizarPreco, normalizarLargura, motivoLarguraIlegivel, detectarCabecalho, ehLinhaDeProduto, sugerirMapeamento, sugerirTipoAba, montarItens, markupDeExistente, aplicarMarkup, indexarExistentes, classificar, aplicarImportacao, desfazerImportacao, resolverAcao, validarDecisoes, validarDecisoesDetalhado, assinaturaDoLayout, montarPerfil, perfilDoFornecedor, codigoLivre, nomeLivre, agruparLinhasPdf, expandirPorCor, lerColados, CAMPOS_DO_IMPORTADOR,
+        sugerirMapeamentoKit, montarItensKit, indexarCodigosOcupados, classificarKits, aplicarImportacaoKits, desfazerImportacaoKits, CAMPOS_DO_KIT };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ImportadorCore = api;

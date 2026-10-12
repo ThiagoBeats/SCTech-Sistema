@@ -2127,6 +2127,15 @@ function realizarBaixaTecidos(ped) {
 function realizarBaixaMateriais(ped) {
     const pedRef = ped.id ? `Pedido #${formatPedidoId(ped.id)}` : 'Pedido';
     for (const item of (ped.itens || [])) {
+        // Linha de kit pronto: baixa do saldo do próprio kit.
+        if (item.kitId) {
+            const kit = db.kits.find(k => k.id == item.kitId);
+            if (kit && !temEstoqueInfinito(kit)) {
+                kit.estoque_atual = Math.max(0, (kit.estoque_atual || 0) - item.quantidade);
+                registrarMovimento('Baixa Pedido', kit.nome, 'kit', item.quantidade, 'un', pedRef);
+            }
+            continue;
+        }
         const mat = db.materiais.find(m => m.id == item.materialId);
         if (mat && !temEstoqueInfinito(mat)) {
             mat.estoque_atual = Math.max(0, (mat.estoque_atual || 0) - item.quantidade);
@@ -2292,9 +2301,12 @@ async function moverStatus(id, direcao) {
         const itensPed = ped.itens || [];
         const insufMat = [];
         for (const i of itensPed) {
-            const mat = db.materiais.find(m => m.id == i.materialId);
-            if (temEstoqueInfinito(mat)) continue;   // sempre disponivel
-            const estAtual = mat ? (mat.estoque_atual || 0) : 0;
+            // Linha de kit pronto confere o saldo do próprio kit.
+            const alvo = i.kitId
+                ? db.kits.find(k => k.id == i.kitId)
+                : db.materiais.find(m => m.id == i.materialId);
+            if (temEstoqueInfinito(alvo)) continue;   // sempre disponivel
+            const estAtual = alvo ? (alvo.estoque_atual || 0) : 0;
             if (estAtual < i.quantidade)
                 insufMat.push(`• ${i.nome}: necessário ${i.quantidade} ${i.unidade}, disponível ${estAtual.toFixed(2)} ${i.unidade}`);
         }
@@ -3875,18 +3887,59 @@ async function excluirKit(id) {
     salvarERecarregar('Kit removido.');
 }
 
+// Ajuste de saldo de kit pronto, irmão do ajuste de material.
+async function confirmarAjusteKit(id) {
+    const kit = db.kits.find(k => k.id == id);
+    if (!kit) return;
+    const qtd = parseFloat(document.getElementById(`ajuste-qtd-kit-${id}`)?.value);
+    if (isNaN(qtd)) { await showAlert('Informe uma quantidade válida (positivo para entrada, negativo para saída).', '⚠️'); return; }
+    kit.estoque_atual = Math.max(0, (kit.estoque_atual || 0) + qtd);
+    registrarMovimento(qtd >= 0 ? 'Ajuste +' : 'Ajuste -', kit.nome, 'kit', qtd, 'un', '');
+    salvarERecarregar('Ajuste realizado!');
+}
+
 function renderKits() {
     const tb = document.getElementById('tb-kits');
     if (!tb) return;
     if (!db.kits.length) {
-        tb.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;padding:24px;">Nenhum kit cadastrado.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:24px;">Nenhum kit cadastrado.</td></tr>';
         return;
     }
-    tb.innerHTML = db.kits.map(k => `<tr>
-        <td><strong>${k.nome}</strong>${k.descricao ? `<br><small style="color:#888">${k.descricao}</small>` : ''}</td>
-        <td style="font-size:13px;color:#555">${k.itens.map(i => `${i.nome}: ${i.quantidade} ${i.unidade}`).join('<br>')}</td>
-        <td><button class="btn btn-outline btn-sm btn-danger" onclick="excluirKit(${k.id})">🗑️</button></td>
-    </tr>`).join('');
+    tb.innerHTML = db.kits.map(k => {
+        const pronto = ehKitPronto(k);
+        const saldo = temEstoqueInfinito(k) ? '<strong title="Estoque infinito">∞</strong>'
+            : (pronto ? `<strong>${(k.estoque_atual || 0).toFixed(0)}</strong> un` : '—');
+        const composicao = pronto
+            ? '<span style="color:#999">kit pronto do fornecedor</span>'
+            : (k.itens || []).map(i => `${escapeHtml(i.nome)}: ${i.quantidade} ${i.unidade}`).join('<br>');
+        const selo = pronto
+            ? '<span class="kit-selo">pronto</span>'
+            : '<span class="kit-selo kit-selo-montagem">montagem</span>';
+        const ajustar = pronto && !temEstoqueInfinito(k)
+            ? `<button class="btn btn-outline btn-sm" onclick="mostrarAjusteForm('kit-${k.id}')" title="Ajustar estoque">± Ajustar</button>`
+            : '';
+        const linhaAjuste = pronto && !temEstoqueInfinito(k) ? `
+        <tr id="ajuste-kit-${k.id}" class="ajuste-form" style="display:none">
+            <td colspan="7" class="baixa-form-cell">
+                <strong>${escapeHtml(k.nome)}</strong> — saldo: <strong>${(k.estoque_atual || 0).toFixed(0)} un</strong> &emsp;
+                Quantidade (+ entrada / − saída):
+                <input type="number" id="ajuste-qtd-kit-${k.id}" placeholder="Ex: +10 ou -3" step="1" style="width:130px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;margin:0 8px">
+                <button class="btn btn-sm" style="background:#005D3B" onclick="confirmarAjusteKit(${k.id})">Confirmar</button>
+                <button class="btn btn-outline btn-sm" onclick="cancelarAjuste()">Cancelar</button>
+            </td>
+        </tr>` : '';
+
+        return `<tr>
+            <td style="font-size:12px;color:#555">${escapeHtml(k.referencia || '—')}</td>
+            <td><strong>${escapeHtml(k.nome)}</strong> ${selo}${k.descricao ? `<br><small style="color:#888">${escapeHtml(k.descricao)}</small>` : ''}</td>
+            <td style="font-size:12px;color:#555">${escapeHtml(k.medida || '—')}</td>
+            <td style="white-space:nowrap">${pronto ? 'R$ ' + (k.preco || 0).toFixed(2) : '—'}</td>
+            <td style="white-space:nowrap">${saldo}</td>
+            <td style="font-size:13px;color:#555">${composicao}</td>
+            <td style="white-space:nowrap">${ajustar}
+                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirKit(${k.id})">🗑️</button></td>
+        </tr>${linhaAjuste}`;
+    }).join('');
 }
 
 // --- HISTÓRICO DE MOVIMENTAÇÕES ---
@@ -4330,11 +4383,37 @@ function atualizarQuantidadeItem(idx, valor) {
     renderItensPedido(); atualizarTotalPedido();
 }
 
+// Kit pronto: produto em si, com código e preço próprios e sem componentes.
+// Kit de montagem (o de sempre) não tem a marca e é explodido em materiais.
+function ehKitPronto(kit) {
+    return !!(kit && kit.tipo === 'pronto');
+}
+
 async function aplicarKit() {
     const kitId = parseInt(document.getElementById('ped-kit')?.value);
     if (!kitId) { await showAlert('Selecione um kit para aplicar.', '⚠️'); return; }
     const kit = db.kits.find(k => k.id == kitId);
     if (!kit) return;
+
+    // Kit pronto entra como UMA linha, com o preço dele. Não há o que explodir.
+    if (ehKitPronto(kit)) {
+        const existente = pedidoDraft.itens.find(i => i.kitId === kit.id);
+        if (existente) {
+            existente.quantidade += 1;
+            existente.subtotal = existente.quantidade * existente.preco_unit;
+        } else {
+            const preco = kit.preco || 0;
+            pedidoDraft.itens.push({
+                kitId: kit.id,
+                nome: kit.nome + (kit.medida ? ' (' + kit.medida + ')' : ''),
+                unidade: 'un', quantidade: 1, preco_unit: preco, subtotal: preco
+            });
+        }
+        renderItensPedido(); atualizarTotalPedido();
+        document.getElementById('ped-kit').value = '';
+        return;
+    }
+
     for (const item of kit.itens) {
         const mat = db.materiais.find(m => m.id == item.materialId);
         if (!mat) continue;
@@ -6847,8 +6926,14 @@ document.addEventListener('DOMContentLoaded', () => {
             db.vendedores.map(v => `<option value="${v.id}">${v.nome} (${v.comissao_pct || 0}%)</option>`).join('');
 
         const kitSel = document.getElementById('ped-kit');
+        // Kit pronto aparece com medida e preço; kit de montagem, só o nome.
         if (kitSel) kitSel.innerHTML = '<option value="">— Selecione um kit —</option>' +
-            db.kits.map(k=>`<option value="${k.id}">${k.nome}</option>`).join('');
+            db.kits.map(k => {
+                const extra = ehKitPronto(k)
+                    ? `${k.medida ? ' · ' + k.medida : ''} · R$ ${(k.preco || 0).toFixed(2)}`
+                    : ' (montagem)';
+                return `<option value="${k.id}">${escapeHtml(k.nome)}${escapeHtml(extra)}</option>`;
+            }).join('');
 
         const matSel = document.getElementById('ped-item-mat');
         if (matSel) matSel.innerHTML = '<option value="">— Selecione o material —</option>' +

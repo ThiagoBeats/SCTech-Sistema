@@ -29,8 +29,16 @@ O Playwright não aceita um diretório de testes fora do seu próprio, então us
 arquivo de configuração apontando para cá. Em `/tmp/sctech-e2e/repo.config.js`:
 
 ```js
-module.exports = { testDir: process.env.TESTDIR, reporter: 'line', use: { headless: true } };
+module.exports = { testDir: process.env.TESTDIR, reporter: 'line', workers: 1, use: { headless: true }, timeout: 60000 };
 ```
+
+**`workers: 1` não é capricho.** Sem isso o Playwright abre um Chromium por
+núcleo (8 nesta máquina), e a suíte cheia derruba a memória: aparecem
+`worker process exited unexpectedly (code=134)` e `net::ERR_INSUFFICIENT_RESOURCES`,
+com falhas que mudam de lugar a cada execução e somem quando você roda o arquivo
+sozinho. Isso parece defeito do sistema e não é. Se vir falhas que não se
+repetem, confira primeiro quantos workers o Playwright anunciou na primeira
+linha da saída.
 
 E rode de dentro da pasta onde o Playwright foi instalado. `NODE_PATH` é
 necessário porque os testes moram no projeto, que não tem `node_modules`:
@@ -43,7 +51,7 @@ TESTDIR=<projeto>/tests/e2e \
   npx playwright test --config=repo.config.js
 ```
 
-Esperado: **128 passando**.
+Esperado: **156 passando**.
 
 ## Sessão autenticada é obrigatória
 
@@ -85,5 +93,6 @@ navegar. Ele semeia um usuário com papel 1 (Administrador, que vem de
 | `fase2-pdf-e-cor.spec.js` | PDF real virando uma aba por página, a página do Book 10 dando os mesmos 38 itens da planilha, modo preço por cor gerando 235 materiais sem repetir código, seleção manual de cabeçalho, e a planilha continuando a funcionar |
 | `catalogo-selecao.spec.js` | Ordenação por coluna nas duas tabelas do catálogo, os filtros de nome/código, fornecedor, preço e largura, marcar itens e a marcação sobrevivendo a ordenar e filtrar, exclusão em massa respeitando o tecido em uso, e o pedido de compra vindo da seleção nos quatro caminhos (mesmo fornecedor, um por fornecedor, tudo para um, genérico) |
 | `config-importacao.spec.js` | Os quatro cartões de configuração do passo 1 (textos, ícones, os dois grupos exclusivos), o sumiço do campo antigo de markup, a cobrança da margem total, a margem aplicada à tabela toda ou item a item, e o estoque infinito não bloqueando pedido, não sofrendo baixa e ficando fora do alerta de mínimo |
+| `importacao-kits.spec.js` | A porta de entrada na popup de produtos, o assistente de kit em três passos, os obrigatórios (código, nome, preço) e os opcionais (medida, descrição), conflito de código contra material, tecido e kit de montagem, a margem total e por item, o estoque infinito, o desfazer, e o kit pronto entrando no pedido como uma linha só com baixa do próprio saldo |
 
-Esperado no total: **128 passando**.
+Esperado no total: **156 passando**.
