@@ -1754,10 +1754,6 @@ const PRAZO_DESFAZER_DIAS = 7;
 // atualizados, os valores anteriores dos campos do importador. Nao copia mais o
 // catalogo e os materiais inteiros — que traziam cada imagem em base64 e, pior,
 // devolviam saldo de estoque velho ao desfazer.
-// Metragem do rolo de um tecido sem controle de estoque. E so um numero para
-// o item existir na lista; ele nunca e consumido.
-const METRAGEM_INFINITA = 99999;
-
 // Um rolo por tecido infinito que ainda nao tem nenhum. Devolve os ids
 // criados, para o desfazer poder remove-los e nao deixar rolo orfao.
 // MONTA os rolos, sem gravar: quem grava e o bloco de commit, depois do

@@ -1133,6 +1133,7 @@ html[data-theme="dark"] .fin-periodo-btn.active { background: var(--secondary); 
 }
 .consulta-tag.tec { background: var(--primary); color: var(--white); }
 .consulta-tag.mat { background: var(--kpi-purple); color: var(--white); }
+.consulta-tag.kit { background: var(--kpi-orange); color: var(--white); }
 
 .consulta-detalhe { padding: 0 14px 14px; background: var(--light); border-top: 1px dashed var(--border); }
 .consulta-detalhe-grid {

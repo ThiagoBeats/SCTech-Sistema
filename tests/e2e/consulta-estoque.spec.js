@@ -121,7 +121,8 @@ test('clicar na linha abre fornecedor e os rolos, e clicar de novo recolhe', asy
 
     const d = (await det.innerText()).replace(/\s+/g, ' ');
     expect(d).toContain('59.928.225 MARIA GABRIELA DA SILVA ALVES');
-    expect(d).toContain('92,94');            // custo volta aqui
+    // O preco de custo saiu deste painel: a consulta e de venda e de saldo.
+    expect(d, 'custo nao aparece mais aqui').not.toContain('92,94');
     expect(d).toContain('L-2291');           // os rolos foram mantidos
     expect(d).toContain('L-2184');
     expect(d).toContain('18,000 m');

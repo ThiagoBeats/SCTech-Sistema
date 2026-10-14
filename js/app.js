@@ -1407,8 +1407,43 @@ async function salvarCatalogo() {
             const dupRef = db.catalogo.find(c => c.referencia && c.referencia.toLowerCase() === referencia.toLowerCase());
             if (dupRef) { await showAlert(`Código "${referencia}" já usado por "${dupRef.nome}".`, '⚠️'); return; }
         }
+        if (_catEstado.margemModo === 'total' && _catEstado.markup === null) {
+            await showAlert('Informe a margem total (%) ou escolha “Definir margem depois”.', '⚠️');
+            return;
+        }
+        const custo = parseFloat(document.getElementById('cat-custo')?.value) || 0;
+        const custoPeca = parseFloat(document.getElementById('cat-custo-peca')?.value);
+        const qtd = parseFloat(document.getElementById('cat-qtd')?.value) || 0;
+        const infinito = _catEstado.estoqueModo === 'infinito';
         const novaImgCad = document.getElementById('cat-foto-preview')?.dataset.base64 || '';
-        db.catalogo.push({ id: Date.now(), nome, preco: 0, largura_rolo, referencia, min_estoque, fornecedor_id: forn_id_cat, fornecedor_nome: forn_obj_cat ? forn_obj_cat.nome : '', imagem: novaImgCad });
+        const id = Date.now();
+        db.catalogo.push({
+            id, nome, largura_rolo, referencia, min_estoque,
+            preco_custo: custo,
+            // Venda sai do custo POR METRO. O custo de corte por peça é
+            // registro da tabela do fornecedor: nenhuma margem incide nele.
+            preco: _cfgVenda(_catEstado, custo) || 0,
+            preco_peca: isFinite(custoPeca) ? custoPeca : null,
+            preco_corte: custo || null,
+            estoque_infinito: infinito,
+            fornecedor_id: forn_id_cat,
+            fornecedor_nome: forn_obj_cat ? forn_obj_cat.nome : '',
+            imagem: novaImgCad
+        });
+        // Entrada de estoque junto com o cadastro: o lote é o próprio código.
+        // Tecido infinito ganha o rolo mesmo sem quantidade, senão ele não
+        // apareceria na aba Estoque — a lista pula tecido sem rolo.
+        const metros = infinito ? METRAGEM_INFINITA : qtd;
+        if (metros > 0) {
+            const hoje = new Date().toISOString().slice(0, 10);
+            db.estoque.push({
+                id: id + 1, tecido_id: id,
+                lote: infinito ? 'ESTOQUE INFINITO' : (referencia || 'CADASTRO'),
+                metragem_inicial: metros, metragem_atual: metros, data_entrada: hoje
+            });
+            registrarMovimento('Entrada', nome, 'tecido', metros, 'm',
+                infinito ? 'Cadastro — estoque infinito' : 'Cadastro manual');
+        }
         salvarERecarregar('Tecido cadastrado no catálogo!');
     }
 }
@@ -2991,6 +3026,12 @@ function filtrarMetrica(valor) {
 }
 
 // --- ESTOQUE DE TECIDO: helpers ---
+// Metragem do rolo de um tecido sem controle de estoque. E so um numero para
+// o item existir na lista de rolos; ele nunca e consumido. Fica aqui, e nao
+// no importador, porque o cadastro manual tambem cria esse rolo e app.js e o
+// unico arquivo carregado em todas as telas.
+const METRAGEM_INFINITA = 99999;
+
 // Item marcado como "estoque infinito" na importação da tabela do fornecedor:
 // está sempre disponível, nunca sofre baixa e fica fora dos alertas de mínimo.
 // A flag é por registro, então nenhum item fora da importação é afetado.
@@ -3709,7 +3750,24 @@ async function salvarMaterial() {
             const dupRef = db.materiais.find(m => m.referencia && m.referencia.toLowerCase() === referencia.toLowerCase());
             if (dupRef) { await showAlert(`Código "${referencia}" já usado por "${dupRef.nome}".`, '⚠️'); return; }
         }
-        db.materiais.push({ id: Date.now(), referencia, nome, unidade, preco: 0, min_estoque, estoque_atual: 0, fornecedor_id: forn_id_mat, fornecedor_nome: forn_obj_mat ? forn_obj_mat.nome : '' });
+        if (_matEstado.margemModo === 'total' && _matEstado.markup === null) {
+            await showAlert('Informe a margem total (%) ou escolha “Definir margem depois”.', '⚠️');
+            return;
+        }
+        const custo = parseFloat(document.getElementById('mat-custo')?.value) || 0;
+        const qtd = parseFloat(document.getElementById('mat-qtd')?.value) || 0;
+        const infinito = _matEstado.estoqueModo === 'infinito';
+        db.materiais.push({
+            id: Date.now(), referencia, nome, unidade, min_estoque,
+            // Quantidade e custo seguem a unidade escolhida acima.
+            preco_custo: custo,
+            preco: _cfgVenda(_matEstado, custo) || 0,
+            estoque_atual: qtd,
+            estoque_infinito: infinito,
+            fornecedor_id: forn_id_mat,
+            fornecedor_nome: forn_obj_mat ? forn_obj_mat.nome : ''
+        });
+        if (qtd > 0) registrarMovimento('Entrada', nome, 'material', qtd, unidade, 'Cadastro manual');
         salvarERecarregar('Material cadastrado!');
     }
 }
@@ -3932,28 +3990,47 @@ async function salvarKit() {
 // popup de importação, para a regra ser uma só.
 // ═══════════════════════════════════════════════════════════════════════
 
-const _kpEstado = { margemModo: 'total', estoqueModo: 'ajustar', markup: null };
+const _kpEstado  = { margemModo: 'total', estoqueModo: 'ajustar', markup: null };
+const _catEstado = { margemModo: 'total', estoqueModo: 'ajustar', markup: null };
+const _matEstado = { margemModo: 'total', estoqueModo: 'ajustar', markup: null };
 
-function renderCfgKitPronto() {
-    const alvo = document.getElementById('kp-cfg');
-    if (!alvo || typeof _impIcone !== 'function') return;
+// ─── Cartões de margem e estoque, compartilhados pelas três abas ─────────
+//
+// Uma implementação só. Copiar este bloco para cada aba e' exatamente como as
+// tres versoes acabariam divergindo — ja aconteceu nesta base com a validacao
+// do passo 3 do importador.
+//
+// `cfg` = { prefixo, estado, item }. O `item` so troca a palavra nas
+// descricoes ("o kit", "o tecido", "o material"); os TITULOS sao identicos
+// nas tres abas, de proposito.
+const _CFG_ABAS = {
+    kp:  { estado: _kpEstado,  item: 'O kit',      aoMudar: () => atualizarVendaKitPronto() },
+    cat: { estado: _catEstado, item: 'O tecido',   aoMudar: () => atualizarVendaTecido() },
+    mat: { estado: _matEstado, item: 'O material', aoMudar: () => atualizarVendaMaterial() }
+};
+
+function renderCartoesConfig(prefixo) {
+    const alvo = document.getElementById(prefixo + '-cfg');
+    const cfg = _CFG_ABAS[prefixo];
+    if (!alvo || !cfg || typeof _impIcone !== 'function') return;
+    const estado = cfg.estado;
 
     const campoMargem = `<div class="imp-cfg-campo">
-        <label for="kp-markup">Margem total (%)</label>
+        <label for="${prefixo}-markup">Margem total (%)</label>
         <div class="imp-cfg-campo-caixa">
-            <input type="number" id="kp-markup" value="${_kpEstado.markup === null ? '' : _kpEstado.markup}"
-                   min="0" step="1" placeholder="Ex.: 30" oninput="_kpMargemMudou(this.value)" onclick="event.stopPropagation()">
+            <input type="number" id="${prefixo}-markup" value="${estado.markup === null ? '' : estado.markup}"
+                   min="0" step="1" placeholder="Ex.: 30" oninput="_cfgMargemMudou('${prefixo}', this.value)" onclick="event.stopPropagation()">
             <span class="imp-cfg-sufixo">%</span>
         </div>
     </div>`;
 
     const card = (grupo, valor, icone, titulo, descricao, extra) => {
-        const atual = grupo === 'margem' ? _kpEstado.margemModo : _kpEstado.estoqueModo;
+        const atual = grupo === 'margem' ? estado.margemModo : estado.estoqueModo;
         const sel = atual === valor;
         return `<label class="imp-cfg-card${sel ? ' imp-cfg-card-sel' : ''}">
             <div class="imp-cfg-topo">
-                <input type="radio" name="kp-cfg-${grupo}" value="${valor}"${sel ? ' checked' : ''}
-                       onchange="_kpEscolherConfig('${grupo}','${valor}')">
+                <input type="radio" name="${prefixo}-cfg-${grupo}" value="${valor}"${sel ? ' checked' : ''}
+                       onchange="_cfgEscolher('${prefixo}','${grupo}','${valor}')">
                 ${_impIcone(icone)}
                 <span class="imp-cfg-titulo">${titulo}</span>
             </div>
@@ -3962,40 +4039,62 @@ function renderCfgKitPronto() {
         </label>`;
     };
 
+    const it = cfg.item;
     alvo.innerHTML = [
         card('margem', 'total', 'porcento', 'Definir margem total',
             'A margem informada forma o preço de venda a partir do custo.', campoMargem),
         card('margem', 'item', 'sliders', 'Definir margem depois',
-            'O kit entra com a venda igual ao custo e você ajusta o preço quando quiser.'),
+            `${it} entra com a venda igual ao custo e você ajusta o preço quando quiser.`),
         card('estoque', 'infinito', 'infinito', 'Estoque infinito',
-            'O kit fica sempre disponível. Não haverá controle de estoque, baixa ou entrada.'),
+            `${it} fica sempre disponível. Não haverá controle de estoque, baixa ou entrada.`),
         card('estoque', 'ajustar', 'caixa', 'Ajustar estoque',
             'O estoque será controlado. Você dá entrada depois e o sistema faz a baixa ao sair nos pedidos.')
     ].join('');
-    atualizarVendaKitPronto();
+    cfg.aoMudar();
 }
 
-function _kpEscolherConfig(grupo, valor) {
-    if (grupo === 'margem') _kpEstado.margemModo = valor;
-    else _kpEstado.estoqueModo = valor;
-    renderCfgKitPronto();
+function _cfgEscolher(prefixo, grupo, valor) {
+    const estado = _CFG_ABAS[prefixo].estado;
+    if (grupo === 'margem') estado.margemModo = valor;
+    else estado.estoqueModo = valor;
+    renderCartoesConfig(prefixo);
 }
 
-function _kpMargemMudou(valor) {
+function _cfgMargemMudou(prefixo, valor) {
+    const estado = _CFG_ABAS[prefixo].estado;
     const bruto = String(valor).trim();
     const v = parseFloat(bruto);
-    _kpEstado.markup = (bruto !== '' && isFinite(v) && v >= 0) ? v : null;
-    atualizarVendaKitPronto();
+    estado.markup = (bruto !== '' && isFinite(v) && v >= 0) ? v : null;
+    _CFG_ABAS[prefixo].aoMudar();
 }
 
-// Venda = custo × (1 + margem/100), a mesma conta do resto do sistema.
-function atualizarVendaKitPronto() {
-    const el = document.getElementById('kp-venda');
+// Venda = custo x (1 + margem/100), a mesma conta do resto do sistema.
+function _cfgVenda(estado, custo) {
+    if (!isFinite(custo) || custo <= 0) return null;
+    const margem = estado.margemModo === 'item' ? 0 : (estado.markup || 0);
+    return window.ImportadorCore.aplicarMarkup(custo, margem);
+}
+
+function _cfgMostrarVenda(idSaida, estado, custo, sufixo) {
+    const el = document.getElementById(idSaida);
     if (!el) return;
-    const custo = parseFloat(document.getElementById('kp-custo')?.value);
-    if (!isFinite(custo) || custo <= 0) { el.textContent = '—'; return; }
-    const margem = _kpEstado.margemModo === 'item' ? 0 : (_kpEstado.markup || 0);
-    el.textContent = 'R$ ' + (custo * (1 + margem / 100)).toFixed(2);
+    const venda = _cfgVenda(estado, custo);
+    el.textContent = venda === null ? '—' : 'R$ ' + venda.toFixed(2) + (sufixo || '');
+}
+
+function renderCfgKitPronto() { renderCartoesConfig('kp'); }
+
+function atualizarVendaKitPronto() {
+    _cfgMostrarVenda('kp-venda', _kpEstado, parseFloat(document.getElementById('kp-custo')?.value));
+}
+
+function atualizarVendaTecido() {
+    _cfgMostrarVenda('cat-venda', _catEstado, parseFloat(document.getElementById('cat-custo')?.value), '/m');
+}
+
+function atualizarVendaMaterial() {
+    const un = document.getElementById('mat-unidade')?.value || '';
+    _cfgMostrarVenda('mat-venda', _matEstado, parseFloat(document.getElementById('mat-custo')?.value), un ? '/' + un : '');
 }
 
 async function salvarKitPronto() {
@@ -4023,7 +4122,8 @@ async function salvarKitPronto() {
         medida: document.getElementById('kp-medida')?.value.trim() || '',
         preco_custo: Math.round(custo * 100) / 100,
         preco: window.ImportadorCore.aplicarMarkup(custo, margem),
-        estoque_atual: 0,
+        estoque_atual: parseFloat(document.getElementById('kp-qtd')?.value) || 0,
+        min_estoque: parseFloat(document.getElementById('kp-min')?.value) || 0,
         estoque_infinito: _kpEstado.estoqueModo === 'infinito',
         fornecedor_id: null,
         fornecedor_nome: '',
@@ -7165,6 +7265,10 @@ document.addEventListener('DOMContentLoaded', () => {
         renderCfgKitPronto();
     }
 
+    // Cartões de margem e estoque do cadastro de tecido e de material
+    if (document.getElementById('cat-cfg')) renderCartoesConfig('cat');
+    if (document.getElementById('mat-cfg')) renderCartoesConfig('mat');
+
     if (document.getElementById('tb-historico')) renderHistorico();
 
     if (document.getElementById('proposta-container')) renderProposta();
@@ -7386,6 +7490,29 @@ function _consultaItens() {
         });
     });
 
+    (db.kits || []).forEach(kit => {
+        // Ultima entrada vem do historico de movimentos, igual ao material.
+        // Kit de montagem nao tem preco nem saldo proprios: ele e explodido
+        // nos materiais no pedido, entao esses campos ficam em branco.
+        const entradas = (db.movimentos || []).filter(mv =>
+            mv.tipo === 'Entrada' && mv.item_tipo === 'kit' && mv.item_nome === kit.nome);
+        const ultimo = entradas.length ? entradas.sort((a, b) => b.data - a.data)[0] : null;
+        const pronto = ehKitPronto(kit);
+        itens.push({
+            tipo: 'kit',
+            id: kit.id,
+            codigo: kit.referencia || '',
+            nome: kit.nome || '',
+            precoTxt: pronto && kit.preco > 0 ? _consultaMoeda(kit.preco) : '—',
+            estoqueTxt: temEstoqueInfinito(kit) ? '∞'
+                : (pronto ? _consultaNum(kit.estoque_atual) + ' un' : '—'),
+            abaixoMin: false,
+            ultimaEntrada: ultimo ? new Date(ultimo.data).toLocaleDateString('pt-BR') : '—',
+            registro: kit,
+            rolos: null
+        });
+    });
+
     // Ordem por codigo, com comparacao numerica para 0002 vir antes de 0010.
     return itens.sort((a, b) =>
         String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true, sensitivity: 'base' })
@@ -7410,10 +7537,19 @@ function _consultaDetalheHTML(item) {
     const campo = (rotulo, valor) =>
         `<div class="consulta-info-item"><span class="consulta-info-label">${rotulo}</span><span>${valor}</span></div>`;
 
+    // O preco de custo NAO aparece aqui — a consulta e de venda e de saldo.
+    // O valor continua gravado no registro e visivel nas telas de cadastro.
     let campos = campo('Fornecedor', escapeHtml(r.fornecedor_nome || '—'));
-    campos += campo('Preço de custo', _consultaMoeda(r.preco_custo) + (item.tipo === 'tecido' ? '/m' : ''));
 
-    if (item.tipo === 'tecido') {
+    if (item.tipo === 'kit') {
+        campos += campo('Tipo de kit', ehKitPronto(r) ? 'Kit pronto' : 'Kit de montagem');
+        campos += campo('Medida', escapeHtml(r.medida || '—'));
+        if (r.descricao) campos += campo('Descrição', escapeHtml(r.descricao));
+        if (!ehKitPronto(r)) {
+            const comp = (r.itens || []).map(i => `${escapeHtml(i.nome)}: ${i.quantidade} ${i.unidade}`).join(' · ');
+            campos += campo('Composição', comp || '—');
+        }
+    } else if (item.tipo === 'tecido') {
         campos += campo('Estoque mínimo', r.min_estoque > 0 ? r.min_estoque + ' m' : '—');
         campos += campo('Largura do rolo', r.largura_rolo ? _consultaNum(r.largura_rolo) + ' m' : '—');
     } else {
@@ -7469,8 +7605,8 @@ function renderConsultaEstoque() {
     const linhas = itens.map(item => {
         const chave = _consultaChave(item);
         const aberto = _consultaAberto === chave;
-        const tag = item.tipo === 'tecido'
-            ? '<span class="consulta-tag tec">TEC</span>'
+        const tag = item.tipo === 'tecido' ? '<span class="consulta-tag tec">TEC</span>'
+            : item.tipo === 'kit' ? '<span class="consulta-tag kit">KIT</span>'
             : '<span class="consulta-tag mat">MAT</span>';
         return `<div class="consulta-linha ${aberto ? 'aberta' : ''}" onclick="toggleConsultaDetalhe('${chave}')">
                 <span class="consulta-cod">${escapeHtml(item.codigo || '—')}</span>

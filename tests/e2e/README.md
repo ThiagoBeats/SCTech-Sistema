@@ -56,7 +56,7 @@ TESTDIR=<projeto>/tests/e2e \
   npx playwright test --config=repo.config.js
 ```
 
-Esperado: **210 passando**.
+Esperado: **233 passando**.
 
 ## Sessão autenticada é obrigatória
 
@@ -102,6 +102,7 @@ navegar. Ele semeia um usuário com papel 1 (Administrador, que vem de
 | `kit-manual.spec.js` | O código obrigatório e único no kit de montagem (Estoque), e o formulário de kit pronto do Catálogo: campos, os quatro cartões, a venda calculada ao vivo, os obrigatórios, o código que não repete, e o kit salvo ficando igual a um importado |
 | `codigo-antes-do-nome.spec.js` | A palavra "Referência" fora de todo rótulo e cabeçalho, o lote do rolo como "Lote" e a origem do movimento como "Origem", a ordem das colunas de tecidos, materiais e kits, cada valor na coluna certa, a linha compacta com reticências e tooltip, e o código antes do nome no seletor do pedido e no detalhe do tecido |
 | `estoque-infinito-entrada.spec.js` | A escolha nos cartões valendo sobre o perfil salvo do fornecedor, o perfil aparecendo nos cartões ao escolher o fornecedor, e o tecido infinito ganhando rolo: aparece na aba Estoque como ∞, sem botão de baixar, sem o número interno na tela, não é consumido ao vender, e o desfazer tira o rolo junto |
+| `cadastro-e-consulta-kits.spec.js` | Kits na Consulta de Estoque (filtro Tipo, saldo controlado/infinito/montagem, filtros por código e nome, painel do kit), o painel expandido sem preço de custo nos três tipos, e os cadastros: os quatro cartões nas três abas, tecido gravando custo, venda pela margem, custo de peça cru e rolo com o código como lote, material por unidade escolhida, e kit com unidade, quantidade e mínimo |
 | `ajustes-importacao.spec.js` | Células editáveis no mapeamento (kits e produtos), o cursor que não pula ao corrigir o texto colado, a rolagem de dentro da tabela preservada ao escolher o papel de uma coluna, a criação de coluna com valor para todas as linhas e ajuste célula a célula, a palavra "margem" no lugar de "markup", o tecido registrando preço de corte e de peça ao mesmo tempo, e o modo "preço por cor" explicando por que deu zero itens em linguagem direta, com o aviso clicável acendendo a coluna errada |
 
-Esperado no total: **210 passando**.
+Esperado no total: **233 passando**.
