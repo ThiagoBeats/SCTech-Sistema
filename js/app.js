@@ -1559,7 +1559,6 @@ function valorOrdenacaoTecido(c, col) {
     switch (col) {
         case 'preco':      return c.preco || 0;
         case 'largura':    return c.largura_rolo || 2.80;
-        case 'preco_peca': return Number(c.preco_peca) || 0;
         case 'minimo':     return c.min_estoque || 0;
         case 'estoque':    return temEstoqueInfinito(c) ? Infinity : estoqueDisponivel(c.id);
         case 'referencia': return (c.referencia || '').toLowerCase();
@@ -1722,7 +1721,6 @@ function renderCatalogoTecidos() {
             <td class="col-num">${dispTxt}${alertMin}</td>
             <td class="col-num">${c.min_estoque ? c.min_estoque + ' m' : '—'}</td>
             <td class="col-num">R$ ${(c.preco || 0).toFixed(2)}</td>
-            <td class="col-num">${c.preco_peca ? 'R$ ' + Number(c.preco_peca).toFixed(2) : '—'}</td>
             <td class="col-forn" title="${escapeHtml(c.fornecedor_nome || '')}">${escapeHtml(c.fornecedor_nome || '—')}</td>
             <td class="col-acoes">
                 <button class="btn btn-outline btn-sm" onclick="editarCatalogo(${c.id})" title="Editar">✏️</button>
@@ -1730,7 +1728,7 @@ function renderCatalogoTecidos() {
                 <button class="btn btn-outline btn-sm btn-danger" onclick="excluirCatalogo(${c.id})" title="Remover do catálogo">🗑️</button>
             </td>
         </tr>`;
-    }).join('') || `<tr><td colspan="10" style="text-align:center;color:#999;padding:20px;">${db.catalogo.length ? 'Nenhum tecido com esses filtros.' : 'Catálogo vazio.'}</td></tr>`;
+    }).join('') || `<tr><td colspan="9" style="text-align:center;color:#999;padding:20px;">${db.catalogo.length ? 'Nenhum tecido com esses filtros.' : 'Catálogo vazio.'}</td></tr>`;
 
     atualizarBarraSelecao('tecido');
 }

@@ -56,7 +56,7 @@ TESTDIR=<projeto>/tests/e2e \
   npx playwright test --config=repo.config.js
 ```
 
-Esperado: **199 passando**.
+Esperado: **200 passando**.
 
 ## Sessão autenticada é obrigatória
 
@@ -103,4 +103,4 @@ navegar. Ele semeia um usuário com papel 1 (Administrador, que vem de
 | `codigo-antes-do-nome.spec.js` | A palavra "Referência" fora de todo rótulo e cabeçalho, o lote do rolo como "Lote" e a origem do movimento como "Origem", a ordem das colunas de tecidos, materiais e kits, cada valor na coluna certa, a linha compacta com reticências e tooltip, e o código antes do nome no seletor do pedido e no detalhe do tecido |
 | `ajustes-importacao.spec.js` | Células editáveis no mapeamento (kits e produtos), o cursor que não pula ao corrigir o texto colado, a rolagem de dentro da tabela preservada ao escolher o papel de uma coluna, a criação de coluna com valor para todas as linhas e ajuste célula a célula, a palavra "margem" no lugar de "markup", o tecido registrando preço de corte e de peça ao mesmo tempo, e o modo "preço por cor" explicando por que deu zero itens em linguagem direta, com o aviso clicável acendendo a coluna errada |
 
-Esperado no total: **199 passando**.
+Esperado no total: **200 passando**.

@@ -70,7 +70,7 @@ test('a tabela de tecidos segue a ordem pedida', async ({ page }) => {
     await semear(page, 'catalogo.html');
     const th = await cabecalhos(page, '#tabela-tecidos thead th');
     expect(th).toEqual(['', 'Código', 'Tecido', 'Largura', 'Em estoque',
-                        'Estoque mínimo', 'Preço', 'Preço por peça', 'Fornecedor', 'Ação']);
+                        'Estoque mínimo', 'Preço', 'Fornecedor', 'Ação']);
 });
 
 test('a tabela de materiais segue a ordem pedida', async ({ page }) => {
@@ -116,8 +116,7 @@ test('cada coluna de tecido carrega o valor certo', async ({ page }) => {
     expect(celulas[3], 'largura').toBe('1.40 m');
     expect(celulas[5], 'estoque mínimo').toBe('10 m');
     expect(celulas[6], 'preço de venda').toBe('R$ 167.30');
-    expect(celulas[7], 'preço por peça vem da tabela do fornecedor').toBe('R$ 95.98');
-    expect(celulas[8]).toContain('59.928.225');
+    expect(celulas[7]).toContain('59.928.225');
 });
 
 test('cada coluna de material carrega o valor certo', async ({ page }) => {
@@ -133,20 +132,22 @@ test('cada coluna de material carrega o valor certo', async ({ page }) => {
     expect(celulas[5], 'preço').toBe('R$ 48.00');
 });
 
-test('tecido sem preco por peca mostra traco, nao em branco', async ({ page }) => {
-    await entrar(page, BASE);
-    await page.goto(BASE + '/catalogo.html');
-    await page.evaluate(() => {
-        localStorage.setItem('sc_forn', JSON.stringify([]));
-        localStorage.setItem('sc_cat', JSON.stringify([{ id: 1, referencia: '0009', nome: 'SEM PECA',
-            preco: 50, preco_custo: 30, largura_rolo: 2.8, min_estoque: 10 }]));
-        localStorage.setItem('sc_mat', JSON.stringify([]));
-        localStorage.setItem('sc_est', JSON.stringify([]));
-    });
-    await page.reload();
+test('a tabela do catalogo nao tem coluna de preco por peca', async ({ page }) => {
+    await semear(page, 'catalogo.html');
+    const th = await cabecalhos(page, '#tabela-tecidos thead th');
+    expect(th, 'essa informação fica no detalhe do tecido, não na lista').not.toContain('Preço por peça');
     const celulas = await page.evaluate(() =>
         [...document.querySelectorAll('#tb-catalogo tr:first-child td')].map(td => td.textContent.trim()));
-    expect(celulas[7]).toBe('—');
+    expect(celulas.length, 'uma coluna a menos').toBe(9);
+});
+
+test('o preco por peca continua no detalhe do tecido', async ({ page }) => {
+    await semear(page, 'catalogo.html');
+    await page.evaluate(() => verDetalhesTecido(1));
+    const modal = page.locator('.modal-overlay').last();
+    await expect(modal).toContainText('Preços da tabela do fornecedor');
+    await expect(modal).toContainText('Corte: R$ 83.65');
+    await expect(modal).toContainText('Peça: R$ 95.98');
 });
 
 // ─── Compactação ────────────────────────────────────────────────────────
