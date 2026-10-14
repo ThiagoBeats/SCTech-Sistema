@@ -3877,16 +3877,157 @@ function renderKitDraftItens() {
     </tr>`).join('');
 }
 
+// Uma regra só de normalização de código em todo o sistema: a do importador.
+// As telas que criam código carregam importador-core.js por isso — duas
+// implementações da mesma regra é como elas acabam divergindo.
+function normalizarCodigoDoSistema(bruto) {
+    return window.ImportadorCore.normalizarCodigo(bruto).codigo;
+}
+
+// Código já em uso por um tecido, material ou kit. Devolve a descrição do dono
+// ou null. Um código vale para o sistema inteiro, não só dentro do seu tipo.
+function donoDoCodigo(codigo, ignorarKitId) {
+    const alvo = normalizarCodigoDoSistema(codigo);
+    if (!alvo) return null;
+    const bate = r => {
+        const cod = normalizarCodigoDoSistema(r.referencia);
+        return cod && cod === alvo;
+    };
+    const tec = (db.catalogo || []).find(bate);
+    if (tec) return `o tecido "${tec.nome}"`;
+    const mat = (db.materiais || []).find(bate);
+    if (mat) return `o material "${mat.nome}"`;
+    const kit = (db.kits || []).find(k => k.id !== ignorarKitId && bate(k));
+    if (kit) return `o kit "${kit.nome}"`;
+    return null;
+}
+
 async function salvarKit() {
+    const ref = document.getElementById('kit-ref')?.value.trim();
     const nome = document.getElementById('kit-nome')?.value.trim();
+    if (!ref) { await showAlert('Informe o código do kit.', '⚠️'); return; }
     if (!nome) { await showAlert('Informe o nome do kit.', '⚠️'); return; }
+    const dono = donoDoCodigo(ref);
+    if (dono) { await showAlert(`O código ${ref} já é de ${dono}. Use outro código.`, '🚫'); return; }
     if (!kitDraftItens.length) { await showAlert('Adicione pelo menos um item ao kit.', '⚠️'); return; }
     db.kits.push({
-        id: Date.now(), nome,
+        id: Date.now(),
+        referencia: normalizarCodigoDoSistema(ref),
+        nome,
         descricao: document.getElementById('kit-desc')?.value.trim() || '',
         itens: kitDraftItens.map(i => ({ ...i }))
     });
     salvarERecarregar('Kit salvo!');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// KIT PRONTO criado à mão (Cadastro › Kits)
+//
+// Mesmo produto que vem da importação: código e preço próprios, sem os
+// materiais descritos. Os cartões de margem e estoque são os mesmos da
+// popup de importação, para a regra ser uma só.
+// ═══════════════════════════════════════════════════════════════════════
+
+const _kpEstado = { margemModo: 'total', estoqueModo: 'ajustar', markup: null };
+
+function renderCfgKitPronto() {
+    const alvo = document.getElementById('kp-cfg');
+    if (!alvo || typeof _impIcone !== 'function') return;
+
+    const campoMargem = `<div class="imp-cfg-campo">
+        <label for="kp-markup">Margem total (%)</label>
+        <div class="imp-cfg-campo-caixa">
+            <input type="number" id="kp-markup" value="${_kpEstado.markup === null ? '' : _kpEstado.markup}"
+                   min="0" step="1" placeholder="Ex.: 30" oninput="_kpMargemMudou(this.value)" onclick="event.stopPropagation()">
+            <span class="imp-cfg-sufixo">%</span>
+        </div>
+    </div>`;
+
+    const card = (grupo, valor, icone, titulo, descricao, extra) => {
+        const atual = grupo === 'margem' ? _kpEstado.margemModo : _kpEstado.estoqueModo;
+        const sel = atual === valor;
+        return `<label class="imp-cfg-card${sel ? ' imp-cfg-card-sel' : ''}">
+            <div class="imp-cfg-topo">
+                <input type="radio" name="kp-cfg-${grupo}" value="${valor}"${sel ? ' checked' : ''}
+                       onchange="_kpEscolherConfig('${grupo}','${valor}')">
+                ${_impIcone(icone)}
+                <span class="imp-cfg-titulo">${titulo}</span>
+            </div>
+            <p class="imp-cfg-desc">${descricao}</p>
+            ${sel && extra ? extra : ''}
+        </label>`;
+    };
+
+    alvo.innerHTML = [
+        card('margem', 'total', 'porcento', 'Definir margem total',
+            'A margem informada forma o preço de venda a partir do custo.', campoMargem),
+        card('margem', 'item', 'sliders', 'Definir margem depois',
+            'O kit entra com a venda igual ao custo e você ajusta o preço quando quiser.'),
+        card('estoque', 'infinito', 'infinito', 'Estoque infinito',
+            'O kit fica sempre disponível. Não haverá controle de estoque, baixa ou entrada.'),
+        card('estoque', 'ajustar', 'caixa', 'Ajustar estoque',
+            'O estoque será controlado. Você dá entrada depois e o sistema faz a baixa ao sair nos pedidos.')
+    ].join('');
+    atualizarVendaKitPronto();
+}
+
+function _kpEscolherConfig(grupo, valor) {
+    if (grupo === 'margem') _kpEstado.margemModo = valor;
+    else _kpEstado.estoqueModo = valor;
+    renderCfgKitPronto();
+}
+
+function _kpMargemMudou(valor) {
+    const bruto = String(valor).trim();
+    const v = parseFloat(bruto);
+    _kpEstado.markup = (bruto !== '' && isFinite(v) && v >= 0) ? v : null;
+    atualizarVendaKitPronto();
+}
+
+// Venda = custo × (1 + margem/100), a mesma conta do resto do sistema.
+function atualizarVendaKitPronto() {
+    const el = document.getElementById('kp-venda');
+    if (!el) return;
+    const custo = parseFloat(document.getElementById('kp-custo')?.value);
+    if (!isFinite(custo) || custo <= 0) { el.textContent = '—'; return; }
+    const margem = _kpEstado.margemModo === 'item' ? 0 : (_kpEstado.markup || 0);
+    el.textContent = 'R$ ' + (custo * (1 + margem / 100)).toFixed(2);
+}
+
+async function salvarKitPronto() {
+    const ref = document.getElementById('kp-ref')?.value.trim();
+    const nome = document.getElementById('kp-nome')?.value.trim();
+    const custo = parseFloat(document.getElementById('kp-custo')?.value);
+
+    if (!ref) { await showAlert('Informe o código do kit.', '⚠️'); return; }
+    if (!nome) { await showAlert('Informe o nome do kit.', '⚠️'); return; }
+    if (!isFinite(custo) || custo <= 0) { await showAlert('Informe o preço de custo do kit.', '⚠️'); return; }
+    if (_kpEstado.margemModo === 'total' && _kpEstado.markup === null) {
+        await showAlert('Informe a margem total (%) ou escolha “Definir margem depois”.', '⚠️');
+        return;
+    }
+    const dono = donoDoCodigo(ref);
+    if (dono) { await showAlert(`O código ${ref} já é de ${dono}. Use outro código.`, '🚫'); return; }
+
+    const margem = _kpEstado.margemModo === 'item' ? 0 : _kpEstado.markup;
+    db.kits.push({
+        id: Date.now(),
+        tipo: 'pronto',
+        referencia: normalizarCodigoDoSistema(ref),
+        nome,
+        descricao: document.getElementById('kp-desc')?.value.trim() || '',
+        medida: document.getElementById('kp-medida')?.value.trim() || '',
+        preco_custo: Math.round(custo * 100) / 100,
+        preco: window.ImportadorCore.aplicarMarkup(custo, margem),
+        estoque_atual: 0,
+        estoque_infinito: _kpEstado.estoqueModo === 'infinito',
+        fornecedor_id: null,
+        fornecedor_nome: '',
+        // Kit pronto não tem componentes; a lista vazia existe para o código
+        // que lê k.itens continuar funcionando sem checagem.
+        itens: []
+    });
+    salvarERecarregar('Kit pronto cadastrado!');
 }
 
 async function excluirKit(id) {
@@ -7010,13 +7151,14 @@ document.addEventListener('DOMContentLoaded', () => {
         renderMateriais();
     }
 
-    // Estoque (aba de kits)
+    // Aba de kits — existe no Estoque (montagem) e no Catálogo (kit pronto)
     if (document.getElementById('tb-kits')) {
         const matSel = document.getElementById('kit-item-mat');
         if (matSel) matSel.innerHTML = '<option value="">— Selecione o material —</option>' +
             db.materiais.map(m=>`<option value="${m.id}">${m.nome} (${m.unidade})</option>`).join('');
         renderKitDraftItens();
         renderKits();
+        renderCfgKitPronto();
     }
 
     if (document.getElementById('tb-historico')) renderHistorico();

@@ -851,7 +851,7 @@ function _impPasso3HTML() {
                 ${amostra.length} linha(s) de <strong>${escapeHtml(layout.abas[0])}</strong>${layout.abas.length > 1 ? ` — o mesmo mapeamento vale para as outras ${layout.abas.length - 1} aba(s)` : ''}.
                 Dá ${qtd} item(ns) com o mapeamento atual${tirados ? ` — ${tirados} linha(s) desmarcada(s) ficam de fora` : ''}.
             </p>
-            ${qtd === 0 ? `<p class="imp-nota-zero">${_impPorQueZeroItens(layout, mapa, modoCor, coresColunas)}</p>` : ''}
+            ${qtd === 0 ? `<p class="imp-nota-zero" onclick="_impAcenderErro(${li})" title="Clique para ver onde está o problema">${_impPorQueZeroItens(layout, mapa, modoCor, coresColunas)}<span class="imp-nota-acao">Clique para ver onde está</span></p>` : ''}
             ${mapa.preco >= 0 && mapa.preco_peca >= 0 ? `<p class="imp-nota-preco">
                 As duas colunas de preço serão gravadas. O <strong>preço por peça</strong> é que forma o preço de venda;
                 o preço por corte fica registrado para orçamento, sem margem aplicada.
@@ -908,23 +908,83 @@ function _impTrocarPapel(indiceLayout, indiceColuna, papel) {
 // O que falta num layout para ele poder ser importado. Devolve lista vazia
 // quando esta tudo certo. Usada pelo painel de problemas e pelo Continuar.
 // Zero itens com o mapeamento atual é quase sempre um mal-entendido, e dizer
-// só "Dá 0 item(ns)" deixa o usuário sem saída. Esta linha diz o porquê.
+// só "Dá 0 item(ns)" deixa o usuário sem saída. Esta linha diz o porquê, em
+// palavras do dia a dia, e _impAlvoDoErro diz onde acender ao clicar nela.
 function _impPorQueZeroItens(layout, mapa, modoCor, coresColunas) {
     if (modoCor && !coresColunas.length) {
-        return 'Nenhuma coluna foi marcada como <strong>Cor</strong>. No modo "preço por cor" as cores são os '
-            + '<strong>títulos das colunas</strong>, com um preço embaixo de cada uma. Marque as colunas de cor '
-            + 'ou desmarque "Esta aba tem preço por cor".';
-    }
-    if (modoCor) {
-        return 'As colunas marcadas como Cor não têm preço legível nas linhas. No modo "preço por cor" espera-se '
-            + 'uma coluna por cor, com o preço daquela cor em cada linha. Se na sua tabela a cor é apenas um valor '
-            + 'ao lado do produto, <strong>desmarque "Esta aba tem preço por cor"</strong> e deixe essa coluna como Ignorar: '
+        return 'Você marcou que esta aba tem preço por cor, mas não disse qual coluna é uma cor. '
+            + 'Nesse modo, <strong>cada cor é uma coluna</strong> da planilha, com o preço daquela cor embaixo. '
+            + 'Se na sua tabela a cor é só uma palavra ao lado do produto, desmarque a opção acima: '
             + 'cada linha já é um produto.';
     }
+    if (modoCor) {
+        return 'As colunas que você marcou como Cor não têm preço nas linhas — têm texto ou estão vazias. '
+            + 'Marque as colunas que realmente têm os preços, ou desmarque "Esta aba tem preço por cor" '
+            + 'se cada linha da sua tabela já é um produto.';
+    }
     const faltas = _impFaltasDoLayout(layout);
-    if (faltas.length) return 'Falta dizer qual coluna é: <strong>' + faltas.join(', ') + '</strong>.';
-    return 'Nenhuma linha tem código, nome e preço ao mesmo tempo. Confira se a linha de cabeçalho está certa '
-        + 'e se as colunas apontam para os campos certos.';
+    if (faltas.length) return 'Falta dizer qual coluna é <strong>' + faltas.join(', ') + '</strong>. '
+        + 'Use os seletores no topo de cada coluna.';
+    return 'Nenhuma linha tem código, nome e preço ao mesmo tempo. '
+        + 'Confira se a linha de título está certa e se cada coluna aponta para o campo certo.';
+}
+
+// Onde acender quando o usuário clica no aviso: { cabecalho, colunas }.
+function _impAlvoDoErro(li) {
+    const C = window.ImportadorCore;
+    const layout = _impLayoutsDistintos()[li];
+    if (!layout) return null;
+    const mapa = _impMapaDoLayout(layout);
+    const coresColunas = _impEstado.cores[layout.assinatura] || [];
+    const modoCor = !!_impEstado.cores[layout.assinatura];
+
+    // Colunas já marcadas como Cor: o problema está nelas.
+    if (modoCor && coresColunas.length) return { cabecalho: true, colunas: coresColunas };
+
+    // Sem coluna de Cor: aponta as candidatas — as que não têm papel e cujas
+    // células parecem preço. É onde o usuário precisa olhar.
+    if (modoCor) {
+        const dados = _impEstado.planilha.abas[layout.abas[0]] || [];
+        const linhas = dados.slice(layout.cabecalhoIndice + 1, layout.cabecalhoIndice + 11);
+        const temPapel = ci => Object.keys(mapa).some(k => mapa[k] === ci);
+        const candidatas = [];
+        for (let ci = 0; ci < layout.colunas.length; ci++) {
+            if (temPapel(ci)) continue;
+            const comPreco = linhas.filter(l => l && C.normalizarPreco(l[ci]).ok).length;
+            if (comPreco >= 2) candidatas.push(ci);
+        }
+        return { cabecalho: true, colunas: candidatas };
+    }
+    return { cabecalho: true, colunas: [] };
+}
+
+// Rola até a tabela e pulsa o ponto errado. O destaque some sozinho: nada
+// fica preso na tela depois que o usuário já entendeu onde olhar.
+function _impAcenderErro(li) {
+    const alvo = _impAlvoDoErro(li);
+    const bloco = document.getElementById('imp-layout-' + li);
+    if (!alvo || !bloco) return;
+
+    bloco.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const area = bloco.querySelector('.imp-mapa-scroll');
+    if (area) area.scrollTop = 0;
+
+    const marcados = [];
+    const acender = (el, classe) => { if (el) { el.classList.add(classe); marcados.push([el, classe]); } };
+
+    if (alvo.cabecalho) bloco.querySelectorAll('.imp-mapa-tabela thead th').forEach(th => acender(th, 'imp-acende-cab'));
+    alvo.colunas.forEach(ci => {
+        // +3: a tabela tem a caixa de marcar e o número da linha antes das colunas.
+        const n = ci + 3;
+        bloco.querySelectorAll(`.imp-mapa-tabela thead th:nth-child(${n})`).forEach(th => acender(th, 'imp-acende-col'));
+        bloco.querySelectorAll(`.imp-mapa-tabela tbody td:nth-child(${n})`).forEach(td => acender(td, 'imp-acende-col'));
+    });
+    if (area && alvo.colunas.length) {
+        const primeira = bloco.querySelector(`.imp-mapa-tabela thead th:nth-child(${alvo.colunas[0] + 3})`);
+        if (primeira) area.scrollLeft = Math.max(0, primeira.offsetLeft - 120);
+    }
+
+    setTimeout(() => marcados.forEach(([el, classe]) => el.classList.remove(classe)), 3200);
 }
 
 function _impFaltasDoLayout(layout) {

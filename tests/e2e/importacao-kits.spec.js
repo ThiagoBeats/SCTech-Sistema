@@ -280,11 +280,18 @@ test('a aba Kits aparece no Cadastro/Catalogo com os mesmos dados', async ({ pag
     await expect(page.locator('#tb-kits tr', { hasText: 'KIT VARAO ROMANO' }).first()).toContainText('5503');
 });
 
-test('da para montar um kit de materiais pela aba do catalogo', async ({ page }) => {
+test('montar kit de materiais continua no Estoque, nao no catalogo', async ({ page }) => {
     await abrirCatalogo(page, {
         mat: [{ id: 21, referencia: 'TR-01', nome: 'TRILHO', unidade: 'm', preco: 40, estoque_atual: 100 }]
     });
+    // no catálogo a aba Kits cria kit PRONTO: não há seletor de material
     await page.click('button[data-tab="cat-kits"]');
+    expect(await page.locator('#kit-item-mat').count()).toBe(0);
+    await expect(page.locator('#tab-cat-kits')).toContainText('Criar Kit Pronto');
+
+    await page.goto(BASE + '/estoque.html');
+    await page.click('button[data-tab="kits"]');
+    await page.fill('#kit-ref', 'KIT-SALA');
     await page.fill('#kit-nome', 'Kit Cortina Sala');
     await page.selectOption('#kit-item-mat', '21');
     await page.fill('#kit-item-qtd', '3');
@@ -293,6 +300,7 @@ test('da para montar um kit de materiais pela aba do catalogo', async ({ page })
 
     await page.waitForFunction(() => typeof db !== 'undefined' && db.kits.length === 1);
     const k = await page.evaluate(() => db.kits[0]);
+    expect(k.referencia).toBe('KIT-SALA');
     expect(k.nome).toBe('Kit Cortina Sala');
     expect(k.itens).toEqual([{ materialId: 21, nome: 'TRILHO', unidade: 'm', quantidade: 3 }]);
 });

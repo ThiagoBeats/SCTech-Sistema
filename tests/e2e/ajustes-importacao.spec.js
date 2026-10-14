@@ -278,8 +278,8 @@ test('modo cor sem coluna de cor marcada explica o zero em vez de calar', async 
     await expect(page.locator('#imp-corpo')).toContainText('Dá 0 item(ns)');
     const nota = page.locator('.imp-nota-zero');
     await expect(nota).toBeVisible();
-    await expect(nota).toContainText('Nenhuma coluna foi marcada como');
-    await expect(nota).toContainText('títulos das colunas');
+    await expect(nota).toContainText('não disse qual coluna é uma cor');
+    await expect(nota).toContainText('cada cor é uma coluna');
 });
 
 test('modo cor sem coluna de cor tambem barra o Continuar', async ({ page }) => {
@@ -295,6 +295,59 @@ test('modo cor sem coluna de cor tambem barra o Continuar', async ({ page }) => 
     expect(await page.evaluate(() => _impEstado.passo), 'nao pode cair no passo 4 com zero itens').toBe(3);
     await expect(page.locator('#imp-corpo')).toContainText('Mapeamentos incompletos');
     await expect(page.locator('#imp-corpo')).toContainText('coluna marcada como Cor');
+});
+
+test('o aviso fala em palavras do dia a dia, sem jargao', async ({ page }) => {
+    await ateOPasso3Colado(page, COLADO_COR);
+    await page.evaluate(() => {
+        _impTrocarPapel(0, 0, 'codigo');
+        _impTrocarPapel(0, 1, 'nome');
+        _impTrocarPapel(0, 2, 'preco');
+        _impAlternarModoCor(0);
+    });
+    const texto = await page.locator('.imp-nota-zero').innerText();
+    expect(texto).toContain('cada cor é uma coluna');
+    expect(texto).toContain('cada linha já é um produto');
+    expect(texto.toLowerCase(), 'nada de "legível"').not.toContain('legív');
+    expect(texto.toLowerCase(), 'nem de "mapeamento"').not.toContain('mapeament');
+    await expect(page.locator('.imp-nota-acao')).toContainText('Clique para ver onde está');
+});
+
+test('clicar no aviso acende o cabecalho da tabela', async ({ page }) => {
+    await ateOPasso3Colado(page, COLADO_COR);
+    await page.evaluate(() => {
+        _impTrocarPapel(0, 0, 'codigo');
+        _impTrocarPapel(0, 1, 'nome');
+        _impTrocarPapel(0, 2, 'preco');
+        _impAlternarModoCor(0);
+    });
+    expect(await page.locator('.imp-acende-cab').count(), 'nada aceso antes do clique').toBe(0);
+
+    await page.click('.imp-nota-zero');
+    expect(await page.locator('.imp-acende-cab').count(), 'o cabecalho precisa acender').toBeGreaterThan(0);
+
+    // o destaque some sozinho, sem prender a tela
+    await page.waitForFunction(() => document.querySelectorAll('.imp-acende-cab').length === 0, null, { timeout: 8000 });
+});
+
+test('com colunas de cor marcadas, o clique acende exatamente essas colunas', async ({ page }) => {
+    // cores como título de coluna, mas com texto embaixo em vez de preço
+    const matriz = 'COD\tNOME\tBRANCO\tPRETO\n6515\tTecido teste\tsob consulta\tsob consulta';
+    await ateOPasso3Colado(page, matriz);
+    await page.evaluate(() => {
+        _impAlternarModoCor(0);
+        _impTrocarPapel(0, 2, 'cor');
+        _impTrocarPapel(0, 3, 'cor');
+    });
+    await expect(page.locator('.imp-nota-zero')).toContainText('não têm preço nas linhas');
+
+    await page.click('.imp-nota-zero');
+    // colunas 2 e 3 → nth-child 5 e 6 (caixa + número da linha antes)
+    const acesas = await page.evaluate(() => {
+        const ths = [...document.querySelectorAll('.imp-mapa-tabela thead th')];
+        return ths.map((th, i) => th.classList.contains('imp-acende-col') ? i : -1).filter(i => i >= 0);
+    });
+    expect(acesas, 'só as colunas marcadas como Cor').toEqual([4, 5]);
 });
 
 test('marcando a coluna de cor, o aviso muda e diz o que fazer', async ({ page }) => {

@@ -1390,3 +1390,32 @@ html[data-theme="dark"] .imp-nova-coluna { background: #1D2024; border-color: #3
     font-size: var(--fs-label); line-height: 1.5; color: var(--dark);
 }
 html[data-theme="dark"] .imp-nota-zero { background: rgba(242, 201, 36, .10); }
+
+/* Preço de venda calculado no formulário de kit pronto */
+.kp-venda {
+    display: flex; align-items: center; min-height: 38px;
+    padding: 7px 10px; border: 1px dashed var(--border); border-radius: var(--radius-input);
+    font-size: var(--fs-num); font-weight: 700; color: var(--primary); background: var(--light);
+}
+html[data-theme="dark"] .kp-venda { background: #1D2024; border-color: #3A3D42; color: var(--secondary); }
+
+/* Aviso de zero itens: clicável, acende o ponto errado na tabela */
+.imp-nota-zero { cursor: pointer; }
+.imp-nota-zero:hover { background: rgba(242, 201, 36, .26); }
+.imp-nota-acao {
+    display: block; margin-top: 5px; font-weight: 700;
+    color: var(--primary); text-decoration: underline;
+}
+
+@keyframes impPulsa {
+    0%, 100% { box-shadow: inset 0 0 0 2px rgba(0, 93, 59, 0); }
+    50%      { box-shadow: inset 0 0 0 2px var(--primary), 0 0 12px rgba(201, 247, 117, .85); }
+}
+.imp-acende-cab, .imp-acende-col {
+    animation: impPulsa 1.05s ease-in-out 3;
+    position: relative; z-index: 2;
+}
+.imp-acende-col { background: rgba(201, 247, 117, .28) !important; }
+
+html[data-theme="dark"] .imp-nota-acao { color: var(--secondary); }
+html[data-theme="dark"] .imp-acende-col { background: rgba(201, 247, 117, .14) !important; }

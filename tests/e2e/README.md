@@ -51,7 +51,7 @@ TESTDIR=<projeto>/tests/e2e \
   npx playwright test --config=repo.config.js
 ```
 
-Esperado: **165 passando**.
+Esperado: **179 passando**.
 
 ## Sessão autenticada é obrigatória
 
@@ -94,6 +94,7 @@ navegar. Ele semeia um usuário com papel 1 (Administrador, que vem de
 | `catalogo-selecao.spec.js` | Ordenação por coluna nas duas tabelas do catálogo, os filtros de nome/código, fornecedor, preço e largura, marcar itens e a marcação sobrevivendo a ordenar e filtrar, exclusão em massa respeitando o tecido em uso, e o pedido de compra vindo da seleção nos quatro caminhos (mesmo fornecedor, um por fornecedor, tudo para um, genérico) |
 | `config-importacao.spec.js` | Os quatro cartões de configuração do passo 1 (textos, ícones, os dois grupos exclusivos), o sumiço do campo antigo de markup, a cobrança da margem total, a margem aplicada à tabela toda ou item a item, e o estoque infinito não bloqueando pedido, não sofrendo baixa e ficando fora do alerta de mínimo |
 | `importacao-kits.spec.js` | O tipo Kit no passo 2, os papéis de coluna próprios do kit, a conferência num bloco à parte, conflito de código contra material, tecido e kit de montagem, produtos e kits na mesma importação indo cada um para o seu lugar, o desfazer cobrindo os dois, a aba Kits no Catálogo e no Estoque, e o kit pronto entrando no pedido como uma linha só |
-| `ajustes-importacao.spec.js` | Células editáveis no mapeamento (kits e produtos), o cursor que não pula ao corrigir o texto colado, a rolagem de dentro da tabela preservada ao escolher o papel de uma coluna, a criação de coluna com valor para todas as linhas e ajuste célula a célula, a palavra "margem" no lugar de "markup", o tecido registrando preço de corte e de peça ao mesmo tempo, e o modo "preço por cor" explicando por que deu zero itens |
+| `kit-manual.spec.js` | O código obrigatório e único no kit de montagem (Estoque), e o formulário de kit pronto do Catálogo: campos, os quatro cartões, a venda calculada ao vivo, os obrigatórios, o código que não repete, e o kit salvo ficando igual a um importado |
+| `ajustes-importacao.spec.js` | Células editáveis no mapeamento (kits e produtos), o cursor que não pula ao corrigir o texto colado, a rolagem de dentro da tabela preservada ao escolher o papel de uma coluna, a criação de coluna com valor para todas as linhas e ajuste célula a célula, a palavra "margem" no lugar de "markup", o tecido registrando preço de corte e de peça ao mesmo tempo, e o modo "preço por cor" explicando por que deu zero itens em linguagem direta, com o aviso clicável acendendo a coluna errada |
 
-Esperado no total: **165 passando**.
+Esperado no total: **179 passando**.

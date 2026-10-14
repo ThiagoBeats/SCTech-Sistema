@@ -28,7 +28,7 @@ async function abrirAssistente(page) {
     await expect(page.locator('#imp-cfg')).toBeVisible();
 }
 
-const cartao = nome => `.imp-cfg-card:has(input[name="imp-cfg-${nome}"])`;
+const cartao = nome => `#imp-cfg .imp-cfg-card:has(input[name="imp-cfg-${nome}"])`;
 const radio  = (grupo, v) => `input[name="imp-cfg-${grupo}"][value="${v}"]`;
 
 // Vai do passo 1 até a conferência com os três tecidos colados.
@@ -60,19 +60,19 @@ test('os quatro cartoes aparecem com os textos combinados', async ({ page }) => 
 
     await expect(page.locator('#imp-corpo')).toContainText('Configurações da importação');
     await expect(page.locator('#imp-corpo')).toContainText('Escolha como deseja aplicar a margem de lucro e o controle de estoque para os itens desta tabela.');
-    await expect(page.locator('.imp-cfg-card')).toHaveCount(4);
+    await expect(page.locator('#imp-cfg .imp-cfg-card')).toHaveCount(4);
 
-    const titulos = await page.locator('.imp-cfg-titulo').allInnerTexts();
+    const titulos = await page.locator('#imp-cfg .imp-cfg-titulo').allInnerTexts();
     expect(titulos).toEqual(['Definir margem total', 'Definir margem por item', 'Estoque infinito', 'Ajustar estoque']);
 
-    const descricoes = await page.locator('.imp-cfg-desc').allInnerTexts();
+    const descricoes = await page.locator('#imp-cfg .imp-cfg-desc').allInnerTexts();
     expect(descricoes[0]).toBe('A mesma margem de lucro será aplicada em todos os itens da tabela, automaticamente.');
     expect(descricoes[1]).toBe('Você poderá definir margens diferentes para cada item, de forma manual, no momento da conferência ou após a importação.');
     expect(descricoes[2]).toBe('Todos os itens da tabela serão marcados como estoque infinito. Não haverá controle de estoque, baixa ou entrada de itens.');
     expect(descricoes[3]).toBe('O estoque será controlado para cada item. Você poderá dar entrada nos itens manualmente após a importação e o sistema fará a baixa ao sair nos pedidos.');
 
     // cada cartão tem o seu ícone
-    await expect(page.locator('.imp-cfg-card svg.imp-cfg-icone')).toHaveCount(4);
+    await expect(page.locator('#imp-cfg .imp-cfg-card svg.imp-cfg-icone')).toHaveCount(4);
 
     expect(erros, erros.join('\n')).toEqual([]);
 });
@@ -149,9 +149,9 @@ test('a margem digitada sobrevive a ir e voltar entre os cartoes', async ({ page
 
 test('so o cartao escolhido fica com o destaque verde', async ({ page }) => {
     await abrirAssistente(page);
-    await expect(page.locator('.imp-cfg-card-sel')).toHaveCount(2);   // uma margem + um estoque
+    await expect(page.locator('#imp-cfg .imp-cfg-card-sel')).toHaveCount(2);   // uma margem + um estoque
     await page.click(radio('estoque', 'infinito'));
-    await expect(page.locator('.imp-cfg-card-sel')).toHaveCount(2);
+    await expect(page.locator('#imp-cfg .imp-cfg-card-sel')).toHaveCount(2);
     await expect(page.locator(cartao('estoque')).first()).toHaveClass(/imp-cfg-card-sel/);
 });
 

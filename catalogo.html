@@ -183,42 +183,48 @@
         <!-- Mesma aba da tela de Estoque: os dois lugares mexem nos mesmos kits. -->
         <div id="tab-cat-kits" class="tab-panel">
 
+            <!-- Kit pronto: produto em si, sem descrever os materiais que o
+                 compõem. Montar kit a partir de materiais continua em Estoque. -->
             <div class="card">
-                <h3 style="margin-bottom:16px">Criar Kit</h3>
+                <h3 style="margin-bottom:4px">Criar Kit Pronto</h3>
+                <p style="font-size:13px;color:#8F8F8F;margin-bottom:16px">
+                    Kit com código e preço próprios, sem descrever os materiais.
+                    Para montar um kit a partir dos seus materiais, use <a href="estoque.html">Estoque › Kits</a>.
+                </p>
                 <div class="grid">
-                    <div class="form-group" style="grid-column:1/-1">
+                    <div class="form-group">
+                        <label>Código <span class="info-tag">código único</span></label>
+                        <input type="text" id="kp-ref" placeholder="Ex: 5501">
+                    </div>
+                    <div class="form-group" style="grid-column:span 2">
                         <label>Nome do Kit</label>
-                        <input type="text" id="kit-nome" placeholder="Ex: Kit Trilho 2m, Kit Instalação Padrão…">
+                        <input type="text" id="kp-nome" placeholder="Ex: Kit Trilho Suíço">
+                    </div>
+                    <div class="form-group">
+                        <label>Medida <span class="info-tag">opcional</span></label>
+                        <input type="text" id="kp-medida" placeholder="Ex: 1,00 a 1,50 m">
                     </div>
                     <div class="form-group" style="grid-column:1/-1">
-                        <label>Descrição (opcional)</label>
-                        <input type="text" id="kit-desc" placeholder="Breve descrição do kit">
+                        <label>Descrição <span class="info-tag">opcional</span></label>
+                        <input type="text" id="kp-desc" placeholder="Breve descrição do kit">
+                    </div>
+                    <div class="form-group">
+                        <label>Preço de custo (R$)</label>
+                        <input type="number" id="kp-custo" placeholder="Ex: 100.00" step="0.01" min="0" oninput="atualizarVendaKitPronto()">
+                    </div>
+                    <div class="form-group" style="grid-column:span 2">
+                        <label>Preço de venda</label>
+                        <div id="kp-venda" class="kp-venda">—</div>
                     </div>
                 </div>
 
-                <h4 style="margin-bottom:10px;color:#555">Itens do Kit</h4>
-                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
-                    <div class="form-group" style="flex:1;min-width:200px">
-                        <label>Material</label>
-                        <select id="kit-item-mat"></select>
-                    </div>
-                    <div class="form-group" style="width:120px">
-                        <label>Quantidade</label>
-                        <input type="number" id="kit-item-qtd" placeholder="Ex: 2" step="0.01" min="0.01" value="1">
-                    </div>
-                    <button class="btn btn-outline" style="margin-bottom:0" onclick="adicionarItemAoKit()">+ Adicionar Item</button>
+                <div class="imp-cfg-secao">
+                    <h4 class="imp-cfg-secao-titulo">Configurações do kit</h4>
+                    <p class="imp-cfg-secao-ajuda">Escolha como aplicar a margem de lucro e o controle de estoque para este kit.</p>
+                    <div id="kp-cfg" class="imp-cfg-grade"></div>
                 </div>
 
-                <div style="margin-bottom:14px">
-                    <table>
-                        <thead>
-                            <tr><th>Material</th><th>Quantidade</th><th style="width:60px"></th></tr>
-                        </thead>
-                        <tbody id="tb-kit-draft"></tbody>
-                    </table>
-                </div>
-
-                <button class="btn btn-success" onclick="salvarKit()">Salvar Kit</button>
+                <button class="btn btn-success" style="margin-top:16px" onclick="salvarKitPronto()">Salvar Kit Pronto</button>
             </div>
 
             <div class="card">

@@ -153,7 +153,11 @@
             <div class="card">
                 <h3 style="margin-bottom:16px">Criar Kit</h3>
                 <div class="grid">
-                    <div class="form-group" style="grid-column:1/-1">
+                    <div class="form-group">
+                        <label>Código <span class="info-tag">código único</span></label>
+                        <input type="text" id="kit-ref" placeholder="Ex: KIT-TR-2M">
+                    </div>
+                    <div class="form-group" style="grid-column:span 3">
                         <label>Nome do Kit</label>
                         <input type="text" id="kit-nome" placeholder="Ex: Kit Trilho 2m, Kit Instalação Padrão…">
                     </div>
@@ -310,5 +314,7 @@
 
     </main>
     <script src="js/app.js"></script>
+    <!-- normalizacao de codigo e calculo de margem: a mesma regra da importacao -->
+    <script src="js/importador-core.js"></script>
 </body>
 </html>
