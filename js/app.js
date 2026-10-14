@@ -3635,12 +3635,16 @@ function renderEstoque() {
     db.catalogo.forEach(tec => {
         const rolos = db.estoque.filter(r => r.tecido_id == tec.id);
         if (!rolos.length) return;
+        const infinito = temEstoqueInfinito(tec);
         const totalDisp = rolos.reduce((s, r) => s + r.metragem_atual, 0);
-        const abaixoMin = tec.min_estoque > 0 && totalDisp < tec.min_estoque;
+        const abaixoMin = !infinito && tec.min_estoque > 0 && totalDisp < tec.min_estoque;
         const precoVendaTec = tec.preco > 0 ? `<span style="margin-left:16px;color:#005D3B;font-size:13px">Preço de venda: <strong>R$ ${tec.preco.toFixed(2)}/m</strong></span>` : '';
+        // Mostrar os 99.999 m de um tecido sem controle de estoque seria
+        // mentira: o numero existe so para o tecido aparecer nesta lista.
+        const totalTxt = infinito ? '<strong title="Estoque infinito">∞</strong>' : `<strong>${totalDisp.toFixed(2)} m</strong>`;
         html += `<tr class="estoque-grupo"><td colspan="6">
             <strong>${tec.nome}</strong>
-            <span style="margin-left:12px;color:#555;font-size:13px">Total disponível: <strong>${totalDisp.toFixed(2)} m</strong></span>
+            <span style="margin-left:12px;color:#555;font-size:13px">Total disponível: ${totalTxt}</span>
             ${precoVendaTec}
             ${abaixoMin ? `<span class="badge-alerta">⚠ Abaixo do mínimo (${tec.min_estoque} m)</span>` : ''}
         </td></tr>`;
@@ -3650,23 +3654,24 @@ function renderEstoque() {
             const esgotado = r.metragem_atual <= 0;
             html += `<tr class="${esgotado ? 'rolo-esgotado' : ''}">
                 <td style="padding-left:22px">${r.lote}</td>
-                <td>${r.metragem_inicial.toFixed(2)} m</td>
-                <td><strong>${r.metragem_atual.toFixed(3)} m</strong></td>
-                <td><div class="progresso-bar"><div class="progresso-fill" style="width:${pct}%;background:${cor}"></div></div><span style="font-size:11px;color:#888">${pct}%</span></td>
+                <td>${infinito ? '∞' : r.metragem_inicial.toFixed(2) + ' m'}</td>
+                <td><strong>${infinito ? '∞' : r.metragem_atual.toFixed(3) + ' m'}</strong></td>
+                <td>${infinito ? '<span style="font-size:11px;color:#8F8F8F">sem controle de estoque</span>'
+                    : `<div class="progresso-bar"><div class="progresso-fill" style="width:${pct}%;background:${cor}"></div></div><span style="font-size:11px;color:#888">${pct}%</span>`}</td>
                 <td>${new Date(r.data_entrada + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
                 <td>
-                    ${!esgotado ? `<button class="btn btn-outline btn-sm" onclick="mostrarBaixaForm(${r.id})">↓ Baixar</button>` : '<span class="badge-esgotado">Esgotado</span>'}
+                    ${infinito ? '' : (!esgotado ? `<button class="btn btn-outline btn-sm" onclick="mostrarBaixaForm(${r.id})">↓ Baixar</button>` : '<span class="badge-esgotado">Esgotado</span>')}
                     <button class="btn btn-outline btn-sm btn-danger" onclick="removerRolo(${r.id})">🗑️</button>
                 </td>
             </tr>
-            <tr id="baixa-${r.id}" class="baixa-form" style="display:none">
+            ${infinito ? '' : `<tr id="baixa-${r.id}" class="baixa-form" style="display:none">
                 <td colspan="6" class="baixa-form-cell">
                     <strong>Baixar ref. ${r.lote}</strong> — saldo: <strong>${r.metragem_atual.toFixed(3)} m</strong> &emsp;
                     <input type="number" id="baixa-qtd-${r.id}" placeholder="Metros a baixar" step="0.001" min="0.001" max="${r.metragem_atual}" style="width:160px;padding:5px 8px;border:1px solid #ccc;border-radius:4px">
                     <button class="btn btn-sm" style="background:#F2C924" onclick="confirmarBaixa(${r.id})">Confirmar Baixa</button>
                     <button class="btn btn-outline btn-sm" onclick="cancelarBaixa()">Cancelar</button>
                 </td>
-            </tr>`;
+            </tr>`}`;
         });
     });
     tb.innerHTML = html || '<tr><td colspan="6" style="text-align:center;color:#999;padding:24px;">Nenhum rolo cadastrado. Registre uma entrada acima.</td></tr>';

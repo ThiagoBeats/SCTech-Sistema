@@ -216,7 +216,7 @@ function _impPasso1HTML() {
     <div class="imp-rodape">
         <div class="form-group imp-rodape-forn">
             <label>Fornecedor desta tabela</label>
-            <select id="imp-fornecedor">
+            <select id="imp-fornecedor" onchange="_impFornecedorMudou(this.value)">
                 <option value="">— Selecione —</option>
                 ${opcoes}
             </select>
@@ -283,6 +283,25 @@ function _impCardsConfigHTML() {
         _impCardConfigHTML('estoque', 'ajustar', 'caixa', 'Ajustar estoque',
             'O estoque será controlado para cada item. Você poderá dar entrada nos itens manualmente após a importação e o sistema fará a baixa ao sair nos pedidos.')
     ].join('');
+}
+
+// Escolher o fornecedor traz a margem e os modos que ele usou da ultima vez,
+// JA NOS CARTOES — para o usuario ver o que foi lembrado e poder mudar. Antes
+// isso era aplicado escondido no Continuar e passava por cima do que ele tinha
+// acabado de clicar.
+function _impFornecedorMudou(valor) {
+    const C = window.ImportadorCore;
+    const id = parseInt(valor, 10);
+    _impCapturarPasso1();
+    _impEstado.fornecedorId = id || null;
+    const perfil = id ? C.perfilDoFornecedor(db.import_perfis, id) : null;
+    if (perfil) {
+        if (perfil.markup_padrao) _impEstado.markupPadrao = perfil.markup_padrao;
+        if (perfil.margem_modo) _impEstado.margemModo = perfil.margem_modo;
+        if (perfil.estoque_modo) _impEstado.estoqueModo = perfil.estoque_modo;
+    }
+    const alvo = document.getElementById('imp-cfg');
+    if (alvo) alvo.innerHTML = _impCardsConfigHTML();
 }
 
 // Troca a escolha e redesenha so os cartoes, para o campo de margem aparecer
@@ -479,11 +498,12 @@ async function _impConcluirPasso1() {
             if (_impEstado.abas[aba] !== undefined) _impEstado.abas[aba] = perfil.abas[aba];
         });
         (perfil.layouts || []).forEach(l => { _impEstado.layouts[l.assinatura] = { mapa: l.mapa, cabecalhoIndice: l.cabecalhoIndice }; });
-        // A margem salva só preenche o que ficou em branco: o que o usuário
-        // acabou de digitar nesta importação manda.
-        if (_impEstado.markupPadrao === null && perfil.markup_padrao) _impEstado.markupPadrao = perfil.markup_padrao;
-        if (perfil.margem_modo) _impEstado.margemModo = perfil.margem_modo;
-        if (perfil.estoque_modo) _impEstado.estoqueModo = perfil.estoque_modo;
+        // Margem e modos NAO sao aplicados aqui: eles ja foram carregados nos
+        // cartoes quando o fornecedor foi escolhido (_impFornecedorMudou), e
+        // o que o usuario clicou depois disso manda. Reaplicar o perfil neste
+        // ponto desfazia a escolha dele em silencio — era por isso que "ajustar
+        // estoque" virava "estoque infinito" na segunda importacao do mesmo
+        // fornecedor.
         (perfil.cores && Object.keys(perfil.cores).forEach(a => { _impEstado.cores[a] = perfil.cores[a]; }));
         toast(`Perfil "${perfil.nome}" aplicado.`, 'info');
         // Perfil cobre abas e mapeamento: o usuario pode ir direto conferir.
@@ -1734,12 +1754,44 @@ const PRAZO_DESFAZER_DIAS = 7;
 // atualizados, os valores anteriores dos campos do importador. Nao copia mais o
 // catalogo e os materiais inteiros — que traziam cada imagem em base64 e, pior,
 // devolviam saldo de estoque velho ao desfazer.
-function _impSalvarSnapshot(resumo, mudancas, rKit) {
+// Metragem do rolo de um tecido sem controle de estoque. E so um numero para
+// o item existir na lista; ele nunca e consumido.
+const METRAGEM_INFINITA = 99999;
+
+// Um rolo por tecido infinito que ainda nao tem nenhum. Devolve os ids
+// criados, para o desfazer poder remove-los e nao deixar rolo orfao.
+// MONTA os rolos, sem gravar: quem grava e o bloco de commit, depois do
+// snapshot. Empurrar aqui deixaria rolo solto se a gravacao falhasse.
+function _impMontarRolosInfinitos(catalogo) {
+    if (_impEstado.estoqueModo !== 'infinito') return [];
+    const hoje = new Date().toISOString().slice(0, 10);
+    const novos = [];
+    let proximo = Date.now();
+    (catalogo || []).forEach(c => {
+        if (!c.estoque_infinito) return;
+        if (db.estoque.some(r => r.tecido_id == c.id)) return;   // ja tem rolo
+        novos.push({
+            id: proximo++,
+            tecido_id: c.id,
+            nomeTecido: c.nome,
+            lote: 'ESTOQUE INFINITO',
+            metragem_inicial: METRAGEM_INFINITA,
+            metragem_atual: METRAGEM_INFINITA,
+            data_entrada: hoje
+        });
+    });
+    return novos;
+}
+
+function _impSalvarSnapshot(resumo, mudancas, rKit, rolosCriados) {
     localStorage.setItem(CHAVE_SNAPSHOT, JSON.stringify({
         quando: new Date().toISOString(),
-        versao: 3,
+        versao: 4,
         resumo,
         mudancas,
+        // Rolos criados para tecido infinito: o desfazer tira eles junto,
+        // senao sobra rolo sem tecido.
+        rolosCriados: rolosCriados || [],
         // Uma importação pode trazer produtos e kits na mesma passada; o
         // desfazer tem de reverter as duas coisas de uma vez.
         resumoKit: rKit ? rKit.resumo : null,
@@ -1788,10 +1840,15 @@ async function _impGravar() {
         agora: Date.now()
     });
 
+    // Tecido infinito ganha um rolo, senao ele nao aparece na aba Estoque:
+    // a lista de rolos pula tecido sem rolo nenhum. O rolo NAO e consumido —
+    // a baixa do pedido pula item infinito —, entao a metragem fica parada.
+    const rolosInfinitos = _impMontarRolosInfinitos(r.catalogo);
+
     // Snapshot antes de tocar no db: se ele nao couber no armazenamento, nada e
     // gravado — melhor não importar do que importar sem poder desfazer.
     try {
-        _impSalvarSnapshot(r.resumo, r.mudancas, rKit);
+        _impSalvarSnapshot(r.resumo, r.mudancas, rKit, rolosInfinitos.map(x => x.id));
     } catch (e) {
         await showAlert('Não foi possível preparar o "desfazer" desta importação'
             + (e && e.message ? ' (' + e.message + ')' : '')
@@ -1804,10 +1861,15 @@ async function _impGravar() {
     const catalogoAntes = db.catalogo;
     const materiaisAntes = db.materiais;
     const kitsAntes = db.kits;
+    const estoqueAntesDaGravacao = db.estoque.slice();
     try {
         db.catalogo = r.catalogo;
         db.materiais = r.materiais;
         if (rKit) db.kits = rKit.kits;
+        rolosInfinitos.forEach(({ nomeTecido, ...rolo }) => {
+            db.estoque.push(rolo);
+            registrarMovimento('Entrada', nomeTecido, 'tecido', METRAGEM_INFINITA, 'm', 'Importação — estoque infinito');
+        });
         if (document.getElementById('imp-salvar-perfil')?.checked) _impSalvarPerfil();
         // O resumo tem de fechar com o numero de decisoes: linhas que nao puderam
         // ser aplicadas aparecem como ignoradas, nunca somem da conta.
@@ -1824,6 +1886,7 @@ async function _impGravar() {
         db.catalogo = catalogoAntes;
         db.materiais = materiaisAntes;
         db.kits = kitsAntes;
+        db.estoque = estoqueAntesDaGravacao;
         // Tenta devolver o armazenamento ao estado anterior: syncDB grava sc_cat
         // antes de sc_mat, entao uma falha no meio pode ter persistido so metade.
         try { syncDB(); } catch (e2) { /* nada mais a fazer aqui */ }
@@ -1890,16 +1953,21 @@ async function desfazerUltimaImportacao() {
     if (!await showConfirm(msg, '↩️', 'Desfazer', 'Cancelar')) return;
 
     const r = C.desfazerImportacao({ catalogo: db.catalogo, materiais: db.materiais, mudancas: snap.mudancas });
+    // Rolos criados por "estoque infinito" saem junto: eles nao sao estoque de
+    // verdade, so existem para o tecido aparecer na lista.
+    const rolosFora = new Set((snap.rolosCriados || []).map(String));
     const rKit = temKits ? C.desfazerImportacaoKits({ kits: db.kits, mudancas: snap.mudancasKit }) : null;
 
     const catalogoAntes = db.catalogo;
     const materiaisAntes = db.materiais;
     const kitsAntes = db.kits;
+    const estoqueAntes = db.estoque;
     const snapshotBruto = localStorage.getItem(CHAVE_SNAPSHOT);
     try {
         db.catalogo = r.catalogo;
         db.materiais = r.materiais;
         if (rKit) db.kits = rKit.kits;
+        if (rolosFora.size) db.estoque = db.estoque.filter(x => !rolosFora.has(String(x.id)));
         localStorage.removeItem(CHAVE_SNAPSHOT);
         const mantidos = r.resumo.mantidos + (rKit ? rKit.resumo.mantidos : 0);
         const sumidos = r.resumo.sumidos + (rKit ? rKit.resumo.sumidos : 0);
@@ -1911,6 +1979,7 @@ async function desfazerUltimaImportacao() {
         db.catalogo = catalogoAntes;
         db.materiais = materiaisAntes;
         db.kits = kitsAntes;
+        db.estoque = estoqueAntes;
         try { syncDB(); } catch (e2) { /* nada mais a fazer aqui */ }
         // o desfazer continua disponivel: nada foi revertido
         try { if (snapshotBruto) localStorage.setItem(CHAVE_SNAPSHOT, snapshotBruto); } catch (e3) { /* idem */ }

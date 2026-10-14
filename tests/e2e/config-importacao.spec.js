@@ -292,7 +292,7 @@ test('item infinito nao sofre baixa, mesmo tendo rolo em estoque', async ({ page
         realizarBaixaTecidos(ped);
         return {
             infinito: tecidoTemEstoqueInfinito(tec.id),
-            saldo: db.estoque[0].metragem_atual,
+            saldo: db.estoque.find(r => r.lote === 'L1').metragem_atual,
             movimentos: (db.movimentos || []).filter(m => m.tipo === 'Baixa Pedido').length
         };
     });
@@ -359,7 +359,7 @@ test('item com controle normal continua baixando do rolo', async ({ page }) => {
             ambientes: [{ nome: 'Sala', tecidos: [{ tecidoId: tec.id, tecidoNome: tec.nome, consumo_linear: 12 }] }]
         };
         realizarBaixaTecidos(ped);
-        return { saldo: db.estoque[0].metragem_atual };
+        return { saldo: db.estoque.find(r => r.lote === 'L1').metragem_atual };
     });
     expect(r.saldo, 'a baixa normal segue funcionando').toBe(38);
 });
