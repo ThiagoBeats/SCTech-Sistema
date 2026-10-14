@@ -38,7 +38,7 @@
                 <h3 style="margin-bottom:16px">Registrar Entrada de Rolo</h3>
                 <div class="grid">
                     <div class="form-group">
-                        <label>Referência <span class="info-tag">lote / banho de cor</span></label>
+                        <label>Lote <span class="info-tag">banho de cor</span></label>
                         <input type="text" id="est-lote" placeholder="Ex: L2024-03 ou Banho #7" oninput="autoFillTecidoPorReferencia()">
                     </div>
                     <div class="form-group">
@@ -74,7 +74,7 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>Referência</th>
+                            <th>Lote</th>
                             <th>Metragem Inicial</th>
                             <th>Disponível</th>
                             <th>Ocupação</th>
@@ -98,7 +98,7 @@
                 <h3 style="margin-bottom:16px">Registrar Entrada de Material / Acessório</h3>
                 <div class="grid">
                     <div class="form-group">
-                        <label>Referência <span class="info-tag">código do material</span></label>
+                        <label>Código <span class="info-tag">código do material</span></label>
                         <input type="text" id="est-mat-ref" placeholder="Ex: TRILHO-SU-01" oninput="autoFillEntradaMaterialPorRef()">
                     </div>
                     <div class="form-group" style="grid-column:span 2">
@@ -133,13 +133,13 @@
             <div class="card">
                 <table>
                     <thead><tr>
-                        <th>Material</th>
-                        <th>Referência</th>
-                        <th>Unidade</th>
-                        <th>Preço Venda</th>
-                        <th>Estoque Atual</th>
-                        <th>Fornecedor</th>
-                        <th>Ações</th>
+                        <th class="col-codigo">Código</th>
+                        <th class="col-nome">Material</th>
+                        <th class="col-un">Unidade</th>
+                        <th class="col-num">Estoque atual</th>
+                        <th class="col-num">Preço</th>
+                        <th class="col-forn">Fornecedor</th>
+                        <th class="col-acoes">Ações</th>
                     </tr></thead>
                     <tbody id="tb-estoque-mat"></tbody>
                 </table>
@@ -196,16 +196,16 @@
             <!-- Kits cadastrados -->
             <div class="card">
                 <h3 style="margin-bottom:16px">Kits Cadastrados</h3>
-                <table>
+                <table id="tabela-kits">
                     <thead>
                         <tr>
-                            <th style="width:90px">Código</th>
-                            <th>Nome</th>
-                            <th style="width:110px">Medida</th>
-                            <th style="width:100px">Preço</th>
-                            <th style="width:90px">Estoque</th>
-                            <th>Composição</th>
-                            <th style="width:150px">Ações</th>
+                            <th class="col-codigo">Código</th>
+                            <th class="col-nome">Nome</th>
+                            <th class="col-num">Medida</th>
+                            <th class="col-num">Preço</th>
+                            <th class="col-num">Estoque</th>
+                            <th class="col-nome">Composição</th>
+                            <th class="col-acoes">Ações</th>
                         </tr>
                     </thead>
                     <tbody id="tb-kits"></tbody>
@@ -250,7 +250,7 @@
                             <th style="width:120px">Tipo</th>
                             <th>Item</th>
                             <th style="width:110px">Quantidade</th>
-                            <th style="width:120px">Referência</th>
+                            <th style="width:120px">Origem</th>
                         </tr>
                     </thead>
                     <tbody id="tb-historico"></tbody>
@@ -264,7 +264,7 @@
             <div class="card">
                 <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
                     <div class="form-group consulta-campo" style="flex:1;min-width:170px;margin-bottom:0">
-                        <label>Código / Referência</label>
+                        <label>Código</label>
                         <input type="text" id="consulta-codigo" placeholder="Ex: 0001, LB-001, TRILHO-SU-01…"
                                oninput="consultaFiltroMudou('codigo')" onfocus="consultaSugerir('codigo')"
                                autocomplete="off" style="text-transform:uppercase">

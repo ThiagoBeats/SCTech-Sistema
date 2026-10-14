@@ -29,8 +29,13 @@ O Playwright não aceita um diretório de testes fora do seu próprio, então us
 arquivo de configuração apontando para cá. Em `/tmp/sctech-e2e/repo.config.js`:
 
 ```js
-module.exports = { testDir: process.env.TESTDIR, reporter: 'line', workers: 1, use: { headless: true }, timeout: 60000 };
+module.exports = { testDir: process.env.TESTDIR, reporter: 'line', workers: 1, use: { headless: true }, timeout: 60000, expect: { timeout: 15000 } };
 ```
+
+O `expect.timeout` é separado do `timeout` do teste e vale 5s por padrão. Numa
+máquina ocupada esse é o limite que estoura primeiro, e a falha aparece como
+`expect(locator).toContainText(...) failed` — que parece texto errado na tela e
+é só tempo.
 
 **`workers: 1` não é capricho.** Sem isso o Playwright abre um Chromium por
 núcleo (8 nesta máquina), e a suíte cheia derruba a memória: aparecem
@@ -51,7 +56,7 @@ TESTDIR=<projeto>/tests/e2e \
   npx playwright test --config=repo.config.js
 ```
 
-Esperado: **179 passando**.
+Esperado: **199 passando**.
 
 ## Sessão autenticada é obrigatória
 
@@ -95,6 +100,7 @@ navegar. Ele semeia um usuário com papel 1 (Administrador, que vem de
 | `config-importacao.spec.js` | Os quatro cartões de configuração do passo 1 (textos, ícones, os dois grupos exclusivos), o sumiço do campo antigo de markup, a cobrança da margem total, a margem aplicada à tabela toda ou item a item, e o estoque infinito não bloqueando pedido, não sofrendo baixa e ficando fora do alerta de mínimo |
 | `importacao-kits.spec.js` | O tipo Kit no passo 2, os papéis de coluna próprios do kit, a conferência num bloco à parte, conflito de código contra material, tecido e kit de montagem, produtos e kits na mesma importação indo cada um para o seu lugar, o desfazer cobrindo os dois, a aba Kits no Catálogo e no Estoque, e o kit pronto entrando no pedido como uma linha só |
 | `kit-manual.spec.js` | O código obrigatório e único no kit de montagem (Estoque), e o formulário de kit pronto do Catálogo: campos, os quatro cartões, a venda calculada ao vivo, os obrigatórios, o código que não repete, e o kit salvo ficando igual a um importado |
+| `codigo-antes-do-nome.spec.js` | A palavra "Referência" fora de todo rótulo e cabeçalho, o lote do rolo como "Lote" e a origem do movimento como "Origem", a ordem das colunas de tecidos, materiais e kits, cada valor na coluna certa, a linha compacta com reticências e tooltip, e o código antes do nome no seletor do pedido e no detalhe do tecido |
 | `ajustes-importacao.spec.js` | Células editáveis no mapeamento (kits e produtos), o cursor que não pula ao corrigir o texto colado, a rolagem de dentro da tabela preservada ao escolher o papel de uma coluna, a criação de coluna com valor para todas as linhas e ajuste célula a célula, a palavra "margem" no lugar de "markup", o tecido registrando preço de corte e de peça ao mesmo tempo, e o modo "preço por cor" explicando por que deu zero itens em linguagem direta, com o aviso clicável acendendo a coluna errada |
 
-Esperado no total: **179 passando**.
+Esperado no total: **199 passando**.

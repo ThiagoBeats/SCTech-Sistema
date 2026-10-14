@@ -1391,7 +1391,7 @@ async function salvarCatalogo() {
             if (dupNome) { await showAlert(`Já existe outro tecido com o nome "${dupNome.nome}".`, '⚠️'); return; }
             if (referencia) {
                 const dupRef = db.catalogo.find(x => x.id != editandoCatalogoId && x.referencia && x.referencia.toLowerCase() === referencia.toLowerCase());
-                if (dupRef) { await showAlert(`Referência "${referencia}" já usada por "${dupRef.nome}".`, '⚠️'); return; }
+                if (dupRef) { await showAlert(`Código "${referencia}" já usado por "${dupRef.nome}".`, '⚠️'); return; }
             }
             const novaImg = document.getElementById('cat-foto-preview')?.dataset.base64 || '';
             Object.assign(c, { nome, preco, largura_rolo, referencia, min_estoque, fornecedor_id: forn_id_cat, fornecedor_nome: forn_obj_cat ? forn_obj_cat.nome : '', imagem: novaImg || c.imagem || '' });
@@ -1405,7 +1405,7 @@ async function salvarCatalogo() {
         if (dup) { await showAlert(`Já existe um tecido com o nome "${dup.nome}" no catálogo.`, '⚠️'); return; }
         if (referencia) {
             const dupRef = db.catalogo.find(c => c.referencia && c.referencia.toLowerCase() === referencia.toLowerCase());
-            if (dupRef) { await showAlert(`Referência "${referencia}" já usada por "${dupRef.nome}".`, '⚠️'); return; }
+            if (dupRef) { await showAlert(`Código "${referencia}" já usado por "${dupRef.nome}".`, '⚠️'); return; }
         }
         const novaImgCad = document.getElementById('cat-foto-preview')?.dataset.base64 || '';
         db.catalogo.push({ id: Date.now(), nome, preco: 0, largura_rolo, referencia, min_estoque, fornecedor_id: forn_id_cat, fornecedor_nome: forn_obj_cat ? forn_obj_cat.nome : '', imagem: novaImgCad });
@@ -1438,8 +1438,8 @@ function verDetalhesTecido(id) {
     overlay.innerHTML = `<div class="modal-box" style="max-width:560px">
         <div class="modal-header">
             <div>
+                ${c.referencia ? `<span style="font-size:13px;color:#8F8F8F;display:block">Código ${escapeHtml(c.referencia)}</span>` : ''}
                 <h3 style="margin-bottom:2px">${escapeHtml(c.nome)}</h3>
-                ${c.referencia ? `<span style="font-size:13px;color:#8F8F8F">Ref: ${escapeHtml(c.referencia)}</span>` : ''}
             </div>
             <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
         </div>
@@ -1559,6 +1559,7 @@ function valorOrdenacaoTecido(c, col) {
     switch (col) {
         case 'preco':      return c.preco || 0;
         case 'largura':    return c.largura_rolo || 2.80;
+        case 'preco_peca': return Number(c.preco_peca) || 0;
         case 'minimo':     return c.min_estoque || 0;
         case 'estoque':    return temEstoqueInfinito(c) ? Infinity : estoqueDisponivel(c.id);
         case 'referencia': return (c.referencia || '').toLowerCase();
@@ -1715,20 +1716,21 @@ function renderCatalogoTecidos() {
         const marcado = catSelecao.tecido.has(c.id);
         return `<tr class="${marcado ? 'cat-linha-marcada' : ''}">
             <td class="cat-col-check"><input type="checkbox"${marcado ? ' checked' : ''} onchange="alternarSelecao('tecido',${c.id},this)"></td>
-            <td>${thumb}${nomeClick}</td>
-            <td style="font-size:12px;color:#555">${escapeHtml(c.referencia || '—')}</td>
-            <td style="white-space:nowrap">R$ ${(c.preco || 0).toFixed(2)}</td>
-            <td style="white-space:nowrap">${(c.largura_rolo || 2.80).toFixed(2)} m</td>
-            <td style="white-space:nowrap">${c.min_estoque ? c.min_estoque + ' m' : '—'}</td>
-            <td style="white-space:nowrap">${dispTxt}${alertMin}</td>
-            <td style="font-size:12px;color:#555">${escapeHtml(c.fornecedor_nome || '—')}</td>
-            <td>
-                <button class="btn btn-outline btn-sm" onclick="editarCatalogo(${c.id})" title="Editar">✏️ Editar</button>
+            <td class="col-codigo" title="${escapeHtml(c.referencia || '')}">${escapeHtml(c.referencia || '—')}</td>
+            <td class="col-nome" title="${escapeHtml(c.nome)}">${thumb}${nomeClick}</td>
+            <td class="col-num">${(c.largura_rolo || 2.80).toFixed(2)} m</td>
+            <td class="col-num">${dispTxt}${alertMin}</td>
+            <td class="col-num">${c.min_estoque ? c.min_estoque + ' m' : '—'}</td>
+            <td class="col-num">R$ ${(c.preco || 0).toFixed(2)}</td>
+            <td class="col-num">${c.preco_peca ? 'R$ ' + Number(c.preco_peca).toFixed(2) : '—'}</td>
+            <td class="col-forn" title="${escapeHtml(c.fornecedor_nome || '')}">${escapeHtml(c.fornecedor_nome || '—')}</td>
+            <td class="col-acoes">
+                <button class="btn btn-outline btn-sm" onclick="editarCatalogo(${c.id})" title="Editar">✏️</button>
                 <button class="btn btn-outline btn-sm" onclick="pedirTecido(${c.id})" title="Criar pedido de compra">🛒</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirCatalogo(${c.id})" title="Remover do catálogo">Remover</button>
+                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirCatalogo(${c.id})" title="Remover do catálogo">🗑️</button>
             </td>
         </tr>`;
-    }).join('') || `<tr><td colspan="9" style="text-align:center;color:#999;padding:20px;">${db.catalogo.length ? 'Nenhum tecido com esses filtros.' : 'Catálogo vazio.'}</td></tr>`;
+    }).join('') || `<tr><td colspan="10" style="text-align:center;color:#999;padding:20px;">${db.catalogo.length ? 'Nenhum tecido com esses filtros.' : 'Catálogo vazio.'}</td></tr>`;
 
     atualizarBarraSelecao('tecido');
 }
@@ -3065,8 +3067,8 @@ function abrirBalanco() {
     db.materiais.forEach(m => {
         const sys = (m.estoque_atual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         rowsMats += `<tr data-balanco-nome="${m.nome.toLowerCase()}" data-balanco-ref="${(m.referencia||'').toLowerCase()}">
-            <td>${m.nome}</td>
             <td>${m.referencia || '—'}</td>
+            <td>${m.nome}</td>
             <td style="text-align:center">${m.unidade || 'un'}</td>
             <td style="text-align:right">${sys}</td>
             <td><input type="number" min="0" step="0.01" placeholder="—"
@@ -3110,7 +3112,7 @@ function abrirBalanco() {
                         <input id="balanco-filter-nome" type="text" placeholder="Filtrar por nome..." style="${inpStyle}" oninput="_filtrarBalanco()">
                     </div>
                     <div style="flex:1;min-width:150px">
-                        <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Código / Referência</label>
+                        <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Código</label>
                         <input id="balanco-filter-ref" type="text" placeholder="Filtrar por código ou lote..." style="${inpStyle}" oninput="_filtrarBalanco()">
                     </div>
                     <div style="display:flex;align-items:flex-end;gap:8px">
@@ -3129,7 +3131,7 @@ function abrirBalanco() {
                     <table style="width:100%;border-collapse:collapse;font-size:13px">
                         <thead><tr>
                             <th style="${thStyle}">Tecido</th>
-                            <th style="${thStyle}">Referência / Lote</th>
+                            <th style="${thStyle}">Lote</th>
                             <th style="${thStyle};text-align:right">Sist. (m)</th>
                             <th style="${thStyle};text-align:right;width:130px">Contado (m)</th>
                             <th style="${thStyle};text-align:right;width:100px">Diferença</th>
@@ -3143,7 +3145,7 @@ function abrirBalanco() {
                     <table style="width:100%;border-collapse:collapse;font-size:13px">
                         <thead><tr>
                             <th style="${thStyle}">Material</th>
-                            <th style="${thStyle}">Referência</th>
+                            <th style="${thStyle}">Código</th>
                             <th style="${thStyle};text-align:center">Un.</th>
                             <th style="${thStyle};text-align:right">Sist.</th>
                             <th style="${thStyle};text-align:right;width:130px">Contado</th>
@@ -3294,13 +3296,13 @@ async function exportarBalancoPDF() {
 
     <h3>Tecidos / Rolos</h3>
     <table>
-        <thead><tr>${th('Tecido')}${th('Referência / Lote')}${th('Qtd. Sistema','text-align:right')}${th('Qtd. Contada','text-align:right;width:130px')}${th('Diferença','text-align:right;width:110px')}</tr></thead>
+        <thead><tr>${th('Tecido')}${th('Lote')}${th('Qtd. Sistema','text-align:right')}${th('Qtd. Contada','text-align:right;width:130px')}${th('Diferença','text-align:right;width:110px')}</tr></thead>
         <tbody>${rowsTec || `<tr><td colspan="5" style="padding:14px;color:#aaa;text-align:center">${filtroAtivo ? 'Nenhum tecido corresponde ao filtro' : 'Nenhum rolo em estoque'}</td></tr>`}</tbody>
     </table>
 
     <h3>Materiais e Acessórios</h3>
     <table>
-        <thead><tr>${th('Material')}${th('Referência')}${th('Un.','text-align:center;width:60px')}${th('Qtd. Sistema','text-align:right')}${th('Qtd. Contada','text-align:right;width:130px')}${th('Diferença','text-align:right;width:110px')}</tr></thead>
+        <thead><tr>${th('Material')}${th('Código')}${th('Un.','text-align:center;width:60px')}${th('Qtd. Sistema','text-align:right')}${th('Qtd. Contada','text-align:right;width:130px')}${th('Diferença','text-align:right;width:110px')}</tr></thead>
         <tbody>${rowsMat || `<tr><td colspan="6" style="padding:14px;color:#aaa;text-align:center">${filtroAtivo ? 'Nenhum material corresponde ao filtro' : 'Nenhum material em estoque'}</td></tr>`}</tbody>
     </table>
 
@@ -3468,7 +3470,7 @@ async function salvarEntradaEstoque() {
     const nomeTecConf = db.catalogo.find(t => t.id === tecidoId)?.nome || '—';
     const precoVendaConf = custo > 0 ? (custo * (1 + markup / 100)).toFixed(2) : null;
     const linhaPreco = custo > 0 ? `\nCusto: R$ ${custo.toFixed(2)}/m  →  Venda: R$ ${precoVendaConf}/m` : '';
-    if (!await showConfirm(`Confirmar entrada de rolo?\n\nTecido: ${nomeTecConf}\nReferência: ${referencia}\nMetragem: ${metros} m${linhaPreco}`, '📦', 'Confirmar Entrada', 'Cancelar')) return;
+    if (!await showConfirm(`Confirmar entrada de rolo?\n\nTecido: ${nomeTecConf}\nLote: ${referencia}\nMetragem: ${metros} m${linhaPreco}`, '📦', 'Confirmar Entrada', 'Cancelar')) return;
     db.estoque.push({ id: Date.now(), tecido_id: tecidoId, lote: referencia, metragem_inicial: metros, metragem_atual: metros, data_entrada: data });
     if (custo > 0) {
         const tec = db.catalogo.find(t => t.id === tecidoId);
@@ -3478,7 +3480,7 @@ async function salvarEntradaEstoque() {
         }
     }
     const nomeTec = db.catalogo.find(t => t.id === tecidoId)?.nome || 'Tecido';
-    registrarMovimento('Entrada', `${nomeTec} — Ref. ${referencia}`, 'tecido', metros, 'm', referencia);
+    registrarMovimento('Entrada', `${nomeTec} — Lote ${referencia}`, 'tecido', metros, 'm', referencia);
     salvarERecarregar('Entrada registrada!');
 }
 
@@ -3689,7 +3691,7 @@ async function salvarMaterial() {
             if (dupNome) { await showAlert(`Já existe outro material com o nome "${dupNome.nome}".`, '⚠️'); return; }
             if (referencia) {
                 const dupRef = db.materiais.find(x => x.id != editandoMaterialId && x.referencia && x.referencia.toLowerCase() === referencia.toLowerCase());
-                if (dupRef) { await showAlert(`Referência "${referencia}" já usada por "${dupRef.nome}".`, '⚠️'); return; }
+                if (dupRef) { await showAlert(`Código "${referencia}" já usado por "${dupRef.nome}".`, '⚠️'); return; }
             }
             Object.assign(m, { referencia, nome, unidade, preco, min_estoque, fornecedor_id: forn_id_mat, fornecedor_nome: forn_obj_mat ? forn_obj_mat.nome : '' });
         }
@@ -3702,7 +3704,7 @@ async function salvarMaterial() {
         if (dup) { await showAlert(`Já existe um material com o nome "${dup.nome}".`, '⚠️'); return; }
         if (referencia) {
             const dupRef = db.materiais.find(m => m.referencia && m.referencia.toLowerCase() === referencia.toLowerCase());
-            if (dupRef) { await showAlert(`Referência "${referencia}" já usada por "${dupRef.nome}".`, '⚠️'); return; }
+            if (dupRef) { await showAlert(`Código "${referencia}" já usado por "${dupRef.nome}".`, '⚠️'); return; }
         }
         db.materiais.push({ id: Date.now(), referencia, nome, unidade, preco: 0, min_estoque, estoque_atual: 0, fornecedor_id: forn_id_mat, fornecedor_nome: forn_obj_mat ? forn_obj_mat.nome : '' });
         salvarERecarregar('Material cadastrado!');
@@ -3806,18 +3808,17 @@ function renderMateriais() {
         return `
         <tr class="${marcado ? 'cat-linha-marcada' : ''}">
             <td class="cat-col-check"><input type="checkbox"${marcado ? ' checked' : ''} onchange="alternarSelecao('material',${m.id},this)"></td>
-            <td><strong>${escapeHtml(m.nome)}</strong>${abaixoMin ? `<span class="badge-alerta" style="margin-left:8px">⚠</span>` : ''}</td>
-            <td style="font-size:12px;color:#555">${escapeHtml(m.referencia || '—')}</td>
-            <td>${escapeHtml(m.unidade || '')}</td>
-            <td style="white-space:nowrap">R$ ${(m.preco || 0).toFixed(2)}</td>
-            <td style="color:${corEstoque};white-space:nowrap">${temEstoqueInfinito(m)
+            <td class="col-codigo" title="${escapeHtml(m.referencia || '')}">${escapeHtml(m.referencia || '—')}</td>
+            <td class="col-nome" title="${escapeHtml(m.nome)}"><strong>${escapeHtml(m.nome)}</strong>${abaixoMin ? `<span class="badge-alerta" style="margin-left:6px">⚠</span>` : ''}</td>
+            <td class="col-un">${escapeHtml(m.unidade || '')}</td>
+            <td class="col-num" style="color:${corEstoque}" title="${m.min_estoque > 0 ? 'Mínimo: ' + m.min_estoque + ' ' + (m.unidade || '') : ''}">${temEstoqueInfinito(m)
                 ? '<strong title="Estoque infinito">∞</strong>'
-                : `<strong>${(m.estoque_atual || 0).toFixed(2)}</strong>${m.min_estoque > 0 ? `<span style="color:#888;font-size:12px"> / mín: ${m.min_estoque}</span>` : ''}`}
-            </td>
-            <td style="font-size:12px;color:#555">${escapeHtml(m.fornecedor_nome || '—')}</td>
-            <td>
-                <button class="btn btn-outline btn-sm" onclick="editarMaterial(${m.id})" title="Editar">✏️ Editar</button>
-                <button class="btn btn-outline btn-sm" onclick="mostrarAjusteForm(${m.id})" title="Ajustar estoque">± Ajustar</button>
+                : `<strong>${(m.estoque_atual || 0).toFixed(2)}</strong>`}</td>
+            <td class="col-num">R$ ${(m.preco || 0).toFixed(2)}</td>
+            <td class="col-forn" title="${escapeHtml(m.fornecedor_nome || '')}">${escapeHtml(m.fornecedor_nome || '—')}</td>
+            <td class="col-acoes">
+                <button class="btn btn-outline btn-sm" onclick="editarMaterial(${m.id})" title="Editar">✏️</button>
+                <button class="btn btn-outline btn-sm" onclick="mostrarAjusteForm(${m.id})" title="Ajustar estoque">±</button>
                 <button class="btn btn-outline btn-sm" onclick="pedirMaterial(${m.id})" title="Criar pedido de compra">🛒</button>
                 <button class="btn btn-outline btn-sm btn-danger" onclick="excluirMaterial(${m.id})" title="Excluir material">🗑️</button>
             </td>
@@ -4060,7 +4061,7 @@ function renderKits() {
             : (pronto ? `<strong>${(k.estoque_atual || 0).toFixed(0)}</strong> un` : '—');
         const composicao = pronto
             ? '<span style="color:#999">kit pronto do fornecedor</span>'
-            : (k.itens || []).map(i => `${escapeHtml(i.nome)}: ${i.quantidade} ${i.unidade}`).join('<br>');
+            : (k.itens || []).map(i => `${escapeHtml(i.nome)}: ${i.quantidade} ${i.unidade}`).join(' · ');
         const selo = pronto
             ? '<span class="kit-selo">pronto</span>'
             : '<span class="kit-selo kit-selo-montagem">montagem</span>';
@@ -4079,13 +4080,13 @@ function renderKits() {
         </tr>` : '';
 
         return `<tr>
-            <td style="font-size:12px;color:#555">${escapeHtml(k.referencia || '—')}</td>
-            <td><strong>${escapeHtml(k.nome)}</strong> ${selo}${k.descricao ? `<br><small style="color:#888">${escapeHtml(k.descricao)}</small>` : ''}</td>
-            <td style="font-size:12px;color:#555">${escapeHtml(k.medida || '—')}</td>
-            <td style="white-space:nowrap">${pronto ? 'R$ ' + (k.preco || 0).toFixed(2) : '—'}</td>
-            <td style="white-space:nowrap">${saldo}</td>
-            <td style="font-size:13px;color:#555">${composicao}</td>
-            <td style="white-space:nowrap">${ajustar}
+            <td class="col-codigo" title="${escapeHtml(k.referencia || '')}">${escapeHtml(k.referencia || '—')}</td>
+            <td class="col-nome" title="${escapeHtml(k.nome)}${k.descricao ? ' — ' + escapeHtml(k.descricao) : ''}"><strong>${escapeHtml(k.nome)}</strong> ${selo}</td>
+            <td class="col-num" title="${escapeHtml(k.medida || '')}">${escapeHtml(k.medida || '—')}</td>
+            <td class="col-num">${pronto ? 'R$ ' + (k.preco || 0).toFixed(2) : '—'}</td>
+            <td class="col-num">${saldo}</td>
+            <td class="col-nome" title="${escapeHtml((k.itens || []).map(i => i.nome + ': ' + i.quantidade + ' ' + i.unidade).join(' · '))}">${composicao}</td>
+            <td class="col-acoes">${ajustar}
                 <button class="btn btn-outline btn-sm btn-danger" onclick="excluirKit(${k.id})">🗑️</button></td>
         </tr>${linhaAjuste}`;
     }).join('');
@@ -4187,7 +4188,7 @@ function renderEstoqueFuturo() {
         const saldo = Math.round((disponivel - reservado) * 100) / 100;
         const saldoCss = saldo < 0 ? 'color:#F43927;font-weight:700' : saldo < 2 ? 'color:#F2C924;font-weight:600' : 'color:#159912';
         return `<tr>
-            <td>${escapeHtml(c.nome)}<br><span style="font-size:11px;color:#8F8F8F">${escapeHtml(c.referencia||'')}</span></td>
+            <td><span style="font-size:11px;color:#8F8F8F;display:block">${escapeHtml(c.referencia||'')}</span>${escapeHtml(c.nome)}</td>
             <td style="text-align:center">${info.pedidoIds.size}</td>
             <td>${reservado.toFixed(2)} m</td>
             <td>${infinito ? '∞' : disponivel.toFixed(2) + ' m'}</td>
@@ -4335,7 +4336,7 @@ function renderAmbientes() {
         const buildTecOpts = (selId) => '<option value="">— Selecione o Tecido —</option>' + db.catalogo.map(c => {
             const disp = estoqueDisponivel(c.id);
             const stockInfo = temEstoqueInfinito(c) ? ' · est: ∞' : (db.estoque.some(r=>r.tecido_id==c.id) ? ` · est: ${disp.toFixed(1)} m` : '');
-            return `<option value="${c.id}"${selId==c.id?' selected':''}>${c.nome}${c.referencia?' ['+c.referencia+']':''} — R$ ${c.preco.toFixed(2)}/m${stockInfo}</option>`;
+            return `<option value="${c.id}"${selId==c.id?' selected':''}>${c.referencia?c.referencia+' · ':''}${c.nome} — R$ ${c.preco.toFixed(2)}/m${stockInfo}</option>`;
         }).join('');
         const tecidosHTML = tecidos.map((t, tidx) => {
             const pregaOpts = PREGA_OPTS.map(o=>`<option value="${o.v}"${(t.prega||'Americana')===o.v?' selected':''}>${o.l}</option>`).join('');
@@ -7422,7 +7423,7 @@ function _consultaDetalheHTML(item) {
         rolosHtml = item.rolos.length ? `
         <table>
             <thead><tr>
-                <th>Referência / Lote</th><th>Metragem inicial</th>
+                <th>Lote</th><th>Metragem inicial</th>
                 <th>Disponível</th><th>Data de entrada</th><th>Status</th>
             </tr></thead>
             <tbody>${item.rolos.map(ro => {
@@ -7574,16 +7575,16 @@ function renderEstoqueMateriais() {
         const abaixoMin = !temEstoqueInfinito(m) && m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque;
         const cor = abaixoMin ? '#F43927' : '#005D3B';
         return `<tr>
-            <td><strong>${escapeHtml(m.nome)}</strong>${abaixoMin?`<span class="badge-alerta" style="margin-left:8px">⚠</span>`:''}</td>
-            <td style="font-size:12px;color:#555">${escapeHtml(m.referencia||'—')}</td>
-            <td>${m.unidade}</td>
-            <td style="color:#005D3B;font-weight:600">${m.preco > 0 ? 'R$ '+m.preco.toFixed(2) : '—'}</td>
-            <td style="color:${cor}">${temEstoqueInfinito(m)
+            <td class="col-codigo" title="${escapeHtml(m.referencia||'')}">${escapeHtml(m.referencia||'—')}</td>
+            <td class="col-nome" title="${escapeHtml(m.nome)}"><strong>${escapeHtml(m.nome)}</strong>${abaixoMin?`<span class="badge-alerta" style="margin-left:6px">⚠</span>`:''}</td>
+            <td class="col-un">${m.unidade}</td>
+            <td class="col-num" style="color:${cor}" title="${m.min_estoque>0?'Mínimo: '+m.min_estoque+' '+(m.unidade||''):''}">${temEstoqueInfinito(m)
                 ? '<strong title="Estoque infinito">∞</strong>'
-                : `<strong>${(m.estoque_atual||0).toFixed(2)}</strong>${m.min_estoque>0?`<span style="color:#888;font-size:12px"> / mín: ${m.min_estoque}</span>`:''}`}</td>
-            <td style="font-size:12px;color:#555">${escapeHtml(m.fornecedor_nome||'—')}</td>
-            <td>
-                <button class="btn btn-outline btn-sm" onclick="mostrarAjusteForm(${m.id})" title="Ajustar estoque">± Ajustar</button>
+                : `<strong>${(m.estoque_atual||0).toFixed(2)}</strong>`}</td>
+            <td class="col-num" style="color:#005D3B;font-weight:600">${m.preco > 0 ? 'R$ '+m.preco.toFixed(2) : '—'}</td>
+            <td class="col-forn" title="${escapeHtml(m.fornecedor_nome||'')}">${escapeHtml(m.fornecedor_nome||'—')}</td>
+            <td class="col-acoes">
+                <button class="btn btn-outline btn-sm" onclick="mostrarAjusteForm(${m.id})" title="Ajustar estoque">±</button>
                 <button class="btn btn-outline btn-sm" onclick="pedirMaterial(${m.id})" title="Criar pedido de compra">🛒</button>
             </td>
         </tr>

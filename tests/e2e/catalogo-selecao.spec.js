@@ -44,7 +44,7 @@ async function abrirCatalogo(page, extras) {
 
 // Nomes da coluna "Tecido", na ordem em que a tabela os mostra.
 function nomesTecidos(page) {
-    return page.locator('#tb-catalogo tr td:nth-child(2)').allInnerTexts();
+    return page.locator('#tb-catalogo tr td.col-nome').allInnerTexts();
 }
 
 // Marcar pelo nome, e nao pela posicao: a tabela nasce ordenada por nome e
@@ -104,11 +104,11 @@ test('a tabela de materiais ordena por unidade e fornecedor', async ({ page }) =
     await irParaMateriais(page);
 
     await page.click('#tabela-materiais th[data-col="unidade"]');
-    let nomes = await page.locator('#tb-materiais tr:not(.ajuste-form) td:nth-child(2)').allInnerTexts();
+    let nomes = await page.locator('#tb-materiais tr:not(.ajuste-form) td.col-nome').allInnerTexts();
     expect(nomes[0]).toContain('TRILHO SUÍÇO');   // m
 
     await page.click('#tabela-materiais th[data-col="fornecedor"]');
-    nomes = await page.locator('#tb-materiais tr:not(.ajuste-form) td:nth-child(2)').allInnerTexts();
+    nomes = await page.locator('#tb-materiais tr:not(.ajuste-form) td.col-nome').allInnerTexts();
     expect(nomes[0], 'RC Tecidos vem antes de Trilhos Brasil').toContain('ABRAÇADEIRA');
 });
 
@@ -202,7 +202,7 @@ test('a marcacao sobrevive a ordenar e a filtrar, e avisa o que ficou escondido'
     // reordenar nao pode perder a marca nem marcar a linha errada
     await page.click('#tabela-tecidos th[data-col="preco"]');
     await expect(page.locator('#sel-tec-qtd')).toHaveText('1 marcado(s)');
-    const marcada = await page.locator('#tb-catalogo tr.cat-linha-marcada td:nth-child(2)').innerText();
+    const marcada = await page.locator('#tb-catalogo tr.cat-linha-marcada td.col-nome').innerText();
     expect(marcada).toContain('TRICÔ HERA');
 
     // escondido pelo filtro: continua marcado, mas a barra avisa

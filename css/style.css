@@ -1419,3 +1419,41 @@ html[data-theme="dark"] .kp-venda { background: #1D2024; border-color: #3A3D42; 
 
 html[data-theme="dark"] .imp-nota-acao { color: var(--secondary); }
 html[data-theme="dark"] .imp-acende-col { background: rgba(201, 247, 117, .14) !important; }
+
+/* ═══ Tabelas de cadastro: compactas, uma linha por item ═══ */
+
+#tabela-tecidos td, #tabela-tecidos th,
+#tabela-materiais td, #tabela-materiais th,
+#tb-estoque-mat td, #tb-estoque-mat th { padding: 6px 8px; }
+
+/* Nome e fornecedor em UMA linha: texto longo vira reticências e o valor
+   completo fica no title, que o navegador mostra ao passar o cursor. */
+/* Com table-layout:fixed a largura ja vem do cabecalho; max-width aqui
+   colapsaria a coluna em vez de limita-la. */
+.col-nome, .col-forn {
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+/* Largura fixa em tudo menos no nome: ele fica com a sobra, que e onde o
+   espaco faz diferenca para a leitura. */
+.col-nome  { width: auto; }
+.col-forn  { width: 130px; font-size: var(--fs-label); color: var(--muted); }
+.col-codigo {
+    /* O codigo e o identificador que o usuario procura: cortar ele e pior
+       do que cortar o nome, entao ele tem largura para codigos longos. */
+    width: 112px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: var(--fs-texto-sm); color: var(--dark); font-variant-numeric: tabular-nums;
+}
+.col-num   { width: 82px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+             font-variant-numeric: tabular-nums; }
+.col-un    { width: 56px; white-space: nowrap; }
+.col-acoes { width: 118px; white-space: nowrap; }
+/* Materiais tem um botao a mais (ajustar estoque) */
+#tabela-materiais .col-acoes, #tb-estoque-mat .col-acoes { width: 150px; }
+.col-acoes .btn { margin-right: 2px; padding: 4px 7px; }
+
+#tabela-tecidos, #tabela-materiais, #tb-estoque-mat { table-layout: fixed; width: 100%; }
+#tabela-kits { table-layout: fixed; width: 100%; }
+#tabela-kits td, #tabela-kits th { padding: 6px 8px; }
+/* Kits tem duas colunas de texto (nome e composicao): dividem a sobra */
+#tabela-kits .col-nome { width: 24%; }
+#tabela-kits .col-acoes { width: 140px; }

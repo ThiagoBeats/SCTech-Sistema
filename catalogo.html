@@ -29,7 +29,7 @@
                 <h3>Cadastrar Tecido</h3>
                 <div class="grid" style="margin-top: 15px;">
                     <div class="form-group">
-                        <label>Referência <span class="info-tag">código único do tecido</span></label>
+                        <label>Código <span class="info-tag">código único do tecido</span></label>
                         <input type="text" id="cat-ref" placeholder="Ex: LB-001 ou LINHO-BEL" oninput="autoFillCatalogoPorReferencia()">
                     </div>
                     <div class="form-group">
@@ -85,14 +85,15 @@
                     <thead>
                         <tr>
                             <th class="cat-col-check"><input type="checkbox" id="chk-tec-todos" onchange="marcarTodosVisiveis('tecido',this.checked)" title="Marcar os visíveis"></th>
-                            <th class="th-sort-mat" data-col="nome"       onclick="sortTecidos('nome')">Tecido <span class="sort-icon">⇅</span></th>
-                            <th class="th-sort-mat" data-col="referencia" onclick="sortTecidos('referencia')">Referência <span class="sort-icon">⇅</span></th>
-                            <th class="th-sort-mat" data-col="preco"      onclick="sortTecidos('preco')">Preço (R$/m) <span class="sort-icon">⇅</span></th>
-                            <th class="th-sort-mat" data-col="largura"    onclick="sortTecidos('largura')">Largura do Rolo <span class="sort-icon">⇅</span></th>
-                            <th class="th-sort-mat" data-col="minimo"     onclick="sortTecidos('minimo')">Estoque Mín. <span class="sort-icon">⇅</span></th>
-                            <th class="th-sort-mat" data-col="estoque"    onclick="sortTecidos('estoque')">Em Estoque <span class="sort-icon">⇅</span></th>
-                            <th class="th-sort-mat" data-col="fornecedor" onclick="sortTecidos('fornecedor')">Fornecedor <span class="sort-icon">⇅</span></th>
-                            <th>Ação</th>
+                            <th class="th-sort-mat col-codigo"  data-col="referencia" onclick="sortTecidos('referencia')">Código <span class="sort-icon">⇅</span></th>
+                            <th class="th-sort-mat col-nome"    data-col="nome"       onclick="sortTecidos('nome')">Tecido <span class="sort-icon">⇅</span></th>
+                            <th class="th-sort-mat col-num"     data-col="largura"    onclick="sortTecidos('largura')">Largura <span class="sort-icon">⇅</span></th>
+                            <th class="th-sort-mat col-num"     data-col="estoque"    onclick="sortTecidos('estoque')">Em estoque <span class="sort-icon">⇅</span></th>
+                            <th class="th-sort-mat col-num"     data-col="minimo"     onclick="sortTecidos('minimo')">Estoque mínimo <span class="sort-icon">⇅</span></th>
+                            <th class="th-sort-mat col-num"     data-col="preco"      onclick="sortTecidos('preco')">Preço <span class="sort-icon">⇅</span></th>
+                            <th class="th-sort-mat col-num"     data-col="preco_peca" onclick="sortTecidos('preco_peca')">Preço por peça <span class="sort-icon">⇅</span></th>
+                            <th class="th-sort-mat col-forn"    data-col="fornecedor" onclick="sortTecidos('fornecedor')">Fornecedor <span class="sort-icon">⇅</span></th>
+                            <th class="col-acoes">Ação</th>
                         </tr>
                     </thead>
                     <tbody id="tb-catalogo"></tbody>
@@ -108,7 +109,7 @@
                 <h3 style="margin-bottom:16px">Cadastrar Material / Acessório</h3>
                 <div class="grid">
                     <div class="form-group">
-                        <label>Referência <span class="info-tag">código único</span></label>
+                        <label>Código <span class="info-tag">código único</span></label>
                         <input type="text" id="mat-ref" placeholder="Ex: TRILHO-SU-01" oninput="autoFillMaterialPorReferencia()">
                     </div>
                     <div class="form-group" style="grid-column:span 3">
@@ -166,13 +167,13 @@
                 <table id="tabela-materiais">
                     <thead><tr>
                         <th class="cat-col-check"><input type="checkbox" id="chk-mat-todos" onchange="marcarTodosVisiveis('material',this.checked)" title="Marcar os visíveis"></th>
-                        <th class="th-sort-mat" data-col="nome"       onclick="sortMateriais('nome')">Material <span class="sort-icon">⇅</span></th>
-                        <th class="th-sort-mat" data-col="referencia" onclick="sortMateriais('referencia')">Referência <span class="sort-icon">⇅</span></th>
-                        <th class="th-sort-mat" data-col="unidade"    onclick="sortMateriais('unidade')">Unidade <span class="sort-icon">⇅</span></th>
-                        <th class="th-sort-mat" data-col="preco"      onclick="sortMateriais('preco')">Preço Unit. <span class="sort-icon">⇅</span></th>
-                        <th class="th-sort-mat" data-col="estoque"    onclick="sortMateriais('estoque')">Estoque Atual <span class="sort-icon">⇅</span></th>
-                        <th class="th-sort-mat" data-col="fornecedor" onclick="sortMateriais('fornecedor')">Fornecedor <span class="sort-icon">⇅</span></th>
-                        <th>Ações</th>
+                        <th class="th-sort-mat col-codigo" data-col="referencia" onclick="sortMateriais('referencia')">Código <span class="sort-icon">⇅</span></th>
+                        <th class="th-sort-mat col-nome"   data-col="nome"       onclick="sortMateriais('nome')">Material <span class="sort-icon">⇅</span></th>
+                        <th class="th-sort-mat col-un"     data-col="unidade"    onclick="sortMateriais('unidade')">Unidade <span class="sort-icon">⇅</span></th>
+                        <th class="th-sort-mat col-num"    data-col="estoque"    onclick="sortMateriais('estoque')">Estoque atual <span class="sort-icon">⇅</span></th>
+                        <th class="th-sort-mat col-num"    data-col="preco"      onclick="sortMateriais('preco')">Preço <span class="sort-icon">⇅</span></th>
+                        <th class="th-sort-mat col-forn"   data-col="fornecedor" onclick="sortMateriais('fornecedor')">Fornecedor <span class="sort-icon">⇅</span></th>
+                        <th class="col-acoes">Ações</th>
                     </tr></thead>
                     <tbody id="tb-materiais"></tbody>
                 </table>
@@ -229,16 +230,16 @@
 
             <div class="card">
                 <h3 style="margin-bottom:16px">Kits Cadastrados</h3>
-                <table>
+                <table id="tabela-kits">
                     <thead>
                         <tr>
-                            <th style="width:90px">Código</th>
-                            <th>Nome</th>
-                            <th style="width:110px">Medida</th>
-                            <th style="width:100px">Preço</th>
-                            <th style="width:90px">Estoque</th>
-                            <th>Composição</th>
-                            <th style="width:150px">Ações</th>
+                            <th class="col-codigo">Código</th>
+                            <th class="col-nome">Nome</th>
+                            <th class="col-num">Medida</th>
+                            <th class="col-num">Preço</th>
+                            <th class="col-num">Estoque</th>
+                            <th class="col-nome">Composição</th>
+                            <th class="col-acoes">Ações</th>
                         </tr>
                     </thead>
                     <tbody id="tb-kits"></tbody>
