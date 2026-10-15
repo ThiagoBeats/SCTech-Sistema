@@ -72,15 +72,15 @@
                 <table id="tabela-est-tecidos">
                     <thead>
                         <tr>
-                            <th class="col-codigo">Código</th>
-                            <th class="col-nome">Tecido</th>
-                            <th class="col-un">Unidade</th>
-                            <th class="col-num">Largura</th>
-                            <th class="col-num">Em estoque</th>
-                            <th class="col-num">Estoque mínimo</th>
-                            <th class="col-num">Preço</th>
-                            <th class="col-forn">Fornecedor</th>
-                            <th class="col-acoes">Rolos</th>
+                            <th title="Código" class="th-sort-mat col-codigo" data-col="referencia" onclick="sortTecidos('referencia')">Código <span class="sort-icon">⇅</span></th>
+                            <th title="Tecido" class="th-sort-mat col-nome" data-col="nome" onclick="sortTecidos('nome')">Tecido <span class="sort-icon">⇅</span></th>
+                            <th title="Unidade" class="th-sort-mat col-un" data-col="unidade" onclick="sortTecidos('unidade')">Unidade <span class="sort-icon">⇅</span></th>
+                            <th title="Largura" class="th-sort-mat col-num" data-col="largura" onclick="sortTecidos('largura')">Largura <span class="sort-icon">⇅</span></th>
+                            <th title="Em estoque" class="th-sort-mat col-num" data-col="estoque" onclick="sortTecidos('estoque')">Em estoque <span class="sort-icon">⇅</span></th>
+                            <th title="Estoque mínimo" class="th-sort-mat col-num" data-col="minimo" onclick="sortTecidos('minimo')">Estoque mínimo <span class="sort-icon">⇅</span></th>
+                            <th title="Preço" class="th-sort-mat col-num" data-col="preco" onclick="sortTecidos('preco')">Preço <span class="sort-icon">⇅</span></th>
+                            <th title="Fornecedor" class="th-sort-mat col-forn" data-col="fornecedor" onclick="sortTecidos('fornecedor')">Fornecedor <span class="sort-icon">⇅</span></th>
+                            <th title="Rolos" class="th-sort-mat col-acoes" data-col="rolos" onclick="sortTecidos('rolos')">Rolos <span class="sort-icon">⇅</span></th>
                         </tr>
                     </thead>
                     <tbody id="tb-estoque"></tbody>
@@ -134,12 +134,12 @@
             <div class="card">
                 <table id="tabela-est-materiais">
                     <thead><tr>
-                        <th class="col-codigo">Código</th>
-                        <th class="col-nome">Material</th>
-                        <th class="col-un">Unidade</th>
-                        <th class="col-num">Estoque atual</th>
-                        <th class="col-num">Preço</th>
-                        <th class="col-forn">Fornecedor</th>
+                        <th title="Código" class="th-sort-mat col-codigo" data-col="referencia" onclick="sortMateriais('referencia')">Código <span class="sort-icon">⇅</span></th>
+                        <th title="Material" class="th-sort-mat col-nome" data-col="nome" onclick="sortMateriais('nome')">Material <span class="sort-icon">⇅</span></th>
+                        <th title="Unidade" class="th-sort-mat col-un" data-col="unidade" onclick="sortMateriais('unidade')">Unidade <span class="sort-icon">⇅</span></th>
+                        <th title="Estoque atual" class="th-sort-mat col-num" data-col="estoque" onclick="sortMateriais('estoque')">Estoque atual <span class="sort-icon">⇅</span></th>
+                        <th title="Preço" class="th-sort-mat col-num" data-col="preco" onclick="sortMateriais('preco')">Preço <span class="sort-icon">⇅</span></th>
+                        <th title="Fornecedor" class="th-sort-mat col-forn" data-col="fornecedor" onclick="sortMateriais('fornecedor')">Fornecedor <span class="sort-icon">⇅</span></th>
                         <th class="col-acoes">Ações</th>
                     </tr></thead>
                     <tbody id="tb-estoque-mat"></tbody>
@@ -200,13 +200,13 @@
                 <table id="tabela-kits" data-com-unidade="1">
                     <thead>
                         <tr>
-                            <th class="col-codigo">Código</th>
-                            <th class="col-nome">Nome</th>
-                            <th class="col-un">Unidade</th>
-                            <th class="col-num">Medida</th>
-                            <th class="col-num">Preço</th>
-                            <th class="col-num">Estoque</th>
-                            <th class="col-nome">Composição</th>
+                            <th title="Código" class="th-sort-mat col-codigo" data-col="referencia" onclick="sortKits('referencia')">Código <span class="sort-icon">⇅</span></th>
+                            <th title="Nome" class="th-sort-mat col-nome" data-col="nome" onclick="sortKits('nome')">Nome <span class="sort-icon">⇅</span></th>
+                            <th title="Unidade" class="th-sort-mat col-un" data-col="unidade" onclick="sortKits('unidade')">Unidade <span class="sort-icon">⇅</span></th>
+                            <th title="Medida" class="th-sort-mat col-num" data-col="medida" onclick="sortKits('medida')">Medida <span class="sort-icon">⇅</span></th>
+                            <th title="Preço" class="th-sort-mat col-num" data-col="preco" onclick="sortKits('preco')">Preço <span class="sort-icon">⇅</span></th>
+                            <th title="Estoque" class="th-sort-mat col-num" data-col="estoque" onclick="sortKits('estoque')">Estoque <span class="sort-icon">⇅</span></th>
+                            <th title="Composição" class="th-sort-mat col-nome" data-col="composicao" onclick="sortKits('composicao')">Composição <span class="sort-icon">⇅</span></th>
                             <th class="col-acoes">Ações</th>
                         </tr>
                     </thead>

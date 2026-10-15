@@ -345,7 +345,7 @@ test('pedido avanca para a costura sem estoque do tecido infinito', async ({ pag
     expect(msg, 'o infinito nao entra na lista do que sera baixado').not.toContain('999.00 m');
 
     await page.click('#sc-modal-btns button:has-text("Confirmar")');
-    await page.waitForFunction(() => db.pedidos.find(x => x.id === 903).status === 'Na Costura');
+    await page.waitForFunction(() => typeof db !== 'undefined' && db.pedidos.find(x => x.id === 903)?.status === 'Na Costura');
 });
 
 test('item com controle normal continua baixando do rolo', async ({ page }) => {

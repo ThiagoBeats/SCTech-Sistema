@@ -413,7 +413,7 @@ test('pedido generico salva sem fornecedor e imprime a linha em branco', async (
     expect(await page.evaluate(() => document.getElementById('pc-fornecedor').value)).toBe('0');
 
     await page.click('#tab-forn-novo button:has-text("Salvar Pedido")');
-    await page.waitForFunction(() => db.pedidos_compra.length === 1);
+    await page.waitForFunction(() => typeof db !== 'undefined' && db.pedidos_compra.length === 1);
 
     const pc = await page.evaluate(() => db.pedidos_compra[0]);
     expect(pc.fornecedor_id).toBe(0);
@@ -455,7 +455,7 @@ test('"um pedido para cada" cria os pedidos em sequencia', async ({ page }) => {
     await page.click('#tab-forn-novo button:has-text("Salvar Pedido")');
 
     // acabou: vai para a lista, com os tres pedidos
-    await page.waitForFunction(() => db.pedidos_compra.length === 3);
+    await page.waitForFunction(() => typeof db !== 'undefined' && db.pedidos_compra.length === 3);
     const r = await page.evaluate(() => ({
         fila: localStorage.getItem('sc_pc_fila'),
         pedidos: db.pedidos_compra.map(p => ({ forn: p.fornecedor_nome, n: p.itens.length }))

@@ -56,7 +56,7 @@ TESTDIR=<projeto>/tests/e2e \
   npx playwright test --config=repo.config.js
 ```
 
-Esperado: **258 passando**.
+Esperado: **271 passando**.
 
 ## Sessão autenticada é obrigatória
 
@@ -106,5 +106,6 @@ navegar. Ele semeia um usuário com papel 1 (Administrador, que vem de
 | `ajustes-importacao.spec.js` | Células editáveis no mapeamento (kits e produtos), o cursor que não pula ao corrigir o texto colado, a rolagem de dentro da tabela preservada ao escolher o papel de uma coluna, a criação de coluna com valor para todas as linhas e ajuste célula a célula, a palavra "margem" no lugar de "markup", o tecido registrando preço de corte e de peça ao mesmo tempo, e o modo "preço por cor" explicando por que deu zero itens em linguagem direta, com o aviso clicável acendendo a coluna errada |
 | `estoque-colunas-e-menu.spec.js` | A escolha "ajustar estoque" valendo nas duas ordens de clique (cartão antes e depois do fornecedor), a unidade de medida selectável no material e oferecida como coluna na importação, a coluna Unidade em tecidos, materiais e kits do Estoque e na Consulta, o Catálogo intocado, as colunas do Estoque seguindo as do Catálogo, o tecido em uma linha só com os rolos abrindo ao clique (e a baixa funcionando dentro deles), e Histórico/Estoque Futuro/Backup fora da barra de abas, dentro do menu dos três pontos |
 | `editar-modo-de-estoque.spec.js` | A edição mostrando o controle de estoque que o item tem de verdade (e não sempre "Ajustar estoque"), só os cartões de estoque ali porque a margem não manda na edição, a troca de infinito para controlado avisando e apagando o saldo de fachada, o cancelar que não muda nada, o caminho de volta, editar sem mexer no cartão preservando o modo, o mesmo para material, e a coluna Em estoque mostrando zero no lugar do traço |
+| `ordenar-estoque.spec.js` | Cabeçalho clicável em toda coluna com valor nas três tabelas do Estoque ("Ações" fica de fora), o segundo clique invertendo, só a coluna ativa marcada com a seta do sentido, tecidos ordenando pela quantidade de rolos, os rolos abertos continuando colados no seu tecido, a escolha valendo nas duas telas nos dois sentidos, uma preferência corrompida não derrubando a tela, e o cabeçalho da unidade cabendo na coluna com o nome inteiro no title |
 
-Esperado no total: **258 passando**.
+Esperado no total: **271 passando**.

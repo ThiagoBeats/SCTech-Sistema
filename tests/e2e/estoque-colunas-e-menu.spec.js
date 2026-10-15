@@ -107,7 +107,7 @@ test('a importacao oferece Unidade como funcao de coluna', async ({ page }) => {
 test('o Estoque mostra a unidade de tecidos, materiais e kits', async ({ page }) => {
     await semear(page, 'estoque.html');
     expect(await cabecalhos(page, '#tabela-est-tecidos')).toContain('Unidade');
-    const linhaTec = (await page.locator('.est-tec-linha').first().innerText()).replace(/\s+/g, ' ');
+    const linhaTec = (await page.locator('.est-tec-linha', { hasText: 'TRICÔ HERA' }).innerText()).replace(/\s+/g, ' ');
     expect(linhaTec, 'tecido e sempre em metro').toContain('m');
 
     await page.click('.tab-btn:has-text("Materiais")');
@@ -166,7 +166,8 @@ test('cada tecido ocupa uma linha, com tudo nela', async ({ page }) => {
     expect(await page.locator('.est-tec-linha').count(), 'uma linha por tecido').toBe(2);
     expect(await page.locator('#tb-estoque .est-rolos-tabela').count(), 'nada de rolos soltos embaixo').toBe(0);
 
-    const linha = (await page.locator('.est-tec-linha').first().innerText()).replace(/\s+/g, ' ');
+    // a lista agora sai ordenada por nome, entao a linha e buscada pelo tecido
+    const linha = (await page.locator('.est-tec-linha', { hasText: 'TRICÔ HERA' }).innerText()).replace(/\s+/g, ' ');
     expect(linha).toContain('0001');
     expect(linha).toContain('TRICÔ HERA');
     expect(linha).toContain('1.40 m');

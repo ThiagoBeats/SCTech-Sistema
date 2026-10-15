@@ -90,7 +90,7 @@ test('a tabela de materiais do estoque segue a mesma ordem', async ({ page }) =>
             .querySelectorAll('thead th')).catch(() => null);
     const nomes = await page.evaluate(() => {
         const t = document.getElementById('tb-estoque-mat').closest('table');
-        return [...t.querySelectorAll('thead th')].map(x => x.textContent.trim());
+        return [...t.querySelectorAll('thead th')].map(x => x.textContent.replace(/[⇅▲▼]/g, '').trim());
     });
     expect(nomes).toEqual(['Código', 'Material', 'Unidade', 'Estoque atual',
                            'Preço', 'Fornecedor', 'Ações']);

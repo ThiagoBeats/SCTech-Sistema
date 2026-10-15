@@ -1449,7 +1449,9 @@ td.col-forn { color: var(--muted); }
 td.col-codigo { color: var(--dark); }
 .col-num   { width: 82px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
              font-variant-numeric: tabular-nums; }
-.col-un    { width: 56px; white-space: nowrap; }
+/* Larga o bastante para "Unidade" com o icone de ordenacao ao lado; o
+   overflow impede que um cabecalho longo invada a coluna vizinha. */
+.col-un    { width: 92px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .col-acoes { width: 118px; white-space: nowrap; }
 /* Materiais tem um botao a mais (ajustar estoque) */
 #tabela-materiais .col-acoes, #tabela-est-materiais .col-acoes { width: 150px; }

@@ -330,7 +330,27 @@ let editandoIdFornecedor = null;
 let editandoCatalogoId = null;
 let editandoMaterialId = null;
 let pcDraftItens = [];
-const matSortState = { col: 'nome', dir: 1 };
+// A ordenacao escolhida vale para as duas telas que mostram o mesmo tipo de
+// item (Cadastro/Catalogo e Estoque). Como sao paginas separadas, o objeto em
+// memoria nao basta: a escolha e' guardada e relida no carregamento.
+const _CHAVE_ORDENACAO = 'sc_ordenacao';
+function _lerOrdenacao(tipo, padrao) {
+    try {
+        const tudo = JSON.parse(localStorage.getItem(_CHAVE_ORDENACAO) || '{}');
+        const e = tudo[tipo];
+        if (e && typeof e.col === 'string' && (e.dir === 1 || e.dir === -1)) return { col: e.col, dir: e.dir };
+    } catch (_) { /* preferencia corrompida nao pode derrubar a tela */ }
+    return padrao;
+}
+function _gravarOrdenacao(tipo, estado) {
+    try {
+        const tudo = JSON.parse(localStorage.getItem(_CHAVE_ORDENACAO) || '{}');
+        tudo[tipo] = { col: estado.col, dir: estado.dir };
+        localStorage.setItem(_CHAVE_ORDENACAO, JSON.stringify(tudo));
+    } catch (_) { /* sem espaco: a ordenacao da sessao continua valendo */ }
+}
+
+const matSortState = _lerOrdenacao('material', { col: 'nome', dir: 1 });
 const cliSortState = { col: 'nome', dir: 1 };
 
 let _prevTabEstoque = null, _curTabEstoque = 'tecidos';
@@ -1596,7 +1616,7 @@ async function excluirCatalogo(id) {
 // CATÁLOGO — ordenação, filtros e seleção em massa
 // ═══════════════════════════════════════════════════════════════════════
 
-const catSortState = { col: 'nome', dir: 1 };
+const catSortState = _lerOrdenacao('tecido', { col: 'nome', dir: 1 });
 
 // Ids marcados em cada aba. Como a marcacao e por id e nao por linha, ela
 // sobrevive a ordenar e a filtrar. Some ao recarregar a pagina, de proposito:
@@ -1620,6 +1640,10 @@ function valorOrdenacaoTecido(c, col) {
         case 'estoque':    return temEstoqueInfinito(c) ? Infinity : estoqueDisponivel(c.id);
         case 'referencia': return (c.referencia || '').toLowerCase();
         case 'fornecedor': return (c.fornecedor_nome || '').toLowerCase();
+        // So a tabela do Estoque tem estas duas; no Catalogo elas nunca sao
+        // escolhidas, mas o estado da ordenacao e' o mesmo nas duas telas.
+        case 'unidade':    return 'm';
+        case 'rolos':      return db.estoque.filter(r => r.tecido_id == c.id).length;
         default:           return (c.nome || '').toLowerCase();
     }
 }
@@ -1634,6 +1658,25 @@ function valorOrdenacaoMaterial(m, col) {
         case 'unidade':    return (m.unidade || '').toLowerCase();
         case 'fornecedor': return (m.fornecedor_nome || '').toLowerCase();
         default:           return (m.nome || '').toLowerCase();
+    }
+}
+
+// Kits ordenam pelas colunas da lista do Estoque. O estado e' um so para as
+// duas tabelas de kit, como ja acontece com tecidos e materiais.
+const kitSortState = _lerOrdenacao('kit', { col: 'nome', dir: 1 });
+
+function valorOrdenacaoKit(k, col) {
+    const pronto = ehKitPronto(k);
+    switch (col) {
+        case 'referencia': return (k.referencia || '').toLowerCase();
+        case 'unidade':    return 'un';
+        case 'medida':     return (k.medida || '').toLowerCase();
+        case 'preco':      return pronto ? (k.preco || 0) : -1;
+        case 'estoque':    return temEstoqueInfinito(k) ? Infinity : (pronto ? (k.estoque_atual || 0) : -1);
+        // Kit de montagem ordena pela quantidade de componentes; o pronto, que
+        // nao tem composicao, fica junto no inicio.
+        case 'composicao': return pronto ? -1 : (k.itens || []).length;
+        default:           return (k.nome || '').toLowerCase();
     }
 }
 
@@ -1743,7 +1786,11 @@ function limparFiltrosMateriais() {
 function sortTecidos(col) {
     if (catSortState.col === col) catSortState.dir *= -1;
     else { catSortState.col = col; catSortState.dir = 1; }
+    _gravarOrdenacao('tecido', catSortState);
+    // As duas telas compartilham a ordenacao. Cada render sai na hora se a
+    // sua tabela nao esta na pagina, entao chamar os dois e' barato.
     renderCatalogoTecidos();
+    renderEstoque();
 }
 
 function renderCatalogoTecidos() {
@@ -3757,7 +3804,8 @@ function renderEstoque() {
     // unidade, pedida para o módulo de estoque). Os rolos — com Baixar e
     // Remover — aparecem ao clicar na linha, como na Consulta de Estoque.
     let html = '';
-    db.catalogo.forEach(tec => {
+    pintarCabecalhoOrdenacao('#tabela-est-tecidos', catSortState);
+    ordenarLista(db.catalogo, catSortState, valorOrdenacaoTecido).forEach(tec => {
         const rolos = db.estoque.filter(r => r.tecido_id == tec.id);
         const infinito = temEstoqueInfinito(tec);
         const totalDisp = rolos.reduce((s, r) => s + r.metragem_atual, 0);
@@ -4007,7 +4055,16 @@ function renderMateriais() {
 function sortMateriais(col) {
     if (matSortState.col === col) matSortState.dir *= -1;
     else { matSortState.col = col; matSortState.dir = 1; }
+    _gravarOrdenacao('material', matSortState);
     renderMateriais();
+    renderEstoqueMateriais();
+}
+
+function sortKits(col) {
+    if (kitSortState.col === col) kitSortState.dir *= -1;
+    else { kitSortState.col = col; kitSortState.dir = 1; }
+    _gravarOrdenacao('kit', kitSortState);
+    renderKits();
 }
 
 // --- KITS ---
@@ -4301,7 +4358,8 @@ function renderKits() {
     // A lista do Estoque tem uma coluna de unidade a mais que a do Catálogo,
     // pedida para o módulo de estoque. A tabela diz qual das duas é.
     const comUnidade = !!tb.closest('table')?.dataset.comUnidade;
-    tb.innerHTML = db.kits.map(k => {
+    pintarCabecalhoOrdenacao('#tabela-kits', kitSortState);
+    tb.innerHTML = ordenarLista(db.kits, kitSortState, valorOrdenacaoKit).map(k => {
         const pronto = ehKitPronto(k);
         const saldo = temEstoqueInfinito(k) ? '<strong title="Estoque infinito">∞</strong>'
             : (pronto ? `<strong>${(k.estoque_atual || 0).toFixed(0)}</strong> un` : '—');
@@ -7860,6 +7918,7 @@ function renderEstoqueMateriais() {
         return;
     }
     const lista = ordenarLista(db.materiais, matSortState, valorOrdenacaoMaterial);
+    pintarCabecalhoOrdenacao('#tabela-est-materiais', matSortState);
     tb.innerHTML = lista.map(m => {
         const abaixoMin = !temEstoqueInfinito(m) && m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque;
         const cor = abaixoMin ? '#F43927' : '#005D3B';
