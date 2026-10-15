@@ -246,11 +246,11 @@ test('margem total em branco barra o cadastro do tecido', async ({ page }) => {
 
 // ═══ Cadastro de material ════════════════════════════════════════════════
 
-test('as sete unidades continuam disponiveis', async ({ page }) => {
+test('as oito unidades continuam disponiveis', async ({ page }) => {
     await abrir(page, 'catalogo.html', {});
     await page.click('button[data-tab="cat-materiais"]');
     const uns = await page.locator('#mat-unidade option').evaluateAll(os => os.map(o => o.value));
-    expect(uns).toEqual(['un', 'm', 'cm', 'kg', 'cj', 'cx', 'par']);
+    expect(uns).toEqual(['un', 'm', 'cm', 'kg', 'cj', 'cx', 'par', 'pct']);
 });
 
 test('material grava quantidade e custo na unidade escolhida', async ({ page }) => {

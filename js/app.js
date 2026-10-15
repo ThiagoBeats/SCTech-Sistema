@@ -2853,6 +2853,42 @@ function renderDashboardsButton() {
     grp.insertBefore(wrap, grp.firstChild);
 }
 
+// Abas menos usadas do Estoque, fora da barra principal: ficam num menu de
+// tres pontos ao lado de Dashboards. So aparece na tela de Estoque.
+const ABAS_EXTRAS_ESTOQUE = [
+    ['historico', '📋', 'Histórico'],
+    ['futuro',    '📊', 'Estoque Futuro'],
+    ['backup',    '💾', 'Backup']
+];
+
+function renderMenuExtrasEstoque() {
+    if (document.getElementById('estoque-extras-btn')) return;
+    if (!document.getElementById('tab-historico')) return;   // só na tela de Estoque
+    const grp = _getHeaderGroup();
+    if (!grp) return;
+    const wrap = document.createElement('div');
+    wrap.id = 'estoque-extras-btn';
+    wrap.style.cssText = 'position:relative';
+    wrap.innerHTML = `<button class="btn btn-outline btn-sm" onclick="toggleExtrasEstoque(event)"
+            title="Mais abas do estoque" style="font-weight:700;letter-spacing:1px;padding:6px 12px">⋯</button>
+        <div id="estoque-extras-menu" style="display:none;position:absolute;top:calc(100% + 8px);right:0;background:var(--white);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.14);z-index:3000;min-width:200px;padding:5px 0;overflow:hidden">
+        ${ABAS_EXTRAS_ESTOQUE.map(([id, ic, lb]) =>
+            `<button type="button" onclick="mostrarTabEstoque('${id}')" style="display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;font-weight:500;color:var(--dark);background:none;border:0;width:100%;text-align:left;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--light)'" onmouseout="this.style.background=''">${ic} <span>${lb}</span></button>`
+        ).join('<div style="height:1px;background:var(--border)"></div>')}
+        </div>`;
+    grp.insertBefore(wrap, grp.firstChild);
+}
+
+function toggleExtrasEstoque(e) {
+    e.stopPropagation();
+    const m = document.getElementById('estoque-extras-menu');
+    if (m) m.style.display = m.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', () => {
+    const m = document.getElementById('estoque-extras-menu');
+    if (m) m.style.display = 'none';
+});
+
 function toggleDashboardsMenu(e) {
     e.stopPropagation();
     const m = document.getElementById('dash-dropdown');
@@ -3595,6 +3631,14 @@ function autoFillTecidoPorReferencia() {
     if (existing) { sel.value = String(existing.tecido_id); autoFillEntradaTecido(); }
 }
 
+// Qual tecido esta com os rolos abertos na aba Estoque. Um de cada vez.
+let _estoqueTecidoAberto = null;
+
+function alternarRolosDoTecido(id) {
+    _estoqueTecidoAberto = _estoqueTecidoAberto === id ? null : id;
+    renderEstoque();
+}
+
 function mostrarBaixaForm(roloId) {
     document.querySelectorAll('.baixa-form').forEach(el => { el.style.display = 'none'; });
     const row = document.getElementById('baixa-' + roloId);
@@ -3672,50 +3716,61 @@ function renderEstoque() {
         }
     }
 
+    // Uma linha por tecido, nas mesmas colunas do Cadastro/Catálogo (mais a
+    // unidade, pedida para o módulo de estoque). Os rolos — com Baixar e
+    // Remover — aparecem ao clicar na linha, como na Consulta de Estoque.
     let html = '';
     db.catalogo.forEach(tec => {
         const rolos = db.estoque.filter(r => r.tecido_id == tec.id);
-        if (!rolos.length) return;
         const infinito = temEstoqueInfinito(tec);
         const totalDisp = rolos.reduce((s, r) => s + r.metragem_atual, 0);
         const abaixoMin = !infinito && tec.min_estoque > 0 && totalDisp < tec.min_estoque;
-        const precoVendaTec = tec.preco > 0 ? `<span style="margin-left:16px;color:#005D3B;font-size:13px">Preço de venda: <strong>R$ ${tec.preco.toFixed(2)}/m</strong></span>` : '';
-        // Mostrar os 99.999 m de um tecido sem controle de estoque seria
-        // mentira: o numero existe so para o tecido aparecer nesta lista.
-        const totalTxt = infinito ? '<strong title="Estoque infinito">∞</strong>' : `<strong>${totalDisp.toFixed(2)} m</strong>`;
-        html += `<tr class="estoque-grupo"><td colspan="6">
-            <strong>${tec.nome}</strong>
-            <span style="margin-left:12px;color:#555;font-size:13px">Total disponível: ${totalTxt}</span>
-            ${precoVendaTec}
-            ${abaixoMin ? `<span class="badge-alerta">⚠ Abaixo do mínimo (${tec.min_estoque} m)</span>` : ''}
-        </td></tr>`;
-        rolos.forEach(r => {
+        const aberto = _estoqueTecidoAberto === tec.id;
+        const saldo = infinito ? '<strong title="Estoque infinito">∞</strong>'
+            : (rolos.length ? `<strong>${totalDisp.toFixed(2)}</strong> m` : '—');
+
+        html += `<tr class="est-tec-linha${aberto ? ' aberta' : ''}" onclick="alternarRolosDoTecido(${tec.id})">
+            <td class="col-codigo" title="${escapeHtml(tec.referencia || '')}">${escapeHtml(tec.referencia || '—')}</td>
+            <td class="col-nome" title="${escapeHtml(tec.nome)}"><strong>${escapeHtml(tec.nome)}</strong>${abaixoMin ? ' <span class="badge-alerta">⚠</span>' : ''}</td>
+            <td class="col-un">m</td>
+            <td class="col-num">${(tec.largura_rolo || 2.80).toFixed(2)} m</td>
+            <td class="col-num">${saldo}</td>
+            <td class="col-num">${tec.min_estoque ? tec.min_estoque + ' m' : '—'}</td>
+            <td class="col-num">${tec.preco > 0 ? 'R$ ' + tec.preco.toFixed(2) : '—'}</td>
+            <td class="col-forn" title="${escapeHtml(tec.fornecedor_nome || '')}">${escapeHtml(tec.fornecedor_nome || '—')}</td>
+            <td class="col-acoes">${rolos.length ? `${rolos.length} rolo(s) ${aberto ? '▲' : '▼'}` : '<span style="color:#999">sem rolo</span>'}</td>
+        </tr>`;
+
+        if (!aberto || !rolos.length) return;
+        html += `<tr class="est-tec-rolos"><td colspan="9"><table class="est-rolos-tabela">
+            <thead><tr><th>Lote</th><th>Metragem inicial</th><th>Disponível</th><th>Ocupação</th><th>Entrada</th><th>Ações</th></tr></thead>
+            <tbody>` + rolos.map(r => {
             const pct = r.metragem_inicial > 0 ? Math.round((r.metragem_atual / r.metragem_inicial) * 100) : 0;
             const cor = pct > 40 ? '#005D3B' : pct > 15 ? '#F2C924' : '#F43927';
             const esgotado = r.metragem_atual <= 0;
-            html += `<tr class="${esgotado ? 'rolo-esgotado' : ''}">
-                <td style="padding-left:22px">${r.lote}</td>
+            return `<tr class="${esgotado ? 'rolo-esgotado' : ''}">
+                <td>${escapeHtml(r.lote)}</td>
                 <td>${infinito ? '∞' : r.metragem_inicial.toFixed(2) + ' m'}</td>
                 <td><strong>${infinito ? '∞' : r.metragem_atual.toFixed(3) + ' m'}</strong></td>
                 <td>${infinito ? '<span style="font-size:11px;color:#8F8F8F">sem controle de estoque</span>'
                     : `<div class="progresso-bar"><div class="progresso-fill" style="width:${pct}%;background:${cor}"></div></div><span style="font-size:11px;color:#888">${pct}%</span>`}</td>
                 <td>${new Date(r.data_entrada + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
-                <td>
+                <td onclick="event.stopPropagation()">
                     ${infinito ? '' : (!esgotado ? `<button class="btn btn-outline btn-sm" onclick="mostrarBaixaForm(${r.id})">↓ Baixar</button>` : '<span class="badge-esgotado">Esgotado</span>')}
                     <button class="btn btn-outline btn-sm btn-danger" onclick="removerRolo(${r.id})">🗑️</button>
                 </td>
             </tr>
             ${infinito ? '' : `<tr id="baixa-${r.id}" class="baixa-form" style="display:none">
-                <td colspan="6" class="baixa-form-cell">
-                    <strong>Baixar ref. ${r.lote}</strong> — saldo: <strong>${r.metragem_atual.toFixed(3)} m</strong> &emsp;
+                <td colspan="6" class="baixa-form-cell" onclick="event.stopPropagation()">
+                    <strong>Baixar lote ${escapeHtml(r.lote)}</strong> — saldo: <strong>${r.metragem_atual.toFixed(3)} m</strong> &emsp;
                     <input type="number" id="baixa-qtd-${r.id}" placeholder="Metros a baixar" step="0.001" min="0.001" max="${r.metragem_atual}" style="width:160px;padding:5px 8px;border:1px solid #ccc;border-radius:4px">
                     <button class="btn btn-sm" style="background:#F2C924" onclick="confirmarBaixa(${r.id})">Confirmar Baixa</button>
                     <button class="btn btn-outline btn-sm" onclick="cancelarBaixa()">Cancelar</button>
                 </td>
             </tr>`}`;
-        });
+        }).join('') + `</tbody></table></td></tr>`;
     });
-    tb.innerHTML = html || '<tr><td colspan="6" style="text-align:center;color:#999;padding:24px;">Nenhum rolo cadastrado. Registre uma entrada acima.</td></tr>';
+    tb.innerHTML = html || '<tr><td colspan="9" style="text-align:center;color:#999;padding:24px;">Nenhum tecido cadastrado. <a href="catalogo.html">Cadastre em Catálogo</a>.</td></tr>';
 }
 
 // --- MATERIAIS (acessórios, ferragens, trilhos, etc.) ---
@@ -4155,9 +4210,12 @@ function renderKits() {
     const tb = document.getElementById('tb-kits');
     if (!tb) return;
     if (!db.kits.length) {
-        tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:24px;">Nenhum kit cadastrado.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;padding:24px;">Nenhum kit cadastrado.</td></tr>';
         return;
     }
+    // A lista do Estoque tem uma coluna de unidade a mais que a do Catálogo,
+    // pedida para o módulo de estoque. A tabela diz qual das duas é.
+    const comUnidade = !!tb.closest('table')?.dataset.comUnidade;
     tb.innerHTML = db.kits.map(k => {
         const pronto = ehKitPronto(k);
         const saldo = temEstoqueInfinito(k) ? '<strong title="Estoque infinito">∞</strong>'
@@ -4171,9 +4229,10 @@ function renderKits() {
         const ajustar = pronto && !temEstoqueInfinito(k)
             ? `<button class="btn btn-outline btn-sm" onclick="mostrarAjusteForm('kit-${k.id}')" title="Ajustar estoque">± Ajustar</button>`
             : '';
+        const colunas = comUnidade ? 8 : 7;
         const linhaAjuste = pronto && !temEstoqueInfinito(k) ? `
         <tr id="ajuste-kit-${k.id}" class="ajuste-form" style="display:none">
-            <td colspan="7" class="baixa-form-cell">
+            <td colspan="${colunas}" class="baixa-form-cell">
                 <strong>${escapeHtml(k.nome)}</strong> — saldo: <strong>${(k.estoque_atual || 0).toFixed(0)} un</strong> &emsp;
                 Quantidade (+ entrada / − saída):
                 <input type="number" id="ajuste-qtd-kit-${k.id}" placeholder="Ex: +10 ou -3" step="1" style="width:130px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;margin:0 8px">
@@ -4185,6 +4244,7 @@ function renderKits() {
         return `<tr>
             <td class="col-codigo" title="${escapeHtml(k.referencia || '')}">${escapeHtml(k.referencia || '—')}</td>
             <td class="col-nome" title="${escapeHtml(k.nome)}${k.descricao ? ' — ' + escapeHtml(k.descricao) : ''}"><strong>${escapeHtml(k.nome)}</strong> ${selo}</td>
+            ${comUnidade ? '<td class="col-un">un</td>' : ''}
             <td class="col-num" title="${escapeHtml(k.medida || '')}">${escapeHtml(k.medida || '—')}</td>
             <td class="col-num">${pronto ? 'R$ ' + (k.preco || 0).toFixed(2) : '—'}</td>
             <td class="col-num">${saldo}</td>
@@ -7132,6 +7192,7 @@ document.addEventListener('DOMContentLoaded', () => {
         checkAuth();
         carregarTema();
         renderDashboardsButton();
+        renderMenuExtrasEstoque();
         renderBellIndicator();
         const popupUserEl = document.getElementById('popup-user-name');
         if (popupUserEl) {
@@ -7461,6 +7522,7 @@ function _consultaItens() {
         itens.push({
             tipo: 'tecido',
             id: tec.id,
+            unidade: 'm',
             codigo: tec.referencia || '',
             nome: tec.nome || '',
             precoTxt: tec.preco > 0 ? _consultaMoeda(tec.preco) + '/m' : '—',
@@ -7479,6 +7541,7 @@ function _consultaItens() {
         itens.push({
             tipo: 'material',
             id: mat.id,
+            unidade: mat.unidade || 'un',
             codigo: mat.referencia || '',
             nome: mat.nome || '',
             precoTxt: mat.preco > 0 ? _consultaMoeda(mat.preco) : '—',
@@ -7501,6 +7564,7 @@ function _consultaItens() {
         itens.push({
             tipo: 'kit',
             id: kit.id,
+            unidade: 'un',
             codigo: kit.referencia || '',
             nome: kit.nome || '',
             precoTxt: pronto && kit.preco > 0 ? _consultaMoeda(kit.preco) : '—',
@@ -7611,6 +7675,7 @@ function renderConsultaEstoque() {
         return `<div class="consulta-linha ${aberto ? 'aberta' : ''}" onclick="toggleConsultaDetalhe('${chave}')">
                 <span class="consulta-cod">${escapeHtml(item.codigo || '—')}</span>
                 <span class="consulta-nome">${tag}${escapeHtml(item.nome)}</span>
+                <span class="consulta-un">${escapeHtml(item.unidade || '—')}</span>
                 <span class="consulta-preco">${item.precoTxt}</span>
                 <span class="consulta-qtd ${item.abaixoMin ? 'baixo' : ''}">${item.estoqueTxt}${item.abaixoMin ? ' ⚠' : ''}</span>
                 <span class="consulta-data">${item.ultimaEntrada}</span>
@@ -7621,7 +7686,7 @@ function renderConsultaEstoque() {
 
     container.innerHTML = `<div class="consulta-lista">
         <div class="consulta-cab">
-            <span>Código</span><span>Nome</span><span>Preço de venda</span>
+            <span>Código</span><span>Nome</span><span>Unidade</span><span>Preço de venda</span>
             <span>Estoque</span><span>Última entrada</span><span></span>
         </div>
         ${linhas}

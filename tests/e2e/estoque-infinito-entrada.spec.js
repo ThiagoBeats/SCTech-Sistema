@@ -112,7 +112,12 @@ test('tecido infinito ganha um rolo e aparece na aba Estoque', async ({ page }) 
     expect(linhas.some(l => l.includes('TECIDO INFINITO')), 'o tecido aparece na lista').toBe(true);
     expect(linhas.join(' '), 'o número interno nunca aparece na tela').not.toContain('99999');
     expect(linhas.join(' ')).toContain('∞');
-    expect(linhas.join(' ')).toContain('sem controle de estoque');
+
+    // os rolos abrem ao clicar na linha do tecido
+    await page.locator('.est-tec-linha', { hasText: 'TECIDO INFINITO' }).first().click();
+    const aberto = (await page.locator('#tb-estoque').innerText()).replace(/\s+/g, ' ');
+    expect(aberto).toContain('sem controle de estoque');
+    expect(aberto, 'o número interno nunca aparece na tela').not.toContain('99999');
 });
 
 test('o rolo infinito nao oferece baixa', async ({ page }) => {
@@ -121,6 +126,8 @@ test('o rolo infinito nao oferece baixa', async ({ page }) => {
     await gravar(page);
     await page.goto(BASE + '/estoque.html');
 
+    await page.locator('.est-tec-linha', { hasText: 'TECIDO INFINITO' }).first().click();
+    expect(await page.locator('#tb-estoque .est-rolos-tabela').count(), 'o rolo está à vista').toBe(1);
     expect(await page.locator('#tb-estoque button:has-text("Baixar")').count(),
         'não há o que baixar de um item sem controle de estoque').toBe(0);
     expect(await page.locator('#tb-estoque .baixa-form').count(),
@@ -173,8 +180,9 @@ test('importar com ajustar estoque nao cria rolo nenhum', async ({ page }) => {
 
     expect(await page.evaluate(() => db.estoque.length)).toBe(0);
     await page.goto(BASE + '/estoque.html');
-    const vazio = await page.locator('#tb-estoque').innerText();
-    expect(vazio).toContain('Nenhum rolo cadastrado');
+    const lista = await page.locator('#tb-estoque').innerText();
+    expect(lista, 'o tecido aparece, mas sem rolo nenhum').toContain('sem rolo');
+    expect(await page.locator('#tb-estoque .est-rolos-tabela').count()).toBe(0);
 });
 
 test('tecido que ja tem rolo nao ganha outro', async ({ page }) => {

@@ -101,6 +101,7 @@ const _impEstado = {
                             // 'item'  = cada item recebe a sua na conferência
     estoqueModo: 'ajustar', // 'ajustar'  = controle normal de estoque
                             // 'infinito' = item sempre disponível, sem baixa
+    cfgTocada: { margem: false, estoque: false },  // o usuário já mexeu no grupo?
     abas: {},            // { [nomeAba]: 'tecido' | 'material' | 'ignorar' }
     layouts: {},         // { [assinatura]: { mapa, cabecalhoIndice } }
     cores: {},           // { [assinatura]: [indices de coluna que sao cor] }
@@ -123,6 +124,7 @@ function _impResetar() {
     _impEstado.markupPadrao = null;
     _impEstado.margemModo = 'total';
     _impEstado.estoqueModo = 'ajustar';
+    _impEstado.cfgTocada = { margem: false, estoque: false };
     _impEstado.abas = {};
     _impEstado.layouts = {};
     _impEstado.cores = {};
@@ -252,7 +254,10 @@ function _impIcone(nome) {
 function _impCardConfigHTML(grupo, valor, icone, titulo, descricao, extra) {
     const atual = grupo === 'margem' ? _impEstado.margemModo : _impEstado.estoqueModo;
     const sel = atual === valor;
-    return `<label class="imp-cfg-card${sel ? ' imp-cfg-card-sel' : ''}">
+    // onclick no cartao inteiro, alem do onchange do radio: clicar no cartao
+    // JA SELECIONADO nao dispara change nenhum, e o usuario precisa poder
+    // confirmar a escolha padrao para o perfil do fornecedor nao troca-la.
+    return `<label class="imp-cfg-card${sel ? ' imp-cfg-card-sel' : ''}" onclick="_impCfgTocada('${grupo}')">
         <div class="imp-cfg-topo">
             <input type="radio" name="imp-cfg-${grupo}" value="${valor}"${sel ? ' checked' : ''}
                    onchange="_impEscolherConfig('${grupo}','${valor}')">
@@ -296,9 +301,15 @@ function _impFornecedorMudou(valor) {
     _impEstado.fornecedorId = id || null;
     const perfil = id ? C.perfilDoFornecedor(db.import_perfis, id) : null;
     if (perfil) {
-        if (perfil.markup_padrao) _impEstado.markupPadrao = perfil.markup_padrao;
-        if (perfil.margem_modo) _impEstado.margemModo = perfil.margem_modo;
-        if (perfil.estoque_modo) _impEstado.estoqueModo = perfil.estoque_modo;
+        // O perfil so preenche o que o usuario AINDA NAO escolheu nesta
+        // importacao. Sem isto, clicar no cartao e so depois escolher o
+        // fornecedor desfazia a escolha — a ordem inversa da que ja foi
+        // corrigida antes.
+        if (!_impEstado.cfgTocada.margem) {
+            if (_impEstado.markupPadrao === null && perfil.markup_padrao) _impEstado.markupPadrao = perfil.markup_padrao;
+            if (perfil.margem_modo) _impEstado.margemModo = perfil.margem_modo;
+        }
+        if (!_impEstado.cfgTocada.estoque && perfil.estoque_modo) _impEstado.estoqueModo = perfil.estoque_modo;
     }
     const alvo = document.getElementById('imp-cfg');
     if (alvo) alvo.innerHTML = _impCardsConfigHTML();
@@ -306,8 +317,16 @@ function _impFornecedorMudou(valor) {
 
 // Troca a escolha e redesenha so os cartoes, para o campo de margem aparecer
 // ou sumir sem recarregar o passo inteiro (o que perderia o texto colado).
+// Qualquer clique num cartao do grupo conta como escolha do usuario.
+function _impCfgTocada(grupo) {
+    _impEstado.cfgTocada[grupo] = true;
+}
+
 function _impEscolherConfig(grupo, valor) {
     _impCapturarPasso1();
+    // Marca que o usuario mexeu neste grupo: daqui em diante o perfil do
+    // fornecedor nao encosta nele, em qualquer ordem de cliques.
+    _impEstado.cfgTocada[grupo] = true;
     if (grupo === 'margem') _impEstado.margemModo = valor;
     else _impEstado.estoqueModo = valor;
     const alvo = document.getElementById('imp-cfg');
@@ -331,6 +350,7 @@ function _impCapturarPasso1() {
         // o Continuar cobra o valor em vez de assumir uma margem calada.
         // Um 0 digitado de propósito continua valendo 0.
         _impEstado.markupPadrao = (bruto !== '' && isFinite(v) && v >= 0) ? v : null;
+        if (bruto !== '') _impEstado.cfgTocada.margem = true;
     }
     // Preserva o texto colado entre redesenhos do passo 1, do mesmo jeito que
     // fornecedor e markup — perder o que o usuario acabou de colar seria o

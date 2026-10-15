@@ -1102,7 +1102,7 @@ html[data-theme="dark"] .fin-periodo-btn.active { background: var(--secondary); 
 
 .consulta-cab, .consulta-linha {
     display: grid;
-    grid-template-columns: 116px minmax(0,1fr) 124px 112px 108px 20px;
+    grid-template-columns: 116px minmax(0,1fr) 72px 124px 112px 108px 20px;
     gap: 12px; align-items: center; padding: 7px 14px;
 }
 .consulta-cab {
@@ -1425,7 +1425,7 @@ html[data-theme="dark"] .imp-acende-col { background: rgba(201, 247, 117, .14) !
 
 #tabela-tecidos td, #tabela-tecidos th,
 #tabela-materiais td, #tabela-materiais th,
-#tb-estoque-mat td, #tb-estoque-mat th { padding: 6px 8px; }
+#tabela-est-materiais td, #tabela-est-materiais th { padding: 6px 8px; }
 
 /* Nome e fornecedor em UMA linha: texto longo vira reticências e o valor
    completo fica no title, que o navegador mostra ao passar o cursor. */
@@ -1437,24 +1437,40 @@ html[data-theme="dark"] .imp-acende-col { background: rgba(201, 247, 117, .14) !
 /* Largura fixa em tudo menos no nome: ele fica com a sobra, que e onde o
    espaco faz diferenca para a leitura. */
 .col-nome  { width: auto; }
-.col-forn  { width: 130px; font-size: var(--fs-label); color: var(--muted); }
+.col-forn  { width: 130px; font-size: var(--fs-label); }
+/* A cor e so do corpo: no cabecalho, que e escuro, ela sumiria. */
+td.col-forn { color: var(--muted); }
 .col-codigo {
     /* O codigo e o identificador que o usuario procura: cortar ele e pior
        do que cortar o nome, entao ele tem largura para codigos longos. */
     width: 112px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    font-size: var(--fs-texto-sm); color: var(--dark); font-variant-numeric: tabular-nums;
+    font-size: var(--fs-texto-sm); font-variant-numeric: tabular-nums;
 }
+td.col-codigo { color: var(--dark); }
 .col-num   { width: 82px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
              font-variant-numeric: tabular-nums; }
 .col-un    { width: 56px; white-space: nowrap; }
 .col-acoes { width: 118px; white-space: nowrap; }
 /* Materiais tem um botao a mais (ajustar estoque) */
-#tabela-materiais .col-acoes, #tb-estoque-mat .col-acoes { width: 150px; }
+#tabela-materiais .col-acoes, #tabela-est-materiais .col-acoes { width: 150px; }
 .col-acoes .btn { margin-right: 2px; padding: 4px 7px; }
 
-#tabela-tecidos, #tabela-materiais, #tb-estoque-mat { table-layout: fixed; width: 100%; }
+#tabela-tecidos, #tabela-materiais, #tabela-est-materiais { table-layout: fixed; width: 100%; }
 #tabela-kits { table-layout: fixed; width: 100%; }
 #tabela-kits td, #tabela-kits th { padding: 6px 8px; }
 /* Kits tem duas colunas de texto (nome e composicao): dividem a sobra */
 #tabela-kits .col-nome { width: 24%; }
 #tabela-kits .col-acoes { width: 140px; }
+
+/* Estoque › Tecidos: lista de uma linha, rolos ao clicar */
+#tabela-est-tecidos { table-layout: fixed; width: 100%; }
+#tabela-est-tecidos td, #tabela-est-tecidos th { padding: 6px 8px; }
+.est-tec-linha { cursor: pointer; }
+.est-tec-linha:hover > td { background: rgba(201, 247, 117, .14); }
+.est-tec-linha.aberta > td { background: rgba(201, 247, 117, .22); font-weight: 500; }
+.est-tec-rolos > td { padding: 0 0 10px 26px !important; background: var(--light); }
+.est-rolos-tabela { width: 100%; }
+.est-rolos-tabela th { font-size: var(--fs-aux); }
+.est-rolos-tabela td, .est-rolos-tabela th { padding: 5px 8px; }
+html[data-theme="dark"] .est-tec-rolos > td { background: #1D2024; }
+.consulta-un { font-size: var(--fs-label); color: var(--muted); }

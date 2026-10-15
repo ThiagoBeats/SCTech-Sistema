@@ -251,7 +251,7 @@
         return 'material';
     }
 
-    const UNIDADES_VALIDAS = ['un', 'm', 'cm', 'kg', 'cj', 'cx', 'par'];
+    const UNIDADES_VALIDAS = ['un', 'm', 'cm', 'kg', 'cj', 'cx', 'par', 'pct'];
 
     // Devolve { unidade, aviso }. `unidade` null significa "a tabela nao disse
     // nada de confiavel sobre a unidade" — quem grava deve PRESERVAR a unidade

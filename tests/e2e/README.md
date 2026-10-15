@@ -56,7 +56,7 @@ TESTDIR=<projeto>/tests/e2e \
   npx playwright test --config=repo.config.js
 ```
 
-Esperado: **233 passando**.
+Esperado: **247 passando**.
 
 ## Sessão autenticada é obrigatória
 
@@ -104,5 +104,6 @@ navegar. Ele semeia um usuário com papel 1 (Administrador, que vem de
 | `estoque-infinito-entrada.spec.js` | A escolha nos cartões valendo sobre o perfil salvo do fornecedor, o perfil aparecendo nos cartões ao escolher o fornecedor, e o tecido infinito ganhando rolo: aparece na aba Estoque como ∞, sem botão de baixar, sem o número interno na tela, não é consumido ao vender, e o desfazer tira o rolo junto |
 | `cadastro-e-consulta-kits.spec.js` | Kits na Consulta de Estoque (filtro Tipo, saldo controlado/infinito/montagem, filtros por código e nome, painel do kit), o painel expandido sem preço de custo nos três tipos, e os cadastros: os quatro cartões nas três abas, tecido gravando custo, venda pela margem, custo de peça cru e rolo com o código como lote, material por unidade escolhida, e kit com unidade, quantidade e mínimo |
 | `ajustes-importacao.spec.js` | Células editáveis no mapeamento (kits e produtos), o cursor que não pula ao corrigir o texto colado, a rolagem de dentro da tabela preservada ao escolher o papel de uma coluna, a criação de coluna com valor para todas as linhas e ajuste célula a célula, a palavra "margem" no lugar de "markup", o tecido registrando preço de corte e de peça ao mesmo tempo, e o modo "preço por cor" explicando por que deu zero itens em linguagem direta, com o aviso clicável acendendo a coluna errada |
+| `estoque-colunas-e-menu.spec.js` | A escolha "ajustar estoque" valendo nas duas ordens de clique (cartão antes e depois do fornecedor), a unidade de medida selectável no material e oferecida como coluna na importação, a coluna Unidade em tecidos, materiais e kits do Estoque e na Consulta, o Catálogo intocado, as colunas do Estoque seguindo as do Catálogo, o tecido em uma linha só com os rolos abrindo ao clique (e a baixa funcionando dentro deles), e Histórico/Estoque Futuro/Backup fora da barra de abas, dentro do menu dos três pontos |
 
-Esperado no total: **233 passando**.
+Esperado no total: **247 passando**.

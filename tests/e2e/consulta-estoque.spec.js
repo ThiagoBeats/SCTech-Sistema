@@ -224,8 +224,14 @@ test('as outras abas do estoque seguem funcionando', async ({ page }) => {
     page.on('pageerror', e => erros.push('pageerror: ' + e.message));
     await abrirConsulta(page);
 
-    for (const aba of ['🧵 Tecidos', '🔩 Materiais', '📋 Histórico', '📊 Estoque Futuro']) {
-        await page.click(`text=${aba}`);
+    for (const aba of ['🧵 Tecidos', '🔩 Materiais', '📦 Kits']) {
+        await page.click(`.tab-btn:has-text("${aba}")`);
+        await page.waitForTimeout(120);
+    }
+    // Historico e Estoque Futuro agora moram no menu dos tres pontos
+    for (const aba of ['Histórico', 'Estoque Futuro']) {
+        await page.click('#estoque-extras-btn > button');
+        await page.click(`#estoque-extras-menu button:has-text("${aba}")`);
         await page.waitForTimeout(120);
     }
     expect(erros, erros.join('\n')).toEqual([]);

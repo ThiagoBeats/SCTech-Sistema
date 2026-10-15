@@ -21,10 +21,7 @@
             <button class="tab-btn active" data-tab="tecidos"   onclick="mostrarTabEstoque('tecidos')">🧵 Tecidos</button>
             <button class="tab-btn"        data-tab="materiais" onclick="mostrarTabEstoque('materiais')">🔩 Materiais</button>
             <button class="tab-btn"        data-tab="kits"      onclick="mostrarTabEstoque('kits')">📦 Kits</button>
-            <button class="tab-btn"        data-tab="historico" onclick="mostrarTabEstoque('historico')">📋 Histórico</button>
             <button class="tab-btn"        data-tab="consulta"  onclick="mostrarTabEstoque('consulta')">🔍 Consulta de Estoque</button>
-            <button class="tab-btn" data-tab="futuro"  onclick="mostrarTabEstoque('futuro')">📊 Estoque Futuro</button>
-            <button class="tab-btn" data-tab="backup" onclick="mostrarTabEstoque('backup')">💾 Backup</button>
         </div>
 
         <!-- ══════════════ ABA: TECIDOS ══════════════ -->
@@ -69,17 +66,21 @@
                 <button class="btn btn-success" onclick="salvarEntradaEstoque()">Registrar Entrada</button>
             </div>
 
-            <!-- Tabela de rolos -->
+            <!-- Lista de tecidos: uma linha por tecido, na mesma ordem de
+                 colunas do Cadastro/Catálogo. Os rolos aparecem ao clicar. -->
             <div class="card">
-                <table>
+                <table id="tabela-est-tecidos">
                     <thead>
                         <tr>
-                            <th>Lote</th>
-                            <th>Metragem Inicial</th>
-                            <th>Disponível</th>
-                            <th>Ocupação</th>
-                            <th>Entrada</th>
-                            <th>Ações</th>
+                            <th class="col-codigo">Código</th>
+                            <th class="col-nome">Tecido</th>
+                            <th class="col-un">Unidade</th>
+                            <th class="col-num">Largura</th>
+                            <th class="col-num">Em estoque</th>
+                            <th class="col-num">Estoque mínimo</th>
+                            <th class="col-num">Preço</th>
+                            <th class="col-forn">Fornecedor</th>
+                            <th class="col-acoes">Rolos</th>
                         </tr>
                     </thead>
                     <tbody id="tb-estoque"></tbody>
@@ -131,7 +132,7 @@
 
             <!-- Tabela de estoque de materiais -->
             <div class="card">
-                <table>
+                <table id="tabela-est-materiais">
                     <thead><tr>
                         <th class="col-codigo">Código</th>
                         <th class="col-nome">Material</th>
@@ -196,11 +197,12 @@
             <!-- Kits cadastrados -->
             <div class="card">
                 <h3 style="margin-bottom:16px">Kits Cadastrados</h3>
-                <table id="tabela-kits">
+                <table id="tabela-kits" data-com-unidade="1">
                     <thead>
                         <tr>
                             <th class="col-codigo">Código</th>
                             <th class="col-nome">Nome</th>
+                            <th class="col-un">Unidade</th>
                             <th class="col-num">Medida</th>
                             <th class="col-num">Preço</th>
                             <th class="col-num">Estoque</th>
