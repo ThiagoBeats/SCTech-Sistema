@@ -1394,7 +1394,29 @@ async function salvarCatalogo() {
                 if (dupRef) { await showAlert(`Código "${referencia}" já usado por "${dupRef.nome}".`, '⚠️'); return; }
             }
             const novaImg = document.getElementById('cat-foto-preview')?.dataset.base64 || '';
-            Object.assign(c, { nome, preco, largura_rolo, referencia, min_estoque, fornecedor_id: forn_id_cat, fornecedor_nome: forn_obj_cat ? forn_obj_cat.nome : '', imagem: novaImg || c.imagem || '' });
+            // O controle de estoque tambem e' editavel: sem isto, um tecido
+            // que entrou como infinito ficava infinito para sempre, embora a
+            // tela mostrasse "Ajustar estoque".
+            const eraInfinito = temEstoqueInfinito(c);
+            const ficaInfinito = _catEstado.estoqueModo === 'infinito';
+            if (eraInfinito && !ficaInfinito) {
+                const ok = await showConfirm(
+                    `"${c.nome}" passa a ter estoque controlado.\n\nO saldo infinito será apagado e o tecido fica zerado até você dar entrada nele.`,
+                    '📦', 'Zerar e controlar', 'Cancelar');
+                if (!ok) return;
+                if (limparSaldoDeFachadaDoTecido(c.id)) {
+                    registrarMovimento('Saída', c.nome, 'tecido', 0, 'm', 'Passou a ter estoque controlado');
+                }
+            }
+            if (!eraInfinito && ficaInfinito && !db.estoque.some(r => r.tecido_id == c.id && _ehSaldoDeFachada(r))) {
+                db.estoque.push({
+                    id: Date.now() + 1, tecido_id: c.id, lote: 'ESTOQUE INFINITO',
+                    metragem_inicial: METRAGEM_INFINITA, metragem_atual: METRAGEM_INFINITA,
+                    data_entrada: new Date().toISOString().slice(0, 10)
+                });
+                registrarMovimento('Entrada', c.nome, 'tecido', METRAGEM_INFINITA, 'm', 'Passou a ter estoque infinito');
+            }
+            Object.assign(c, { nome, preco, largura_rolo, referencia, min_estoque, estoque_infinito: ficaInfinito, fornecedor_id: forn_id_cat, fornecedor_nome: forn_obj_cat ? forn_obj_cat.nome : '', imagem: novaImg || c.imagem || '' });
         }
         editandoCatalogoId = null;
         const precoGroup = document.getElementById('cat-preco-group');
@@ -1980,6 +2002,7 @@ function editarCatalogo(id) {
         const fileInput = document.getElementById('cat-foto');
         if (fileInput) fileInput.value = '';
     }
+    carregarCfgDoRegistro('cat', c);
     const btn = document.querySelector('button[onclick="salvarCatalogo()"]');
     if (btn) btn.textContent = 'Atualizar Tecido';
     document.getElementById('cat-ref').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -3080,7 +3103,21 @@ function tecidoTemEstoqueInfinito(tecidoId) {
 // Saldo para mostrar na tela: "∞" quando o item não tem controle de estoque.
 function textoSaldoTecido(c) {
     if (temEstoqueInfinito(c)) return '∞';
-    return db.estoque.some(r => r.tecido_id == c.id) ? `${estoqueDisponivel(c.id).toFixed(2)} m` : '—';
+    // Sem rolo nenhum o saldo e' zero, e e' isso que a coluna diz. Um traço
+    // aqui se confundia com "não se aplica", que e' o caso do infinito.
+    return `${estoqueDisponivel(c.id).toFixed(2)} m`;
+}
+
+// Um item infinito carrega um rolo/saldo de fachada (METRAGEM_INFINITA) so
+// para aparecer nas listas. Ao voltar a ser controlado, esse saldo nao pode
+// virar estoque real: ele e' apagado e o item fica zerado, esperando entrada.
+function _ehSaldoDeFachada(rolo) {
+    return rolo.lote === 'ESTOQUE INFINITO' || rolo.metragem_inicial >= METRAGEM_INFINITA;
+}
+function limparSaldoDeFachadaDoTecido(tecidoId) {
+    const antes = db.estoque.length;
+    db.estoque = db.estoque.filter(r => !(r.tecido_id == tecidoId && _ehSaldoDeFachada(r)));
+    return antes !== db.estoque.length;
 }
 
 function estoqueDisponivel(tecidoId) {
@@ -3727,7 +3764,7 @@ function renderEstoque() {
         const abaixoMin = !infinito && tec.min_estoque > 0 && totalDisp < tec.min_estoque;
         const aberto = _estoqueTecidoAberto === tec.id;
         const saldo = infinito ? '<strong title="Estoque infinito">∞</strong>'
-            : (rolos.length ? `<strong>${totalDisp.toFixed(2)}</strong> m` : '—');
+            : `<strong>${totalDisp.toFixed(2)}</strong> m`;
 
         html += `<tr class="est-tec-linha${aberto ? ' aberta' : ''}" onclick="alternarRolosDoTecido(${tec.id})">
             <td class="col-codigo" title="${escapeHtml(tec.referencia || '')}">${escapeHtml(tec.referencia || '—')}</td>
@@ -3792,7 +3829,20 @@ async function salvarMaterial() {
                 const dupRef = db.materiais.find(x => x.id != editandoMaterialId && x.referencia && x.referencia.toLowerCase() === referencia.toLowerCase());
                 if (dupRef) { await showAlert(`Código "${referencia}" já usado por "${dupRef.nome}".`, '⚠️'); return; }
             }
-            Object.assign(m, { referencia, nome, unidade, preco, min_estoque, fornecedor_id: forn_id_mat, fornecedor_nome: forn_obj_mat ? forn_obj_mat.nome : '' });
+            const eraInfinito = temEstoqueInfinito(m);
+            const ficaInfinito = _matEstado.estoqueModo === 'infinito';
+            if (eraInfinito && !ficaInfinito) {
+                const ok = await showConfirm(
+                    `"${m.nome}" passa a ter estoque controlado.\n\nO saldo infinito será apagado e o material fica zerado até você dar entrada nele.`,
+                    '📦', 'Zerar e controlar', 'Cancelar');
+                if (!ok) return;
+                m.estoque_atual = 0;
+                registrarMovimento('Saída', m.nome, 'material', 0, unidade, 'Passou a ter estoque controlado');
+            }
+            if (!eraInfinito && ficaInfinito) {
+                registrarMovimento('Entrada', m.nome, 'material', 0, unidade, 'Passou a ter estoque infinito');
+            }
+            Object.assign(m, { referencia, nome, unidade, preco, min_estoque, estoque_infinito: ficaInfinito, fornecedor_id: forn_id_mat, fornecedor_nome: forn_obj_mat ? forn_obj_mat.nome : '' });
         }
         editandoMaterialId = null;
         const precoGroup = document.getElementById('mat-preco-group');
@@ -3866,6 +3916,7 @@ function editarMaterial(id) {
         precoGroup.style.display = '';
         document.getElementById('mat-preco').value = m.preco || 0;
     }
+    carregarCfgDoRegistro('mat', m);
     const btn = document.querySelector('button[onclick="salvarMaterial()"]');
     if (btn) btn.textContent = 'Atualizar Material';
     document.getElementById('mat-ref').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -4064,7 +4115,10 @@ const _CFG_ABAS = {
     mat: { estado: _matEstado, item: 'O material', aoMudar: () => atualizarVendaMaterial() }
 };
 
-function renderCartoesConfig(prefixo) {
+// `soEstoque` e' o modo edicao: ali o preco de venda e' digitado direto no
+// campo, entao os cartoes de margem nao mandam em nada e mostra-los seria
+// mentir para quem edita. Os de estoque continuam, porque eles mandam.
+function renderCartoesConfig(prefixo, soEstoque) {
     const alvo = document.getElementById(prefixo + '-cfg');
     const cfg = _CFG_ABAS[prefixo];
     if (!alvo || !cfg || typeof _impIcone !== 'function') return;
@@ -4095,24 +4149,55 @@ function renderCartoesConfig(prefixo) {
     };
 
     const it = cfg.item;
-    alvo.innerHTML = [
+    const margem = soEstoque ? [] : [
         card('margem', 'total', 'porcento', 'Definir margem total',
             'A margem informada forma o preço de venda a partir do custo.', campoMargem),
         card('margem', 'item', 'sliders', 'Definir margem depois',
-            `${it} entra com a venda igual ao custo e você ajusta o preço quando quiser.`),
+            `${it} entra com a venda igual ao custo e você ajusta o preço quando quiser.`)
+    ];
+    alvo.innerHTML = margem.concat([
         card('estoque', 'infinito', 'infinito', 'Estoque infinito',
             `${it} fica sempre disponível. Não haverá controle de estoque, baixa ou entrada.`),
         card('estoque', 'ajustar', 'caixa', 'Ajustar estoque',
             'O estoque será controlado. Você dá entrada depois e o sistema faz a baixa ao sair nos pedidos.')
-    ].join('');
+    ]).join('');
+    alvo.dataset.soEstoque = soEstoque ? '1' : '';
     cfg.aoMudar();
+}
+
+// Quem re-renderiza depois de um clique precisa manter o modo em que a tela
+// esta: senao os cartoes de margem voltariam no meio de uma edicao.
+function _cfgSoEstoque(prefixo) {
+    return document.getElementById(prefixo + '-cfg')?.dataset.soEstoque === '1';
+}
+
+// Leva o item que esta sendo editado para dentro dos cartoes, para a tela
+// dizer a verdade sobre ele. Sem isto a edicao mostrava sempre "Ajustar
+// estoque", mesmo num item infinito.
+function carregarCfgDoRegistro(prefixo, registro) {
+    const estado = _CFG_ABAS[prefixo]?.estado;
+    if (!estado) return;
+    estado.estoqueModo = temEstoqueInfinito(registro) ? 'infinito' : 'ajustar';
+    renderCartoesConfig(prefixo, true);
+    _cfgAjuda(prefixo, true);
+}
+
+// O texto de ajuda da secao fala de margem; na edicao, so de estoque.
+function _cfgAjuda(prefixo, soEstoque) {
+    const secao = document.getElementById(prefixo + '-cfg')?.closest('.imp-cfg-secao');
+    const ajuda = secao?.querySelector('.imp-cfg-secao-ajuda');
+    if (!ajuda) return;
+    if (ajuda.dataset.original === undefined) ajuda.dataset.original = ajuda.textContent;
+    ajuda.textContent = soEstoque
+        ? 'Escolha o controle de estoque deste item. A margem não aparece aqui porque, na edição, o preço de venda é digitado direto no campo acima.'
+        : ajuda.dataset.original;
 }
 
 function _cfgEscolher(prefixo, grupo, valor) {
     const estado = _CFG_ABAS[prefixo].estado;
     if (grupo === 'margem') estado.margemModo = valor;
     else estado.estoqueModo = valor;
-    renderCartoesConfig(prefixo);
+    renderCartoesConfig(prefixo, _cfgSoEstoque(prefixo));
 }
 
 function _cfgMargemMudou(prefixo, valor) {

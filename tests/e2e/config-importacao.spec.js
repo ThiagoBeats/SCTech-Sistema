@@ -267,13 +267,13 @@ test('estoque infinito marca os itens e mostra infinito no catalogo', async ({ p
     await expect(page.locator('#tb-catalogo tr').first()).toContainText('∞');
 });
 
-test('ajustar estoque deixa o controle normal e o saldo em branco', async ({ page }) => {
+test('ajustar estoque deixa o controle normal e o saldo zerado', async ({ page }) => {
     await importar(page, { estoque: 'ajustar', markup: 80 });
 
     expect(await page.evaluate(() => db.catalogo.every(c => c.estoque_infinito === false))).toBe(true);
     await expect(page.locator('#tb-catalogo tr')).toHaveCount(3);
     const linha = await page.locator('#tb-catalogo tr').first().innerText();
-    expect(linha, 'sem rolos, o saldo aparece como traco').toContain('—');
+    expect(linha, 'sem rolos, o saldo e zero — traco se confundiria com infinito').toContain('0.00 m');
     expect(linha).not.toContain('∞');
 });
 
