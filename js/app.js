@@ -1436,7 +1436,7 @@ async function salvarCatalogo() {
                 });
                 registrarMovimento('Entrada', c.nome, 'tecido', METRAGEM_INFINITA, 'm', 'Passou a ter estoque infinito');
             }
-            Object.assign(c, { nome, preco, largura_rolo, referencia, min_estoque, estoque_infinito: ficaInfinito, fornecedor_id: forn_id_cat, fornecedor_nome: forn_obj_cat ? forn_obj_cat.nome : '', imagem: novaImg || c.imagem || '' });
+            Object.assign(c, { nome, preco, largura_rolo, referencia, min_estoque: ficaInfinito ? 0 : min_estoque, estoque_infinito: ficaInfinito, fornecedor_id: forn_id_cat, fornecedor_nome: forn_obj_cat ? forn_obj_cat.nome : '', imagem: novaImg || c.imagem || '' });
         }
         editandoCatalogoId = null;
         const precoGroup = document.getElementById('cat-preco-group');
@@ -1460,7 +1460,8 @@ async function salvarCatalogo() {
         const novaImgCad = document.getElementById('cat-foto-preview')?.dataset.base64 || '';
         const id = Date.now();
         db.catalogo.push({
-            id, nome, largura_rolo, referencia, min_estoque,
+            id, nome, largura_rolo, referencia,
+            min_estoque: _cfgMinimo(_catEstado, min_estoque),
             preco_custo: custo,
             // Venda sai do custo POR METRO. O custo de corte por peça é
             // registro da tabela do fornecedor: nenhuma margem incide nele.
@@ -1531,7 +1532,7 @@ function verDetalhesTecido(id) {
                 </div>
                 <div style="background:#FAFAFA;border-radius:8px;padding:10px 14px">
                     <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Em Estoque</div>
-                    <div style="font-size:17px;font-weight:700;color:${abaixoMin ? '#F43927' : '#159912'}">${disp.toFixed(2)} m ${abaixoMin ? '<span style="font-size:12px">⚠ Abaixo do mínimo</span>' : ''}</div>
+                    <div style="font-size:17px;font-weight:700;color:${abaixoMin ? '#F43927' : '#159912'}">${temEstoqueInfinito(c) ? '∞' : disp.toFixed(2) + ' m'} ${abaixoMin ? '<span style="font-size:12px">⚠ Abaixo do mínimo</span>' : ''}</div>
                 </div>
                 <div style="background:#FAFAFA;border-radius:8px;padding:10px 14px">
                     <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Largura do Rolo</div>
@@ -1539,7 +1540,7 @@ function verDetalhesTecido(id) {
                 </div>
                 <div style="background:#FAFAFA;border-radius:8px;padding:10px 14px">
                     <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Estoque Mínimo</div>
-                    <div style="font-size:14px;font-weight:600">${c.min_estoque ? c.min_estoque + ' m' : '—'}</div>
+                    <div style="font-size:14px;font-weight:600">${textoMinimo(c, 'm')}</div>
                 </div>
                 ${(c.preco_corte || c.preco_peca) ? `<div style="background:#FAFAFA;border-radius:8px;padding:10px 14px;grid-column:1/-1">
                     <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Preços da tabela do fornecedor</div>
@@ -1636,7 +1637,7 @@ function valorOrdenacaoTecido(c, col) {
     switch (col) {
         case 'preco':      return c.preco || 0;
         case 'largura':    return c.largura_rolo || 2.80;
-        case 'minimo':     return c.min_estoque || 0;
+        case 'minimo':     return temEstoqueInfinito(c) ? -1 : (c.min_estoque || 0);
         case 'estoque':    return temEstoqueInfinito(c) ? Infinity : estoqueDisponivel(c.id);
         case 'referencia': return (c.referencia || '').toLowerCase();
         case 'fornecedor': return (c.fornecedor_nome || '').toLowerCase();
@@ -1823,7 +1824,7 @@ function renderCatalogoTecidos() {
             <td class="col-nome" title="${escapeHtml(c.nome)}">${thumb}${nomeClick}</td>
             <td class="col-num">${(c.largura_rolo || 2.80).toFixed(2)} m</td>
             <td class="col-num">${dispTxt}${alertMin}</td>
-            <td class="col-num">${c.min_estoque ? c.min_estoque + ' m' : '—'}</td>
+            <td class="col-num">${textoMinimo(c, 'm')}</td>
             <td class="col-num">R$ ${(c.preco || 0).toFixed(2)}</td>
             <td class="col-forn" title="${escapeHtml(c.fornecedor_nome || '')}">${escapeHtml(c.fornecedor_nome || '—')}</td>
             <td class="col-acoes">
@@ -3158,6 +3159,14 @@ function textoSaldoTecido(c) {
 // Um item infinito carrega um rolo/saldo de fachada (METRAGEM_INFINITA) so
 // para aparecer nas listas. Ao voltar a ser controlado, esse saldo nao pode
 // virar estoque real: ele e' apagado e o item fica zerado, esperando entrada.
+// Minimo para mostrar na tela. Item sem controle de estoque nao tem ponto de
+// pedido, entao a coluna diz "—" mesmo que haja um numero guardado de antes.
+function textoMinimo(registro, unidade) {
+    if (temEstoqueInfinito(registro)) return '—';
+    const m = registro && registro.min_estoque;
+    return m > 0 ? m + (unidade ? ' ' + unidade : '') : '—';
+}
+
 function _ehSaldoDeFachada(rolo) {
     return rolo.lote === 'ESTOQUE INFINITO' || rolo.metragem_inicial >= METRAGEM_INFINITA;
 }
@@ -3624,7 +3633,7 @@ async function salvarEntradaEstoque() {
     const custo      = parseFloat(document.getElementById('est-preco-custo')?.value) || 0;
     const markup     = parseFloat(document.getElementById('est-markup')?.value) || 0;
     if (!referencia)            { await showAlert('Informe a referência do rolo.', '⚠️'); return; }
-    if (!tecidoId)              { await showAlert('Selecione o tecido.', '⚠️'); return; }
+    if (!tecidoId)              { await showAlert('Escolha o tecido na lista de sugestões.', '⚠️'); return; }
     if (!metros || metros <= 0) { await showAlert('Informe a metragem do rolo.', '⚠️'); return; }
     const nomeTecConf = db.catalogo.find(t => t.id === tecidoId)?.nome || '—';
     const precoVendaConf = custo > 0 ? (custo * (1 + markup / 100)).toFixed(2) : null;
@@ -3659,6 +3668,141 @@ function autoFillRefFromTecido(ambId, tidx) {
     const refEl = document.getElementById(`a-tec-ref-${ambId}-${tidx}`);
     if (refEl) refEl.value = tec?.referencia || '';
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// CAMPO DE BUSCA COM SUGESTOES
+// ═══════════════════════════════════════════════════════════════════════
+//
+// Substitui os <select> de tecido e de material nas entradas de estoque. Um
+// input de texto visivel, com o nome, e um input escondido com o ID: o ID e' a
+// fonte da verdade, e por isso mexer no texto o limpa — ver um nome na tela e
+// gravar outro item seria pior do que nao achar nada.
+//
+// Uma implementacao so para os dois campos. O <select> que saiu dava para usar
+// pelo teclado, entao setas, Enter e Esc continuam funcionando aqui.
+
+const _BUSCAS = {
+    'est-tecido': {
+        itens: () => db.catalogo,
+        rotulo: c => c.nome,
+        aoEscolher: () => autoFillEntradaTecido(),
+        vazio: 'Nenhum tecido com esse código ou nome'
+    },
+    'est-mat-id': {
+        itens: () => db.materiais,
+        rotulo: m => `${m.nome} (${m.unidade || 'un'})`,
+        aoEscolher: () => autoFillEntradaMaterialById(),
+        vazio: 'Nenhum material com esse código ou nome'
+    }
+};
+
+// Qual sugestao esta percorrida pelo teclado, por campo. -1 = nenhuma.
+const _buscaAtiva = {};
+
+function _buscaNormaliza(t) {
+    return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+
+function _buscaAchados(campo) {
+    const cfg = _BUSCAS[campo];
+    const termo = _buscaNormaliza(document.getElementById(campo + '-busca')?.value);
+    if (!termo) return [];
+    return cfg.itens().filter(i =>
+        _buscaNormaliza(i.nome).includes(termo) || _buscaNormaliza(i.referencia).includes(termo)
+    ).slice(0, 12);
+}
+
+function _buscaRender(campo) {
+    const caixa = document.getElementById(campo + '-sug');
+    if (!caixa) return;
+    const achados = _buscaAchados(campo);
+    const ativa = _buscaAtiva[campo];
+
+    if (!document.getElementById(campo + '-busca')?.value.trim()) {
+        caixa.classList.remove('aberta'); caixa.innerHTML = ''; return;
+    }
+    if (!achados.length) {
+        caixa.innerHTML = `<div class="consulta-sug-item" style="cursor:default;color:var(--muted)">${escapeHtml(_BUSCAS[campo].vazio)}</div>`;
+        caixa.classList.add('aberta');
+        return;
+    }
+    caixa.innerHTML = achados.map((i, n) => `
+        <div class="consulta-sug-item${n === ativa ? ' ativa' : ''}" onclick="buscaEscolher('${campo}', ${i.id})">
+            <span class="consulta-sug-cod">${escapeHtml(i.referencia || '—')}</span>
+            <span class="consulta-sug-nome">${escapeHtml(_BUSCAS[campo].rotulo(i))}</span>
+        </div>`).join('');
+    caixa.classList.add('aberta');
+    caixa.querySelector('.consulta-sug-item.ativa')?.scrollIntoView({ block: 'nearest' });
+}
+
+// Digitar invalida a escolha anterior: o texto e o id precisam andar juntos.
+function buscaDigitou(campo) {
+    const esc = document.getElementById(campo);
+    if (esc) esc.value = '';
+    _buscaAtiva[campo] = -1;
+    _buscaRender(campo);
+}
+
+function buscaEscolher(campo, id) {
+    const item = _BUSCAS[campo].itens().find(i => i.id == id);
+    if (!item) return;
+    const esc = document.getElementById(campo);
+    const txt = document.getElementById(campo + '-busca');
+    if (esc) esc.value = String(item.id);
+    if (txt) txt.value = _BUSCAS[campo].rotulo(item);
+    buscaFechar(campo);
+    _BUSCAS[campo].aoEscolher();
+}
+
+function buscaFechar(campo) {
+    _buscaAtiva[campo] = -1;
+    const caixa = document.getElementById(campo + '-sug');
+    if (caixa) { caixa.classList.remove('aberta'); caixa.innerHTML = ''; }
+}
+
+function buscaTecla(campo, e) {
+    const achados = _buscaAchados(campo);
+    const aberta = document.getElementById(campo + '-sug')?.classList.contains('aberta');
+    if (e.key === 'Escape') { buscaFechar(campo); return; }
+    if (!achados.length) return;
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!aberta) { _buscaRender(campo); return; }
+        const total = achados.length;
+        const atual = _buscaAtiva[campo] === undefined ? -1 : _buscaAtiva[campo];
+        // Da' a volta nas duas pontas: do ultimo para o primeiro e vice-versa.
+        _buscaAtiva[campo] = e.key === 'ArrowDown'
+            ? (atual + 1) % total
+            : (atual <= 0 ? total - 1 : atual - 1);
+        _buscaRender(campo);
+        return;
+    }
+    if (e.key === 'Enter') {
+        // Sem nada percorrido, um unico achado e' escolha obvia; varios, nao.
+        const alvo = _buscaAtiva[campo] >= 0 ? achados[_buscaAtiva[campo]]
+            : (achados.length === 1 ? achados[0] : null);
+        if (alvo) { e.preventDefault(); buscaEscolher(campo, alvo.id); }
+    }
+}
+
+// Preenche de fora (ex.: achar o tecido pelo lote digitado).
+function buscaDefinir(campo, id) {
+    const item = _BUSCAS[campo].itens().find(i => i.id == id);
+    if (!item) return;
+    const esc = document.getElementById(campo);
+    const txt = document.getElementById(campo + '-busca');
+    if (esc) esc.value = String(item.id);
+    if (txt) txt.value = _BUSCAS[campo].rotulo(item);
+    buscaFechar(campo);
+}
+
+document.addEventListener('click', e => {
+    Object.keys(_BUSCAS).forEach(campo => {
+        if (e.target.closest && e.target.closest('#' + campo + '-campo')) return;
+        buscaFechar(campo);
+    });
+});
 
 function autoFillEntradaTecido() {
     const tecidoId = parseInt(document.getElementById('est-tecido')?.value);
@@ -3707,12 +3851,11 @@ function autoFillEntradaMaterialById() {
 function autoFillTecidoPorReferencia() {
     const ref = document.getElementById('est-lote')?.value.trim();
     if (!ref || ref.length < 2) return;
-    const sel = document.getElementById('est-tecido');
-    if (!sel) return;
+    if (!document.getElementById('est-tecido')) return;
     const tec = db.catalogo.find(c => c.referencia && c.referencia.toLowerCase() === ref.toLowerCase());
-    if (tec) { sel.value = String(tec.id); autoFillEntradaTecido(); return; }
+    if (tec) { buscaDefinir('est-tecido', tec.id); autoFillEntradaTecido(); return; }
     const existing = db.estoque.find(r => r.lote && r.lote.toLowerCase() === ref.toLowerCase());
-    if (existing) { sel.value = String(existing.tecido_id); autoFillEntradaTecido(); }
+    if (existing) { buscaDefinir('est-tecido', existing.tecido_id); autoFillEntradaTecido(); }
 }
 
 // Qual tecido esta com os rolos abertos na aba Estoque. Um de cada vez.
@@ -3820,7 +3963,7 @@ function renderEstoque() {
             <td class="col-un">m</td>
             <td class="col-num">${(tec.largura_rolo || 2.80).toFixed(2)} m</td>
             <td class="col-num">${saldo}</td>
-            <td class="col-num">${tec.min_estoque ? tec.min_estoque + ' m' : '—'}</td>
+            <td class="col-num">${textoMinimo(tec, 'm')}</td>
             <td class="col-num">${tec.preco > 0 ? 'R$ ' + tec.preco.toFixed(2) : '—'}</td>
             <td class="col-forn" title="${escapeHtml(tec.fornecedor_nome || '')}">${escapeHtml(tec.fornecedor_nome || '—')}</td>
             <td class="col-acoes">${rolos.length ? `${rolos.length} rolo(s) ${aberto ? '▲' : '▼'}` : '<span style="color:#999">sem rolo</span>'}</td>
@@ -3890,7 +4033,7 @@ async function salvarMaterial() {
             if (!eraInfinito && ficaInfinito) {
                 registrarMovimento('Entrada', m.nome, 'material', 0, unidade, 'Passou a ter estoque infinito');
             }
-            Object.assign(m, { referencia, nome, unidade, preco, min_estoque, estoque_infinito: ficaInfinito, fornecedor_id: forn_id_mat, fornecedor_nome: forn_obj_mat ? forn_obj_mat.nome : '' });
+            Object.assign(m, { referencia, nome, unidade, preco, min_estoque: ficaInfinito ? 0 : min_estoque, estoque_infinito: ficaInfinito, fornecedor_id: forn_id_mat, fornecedor_nome: forn_obj_mat ? forn_obj_mat.nome : '' });
         }
         editandoMaterialId = null;
         const precoGroup = document.getElementById('mat-preco-group');
@@ -3911,7 +4054,8 @@ async function salvarMaterial() {
         const qtd = parseFloat(document.getElementById('mat-qtd')?.value) || 0;
         const infinito = _matEstado.estoqueModo === 'infinito';
         db.materiais.push({
-            id: Date.now(), referencia, nome, unidade, min_estoque,
+            id: Date.now(), referencia, nome, unidade,
+            min_estoque: _cfgMinimo(_matEstado, min_estoque),
             // Quantidade e custo seguem a unidade escolhida acima.
             preco_custo: custo,
             preco: _cfgVenda(_matEstado, custo) || 0,
@@ -4026,7 +4170,7 @@ function renderMateriais() {
             <td class="col-codigo" title="${escapeHtml(m.referencia || '')}">${escapeHtml(m.referencia || '—')}</td>
             <td class="col-nome" title="${escapeHtml(m.nome)}"><strong>${escapeHtml(m.nome)}</strong>${abaixoMin ? `<span class="badge-alerta" style="margin-left:6px">⚠</span>` : ''}</td>
             <td class="col-un">${escapeHtml(m.unidade || '')}</td>
-            <td class="col-num" style="color:${corEstoque}" title="${m.min_estoque > 0 ? 'Mínimo: ' + m.min_estoque + ' ' + (m.unidade || '') : ''}">${temEstoqueInfinito(m)
+            <td class="col-num" style="color:${corEstoque}" title="${temEstoqueInfinito(m) || !(m.min_estoque > 0) ? '' : 'Mínimo: ' + m.min_estoque + ' ' + (m.unidade || '')}">${temEstoqueInfinito(m)
                 ? '<strong title="Estoque infinito">∞</strong>'
                 : `<strong>${(m.estoque_atual || 0).toFixed(2)}</strong>`}</td>
             <td class="col-num">R$ ${(m.preco || 0).toFixed(2)}</td>
@@ -4073,7 +4217,7 @@ let kitDraftItens = [];
 async function adicionarItemAoKit() {
     const matId = parseInt(document.getElementById('kit-item-mat')?.value);
     const qtd   = parseFloat(document.getElementById('kit-item-qtd')?.value);
-    if (!matId) { await showAlert('Selecione o material.', '⚠️'); return; }
+    if (!matId) { await showAlert('Escolha o material na lista de sugestões.', '⚠️'); return; }
     if (!qtd || qtd <= 0) { await showAlert('Informe uma quantidade válida.', '⚠️'); return; }
     const mat = db.materiais.find(m => m.id == matId);
     if (!mat) return;
@@ -4219,7 +4363,23 @@ function renderCartoesConfig(prefixo, soEstoque) {
             'O estoque será controlado. Você dá entrada depois e o sistema faz a baixa ao sair nos pedidos.')
     ]).join('');
     alvo.dataset.soEstoque = soEstoque ? '1' : '';
+    _cfgCampoMinimo(prefixo, estado.estoqueModo === 'infinito');
     cfg.aoMudar();
+}
+
+// Item sem controle de estoque nao tem ponto de pedido: pedir um minimo que
+// nunca sera comparado so faz o usuario preencher a toa. O campo some, e o
+// valor digitado antes nao e' apagado — se ele voltar para estoque
+// controlado, o minimo que ele tinha definido reaparece.
+const _CFG_CAMPO_MINIMO = { kp: 'kp-min', cat: 'cat-min', mat: 'mat-min' };
+function _cfgCampoMinimo(prefixo, infinito) {
+    const campo = document.getElementById(_CFG_CAMPO_MINIMO[prefixo]);
+    const grupo = campo?.closest('.form-group');
+    if (grupo) grupo.style.display = infinito ? 'none' : '';
+}
+// Quem grava: infinito nao guarda minimo.
+function _cfgMinimo(estado, valor) {
+    return estado.estoqueModo === 'infinito' ? 0 : valor;
 }
 
 // Quem re-renderiza depois de um clique precisa manter o modo em que a tela
@@ -4320,7 +4480,7 @@ async function salvarKitPronto() {
         preco_custo: Math.round(custo * 100) / 100,
         preco: window.ImportadorCore.aplicarMarkup(custo, margem),
         estoque_atual: parseFloat(document.getElementById('kp-qtd')?.value) || 0,
-        min_estoque: parseFloat(document.getElementById('kp-min')?.value) || 0,
+        min_estoque: _cfgMinimo(_kpEstado, parseFloat(document.getElementById('kp-min')?.value) || 0),
         estoque_infinito: _kpEstado.estoqueModo === 'infinito',
         fornecedor_id: null,
         fornecedor_nome: '',
@@ -7425,9 +7585,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Estoque (aba de tecidos)
     if (document.getElementById('tb-estoque')) {
-        const sel = document.getElementById('est-tecido');
-        if (sel) sel.innerHTML = '<option value="">— Selecione o Tecido —</option>' +
-            db.catalogo.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+        // O campo de tecido e' de busca: a lista sai de db.catalogo na hora de
+        // digitar, entao nao ha <option> para montar aqui.
         const dataEl = document.getElementById('est-data');
         if (dataEl) dataEl.value = new Date().toISOString().split('T')[0];
         renderEstoque();
@@ -7443,9 +7602,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Estoque (aba de entrada de materiais)
     if (document.getElementById('tb-estoque-mat')) {
-        const matSel = document.getElementById('est-mat-id');
-        if (matSel) matSel.innerHTML = '<option value="">— Selecione o Material —</option>' +
-            db.materiais.map(m => `<option value="${m.id}">${escapeHtml(m.nome)} (${m.unidade})</option>`).join('');
         const dataEl = document.getElementById('est-mat-data');
         if (dataEl) dataEl.value = new Date().toISOString().split('T')[0];
         renderEstoqueMateriais();
@@ -7597,8 +7753,9 @@ function autoFillEntradaMaterialPorRef() {
     if (!ref || ref.length < 2) return;
     const mat = db.materiais.find(m => m.referencia && m.referencia.toLowerCase() === ref.toLowerCase());
     if (!mat) return;
-    const sel = document.getElementById('est-mat-id');
-    if (sel) { sel.value = String(mat.id); autoFillEntradaMaterialById(); }
+    if (!document.getElementById('est-mat-id')) return;
+    buscaDefinir('est-mat-id', mat.id);
+    autoFillEntradaMaterialById();
 }
 
 function calcularPrecoVendaMat() { _calcularPrecoVenda('est-mat-preco-custo', 'est-mat-markup', 'est-mat-preco-venda-display'); }
@@ -7609,7 +7766,7 @@ async function salvarEntradaMaterial() {
     const data   = document.getElementById('est-mat-data')?.value;
     const custo  = parseFloat(document.getElementById('est-mat-preco-custo')?.value) || 0;
     const markup = parseFloat(document.getElementById('est-mat-markup')?.value) || 0;
-    if (!matId) { await showAlert('Selecione o material.', '⚠️'); return; }
+    if (!matId) { await showAlert('Escolha o material na lista de sugestões.', '⚠️'); return; }
     if (!qtd || qtd <= 0) { await showAlert('Informe uma quantidade válida.', '⚠️'); return; }
     const mat = db.materiais.find(m => m.id === matId);
     if (!mat) return;
@@ -7757,10 +7914,10 @@ function _consultaDetalheHTML(item) {
             campos += campo('Composição', comp || '—');
         }
     } else if (item.tipo === 'tecido') {
-        campos += campo('Estoque mínimo', r.min_estoque > 0 ? r.min_estoque + ' m' : '—');
+        campos += campo('Estoque mínimo', textoMinimo(r, 'm'));
         campos += campo('Largura do rolo', r.largura_rolo ? _consultaNum(r.largura_rolo) + ' m' : '—');
     } else {
-        campos += campo('Estoque mínimo', r.min_estoque > 0 ? r.min_estoque + ' ' + (r.unidade || '') : '—');
+        campos += campo('Estoque mínimo', textoMinimo(r, r.unidade));
         campos += campo('Unidade', escapeHtml(r.unidade || '—'));
     }
 
@@ -7926,7 +8083,7 @@ function renderEstoqueMateriais() {
             <td class="col-codigo" title="${escapeHtml(m.referencia||'')}">${escapeHtml(m.referencia||'—')}</td>
             <td class="col-nome" title="${escapeHtml(m.nome)}"><strong>${escapeHtml(m.nome)}</strong>${abaixoMin?`<span class="badge-alerta" style="margin-left:6px">⚠</span>`:''}</td>
             <td class="col-un">${m.unidade}</td>
-            <td class="col-num" style="color:${cor}" title="${m.min_estoque>0?'Mínimo: '+m.min_estoque+' '+(m.unidade||''):''}">${temEstoqueInfinito(m)
+            <td class="col-num" style="color:${cor}" title="${temEstoqueInfinito(m) || !(m.min_estoque > 0) ? '' : 'Mínimo: ' + m.min_estoque + ' ' + (m.unidade || '')}">${temEstoqueInfinito(m)
                 ? '<strong title="Estoque infinito">∞</strong>'
                 : `<strong>${(m.estoque_atual||0).toFixed(2)}</strong>`}</td>
             <td class="col-num" style="color:#005D3B;font-weight:600">${m.preco > 0 ? 'R$ '+m.preco.toFixed(2) : '—'}</td>

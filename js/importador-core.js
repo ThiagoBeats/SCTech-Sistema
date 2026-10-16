@@ -627,8 +627,9 @@
                 // ponto de pedido valer desde a importacao. Material continua
                 // em 0 — a quantidade minima de acessorio varia demais.
                 // Isto vale so na CRIACAO: numa atualizacao o minimo que o
-                // usuario ajustou a mao e preservado.
-                min_estoque: item.tipo === 'tecido' ? MIN_ESTOQUE_TECIDO : 0,
+                // usuario ajustou a mao e preservado. Tecido sem controle de
+                // estoque nao ganha minimo: nao ha ponto de pedido para ele.
+                min_estoque: item.tipo === 'tecido' && !estoqueInfinito ? MIN_ESTOQUE_TECIDO : 0,
                 fornecedor_id: fornecedor ? fornecedor.id : null,
                 fornecedor_nome: fornecedor ? fornecedor.nome : '',
                 estoque_infinito: estoqueInfinito,

@@ -56,7 +56,7 @@ TESTDIR=<projeto>/tests/e2e \
   npx playwright test --config=repo.config.js
 ```
 
-Esperado: **276 passando**.
+Esperado: **298 passando**.
 
 ## Sessão autenticada é obrigatória
 
@@ -108,5 +108,6 @@ navegar. Ele semeia um usuário com papel 1 (Administrador, que vem de
 | `editar-modo-de-estoque.spec.js` | A edição mostrando o controle de estoque que o item tem de verdade (e não sempre "Ajustar estoque"), só os cartões de estoque ali porque a margem não manda na edição, a troca de infinito para controlado avisando e apagando o saldo de fachada, o cancelar que não muda nada, o caminho de volta, editar sem mexer no cartão preservando o modo, o mesmo para material, e a coluna Em estoque mostrando zero no lugar do traço |
 | `ordenar-estoque.spec.js` | Cabeçalho clicável em toda coluna com valor nas três tabelas do Estoque ("Ações" fica de fora), o segundo clique invertendo, só a coluna ativa marcada com a seta do sentido, tecidos ordenando pela quantidade de rolos, os rolos abertos continuando colados no seu tecido, a escolha valendo nas duas telas nos dois sentidos, uma preferência corrompida não derrubando a tela, e o cabeçalho da unidade cabendo na coluna com o nome inteiro no title |
 | `preco-do-tecido-sai-do-corte.spec.js` | Com as duas colunas de preço mapeadas, o custo do TECIDO sai do corte (ele é vendido por metro cortado) e o do MATERIAL continua saindo da peça; os dois valores da tabela seguem gravados; tecido só com a coluna de peça continua usando ela, avisando; a nota da etapa 3 dizendo qual das duas manda; e o valor do tecido no pedido saindo do corte COM a margem — nem pela peça, nem pelo corte cru |
+| `busca-e-minimo-infinito.spec.js` | Os campos de tecido e de material na entrada de estoque como busca com sugestões: filtro por código ou nome, clique e teclado (setas dando a volta, Enter, Esc), mexer no texto limpando o item escolhido, o preenchimento automático disparando, a entrada gravando o item certo e cobrando a escolha quem só digitou; e o estoque mínimo que não vale para item infinito: o campo somindo do cadastro de tecido, material e kit, o valor gravado como zero, o traço nas listas, no detalhe e na Consulta, o dado antigo preservado e a ordenação tratando infinito como sem mínimo |
 
-Esperado no total: **276 passando**.
+Esperado no total: **298 passando**.

@@ -40,7 +40,14 @@
                     </div>
                     <div class="form-group">
                         <label>Tecido</label>
-                        <select id="est-tecido" onchange="autoFillEntradaTecido()"></select>
+                        <div class="busca-campo" id="est-tecido-campo">
+                            <input type="text" id="est-tecido-busca" autocomplete="off"
+                                   placeholder="Digite o código ou o nome"
+                                   oninput="buscaDigitou('est-tecido')"
+                                   onkeydown="buscaTecla('est-tecido', event)">
+                            <input type="hidden" id="est-tecido">
+                            <div class="consulta-sugestoes" id="est-tecido-sug"></div>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>Metragem do Rolo (m)</label>
@@ -104,7 +111,14 @@
                     </div>
                     <div class="form-group" style="grid-column:span 2">
                         <label>Material</label>
-                        <select id="est-mat-id" onchange="autoFillEntradaMaterialById()"></select>
+                        <div class="busca-campo" id="est-mat-id-campo">
+                            <input type="text" id="est-mat-id-busca" autocomplete="off"
+                                   placeholder="Digite o código ou o nome"
+                                   oninput="buscaDigitou('est-mat-id')"
+                                   onkeydown="buscaTecla('est-mat-id', event)">
+                            <input type="hidden" id="est-mat-id">
+                            <div class="consulta-sugestoes" id="est-mat-id-sug"></div>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>Quantidade</label>

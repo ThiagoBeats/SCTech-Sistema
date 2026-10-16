@@ -1079,7 +1079,10 @@ html[data-theme="dark"] .fin-periodo-btn.active { background: var(--secondary); 
 /* ─── Consulta de Estoque: lista compacta ──────────────────────────────── */
 /* Uma linha por produto, para caber muita coisa na tela sem rolar. */
 
-.consulta-campo { position: relative; }
+/* O mesmo widget serve a Consulta de Estoque e aos campos de entrada do
+   estoque: um input de texto com a lista de itens embaixo. */
+.consulta-campo, .busca-campo { position: relative; }
+.busca-campo input[type="text"] { width: 100%; }
 
 .consulta-sugestoes {
     display: none;
@@ -1094,7 +1097,11 @@ html[data-theme="dark"] .fin-periodo-btn.active { background: var(--secondary); 
     padding: 7px 12px; cursor: pointer; font-size: 13px; line-height: 1.3;
 }
 .consulta-sug-item + .consulta-sug-item { border-top: 1px solid var(--border); }
-.consulta-sug-item:hover { background: var(--light); }
+.consulta-sug-item:hover,
+.consulta-sug-item.ativa { background: var(--light); }
+/* A linha percorrida pelo teclado precisa de uma marca mais forte que o hover,
+   senao o cursor do mouse parado sobre outra linha confunde quem navega. */
+.consulta-sug-item.ativa { box-shadow: inset 3px 0 0 var(--primary); }
 .consulta-sug-cod { font-weight: 700; color: var(--dark); min-width: 76px; }
 .consulta-sug-nome { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -1156,7 +1163,8 @@ html[data-theme="dark"] .consulta-cab,
 html[data-theme="dark"] .consulta-detalhe,
 html[data-theme="dark"] .consulta-linha:hover,
 html[data-theme="dark"] .consulta-linha.aberta,
-html[data-theme="dark"] .consulta-sug-item:hover { background: #1D2024; }
+html[data-theme="dark"] .consulta-sug-item:hover,
+html[data-theme="dark"] .consulta-sug-item.ativa { background: #1D2024; }
 html[data-theme="dark"] .consulta-linha,
 html[data-theme="dark"] .consulta-sug-item + .consulta-sug-item { border-color: #282A2E; }
 

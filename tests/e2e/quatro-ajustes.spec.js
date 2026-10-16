@@ -156,7 +156,9 @@ test('escolher o tecido pelo nome preenche a referencia com o codigo', async ({ 
     await abrirEstoque(page, { cat: TECIDOS, est: [] });
 
     expect(await page.inputValue('#est-lote')).toBe('');
-    await page.selectOption('#est-tecido', '1');
+    // o dropdown virou campo de busca: escolher pela lista de sugestoes
+    await page.fill('#est-tecido-busca', 'TRICÔ HERA');
+    await page.locator('#est-tecido-sug .consulta-sug-item').first().click();
 
     expect(await page.inputValue('#est-lote'), 'o codigo do tecido deveria ter sido preenchido').toBe('0001');
     expect(await page.inputValue('#est-preco-custo')).toBe('92.94');
@@ -166,7 +168,8 @@ test('escolher o tecido pelo nome preenche a referencia com o codigo', async ({ 
 test('um banho de cor ja digitado nao e sobrescrito', async ({ page }) => {
     await abrirEstoque(page, { cat: TECIDOS, est: [] });
     await page.fill('#est-lote', 'BANHO-77');
-    await page.selectOption('#est-tecido', '1');
+    await page.fill('#est-tecido-busca', 'TRICÔ HERA');
+    await page.locator('#est-tecido-sug .consulta-sug-item').first().click();
     expect(await page.inputValue('#est-lote'), 'o que o usuario digitou manda').toBe('BANHO-77');
 });
 
