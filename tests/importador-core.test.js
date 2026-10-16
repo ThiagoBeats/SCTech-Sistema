@@ -1780,13 +1780,49 @@ test('com preco_peca, o custo sai dela e nao da coluna de preco', () => {
         'o item precisa avisar que o custo veio do preço por peça');
 });
 
-test('preco_peca vence quando as duas colunas estao mapeadas', () => {
+// Tecido e material divergem aqui de proposito. O preco de venda do TECIDO
+// sai do metro cortado, que e' como ele e' vendido; o material continua na
+// regra antiga, em que a peca manda.
+test('tecido: com as duas colunas mapeadas, o custo sai do CORTE', () => {
     const itens = C.montarItens({
         linhas: LINHAS_CORTE_PECA, cabecalhoIndice: 0,
         mapa: { codigo: 0, nome: 1, largura: 3, preco: 4, preco_peca: 5, unidade: -1 },
         tipo: 'tecido', aba: 'T'
     });
+    assert.strictEqual(itens[0].preco_custo, 83.65);
+    assert.strictEqual(itens[1].preco_custo, 78.90);
+    assert.ok(!itens[0].avisos.some(a => /peça/i.test(a)),
+        'com o corte mandando nao ha o que avisar sobre a peca');
+});
+
+test('material: com as duas colunas mapeadas, o custo continua saindo da PECA', () => {
+    const itens = C.montarItens({
+        linhas: LINHAS_CORTE_PECA, cabecalhoIndice: 0,
+        mapa: { codigo: 0, nome: 1, preco: 4, preco_peca: 5, unidade: -1 },
+        tipo: 'material', aba: 'M'
+    });
     assert.strictEqual(itens[0].preco_custo, 79.47);
+});
+
+test('tecido: os dois valores da tabela ficam gravados, mande quem mandar', () => {
+    const itens = C.montarItens({
+        linhas: LINHAS_CORTE_PECA, cabecalhoIndice: 0,
+        mapa: { codigo: 0, nome: 1, largura: 3, preco: 4, preco_peca: 5, unidade: -1 },
+        tipo: 'tecido', aba: 'T'
+    });
+    assert.strictEqual(itens[0].preco_corte, 83.65);
+    assert.strictEqual(itens[0].preco_peca, 79.47);
+});
+
+test('tecido: so com a coluna de peca, o custo sai dela e avisa', () => {
+    const itens = C.montarItens({
+        linhas: LINHAS_CORTE_PECA, cabecalhoIndice: 0,
+        mapa: { codigo: 0, nome: 1, largura: 3, preco: -1, preco_peca: 5, unidade: -1 },
+        tipo: 'tecido', aba: 'T'
+    });
+    assert.strictEqual(itens[0].preco_custo, 79.47);
+    assert.ok(itens[0].avisos.some(a => /peça/i.test(a)),
+        'sem coluna de corte, o usuario precisa saber de onde veio o custo');
 });
 
 test('linha sem codigo mas com preco por peca vira pendencia, nao sumico', () => {

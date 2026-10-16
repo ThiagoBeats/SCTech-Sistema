@@ -207,13 +207,19 @@
 
     // De qual coluna sai o CUSTO que forma o preco de venda. As duas colunas
     // podem ser mapeadas ao mesmo tempo e ambas sao gravadas, mas so uma vira
-    // custo: quando ha coluna de preco por peca, e ela que manda — regra de
-    // sempre, preservada para nao mexer no preco do que ja foi importado.
-    // A outra fica registrada crua, como veio, para orcamento e consulta.
-    function _colunaDePreco(mapa) {
+    // custo; a outra fica registrada crua, como veio, para orcamento e consulta.
+    //
+    // TECIDO sai do CORTE: ele e' vendido por metro cortado, e e' esse preco
+    // que o pedido multiplica pelo consumo linear. MATERIAL mantem a regra
+    // antiga, em que a peca manda, para nao mexer no preco do que ja foi
+    // importado. Com so uma coluna mapeada, os dois usam a que houver.
+    function _colunaDePreco(mapa, tipo) {
         const m = mapa || {};
-        if (m.preco_peca >= 0) return { indice: m.preco_peca, porPeca: true, temCorte: m.preco >= 0 };
-        return { indice: m.preco >= 0 ? m.preco : -1, porPeca: false, temCorte: m.preco >= 0 };
+        const temCorte = m.preco >= 0;
+        const temPeca = m.preco_peca >= 0;
+        if (tipo === 'tecido' && temCorte) return { indice: m.preco, porPeca: false, temCorte };
+        if (temPeca) return { indice: m.preco_peca, porPeca: true, temCorte };
+        return { indice: temCorte ? m.preco : -1, porPeca: false, temCorte };
     }
 
     // Valor cru de uma coluna de preco, ou null quando nao mapeada/ilegivel.
@@ -359,7 +365,7 @@
                 if (l.motivo) { larguraIlegivel = true; avisos.push(l.motivo); }
             }
 
-            const fontePreco = _colunaDePreco(mapa);
+            const fontePreco = _colunaDePreco(mapa, tipo);
             const p = fontePreco.indice >= 0
                 ? normalizarPreco(linha[fontePreco.indice])
                 : { valor: null, ok: false, motivo: 'A planilha não tem coluna de preço mapeada' };

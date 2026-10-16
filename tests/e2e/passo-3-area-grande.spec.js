@@ -97,7 +97,7 @@ test('o seletor do cabecalho vale para a coluna inteira', async ({ page }) => {
     expect(depois).toBe(5);
 });
 
-test('Preço por peça aparece no seletor e vira a fonte do custo', async ({ page }) => {
+test('Preço por peça aparece no seletor; no tecido quem manda e o corte', async ({ page }) => {
     await ateOPasso3(page, 'Book 10');
 
     const opcoes = await page.locator('.imp-mapa-tabela thead select').first()
@@ -119,11 +119,11 @@ test('Preço por peça aparece no seletor e vira a fonte do custo', async ({ pag
         const e = _impEstado.grupos.novos.find(x => x.item.codigo === '10001');
         return { custo: e.item.preco_custo, corte: e.item.preco_corte, peca: e.item.preco_peca, avisos: e.item.avisos };
     });
-    expect(r.custo, 'o custo deveria vir da coluna PEÇA').toBe(79.47);
-    expect(r.corte, 'o corte fica registrado ao lado').toBe(83.65);
-    expect(r.peca).toBe(79.47);
+    expect(r.custo, 'tecido: o custo vem da coluna CORTE').toBe(83.65);
+    expect(r.peca, 'a peça fica registrada ao lado').toBe(79.47);
+    expect(r.corte).toBe(83.65);
     expect(r.avisos.some(a => /peça/i.test(a)),
-        'com as duas mapeadas a escolha é deliberada, sem aviso em cada linha').toBe(false);
+        'o custo veio do corte: não há o que avisar sobre a peça').toBe(false);
 });
 
 test('com SO a coluna de peca mapeada, o aviso de origem do custo aparece', async ({ page }) => {

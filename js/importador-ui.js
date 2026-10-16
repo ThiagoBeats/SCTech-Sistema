@@ -611,7 +611,8 @@ const _IMP_PAPEIS = [
 ];
 
 // As duas colunas de preco podem conviver: ambas sao gravadas. Quando as duas
-// estao mapeadas, o CUSTO sai da de peca — regra de sempre, preservada.
+// estao mapeadas, o CUSTO sai do CORTE no tecido (vendido por metro cortado) e
+// da PECA no material (regra antiga, preservada). Ver _colunaDePreco no core.
 const _IMP_PAPEIS_PRECO = ['preco', 'preco_peca'];
 
 // Papeis de uma aba marcada como Kit. Codigo, Nome e Preco sao obrigatorios.
@@ -893,8 +894,9 @@ function _impPasso3HTML() {
             </p>
             ${qtd === 0 ? `<p class="imp-nota-zero" onclick="_impAcenderErro(${li})" title="Clique para ver onde está o problema">${_impPorQueZeroItens(layout, mapa, modoCor, coresColunas)}<span class="imp-nota-acao">Clique para ver onde está</span></p>` : ''}
             ${mapa.preco >= 0 && mapa.preco_peca >= 0 ? `<p class="imp-nota-preco">
-                As duas colunas de preço serão gravadas. O <strong>preço por peça</strong> é que forma o preço de venda;
-                o preço por corte fica registrado para orçamento, sem margem aplicada.
+                As duas colunas de preço serão gravadas. ${layout.tipo === 'tecido'
+                    ? 'O <strong>preço (corte)</strong> é que forma o preço de venda, porque o tecido é vendido por metro cortado; o preço por peça fica registrado para orçamento, sem margem aplicada.'
+                    : 'O <strong>preço por peça</strong> é que forma o preço de venda; o preço (corte) fica registrado para orçamento, sem margem aplicada.'}
             </p>` : ''}
         </div>`;
     }).join('');

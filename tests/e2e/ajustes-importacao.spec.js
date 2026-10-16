@@ -416,9 +416,11 @@ test('as duas colunas de preco podem conviver', async ({ page }) => {
     expect(mapa.preco, 'a coluna de corte continua mapeada').toBe(4);
     expect(mapa.preco_peca).toBe(5);
     await expect(page.locator('#imp-corpo')).toContainText('As duas colunas de preço serão gravadas');
+    await expect(page.locator('.imp-nota-preco'), 'a nota precisa dizer qual das duas manda')
+        .toContainText('preço (corte)');
 });
 
-test('os dois precos sao gravados, e a venda sai da peca', async ({ page }) => {
+test('os dois precos sao gravados, e a venda do tecido sai do corte', async ({ page }) => {
     await ateOPasso3(page);
     await page.evaluate(() => _impTrocarPapel(0, 5, 'preco_peca'));
     await page.click('#imp-corpo button:has-text("Continuar")');
@@ -439,8 +441,8 @@ test('os dois precos sao gravados, e a venda sai da peca', async ({ page }) => {
     // Book 10, linha do 10003: corte 78,90 e peça 75,14
     expect(t.corte).toBe(78.9);
     expect(t.peca).toBe(75.14);
-    expect(t.custo, 'o custo sai da peca, regra de sempre').toBe(75.14);
-    expect(t.venda, '75,14 × 1,80').toBeCloseTo(135.25, 2);
+    expect(t.custo, 'tecido e vendido por metro cortado: o custo sai do corte').toBe(78.9);
+    expect(t.venda, '78,90 × 1,80').toBeCloseTo(142.02, 2);
 });
 
 test('o detalhe do tecido mostra os dois precos da tabela', async ({ page }) => {
