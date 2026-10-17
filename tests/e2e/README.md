@@ -56,7 +56,7 @@ TESTDIR=<projeto>/tests/e2e \
   npx playwright test --config=repo.config.js
 ```
 
-Esperado: **298 passando**.
+Esperado: **308 passando**.
 
 ## Sessão autenticada é obrigatória
 
@@ -109,5 +109,6 @@ navegar. Ele semeia um usuário com papel 1 (Administrador, que vem de
 | `ordenar-estoque.spec.js` | Cabeçalho clicável em toda coluna com valor nas três tabelas do Estoque ("Ações" fica de fora), o segundo clique invertendo, só a coluna ativa marcada com a seta do sentido, tecidos ordenando pela quantidade de rolos, os rolos abertos continuando colados no seu tecido, a escolha valendo nas duas telas nos dois sentidos, uma preferência corrompida não derrubando a tela, e o cabeçalho da unidade cabendo na coluna com o nome inteiro no title |
 | `preco-do-tecido-sai-do-corte.spec.js` | Com as duas colunas de preço mapeadas, o custo do TECIDO sai do corte (ele é vendido por metro cortado) e o do MATERIAL continua saindo da peça; os dois valores da tabela seguem gravados; tecido só com a coluna de peça continua usando ela, avisando; a nota da etapa 3 dizendo qual das duas manda; e o valor do tecido no pedido saindo do corte COM a margem — nem pela peça, nem pelo corte cru |
 | `busca-e-minimo-infinito.spec.js` | Os campos de tecido e de material na entrada de estoque como busca com sugestões: filtro por código ou nome, clique e teclado (setas dando a volta, Enter, Esc), mexer no texto limpando o item escolhido, o preenchimento automático disparando, a entrada gravando o item certo e cobrando a escolha quem só digitou; e o estoque mínimo que não vale para item infinito: o campo somindo do cadastro de tecido, material e kit, o valor gravado como zero, o traço nas listas, no detalhe e na Consulta, o dado antigo preservado e a ordenação tratando infinito como sem mínimo |
+| `rolo-se-chama-codigo.spec.js` | O rolo chamado de "Código" em toda a Gestão de Estoque — formulário (com a dica "banho de cor"), tabela de rolos, Consulta, Balanço e o filtro dele, a confirmação da entrada e o movimento gravado no histórico; "Metragem do Rolo" virando "Metragem"; o formulário de baixa falando em rolo; e a palavra "lote" preservada nos Pedidos, onde ela quer dizer banho de cor |
 
-Esperado no total: **298 passando**.
+Esperado no total: **308 passando**.

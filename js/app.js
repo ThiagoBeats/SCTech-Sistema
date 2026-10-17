@@ -3281,7 +3281,7 @@ function abrirBalanco() {
                     </div>
                     <div style="flex:1;min-width:150px">
                         <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Código</label>
-                        <input id="balanco-filter-ref" type="text" placeholder="Filtrar por código ou lote..." style="${inpStyle}" oninput="_filtrarBalanco()">
+                        <input id="balanco-filter-ref" type="text" placeholder="Filtrar por código do tecido ou do rolo..." style="${inpStyle}" oninput="_filtrarBalanco()">
                     </div>
                     <div style="display:flex;align-items:flex-end;gap:8px">
                         <button class="btn btn-outline btn-sm" onclick="_limparFiltrosBalanco()" style="white-space:nowrap">✕ Limpar</button>
@@ -3299,7 +3299,7 @@ function abrirBalanco() {
                     <table style="width:100%;border-collapse:collapse;font-size:13px">
                         <thead><tr>
                             <th style="${thStyle}">Tecido</th>
-                            <th style="${thStyle}">Lote</th>
+                            <th style="${thStyle}">Código</th>
                             <th style="${thStyle};text-align:right">Sist. (m)</th>
                             <th style="${thStyle};text-align:right;width:130px">Contado (m)</th>
                             <th style="${thStyle};text-align:right;width:100px">Diferença</th>
@@ -3464,7 +3464,7 @@ async function exportarBalancoPDF() {
 
     <h3>Tecidos / Rolos</h3>
     <table>
-        <thead><tr>${th('Tecido')}${th('Lote')}${th('Qtd. Sistema','text-align:right')}${th('Qtd. Contada','text-align:right;width:130px')}${th('Diferença','text-align:right;width:110px')}</tr></thead>
+        <thead><tr>${th('Tecido')}${th('Código')}${th('Qtd. Sistema','text-align:right')}${th('Qtd. Contada','text-align:right;width:130px')}${th('Diferença','text-align:right;width:110px')}</tr></thead>
         <tbody>${rowsTec || `<tr><td colspan="5" style="padding:14px;color:#aaa;text-align:center">${filtroAtivo ? 'Nenhum tecido corresponde ao filtro' : 'Nenhum rolo em estoque'}</td></tr>`}</tbody>
     </table>
 
@@ -3638,7 +3638,7 @@ async function salvarEntradaEstoque() {
     const nomeTecConf = db.catalogo.find(t => t.id === tecidoId)?.nome || '—';
     const precoVendaConf = custo > 0 ? (custo * (1 + markup / 100)).toFixed(2) : null;
     const linhaPreco = custo > 0 ? `\nCusto: R$ ${custo.toFixed(2)}/m  →  Venda: R$ ${precoVendaConf}/m` : '';
-    if (!await showConfirm(`Confirmar entrada de rolo?\n\nTecido: ${nomeTecConf}\nLote: ${referencia}\nMetragem: ${metros} m${linhaPreco}`, '📦', 'Confirmar Entrada', 'Cancelar')) return;
+    if (!await showConfirm(`Confirmar entrada de rolo?\n\nTecido: ${nomeTecConf}\nCódigo: ${referencia}\nMetragem: ${metros} m${linhaPreco}`, '📦', 'Confirmar Entrada', 'Cancelar')) return;
     db.estoque.push({ id: Date.now(), tecido_id: tecidoId, lote: referencia, metragem_inicial: metros, metragem_atual: metros, data_entrada: data });
     if (custo > 0) {
         const tec = db.catalogo.find(t => t.id === tecidoId);
@@ -3648,7 +3648,7 @@ async function salvarEntradaEstoque() {
         }
     }
     const nomeTec = db.catalogo.find(t => t.id === tecidoId)?.nome || 'Tecido';
-    registrarMovimento('Entrada', `${nomeTec} — Lote ${referencia}`, 'tecido', metros, 'm', referencia);
+    registrarMovimento('Entrada', `${nomeTec} — Código ${referencia}`, 'tecido', metros, 'm', referencia);
     salvarERecarregar('Entrada registrada!');
 }
 
@@ -3971,7 +3971,7 @@ function renderEstoque() {
 
         if (!aberto || !rolos.length) return;
         html += `<tr class="est-tec-rolos"><td colspan="9"><table class="est-rolos-tabela">
-            <thead><tr><th>Lote</th><th>Metragem inicial</th><th>Disponível</th><th>Ocupação</th><th>Entrada</th><th>Ações</th></tr></thead>
+            <thead><tr><th>Código</th><th>Metragem inicial</th><th>Disponível</th><th>Ocupação</th><th>Entrada</th><th>Ações</th></tr></thead>
             <tbody>` + rolos.map(r => {
             const pct = r.metragem_inicial > 0 ? Math.round((r.metragem_atual / r.metragem_inicial) * 100) : 0;
             const cor = pct > 40 ? '#005D3B' : pct > 15 ? '#F2C924' : '#F43927';
@@ -3990,7 +3990,7 @@ function renderEstoque() {
             </tr>
             ${infinito ? '' : `<tr id="baixa-${r.id}" class="baixa-form" style="display:none">
                 <td colspan="6" class="baixa-form-cell" onclick="event.stopPropagation()">
-                    <strong>Baixar lote ${escapeHtml(r.lote)}</strong> — saldo: <strong>${r.metragem_atual.toFixed(3)} m</strong> &emsp;
+                    <strong>Baixar rolo ${escapeHtml(r.lote)}</strong> — saldo: <strong>${r.metragem_atual.toFixed(3)} m</strong> &emsp;
                     <input type="number" id="baixa-qtd-${r.id}" placeholder="Metros a baixar" step="0.001" min="0.001" max="${r.metragem_atual}" style="width:160px;padding:5px 8px;border:1px solid #ccc;border-radius:4px">
                     <button class="btn btn-sm" style="background:#F2C924" onclick="confirmarBaixa(${r.id})">Confirmar Baixa</button>
                     <button class="btn btn-outline btn-sm" onclick="cancelarBaixa()">Cancelar</button>
@@ -7926,7 +7926,7 @@ function _consultaDetalheHTML(item) {
         rolosHtml = item.rolos.length ? `
         <table>
             <thead><tr>
-                <th>Lote</th><th>Metragem inicial</th>
+                <th>Código</th><th>Metragem inicial</th>
                 <th>Disponível</th><th>Data de entrada</th><th>Status</th>
             </tr></thead>
             <tbody>${item.rolos.map(ro => {

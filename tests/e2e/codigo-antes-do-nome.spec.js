@@ -56,11 +56,14 @@ for (const pagina of PAGINAS) {
     });
 }
 
-test('o lote do rolo se chama Lote, e a origem do movimento se chama Origem', async ({ page }) => {
+// O rolo era chamado de "Lote"; passou a ser "Código", como o resto do
+// sistema. A palavra sai dos rótulos da Gestão de Estoque — mas continua
+// valendo nos Pedidos, onde "lote" quer dizer banho de cor, outra coisa.
+test('o rolo se chama Código, e a origem do movimento se chama Origem', async ({ page }) => {
     await semear(page, 'estoque.html');
     const rotulos = await page.evaluate(() =>
         [...document.querySelectorAll('label, th')].map(el => el.textContent.trim()));
-    expect(rotulos.some(t => /^Lote/.test(t)), 'o lote do rolo').toBe(true);
+    expect(rotulos.some(t => /^Lote/.test(t)), 'a palavra Lote saiu dos rótulos').toBe(false);
     expect(rotulos.some(t => t === 'Origem'), 'a origem do movimento').toBe(true);
 });
 
