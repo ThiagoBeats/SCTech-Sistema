@@ -52,7 +52,7 @@ test('medicoes: pendentes a esquerda, realizados a direita, sem cancelados', asy
     await abrir(page, 'medicoes');
     expect(await nomes(page, 'med-pend-lista')).toEqual(['Maria Oliveira', 'Ana Paula Lima', 'Carlos Souza']);
     expect(await nomes(page, 'med-real-lista'), 'mais recente primeiro').toEqual(['João Silva', 'Juliana Martins']);
-    await expect(page.locator('#med-pend-count')).toHaveText('3');
+    await expect(page.locator('#med-pend-count')).toHaveText('3 agendamentos');
     await expect(page.locator('#med-real-count')).toHaveText('2');
     await expect(page.locator('#pcp-view-medicoes')).not.toContainText('Cancelada Teste');
 });
@@ -68,7 +68,7 @@ test('medicoes: cada coluna tem a sua busca, que ignora acento e maiuscula', asy
     await abrir(page, 'medicoes');
     await page.fill('#med-pend-busca', 'MARIA');
     expect(await nomes(page, 'med-pend-lista')).toEqual(['Maria Oliveira']);
-    await expect(page.locator('#med-pend-count')).toHaveText('1 de 3');
+    await expect(page.locator('#med-pend-count')).toHaveText('1 de 3 agendamentos');
     expect((await nomes(page, 'med-real-lista')).length, 'a outra coluna nao filtra').toBe(2);
     await page.fill('#med-real-busca', 'joao');
     expect(await nomes(page, 'med-real-lista')).toEqual(['João Silva']);
@@ -83,7 +83,7 @@ test('medicoes: agendar uma visita a coloca na coluna da esquerda, sem recarrega
     await page.fill('#med-end', 'Rua Laura, 139');
     await page.click('button:has-text("Agendar Visita")');
     await expect(page.locator('#med-pend-lista')).toContainText('Euclides Genésio');
-    await expect(page.locator('#med-pend-count')).toHaveText('4');
+    await expect(page.locator('#med-pend-count')).toHaveText('4 agendamentos');
 });
 
 // --- Medicoes: detalhe e acoes ------------------------------------------------
@@ -166,7 +166,7 @@ test('medicoes: cancelar tira dos agendamentos e nao conta como realizada', asyn
     await confirmar(page);
     await expect(page.locator('#med-pend-lista')).not.toContainText('Maria Oliveira');
     await expect(page.locator('#med-real-lista')).not.toContainText('Maria Oliveira');
-    await expect(page.locator('#med-pend-count')).toHaveText('2');
+    await expect(page.locator('#med-pend-count')).toHaveText('2 agendamentos');
     await expect(page.locator('#med-real-count')).toHaveText('2');
     const m = (await lerMed(page)).find(x => x.id === 3);
     expect(m.status).toBe('Cancelado');
@@ -287,4 +287,35 @@ test('o Kanban continua confirmando a entrega pelo mesmo desfecho', async ({ pag
     const mover = fonte.slice(fonte.indexOf('async function moverStatus'));
     const corpo = mover.slice(0, mover.search(/\r?\n\}\r?\n/) + 1);   // o arquivo e servido com CRLF
     expect(corpo, 'moverStatus usa a funcao compartilhada').toContain('aplicarConfirmacaoEntrega(ped, resultado)');
+});
+
+test('a linha segue a referencia: data e horario lado a lado, selo embaixo', async ({ page }) => {
+    await abrir(page, 'medicoes');
+    const item = page.locator('#med-pend-lista .agd-item').first();
+    const [d, h, s] = await Promise.all([
+        item.locator('.agd-quando-linha .agd-linha').nth(0).boundingBox(),
+        item.locator('.agd-quando-linha .agd-linha').nth(1).boundingBox(),
+        item.locator('.agd-pill').boundingBox(),
+    ]);
+    expect(Math.abs(d.y - h.y), 'mesma linha').toBeLessThan(3);
+    expect(s.y, 'selo abaixo').toBeGreaterThan(d.y + d.height - 1);
+});
+
+// --- Cache ------------------------------------------------------------------
+
+test('todas as paginas pedem CSS e JS com a mesma versao', async () => {
+    // Sem ?v= o navegador reaproveita o style.css antigo e a tela nova aparece
+    // sem estilo. Ao publicar mudanca de CSS/JS, troque a versao em todas.
+    const fs = require('node:fs'), path = require('node:path');
+    const raiz = path.join(__dirname, '..', '..');
+    const versoes = new Set(), semVersao = [];
+    for (const f of fs.readdirSync(raiz).filter(n => n.endsWith('.html'))) {
+        const html = fs.readFileSync(path.join(raiz, f), 'utf8');
+        for (const m of html.matchAll(/(?:href|src)="((?:css|js)\/[\w-]+\.(?:css|js))(\?v=[\w-]+)?"/g)) {
+            if (!m[2]) semVersao.push(`${f}: ${m[1]}`);
+            else versoes.add(m[2]);
+        }
+    }
+    expect(semVersao, 'arquivo local sem versao').toEqual([]);
+    expect([...versoes].length, 'uma versao so').toBe(1);
 });

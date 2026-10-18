@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Produção - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=20261019a">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
@@ -62,8 +62,10 @@
                 <section class="card agd-col" aria-labelledby="inst-pend-titulo">
                     <header class="agd-col-head">
                         <span class="agd-col-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></span>
-                        <h3 id="inst-pend-titulo">Agendamentos de Instalação</h3>
-                        <span class="agd-count" id="inst-pend-count">0</span>
+                        <span class="agd-col-tit">
+                            <h3 id="inst-pend-titulo">Agendamentos de Instalação</h3>
+                            <span class="agd-count" id="inst-pend-count">0</span>
+                        </span>
                         <label class="agd-busca">
                             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
                             <input type="search" id="inst-pend-busca" placeholder="Buscar por cliente ou nº do pedido..." aria-label="Buscar agendamentos de instalação" oninput="buscarAgenda('instPend', this.value)">
@@ -155,8 +157,10 @@
                 <section class="card agd-col" aria-labelledby="med-pend-titulo">
                     <header class="agd-col-head">
                         <span class="agd-col-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></span>
-                        <h3 id="med-pend-titulo">Agendamentos de Medição</h3>
-                        <span class="agd-count" id="med-pend-count">0</span>
+                        <span class="agd-col-tit">
+                            <h3 id="med-pend-titulo">Agendamentos de Medição</h3>
+                            <span class="agd-count" id="med-pend-count">0</span>
+                        </span>
                         <label class="agd-busca">
                             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
                             <input type="search" id="med-pend-busca" placeholder="Buscar por nome do cliente..." aria-label="Buscar agendamentos de medição" oninput="buscarAgenda('medPend', this.value)">
@@ -179,7 +183,7 @@
             </div>
         </div>
     </main>
-    <script src="js/app.js"></script>
+    <script src="js/app.js?v=20261019a"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const view = new URLSearchParams(window.location.search).get('view');

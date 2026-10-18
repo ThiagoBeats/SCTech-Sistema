@@ -7225,18 +7225,22 @@ function _agdLinha(o) {
             ${o.end ? `<span class="agd-linha">${_agdIco('pin', 12)}${escapeHtml(o.end)}</span>` : ''}
         </span>
         <span class="agd-quando">
-            <span class="agd-linha">${_agdIco('cal', 13)}${o.data ? _agdFmtData(o.data) : 'Sem data'}</span>
-            <span class="agd-linha">${_agdIco('relogio', 13)}${escapeHtml(o.hora || '--:--')}</span>
+            <span class="agd-quando-linha">
+                <span class="agd-linha">${_agdIco('cal', 13)}${o.data ? _agdFmtData(o.data) : 'Sem data'}</span>
+                <span class="agd-linha">${_agdIco('relogio', 13)}${escapeHtml(o.hora || '--:--')}</span>
+            </span>
+            <span class="agd-status">${_agdPill(o.pill)}</span>
         </span>
-        <span class="agd-status">${_agdPill(o.pill)}</span>
         <span class="agd-seta">${_agdIco('seta', 16)}</span>
     </button>`;
 }
 
-function _agdPreencher(prefixo, linhas, total, vazio, busca) {
+// unidade: [singular, plural] escreve "4 agendamentos"; sem ela, so o numero.
+function _agdPreencher(prefixo, linhas, total, vazio, busca, unidade) {
     const lista = document.getElementById(prefixo + '-lista');
     const cont  = document.getElementById(prefixo + '-count');
-    if (cont) cont.textContent = busca ? `${linhas.length} de ${total}` : String(total);
+    const sufixo = unidade ? ' ' + unidade[total === 1 ? 0 : 1] : '';
+    if (cont) cont.textContent = (busca ? `${linhas.length} de ${total}` : String(total)) + sufixo;
     if (lista) lista.innerHTML = linhas.length
         ? linhas.join('')
         : `<div class="agd-vazio">${busca ? 'Nenhum resultado para essa busca.' : vazio}</div>`;
@@ -7364,7 +7368,7 @@ function renderMedicoes() {
     const pendF = filtra(pend, 'medPend').sort((a, b) => _agdCmp(_agdChave(a.data, a.hora), _agdChave(b.data, b.hora)));
     const realF = filtra(real, 'medReal').sort((a, b) =>
         _agdCmp(_agdChave(b.data, b.hora), _agdChave(a.data, a.hora)) || (b.realizado_em || 0) - (a.realizado_em || 0));
-    _agdPreencher('med-pend', pendF.map(linha), pend.length, 'Nenhuma visita agendada. Use o formulário acima para agendar.', _agdBusca.medPend);
+    _agdPreencher('med-pend', pendF.map(linha), pend.length, 'Nenhuma visita agendada. Use o formulário acima para agendar.', _agdBusca.medPend, ['agendamento', 'agendamentos']);
     _agdPreencher('med-real', realF.map(linha), real.length, 'Nenhuma medição realizada ainda.', _agdBusca.medReal);
 }
 
@@ -7682,7 +7686,7 @@ function renderAgenda() {
         _agdCmp(_agdChave(a.data_entrega, a.inst_hora), _agdChave(b.data_entrega, b.inst_hora)));
     const realF = filtra(real, 'instReal').sort((a, b) =>
         (b.data_instalado || 0) - (a.data_instalado || 0) || _agdCmp(_agdChave(b.data_entrega, b.inst_hora), _agdChave(a.data_entrega, a.inst_hora)));
-    _agdPreencher('inst-pend', pendF.map(p => linha(p, false)), pend.length, 'Nenhum pedido aguardando instalação.', _agdBusca.instPend);
+    _agdPreencher('inst-pend', pendF.map(p => linha(p, false)), pend.length, 'Nenhum pedido aguardando instalação.', _agdBusca.instPend, ['agendamento', 'agendamentos']);
     _agdPreencher('inst-real', realF.map(p => linha(p, true)), real.length, 'Nenhuma instalação realizada ainda.', _agdBusca.instReal);
 }
 
