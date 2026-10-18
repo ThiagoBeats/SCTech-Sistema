@@ -56,128 +56,127 @@
             <div id="kanban-board" class="kanban-board"></div>
         </div>
         <div id="pcp-view-agenda" style="display:none">
-            <!-- Filtros da Agenda de Instalações -->
-            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;padding:12px 0 4px">
-                <div style="flex:1;min-width:160px">
-                    <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Cliente</label>
-                    <input id="ag-cliente" type="text" placeholder="🔍 Buscar cliente..."
-                           style="width:100%;padding:7px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px"
-                           oninput="aplicarFiltroAgenda()">
-                </div>
-                <div style="flex:1;min-width:140px">
-                    <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Vendedor</label>
-                    <select id="ag-vendedor"
-                            style="width:100%;padding:7px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px;background:#fff"
-                            onchange="aplicarFiltroAgenda()">
-                        <option value="">Todos</option>
-                    </select>
-                </div>
-                <div style="flex:1;min-width:140px">
-                    <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Número do pedido</label>
-                    <input id="ag-pedido" type="text" placeholder="Ex: 26001 ou #26001"
-                           style="width:100%;padding:7px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px"
-                           oninput="aplicarFiltroAgenda()">
-                </div>
-                <div style="display:flex;align-items:flex-end;gap:8px;padding-bottom:1px">
-                    <button class="btn btn-outline btn-sm" onclick="limparFiltroAgenda()" style="white-space:nowrap">✕ Limpar</button>
-                    <button class="btn btn-outline btn-sm" onclick="salvarFiltroAgenda()" style="white-space:nowrap" title="Lembrar este filtro para a próxima vez que você abrir esta aba">💾 Salvar filtro</button>
-                </div>
+            <!-- Agenda de Instalacoes: cada linha e um pedido. Sem formulario:
+                 a instalacao nasce ao avancar o pedido para Pronto p/ Instalacao. -->
+            <div id="agenda-container" class="agd-colunas">
+                <section class="card agd-col" aria-labelledby="inst-pend-titulo">
+                    <header class="agd-col-head">
+                        <span class="agd-col-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></span>
+                        <h3 id="inst-pend-titulo">Agendamentos de Instalação</h3>
+                        <span class="agd-count" id="inst-pend-count">0</span>
+                        <label class="agd-busca">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                            <input type="search" id="inst-pend-busca" placeholder="Buscar por cliente ou nº do pedido..." aria-label="Buscar agendamentos de instalação" oninput="buscarAgenda('instPend', this.value)">
+                        </label>
+                    </header>
+                    <div class="agd-lista" id="inst-pend-lista"></div>
+                </section>
+                <section class="card agd-col" aria-labelledby="inst-real-titulo">
+                    <header class="agd-col-head">
+                        <span class="agd-col-ico agd-verde" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                        <h3 id="inst-real-titulo">Realizados</h3>
+                        <span class="agd-count" id="inst-real-count">0</span>
+                        <label class="agd-busca">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                            <input type="search" id="inst-real-busca" placeholder="Buscar por cliente ou nº do pedido..." aria-label="Buscar instalações realizadas" oninput="buscarAgenda('instReal', this.value)">
+                        </label>
+                    </header>
+                    <div class="agd-lista" id="inst-real-lista"></div>
+                </section>
             </div>
-            <div id="agenda-container"></div>
         </div>
         <div id="pcp-view-medicoes" style="display:none">
-            <div class="card" style="margin-bottom:0">
-                <h3 style="margin-bottom:18px;color:var(--primary)">Agendar Visita de Medição</h3>
+            <div class="card agd-form-card">
+                <h3>Agendar Visita de Medição</h3>
 
-                <!-- Tipo de cliente -->
-                <div style="display:flex;gap:24px;margin-bottom:16px">
-                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-weight:600">
-                        <input type="radio" name="med-tipo" value="existente" checked onchange="toggleTipoClienteMedicao()"> Cliente existente
-                    </label>
-                    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-weight:600">
-                        <input type="radio" name="med-tipo" value="novo" onchange="toggleTipoClienteMedicao()"> Novo cliente
-                    </label>
+                <div class="agd-tipo">
+                    <label><input type="radio" name="med-tipo" value="existente" checked onchange="toggleTipoClienteMedicao()"> Cliente existente</label>
+                    <label><input type="radio" name="med-tipo" value="novo" onchange="toggleTipoClienteMedicao()"> Novo cliente</label>
                 </div>
 
-                <!-- Cliente existente -->
-                <div id="med-grupo-existente">
-                    <div class="form-group" style="max-width:400px">
-                        <label>Cliente <span style="color:#F43927">*</span></label>
+                <!-- Novo cliente: ocupa uma linha propria acima dos dados da visita -->
+                <div id="med-grupo-novo" class="agd-form-grid" style="display:none;margin-bottom:10px">
+                    <div class="form-group">
+                        <label for="med-novo-nome">Nome do cliente <span style="color:var(--danger)">*</span></label>
+                        <input type="text" id="med-novo-nome" placeholder="Nome completo">
+                    </div>
+                    <div class="form-group">
+                        <label for="med-novo-tel">Telefone / WhatsApp</label>
+                        <input type="text" id="med-novo-tel" placeholder="(11) 99999-9999">
+                    </div>
+                    <div class="form-group">
+                        <label for="med-novo-cpf">CPF</label>
+                        <input type="text" id="med-novo-cpf" placeholder="000.000.000-00" maxlength="14" oninput="mascaraCPF(this)">
+                    </div>
+                    <div class="form-group">
+                        <label for="med-novo-email">E-mail</label>
+                        <input type="email" id="med-novo-email" placeholder="cliente@email.com">
+                    </div>
+                </div>
+
+                <div class="agd-form-grid">
+                    <div class="form-group" id="med-grupo-existente">
+                        <label for="med-cliente-id">Cliente <span style="color:var(--danger)">*</span></label>
                         <select id="med-cliente-id" onchange="onMedClienteChange()">
                             <option value="">— Selecione o cliente —</option>
                         </select>
                     </div>
-                </div>
-
-                <!-- Novo cliente inline -->
-                <div id="med-grupo-novo" style="display:none">
-                    <div class="grid" style="max-width:600px">
-                        <div class="form-group">
-                            <label>Nome do cliente <span style="color:#F43927">*</span></label>
-                            <input type="text" id="med-novo-nome" placeholder="Nome completo">
-                        </div>
-                        <div class="form-group">
-                            <label>Telefone / WhatsApp</label>
-                            <input type="text" id="med-novo-tel" placeholder="(11) 99999-9999">
-                        </div>
-                        <div class="form-group">
-                            <label>CPF</label>
-                            <input type="text" id="med-novo-cpf" placeholder="000.000.000-00" maxlength="14" oninput="mascaraCPF(this)">
-                        </div>
-                        <div class="form-group">
-                            <label>E-mail</label>
-                            <input type="email" id="med-novo-email" placeholder="cliente@email.com">
-                        </div>
-                    </div>
-                    <p style="font-size:11px;color:#8F8F8F;margin:-4px 0 8px">O cliente será cadastrado automaticamente ao agendar.</p>
-                </div>
-
-                <!-- Data / Hora / Endereço / Obs -->
-                <div class="grid" style="margin-top:4px">
                     <div class="form-group">
-                        <label>Data da visita <span style="color:#F43927">*</span></label>
+                        <label for="med-data">Data da visita <span style="color:var(--danger)">*</span></label>
                         <input type="date" id="med-data">
                     </div>
                     <div class="form-group">
-                        <label>Horário</label>
+                        <label for="med-hora">Horário</label>
                         <input type="time" id="med-hora">
                     </div>
                     <div class="form-group">
-                        <label>Endereço da visita <span style="color:#F43927">*</span></label>
+                        <label for="med-end">Endereço da visita <span style="color:var(--danger)">*</span></label>
                         <input type="text" id="med-end" placeholder="Rua, nº, bairro, cidade…">
                     </div>
-                </div>
-                <div class="grid" style="margin-top:0">
                     <div class="form-group">
-                        <label>Responsável pela medição</label>
+                        <label for="med-usuario">Responsável pela medição</label>
                         <select id="med-usuario">
                             <option value="">— A definir —</option>
                         </select>
-                        <small style="font-size:11px;color:var(--muted);margin-top:4px">A visita aparece como alerta para esta pessoa.</small>
+                        <small class="agd-form-dica">A visita aparece como alerta para esta pessoa.</small>
                     </div>
-                    <div class="form-group" style="grid-column:span 2">
-                        <label>Observações</label>
+                    <div class="form-group agd-span2">
+                        <label for="med-obs">Observações</label>
                         <input type="text" id="med-obs" placeholder="Referências, ponto de encontro, instruções…">
                     </div>
                 </div>
 
-                <button class="btn btn-success" onclick="salvarMedicao()">📐 Agendar Visita</button>
+                <div class="agd-form-rodape">
+                    <button class="btn btn-success" onclick="salvarMedicao()">📐 Agendar Visita</button>
+                </div>
             </div>
 
-            <!-- Filtro da Agenda de Medições -->
-            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;padding:16px 0 4px">
-                <div style="flex:1;min-width:200px;max-width:320px">
-                    <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Cliente</label>
-                    <input id="mf-cliente" type="text" placeholder="🔍 Buscar cliente..."
-                           style="width:100%;padding:7px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px"
-                           oninput="aplicarFiltroMedicoes()">
-                </div>
-                <div style="display:flex;align-items:flex-end;gap:8px;padding-bottom:1px">
-                    <button class="btn btn-outline btn-sm" onclick="limparFiltroMedicoes()" style="white-space:nowrap">✕ Limpar</button>
-                    <button class="btn btn-outline btn-sm" onclick="salvarFiltroMedicoes()" style="white-space:nowrap" title="Lembrar este filtro para a próxima vez que você abrir esta aba">💾 Salvar filtro</button>
-                </div>
+            <div id="medicoes-container" class="agd-colunas">
+                <section class="card agd-col" aria-labelledby="med-pend-titulo">
+                    <header class="agd-col-head">
+                        <span class="agd-col-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></span>
+                        <h3 id="med-pend-titulo">Agendamentos de Medição</h3>
+                        <span class="agd-count" id="med-pend-count">0</span>
+                        <label class="agd-busca">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                            <input type="search" id="med-pend-busca" placeholder="Buscar por nome do cliente..." aria-label="Buscar agendamentos de medição" oninput="buscarAgenda('medPend', this.value)">
+                        </label>
+                    </header>
+                    <div class="agd-lista" id="med-pend-lista"></div>
+                </section>
+                <section class="card agd-col" aria-labelledby="med-real-titulo">
+                    <header class="agd-col-head">
+                        <span class="agd-col-ico agd-verde" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                        <h3 id="med-real-titulo">Realizados</h3>
+                        <span class="agd-count" id="med-real-count">0</span>
+                        <label class="agd-busca">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                            <input type="search" id="med-real-busca" placeholder="Buscar por nome do cliente..." aria-label="Buscar medições realizadas" oninput="buscarAgenda('medReal', this.value)">
+                        </label>
+                    </header>
+                    <div class="agd-lista" id="med-real-lista"></div>
+                </section>
             </div>
-            <div id="medicoes-container" style="margin-top:8px"></div>
         </div>
     </main>
     <script src="js/app.js"></script>

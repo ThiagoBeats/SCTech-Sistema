@@ -2390,6 +2390,21 @@ function ofertarAgendamentoInstalacao(ped) {
     return new Promise(resolve => mostrarModalAgendarInstalacao(ped, resolve));
 }
 
+// Desfecho de "Confirmar Entrega" (modal de pagamento), usado pelo Kanban e
+// pela Agenda de Instalacoes: pago -> Instalado; com saldo -> Aguardando Pagamento.
+function aplicarConfirmacaoEntrega(ped, resultado) {
+    if (!ped.timeline) ped.timeline = [];
+    if (resultado === 'pago') {
+        ped.valor_recebido = ped.valor;
+        ped.status = 'Instalado';
+        if (!ped.data_instalado) ped.data_instalado = Date.now();
+        ped.timeline.push({ status: 'Instalado', data: Date.now() });
+    } else {
+        ped.status = 'Aguardando Pagamento';
+        ped.timeline.push({ status: 'Aguardando Pagamento', data: Date.now() });
+    }
+}
+
 async function moverStatus(id, direcao) {
     const ped = db.pedidos.find(p => p.id == id);
     if (!ped) return;
@@ -2473,17 +2488,7 @@ async function moverStatus(id, direcao) {
     if ((STATUS_PIPELINE[idx] === 'Pronto p/ Instalação' || STATUS_PIPELINE[idx] === 'Aguardando Pagamento') && direcao === 1) {
         mostrarModalPagamento(ped, resultado => {
             if (!resultado) return;
-            if (resultado === 'pago') {
-                ped.valor_recebido = ped.valor;
-                ped.status = 'Instalado';
-                if (!ped.data_instalado) ped.data_instalado = Date.now();
-                if (!ped.timeline) ped.timeline = [];
-                ped.timeline.push({ status: 'Instalado', data: Date.now() });
-            } else {
-                ped.status = 'Aguardando Pagamento';
-                if (!ped.timeline) ped.timeline = [];
-                ped.timeline.push({ status: 'Aguardando Pagamento', data: Date.now() });
-            }
+            aplicarConfirmacaoEntrega(ped, resultado);
             toastReload('Status atualizado!');
             syncDB();
             window.location.reload();
@@ -7108,31 +7113,6 @@ async function salvarMedicao() {
     renderDashboardMedicoes();
 }
 
-function marcarMedicaoRealizada(id) {
-    const m = db.medicoes.find(x => x.id == id);
-    if (m) m.status = 'Realizado';
-    syncDB();
-    renderMedicoes();
-    renderDashboardMedicoes();
-}
-
-async function cancelarMedicao(id) {
-    if (!await showConfirm('Cancelar esta visita agendada?', '⚠️', 'Sim, cancelar', 'Não')) return;
-    const m = db.medicoes.find(x => x.id == id);
-    if (m) m.status = 'Cancelado';
-    syncDB();
-    renderMedicoes();
-    renderDashboardMedicoes();
-}
-
-async function excluirMedicao(id) {
-    if (!await showConfirm('Excluir este agendamento?', '🗑️', 'Excluir', 'Cancelar')) return;
-    db.medicoes = db.medicoes.filter(x => x.id != id);
-    syncDB();
-    renderMedicoes();
-    renderDashboardMedicoes();
-}
-
 function imprimirAgendamentoMedicao(id) {
     const v = db.medicoes.find(x => x.id == id);
     if (!v) return;
@@ -7189,116 +7169,308 @@ function imprimirAgendamentoMedicao(id) {
     abrirDocModal(html, 'Agendamento de Medição');
 }
 
-// --- FILTRO: Agenda de Medições ---
-// Só o campo Cliente é aplicável aqui: uma medição é agendada antes de existir
-// um pedido, então não há vendedor nem número de pedido para filtrar por enquanto.
-let _medicoesFiltro = { cliente: '' };
-let _medicoesFiltroPronto = false;
-
-function _inicializarFiltroMedicoes() {
-    if (_medicoesFiltroPronto) return;
-    _medicoesFiltroPronto = true;
-    const salvo = _filtroSalvoPCP('agendamento_medicoes');
-    if (salvo) {
-        _medicoesFiltro = { cliente: salvo.cliente || '' };
-        const c = document.getElementById('mf-cliente'); if (c) c.value = _medicoesFiltro.cliente;
-    }
+// --- AGENDAS DA PRODUCAO (Medicoes e Instalacoes) ---------------------------
+// As duas abas tem o mesmo desenho: coluna de pendentes (data mais proxima
+// primeiro) e coluna de realizados (mais recente primeiro), cada uma com a sua
+// busca. A linha so mostra o resumo; as acoes ficam no detalhe, aberto pela
+// seta. Toda acao regrava e redesenha as listas, sem recarregar a pagina.
+const _AGD_SVG = {
+    cal:     '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+    relogio: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    tel:     '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>',
+    pin:     '<path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/>',
+    user:    '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/>',
+    seta:    '<path d="m9 6 6 6-6 6"/>',
+};
+function _agdIco(nome, tam) {
+    const t = tam || 14;
+    return `<svg viewBox="0 0 24 24" width="${t}" height="${t}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${_AGD_SVG[nome] || ''}</svg>`;
 }
 
-function aplicarFiltroMedicoes() {
-    _medicoesFiltro.cliente = (document.getElementById('mf-cliente')?.value || '').toLowerCase().trim();
+let _agdBusca = { medPend: '', medReal: '', instPend: '', instReal: '' };
+
+// Dia de hoje no fuso do usuario (toISOString daria o dia em UTC, que vira o
+// dia seguinte a noite no Brasil).
+function _agdHoje() { return new Date().toLocaleDateString('sv-SE'); }
+function _agdDiaLocal(ts) { return new Date(ts).toLocaleDateString('sv-SE'); }
+function _agdFmtData(d) { return d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—'; }
+function _agdFmtMomento(ts) {
+    return new Date(ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+// Chave de ordenacao: sem data vai para o fim; sem horario, para o fim do dia.
+function _agdChave(data, hora) { return (data || '9999-12-31') + ' ' + (hora || '99:99'); }
+function _agdCmp(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
+function _agdNorm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(); }
+
+const _AGD_PILLS = {
+    agendado:  ['Agendado',          'agd-pill-azul'],
+    atrasado:  ['Atrasado',          'agd-pill-verm'],
+    realizado: ['Realizado',         'agd-pill-verde'],
+    instalado: ['Instalado',         'agd-pill-verde'],
+    pagamento: ['Aguard. pagamento', 'agd-pill-amar'],
+    semdata:   ['Sem data',          'agd-pill-cinza'],
+};
+function _agdPill(tipo) {
+    const [txt, cls] = _AGD_PILLS[tipo] || _AGD_PILLS.agendado;
+    return `<span class="agd-pill ${cls}">${txt}</span>`;
+}
+
+function _agdLinha(o) {
+    return `<button type="button" class="agd-item" onclick="${o.onclick}" title="Ver detalhes">
+        <span class="agd-avatar">${_agdIco('user', 18)}</span>
+        <span class="agd-info">
+            <span class="agd-nome">${escapeHtml(o.nome || '—')}</span>
+            ${o.sub ? `<span class="agd-linha agd-sub">${escapeHtml(o.sub)}</span>` : ''}
+            ${o.tel ? `<span class="agd-linha">${_agdIco('tel', 12)}${escapeHtml(o.tel)}</span>` : ''}
+            ${o.end ? `<span class="agd-linha">${_agdIco('pin', 12)}${escapeHtml(o.end)}</span>` : ''}
+        </span>
+        <span class="agd-quando">
+            <span class="agd-linha">${_agdIco('cal', 13)}${o.data ? _agdFmtData(o.data) : 'Sem data'}</span>
+            <span class="agd-linha">${_agdIco('relogio', 13)}${escapeHtml(o.hora || '--:--')}</span>
+        </span>
+        <span class="agd-status">${_agdPill(o.pill)}</span>
+        <span class="agd-seta">${_agdIco('seta', 16)}</span>
+    </button>`;
+}
+
+function _agdPreencher(prefixo, linhas, total, vazio, busca) {
+    const lista = document.getElementById(prefixo + '-lista');
+    const cont  = document.getElementById(prefixo + '-count');
+    if (cont) cont.textContent = busca ? `${linhas.length} de ${total}` : String(total);
+    if (lista) lista.innerHTML = linhas.length
+        ? linhas.join('')
+        : `<div class="agd-vazio">${busca ? 'Nenhum resultado para essa busca.' : vazio}</div>`;
+}
+
+// A busca so redesenha as listas; o campo digitado nao e recriado e nao perde o foco.
+function buscarAgenda(chave, valor) {
+    _agdBusca[chave] = valor || '';
+    if (chave.startsWith('med')) renderMedicoes(); else renderAgenda();
+}
+
+// --- Modal de detalhe/formulario (um por vez) ---
+let _agdModalEl = null;
+function _agdEsc(e) { if (e.key === 'Escape') fecharModalAgenda(); }
+function fecharModalAgenda() {
+    if (!_agdModalEl) return;
+    _agdModalEl.remove();
+    _agdModalEl = null;
+    document.removeEventListener('keydown', _agdEsc);
+}
+function _agdAbrirModal(titulo, corpo, rodape) {
+    fecharModalAgenda();
+    const o = document.createElement('div');
+    o.className = 'agd-modal-overlay';
+    o.innerHTML = `<div class="agd-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(titulo)}">
+        <div class="agd-modal-head">
+            <h3>${escapeHtml(titulo)}</h3>
+            <button type="button" class="agd-modal-x" onclick="fecharModalAgenda()" aria-label="Fechar">×</button>
+        </div>
+        <div class="agd-modal-corpo">${corpo}</div>
+        ${rodape ? `<div class="agd-modal-acoes">${rodape}</div>` : ''}
+    </div>`;
+    o.addEventListener('click', e => { if (e.target === o) fecharModalAgenda(); });
+    document.body.appendChild(o);
+    _agdModalEl = o;
+    document.addEventListener('keydown', _agdEsc);
+    return o;
+}
+
+// pares: [rotulo, html ja escapado]; null e ignorado.
+function _agdCampos(pares) {
+    return `<dl class="agd-det">${pares.filter(Boolean).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`;
+}
+
+function _agdDescHist(x) {
+    const fmt = o => o && o.data ? _agdFmtData(o.data) + (o.hora ? ' ' + o.hora : '') : 'sem data';
+    const por = x.por ? ` (${nomeUsuario(x.por) || 'usuário removido'})` : '';
+    const quando = _agdFmtMomento(x.em);
+    if (x.acao === 'reagendado') return `${quando}: reagendado de ${fmt(x.de)} para ${fmt(x.para)}${por}`;
+    if (x.acao === 'desmarcado') return `${quando}: data desmarcada, era ${fmt(x.de)}${por}`;
+    if (x.acao === 'cancelado')  return `${quando}: agendamento cancelado${por}`;
+    return `${quando}: ${x.acao}${por}`;
+}
+function _agdHistorico(h) {
+    if (!h || !h.length) return '';
+    return `<div class="agd-hist"><div class="agd-hist-tit">Histórico</div>${
+        h.map(x => `<div>• ${escapeHtml(_agdDescHist(x))}</div>`).join('')}</div>`;
+}
+function _agdRegistrar(lista, acao, extra) {
+    lista.push({ acao, em: Date.now(), por: getUsuarioLogado()?.id || null, ...(extra || {}) });
+}
+
+// campos: { id, label, tipo: date|time|text|textarea|usuario, valor, obrig, largo, placeholder }
+// onSalvar(valores) grava; se devolver false, o formulario continua aberto.
+function _agdFormulario(titulo, campos, onSalvar, voltar) {
+    const corpo = `<div class="agd-form">${campos.map(c => {
+        const id  = 'agdf-' + c.id;
+        const req = c.obrig ? ' <span style="color:var(--danger)">*</span>' : '';
+        const ph  = c.placeholder ? ` placeholder="${escapeHtml(c.placeholder)}"` : '';
+        let input;
+        if (c.tipo === 'textarea')     input = `<textarea id="${id}" rows="3"${ph}>${escapeHtml(c.valor || '')}</textarea>`;
+        else if (c.tipo === 'usuario') input = `<select id="${id}"></select>`;
+        else                           input = `<input type="${c.tipo}" id="${id}" value="${escapeHtml(c.valor || '')}"${ph}>`;
+        return `<div class="form-group${c.largo ? ' agd-form-largo' : ''}"><label for="${id}">${escapeHtml(c.label)}${req}</label>${input}</div>`;
+    }).join('')}</div>`;
+    const rodape = `<button type="button" class="btn btn-outline btn-sm" id="agdf-voltar">Voltar</button>
+        <button type="button" class="btn btn-success btn-sm" id="agdf-salvar">Salvar</button>`;
+    const o = _agdAbrirModal(titulo, corpo, rodape);
+    campos.filter(c => c.tipo === 'usuario').forEach(c => {
+        preencherSelectUsuarios('agdf-' + c.id, '— A definir —');
+        const s = document.getElementById('agdf-' + c.id);
+        if (s) s.value = c.valor ? String(c.valor) : '';
+    });
+    o.querySelector('#agdf-voltar').onclick = voltar || fecharModalAgenda;
+    o.querySelector('#agdf-salvar').onclick = async () => {
+        const v = {};
+        for (const c of campos) {
+            const el = document.getElementById('agdf-' + c.id);
+            el.classList.remove('agd-erro');
+            v[c.id] = c.tipo === 'usuario' ? (parseInt(el.value) || null) : el.value.trim();
+            if (c.obrig && !v[c.id]) { el.classList.add('agd-erro'); el.focus(); return; }
+        }
+        await onSalvar(v);
+    };
+    o.querySelector('input, select, textarea')?.focus();
+}
+
+// --- MEDICOES ---------------------------------------------------------------
+function _medPill(m, hoje) {
+    if (m.status === 'Realizado') return 'realizado';
+    return m.data && m.data < hoje ? 'atrasado' : 'agendado';
+}
+
+function _medAtualizar() {
+    syncDB();
     renderMedicoes();
-}
-
-function limparFiltroMedicoes() {
-    _medicoesFiltro = { cliente: '' };
-    const c = document.getElementById('mf-cliente'); if (c) c.value = '';
-    renderMedicoes();
-}
-
-function salvarFiltroMedicoes() {
-    _salvarFiltroPCP('agendamento_medicoes', { cliente: _medicoesFiltro.cliente });
+    renderDashboardMedicoes();
 }
 
 function renderMedicoes() {
-    const container = document.getElementById('medicoes-container');
-    if (!container) return;
-    _inicializarFiltroMedicoes();
-
-    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    const hojeStr = hoje.toISOString().split('T')[0];
-
-    let visitas = db.medicoes.filter(m => m.status !== 'Cancelado');
-    if (_medicoesFiltro.cliente) visitas = visitas.filter(m => (m.clienteNome || '').toLowerCase().includes(_medicoesFiltro.cliente));
-    visitas = visitas.sort((a, b) => (a.data + (a.hora || '99:99')) < (b.data + (b.hora || '99:99')) ? -1 : 1);
-
-    if (!visitas.length) {
-        const msg = _medicoesFiltro.cliente ? 'Nenhuma visita encontrada com esse filtro.' : 'Nenhuma visita agendada. Use o formulário acima para agendar.';
-        container.innerHTML = `<div class="card" style="text-align:center;color:#999;padding:40px">${msg}</div>`;
-        return;
-    }
-
-    const grupos = {};
-    visitas.forEach(v => {
-        let grupo;
-        if (v.status === 'Realizado') {
-            grupo = '✅ Realizados';
-        } else {
-            const d    = new Date(v.data + 'T00:00:00');
-            const diff = Math.round((d - hoje) / (1000 * 60 * 60 * 24));
-            if (diff < 0)        grupo = '⚠ Atrasado';
-            else if (diff === 0) grupo = '📅 Hoje';
-            else if (diff <= 7)  grupo = '📅 Esta semana';
-            else if (diff <= 14) grupo = '📆 Próxima semana';
-            else                 grupo = '🗓 Futuro';
-        }
-        if (!grupos[grupo]) grupos[grupo] = [];
-        grupos[grupo].push(v);
+    if (!document.getElementById('med-pend-lista')) return;
+    const hoje  = _agdHoje();
+    const todas = db.medicoes || [];
+    const pend  = todas.filter(m => m.status === 'Agendado');
+    const real  = todas.filter(m => m.status === 'Realizado');
+    const filtra = (lista, chave) => {
+        const b = _agdNorm(_agdBusca[chave]);
+        return b ? lista.filter(m => _agdNorm(m.clienteNome).includes(b)) : lista;
+    };
+    const linha = m => _agdLinha({
+        onclick: `abrirDetalheMedicao(${m.id})`,
+        nome: m.clienteNome, tel: m.clienteTel, end: m.endereco,
+        data: m.data, hora: m.hora, pill: _medPill(m, hoje),
     });
+    const pendF = filtra(pend, 'medPend').sort((a, b) => _agdCmp(_agdChave(a.data, a.hora), _agdChave(b.data, b.hora)));
+    const realF = filtra(real, 'medReal').sort((a, b) =>
+        _agdCmp(_agdChave(b.data, b.hora), _agdChave(a.data, a.hora)) || (b.realizado_em || 0) - (a.realizado_em || 0));
+    _agdPreencher('med-pend', pendF.map(linha), pend.length, 'Nenhuma visita agendada. Use o formulário acima para agendar.', _agdBusca.medPend);
+    _agdPreencher('med-real', realF.map(linha), real.length, 'Nenhuma medição realizada ainda.', _agdBusca.medReal);
+}
 
-    const ordem = ['⚠ Atrasado', '📅 Hoje', '📅 Esta semana', '📆 Próxima semana', '🗓 Futuro', '✅ Realizados'];
-    container.innerHTML = ordem.filter(g => grupos[g]).map(g => {
-        const cards = grupos[g].map(v => {
-            const d       = new Date(v.data + 'T12:00:00');
-            const dataFmt = v.data === hojeStr ? 'Hoje' : d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
-            const isAtv   = v.status === 'Agendado';
-            const statusBg  = v.status === 'Realizado' ? '#E3F7E2' : v.status === 'Cancelado' ? '#F1F1F1' : '#E4EFF9';
-            const statusClr = v.status === 'Realizado' ? '#0F6B0D' : v.status === 'Cancelado' ? '#8F8F8F' : '#1F5A96';
-            return `<div class="card" style="margin-bottom:10px">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
-                    <div>
-                        <div style="font-weight:700;font-size:15px;margin-bottom:4px">${escapeHtml(v.clienteNome || '—')}</div>
-                        ${v.clienteTel ? `<div style="font-size:13px;color:#555">📱 ${escapeHtml(v.clienteTel)}</div>` : ''}
-                        ${v.endereco   ? `<div style="font-size:13px;color:var(--dark);margin-top:3px">📍 ${escapeHtml(v.endereco)}</div>` : ''}
-                        ${v.obs        ? `<div style="font-size:13px;color:#8F8F8F;margin-top:3px">📝 ${escapeHtml(v.obs)}</div>` : ''}
-                        <div style="font-size:12.5px;color:#8F8F8F;margin-top:4px">👤 ${escapeHtml(nomeUsuario(v.usuario_id) || 'Responsável a definir')}</div>
-                    </div>
-                    <div style="text-align:right">
-                        <div style="font-weight:700;font-size:15px;color:var(--dark)">${dataFmt}</div>
-                        ${v.hora ? `<div style="font-size:14px;color:var(--dark);font-weight:600">🕐 ${v.hora}</div>` : ''}
-                        <span style="display:inline-block;margin-top:6px;font-size:11px;font-weight:700;padding:2px 10px;border-radius:12px;background:${statusBg};color:${statusClr}">${v.status}</span>
-                    </div>
-                </div>
-                ${isAtv ? `<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-                    <button class="btn btn-success btn-sm" onclick="marcarMedicaoRealizada(${v.id})">✅ Marcar como Realizado</button>
-                    ${v.clienteTel ? `<a href="https://wa.me/55${v.clienteTel.replace(/\D/g,'')}" target="_blank" class="btn btn-outline btn-sm">📱 WhatsApp</a>` : ''}
-                    <button class="btn btn-outline btn-sm" onclick="imprimirAgendamentoMedicao(${v.id})">🖨️ Documento</button>
-                    <button class="btn btn-outline btn-sm btn-danger" onclick="cancelarMedicao(${v.id})" style="margin-left:auto">✕ Cancelar</button>
-                </div>` : `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-                    <button class="btn btn-success btn-sm" onclick="criarPedidoDaMedicao(${v.id})" title="Abre o formulário de pedido com o cliente já preenchido">+ Criar Pedido</button>
-                    <button class="btn btn-outline btn-sm" onclick="imprimirAgendamentoMedicao(${v.id})">🖨️ Documento</button>
-                    <button class="btn btn-outline btn-sm btn-danger" onclick="excluirMedicao(${v.id})" style="margin-left:auto">🗑️ Excluir</button>
-                </div>`}
-            </div>`;
-        }).join('');
-        const bgGrupo = g.includes('Atrasado') ? '#FDE8E5' : g.includes('Hoje') ? '#E4EFF9' : '#F1F1F1';
-        const clrGrupo = g.includes('Atrasado') ? '#B3160A' : g.includes('Hoje') ? '#1F5A96' : '#242424';
-        return `<div style="margin-bottom:20px">
-            <h3 style="font-size:14px;font-weight:700;color:${clrGrupo};margin-bottom:12px;padding:6px 12px;background:${bgGrupo};border-radius:6px">
-                ${g} <span style="font-size:12px;font-weight:normal">(${grupos[g].length})</span>
-            </h3>${cards}
-        </div>`;
-    }).join('');
+function abrirDetalheMedicao(id) {
+    const m = (db.medicoes || []).find(x => x.id == id);
+    if (!m) return;
+    const pend = m.status === 'Agendado';
+    const tel  = m.clienteTel
+        ? `<a href="https://wa.me/55${m.clienteTel.replace(/\D/g, '')}" target="_blank" rel="noopener">${escapeHtml(m.clienteTel)}</a>`
+        : '—';
+    const corpo = `<div class="agd-det-topo">${_agdPill(_medPill(m, _agdHoje()))}</div>` + _agdCampos([
+        ['Cliente',     escapeHtml(m.clienteNome || '—')],
+        ['Telefone',    tel],
+        ['Endereço',    escapeHtml(m.endereco || '—')],
+        ['Data',        _agdFmtData(m.data)],
+        ['Horário',     escapeHtml(m.hora || '—')],
+        ['Responsável', escapeHtml(nomeUsuario(m.usuario_id) || 'A definir')],
+        ['Observações', escapeHtml(m.obs || '—')],
+        m.realizado_em ? ['Confirmada em', _agdFmtMomento(m.realizado_em)] : null,
+    ]) + _agdHistorico(m.historico);
+    const rodape = pend
+        ? `<button class="btn btn-outline btn-sm btn-danger" onclick="cancelarMedicao(${m.id})">✕ Cancelar agendamento</button>
+           <button class="btn btn-outline btn-sm" onclick="fecharModalAgenda();imprimirAgendamentoMedicao(${m.id})">🖨️ Documento</button>
+           <button class="btn btn-outline btn-sm" onclick="editarMedicao(${m.id})">✏️ Editar</button>
+           <button class="btn btn-outline btn-sm" onclick="reagendarMedicao(${m.id})">📅 Reagendar</button>
+           <button class="btn btn-success btn-sm" onclick="confirmarMedicao(${m.id})">✓ Confirmar medição</button>`
+        : `<button class="btn btn-outline btn-sm btn-danger" onclick="excluirMedicao(${m.id})">🗑️ Excluir</button>
+           <button class="btn btn-outline btn-sm" onclick="fecharModalAgenda();imprimirAgendamentoMedicao(${m.id})">🖨️ Documento</button>
+           <button class="btn btn-success btn-sm" onclick="criarPedidoDaMedicao(${m.id})" title="Abre o formulário de pedido com o cliente já preenchido">+ Criar Pedido</button>`;
+    _agdAbrirModal('Visita de medição', corpo, rodape);
+}
+
+function editarMedicao(id) {
+    const m = (db.medicoes || []).find(x => x.id == id);
+    if (!m) return;
+    _agdFormulario('Editar agendamento', [
+        { id: 'tel',  label: 'Telefone',    tipo: 'text', valor: m.clienteTel },
+        { id: 'end',  label: 'Endereço da visita', tipo: 'text', valor: m.endereco, obrig: true },
+        { id: 'data', label: 'Data da visita', tipo: 'date', valor: m.data, obrig: true },
+        { id: 'hora', label: 'Horário',     tipo: 'time', valor: m.hora },
+        { id: 'usu',  label: 'Responsável pela medição', tipo: 'usuario', valor: m.usuario_id, largo: true },
+        { id: 'obs',  label: 'Observações', tipo: 'textarea', valor: m.obs, largo: true },
+    ], v => {
+        m.clienteTel = v.tel; m.endereco = v.end; m.data = v.data; m.hora = v.hora;
+        m.usuario_id = v.usu; m.obs = v.obs;
+        _medAtualizar();
+        toast('Agendamento atualizado!', 'success');
+        abrirDetalheMedicao(id);
+    }, () => abrirDetalheMedicao(id));
+}
+
+function reagendarMedicao(id) {
+    const m = (db.medicoes || []).find(x => x.id == id);
+    if (!m) return;
+    _agdFormulario('Reagendar visita', [
+        { id: 'data', label: 'Nova data', tipo: 'date', valor: m.data, obrig: true },
+        { id: 'hora', label: 'Horário',   tipo: 'time', valor: m.hora },
+        { id: 'usu',  label: 'Responsável pela medição', tipo: 'usuario', valor: m.usuario_id, largo: true },
+        { id: 'obs',  label: 'Observações', tipo: 'textarea', valor: m.obs, largo: true },
+    ], v => {
+        if (v.data !== m.data || v.hora !== (m.hora || '')) {
+            if (!m.historico) m.historico = [];
+            _agdRegistrar(m.historico, 'reagendado', { de: { data: m.data, hora: m.hora || '' }, para: { data: v.data, hora: v.hora } });
+        }
+        m.data = v.data; m.hora = v.hora; m.usuario_id = v.usu; m.obs = v.obs;
+        _medAtualizar();
+        toast('Visita reagendada!', 'success');
+        abrirDetalheMedicao(id);
+    }, () => abrirDetalheMedicao(id));
+}
+
+async function confirmarMedicao(id) {
+    const m = (db.medicoes || []).find(x => x.id == id);
+    if (!m || m.status !== 'Agendado') return;
+    fecharModalAgenda();
+    const ok = await showConfirm(`Confirmar que a medição de ${m.clienteNome || 'cliente'} foi realizada?\n\nEla sai de Agendamentos e vai para Realizados.`, '✅', 'Confirmar', 'Voltar');
+    if (!ok) { abrirDetalheMedicao(id); return; }
+    m.status = 'Realizado';
+    m.realizado_em  = Date.now();
+    m.realizado_por = getUsuarioLogado()?.id || null;
+    _medAtualizar();
+    toast('Medição confirmada!', 'success');
+}
+
+// Cancelar nao apaga: o registro fica com status Cancelado e o momento, fora
+// das duas colunas e fora da contagem de realizadas.
+async function cancelarMedicao(id) {
+    const m = (db.medicoes || []).find(x => x.id == id);
+    if (!m || m.status !== 'Agendado') return;
+    fecharModalAgenda();
+    const ok = await showConfirm(`Cancelar a visita de ${m.clienteNome || 'cliente'} em ${_agdFmtData(m.data)}?`, '⚠️', 'Sim, cancelar', 'Não');
+    if (!ok) { abrirDetalheMedicao(id); return; }
+    if (!m.historico) m.historico = [];
+    _agdRegistrar(m.historico, 'cancelado');
+    m.status = 'Cancelado';
+    m.cancelado_em = Date.now();
+    _medAtualizar();
+    toast('Agendamento cancelado.', 'info');
+}
+
+async function excluirMedicao(id) {
+    fecharModalAgenda();
+    if (!await showConfirm('Excluir este registro de medição?\nEsta ação não pode ser desfeita.', '🗑️', 'Excluir', 'Cancelar')) { abrirDetalheMedicao(id); return; }
+    db.medicoes = db.medicoes.filter(x => x.id != id);
+    _medAtualizar();
+    toast('Registro excluído.', 'info');
 }
 
 function renderDashboardMedicoes() {
@@ -7458,210 +7630,175 @@ function renderDashboardInstalacoes() {
     </div>`;
 }
 
-function salvarCamposInstalacao(pedidoId) {
-    const p = db.pedidos.find(x => x.id == pedidoId);
-    if (!p) return;
-    p.inst_endereco = (document.getElementById(`inst-end-${pedidoId}`)?.value   || '').trim();
-    p.inst_hora     = (document.getElementById(`inst-hora-${pedidoId}`)?.value  || '').trim();
-    p.inst_obs      = (document.getElementById(`inst-obs-${pedidoId}`)?.value   || '').trim();
-    syncDB();
-    toast('Informações de instalação salvas!', 'success', 1500);
-    renderDashboardInstalacoes();
+// --- INSTALACOES --------------------------------------------------------------
+// Cada linha e um pedido. Pendentes: Pronto p/ Instalacao e Aguardando
+// Pagamento. Realizados: Instalado. A data da instalacao e a data_entrega do
+// pedido (a mesma do Kanban e do formulario do pedido).
+const _INST_PENDENTES = ['Pronto p/ Instalação', 'Aguardando Pagamento'];
+
+function _instPill(p, hoje) {
+    const s = normalizarStatus(p.status);
+    if (s === 'Instalado') return 'instalado';
+    if (s === 'Aguardando Pagamento') return 'pagamento';
+    if (!p.data_entrega) return 'semdata';
+    return p.data_entrega < hoje ? 'atrasado' : 'agendado';
 }
 
-async function alterarDataInstalacao(pedidoId) {
-    const p = db.pedidos.find(x => x.id == pedidoId);
-    if (!p) return;
-    const novaData = (document.getElementById(`inst-data-${pedidoId}`)?.value || '').trim();
-    if (!novaData) { showAlert('Selecione uma data válida antes de confirmar.', '⚠️'); return; }
-    if (novaData === p.data_entrega) { toast('A data já é essa.', 'info', 1500); return; }
-    const fmtD = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—';
-    const ok = await showConfirm(
-        `Alterar a data de instalação do pedido #${formatPedidoId(pedidoId)}?\n\nData atual: ${fmtD(p.data_entrega)}\nNova data:  ${fmtD(novaData)}\n\nA alteração refletirá no pedido.`,
-        '📅', 'Confirmar', 'Cancelar'
-    );
-    if (!ok) return;
-    p.data_entrega = novaData;
+// Data mostrada no Realizado: o dia em que virou Instalado; pedido antigo sem
+// esse registro usa a data agendada.
+function _instDiaRealizado(p) { return p.data_instalado ? _agdDiaLocal(p.data_instalado) : (p.data_entrega || ''); }
+
+function _instAtualizar() {
     syncDB();
-    toast('Data de instalação atualizada!', 'success', 2000);
     renderAgenda();
     renderDashboardInstalacoes();
-}
-
-// --- FILTROS SALVOS DO PAINEL DE PRODUÇÃO (por usuário + aba) ---
-// Conveniência de visualização — não restringe o que o usuário pode ver, só
-// lembra a última combinação de busca de cada usuário para cada aba.
-function _prefsFiltroPCP() {
-    try { return JSON.parse(localStorage.getItem('sc_pref_filtro_pcp') || '{}'); } catch { return {}; }
-}
-
-function _filtroSalvoPCP(tela) {
-    const usuario = getUsuarioLogado();
-    if (!usuario) return null;
-    return _prefsFiltroPCP()[usuario.id]?.[tela] || null;
-}
-
-function _salvarFiltroPCP(tela, filtros) {
-    const usuario = getUsuarioLogado();
-    if (!usuario) return;
-    const prefs = _prefsFiltroPCP();
-    prefs[usuario.id] = prefs[usuario.id] || {};
-    prefs[usuario.id][tela] = filtros;
-    localStorage.setItem('sc_pref_filtro_pcp', JSON.stringify(prefs));
-    toast('Filtro salvo!', 'success', 1800);
-}
-
-// --- FILTRO: Agenda de Instalações ---
-let _agendaFiltro = { cliente: '', vendedor: '', numeroPedido: '' };
-let _agendaFiltroPronto = false;
-
-function _inicializarFiltroAgenda() {
-    if (_agendaFiltroPronto) return;
-    _agendaFiltroPronto = true;
-    const selVend = document.getElementById('ag-vendedor');
-    if (selVend) selVend.innerHTML = '<option value="">Todos</option>' +
-        db.vendedores.map(v => `<option value="${v.id}">${escapeHtml(v.nome)}</option>`).join('');
-    const salvo = _filtroSalvoPCP('agenda_instalacoes');
-    if (salvo) {
-        _agendaFiltro = { cliente: salvo.cliente || '', vendedor: salvo.vendedor_id || '', numeroPedido: salvo.numero_pedido || '' };
-        const c = document.getElementById('ag-cliente'); if (c) c.value = _agendaFiltro.cliente;
-        if (selVend) selVend.value = _agendaFiltro.vendedor;
-        const n = document.getElementById('ag-pedido'); if (n) n.value = _agendaFiltro.numeroPedido;
-    }
-}
-
-function aplicarFiltroAgenda() {
-    _agendaFiltro.cliente = (document.getElementById('ag-cliente')?.value || '').toLowerCase().trim();
-    _agendaFiltro.vendedor = document.getElementById('ag-vendedor')?.value || '';
-    _agendaFiltro.numeroPedido = (document.getElementById('ag-pedido')?.value || '').replace(/\D/g, '');
-    renderAgenda();
-}
-
-function limparFiltroAgenda() {
-    _agendaFiltro = { cliente: '', vendedor: '', numeroPedido: '' };
-    const c = document.getElementById('ag-cliente'); if (c) c.value = '';
-    const v = document.getElementById('ag-vendedor'); if (v) v.value = '';
-    const n = document.getElementById('ag-pedido'); if (n) n.value = '';
-    renderAgenda();
-}
-
-function salvarFiltroAgenda() {
-    _salvarFiltroPCP('agenda_instalacoes', { cliente: _agendaFiltro.cliente, vendedor_id: _agendaFiltro.vendedor, numero_pedido: _agendaFiltro.numeroPedido });
 }
 
 function renderAgenda() {
-    const container = document.getElementById('agenda-container');
-    if (!container) return;
-    _inicializarFiltroAgenda();
-    const statuses = ['Pronto p/ Instalação', 'Aguardando Pagamento'];
-    let pedidos  = db.pedidos
-        .filter(p => statuses.includes(normalizarStatus(p.status)));
-    if (_agendaFiltro.cliente) pedidos = pedidos.filter(p => (p.clienteNome || '').toLowerCase().includes(_agendaFiltro.cliente));
-    if (_agendaFiltro.vendedor) pedidos = pedidos.filter(p => String(p.vendedor_id || '') === _agendaFiltro.vendedor);
-    if (_agendaFiltro.numeroPedido) pedidos = pedidos.filter(p => String(p.id).includes(_agendaFiltro.numeroPedido));
-    pedidos = pedidos
-        .sort((a, b) => {
-            const da  = a.data_entrega || '9999-12-31';
-            const db2 = b.data_entrega || '9999-12-31';
-            return da < db2 ? -1 : da > db2 ? 1 : 0;
+    if (!document.getElementById('inst-pend-lista')) return;
+    const hoje = _agdHoje();
+    const pend = db.pedidos.filter(p => _INST_PENDENTES.includes(normalizarStatus(p.status)));
+    const real = db.pedidos.filter(p => normalizarStatus(p.status) === 'Instalado');
+    const filtra = (lista, chave) => {
+        const b = _agdNorm(_agdBusca[chave]);
+        if (!b) return lista;
+        const dig = b.replace(/\D/g, '');
+        return lista.filter(p => _agdNorm(p.clienteNome).includes(b) || (dig && String(p.id).includes(dig)));
+    };
+    const linha = (p, realizado) => {
+        const cli = db.clientes.find(c => c.id == p.clienteId);
+        return _agdLinha({
+            onclick: `abrirDetalheInstalacao(${p.id})`,
+            nome: p.clienteNome,
+            sub:  `Pedido #${formatPedidoId(p.id)}${p.amb ? ' · ' + p.amb : ''}`,
+            tel:  cli?.tel,
+            end:  p.inst_endereco || cli?.end,
+            data: realizado ? _instDiaRealizado(p) : p.data_entrega,
+            hora: p.inst_hora,
+            pill: _instPill(p, hoje),
         });
-    if (!pedidos.length) {
-        const filtroAtivo = _agendaFiltro.cliente || _agendaFiltro.vendedor || _agendaFiltro.numeroPedido;
-        container.innerHTML = `<div class="card" style="text-align:center;color:#999;padding:40px">${filtroAtivo ? 'Nenhum pedido encontrado com esses filtros.' : 'Nenhum pedido aguardando instalação.'}</div>`;
-        return;
-    }
-    const hoje  = new Date(); hoje.setHours(0,0,0,0);
-    const grupos = {};
-    pedidos.forEach(p => {
-        let grupo;
-        if (!p.data_entrega) {
-            grupo = 'Sem data definida';
-        } else {
-            const d    = new Date(p.data_entrega + 'T00:00:00');
-            const diff = Math.round((d - hoje) / (1000*60*60*24));
-            if (diff < 0)        grupo = '⚠ Atrasado';
-            else if (diff <= 7)  grupo = '📅 Esta semana';
-            else if (diff <= 14) grupo = '📆 Próxima semana';
-            else                 grupo = '🗓 Futuro';
+    };
+    const pendF = filtra(pend, 'instPend').sort((a, b) =>
+        _agdCmp(_agdChave(a.data_entrega, a.inst_hora), _agdChave(b.data_entrega, b.inst_hora)));
+    const realF = filtra(real, 'instReal').sort((a, b) =>
+        (b.data_instalado || 0) - (a.data_instalado || 0) || _agdCmp(_agdChave(b.data_entrega, b.inst_hora), _agdChave(a.data_entrega, a.inst_hora)));
+    _agdPreencher('inst-pend', pendF.map(p => linha(p, false)), pend.length, 'Nenhum pedido aguardando instalação.', _agdBusca.instPend);
+    _agdPreencher('inst-real', realF.map(p => linha(p, true)), real.length, 'Nenhuma instalação realizada ainda.', _agdBusca.instReal);
+}
+
+function abrirDetalheInstalacao(id) {
+    const p = db.pedidos.find(x => x.id == id);
+    if (!p) return;
+    const cli   = db.clientes.find(c => c.id == p.clienteId);
+    const pend  = _INST_PENDENTES.includes(normalizarStatus(p.status));
+    const pagto = statusPagamento(p);
+    const tel   = cli?.tel
+        ? `<a href="https://wa.me/55${cli.tel.replace(/\D/g, '')}" target="_blank" rel="noopener">${escapeHtml(cli.tel)}</a>`
+        : '—';
+    const corpo = `<div class="agd-det-topo">${_agdPill(_instPill(p, _agdHoje()))}</div>` + _agdCampos([
+        ['Pedido',      '#' + formatPedidoId(p.id)],
+        ['Cliente',     escapeHtml(p.clienteNome || '—')],
+        ['Telefone',    tel],
+        ['Endereço',    escapeHtml(p.inst_endereco || cli?.end || '—')],
+        ['Data',        _agdFmtData(p.data_entrega)],
+        ['Horário',     escapeHtml(p.inst_hora || '—')],
+        ['Instalador',  escapeHtml(nomeUsuario(p.usuario_instalacao_id) || 'A definir')],
+        ['Ambientes',   escapeHtml(p.amb || '—')],
+        ['Valor',       'R$ ' + (p.valor || 0).toFixed(2)],
+        ['Pagamento',   escapeHtml(pagto.label || '—')],
+        ['Observações', escapeHtml(p.inst_obs || '—')],
+        p.data_instalado ? ['Instalado em', _agdFmtMomento(p.data_instalado)] : null,
+    ]) + _agdHistorico(p.inst_historico);
+    const rodape = pend
+        ? `${p.data_entrega ? `<button class="btn btn-outline btn-sm btn-danger" onclick="desmarcarInstalacao(${p.id})">✕ Desmarcar data</button>` : ''}
+           <button class="btn btn-outline btn-sm" onclick="fecharModalAgenda();abrirOS(${p.id})">📋 OS</button>
+           <button class="btn btn-outline btn-sm" onclick="editarInstalacao(${p.id})">✏️ Editar</button>
+           <button class="btn btn-outline btn-sm" onclick="reagendarInstalacao(${p.id})">📅 Reagendar</button>
+           <button class="btn btn-success btn-sm" onclick="confirmarInstalacao(${p.id})">✓ Confirmar instalação</button>`
+        : `<button class="btn btn-outline btn-sm" onclick="fecharModalAgenda();abrirOS(${p.id})">📋 OS</button>`;
+    _agdAbrirModal('Instalação', corpo, rodape);
+}
+
+// A data da instalacao e a do pedido: mudar exige confirmacao, como antes.
+async function _instConfirmarNovaData(p, novaData) {
+    if (!p.data_entrega || novaData === p.data_entrega) return true;
+    return showConfirm(
+        `Alterar a data de instalação do pedido #${formatPedidoId(p.id)}?\n\nData atual: ${_agdFmtData(p.data_entrega)}\nNova data:  ${_agdFmtData(novaData)}\n\nA alteração reflete no pedido.`,
+        '📅', 'Confirmar', 'Cancelar');
+}
+
+function editarInstalacao(id) {
+    const p = db.pedidos.find(x => x.id == id);
+    if (!p) return;
+    const cli = db.clientes.find(c => c.id == p.clienteId);
+    _agdFormulario('Editar instalação', [
+        { id: 'end',  label: 'Endereço da instalação', tipo: 'text', valor: p.inst_endereco, largo: true, placeholder: cli?.end || 'Endereço da instalação…' },
+        { id: 'data', label: 'Data de instalação', tipo: 'date', valor: p.data_entrega },
+        { id: 'hora', label: 'Horário', tipo: 'time', valor: p.inst_hora },
+        { id: 'usu',  label: 'Quem vai instalar', tipo: 'usuario', valor: p.usuario_instalacao_id, largo: true },
+        { id: 'obs',  label: 'Observações', tipo: 'textarea', valor: p.inst_obs, largo: true },
+    ], async v => {
+        if (v.data && !await _instConfirmarNovaData(p, v.data)) return false;
+        p.inst_endereco = v.end;
+        p.data_entrega  = v.data || null;
+        p.inst_hora     = v.hora;
+        p.usuario_instalacao_id = v.usu;
+        p.inst_obs      = v.obs;
+        _instAtualizar();
+        toast('Instalação atualizada!', 'success');
+        abrirDetalheInstalacao(id);
+    }, () => abrirDetalheInstalacao(id));
+}
+
+function reagendarInstalacao(id) {
+    const p = db.pedidos.find(x => x.id == id);
+    if (!p) return;
+    _agdFormulario('Reagendar instalação', [
+        { id: 'data', label: 'Nova data', tipo: 'date', valor: p.data_entrega, obrig: true },
+        { id: 'hora', label: 'Horário', tipo: 'time', valor: p.inst_hora },
+        { id: 'usu',  label: 'Quem vai instalar', tipo: 'usuario', valor: p.usuario_instalacao_id, largo: true },
+        { id: 'obs',  label: 'Observações', tipo: 'textarea', valor: p.inst_obs, largo: true },
+    ], async v => {
+        if (!await _instConfirmarNovaData(p, v.data)) return false;
+        if (v.data !== p.data_entrega || v.hora !== (p.inst_hora || '')) {
+            if (!p.inst_historico) p.inst_historico = [];
+            _agdRegistrar(p.inst_historico, 'reagendado', { de: { data: p.data_entrega || '', hora: p.inst_hora || '' }, para: { data: v.data, hora: v.hora } });
         }
-        if (!grupos[grupo]) grupos[grupo] = [];
-        grupos[grupo].push(p);
+        p.data_entrega = v.data; p.inst_hora = v.hora; p.usuario_instalacao_id = v.usu; p.inst_obs = v.obs;
+        _instAtualizar();
+        toast('Instalação reagendada!', 'success');
+        abrirDetalheInstalacao(id);
+    }, () => abrirDetalheInstalacao(id));
+}
+
+// Tira data e horario; o pedido continua pendente, no fim da lista, ate ser
+// reagendado. O que havia fica no historico.
+async function desmarcarInstalacao(id) {
+    const p = db.pedidos.find(x => x.id == id);
+    if (!p || !p.data_entrega) return;
+    fecharModalAgenda();
+    const ok = await showConfirm(`Desmarcar a instalação do pedido #${formatPedidoId(p.id)} em ${_agdFmtData(p.data_entrega)}?\n\nO pedido continua na agenda, sem data, até ser reagendado.`, '⚠️', 'Desmarcar', 'Voltar');
+    if (!ok) { abrirDetalheInstalacao(id); return; }
+    if (!p.inst_historico) p.inst_historico = [];
+    _agdRegistrar(p.inst_historico, 'desmarcado', { de: { data: p.data_entrega, hora: p.inst_hora || '' } });
+    p.data_entrega = null;
+    p.inst_hora = '';
+    _instAtualizar();
+    toast('Data da instalação desmarcada.', 'info');
+}
+
+// Mesmo fluxo do Kanban: pago -> Instalado (vai para Realizados); com saldo ->
+// Aguardando Pagamento (continua pendente, com esse selo).
+function confirmarInstalacao(id) {
+    const p = db.pedidos.find(x => x.id == id);
+    if (!p || !_INST_PENDENTES.includes(normalizarStatus(p.status))) return;
+    fecharModalAgenda();
+    mostrarModalPagamento(p, resultado => {
+        if (!resultado) { abrirDetalheInstalacao(id); return; }
+        aplicarConfirmacaoEntrega(p, resultado);
+        _instAtualizar();
+        toast(resultado === 'pago' ? 'Instalação confirmada!' : 'Pedido em Aguardando Pagamento.', resultado === 'pago' ? 'success' : 'info');
     });
-    const ordemGrupos = ['⚠ Atrasado', '📅 Esta semana', '📆 Próxima semana', '🗓 Futuro', 'Sem data definida'];
-    container.innerHTML = ordemGrupos.filter(g => grupos[g]).map(g => {
-        const bgGrupo  = g.includes('Atrasado') ? '#FDE8E5' : g.includes('Esta semana') ? '#E4EFF9' : '#F1F1F1';
-        const clrGrupo = g.includes('Atrasado') ? '#B3160A' : g.includes('Esta semana') ? '#1F5A96' : '#242424';
-        const cards = grupos[g].map(p => {
-            const cli     = db.clientes.find(c => c.id == p.clienteId);
-            const pagto   = statusPagamento(p);
-            const entrega = p.data_entrega ? new Date(p.data_entrega+'T12:00:00').toLocaleDateString('pt-BR') : '—';
-            const cls     = COR_STATUS[normalizarStatus(p.status)] || '';
-            const endPlaceholder = cli?.end || 'Endereço da instalação…';
-            return `<div class="card" style="margin-bottom:10px">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
-                    <div>
-                        <span style="font-size:11px;color:#888">Pedido #${formatPedidoId(p.id)}</span>
-                        <div style="font-weight:bold;font-size:15px;margin:2px 0">${escapeHtml(p.clienteNome||'—')}</div>
-                        <div style="font-size:13px;color:#555">${escapeHtml(p.amb||'—')}</div>
-                        ${cli?.tel ? `<div style="font-size:12px;color:#8F8F8F;margin-top:2px">📱 ${escapeHtml(cli.tel)}</div>` : ''}
-                        <div style="font-size:12px;color:#8F8F8F;margin-top:2px">👤 ${escapeHtml(nomeUsuario(p.usuario_instalacao_id) || 'Instalador a definir')}</div>
-                    </div>
-                    <div style="text-align:right">
-                        <div style="font-weight:bold">R$ ${(p.valor||0).toFixed(2)}</div>
-                        ${pagto.cls ? `<span class="${pagto.cls}">${pagto.label}</span>` : ''}
-                        <div style="font-size:12px;color:#8F8F8F;margin-top:4px">📅 ${entrega}</div>
-                    </div>
-                </div>
-
-                <!-- Campos editáveis de instalação -->
-                <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
-                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8F8F8F;margin-bottom:10px">Detalhes da Instalação</div>
-
-                    <!-- Data de instalação (com confirmação) -->
-                    <div style="margin-bottom:10px;padding:10px 12px;background:#FEFAE9;border:1px solid #F7DE86;border-radius:8px">
-                        <label style="font-size:11px;color:#8A6A00;font-weight:700;display:block;margin-bottom:6px">📅 Data de Instalação</label>
-                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                            <input type="date" id="inst-data-${p.id}" value="${p.data_entrega||''}"
-                                   style="padding:6px 10px;border:1px solid #F2C924;border-radius:6px;font-size:13px;background:#fff;color:var(--dark);flex:1;min-width:140px">
-                            <button class="btn btn-sm" style="background:#F2C924;color:#fff;border:none;white-space:nowrap" onclick="alterarDataInstalacao(${p.id})">
-                                📅 Alterar Data
-                            </button>
-                        </div>
-                        <div style="font-size:10px;color:#8A6A00;margin-top:5px">Alteração reflete no pedido e exige confirmação.</div>
-                    </div>
-
-                    <div style="display:grid;grid-template-columns:1fr 120px;gap:8px;margin-bottom:8px">
-                        <div>
-                            <label style="font-size:11px;color:#8F8F8F;display:block;margin-bottom:3px">Endereço</label>
-                            <input type="text" id="inst-end-${p.id}" value="${escapeHtml(p.inst_endereco||'')}" placeholder="${escapeHtml(endPlaceholder)}"
-                                   style="width:100%;padding:6px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px">
-                        </div>
-                        <div>
-                            <label style="font-size:11px;color:#8F8F8F;display:block;margin-bottom:3px">Horário</label>
-                            <input type="time" id="inst-hora-${p.id}" value="${escapeHtml(p.inst_hora||'')}"
-                                   style="width:100%;padding:6px 8px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px">
-                        </div>
-                    </div>
-                    <div style="margin-bottom:10px">
-                        <label style="font-size:11px;color:#8F8F8F;display:block;margin-bottom:3px">Informações Gerais</label>
-                        <textarea id="inst-obs-${p.id}" rows="2" placeholder="Observações, referências, instruções de acesso…"
-                                  style="width:100%;padding:6px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px;resize:vertical;font-family:inherit">${escapeHtml(p.inst_obs||'')}</textarea>
-                    </div>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-                        <button class="btn btn-success btn-sm" onclick="salvarCamposInstalacao(${p.id})">💾 Salvar</button>
-                        <span class="status-tag ${cls}" style="font-size:11px">${normalizarStatus(p.status)}</span>
-                        ${cli?.tel ? `<a href="https://wa.me/55${cli.tel.replace(/\D/g,'')}" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px">📱 WhatsApp</a>` : ''}
-                        <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})">📋 OS</button>
-                    </div>
-                </div>
-            </div>`;
-        }).join('');
-        return `<div style="margin-bottom:20px">
-            <h3 style="font-size:14px;font-weight:700;color:${clrGrupo};margin-bottom:12px;padding:6px 12px;background:${bgGrupo};border-radius:6px">
-                ${g} <span style="font-size:12px;font-weight:normal">(${grupos[g].length})</span>
-            </h3>${cards}
-        </div>`;
-    }).join('');
 }
 
 // --- PCP VIEW TOGGLE ---
