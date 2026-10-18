@@ -9,7 +9,7 @@ const MODULOS_PERMISSAO = [
     { key: 'producao',      label: 'Produção',           subs: [
         { key: 'kanban',   label: 'Status dos pedidos' },
         { key: 'agenda',   label: 'Agenda de Instalações' },
-        { key: 'medicoes', label: 'Agendamento de Medições' },
+        { key: 'medicoes', label: 'Agenda de Medições' },
     ]},
     { key: 'estoque',       label: 'Estoque',            subs: [
         { key: 'tecidos',   label: 'Tecidos' },
@@ -49,6 +49,7 @@ const MODULOS_PERMISSAO = [
     { key: 'configuracoes', label: 'Configurações',      subs: [
         { key: 'usuarios', label: 'Usuários' },
         { key: 'papeis',   label: 'Papéis' },
+        { key: 'empresa',  label: 'Configurar Empresa' },
     ]},
 ];
 
@@ -486,7 +487,9 @@ function renderSidebar() {
                 </button>
                 <div class="logo-popup-sep"></div>
                 <a href="sobre.html" class="logo-popup-item">${navIcon('info', 16)} Sobre o Sistema</a>
-                <a href="empresa.html" class="logo-popup-item">${navIcon('settings', 16)} Configurar Empresa</a>
+                ${temAcesso('configuracoes.empresa', 'visualizar')
+                    ? `<a href="empresa.html" class="logo-popup-item">${navIcon('settings', 16)} Configurar Empresa</a>`
+                    : ''}
                 <div class="logo-popup-sep"></div>
                 <button class="logo-popup-item logo-popup-logout" onclick="logout()">${navIcon('logout', 16)} Sair</button>
             </div>
@@ -635,6 +638,7 @@ const PAGINA_MODULO = {
     'financeiro.html':    'financeiro',
     'relatorios.html':    'relatorios',
     'configuracoes.html': 'configuracoes',
+    'empresa.html':       'configuracoes.empresa',
 };
 
 async function hashSenha(senha) {
@@ -2888,7 +2892,9 @@ function renderBellIndicator() {
     const cfg = getAlertasCfg();
     const temDesativado = Object.keys(ALERTAS_TIPOS).some(k => cfg[k] === false);
     let bell = document.getElementById('alerta-bell-disabled');
-    if (!temDesativado) { if (bell) bell.remove(); return; }
+    // O sino leva a Configurar Empresa. Para quem nao alcanca aquela tela ele
+    // so renderia um convite a ser barrado na porta.
+    if (!temDesativado || !temAcesso('configuracoes.empresa', 'visualizar')) { if (bell) bell.remove(); return; }
     if (!bell) {
         bell = document.createElement('div');
         bell.id = 'alerta-bell-disabled';
@@ -5041,33 +5047,17 @@ async function aplicarKit() {
     document.getElementById('ped-kit').value = '';
 }
 
+// O valor do pedido e' a soma dos seus itens. O modo "por pedido" (margem
+// global sobre o custo) saiu da tela: os itens ja carregam a margem deles.
+// Pedidos antigos fechados naquele modo guardam os proprios valores e nao sao
+// recalculados — ver o DRE, que ainda le tipo_precificacao.
 function atualizarTotalPedido() {
-    const tipo    = document.getElementById('ped-tipo-precificacao')?.value || 'item';
     const mao     = parseFloat(document.getElementById('ped-mao')?.value) || 0;
     const descPct = parseFloat(document.getElementById('ped-desconto')?.value) || 0;
-    let totalMat, totalItens, bruto;
 
-    if (tipo === 'pedido') {
-        totalMat = pedidoDraft.ambientes.filter(a => a.calculado).reduce((s, a) =>
-            s + (a.tecidos || []).reduce((ts, t) => {
-                const tec = db.catalogo.find(c => c.id == t.tecidoId);
-                return ts + (t.consumo_linear || 0) * (tec?.preco_custo || 0);
-            }, 0), 0);
-        totalItens = pedidoDraft.itens.reduce((s, i) => {
-            const mat = db.materiais.find(m => m.id == i.materialId);
-            return s + (i.quantidade || 0) * (mat?.preco_custo || 0);
-        }, 0);
-        const margemPct  = parseFloat(document.getElementById('ped-margem-pedido')?.value) || 0;
-        const custoTotal = totalMat + totalItens;
-        const vendaBase  = custoTotal * (1 + margemPct / 100);
-        bruto = vendaBase + mao;
-        const info = document.getElementById('ped-margem-pedido-info');
-        if (info) info.textContent = custoTotal > 0 ? `(custo R$ ${custoTotal.toFixed(2)} → venda R$ ${vendaBase.toFixed(2)})` : '';
-    } else {
-        totalMat   = pedidoDraft.ambientes.filter(a => a.calculado).reduce((s, a) => s + (a.tecidos || []).reduce((ts, t) => ts + (t.total_material || 0), 0), 0);
-        totalItens = pedidoDraft.itens.reduce((s, i) => s + (i.subtotal || 0), 0);
-        bruto      = totalMat + totalItens + mao;
-    }
+    const totalMat   = pedidoDraft.ambientes.filter(a => a.calculado).reduce((s, a) => s + (a.tecidos || []).reduce((ts, t) => ts + (t.total_material || 0), 0), 0);
+    const totalItens = pedidoDraft.itens.reduce((s, i) => s + (i.subtotal || 0), 0);
+    const bruto      = totalMat + totalItens + mao;
 
     const descVal  = Math.round(bruto * descPct / 100 * 100) / 100;
     const total    = bruto - descVal;
@@ -5090,13 +5080,6 @@ function atualizarTotalPedido() {
     if (rowEl) rowEl.style.display = comissaoPct > 0 ? '' : 'none';
     if (el('ped-comissao-pct')) el('ped-comissao-pct').textContent = comissaoPct;
     if (el('ped-comissao-val')) el('ped-comissao-val').textContent = comissaoVal.toFixed(2);
-}
-
-function alternarTipoPrecificacao() {
-    const tipo = document.getElementById('ped-tipo-precificacao')?.value || 'item';
-    const row = document.getElementById('ped-margem-pedido-row');
-    if (row) row.style.display = tipo === 'pedido' ? 'block' : 'none';
-    atualizarTotalPedido();
 }
 
 function filtrarClientes() {
@@ -5130,35 +5113,12 @@ async function salvarPedido() {
     });
     const cliente          = db.clientes.find(c => c.id == clienteId);
     const maoObra          = parseFloat(document.getElementById('ped-mao')?.value) || 0;
-    const tipoPrecificacao = document.getElementById('ped-tipo-precificacao')?.value || 'item';
-    const margemPedidoPct  = parseFloat(document.getElementById('ped-margem-pedido')?.value) || 0;
     const desconto_pct     = parseFloat(document.getElementById('ped-desconto')?.value) || 0;
-    let total_material, total_acessorios, desconto_valor, valor, custo_mat, custo_acess;
-    if (tipoPrecificacao === 'pedido') {
-        custo_mat   = pedidoDraft.ambientes.reduce((s,a) =>
-            s + (a.tecidos||[]).reduce((ts,t) => {
-                const tec = db.catalogo.find(c => c.id == t.tecidoId);
-                return ts + (t.consumo_linear||0) * (tec?.preco_custo||0);
-            }, 0), 0);
-        custo_acess = pedidoDraft.itens.reduce((s,i) => {
-            const mat = db.materiais.find(m => m.id == i.materialId);
-            return s + (i.quantidade||0) * (mat?.preco_custo||0);
-        }, 0);
-        const fator    = 1 + margemPedidoPct / 100;
-        total_material   = Math.round(custo_mat   * fator * 100) / 100;
-        total_acessorios = Math.round(custo_acess * fator * 100) / 100;
-        const bruto      = total_material + total_acessorios + maoObra;
-        desconto_valor   = Math.round(bruto * desconto_pct / 100 * 100) / 100;
-        valor            = bruto - desconto_valor;
-    } else {
-        custo_mat   = null;
-        custo_acess = null;
-        total_material   = pedidoDraft.ambientes.reduce((s,a)=>s+(a.tecidos||[]).reduce((ts,t)=>ts+(t.total_material||0),0),0);
-        total_acessorios = pedidoDraft.itens.reduce((s,i)=>s+(i.subtotal||0),0);
-        const bruto      = total_material + total_acessorios + maoObra;
-        desconto_valor   = Math.round(bruto * desconto_pct / 100 * 100) / 100;
-        valor            = bruto - desconto_valor;
-    }
+    const total_material   = pedidoDraft.ambientes.reduce((s,a)=>s+(a.tecidos||[]).reduce((ts,t)=>ts+(t.total_material||0),0),0);
+    const total_acessorios = pedidoDraft.itens.reduce((s,i)=>s+(i.subtotal||0),0);
+    const bruto            = total_material + total_acessorios + maoObra;
+    const desconto_valor   = Math.round(bruto * desconto_pct / 100 * 100) / 100;
+    const valor            = bruto - desconto_valor;
     const ambNomes         = pedidoDraft.ambientes.map(a=>a.amb).filter(Boolean).join(', ') || 'Sem nome';
     const vendedor_id_sel  = parseInt(document.getElementById('ped-vendedor')?.value) || null;
     const vendedor_obj     = vendedor_id_sel ? db.vendedores.find(v => v.id === vendedor_id_sel) : null;
@@ -5169,7 +5129,9 @@ async function salvarPedido() {
         amb: ambNomes, ambientes: pedidoDraft.ambientes.map(a=>({...a})),
         itens: pedidoDraft.itens.map(i=>({...i})),
         maoObra, total_material, total_acessorios, desconto_pct, desconto_valor, valor,
-        tipo_precificacao: tipoPrecificacao, margem_pedido_pct: margemPedidoPct, custo_mat, custo_acess,
+        // Fica gravado para o DRE distinguir destes os pedidos antigos, que
+        // foram fechados com margem global e guardam o proprio custo.
+        tipo_precificacao: 'item', custo_mat: null, custo_acess: null,
         status:         document.getElementById('ped-status')?.value || 'Orçamento',
         data_entrega:   document.getElementById('ped-entrega')?.value || null,
         observacoes:    document.getElementById('ped-obs')?.value.trim() || '',
@@ -5264,14 +5226,6 @@ function carregarPedidoParaEdicao(id) {
     if (rtEl) rtEl.value = ped.rt_pct || 0;
     const pagEl = document.getElementById('ped-tipo-pagamento');
     if (pagEl) pagEl.value = ped.tipo_pagamento || '50_50';
-    const tipoPrecEl = document.getElementById('ped-tipo-precificacao');
-    if (tipoPrecEl) {
-        tipoPrecEl.value = ped.tipo_precificacao || 'item';
-        const margemRow = document.getElementById('ped-margem-pedido-row');
-        if (margemRow) margemRow.style.display = tipoPrecEl.value === 'pedido' ? 'block' : 'none';
-    }
-    const margemPedEl = document.getElementById('ped-margem-pedido');
-    if (margemPedEl) margemPedEl.value = ped.margem_pedido_pct || 0;
     const ambientes = normalizarAmbientes(ped);
     _ambienteCounter = ambientes.length;
     pedidoDraft.ambientes = ambientes.map((a, i) => ({
@@ -6255,6 +6209,22 @@ function mascaraCNPJ(el) {
     el.value = v;
 }
 
+// Consulta a mesma base publica usada no cadastro de fornecedor. Devolve o
+// par (razao social, estabelecimento) ja decodificado, ou lanca { tipo }.
+// Uma implementacao so: a tela de empresa e a de fornecedor consomem esta.
+async function consultarCNPJ(digitos) {
+    const res = await fetch(`https://publica.cnpj.ws/cnpj/${digitos}`);
+    if (!res.ok) throw { tipo: res.status === 404 ? 'nao_encontrado' : 'erro_http' };
+    const d = await res.json();
+    return { razao_social: d.razao_social || '', est: d.estabelecimento || {} };
+}
+
+function _cnpjMensagemDeErro(e) {
+    return e && e.tipo === 'nao_encontrado'
+        ? '<span style="color:#F43927">❌ CNPJ não encontrado na base de dados.</span>'
+        : '<span style="color:#F43927">❌ Erro ao consultar. Verifique sua conexão.</span>';
+}
+
 async function buscarCNPJ() {
     const cnpjRaw = document.getElementById('forn-cnpj')?.value.replace(/\D/g, '');
     const statusEl = document.getElementById('forn-cnpj-status');
@@ -6268,10 +6238,8 @@ async function buscarCNPJ() {
     if (btn) btn.disabled = true;
 
     try {
-        const res = await fetch(`https://publica.cnpj.ws/cnpj/${cnpjRaw}`);
-        if (!res.ok) throw { tipo: res.status === 404 ? 'nao_encontrado' : 'erro_http' };
-        const d = await res.json();
-        const est = d.estabelecimento || {};
+        const { razao_social, est } = await consultarCNPJ(cnpjRaw);
+        const d = { razao_social };
 
         const set = (id, val) => { if (!val) return; const el = document.getElementById(id); if (el) el.value = val; };
 
@@ -6293,12 +6261,63 @@ async function buscarCNPJ() {
         statusEl.innerHTML = '<span style="color:#005D3B">✅ Dados preenchidos!</span>';
         setTimeout(() => { statusEl.innerHTML = ''; }, 4000);
     } catch (e) {
-        statusEl.innerHTML = e.tipo === 'nao_encontrado'
-            ? '<span style="color:#F43927">❌ CNPJ não encontrado na base de dados.</span>'
-            : '<span style="color:#F43927">❌ Erro ao consultar. Verifique sua conexão.</span>';
+        statusEl.innerHTML = _cnpjMensagemDeErro(e);
     } finally {
         if (btn) btn.disabled = false;
     }
+}
+
+// ── Empresa: o CNPJ preenche o resto sozinho ────────────────────────────────
+// Dispara quando os 14 digitos ficam completos, sem botao. `oninput` dispara a
+// cada tecla e tambem quando a mascara reescreve o campo, entao o numero ja
+// consultado fica guardado para nao repetir a chamada. Apagar um digito limpa
+// essa memoria de proposito: quem apaga esta corrigindo, e a correcao precisa
+// poder consultar de novo. Campo ja preenchido a mao nao e' sobrescrito.
+let _empCnpjConsultado = '';
+
+async function empresaCnpjMudou(el) {
+    mascaraCNPJ(el);
+    const digitos = el.value.replace(/\D/g, '');
+    const statusEl = document.getElementById('emp-cnpj-status');
+    if (digitos.length !== 14) {
+        _empCnpjConsultado = '';
+        if (statusEl) statusEl.innerHTML = '';
+        return;
+    }
+    if (digitos === _empCnpjConsultado) return;
+    _empCnpjConsultado = digitos;
+
+    if (statusEl) statusEl.innerHTML = '<span style="color:#8F8F8F">⏳ Consultando...</span>';
+    try {
+        const { razao_social, est } = await consultarCNPJ(digitos);
+        // So preenche o que estiver vazio: o que voce digitou manda.
+        const set = (id, val) => {
+            if (!val) return;
+            const campo = document.getElementById(id);
+            if (campo && !campo.value.trim()) campo.value = val;
+        };
+        set('emp-razao', razao_social);
+        set('emp-fantasia', est.nome_fantasia || '');
+        set('emp-end', _empEnderecoCompleto(est));
+        if (est.ddd1 && est.telefone1) set('emp-tel', `(${est.ddd1}) ${est.telefone1}`);
+        set('emp-email', est.email || '');
+        if (statusEl) {
+            statusEl.innerHTML = '<span style="color:#005D3B">✅ Dados preenchidos!</span>';
+            setTimeout(() => { if (statusEl) statusEl.innerHTML = ''; }, 4000);
+        }
+    } catch (e) {
+        _empCnpjConsultado = '';   // deixa tentar de novo
+        if (statusEl) statusEl.innerHTML = _cnpjMensagemDeErro(e);
+    }
+}
+
+// O formulario da empresa tem um campo unico de endereco; a API devolve em
+// partes, entao elas sao juntadas aqui no formato que a tela mostra.
+function _empEnderecoCompleto(est) {
+    const logr = [est.tipo_logradouro, est.logradouro].filter(Boolean).join(' ');
+    const ruaNum = [logr, est.numero].filter(Boolean).join(', ');
+    const cidadeUf = [est.cidade?.nome, est.estado?.sigla].filter(Boolean).join(' — ');
+    return [ruaNum, est.bairro, cidadeUf, est.cep].filter(Boolean).join(', ');
 }
 
 async function salvarFornecedor() {
@@ -6978,7 +6997,7 @@ function imprimirAgendamentoMedicao(id) {
     abrirDocModal(html, 'Agendamento de Medição');
 }
 
-// --- FILTRO: Agendamento de Medições ---
+// --- FILTRO: Agenda de Medições ---
 // Só o campo Cliente é aplicável aqui: uma medição é agendada antes de existir
 // um pedido, então não há vendedor nem número de pedido para filtrar por enquanto.
 let _medicoesFiltro = { cliente: '' };
