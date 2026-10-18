@@ -200,6 +200,21 @@ function gerarNumeroPedido() {
     return parseInt(yy + String(seq).padStart(3, '0'));
 }
 
+// O pedido de compra tem sequencia propria: usar a dos pedidos faria uma
+// compra consumir um numero de venda. Mesmo formato (ano + sequencial), e
+// pula numero ja ocupado, porque as compras antigas nasceram com Date.now().
+function gerarNumeroPedidoCompra() {
+    const yy = String(new Date().getFullYear()).slice(-2);
+    let seq = parseInt(localStorage.getItem('sc_pc_seq') || '0');
+    let id;
+    do {
+        seq += 1;
+        id = parseInt(yy + String(seq).padStart(3, '0'));
+    } while (db.pedidos_compra.some(p => p.id === id));
+    localStorage.setItem('sc_pc_seq', String(seq));
+    return id;
+}
+
 function formatPedidoId(id) {
     return String(id);
 }
@@ -331,6 +346,8 @@ let editandoIdFornecedor = null;
 let editandoCatalogoId = null;
 let editandoMaterialId = null;
 let pcDraftItens = [];
+// Qual pedido de compra esta sendo editado. null = formulario de pedido novo.
+let editandoPCId = null;
 // A ordenacao escolhida vale para as duas telas que mostram o mesmo tipo de
 // item (Cadastro/Catalogo e Estoque). Como sao paginas separadas, o objeto em
 // memoria nao basta: a escolha e' guardada e relida no carregamento.
@@ -6477,6 +6494,10 @@ async function adicionarItemPC() {
         const m = db.materiais.find(x => x.id === itemId);
         if (!m) return;
         item_nome = m.nome; unidade = m.unidade; preco_unit = m.preco_custo || 0; referencia = m.referencia || '';
+    } else if (tipo === 'kit') {
+        const k = _pcKitsCompraveis().find(x => x.id === itemId);
+        if (!k) return;
+        item_nome = k.nome; unidade = 'un'; preco_unit = k.preco_custo || 0; referencia = k.referencia || '';
     } else {
         const c = db.catalogo.find(x => x.id === itemId);
         if (!c) return;
@@ -6491,6 +6512,33 @@ async function adicionarItemPC() {
     else { pcDraftItens.push({ tipo, item_id: itemId, item_nome, referencia, unidade, quantidade: qtd, preco_unit, subtotal: qtd * preco_unit }); }
     renderItensPCDraft();
 }
+
+// Escolher o item preenche o codigo dele; o campo de codigo continua achando
+// o item. Os dois sentidos: antes, escolher um item APAGAVA o codigo.
+function preencherCodigoItemPC() {
+    const tipo = document.getElementById('pc-item-tipo')?.value || 'material';
+    const sel  = document.getElementById('pc-item-id');
+    const codigoEl = document.getElementById('pc-item-codigo');
+    if (!sel || !codigoEl) return;
+    sel.style.borderColor = '';
+    const id = parseInt(sel.value);
+    const item = id ? _pcListaDoTipo(tipo).find(x => x.id === id) : null;
+    codigoEl.value = item ? (item.referencia || '') : '';
+}
+
+// Escolher o fornecedor preenche o CNPJ dele; o campo de CNPJ continua
+// filtrando a lista. Antes, escolher um fornecedor APAGAVA o CNPJ.
+function preencherCNPJFornecedorPC() {
+    const sel = document.getElementById('pc-fornecedor');
+    const cnpjEl = document.getElementById('pc-busca-cnpj');
+    if (!sel || !cnpjEl) return;
+    const id = parseInt(sel.value);
+    const forn = id ? db.fornecedores.find(f => f.id === id) : null;
+    cnpjEl.value = forn ? (forn.cnpj || '') : '';
+}
+
+const _PC_ROTULO_TIPO = { tecido: 'Tecido', kit: 'Kit', material: 'Material' };
+function _pcRotuloTipo(tipo) { return _PC_ROTULO_TIPO[tipo] || 'Material'; }
 
 function removerItemPC(idx) {
     pcDraftItens.splice(idx, 1);
@@ -6518,13 +6566,19 @@ function renderItensPCDraft() {
             ? `R$ ${i.preco_unit.toFixed(2)}/${i.tipo === 'tecido' ? 'm' : i.unidade}`
             : `<span style="color:#8F8F8F;font-size:12px">sem registro</span>`;
         return `<tr>
-            <td>${escapeHtml(i.item_nome)} <span style="font-size:11px;color:#888">(${i.tipo === 'tecido' ? 'Tecido' : 'Material'})</span></td>
+            <td>${escapeHtml(i.item_nome)} <span style="font-size:11px;color:#888">(${_pcRotuloTipo(i.tipo)})</span></td>
             <td><input type="number" value="${i.quantidade}" step="0.01" min="0.01" style="width:80px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:13px" onchange="atualizarQtdPC(${idx},this.value)"></td>
             <td>${i.unidade}</td>
             <td>${precoLabel}</td>
             <td><button class="btn btn-outline btn-sm btn-danger" onclick="removerItemPC(${idx})">✕</button></td>
         </tr>`;
     }).join('') + `<tr style="background:#FAFAFA"><td colspan="3" style="text-align:right;font-weight:bold;color:#555;padding:10px 12px">Total estimado:</td><td style="font-weight:bold;padding:10px 12px">${total > 0 ? 'R$ ' + total.toFixed(2) : '<span style="color:#8F8F8F;font-size:12px">—</span>'}</td><td></td></tr>`;
+}
+
+// So kit PRONTO entra num pedido de compra: o kit de montagem e' feito aqui
+// dentro, a partir dos materiais, e nao e' comprado do fornecedor.
+function _pcKitsCompraveis() {
+    return db.kits.filter(ehKitPronto);
 }
 
 function atualizarSelectItemPC() {
@@ -6537,7 +6591,14 @@ function atualizarSelectItemPC() {
     sel.style.borderColor = '';
     if (tipo === 'material') {
         sel.innerHTML = '<option value="">— Selecione o material —</option>' +
-            db.materiais.map(m => `<option value="${m.id}">${m.nome} (${m.unidade})</option>`).join('');
+            db.materiais.map(m => `<option value="${m.id}">${escapeHtml(m.nome)} (${m.unidade})</option>`).join('');
+        if (unidadeGroup) unidadeGroup.style.display = 'none';
+    } else if (tipo === 'kit') {
+        const kits = _pcKitsCompraveis();
+        sel.innerHTML = kits.length
+            ? '<option value="">— Selecione o kit —</option>' +
+              kits.map(k => `<option value="${k.id}">${escapeHtml(k.nome)}${k.medida ? ' — ' + escapeHtml(k.medida) : ''}</option>`).join('')
+            : '<option value="">— Nenhum kit pronto cadastrado —</option>';
         if (unidadeGroup) unidadeGroup.style.display = 'none';
     } else {
         sel.innerHTML = '<option value="">— Selecione o tecido —</option>' +
@@ -6550,18 +6611,21 @@ function atualizarSelectItemPC() {
     }
 }
 
+// A lista de onde cada tipo de item sai. Uma fonte so, para o seletor, a busca
+// por codigo e o preenchimento do codigo nao divergirem.
+function _pcListaDoTipo(tipo) {
+    if (tipo === 'material') return db.materiais;
+    if (tipo === 'kit') return _pcKitsCompraveis();
+    return db.catalogo;
+}
+
 function buscarItemPorCodigoPC(val) {
     const codigo = val.trim().toLowerCase();
     const tipo = document.getElementById('pc-item-tipo')?.value || 'material';
     const sel  = document.getElementById('pc-item-id');
     if (!sel) return;
     if (!codigo) { sel.style.borderColor = ''; return; }
-    let encontrado = null;
-    if (tipo === 'material') {
-        encontrado = db.materiais.find(m => (m.referencia || '').toLowerCase() === codigo);
-    } else {
-        encontrado = db.catalogo.find(c => (c.referencia || '').toLowerCase() === codigo);
-    }
+    const encontrado = _pcListaDoTipo(tipo).find(x => (x.referencia || '').toLowerCase() === codigo);
     if (encontrado) {
         sel.value = encontrado.id;
         sel.style.borderColor = '#159912';
@@ -6582,16 +6646,32 @@ async function salvarPedidoCompra() {
     if (!pcDraftItens.length) { await showAlert('Adicione pelo menos um item ao pedido.', '⚠️'); return; }
     const fornId = parseInt(bruto, 10) || 0;
     const forn = db.fornecedores.find(f => f.id === fornId);
-    db.pedidos_compra.push({
-        id:              Date.now(),
+    // fornecedor_id/nome do item so servem para agrupar no catalogo.
+    const itens = pcDraftItens.map(({ fornecedor_id, fornecedor_nome, ...i }) => i);
+    const dados = {
         fornecedor_id:   fornId,
         fornecedor_nome: forn ? forn.nome : (fornId ? '' : PC_SEM_FORNECEDOR),
-        data_criacao:    Date.now(),
-        status:          'Rascunho',
-        // fornecedor_id/nome do item só servem para agrupar no catálogo.
-        itens:           pcDraftItens.map(({ fornecedor_id, fornecedor_nome, ...i }) => i),
+        itens,
         observacoes:     document.getElementById('pc-obs')?.value.trim() || ''
-    });
+    };
+
+    if (editandoPCId !== null) {
+        const alvo = db.pedidos_compra.find(p => p.id === editandoPCId);
+        if (!alvo) { await showAlert('O pedido que você estava editando não existe mais.', '⚠️'); cancelarEdicaoPC(); return; }
+        // Numero, data e status sao do pedido, nao do formulario: editar o
+        // conteudo nao pode renumerar nem reabrir um pedido ja enviado.
+        Object.assign(alvo, dados);
+        editandoPCId = null;
+        pcDraftItens = [];
+        salvarERecarregar(`Pedido de compra #${formatPedidoId(alvo.id)} atualizado!`);
+        return;
+    }
+
+    db.pedidos_compra.push(Object.assign({
+        id:           gerarNumeroPedidoCompra(),
+        data_criacao: Date.now(),
+        status:       'Rascunho'
+    }, dados));
     pcDraftItens = [];
 
     const fila = lerFilaPC();
@@ -6652,7 +6732,7 @@ function renderListaPedidosCompra() {
         const total = p.itens.reduce((s, i) => s + i.subtotal, 0);
         const cls   = COR_PC[p.status] || 'st-orcamento';
         return `<tr>
-            <td style="font-size:12px">#${formatPedidoId(p.id)}</td>
+            <td style="font-size:12px"><button class="pc-num-btn" onclick="editarPedidoCompra(${p.id})" title="Abrir para editar ou acrescentar itens">#${formatPedidoId(p.id)}</button></td>
             <td><strong>${escapeHtml(p.fornecedor_nome)}</strong></td>
             <td style="font-size:12px;color:#8F8F8F;white-space:nowrap">${data}</td>
             <td style="text-align:center">${p.itens.length}</td>
@@ -6716,6 +6796,54 @@ function abrirPedidoCompra(id) {
     abrirDocModal(gerarHTMLPedidoCompra(id), 'Pedido de Compra');
 }
 
+// Clicar no numero do pedido abre ele no formulario, para corrigir os itens ou
+// acrescentar outros. Nenhum status de pedido de compra mexe em estoque, entao
+// editar um ja enviado nao desfaz movimento nenhum.
+function editarPedidoCompra(id) {
+    const pc = db.pedidos_compra.find(p => p.id == id);
+    if (!pc) return;
+    editandoPCId = pc.id;
+    pcDraftItens = (pc.itens || []).map(i => ({ ...i }));
+
+    mostrarTabFornecedores('novo');
+    const fornSel = document.getElementById('pc-fornecedor');
+    if (fornSel) fornSel.value = String(pc.fornecedor_id || 0);
+    preencherCNPJFornecedorPC();
+    const obsEl = document.getElementById('pc-obs');
+    if (obsEl) obsEl.value = pc.observacoes || '';
+
+    renderItensPCDraft();
+    _pcPintarModoEdicao(pc);
+    document.getElementById('pc-fornecedor')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelarEdicaoPC() {
+    editandoPCId = null;
+    pcDraftItens = [];
+    const fornSel = document.getElementById('pc-fornecedor');
+    if (fornSel) fornSel.value = '';
+    const cnpjEl = document.getElementById('pc-busca-cnpj');
+    if (cnpjEl) cnpjEl.value = '';
+    const obsEl = document.getElementById('pc-obs');
+    if (obsEl) obsEl.value = '';
+    renderItensPCDraft();
+    _pcPintarModoEdicao(null);
+}
+
+// O formulario e' o mesmo para criar e editar: o titulo e o botao dizem em
+// qual dos dois voce esta, senao da' para salvar um pedido achando que esta
+// criando outro.
+function _pcPintarModoEdicao(pc) {
+    const titulo = document.getElementById('pc-form-titulo');
+    if (titulo) titulo.textContent = pc
+        ? `Editando Pedido de Compra #${formatPedidoId(pc.id)}`
+        : 'Novo Pedido de Compra';
+    const botao = document.getElementById('pc-btn-salvar');
+    if (botao) botao.textContent = pc ? '💾 Salvar Alterações' : '💾 Salvar Pedido';
+    const cancelar = document.getElementById('pc-btn-cancelar-edicao');
+    if (cancelar) cancelar.style.display = pc ? '' : 'none';
+}
+
 function criarPCParaFornecedor(fornId) {
     localStorage.setItem('sc_pc_prefill_forn', fornId);
     mostrarTabFornecedores('novo');
@@ -6760,15 +6888,12 @@ function gerarHTMLPedidoCompra(id) {
     const linhas = pc.itens.map(i => {
         let ref = i.referencia || '';
         if (!ref && i.item_id) {
-            const src = i.tipo === 'tecido'
-                ? db.catalogo.find(x => x.id == i.item_id)
-                : db.materiais.find(x => x.id == i.item_id);
-            ref = src?.referencia || '';
+            ref = _pcListaDoTipo(i.tipo).find(x => x.id == i.item_id)?.referencia || '';
         }
         return `<tr>
         <td style="font-size:12px;color:#555;white-space:nowrap">${ref ? escapeHtml(ref) : '<span style="color:#ccc">—</span>'}</td>
         <td>${escapeHtml(i.item_nome)}</td>
-        <td style="text-align:center">${i.tipo === 'tecido' ? 'Tecido' : 'Material'}</td>
+        <td style="text-align:center">${_pcRotuloTipo(i.tipo)}</td>
         <td style="text-align:right">${i.quantidade}</td>
         <td>${i.unidade}</td>
         <td style="text-align:right">R$ ${i.preco_unit.toFixed(2)}</td>

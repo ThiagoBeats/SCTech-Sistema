@@ -150,17 +150,17 @@
         <div id="tab-forn-novo" class="tab-panel">
             <div class="card">
                 <div id="pc-fila-banner" class="pc-fila-banner" style="display:none"></div>
-                <h3 style="color:var(--primary);margin-bottom:20px">Novo Pedido de Compra</h3>
+                <h3 id="pc-form-titulo" style="color:var(--primary);margin-bottom:20px">Novo Pedido de Compra</h3>
                 <!-- Busca de fornecedor -->
                 <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
                     <div class="form-group" style="width:220px;margin-bottom:0">
-                        <label>Buscar por CNPJ</label>
+                        <label>CNPJ <span class="info-tag">busca e é preenchido</span></label>
                         <input type="text" id="pc-busca-cnpj" placeholder="00.000.000/0000-00" maxlength="18"
                                oninput="mascaraCNPJ(this);filtrarFornecedorPorCNPJ(this.value)">
                     </div>
                     <div class="form-group" style="flex:1;min-width:220px;margin-bottom:0">
                         <label>Fornecedor <span style="color:#F43927">*</span></label>
-                        <select id="pc-fornecedor" onchange="document.getElementById('pc-busca-cnpj').value=''">
+                        <select id="pc-fornecedor" onchange="preencherCNPJFornecedorPC()">
                             <option value="">— Selecione o fornecedor —</option>
                         </select>
                     </div>
@@ -171,6 +171,7 @@
                         <select id="pc-item-tipo" onchange="atualizarSelectItemPC()">
                             <option value="material">Material</option>
                             <option value="tecido">Tecido</option>
+                            <option value="kit">Kit</option>
                         </select>
                     </div>
                     <div class="form-group" style="width:140px;margin-bottom:0">
@@ -181,7 +182,7 @@
                     </div>
                     <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
                         <label>Item</label>
-                        <select id="pc-item-id" onchange="document.getElementById('pc-item-codigo').value=''"></select>
+                        <select id="pc-item-id" onchange="preencherCodigoItemPC()"></select>
                     </div>
                     <div class="form-group" id="pc-unidade-group" style="width:130px;margin-bottom:0;display:none">
                         <label>Unidade</label>
@@ -213,7 +214,8 @@
                     <textarea id="pc-obs" rows="3" placeholder="Condições de pagamento, prazo de entrega, referências..." style="padding:10px;border:1px solid #ccc;border-radius:4px;resize:vertical;font-family:inherit;font-size:14px;width:100%"></textarea>
                 </div>
                 <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px">
-                    <button class="btn btn-success" onclick="salvarPedidoCompra()">💾 Salvar Pedido de Compra</button>
+                    <button class="btn btn-success" id="pc-btn-salvar" onclick="salvarPedidoCompra()">💾 Salvar Pedido</button>
+                    <button class="btn btn-outline" id="pc-btn-cancelar-edicao" style="display:none" onclick="cancelarEdicaoPC()">Cancelar edição</button>
                 </div>
             </div>
         </div>

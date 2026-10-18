@@ -56,7 +56,7 @@ TESTDIR=<projeto>/tests/e2e \
   npx playwright test --config=repo.config.js
 ```
 
-Esperado: **325 passando**.
+Esperado: **340 passando**.
 
 ## Sessão autenticada é obrigatória
 
@@ -111,5 +111,6 @@ navegar. Ele semeia um usuário com papel 1 (Administrador, que vem de
 | `busca-e-minimo-infinito.spec.js` | Os campos de tecido e de material na entrada de estoque como busca com sugestões: filtro por código ou nome, clique e teclado (setas dando a volta, Enter, Esc), mexer no texto limpando o item escolhido, o preenchimento automático disparando, a entrada gravando o item certo e cobrando a escolha quem só digitou; e o estoque mínimo que não vale para item infinito: o campo somindo do cadastro de tecido, material e kit, o valor gravado como zero, o traço nas listas, no detalhe e na Consulta, o dado antigo preservado e a ordenação tratando infinito como sem mínimo |
 | `rolo-se-chama-codigo.spec.js` | O rolo chamado de "Código" em toda a Gestão de Estoque — formulário (com a dica "banho de cor"), tabela de rolos, Consulta, Balanço e o filtro dele, a confirmação da entrada e o movimento gravado no histórico; "Metragem do Rolo" virando "Metragem"; o formulário de baixa falando em rolo; e a palavra "lote" preservada nos Pedidos, onde ela quer dizer banho de cor |
 | `empresa-precificacao-agenda.spec.js` | O CNPJ como primeiro campo da tela de empresa, preenchendo o resto sozinho ao completar os 14 dígitos (sem sobrescrever o que foi digitado à mão, sem consultar incompleto, uma chamada só por número, e avisando em CNPJ inexistente ou queda de rede); a tela exigindo permissão, com o atalho sumindo do popup e a porta fechada de verdade; a saída do "Tipo de precificação" do pedido, com o total somando pelos itens e o DRE ainda lendo os pedidos antigos fechados por margem global; e "Agenda de Medições" na aba e na árvore de permissões |
+| `pedido-de-compra.spec.js` | Numeração sequencial do pedido de compra, com sequência própria (uma compra não consome número de venda) e pulando número já ocupado pelas compras antigas; escolher fornecedor preenchendo o CNPJ e escolher item preenchendo o código, com os caminhos inversos intactos; Kit como terceiro tipo de item, só o kit pronto na lista, com custo e unidade próprios e aparecendo no documento; e a edição ao clicar no número — carregando fornecedor, CNPJ, observações e itens, sem duplicar o pedido, sem renumerar, sem devolver para Rascunho um pedido já enviado, e com o cancelar descartando o que foi acrescentado |
 
-Esperado no total: **325 passando**.
+Esperado no total: **340 passando**.

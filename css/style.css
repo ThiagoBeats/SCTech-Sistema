@@ -1484,3 +1484,12 @@ td.col-codigo { color: var(--dark); }
 .est-rolos-tabela td, .est-rolos-tabela th { padding: 5px 8px; }
 html[data-theme="dark"] .est-tec-rolos > td { background: #1D2024; }
 .consulta-un { font-size: var(--fs-label); color: var(--muted); }
+
+/* ─── Pedido de compra: o número abre o pedido para editar ─────────────── */
+.pc-num-btn {
+    background: none; border: none; padding: 0; cursor: pointer;
+    font: inherit; font-weight: 700; color: var(--primary);
+    text-decoration: underline; text-underline-offset: 2px;
+}
+.pc-num-btn:hover { color: var(--dark); }
+html[data-theme="dark"] .pc-num-btn { color: var(--accent, #C9F775); }
