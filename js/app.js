@@ -25,8 +25,8 @@ const MODULOS_PERMISSAO = [
         { key: 'tecidos',   label: 'Tecidos' },
         { key: 'materiais', label: 'Materiais e Acessórios' },
     ]},
-    { key: 'vendedores',    label: 'Vendedores',         subs: [
-        { key: 'lista',     label: 'Vendedores' },
+    { key: 'vendedores',    label: 'Vendedores/Arquitetos', subs: [
+        { key: 'lista',     label: 'Cadastro' },
         { key: 'pendentes', label: 'Comissões Pendentes' },
         { key: 'historico', label: 'Histórico de Pagamentos' },
     ]},
@@ -401,7 +401,7 @@ const _PAGE_NAMES = {
     'index.html': 'Página Inicial', 'pcp.html': 'Produção',
     'estoque.html': 'Estoque', 'clientes.html': 'Clientes',
     'catalogo.html': 'Cadastro/Catálogo', 'relatorios.html': 'Relatórios',
-    'vendedores.html': 'Vendedores', 'fornecedores.html': 'Fornecedores',
+    'vendedores.html': 'Vendedores/Arquitetos', 'fornecedores.html': 'Fornecedores',
     'financeiro.html': 'Financeiro', 'pedido.html': 'Pedido',
 };
 
@@ -447,7 +447,7 @@ const SIDEBAR_MODULOS = [
     { href: 'estoque.html',     icon: 'estoque',      label: 'Estoque',           permModulo: 'estoque' },
     { href: 'clientes.html',    icon: 'clientes',     label: 'Clientes',          permModulo: 'clientes' },
     { href: 'catalogo.html',    icon: 'catalogo',     label: 'Cadastro/Catálogo', permModulo: 'catalogo' },
-    { href: 'vendedores.html',  icon: 'vendedores',   label: 'Vendedores',        permModulo: 'vendedores' },
+    { href: 'vendedores.html',  icon: 'vendedores',   label: 'Vendedores/Arquitetos', permModulo: 'vendedores' },
     { href: 'fornecedores.html', icon: 'fornecedores', label: 'Fornecedores',     permModulo: 'fornecedores' },
     { href: 'financeiro.html',  icon: 'financeiro',   label: 'Financeiro',        permModulo: 'financeiro' },
     { href: 'configuracoes.html', icon: 'settings',   label: 'Configurações',     permModulo: 'configuracoes' },
@@ -5157,8 +5157,8 @@ async function salvarPedido() {
         vendedor_nome:  vendedor_obj ? vendedor_obj.nome : '',
         comissao_pct,
         comissao_valor,
-        arquiteto_nome: document.getElementById('ped-arquiteto')?.value.trim() || '',
-        rt_pct: parseFloat(document.getElementById('ped-rt')?.value) || 0,
+        arquiteto_nome: '',
+        rt_pct: 0,
         tipo_pagamento: document.getElementById('ped-tipo-pagamento')?.value || '50_50'
     };
     if (editandoIdPedido) {
@@ -5173,6 +5173,9 @@ async function salvarPedido() {
             dadosPedido.comissao_data_pgto = db.pedidos[index].comissao_data_pgto || null;
             dadosPedido.financeiro_gerado  = db.pedidos[index].financeiro_gerado  || false;
             dadosPedido.rt_gerado          = db.pedidos[index].rt_gerado          || false;
+            // RT antiga (campo livre que saiu da tela): editar o pedido nao a apaga.
+            dadosPedido.arquiteto_nome     = db.pedidos[index].arquiteto_nome     || '';
+            dadosPedido.rt_pct             = db.pedidos[index].rt_pct             || 0;
             if (dadosPedido.status === 'Na Costura' && !dadosPedido.baixa_realizada) {
                 realizarBaixaEstoque(dadosPedido);
             }
@@ -5237,10 +5240,6 @@ function carregarPedidoParaEdicao(id) {
     if (descontoEl) descontoEl.value = ped.desconto_pct || 0;
     const vendedorEl = document.getElementById('ped-vendedor');
     if (vendedorEl) vendedorEl.value = String(ped.vendedor_id || '');
-    const arquitetoEl = document.getElementById('ped-arquiteto');
-    if (arquitetoEl) arquitetoEl.value = ped.arquiteto_nome || '';
-    const rtEl = document.getElementById('ped-rt');
-    if (rtEl) rtEl.value = ped.rt_pct || 0;
     const pagEl = document.getElementById('ped-tipo-pagamento');
     if (pagEl) pagEl.value = ped.tipo_pagamento || '50_50';
     const ambientes = normalizarAmbientes(ped);
@@ -6033,10 +6032,64 @@ function mostrarTabRel(tab) {
     _tabBackBtn('.tab-nav', _prevTabRel, () => mostrarTabRel(_prevTabRel));
 }
 
-// --- VENDEDORES ---
+// --- VENDEDORES / ARQUITETOS ---
+// Os dois vivem na mesma lista (db.vendedores) e se distinguem pelo campo
+// tipo. Cadastro antigo nao tem tipo: e vendedor. Assim comissao, pagamento,
+// relatorio e o campo do pedido funcionam igual para os dois.
+const TIPOS_VENDEDOR = {
+    vendedor:  { um: 'Vendedor',  varios: 'Vendedores' },
+    arquiteto: { um: 'Arquiteto', varios: 'Arquitetos' },
+};
+let _tipoVend = 'vendedor';
+function tipoDoVendedor(v) { return v && v.tipo === 'arquiteto' ? 'arquiteto' : 'vendedor'; }
+function vendedoresDoTipo(tipo) { return (db.vendedores || []).filter(v => tipoDoVendedor(v) === tipo); }
+function _idsDoTipo(tipo) { return new Set(vendedoresDoTipo(tipo).map(v => String(v.id))); }
+
+// Opcoes do campo "Vendedor / Responsavel" do pedido: os dois tipos, em grupos.
+function opcoesVendedorPedido() {
+    return Object.keys(TIPOS_VENDEDOR).map(t => {
+        const lista = vendedoresDoTipo(t);
+        if (!lista.length) return '';
+        return `<optgroup label="${TIPOS_VENDEDOR[t].varios}">` +
+            lista.map(v => `<option value="${v.id}">${escapeHtml(v.nome)} (${v.comissao_pct || 0}%)</option>`).join('') +
+            '</optgroup>';
+    }).join('');
+}
+
+function _preencherFiltrosVendedores() {
+    ['filtro-vend-pendente', 'filtro-vend-hist'].forEach(fId => {
+        const el = document.getElementById(fId);
+        if (!el) return;
+        const atual = el.value;
+        el.innerHTML = `<option value="">Todos os ${TIPOS_VENDEDOR[_tipoVend].varios.toLowerCase()}</option>` +
+            vendedoresDoTipo(_tipoVend).map(v => `<option value="${v.id}">${escapeHtml(v.nome)}</option>`).join('');
+        el.value = [...el.options].some(o => o.value === atual) ? atual : '';
+    });
+}
+
+function _rotulosTipoVendedores() {
+    const t = TIPOS_VENDEDOR[_tipoVend];
+    document.querySelectorAll('.vend-col-nome').forEach(th => { th.textContent = t.um; });
+    const tit = document.getElementById('vend-form-titulo');
+    if (tit) tit.textContent = (editandoIdVendedor ? 'Editar ' : 'Cadastrar ') + t.um;
+    const btn = document.getElementById('vend-btn-salvar');
+    if (btn) btn.textContent = editandoIdVendedor ? 'Salvar Alterações' : 'Salvar ' + t.um;
+}
+
+function mostrarTipoVendedores(tipo) {
+    if (!TIPOS_VENDEDOR[tipo]) tipo = 'vendedor';
+    if (_tipoVend !== tipo) cancelarEdicaoVendedor();
+    _tipoVend = tipo;
+    document.querySelectorAll('.vend-tipo-btn').forEach(b => b.classList.toggle('active', b.dataset.tipo === tipo));
+    _preencherFiltrosVendedores();
+    _rotulosTipoVendedores();
+    mostrarTabVendedores(_curTabVend || 'lista');
+}
+
 async function salvarVendedor() {
+    const t = TIPOS_VENDEDOR[_tipoVend];
     const nome = document.getElementById('vend-nome')?.value.trim();
-    if (!nome) { await showAlert('Informe o nome do vendedor.', '⚠️'); return; }
+    if (!nome) { await showAlert(`Informe o nome do ${t.um.toLowerCase()}.`, '⚠️'); return; }
     const comissao_pct = parseFloat(document.getElementById('vend-comissao')?.value) || 0;
     const tel = document.getElementById('vend-tel')?.value.trim() || '';
     const usuario_id = parseInt(document.getElementById('vend-usuario')?.value) || null;
@@ -6044,12 +6097,14 @@ async function salvarVendedor() {
         const idx = db.vendedores.findIndex(v => v.id == editandoIdVendedor);
         if (idx !== -1) db.vendedores[idx] = { ...db.vendedores[idx], nome, comissao_pct, tel, usuario_id };
         cancelarEdicaoVendedor();
-        salvarERecarregar('Vendedor atualizado!');
+        salvarERecarregar(`${t.um} atualizado!`);
     } else {
+        // Nome repetido e barrado entre os dois tipos: no pedido eles dividem o
+        // mesmo campo, e dois "Studio M" seriam indistinguiveis.
         const dup = db.vendedores.find(v => v.nome.trim().toLowerCase() === nome.toLowerCase());
-        if (dup) { await showAlert(`Já existe um vendedor com o nome "${dup.nome}".`, '⚠️'); return; }
-        db.vendedores.push({ id: Date.now(), nome, comissao_pct, tel, usuario_id });
-        salvarERecarregar('Vendedor cadastrado!');
+        if (dup) { await showAlert(`Já existe um cadastro com o nome "${dup.nome}" (${TIPOS_VENDEDOR[tipoDoVendedor(dup)].um.toLowerCase()}).`, '⚠️'); return; }
+        db.vendedores.push({ id: Date.now(), tipo: _tipoVend, nome, comissao_pct, tel, usuario_id });
+        salvarERecarregar(`${t.um} cadastrado!`);
     }
 }
 
@@ -6065,7 +6120,7 @@ function editarVendedor(id) {
     const tit = document.getElementById('vend-form-titulo');
     const btn = document.getElementById('vend-btn-salvar');
     const cnc = document.getElementById('vend-btn-cancelar');
-    if (tit) tit.textContent = 'Editar Vendedor';
+    if (tit) tit.textContent = 'Editar ' + TIPOS_VENDEDOR[tipoDoVendedor(v)].um;
     if (btn) btn.textContent = 'Salvar Alterações';
     if (cnc) cnc.style.display = 'inline-block';
     document.getElementById('vend-nome').focus();
@@ -6080,8 +6135,8 @@ function cancelarEdicaoVendedor() {
     const tit = document.getElementById('vend-form-titulo');
     const btn = document.getElementById('vend-btn-salvar');
     const cnc = document.getElementById('vend-btn-cancelar');
-    if (tit) tit.textContent = 'Cadastrar Vendedor';
-    if (btn) btn.textContent = 'Salvar Vendedor';
+    if (tit) tit.textContent = 'Cadastrar ' + TIPOS_VENDEDOR[_tipoVend].um;
+    if (btn) btn.textContent = 'Salvar ' + TIPOS_VENDEDOR[_tipoVend].um;
     if (cnc) cnc.style.display = 'none';
 }
 
@@ -6090,19 +6145,21 @@ async function excluirVendedor(id) {
     if (!v) return;
     const usados = db.pedidos.filter(p => p.vendedor_id == id);
     if (usados.length) { await showAlert(`Não é possível excluir: ${escapeHtml(v.nome)} está associado a ${usados.length} pedido(s).`, '🚫'); return; }
-    if (!await showConfirm(`Excluir o vendedor "${v.nome}"?`, '🗑️', 'Excluir', 'Cancelar')) return;
+    const um = TIPOS_VENDEDOR[tipoDoVendedor(v)].um;
+    if (!await showConfirm(`Excluir o ${um.toLowerCase()} "${v.nome}"?`, '🗑️', 'Excluir', 'Cancelar')) return;
     db.vendedores = db.vendedores.filter(x => x.id != id);
-    salvarERecarregar('Vendedor excluído.');
+    salvarERecarregar(`${um} excluído.`);
 }
 
 function renderTabelaVendedores() {
     const tb = document.getElementById('tb-vendedores');
     if (!tb) return;
-    if (!db.vendedores.length) {
-        tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;padding:20px;">Nenhum vendedor cadastrado.</td></tr>';
+    const lista = vendedoresDoTipo(_tipoVend);
+    if (!lista.length) {
+        tb.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#999;padding:20px;">Nenhum ${TIPOS_VENDEDOR[_tipoVend].um.toLowerCase()} cadastrado.</td></tr>`;
         return;
     }
-    tb.innerHTML = db.vendedores.map(v => {
+    tb.innerHTML = lista.map(v => {
         const pedidos        = db.pedidos.filter(p => p.vendedor_id == v.id);
         const totalComissoes = pedidos.reduce((s, p) => s + (p.comissao_valor || 0), 0);
         const comissoesPagas = pedidos.filter(p => p.comissao_paga).reduce((s, p) => s + (p.comissao_valor || 0), 0);
@@ -6114,19 +6171,29 @@ function renderTabelaVendedores() {
             <td style="text-align:center">${pedidos.length}</td>
             <td>
                 ${pendente > 0.01 ? `<span class="badge-comissao-pendente">R$ ${pendente.toFixed(2)} pendente</span>` : '<span class="badge-comissao-paga">Em dia</span>'}
-                <button class="btn btn-outline btn-sm" onclick="editarVendedor(${v.id})" style="margin-left:6px" title="Editar vendedor">✏️</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirVendedor(${v.id})" title="Excluir vendedor">🗑️</button>
+                <button class="btn btn-outline btn-sm" onclick="editarVendedor(${v.id})" style="margin-left:6px" title="Editar">✏️</button>
+                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirVendedor(${v.id})" title="Excluir">🗑️</button>
             </td>
         </tr>`;
     }).join('');
+}
+
+// Pendente = pedido instalado, com comissao, ainda nao paga, cujo responsavel
+// e do tipo da aba aberta. "Pagar todas" usa a mesma regra, para nunca pagar
+// o que a tela nao esta mostrando.
+function _comissoesPendentesDoTipo(filtroVend) {
+    const doTipo = _idsDoTipo(_tipoVend);
+    let pedidos = db.pedidos.filter(p => p.vendedor_id && doTipo.has(String(p.vendedor_id)) &&
+        (p.comissao_valor || 0) > 0 && !p.comissao_paga && normalizarStatus(p.status) === 'Instalado');
+    if (filtroVend) pedidos = pedidos.filter(p => p.vendedor_id == filtroVend);
+    return pedidos;
 }
 
 function renderComissoesPendentes() {
     const tb = document.getElementById('tb-comissoes-pendentes');
     if (!tb) return;
     const filtroVend = document.getElementById('filtro-vend-pendente')?.value || '';
-    let pedidos = db.pedidos.filter(p => p.vendedor_id && (p.comissao_valor || 0) > 0 && !p.comissao_paga && normalizarStatus(p.status) === 'Instalado');
-    if (filtroVend) pedidos = pedidos.filter(p => p.vendedor_id == filtroVend);
+    const pedidos = _comissoesPendentesDoTipo(filtroVend);
     pedidos.sort((a, b) => (b.data_instalado || b.id) - (a.data_instalado || a.id));
     const totalEl = document.getElementById('total-comissoes-pendentes');
     if (!pedidos.length) {
@@ -6153,7 +6220,8 @@ function renderHistoricoComissoes() {
     const tb = document.getElementById('tb-hist-comissoes');
     if (!tb) return;
     const filtroVend = document.getElementById('filtro-vend-hist')?.value || '';
-    let pedidos = db.pedidos.filter(p => p.vendedor_id && (p.comissao_valor || 0) > 0 && p.comissao_paga);
+    const doTipo = _idsDoTipo(_tipoVend);
+    let pedidos = db.pedidos.filter(p => p.vendedor_id && doTipo.has(String(p.vendedor_id)) && (p.comissao_valor || 0) > 0 && p.comissao_paga);
     if (filtroVend) pedidos = pedidos.filter(p => p.vendedor_id == filtroVend);
     pedidos.sort((a, b) => (b.comissao_data_pgto || 0) - (a.comissao_data_pgto || 0));
     if (!pedidos.length) {
@@ -6178,7 +6246,7 @@ async function pagarComissao(pedidoId) {
     const ped = db.pedidos.find(p => p.id == pedidoId);
     if (!ped) return;
     const v = db.vendedores.find(x => x.id == ped.vendedor_id);
-    if (!await showConfirm(`Registrar pagamento de comissão R$ ${(ped.comissao_valor||0).toFixed(2)} para ${v?.nome || ped.vendedor_nome || 'vendedor'}?`, '💰', 'Confirmar', 'Cancelar')) return;
+    if (!await showConfirm(`Registrar pagamento de comissão R$ ${(ped.comissao_valor||0).toFixed(2)} para ${v?.nome || ped.vendedor_nome || 'o responsável'}?`, '💰', 'Confirmar', 'Cancelar')) return;
     ped.comissao_paga       = true;
     ped.comissao_data_pgto  = Date.now();
     salvarERecarregar('Comissão paga!');
@@ -6186,8 +6254,7 @@ async function pagarComissao(pedidoId) {
 
 async function pagarTodasFiltradas() {
     const filtroVend = document.getElementById('filtro-vend-pendente')?.value || '';
-    let pedidos = db.pedidos.filter(p => p.vendedor_id && (p.comissao_valor || 0) > 0 && !p.comissao_paga && normalizarStatus(p.status) === 'Instalado');
-    if (filtroVend) pedidos = pedidos.filter(p => p.vendedor_id == filtroVend);
+    const pedidos = _comissoesPendentesDoTipo(filtroVend);
     if (!pedidos.length) { await showAlert('Nenhuma comissão pendente para pagar.', 'ℹ️'); return; }
     const total = pedidos.reduce((s, p) => s + (p.comissao_valor || 0), 0);
     if (!await showConfirm(`Pagar ${pedidos.length} comissão(ões) no total de R$ ${total.toFixed(2)}?`, '💰', 'Confirmar', 'Cancelar')) return;
@@ -6205,7 +6272,7 @@ function mostrarTabVendedores(tab) {
     if (tab === 'lista')     renderTabelaVendedores();
     if (tab === 'pendentes') renderComissoesPendentes();
     if (tab === 'historico') renderHistoricoComissoes();
-    _tabBackBtn('.tab-nav', _prevTabVend, () => mostrarTabVendedores(_prevTabVend));
+    _tabBackBtn('.vend-sub-nav', _prevTabVend, () => mostrarTabVendedores(_prevTabVend));
 }
 
 // --- FORNECEDORES ---
@@ -7683,8 +7750,7 @@ document.addEventListener('DOMContentLoaded', () => {
         filtrarClientes();
 
         const vendSel = document.getElementById('ped-vendedor');
-        if (vendSel) vendSel.innerHTML = '<option value="">— Sem vendedor —</option>' +
-            db.vendedores.map(v => `<option value="${v.id}">${v.nome} (${v.comissao_pct || 0}%)</option>`).join('');
+        if (vendSel) vendSel.innerHTML = '<option value="">— Sem vendedor —</option>' + opcoesVendedorPedido();
 
         const kitSel = document.getElementById('ped-kit');
         // Kit pronto aparece com medida e preço; kit de montagem, só o nome.
@@ -7803,14 +7869,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (document.getElementById('tb-vendedores')) {
-        const filtros = ['filtro-vend-pendente', 'filtro-vend-hist'];
-        filtros.forEach(fId => {
-            const el = document.getElementById(fId);
-            if (el) el.innerHTML = '<option value="">Todos os vendedores</option>' +
-                db.vendedores.map(v => `<option value="${v.id}">${v.nome}</option>`).join('');
-        });
         preencherSelectUsuarios('vend-usuario', '— Sem conta de acesso —');
-        mostrarTabVendedores('lista');
+        const tipoUrl = new URLSearchParams(window.location.search).get('tipo');
+        mostrarTipoVendedores(tipoUrl === 'arquiteto' ? 'arquiteto' : 'vendedor');
     }
 
     if (document.getElementById('tb-usuarios')) mostrarTabConfig('usuarios');
