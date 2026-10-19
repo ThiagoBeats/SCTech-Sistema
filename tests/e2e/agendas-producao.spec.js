@@ -319,3 +319,33 @@ test('todas as paginas pedem CSS e JS com a mesma versao', async () => {
     expect(semVersao, 'arquivo local sem versao').toEqual([]);
     expect([...versoes].length, 'uma versao so').toBe(1);
 });
+
+// --- Kanban acompanha a agenda sem recarregar ----------------------------------
+
+const colunaKanban = (page, titulo) => page.locator('.kanban-col', { has: page.locator('.kanban-col-header', { hasText: titulo }) });
+
+test('confirmar na agenda move o card do Kanban sem recarregar a pagina', async ({ page }) => {
+    await abrir(page, 'kanban');
+    await expect(colunaKanban(page, 'Pronto p/ Instalação')).toContainText('Pedro Alves');
+    await page.evaluate(() => { window.__semRecarga = true; });
+
+    await page.click('#tab-btn-agenda');
+    await page.locator('#inst-pend-lista .agd-item', { hasText: 'Pedro Alves' }).click();
+    await page.click('.agd-modal button:has-text("Confirmar instalação")');
+    await page.click('#mpg-sim');
+    await page.click('#tab-btn-kanban');
+
+    await expect(colunaKanban(page, 'Instalado')).toContainText('Pedro Alves');
+    await expect(colunaKanban(page, 'Pronto p/ Instalação')).not.toContainText('Pedro Alves');
+    expect(await page.evaluate(() => window.__semRecarga), 'a pagina nao recarregou').toBe(true);
+});
+
+test('confirmar com saldo leva o card para Aguardando Pagamento', async ({ page }) => {
+    await abrir(page, 'agenda');
+    await page.locator('#inst-pend-lista .agd-item', { hasText: 'Pedro Alves' }).click();
+    await page.click('.agd-modal button:has-text("Confirmar instalação")');
+    await page.click('#mpg-nao');
+    await page.click('#tab-btn-kanban');
+    await expect(colunaKanban(page, 'Aguardando Pagamento')).toContainText('Pedro Alves');
+    await expect(colunaKanban(page, 'Pronto p/ Instalação')).not.toContainText('Pedro Alves');
+});

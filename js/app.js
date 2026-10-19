@@ -7773,9 +7773,12 @@ function _instPill(p, hoje) {
 // esse registro usa a data agendada.
 function _instDiaRealizado(p) { return p.data_instalado ? _agdDiaLocal(p.data_instalado) : (p.data_entrega || ''); }
 
+// A agenda e o Kanban ficam na mesma pagina: o que muda o pedido aqui
+// (confirmar, reagendar, desmarcar) redesenha os dois, sem recarregar.
 function _instAtualizar() {
     syncDB();
     renderAgenda();
+    renderKanban();
     renderDashboardInstalacoes();
 }
 
@@ -7936,6 +7939,7 @@ function mostrarViewPCP(view) {
     document.getElementById('tab-btn-kanban').className   = 'tab-btn' + (view === 'kanban'   ? ' active' : '');
     document.getElementById('tab-btn-agenda').className   = 'tab-btn' + (view === 'agenda'   ? ' active' : '');
     document.getElementById('tab-btn-medicoes').className = 'tab-btn' + (view === 'medicoes' ? ' active' : '');
+    if (view === 'kanban')   renderKanban();
     if (view === 'agenda')   renderAgenda();
     if (view === 'medicoes') renderMedicoes();
     _tabBackBtn('.tab-nav', _prevViewPCP, () => mostrarViewPCP(_prevViewPCP));
