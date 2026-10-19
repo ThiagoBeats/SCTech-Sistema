@@ -183,30 +183,60 @@ function trilho() {
   ${[x1 + 60, (x1 + x2) / 2, x2 - 70].map(bx => `<rect x="${bx}" y="${y - 9}" width="14" height="9" rx="1.5" fill="#E4E5E7" stroke="#B5B8BC" stroke-width=".6"/>`).join('')}`;
 }
 
-function laminas(rec) {
+// Animacao (so nos arquivos -anim): a cortina comeca fechada cobrindo a
+// janela; as laminas giram (ficam estreitas) enquanto deslizam ate o recolhimento.
+// O quadro final e igual a imagem estatica.
+// Giro e deslizamento comecam e terminam juntos; o giro acelera mais no
+// inicio para as frestas entre as laminas aparecerem durante o movimento.
+const ANIM = { inicio: 0.4, dur: 2.4, tempos: '0;0.15;1',
+    curvas: { translate: '0 0 1 1;.45 0 .25 1', scale: '0 0 1 1;.15 .6 .3 1' } };
+const anima = (tipo, valores) => `<animateTransform attributeName="transform" type="${tipo}" values="${valores}" keyTimes="${ANIM.tempos}" calcMode="spline" keySplines="${ANIM.curvas[tipo]}" begin="${ANIM.inicio}s" dur="${ANIM.dur}s" fill="freeze"/>`;
+
+function laminas(rec, animado) {
     const xs = posicoes(rec);
     const { topo, base, larg } = LAM;
-    const corpo = xs.map(lx => `<rect x="${lx}" y="${topo}" width="${larg}" height="${base - topo}" rx="2.5" fill="url(#lamina)"/>`).join('');
-    const ganchos = xs.map(lx => `<rect x="${lx + larg / 2 - 3}" y="${TRILHO.y + TRILHO.h - 3}" width="6" height="${topo - TRILHO.y - TRILHO.h + 6}" rx="1.5" fill="#F4F4F4" stroke="#BDBFC2" stroke-width=".6"/>`).join('');
-    const altura = xs.map(lx => `<rect x="${lx}" y="${topo}" width="${larg}" height="${base - topo}" rx="2.5" fill="url(#laminaAltura)"/>`).join('');
-    // Cada lamina vira um pouco diferente na pilha: tom levemente variado.
-    const tons = xs.map((lx, i) => `<rect x="${lx}" y="${topo}" width="${larg}" height="${base - topo}" rx="2.5" fill="${i % 3 === 1 ? '#FFF' : '#000'}" opacity="${[0.05, 0.07, 0.1][i % 3]}"/>`).join('');
-    const pesos = xs.map(lx => `<rect x="${lx + 2}" y="${base - 18}" width="${larg - 4}" height="12" rx="3" fill="#000" opacity=".07"/>`).join('');
-    // Corrente inferior ligando as laminas de cada pilha.
+    const alt = base - topo;
+    // Fechada: as laminas dividem o trilho inteiro, um pouco sobrepostas.
+    const vaoIni = TRILHO.x1 + 14, vao = (TRILHO.x2 - 14) - vaoIni;
+    const passoFechado = vao / xs.length;
+    const escalaFechada = f((passoFechado + 3) / larg);
+    const gancho = `<rect x="-3" y="${TRILHO.y + TRILHO.h - 3}" width="6" height="${topo - TRILHO.y - TRILHO.h + 6}" rx="1.5" fill="#F4F4F4" stroke="#BDBFC2" stroke-width=".6"/>`;
+    const lamina = xs.map((lx, i) => {
+        const cxFinal = f(lx + larg / 2);
+        const cxFechado = f(vaoIni + passoFechado * (i + 0.5));
+        // Cada lamina vira um pouco diferente: tom levemente variado.
+        const corpo = `<rect x="${-larg / 2}" y="${topo}" width="${larg}" height="${alt}" rx="2.5" fill="url(#lamina)"/>
+      <rect x="${-larg / 2}" y="${topo}" width="${larg}" height="${alt}" rx="2.5" fill="url(#laminaAltura)"/>
+      <rect x="${-larg / 2}" y="${topo}" width="${larg}" height="${alt}" rx="2.5" fill="${i % 3 === 1 ? '#FFF' : '#000'}" opacity="${[0.05, 0.07, 0.1][i % 3]}"/>
+      <rect x="${-larg / 2 + 2}" y="${base - 18}" width="${larg - 4}" height="12" rx="3" fill="#000" opacity=".07"/>`;
+        if (!animado) return `<g transform="translate(${cxFinal} 0)">${gancho}${corpo}</g>`;
+        const fx = `${cxFechado} 0`, ax = `${cxFinal} 0`, ef = `${escalaFechada} 1`;
+        return `<g transform="translate(${fx})">${anima('translate', `${fx};${fx};${ax}`)}
+      ${gancho}
+      <g transform="scale(${ef})">${anima('scale', `${ef};${ef};1 1`)}
+      ${corpo}
+      </g></g>`;
+    }).join('\n    ');
+    // Corrente inferior ligando as laminas de cada pilha (aparece no fim da animacao).
     const grupos = rec === 'lados' ? [xs.slice(0, LAM.qtd), xs.slice(LAM.qtd)] : [xs];
     const correntes = grupos.map(g => `<line x1="${g[0] + larg / 2}" y1="${base - 10}" x2="${g[g.length - 1] + larg / 2}" y2="${base - 10}" stroke="#E8E4DC" stroke-width="2" stroke-dasharray="1 3" stroke-linecap="round"/>`).join('');
-    return `<g filter="url(#sombraLaminas)"><g filter="url(#tecido)">${corpo}</g></g>
-  ${altura}${tons}${pesos}${correntes}${ganchos}`;
+    const surge = animado
+        ? ` opacity="0"><animate attributeName="opacity" from="0" to="1" begin="${f(ANIM.inicio + ANIM.dur - 0.2)}s" dur=".3s" fill="freeze"/`
+        : '';
+    return `<g filter="url(#sombraLaminas)"><g filter="url(#tecido)">
+    ${lamina}
+  </g></g>
+  <g${surge}>${correntes}</g>`;
 }
 
-function comando(cmd) {
+function comando(cmd, animado) {
     const esq = cmd === 'esq';
     const xc = esq ? TRILHO.x1 + 4 : TRILHO.x2 - 4;
     const yTopo = TRILHO.y + TRILHO.h;
     const yFim = 420;
     const bolinhas = `stroke-dasharray="0.1 5.5" stroke-linecap="round" stroke-width="3.6" fill="none"`;
     return `<g filter="url(#sombra)">
-    <path d="M${xc - 4} ${yTopo} V${yFim} Q${xc} ${yFim + 12} ${xc + 4} ${yFim} V${yTopo}" stroke="#8F9398" ${bolinhas}/>
+    <path d="M${xc - 4} ${yTopo} V${yFim} Q${xc} ${yFim + 12} ${xc + 4} ${yFim} V${yTopo}" stroke="#8F9398" ${bolinhas}>${animado ? `<animate attributeName="stroke-dashoffset" values="0;0;-90" keyTimes="0;0.15;1" begin="${ANIM.inicio}s" dur="${ANIM.dur}s" fill="freeze"/>` : ''}</path>
     <path d="M${xc - 4} ${yTopo} V${yFim} Q${xc} ${yFim + 12} ${xc + 4} ${yFim} V${yTopo}" stroke="#9A9DA1" stroke-width=".6" fill="none" opacity=".6"/>
     <rect x="${xc - 7}" y="${yFim + 4}" width="14" height="34" rx="7" fill="url(#aluminio)" stroke="#B5B8BC" stroke-width=".8"/>
   </g>
@@ -222,15 +252,15 @@ function legenda(letra, sub) {
   </g>`;
 }
 
-function svg(letra, cfg) {
+function svg(letra, cfg, animado) {
     return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Abertura ${letra}: ${cfg.sub}">
 ${defs()}
   ${ambiente()}
   ${janela()}
   ${trilho()}
-  ${laminas(cfg.rec)}
-  ${comando(cfg.cmd)}
+  ${laminas(cfg.rec, animado)}
+  ${comando(cfg.cmd, animado)}
   <rect width="${W}" height="${H}" fill="url(#vinheta)"/>
   <rect width="${W}" height="${H}" filter="url(#grao)"/>
   ${legenda(letra, cfg.sub)}
@@ -242,5 +272,6 @@ const destino = path.join(__dirname, '..', 'images', 'Aberturas', 'Ambiente');
 fs.mkdirSync(destino, { recursive: true });
 for (const [letra, cfg] of Object.entries(ABERTURAS)) {
     fs.writeFileSync(path.join(destino, `Abertura${letra}.svg`), svg(letra, cfg));
+    fs.writeFileSync(path.join(destino, `Abertura${letra}-anim.svg`), svg(letra, cfg, true));
 }
 console.log('Geradas em images/Aberturas/Ambiente:', Object.keys(ABERTURAS).join(', '));

@@ -4800,10 +4800,20 @@ let _ambienteCounter = 0;
 // "images/Aberturas/Ambiente/" = cortina instalada no ambiente.
 const PASTA_ABERTURAS = 'images/Aberturas/Ambiente/';
 
+// Ao escolher/trocar a abertura, toca uma vez a cortina abrindo (arquivo
+// -anim, que so existe na versao Ambiente). Ao abrir o pedido e na OS a
+// imagem fica parada. Quem pede menos movimento no sistema ve a estatica.
+function urlAberturaAnimada(letra) {
+    const semMovimento = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (semMovimento || !PASTA_ABERTURAS.includes('Ambiente')) return `${PASTA_ABERTURAS}Abertura${letra}.svg`;
+    // O parametro novo faz o navegador recarregar o SVG, e a animacao recomeca.
+    return `${PASTA_ABERTURAS}Abertura${letra}-anim.svg?t=${Date.now()}`;
+}
+
 function onAberturaChange(id) {
     const val = document.getElementById(`a-abertura-${id}`)?.value || 'A';
     const img = document.getElementById(`img-abertura-${id}`);
-    if (img) { img.src = `${PASTA_ABERTURAS}Abertura${val}.svg`; img.alt = `Abertura ${val}`; }
+    if (img) { img.src = urlAberturaAnimada(val); img.alt = `Abertura ${val}`; }
     const lbl = document.getElementById(`lbl-abertura-${id}`);
     if (lbl) lbl.textContent = `Tipo ${val}`;
 }

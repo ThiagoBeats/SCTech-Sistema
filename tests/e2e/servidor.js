@@ -1,6 +1,6 @@
 const http = require('http'), fs = require('fs'), path = require('path'), url = require('url');
 const RAIZ = process.env.RAIZ;
-const TIPOS = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.xlsx': 'application/octet-stream', '.pdf': 'application/pdf' };
+const TIPOS = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.xlsx': 'application/octet-stream', '.pdf': 'application/pdf' };
 http.createServer((q, s) => {
     const p = decodeURIComponent(url.parse(q.url).pathname);
     const a = path.join(RAIZ, p);
