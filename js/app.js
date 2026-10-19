@@ -4796,10 +4796,14 @@ let editandoIdPedido = null;
 let pedidoDraft = { ambientes: [], itens: [] };
 let _ambienteCounter = 0;
 
+// Imagens das aberturas: "images/Aberturas/" = desenho tecnico;
+// "images/Aberturas/Ambiente/" = cortina instalada no ambiente.
+const PASTA_ABERTURAS = 'images/Aberturas/Ambiente/';
+
 function onAberturaChange(id) {
     const val = document.getElementById(`a-abertura-${id}`)?.value || 'A';
     const img = document.getElementById(`img-abertura-${id}`);
-    if (img) { img.src = `images/Aberturas/Abertura${val}.svg`; img.alt = `Abertura ${val}`; }
+    if (img) { img.src = `${PASTA_ABERTURAS}Abertura${val}.svg`; img.alt = `Abertura ${val}`; }
     const lbl = document.getElementById(`lbl-abertura-${id}`);
     if (lbl) lbl.textContent = `Tipo ${val}`;
 }
@@ -4969,7 +4973,7 @@ function renderAmbientes() {
             </div>
         </div>
         <div style="flex:0 1 475px;min-width:220px;max-width:475px;margin:0 auto;text-align:center">
-            <img id="img-abertura-${a.id}" src="images/Aberturas/Abertura${a.abertura||'A'}.svg" alt="Abertura ${a.abertura||'A'}" style="width:100%;height:auto;border:1px solid var(--border);border-radius:6px;display:block">
+            <img id="img-abertura-${a.id}" src="${PASTA_ABERTURAS}Abertura${a.abertura||'A'}.svg" alt="Abertura ${a.abertura||'A'}" style="width:100%;height:auto;border:1px solid var(--border);border-radius:6px;display:block">
             <div id="lbl-abertura-${a.id}" style="font-size:11px;color:#666;margin-top:4px;font-weight:600">Tipo ${a.abertura||'A'}</div>
         </div>
     </div>
@@ -5815,7 +5819,7 @@ function gerarHTMLProposta(pedidoId, diasValidade) {
             return nome ? `${nome}${t.prega ? ' ('+escapeHtml(t.prega)+', '+t.fator+'x)' : ''}` : '';
         }).filter(Boolean).join(' + ') || 'Tecido selecionado';
         const aberturaImg = a.abertura
-            ? `<img src="images/Aberturas/Abertura${escapeHtml(a.abertura)}.svg" alt="Abertura ${escapeHtml(a.abertura)}"
+            ? `<img src="${PASTA_ABERTURAS}Abertura${escapeHtml(a.abertura)}.svg" alt="Abertura ${escapeHtml(a.abertura)}"
                 style="height:54px;width:auto;vertical-align:middle;margin-left:10px;border:1px solid #E0E0E0;border-radius:4px;padding:2px;background:#fff"
                 title="Tipo de abertura: ${escapeHtml(a.abertura)}">`
             : '';
