@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Novo Pedido - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261019a">
+    <link rel="stylesheet" href="css/style.css?v=20261019b">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
@@ -42,8 +42,12 @@
                     <input type="date" id="ped-entrega">
                 </div>
                 <div class="form-group">
-                    <label>Vendedor / Responsável <span class="info-tag">vendedor ou arquiteto</span></label>
+                    <label for="ped-vendedor">Vendedor</label>
                     <select id="ped-vendedor" onchange="atualizarTotalPedido()"></select>
+                </div>
+                <div class="form-group">
+                    <label for="ped-arquiteto">Arquiteto <span class="info-tag">informe ao menos um dos dois</span></label>
+                    <select id="ped-arquiteto" onchange="atualizarTotalPedido()"></select>
                 </div>
             </div>
             <div class="form-group" style="margin-top:10px">
@@ -116,7 +120,7 @@
                     </select>
                 </div>
             </div>
-            <p style="font-size:12px;color:#888;margin-top:4px">As parcelas são geradas automaticamente no módulo <a href="financeiro.html" style="color:var(--primary)">Financeiro</a> ao aprovar o pedido (status ≠ Orçamento). A comissão do arquiteto parceiro é a do cadastro dele: escolha-o em <strong>Vendedor / Responsável</strong>.</p>
+            <p style="font-size:12px;color:#888;margin-top:4px">As parcelas são geradas automaticamente no módulo <a href="financeiro.html" style="color:var(--primary)">Financeiro</a> ao aprovar o pedido (status ≠ Orçamento). As comissões do vendedor e do arquiteto saem dos cadastros deles.</p>
         </div>
 
         <!-- SEÇÃO 5: RESUMO E SALVAR -->
@@ -132,7 +136,10 @@
                     <div>Total Materiais (tecido): R$ <strong id="ped-total-mat">0.00</strong></div>
                     <div>Total Acessórios: R$ <strong id="ped-total-itens">0.00</strong></div>
                     <div id="ped-comissao-row" style="display:none;color:#8A6A00">
-                        Comissão (<span id="ped-comissao-pct">0</span>%): R$ <strong id="ped-comissao-val">0.00</strong>
+                        Comissão do vendedor (<span id="ped-comissao-pct">0</span>%): R$ <strong id="ped-comissao-val">0.00</strong>
+                    </div>
+                    <div id="ped-comissao-arq-row" style="display:none;color:#8A6A00">
+                        Comissão do arquiteto (<span id="ped-comissao-arq-pct">0</span>%): R$ <strong id="ped-comissao-arq-val">0.00</strong>
                     </div>
                     <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;margin-top:2px">
                         Desconto:
@@ -153,6 +160,6 @@
             </div>
         </div>
     </main>
-    <script src="js/app.js?v=20261019a"></script>
+    <script src="js/app.js?v=20261019b"></script>
 </body>
 </html>

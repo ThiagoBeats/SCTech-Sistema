@@ -152,6 +152,35 @@ function migrarPermissoesParaArvore(permissoes) {
     return novo;
 }
 
+// Comissao de cada papel no pedido. Vendedor usa os campos historicos
+// (vendedor_id, comissao_*); arquiteto, os arq_*. Um pedido pode ter os dois.
+const CAMPOS_COMISSAO = {
+    vendedor:  { id: 'vendedor_id', nome: 'vendedor_nome', pct: 'comissao_pct',     valor: 'comissao_valor',     paga: 'comissao_paga',     data: 'comissao_data_pgto' },
+    arquiteto: { id: 'arq_id',      nome: 'arq_nome',      pct: 'arq_comissao_pct', valor: 'arq_comissao_valor', paga: 'arq_comissao_paga', data: 'arq_comissao_data_pgto' },
+};
+
+// Por um tempo o arquiteto entrava no pedido pelo campo de vendedor. Esses
+// pedidos passam o arquiteto (e a comissao dele, paga ou nao) para os campos
+// arq_*, e o vendedor fica vazio, como foi gravado.
+function migrarArquitetoDosPedidos() {
+    let mudou = false;
+    (db.pedidos || []).forEach(p => {
+        if (!p.vendedor_id || p.arq_id) return;
+        const v = (db.vendedores || []).find(x => x.id == p.vendedor_id);
+        if (!v || v.tipo !== 'arquiteto') return;
+        p.arq_id = p.vendedor_id;
+        p.arq_nome = p.vendedor_nome || v.nome;
+        p.arq_comissao_pct = p.comissao_pct || 0;
+        p.arq_comissao_valor = p.comissao_valor || 0;
+        p.arq_comissao_paga = !!p.comissao_paga;
+        p.arq_comissao_data_pgto = p.comissao_data_pgto || null;
+        p.vendedor_id = null; p.vendedor_nome = '';
+        p.comissao_pct = 0; p.comissao_valor = 0; p.comissao_paga = false; p.comissao_data_pgto = null;
+        mudou = true;
+    });
+    if (mudou) syncDB();
+}
+
 function migrarPermissoesSalvas() {
     let mudou = false;
     (db.papeis || []).forEach(p => {
@@ -740,6 +769,7 @@ async function exigirPermissao(modulo, nivelMinimo) {
 function checkAuth() {
     if (!sessionStorage.getItem('sc_user')) { window.location.replace('login.html'); return; }
     migrarPermissoesSalvas();
+    migrarArquitetoDosPedidos();
     const usuario = getUsuarioLogado();
     if (!usuario || !usuario.ativo) { logout(); return; }
     const arquivo  = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
@@ -1075,6 +1105,7 @@ function pedidoEhMeu(ped, usuario) {
     const u = usuario === undefined ? getUsuarioLogado() : usuario;
     if (!u || !ped) return false;
     return usuarioDoVendedor(ped.vendedor_id) === u.id
+        || (ped.arq_id && usuarioDoVendedor(ped.arq_id) === u.id)
         || ped.usuario_instalacao_id === u.id
         || ped.criado_por === u.id;
 }
@@ -2167,7 +2198,7 @@ async function aprovarPedido(id) {
 
     const pendencias = [];
     if (!ped.clienteNome && !ped.clienteId) pendencias.push('• Cliente não definido');
-    if (!ped.vendedor_nome && !ped.vendedor_id) pendencias.push('• Vendedor não definido');
+    if (!ped.vendedor_nome && !ped.vendedor_id && !ped.arq_id) pendencias.push('• Vendedor ou arquiteto não definido');
     if (!ped.data_entrega) pendencias.push('• Data de entrega não definida');
 
     if (pendencias.length) {
@@ -5094,14 +5125,13 @@ function atualizarTotalPedido() {
     if (el('ped-total-final'))  el('ped-total-final').textContent  = total.toFixed(2);
     if (el('ped-saldo'))        el('ped-saldo').textContent        = saldo.toFixed(2);
 
-    const vendedorId  = parseInt(document.getElementById('ped-vendedor')?.value) || 0;
-    const vendedorObj = db.vendedores.find(v => v.id === vendedorId);
-    const comissaoPct = vendedorObj ? (vendedorObj.comissao_pct || 0) : 0;
-    const comissaoVal = comissaoPct > 0 ? Math.round(total * comissaoPct / 100 * 100) / 100 : 0;
-    const rowEl       = document.getElementById('ped-comissao-row');
-    if (rowEl) rowEl.style.display = comissaoPct > 0 ? '' : 'none';
-    if (el('ped-comissao-pct')) el('ped-comissao-pct').textContent = comissaoPct;
-    if (el('ped-comissao-val')) el('ped-comissao-val').textContent = comissaoVal.toFixed(2);
+    [['ped-vendedor', 'ped-comissao'], ['ped-arquiteto', 'ped-comissao-arq']].forEach(([sel, pre]) => {
+        const { pct, valor } = comissaoDoCadastro(document.getElementById(sel)?.value, total);
+        const rowEl = el(pre + '-row');
+        if (rowEl) rowEl.style.display = pct > 0 ? '' : 'none';
+        if (el(pre + '-pct')) el(pre + '-pct').textContent = pct;
+        if (el(pre + '-val')) el(pre + '-val').textContent = valor.toFixed(2);
+    });
 }
 
 function filtrarClientes() {
@@ -5143,9 +5173,12 @@ async function salvarPedido() {
     const valor            = bruto - desconto_valor;
     const ambNomes         = pedidoDraft.ambientes.map(a=>a.amb).filter(Boolean).join(', ') || 'Sem nome';
     const vendedor_id_sel  = parseInt(document.getElementById('ped-vendedor')?.value) || null;
+    const arq_id_sel       = parseInt(document.getElementById('ped-arquiteto')?.value) || null;
+    if (!vendedor_id_sel && !arq_id_sel) { await showAlert('Informe pelo menos um vendedor ou um arquiteto.', '⚠️'); return; }
     const vendedor_obj     = vendedor_id_sel ? db.vendedores.find(v => v.id === vendedor_id_sel) : null;
-    const comissao_pct     = vendedor_obj ? (vendedor_obj.comissao_pct || 0) : 0;
-    const comissao_valor   = comissao_pct > 0 ? Math.round(valor * comissao_pct / 100 * 100) / 100 : 0;
+    const arq_obj          = arq_id_sel ? db.vendedores.find(v => v.id === arq_id_sel) : null;
+    const { pct: comissao_pct, valor: comissao_valor }         = comissaoDoCadastro(vendedor_id_sel, valor);
+    const { pct: arq_comissao_pct, valor: arq_comissao_valor } = comissaoDoCadastro(arq_id_sel, valor);
     const dadosPedido = {
         clienteId, clienteNome: cliente ? cliente.nome : 'Cliente Não Vinculado',
         amb: ambNomes, ambientes: pedidoDraft.ambientes.map(a=>({...a})),
@@ -5162,6 +5195,10 @@ async function salvarPedido() {
         vendedor_nome:  vendedor_obj ? vendedor_obj.nome : '',
         comissao_pct,
         comissao_valor,
+        arq_id:         arq_id_sel,
+        arq_nome:       arq_obj ? arq_obj.nome : '',
+        arq_comissao_pct,
+        arq_comissao_valor,
         arquiteto_nome: '',
         rt_pct: 0,
         tipo_pagamento: document.getElementById('ped-tipo-pagamento')?.value || '50_50'
@@ -5176,6 +5213,8 @@ async function salvarPedido() {
             dadosPedido.data_criacao      = db.pedidos[index].data_criacao || db.pedidos[index].id;
             dadosPedido.comissao_paga     = db.pedidos[index].comissao_paga     || false;
             dadosPedido.comissao_data_pgto = db.pedidos[index].comissao_data_pgto || null;
+            dadosPedido.arq_comissao_paga      = db.pedidos[index].arq_comissao_paga      || false;
+            dadosPedido.arq_comissao_data_pgto = db.pedidos[index].arq_comissao_data_pgto || null;
             dadosPedido.financeiro_gerado  = db.pedidos[index].financeiro_gerado  || false;
             dadosPedido.rt_gerado          = db.pedidos[index].rt_gerado          || false;
             // RT antiga (campo livre que saiu da tela): editar o pedido nao a apaga.
@@ -5245,6 +5284,8 @@ function carregarPedidoParaEdicao(id) {
     if (descontoEl) descontoEl.value = ped.desconto_pct || 0;
     const vendedorEl = document.getElementById('ped-vendedor');
     if (vendedorEl) vendedorEl.value = String(ped.vendedor_id || '');
+    const arqEl = document.getElementById('ped-arquiteto');
+    if (arqEl) arqEl.value = String(ped.arq_id || '');
     const pagEl = document.getElementById('ped-tipo-pagamento');
     if (pagEl) pagEl.value = ped.tipo_pagamento || '50_50';
     const ambientes = normalizarAmbientes(ped);
@@ -6048,17 +6089,18 @@ const TIPOS_VENDEDOR = {
 let _tipoVend = 'vendedor';
 function tipoDoVendedor(v) { return v && v.tipo === 'arquiteto' ? 'arquiteto' : 'vendedor'; }
 function vendedoresDoTipo(tipo) { return (db.vendedores || []).filter(v => tipoDoVendedor(v) === tipo); }
-function _idsDoTipo(tipo) { return new Set(vendedoresDoTipo(tipo).map(v => String(v.id))); }
 
-// Opcoes do campo "Vendedor / Responsavel" do pedido: os dois tipos, em grupos.
-function opcoesVendedorPedido() {
-    return Object.keys(TIPOS_VENDEDOR).map(t => {
-        const lista = vendedoresDoTipo(t);
-        if (!lista.length) return '';
-        return `<optgroup label="${TIPOS_VENDEDOR[t].varios}">` +
-            lista.map(v => `<option value="${v.id}">${escapeHtml(v.nome)} (${v.comissao_pct || 0}%)</option>`).join('') +
-            '</optgroup>';
-    }).join('');
+// Opcoes dos campos Vendedor e Arquiteto do pedido: cada um so o seu tipo.
+function opcoesCadastroPedido(tipo) {
+    return vendedoresDoTipo(tipo)
+        .map(v => `<option value="${v.id}">${escapeHtml(v.nome)} (${v.comissao_pct || 0}%)</option>`).join('');
+}
+
+// Comissao que o cadastro gera sobre um valor (0 quando nao ha cadastro).
+function comissaoDoCadastro(id, valor) {
+    const v = id ? (db.vendedores || []).find(x => x.id == id) : null;
+    const pct = v ? (v.comissao_pct || 0) : 0;
+    return { pct, valor: pct > 0 ? Math.round(valor * pct / 100 * 100) / 100 : 0 };
 }
 
 function _preencherFiltrosVendedores() {
@@ -6085,6 +6127,7 @@ function mostrarTipoVendedores(tipo) {
     if (!TIPOS_VENDEDOR[tipo]) tipo = 'vendedor';
     if (_tipoVend !== tipo) cancelarEdicaoVendedor();
     _tipoVend = tipo;
+    _vendLembrarNaUrl('tipo', tipo);
     document.querySelectorAll('.vend-tipo-btn').forEach(b => b.classList.toggle('active', b.dataset.tipo === tipo));
     _preencherFiltrosVendedores();
     _rotulosTipoVendedores();
@@ -6148,7 +6191,7 @@ function cancelarEdicaoVendedor() {
 async function excluirVendedor(id) {
     const v = db.vendedores.find(x => x.id == id);
     if (!v) return;
-    const usados = db.pedidos.filter(p => p.vendedor_id == id);
+    const usados = db.pedidos.filter(p => p.vendedor_id == id || p.arq_id == id);
     if (usados.length) { await showAlert(`Não é possível excluir: ${escapeHtml(v.nome)} está associado a ${usados.length} pedido(s).`, '🚫'); return; }
     const um = TIPOS_VENDEDOR[tipoDoVendedor(v)].um;
     if (!await showConfirm(`Excluir o ${um.toLowerCase()} "${v.nome}"?`, '🗑️', 'Excluir', 'Cancelar')) return;
@@ -6156,18 +6199,28 @@ async function excluirVendedor(id) {
     salvarERecarregar(`${um} excluído.`);
 }
 
+// Salvar recarrega a pagina; a aba aberta vai no endereco para voltar a ela.
+function _vendLembrarNaUrl(chave, valor) {
+    try {
+        const u = new URL(window.location.href);
+        u.searchParams.set(chave, valor);
+        history.replaceState(null, '', u);
+    } catch (e) { /* sem history (ex.: file:// restrito): so nao lembra */ }
+}
+
 function renderTabelaVendedores() {
     const tb = document.getElementById('tb-vendedores');
     if (!tb) return;
+    const c = CAMPOS_COMISSAO[_tipoVend];
     const lista = vendedoresDoTipo(_tipoVend);
     if (!lista.length) {
         tb.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#999;padding:20px;">Nenhum ${TIPOS_VENDEDOR[_tipoVend].um.toLowerCase()} cadastrado.</td></tr>`;
         return;
     }
     tb.innerHTML = lista.map(v => {
-        const pedidos        = db.pedidos.filter(p => p.vendedor_id == v.id);
-        const totalComissoes = pedidos.reduce((s, p) => s + (p.comissao_valor || 0), 0);
-        const comissoesPagas = pedidos.filter(p => p.comissao_paga).reduce((s, p) => s + (p.comissao_valor || 0), 0);
+        const pedidos        = db.pedidos.filter(p => p[c.id] == v.id);
+        const totalComissoes = pedidos.reduce((s, p) => s + (p[c.valor] || 0), 0);
+        const comissoesPagas = pedidos.filter(p => p[c.paga]).reduce((s, p) => s + (p[c.valor] || 0), 0);
         const pendente       = totalComissoes - comissoesPagas;
         return `<tr>
             <td><strong>${escapeHtml(v.nome)}</strong></td>
@@ -6183,20 +6236,21 @@ function renderTabelaVendedores() {
     }).join('');
 }
 
-// Pendente = pedido instalado, com comissao, ainda nao paga, cujo responsavel
-// e do tipo da aba aberta. "Pagar todas" usa a mesma regra, para nunca pagar
-// o que a tela nao esta mostrando.
+// Pendente = pedido instalado, com comissao do papel da aba ainda nao paga.
+// "Pagar todas" usa a mesma regra, para nunca pagar o que a tela nao mostra.
+// Um pedido com vendedor e arquiteto aparece nas duas abas, cada um com a sua.
 function _comissoesPendentesDoTipo(filtroVend) {
-    const doTipo = _idsDoTipo(_tipoVend);
-    let pedidos = db.pedidos.filter(p => p.vendedor_id && doTipo.has(String(p.vendedor_id)) &&
-        (p.comissao_valor || 0) > 0 && !p.comissao_paga && normalizarStatus(p.status) === 'Instalado');
-    if (filtroVend) pedidos = pedidos.filter(p => p.vendedor_id == filtroVend);
+    const c = CAMPOS_COMISSAO[_tipoVend];
+    let pedidos = db.pedidos.filter(p => p[c.id] && (p[c.valor] || 0) > 0 && !p[c.paga] &&
+        normalizarStatus(p.status) === 'Instalado');
+    if (filtroVend) pedidos = pedidos.filter(p => p[c.id] == filtroVend);
     return pedidos;
 }
 
 function renderComissoesPendentes() {
     const tb = document.getElementById('tb-comissoes-pendentes');
     if (!tb) return;
+    const c = CAMPOS_COMISSAO[_tipoVend];
     const filtroVend = document.getElementById('filtro-vend-pendente')?.value || '';
     const pedidos = _comissoesPendentesDoTipo(filtroVend);
     pedidos.sort((a, b) => (b.data_instalado || b.id) - (a.data_instalado || a.id));
@@ -6207,64 +6261,67 @@ function renderComissoesPendentes() {
         return;
     }
     tb.innerHTML = pedidos.map(p => {
-        const v = db.vendedores.find(x => x.id == p.vendedor_id);
+        const v = db.vendedores.find(x => x.id == p[c.id]);
         return `<tr>
             <td style="font-size:12px">#${formatPedidoId(p.id)}</td>
             <td>${escapeHtml(p.clienteNome || '—')}</td>
-            <td>${escapeHtml(v?.nome || p.vendedor_nome || '—')}</td>
+            <td>${escapeHtml(v?.nome || p[c.nome] || '—')}</td>
             <td>R$ ${(p.valor || 0).toFixed(2)}</td>
-            <td><strong>R$ ${(p.comissao_valor || 0).toFixed(2)}</strong> <span style="color:#888;font-size:12px">(${p.comissao_pct || 0}%)</span></td>
+            <td><strong>R$ ${(p[c.valor] || 0).toFixed(2)}</strong> <span style="color:#888;font-size:12px">(${p[c.pct] || 0}%)</span></td>
             <td><button class="btn btn-sm btn-success" onclick="pagarComissao(${p.id})">✓ Pagar</button></td>
         </tr>`;
     }).join('');
-    const total = pedidos.reduce((s, p) => s + (p.comissao_valor || 0), 0);
+    const total = pedidos.reduce((s, p) => s + (p[c.valor] || 0), 0);
     if (totalEl) totalEl.textContent = `R$ ${total.toFixed(2)}`;
 }
 
 function renderHistoricoComissoes() {
     const tb = document.getElementById('tb-hist-comissoes');
     if (!tb) return;
+    const c = CAMPOS_COMISSAO[_tipoVend];
     const filtroVend = document.getElementById('filtro-vend-hist')?.value || '';
-    const doTipo = _idsDoTipo(_tipoVend);
-    let pedidos = db.pedidos.filter(p => p.vendedor_id && doTipo.has(String(p.vendedor_id)) && (p.comissao_valor || 0) > 0 && p.comissao_paga);
-    if (filtroVend) pedidos = pedidos.filter(p => p.vendedor_id == filtroVend);
-    pedidos.sort((a, b) => (b.comissao_data_pgto || 0) - (a.comissao_data_pgto || 0));
+    let pedidos = db.pedidos.filter(p => p[c.id] && (p[c.valor] || 0) > 0 && p[c.paga]);
+    if (filtroVend) pedidos = pedidos.filter(p => p[c.id] == filtroVend);
+    pedidos.sort((a, b) => (b[c.data] || 0) - (a[c.data] || 0));
     if (!pedidos.length) {
         tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;padding:20px;">Nenhum pagamento registrado.</td></tr>';
         return;
     }
     tb.innerHTML = pedidos.map(p => {
-        const v       = db.vendedores.find(x => x.id == p.vendedor_id);
-        const dataPgto = p.comissao_data_pgto ? new Date(p.comissao_data_pgto).toLocaleDateString('pt-BR') : '—';
+        const v        = db.vendedores.find(x => x.id == p[c.id]);
+        const dataPgto = p[c.data] ? new Date(p[c.data]).toLocaleDateString('pt-BR') : '—';
         return `<tr>
             <td style="font-size:12px;white-space:nowrap">${dataPgto}</td>
             <td style="font-size:12px">#${formatPedidoId(p.id)}</td>
             <td>${escapeHtml(p.clienteNome || '—')}</td>
-            <td>${escapeHtml(v?.nome || p.vendedor_nome || '—')}</td>
+            <td>${escapeHtml(v?.nome || p[c.nome] || '—')}</td>
             <td>R$ ${(p.valor || 0).toFixed(2)}</td>
-            <td><span class="badge-comissao-paga">R$ ${(p.comissao_valor || 0).toFixed(2)} pago</span></td>
+            <td><span class="badge-comissao-paga">R$ ${(p[c.valor] || 0).toFixed(2)} pago</span></td>
         </tr>`;
     }).join('');
 }
 
+// Paga a comissao do papel da aba aberta; a do outro papel no mesmo pedido fica.
 async function pagarComissao(pedidoId) {
     const ped = db.pedidos.find(p => p.id == pedidoId);
     if (!ped) return;
-    const v = db.vendedores.find(x => x.id == ped.vendedor_id);
-    if (!await showConfirm(`Registrar pagamento de comissão R$ ${(ped.comissao_valor||0).toFixed(2)} para ${v?.nome || ped.vendedor_nome || 'o responsável'}?`, '💰', 'Confirmar', 'Cancelar')) return;
-    ped.comissao_paga       = true;
-    ped.comissao_data_pgto  = Date.now();
+    const c = CAMPOS_COMISSAO[_tipoVend];
+    const v = db.vendedores.find(x => x.id == ped[c.id]);
+    if (!await showConfirm(`Registrar pagamento de comissão R$ ${(ped[c.valor] || 0).toFixed(2)} para ${v?.nome || ped[c.nome] || 'o responsável'}?`, '💰', 'Confirmar', 'Cancelar')) return;
+    ped[c.paga] = true;
+    ped[c.data] = Date.now();
     salvarERecarregar('Comissão paga!');
 }
 
 async function pagarTodasFiltradas() {
+    const c = CAMPOS_COMISSAO[_tipoVend];
     const filtroVend = document.getElementById('filtro-vend-pendente')?.value || '';
     const pedidos = _comissoesPendentesDoTipo(filtroVend);
     if (!pedidos.length) { await showAlert('Nenhuma comissão pendente para pagar.', 'ℹ️'); return; }
-    const total = pedidos.reduce((s, p) => s + (p.comissao_valor || 0), 0);
+    const total = pedidos.reduce((s, p) => s + (p[c.valor] || 0), 0);
     if (!await showConfirm(`Pagar ${pedidos.length} comissão(ões) no total de R$ ${total.toFixed(2)}?`, '💰', 'Confirmar', 'Cancelar')) return;
     const agora = Date.now();
-    pedidos.forEach(p => { p.comissao_paga = true; p.comissao_data_pgto = agora; });
+    pedidos.forEach(p => { p[c.paga] = true; p[c.data] = agora; });
     salvarERecarregar('Comissões pagas!');
 }
 
@@ -6274,6 +6331,7 @@ function mostrarTabVendedores(tab) {
     document.querySelectorAll('.vend-tab-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('tab-vend-' + tab)?.classList.add('active');
     document.querySelector(`.vend-tab-btn[data-tab="${tab}"]`)?.classList.add('active');
+    _vendLembrarNaUrl('aba', tab);
     if (tab === 'lista')     renderTabelaVendedores();
     if (tab === 'pendentes') renderComissoesPendentes();
     if (tab === 'historico') renderHistoricoComissoes();
@@ -7891,7 +7949,9 @@ document.addEventListener('DOMContentLoaded', () => {
         filtrarClientes();
 
         const vendSel = document.getElementById('ped-vendedor');
-        if (vendSel) vendSel.innerHTML = '<option value="">— Sem vendedor —</option>' + opcoesVendedorPedido();
+        if (vendSel) vendSel.innerHTML = '<option value="">— Sem vendedor —</option>' + opcoesCadastroPedido('vendedor');
+        const arqSel = document.getElementById('ped-arquiteto');
+        if (arqSel) arqSel.innerHTML = '<option value="">— Sem arquiteto —</option>' + opcoesCadastroPedido('arquiteto');
 
         const kitSel = document.getElementById('ped-kit');
         // Kit pronto aparece com medida e preço; kit de montagem, só o nome.
@@ -8011,8 +8071,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (document.getElementById('tb-vendedores')) {
         preencherSelectUsuarios('vend-usuario', '— Sem conta de acesso —');
-        const tipoUrl = new URLSearchParams(window.location.search).get('tipo');
-        mostrarTipoVendedores(tipoUrl === 'arquiteto' ? 'arquiteto' : 'vendedor');
+        const url = new URLSearchParams(window.location.search);
+        const aba = url.get('aba');
+        if (['lista', 'pendentes', 'historico'].includes(aba)) _curTabVend = aba;
+        mostrarTipoVendedores(url.get('tipo') === 'arquiteto' ? 'arquiteto' : 'vendedor');
     }
 
     if (document.getElementById('tb-usuarios')) mostrarTabConfig('usuarios');
