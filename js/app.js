@@ -6850,7 +6850,7 @@ async function salvarPedidoCompra() {
         Object.assign(alvo, dados);
         editandoPCId = null;
         pcDraftItens = [];
-        salvarERecarregar(`Pedido de compra #${formatPedidoId(alvo.id)} atualizado!`);
+        irParaPedidosCompra(`Pedido de compra #${formatPedidoId(alvo.id)} atualizado!`);
         return;
     }
 
@@ -6871,13 +6871,18 @@ async function salvarPedidoCompra() {
         } else {
             // Acabou a fila: leva para a lista, onde os pedidos estão.
             localStorage.removeItem('sc_pc_fila');
-            syncDB();
-            toastReload(`${fila.total} pedidos de compra criados!`);
-            window.location.href = 'fornecedores.html?tab=pedidos';
+            irParaPedidosCompra(`${fila.total} pedidos de compra criados!`);
         }
         return;
     }
-    salvarERecarregar('Pedido de compra criado!');
+    irParaPedidosCompra('Pedido de compra criado!');
+}
+
+// Depois de salvar, leva para a aba "Pedidos de Compra", onde o pedido aparece.
+function irParaPedidosCompra(msg) {
+    syncDB();
+    toastReload(msg);
+    window.location.href = 'fornecedores.html?tab=pedidos';
 }
 
 // Desiste dos pedidos que ainda faltam na fila.

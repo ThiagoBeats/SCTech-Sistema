@@ -276,3 +276,28 @@ test('as tabelas de pedidos de venda nao abrem pedido de compra', async () => {
     expect(corpo.slice(0, corpo.indexOf('\nfunction ')), 'e ele mora na lista de compras')
         .toContain('editarPedidoCompra(${p.id})');
 });
+
+// --- Depois de salvar ---------------------------------------------------------
+
+test('salvar um pedido novo leva para a aba Pedidos de Compra', async ({ page }) => {
+    await semear(page);
+    await page.selectOption('#pc-fornecedor', '7');
+    await umItem(page, 'material', 11);
+    await gravar(page);
+    await expect(page).toHaveURL(/fornecedores\.html\?tab=pedidos$/);
+    await expect(page.locator('.forn-tab-btn[data-tab="pedidos"]')).toHaveClass(/active/);
+    await expect(page.locator('#tab-forn-pedidos')).toHaveClass(/active/);
+    await expect(page.locator('.pc-num-btn')).toHaveCount(1);
+});
+
+test('salvar a edicao de um pedido tambem leva para Pedidos de Compra', async ({ page }) => {
+    await semear(page);
+    await page.selectOption('#pc-fornecedor', '7');
+    await umItem(page, 'material', 11);
+    await gravar(page);
+    await page.locator('.pc-num-btn').first().click();
+    await umItem(page, 'tecido', 1);
+    await gravar(page);
+    await expect(page).toHaveURL(/fornecedores\.html\?tab=pedidos$/);
+    await expect(page.locator('#tab-forn-pedidos')).toHaveClass(/active/);
+});
