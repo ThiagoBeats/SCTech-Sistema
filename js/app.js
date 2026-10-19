@@ -1084,6 +1084,34 @@ function nomeUsuario(id) {
     return u ? u.nome : 'Usuário removido';
 }
 
+// Campo de pessoa com texto livre: sugere os usuários ativos, mas aceita um
+// nome ainda não cadastrado (ex.: instalador terceirizado).
+function htmlCampoPessoa(inputId, valorTexto, placeholder) {
+    const lista = db.usuarios.filter(u => u.ativo);
+    return `<input type="text" id="${inputId}" list="${inputId}-lista" autocomplete="off" value="${escapeHtml(valorTexto || '')}" placeholder="${escapeHtml(placeholder || 'Selecione ou digite um nome…')}">` +
+        `<datalist id="${inputId}-lista">${lista.map(u => `<option value="${escapeHtml(u.nome)}"></option>`).join('')}</datalist>`;
+}
+
+// Texto digitado -> { id, nome }. Nome igual ao de um usuário ativo vira o id
+// dele (recebe os alertas); qualquer outro texto fica só como nome.
+function resolverPessoa(texto) {
+    const t = (texto || '').trim();
+    if (!t) return { id: null, nome: '' };
+    const u = db.usuarios.find(x => x.ativo && (x.nome || '').trim().toLowerCase() === t.toLowerCase());
+    return u ? { id: u.id, nome: '' } : { id: null, nome: t };
+}
+
+// Quem vai instalar o pedido: usuário do sistema ou nome digitado.
+function nomeInstalador(ped) {
+    if (!ped) return '';
+    return nomeUsuario(ped.usuario_instalacao_id) || ped.instalador_nome || '';
+}
+
+function definirInstalador(ped, pessoa) {
+    ped.usuario_instalacao_id = pessoa.id || null;
+    ped.instalador_nome = pessoa.id ? '' : (pessoa.nome || '');
+}
+
 // Conta de acesso do vendedor responsável por um pedido (quando vinculada).
 function usuarioDoVendedor(vendedorId) {
     if (!vendedorId) return null;
@@ -2388,20 +2416,29 @@ function mostrarModalAgendarInstalacao(ped, callback) {
             </div>
             <div class="form-group" style="margin-bottom:18px">
                 <label style="font-size:12px;font-weight:bold;color:#666">Quem vai instalar</label>
-                <select id="mai-usuario" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box">
-                    <option value="">— A definir —</option>
-                </select>
-                <small style="font-size:11px;color:var(--muted);display:block;margin-top:4px">A instalação aparece como alerta para esta pessoa.</small>
+                <div id="mai-usuario-box"></div>
+                <small style="font-size:11px;color:var(--muted);display:block;margin-top:4px">Escolha um usuário (recebe o alerta da instalação) ou digite o nome de quem ainda não está cadastrado.</small>
             </div>
             <div style="display:flex;flex-direction:column;gap:10px">
                 <button id="mai-salvar" class="btn btn-success" style="padding:11px;font-size:14px">📅 Agendar Instalação</button>
-                <button id="mai-pular" class="btn btn-outline" style="padding:9px;font-size:13px">Pular por enquanto</button>
+                <button id="mai-pular" class="btn btn-outline" style="padding:9px;font-size:13px">Avançar sem agendar</button>
+                <button id="mai-cancelar" class="btn btn-outline" style="padding:9px;font-size:13px">Cancelar (não mover o pedido)</button>
             </div>
         </div>`;
     document.body.appendChild(overlay);
-    preencherSelectUsuarios('mai-usuario', '— A definir —');
-    const selInstalador = document.getElementById('mai-usuario');
-    if (selInstalador && ped.usuario_instalacao_id) selInstalador.value = String(ped.usuario_instalacao_id);
+    const boxInst = overlay.querySelector('#mai-usuario-box');
+    boxInst.innerHTML = htmlCampoPessoa('mai-usuario', nomeInstalador(ped), 'A definir — selecione ou digite um nome');
+    const instEl = boxInst.querySelector('input');
+    instEl.style.cssText = 'width:100%;padding:9px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box';
+    // Fechar o popup sem escolher (Cancelar, clique fora, Esc) devolve
+    // 'cancelado' e o pedido não sai da etapa atual.
+    const fechar = resultado => {
+        document.removeEventListener('keydown', onEsc);
+        if (overlay.parentNode) document.body.removeChild(overlay);
+        callback(resultado);
+    };
+    const onEsc = e => { if (e.key === 'Escape') fechar('cancelado'); };
+    document.addEventListener('keydown', onEsc);
     const dataEl = document.getElementById('mai-data');
     dataEl.focus();
     overlay.querySelector('#mai-salvar').onclick = () => {
@@ -2409,12 +2446,12 @@ function mostrarModalAgendarInstalacao(ped, callback) {
         if (!data) { dataEl.style.borderColor = '#F43927'; return; }
         const hora = document.getElementById('mai-hora').value;
         const end  = document.getElementById('mai-end').value.trim();
-        const usuario_instalacao_id = parseInt(document.getElementById('mai-usuario').value) || null;
-        document.body.removeChild(overlay);
-        callback({ data, hora, end, usuario_instalacao_id });
+        const instalador = resolverPessoa(instEl.value);
+        fechar({ data, hora, end, instalador });
     };
-    overlay.querySelector('#mai-pular').onclick = () => { document.body.removeChild(overlay); callback(null); };
-    overlay.addEventListener('click', e => { if (e.target === overlay) { document.body.removeChild(overlay); callback(null); } });
+    overlay.querySelector('#mai-pular').onclick    = () => fechar(null);
+    overlay.querySelector('#mai-cancelar').onclick = () => fechar('cancelado');
+    overlay.addEventListener('click', e => { if (e.target === overlay) fechar('cancelado'); });
 }
 
 function ofertarAgendamentoInstalacao(ped) {
@@ -2495,24 +2532,30 @@ async function moverStatus(id, direcao) {
             await showAlert(`Não é possível avançar para "Pronto p/ Instalação".\n\nMateriais/acessórios insuficientes em estoque:\n\n${insufMat.join('\n')}`, '🚫');
             return;
         }
-        if (itensPed.length) {
-            const linhasMat = itensPed.map(i => `• ${i.nome}: ${i.quantidade} ${i.unidade}`);
-            if (!await showConfirm(`Dar baixa nos materiais e avançar para "Pronto p/ Instalação"?\n\n${linhasMat.join('\n')}`, '🔩', 'Confirmar Baixa', 'Cancelar')) return;
-            realizarBaixaMateriais(ped);
-        }
     }
 
     // ── Na Costura → Pronto p/ Instalação: agendar e definir quem instala.
     // Roda também quando já existe data, para o instalador nunca ficar sem dono.
+    // Vem antes da baixa: fechar o popup cancela a mudança sem mexer no estoque.
+    let agendamento = null;
     if (STATUS_PIPELINE[idx] === 'Na Costura' && STATUS_PIPELINE[novoIdx] === 'Pronto p/ Instalação'
-        && (!ped.data_entrega || !ped.usuario_instalacao_id)) {
-        const agendamento = await ofertarAgendamentoInstalacao(ped);
-        if (agendamento) {
-            ped.data_entrega = agendamento.data;
-            if (agendamento.hora) ped.inst_hora = agendamento.hora;
-            if (agendamento.end)  ped.inst_endereco = agendamento.end;
-            ped.usuario_instalacao_id = agendamento.usuario_instalacao_id || null;
-        }
+        && (!ped.data_entrega || !nomeInstalador(ped))) {
+        agendamento = await ofertarAgendamentoInstalacao(ped);
+        if (agendamento === 'cancelado') return;
+    }
+
+    if (STATUS_PIPELINE[idx] === 'Na Costura' && STATUS_PIPELINE[novoIdx] === 'Pronto p/ Instalação'
+        && !ped.baixa_mat_realizada && !ped.baixa_realizada && (ped.itens || []).length) {
+        const linhasMat = ped.itens.map(i => `• ${i.nome}: ${i.quantidade} ${i.unidade}`);
+        if (!await showConfirm(`Dar baixa nos materiais e avançar para "Pronto p/ Instalação"?\n\n${linhasMat.join('\n')}`, '🔩', 'Confirmar Baixa', 'Cancelar')) return;
+        realizarBaixaMateriais(ped);
+    }
+
+    if (agendamento) {
+        ped.data_entrega = agendamento.data;
+        if (agendamento.hora) ped.inst_hora = agendamento.hora;
+        if (agendamento.end)  ped.inst_endereco = agendamento.end;
+        definirInstalador(ped, agendamento.instalador);
     }
 
     // Intercept: avançar de "Pronto p/ Instalação" ou "Aguardando Pagamento" → verificar pagamento
@@ -7371,6 +7414,7 @@ function _agdFormulario(titulo, campos, onSalvar, voltar) {
         let input;
         if (c.tipo === 'textarea')     input = `<textarea id="${id}" rows="3"${ph}>${escapeHtml(c.valor || '')}</textarea>`;
         else if (c.tipo === 'usuario') input = `<select id="${id}"></select>`;
+        else if (c.tipo === 'pessoa')  input = htmlCampoPessoa(id, c.valor, 'A definir — selecione ou digite um nome');
         else                           input = `<input type="${c.tipo}" id="${id}" value="${escapeHtml(c.valor || '')}"${ph}>`;
         return `<div class="form-group${c.largo ? ' agd-form-largo' : ''}"><label for="${id}">${escapeHtml(c.label)}${req}</label>${input}</div>`;
     }).join('')}</div>`;
@@ -7764,7 +7808,7 @@ function abrirDetalheInstalacao(id) {
         ['Endereço',    escapeHtml(p.inst_endereco || cli?.end || '—')],
         ['Data',        _agdFmtData(p.data_entrega)],
         ['Horário',     escapeHtml(p.inst_hora || '—')],
-        ['Instalador',  escapeHtml(nomeUsuario(p.usuario_instalacao_id) || 'A definir')],
+        ['Instalador',  escapeHtml(nomeInstalador(p) || 'A definir')],
         ['Ambientes',   escapeHtml(p.amb || '—')],
         ['Valor',       'R$ ' + (p.valor || 0).toFixed(2)],
         ['Pagamento',   escapeHtml(pagto.label || '—')],
@@ -7797,14 +7841,14 @@ function editarInstalacao(id) {
         { id: 'end',  label: 'Endereço da instalação', tipo: 'text', valor: p.inst_endereco, largo: true, placeholder: cli?.end || 'Endereço da instalação…' },
         { id: 'data', label: 'Data de instalação', tipo: 'date', valor: p.data_entrega },
         { id: 'hora', label: 'Horário', tipo: 'time', valor: p.inst_hora },
-        { id: 'usu',  label: 'Quem vai instalar', tipo: 'usuario', valor: p.usuario_instalacao_id, largo: true },
+        { id: 'usu',  label: 'Quem vai instalar', tipo: 'pessoa', valor: nomeInstalador(p), largo: true },
         { id: 'obs',  label: 'Observações', tipo: 'textarea', valor: p.inst_obs, largo: true },
     ], async v => {
         if (v.data && !await _instConfirmarNovaData(p, v.data)) return false;
         p.inst_endereco = v.end;
         p.data_entrega  = v.data || null;
         p.inst_hora     = v.hora;
-        p.usuario_instalacao_id = v.usu;
+        definirInstalador(p, resolverPessoa(v.usu));
         p.inst_obs      = v.obs;
         _instAtualizar();
         toast('Instalação atualizada!', 'success');
@@ -7818,7 +7862,7 @@ function reagendarInstalacao(id) {
     _agdFormulario('Reagendar instalação', [
         { id: 'data', label: 'Nova data', tipo: 'date', valor: p.data_entrega, obrig: true },
         { id: 'hora', label: 'Horário', tipo: 'time', valor: p.inst_hora },
-        { id: 'usu',  label: 'Quem vai instalar', tipo: 'usuario', valor: p.usuario_instalacao_id, largo: true },
+        { id: 'usu',  label: 'Quem vai instalar', tipo: 'pessoa', valor: nomeInstalador(p), largo: true },
         { id: 'obs',  label: 'Observações', tipo: 'textarea', valor: p.inst_obs, largo: true },
     ], async v => {
         if (!await _instConfirmarNovaData(p, v.data)) return false;
@@ -7826,7 +7870,7 @@ function reagendarInstalacao(id) {
             if (!p.inst_historico) p.inst_historico = [];
             _agdRegistrar(p.inst_historico, 'reagendado', { de: { data: p.data_entrega || '', hora: p.inst_hora || '' }, para: { data: v.data, hora: v.hora } });
         }
-        p.data_entrega = v.data; p.inst_hora = v.hora; p.usuario_instalacao_id = v.usu; p.inst_obs = v.obs;
+        p.data_entrega = v.data; p.inst_hora = v.hora; definirInstalador(p, resolverPessoa(v.usu)); p.inst_obs = v.obs;
         _instAtualizar();
         toast('Instalação reagendada!', 'success');
         abrirDetalheInstalacao(id);
