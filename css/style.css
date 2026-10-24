@@ -1560,6 +1560,93 @@ html[data-theme="dark"] .pc-num-btn { color: var(--accent, #C9F775); }
 .agd-form textarea { width: 100%; font-family: inherit; resize: vertical; }
 .agd-erro { border-color: var(--danger) !important; }
 
+/* --- Agenda: pedidos prontos, formulario + disponibilidade do profissional --- */
+.agd-prontos { margin: 16px 0 0; padding: 14px 16px; }
+.agd-prontos-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.agd-prontos-head h3 { margin: 0; font-size: 15px; color: var(--primary); }
+.agd-prontos-lista { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(220px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 4px; }
+.agd-prontos-vazio { border: 1px dashed var(--border); border-radius: 12px; grid-column: 1 / -1; }
+.agd-pronto { display: grid; grid-template-columns: 36px minmax(0, 1fr) 16px; gap: 10px; align-items: center; padding: 10px 12px; margin: 0; background: var(--white); color: var(--dark); border: 1px solid var(--border); border-radius: 12px; text-align: left; font: inherit; cursor: pointer; box-shadow: none; }
+.agd-pronto:hover { border-color: var(--primary); background: rgba(0, 93, 59, .03); transform: none; }
+.agd-pronto:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.agd-pronto-sel { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(0, 93, 59, .18); }
+.agd-pronto-ico { width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: #E4EFF9; color: #1F5A96; }
+.agd-pronto-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.agd-pronto-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 2px; }
+.agd-pronto-top strong { font-size: 13.5px; }
+.agd-pronto-top .agd-pill { font-size: 10px; padding: 1px 7px; }
+.agd-pronto-linha { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agd-pronto-linha em { font-style: normal; color: var(--muted); }
+
+.agd-agendar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); gap: 16px; align-items: start; margin-top: 16px; }
+.agd-agendar > .card { margin-bottom: 0; min-width: 0; }
+.agd-inst-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 14px; align-items: start; }
+.agd-inst-grid .form-group { margin-bottom: 0; }
+.agd-inst-grid .agd-span2 { grid-column: span 2; }
+.agd-inst-grid .agd-span4 { grid-column: 1 / -1; }
+.agd-pedido-box { border: 1px solid var(--border); border-radius: var(--radius-input); background: var(--white); padding: 2px 4px 6px; }
+.agd-pedido-box select { border: 0; box-shadow: none; width: 100%; padding: 6px 6px 2px; font-weight: 600; background: transparent; }
+.agd-pedido-sub { display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 12px; color: var(--muted); min-height: 0; }
+.agd-pedido-sub:empty { display: none; }
+.agd-cli-box { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-height: 52px; padding: 7px 12px; border: 1px solid var(--border); border-radius: var(--radius-input); background: #FAFAFA; font-size: 13px; }
+.agd-cli-vazio { color: var(--muted); font-size: 12px; }
+.agd-prof-outro { margin-top: 6px; }
+.agd-cfg-btn { display: inline-flex; align-items: center; justify-content: center; padding: 0 2px; margin: 0 0 0 2px; background: none; border: 0; box-shadow: none; color: var(--muted); cursor: pointer; vertical-align: -2px; }
+.agd-cfg-btn:hover { color: var(--primary); transform: none; background: none; }
+
+.agd-disp { padding: 16px; background: #F5FAFE; border: 1px solid #DCE9F5; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+.agd-disp-modal { margin-top: 14px; border-radius: 12px; }
+.agd-disp-tit { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--dark); }
+.agd-disp-tit-ico { display: inline-flex; color: #1F5A96; }
+.agd-disp-vazio { display: flex; align-items: center; gap: 10px; color: var(--muted); padding: 14px 4px; }
+.agd-disp-prof { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px; background: var(--white); border: 1px solid var(--border); border-radius: 12px; }
+.agd-disp-prof .agd-avatar { width: 40px; height: 40px; }
+.agd-disp-prof-info { display: flex; flex-direction: column; min-width: 0; }
+.agd-disp-prof-info strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agd-disp-prof-info small { color: var(--muted); font-size: 11.5px; }
+.agd-disp-dia { font-weight: 700; color: var(--primary); }
+.agd-disp-dia small { font-weight: 500; color: var(--muted); }
+.agd-disp-leg { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11.5px; color: var(--muted); }
+.agd-disp-leg span { display: inline-flex; align-items: center; gap: 5px; }
+.agd-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.agd-dot-livre   { background: #159912; }
+.agd-dot-ocupado { background: #F43927; }
+.agd-dot-indisp  { background: #B8BCC2; }
+.agd-disp-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 6px; }
+.agd-slot { display: inline-flex; align-items: center; justify-content: center; padding: 6px 0; margin: 0; border-radius: 8px; font-size: 12px; font-weight: 600; border: 1px solid transparent; box-shadow: none; font-family: inherit; line-height: 1.2; }
+.agd-slot-livre   { background: #E3F7E2; color: #0F6B0D; border-color: #A9DEA7; cursor: pointer; }
+.agd-slot-livre:hover { background: #CDEFCB; transform: none; }
+.agd-slot-ocupado { background: #FDE8E5; color: #B3160A; border-color: #F7B9B1; cursor: not-allowed; }
+.agd-slot-indisp  { background: #F1F1F1; color: #8F8F8F; cursor: not-allowed; }
+.agd-slot-sel { outline: 2px solid var(--primary); outline-offset: 1px; }
+.agd-disp-sub { font-weight: 700; color: var(--primary); font-size: 12.5px; }
+.agd-disp-nota { font-size: 12px; color: var(--muted); }
+.agd-disp-prox { display: flex; flex-wrap: wrap; gap: 8px; }
+.agd-chip { padding: 6px 14px; margin: 0; border-radius: var(--radius-pill); background: var(--white); color: var(--dark); border: 1px solid var(--border); font-size: 12.5px; font-weight: 600; cursor: pointer; box-shadow: none; font-family: inherit; }
+.agd-chip:hover { border-color: var(--primary); color: var(--primary); background: var(--white); transform: none; }
+.agd-chip-mais { background: #E4EFF9; color: #1F5A96; border-color: transparent; }
+.agd-disp-aviso { padding: 8px 10px; border-radius: 8px; background: #FDE8E5; color: #B3160A; font-size: 12px; font-weight: 600; }
+.agd-disp-ok { padding: 8px 10px; border-radius: 8px; background: #E3F7E2; color: #0F6B0D; font-size: 12px; font-weight: 600; }
+.agd-disp-comp { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px dashed #CFDFEE; }
+.agd-disp-comp-item { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 8px; align-items: center; font-size: 12px; }
+.agd-disp-comp-cli { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.kanban-inst { font-size: 11.5px; font-weight: 600; color: var(--primary); margin: 2px 0 5px; }
+.kanban-inst-pend { color: #8A6A00; }
+.kanban-btn-agendar { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 8px; padding: 8px 10px; font-size: 12.5px; white-space: nowrap; }
+
+.agd-disp-lista { display: flex; flex-direction: column; gap: 8px; }
+.agd-disp-prof-btn { width: 100%; margin: 0; text-align: left; font: inherit; color: var(--dark); cursor: pointer; box-shadow: none; }
+.agd-disp-prof-btn:hover { border-color: var(--primary); background: var(--white); transform: none; }
+.agd-disp-prof-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.agd-disp-prof-btn .agd-pill { font-size: 10.5px; }
+
+@media (max-width: 1100px) { .agd-agendar { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 700px) {
+    .agd-inst-grid { grid-template-columns: 1fr 1fr; }
+    .agd-inst-grid .agd-span2 { grid-column: 1 / -1; }
+}
+
 @media (max-width: 1000px) { .agd-colunas { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 900px)  { .agd-form-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 560px) {
@@ -1582,3 +1669,14 @@ html[data-theme="dark"] .agd-pill-verm  { background: rgba(244, 57, 39, .18); co
 html[data-theme="dark"] .agd-pill-amar  { background: rgba(242, 201, 36, .15); color: #F7DE86; }
 html[data-theme="dark"] .agd-pill-cinza { background: rgba(255, 255, 255, .08); color: #B0B4BA; }
 html[data-theme="dark"] .agd-item:hover { background: rgba(255, 255, 255, .04); }
+html[data-theme="dark"] .agd-pronto-ico,
+html[data-theme="dark"] .agd-chip-mais  { background: rgba(79, 160, 245, .15); color: #8DC1F7; }
+html[data-theme="dark"] .agd-cli-box    { background: rgba(255, 255, 255, .04); }
+html[data-theme="dark"] .agd-disp       { background: rgba(79, 160, 245, .06); border-color: rgba(79, 160, 245, .18); }
+html[data-theme="dark"] .agd-disp-comp  { border-top-color: rgba(79, 160, 245, .2); }
+html[data-theme="dark"] .agd-slot-livre,
+html[data-theme="dark"] .agd-disp-ok    { background: rgba(45, 212, 120, .15); color: #6EE7A8; border-color: rgba(45, 212, 120, .3); }
+html[data-theme="dark"] .agd-slot-ocupado,
+html[data-theme="dark"] .agd-disp-aviso { background: rgba(244, 57, 39, .18); color: #FF9A8F; border-color: rgba(244, 57, 39, .35); }
+html[data-theme="dark"] .agd-slot-indisp { background: rgba(255, 255, 255, .06); color: #8A8F96; }
+html[data-theme="dark"] .kanban-inst-pend { color: #F7DE86; }

@@ -1135,13 +1135,15 @@ function pedidoEhMeu(ped, usuario) {
     return usuarioDoVendedor(ped.vendedor_id) === u.id
         || (ped.arq_id && usuarioDoVendedor(ped.arq_id) === u.id)
         || ped.usuario_instalacao_id === u.id
+        || ped.inst_agendado_por === u.id
         || ped.criado_por === u.id;
 }
 
+// Responsável pela visita ou quem a agendou.
 function medicaoEhMinha(med, usuario) {
     const u = usuario === undefined ? getUsuarioLogado() : usuario;
     if (!u || !med) return false;
-    return med.usuario_id === u.id;
+    return med.usuario_id === u.id || med.agendado_por === u.id;
 }
 
 // Aplica o escopo aos pedidos/medições exibidos em alertas e widgets do painel.
@@ -2394,74 +2396,11 @@ function mostrarModalPagamento(ped, callback) {
     overlay.querySelector('#mpg-cancel').onclick = () => { document.body.removeChild(overlay); callback(null); };
 }
 
-function mostrarModalAgendarInstalacao(ped, callback) {
-    const cli = db.clientes.find(c => c.id == ped.clienteId);
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
-    overlay.innerHTML = `
-        <div style="background:white;border-radius:10px;padding:28px 32px;max-width:420px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.22)">
-            <h3 style="margin-bottom:6px;color:var(--dark)">📅 Agendar Instalação</h3>
-            <p style="font-size:13px;color:#888;margin-bottom:18px">Pedido #${formatPedidoId(ped.id)} ainda não tem instalação agendada. Deseja agendar agora?</p>
-            <div class="form-group" style="margin-bottom:10px">
-                <label style="font-size:12px;font-weight:bold;color:#666">Data de Instalação</label>
-                <input type="date" id="mai-data" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box">
-            </div>
-            <div class="form-group" style="margin-bottom:10px">
-                <label style="font-size:12px;font-weight:bold;color:#666">Horário (opcional)</label>
-                <input type="time" id="mai-hora" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box">
-            </div>
-            <div class="form-group" style="margin-bottom:10px">
-                <label style="font-size:12px;font-weight:bold;color:#666">Endereço da Instalação</label>
-                <input type="text" id="mai-end" placeholder="${cli && cli.end ? escapeHtml(cli.end) : 'Endereço da instalação…'}" style="width:100%;padding:9px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box">
-            </div>
-            <div class="form-group" style="margin-bottom:18px">
-                <label style="font-size:12px;font-weight:bold;color:#666">Quem vai instalar</label>
-                <div id="mai-usuario-box"></div>
-                <small style="font-size:11px;color:var(--muted);display:block;margin-top:4px">Escolha um usuário (recebe o alerta da instalação) ou digite o nome de quem ainda não está cadastrado.</small>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:10px">
-                <button id="mai-salvar" class="btn btn-success" style="padding:11px;font-size:14px">📅 Agendar Instalação</button>
-                <button id="mai-pular" class="btn btn-outline" style="padding:9px;font-size:13px">Avançar sem agendar</button>
-                <button id="mai-cancelar" class="btn btn-outline" style="padding:9px;font-size:13px">Cancelar (não mover o pedido)</button>
-            </div>
-        </div>`;
-    document.body.appendChild(overlay);
-    const boxInst = overlay.querySelector('#mai-usuario-box');
-    boxInst.innerHTML = htmlCampoPessoa('mai-usuario', nomeInstalador(ped), 'A definir — selecione ou digite um nome');
-    const instEl = boxInst.querySelector('input');
-    instEl.style.cssText = 'width:100%;padding:9px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box';
-    // Fechar o popup sem escolher (Cancelar, clique fora, Esc) devolve
-    // 'cancelado' e o pedido não sai da etapa atual.
-    const fechar = resultado => {
-        document.removeEventListener('keydown', onEsc);
-        if (overlay.parentNode) document.body.removeChild(overlay);
-        callback(resultado);
-    };
-    const onEsc = e => { if (e.key === 'Escape') fechar('cancelado'); };
-    document.addEventListener('keydown', onEsc);
-    const dataEl = document.getElementById('mai-data');
-    dataEl.focus();
-    overlay.querySelector('#mai-salvar').onclick = () => {
-        const data = dataEl.value;
-        if (!data) { dataEl.style.borderColor = '#F43927'; return; }
-        const hora = document.getElementById('mai-hora').value;
-        const end  = document.getElementById('mai-end').value.trim();
-        const instalador = resolverPessoa(instEl.value);
-        fechar({ data, hora, end, instalador });
-    };
-    overlay.querySelector('#mai-pular').onclick    = () => fechar(null);
-    overlay.querySelector('#mai-cancelar').onclick = () => fechar('cancelado');
-    overlay.addEventListener('click', e => { if (e.target === overlay) fechar('cancelado'); });
-}
-
-function ofertarAgendamentoInstalacao(ped) {
-    return new Promise(resolve => mostrarModalAgendarInstalacao(ped, resolve));
-}
-
 // Desfecho de "Confirmar Entrega" (modal de pagamento), usado pelo Kanban e
 // pela Agenda de Instalacoes: pago -> Instalado; com saldo -> Aguardando Pagamento.
 function aplicarConfirmacaoEntrega(ped, resultado) {
     if (!ped.timeline) ped.timeline = [];
+    if (!ped.inst_confirmada_em) ped.inst_confirmada_em = Date.now();   // instalacao feita -> Realizados
     if (resultado === 'pago') {
         ped.valor_recebido = ped.valor;
         ped.status = 'Instalado';
@@ -2534,16 +2473,6 @@ async function moverStatus(id, direcao) {
         }
     }
 
-    // ── Na Costura → Pronto p/ Instalação: agendar e definir quem instala.
-    // Roda também quando já existe data, para o instalador nunca ficar sem dono.
-    // Vem antes da baixa: fechar o popup cancela a mudança sem mexer no estoque.
-    let agendamento = null;
-    if (STATUS_PIPELINE[idx] === 'Na Costura' && STATUS_PIPELINE[novoIdx] === 'Pronto p/ Instalação'
-        && (!ped.data_entrega || !nomeInstalador(ped))) {
-        agendamento = await ofertarAgendamentoInstalacao(ped);
-        if (agendamento === 'cancelado') return;
-    }
-
     if (STATUS_PIPELINE[idx] === 'Na Costura' && STATUS_PIPELINE[novoIdx] === 'Pronto p/ Instalação'
         && !ped.baixa_mat_realizada && !ped.baixa_realizada && (ped.itens || []).length) {
         const linhasMat = ped.itens.map(i => `• ${i.nome}: ${i.quantidade} ${i.unidade}`);
@@ -2551,11 +2480,18 @@ async function moverStatus(id, direcao) {
         realizarBaixaMateriais(ped);
     }
 
-    if (agendamento) {
-        ped.data_entrega = agendamento.data;
-        if (agendamento.hora) ped.inst_hora = agendamento.hora;
-        if (agendamento.end)  ped.inst_endereco = agendamento.end;
-        definirInstalador(ped, agendamento.instalador);
+    // ── Na Costura → Pronto p/ Instalação: o pedido entra nos cards "Pedidos
+    // Prontos para Instalação" da agenda, ainda sem agendamento. O agendamento
+    // (profissional, data, horário, duração) é feito lá, contra a
+    // disponibilidade real; nada é agendado automaticamente aqui.
+    if (STATUS_PIPELINE[idx] === 'Na Costura' && STATUS_PIPELINE[novoIdx] === 'Pronto p/ Instalação') {
+        ped.inst_agendado = false;
+    }
+
+    // Pronto p/ Instalação sem agendamento não se confirma: vai para a agenda.
+    if (STATUS_PIPELINE[idx] === 'Pronto p/ Instalação' && direcao === 1 && !_instAgendada(ped)) {
+        irParaAgendaInstalacao(ped.id);
+        return;
     }
 
     // Intercept: avançar de "Pronto p/ Instalação" ou "Aguardando Pagamento" → verificar pagamento
@@ -5453,6 +5389,18 @@ function renderKanban() {
                 const badgeBaixa   = p.baixa_realizada ? `<span class="badge-baixa">✔ Baixa OK</span>` : '';
                 const entregaInf   = statusEntrega(p);
                 const entregaBadge = entregaInf ? `<span class="${entregaInf.cls}">${entregaInf.label}</span>` : '';
+                // Pronto p/ Instalacao: sem agendamento, a seta leva para a
+                // agenda com o pedido ja selecionado; agendado, confirma a entrega.
+                const prontoSemAgenda = col.status === 'Pronto p/ Instalação' && !_instAgendada(p);
+                const instLinha = col.status !== 'Pronto p/ Instalação' ? ''
+                    : prontoSemAgenda
+                        ? `<div class="kanban-inst kanban-inst-pend">📅 Aguardando agendamento</div>`
+                        : `<div class="kanban-inst">📅 ${_agdFmtData(p.data_entrega)}${p.inst_hora ? ' · ' + escapeHtml(p.inst_hora) : ''}${nomeInstalador(p) ? ' · ' + escapeHtml(nomeInstalador(p)) : ''}</div>`;
+                const btnAvancar = prontoSemAgenda ? ''
+                    : `<button class="btn btn-sm" onclick="moverStatus(${p.id},1)" title="Avançar etapa">→</button>`;
+                const btnAgendar = prontoSemAgenda
+                    ? `<button class="btn btn-sm kanban-btn-agendar" onclick="irParaAgendaInstalacao(${p.id})" title="Agendar instalação">📅 Agendar instalação</button>`
+                    : '';
                 return `<div class="kanban-card${cardAtrasado}">
                     <div class="kanban-card-top">
                         <span class="kanban-card-id" style="cursor:pointer;text-decoration:underline" onclick="editarPedido(${p.id})" title="Editar pedido">#${formatPedidoId(p.id)}</span>
@@ -5462,6 +5410,7 @@ function renderKanban() {
                     <div class="kanban-card-cliente">${escapeHtml(p.clienteNome||'')}${obsBadge}</div>
                     <div class="kanban-card-amb">${escapeHtml(p.amb||'')}</div>
                     ${entregaBadge ? `<div style="margin:3px 0 5px">${entregaBadge}</div>` : ''}
+                    ${instLinha}
                     <div class="kanban-card-info">${pregaTipos.join(', ')||'—'} · ${tecidoNomes.join(', ')||'—'}<br>${totalPanos} pano(s) · ${totalConsumo.toFixed(2)} m</div>
                     ${badgeEst||badgeBaixa ? `<div style="margin-bottom:6px">${badgeEst}${badgeBaixa}</div>` : ''}
                     <div class="kanban-card-actions">
@@ -5471,9 +5420,10 @@ function renderKanban() {
                         </div>
                         <div style="display:flex;gap:4px">
                             ${podeVoltar  ? `<button class="btn btn-outline btn-sm" onclick="moverStatus(${p.id},-1)" title="Voltar etapa">←</button>` : `<span class="kanban-nav-ph"></span>`}
-                            ${podeAvancar ? `<button class="btn btn-sm" onclick="moverStatus(${p.id},1)" title="Avançar etapa">→</button>` : ''}
+                            ${podeAvancar ? btnAvancar : ''}
                         </div>
                     </div>
+                    ${btnAgendar}
                 </div>`;
             }).join('');
         return `<div class="kanban-col">
@@ -7169,6 +7119,7 @@ function criarPedidoDaMedicao(medicaoId) {
 async function salvarMedicao() {
     const tipo = document.querySelector('input[name="med-tipo"]:checked')?.value || 'existente';
     let clienteId = null, clienteNome = '', clienteTel = '';
+    let clienteCpf = '', clienteEmail = '';
 
     if (tipo === 'existente') {
         clienteId = parseInt(document.getElementById('med-cliente-id')?.value) || null;
@@ -7181,17 +7132,40 @@ async function salvarMedicao() {
             if (endEl && !endEl.value.trim() && cli.end) endEl.value = cli.end;
         }
     } else {
-        clienteNome = (document.getElementById('med-novo-nome')?.value || '').trim();
-        clienteTel  = (document.getElementById('med-novo-tel')?.value || '').trim();
-        const clienteCpf   = (document.getElementById('med-novo-cpf')?.value || '').trim();
-        const clienteEmail = (document.getElementById('med-novo-email')?.value || '').trim();
+        clienteNome  = (document.getElementById('med-novo-nome')?.value || '').trim();
+        clienteTel   = (document.getElementById('med-novo-tel')?.value || '').trim();
+        clienteCpf   = (document.getElementById('med-novo-cpf')?.value || '').trim();
+        clienteEmail = (document.getElementById('med-novo-email')?.value || '').trim();
         if (!clienteNome) { await showAlert('Informe o nome do cliente.', '⚠️'); return; }
         if (clienteCpf) {
             const cpfDigitos = clienteCpf.replace(/\D/g, '');
             const duplicado = db.clientes.find(c => c.cpf && c.cpf.replace(/\D/g, '') === cpfDigitos);
             if (duplicado) { await showAlert(`CPF já cadastrado para o cliente "${duplicado.nome}".`, '⚠️'); return; }
         }
-        const novoCli = { id: Date.now(), nome: clienteNome, tel: clienteTel, email: clienteEmail, cpf: clienteCpf, end: '' };
+    }
+
+    const data = (document.getElementById('med-data')?.value || '').trim();
+    const hora = (document.getElementById('med-hora')?.value || '').trim();
+    const end  = (document.getElementById('med-end')?.value  || '').trim();
+    const obs  = (document.getElementById('med-obs')?.value  || '').trim();
+    const dur  = parseInt(document.getElementById('med-dur')?.value) || _agdDurPadrao('med');
+    const prof = _agdLerProf('med-prof');
+    if (!data) { await showAlert('Informe a data da visita.', '⚠️'); return; }
+    if (!end)  { await showAlert('Informe o endereço da visita.', '⚠️'); return; }
+
+    // Com profissional definido a visita ocupa a agenda dele: precisa de
+    // horário e é conferida de novo contra instalações e medições já gravadas.
+    if (prof.chave && !hora) {
+        document.getElementById('med-hora')?.classList.add('agd-erro');
+        await showAlert('Informe o horário: ele reserva a agenda do profissional.', '⚠️');
+        return;
+    }
+    document.getElementById('med-hora')?.classList.remove('agd-erro');
+    if (!await _agdValidarDisp({ prof: prof.chave, profNome: prof.pessoa.nome, data, hora, dur })) { _medAtualizarDisp(); return; }
+
+    // Só depois de tudo validado o novo cliente é cadastrado.
+    if (tipo === 'novo') {
+        const novoCli = { id: Date.now(), nome: clienteNome, tel: clienteTel, email: clienteEmail, cpf: clienteCpf, end };
         db.clientes.push(novoCli);
         clienteId = novoCli.id;
         const sel = document.getElementById('med-cliente-id');
@@ -7199,31 +7173,21 @@ async function salvarMedicao() {
             db.clientes.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
     }
 
-    const data = (document.getElementById('med-data')?.value || '').trim();
-    const hora = (document.getElementById('med-hora')?.value || '').trim();
-    const end  = (document.getElementById('med-end')?.value  || '').trim();
-    const obs  = (document.getElementById('med-obs')?.value  || '').trim();
-    if (!data) { await showAlert('Informe a data da visita.', '⚠️'); return; }
-    if (!end)  { await showAlert('Informe o endereço da visita.', '⚠️'); return; }
+    const med = { id: Date.now(), clienteId, clienteNome, clienteTel, endereco: end, data, hora, duracao: dur, obs, status: 'Agendado',
+        agendado_por: getUsuarioLogado()?.id || null, agendado_em: Date.now() };
+    _medDefinirResponsavel(med, prof.pessoa);
+    db.medicoes.push(med);
 
-    // Vincula o endereço ao cadastro do cliente quando é um novo cliente
-    if (tipo === 'novo' && clienteId) {
-        const cliNovo = db.clientes.find(c => c.id === clienteId);
-        if (cliNovo) cliNovo.end = end;
-    }
-
-    const usuarioMedicao = parseInt(document.getElementById('med-usuario')?.value) || null;
-    db.medicoes.push({ id: Date.now(), clienteId, clienteNome, clienteTel, endereco: end, data, hora, obs, status: 'Agendado', usuario_id: usuarioMedicao });
-
-    const usuEl   = document.getElementById('med-usuario');    if (usuEl)   usuEl.value   = '';
     const nomeEl  = document.getElementById('med-novo-nome');  if (nomeEl)  nomeEl.value  = '';
     const telEl   = document.getElementById('med-novo-tel');   if (telEl)   telEl.value   = '';
     const cpfEl   = document.getElementById('med-novo-cpf');   if (cpfEl)   cpfEl.value   = '';
     const emailEl = document.getElementById('med-novo-email'); if (emailEl) emailEl.value = '';
-    document.getElementById('med-data').value = '';
+    document.getElementById('med-data').value = _agdHoje();
     document.getElementById('med-hora').value = '';
     document.getElementById('med-end').value  = '';
     document.getElementById('med-obs').value  = '';
+    _agdPreencherProf('med-prof', '', '— A definir —');
+    _agdPreencherDur('med-dur', 'med');
     document.querySelectorAll('input[name="med-tipo"]').forEach(r => { r.checked = r.value === 'existente'; });
     toggleTipoClienteMedicao();
 
@@ -7231,6 +7195,7 @@ async function salvarMedicao() {
     toast(tipo === 'novo' ? 'Cliente cadastrado e visita agendada!' : 'Visita agendada!', 'success');
     renderMedicoes();
     renderDashboardMedicoes();
+    renderAgenda();
 }
 
 function imprimirAgendamentoMedicao(id) {
@@ -7273,7 +7238,8 @@ function imprimirAgendamentoMedicao(id) {
         ${secTitle('Dados do Agendamento')}
         <table style="width:100%;border-collapse:collapse">
             ${row('Data da visita', dataFmt)}
-            ${row('Horário', horaFmt)}
+            ${row('Horário', v.hora ? _agdPeriodo(v.hora, +v.duracao || _agdDurPadrao('med')) : horaFmt)}
+            ${row('Responsável', escapeHtml(_medNomeResp(v)))}
             ${row('Endereço da visita', escapeHtml(v.endereco || ''))}
             ${row('Observações', escapeHtml(v.obs || ''))}
         </table>
@@ -7301,6 +7267,7 @@ const _AGD_SVG = {
     pin:     '<path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/>',
     user:    '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/>',
     seta:    '<path d="m9 6 6 6-6 6"/>',
+    caixa:   '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
 };
 function _agdIco(nome, tam) {
     const t = tam || 14;
@@ -7409,9 +7376,10 @@ function _agdDescHist(x) {
     const fmt = o => o && o.data ? _agdFmtData(o.data) + (o.hora ? ' ' + o.hora : '') : 'sem data';
     const por = x.por ? ` (${nomeUsuario(x.por) || 'usuário removido'})` : '';
     const quando = _agdFmtMomento(x.em);
+    if (x.acao === 'agendado')   return `${quando}: agendado para ${fmt(x.para)}${x.prof ? ' com ' + x.prof : ''}${por}`;
     if (x.acao === 'reagendado') return `${quando}: reagendado de ${fmt(x.de)} para ${fmt(x.para)}${por}`;
     if (x.acao === 'desmarcado') return `${quando}: data desmarcada, era ${fmt(x.de)}${por}`;
-    if (x.acao === 'cancelado')  return `${quando}: agendamento cancelado${por}`;
+    if (x.acao === 'cancelado')  return `${quando}: agendamento cancelado${x.de ? ', era ' + fmt(x.de) : ''}${por}`;
     return `${quando}: ${x.acao}${por}`;
 }
 function _agdHistorico(h) {
@@ -7423,20 +7391,26 @@ function _agdRegistrar(lista, acao, extra) {
     lista.push({ acao, em: Date.now(), por: getUsuarioLogado()?.id || null, ...(extra || {}) });
 }
 
-// campos: { id, label, tipo: date|time|text|textarea|usuario, valor, obrig, largo, placeholder }
+// campos: { id, label, tipo: date|time|text|textarea|usuario|pessoa|profissional|duracao, valor, obrig, largo, placeholder }
 // onSalvar(valores) grava; se devolver false, o formulario continua aberto.
-function _agdFormulario(titulo, campos, onSalvar, voltar) {
+// opts.disp = { tipo: 'inst'|'med', ignorar: { tipo, id }, exigeHora }: mostra o
+// painel de disponibilidade do profissional (campos usu/data/hora/dur) e,
+// ao salvar, confere de novo a agenda gravada antes de chamar onSalvar.
+function _agdFormulario(titulo, campos, onSalvar, voltar, opts) {
+    const disp = opts && opts.disp;
     const corpo = `<div class="agd-form">${campos.map(c => {
         const id  = 'agdf-' + c.id;
         const req = c.obrig ? ' <span style="color:var(--danger)">*</span>' : '';
         const ph  = c.placeholder ? ` placeholder="${escapeHtml(c.placeholder)}"` : '';
         let input;
-        if (c.tipo === 'textarea')     input = `<textarea id="${id}" rows="3"${ph}>${escapeHtml(c.valor || '')}</textarea>`;
-        else if (c.tipo === 'usuario') input = `<select id="${id}"></select>`;
-        else if (c.tipo === 'pessoa')  input = htmlCampoPessoa(id, c.valor, 'A definir — selecione ou digite um nome');
-        else                           input = `<input type="${c.tipo}" id="${id}" value="${escapeHtml(c.valor || '')}"${ph}>`;
+        if (c.tipo === 'textarea')          input = `<textarea id="${id}" rows="3"${ph}>${escapeHtml(c.valor || '')}</textarea>`;
+        else if (c.tipo === 'usuario')      input = `<select id="${id}"></select>`;
+        else if (c.tipo === 'pessoa')       input = htmlCampoPessoa(id, c.valor, 'A definir — selecione ou digite um nome');
+        else if (c.tipo === 'profissional') input = `<select id="${id}"></select><input type="text" id="${id}-outro" class="agd-prof-outro" placeholder="Nome do profissional" autocomplete="off" hidden>`;
+        else if (c.tipo === 'duracao')      input = `<select id="${id}"></select>`;
+        else                                input = `<input type="${c.tipo}" id="${id}" value="${escapeHtml(c.valor || '')}"${ph}>`;
         return `<div class="form-group${c.largo ? ' agd-form-largo' : ''}"><label for="${id}">${escapeHtml(c.label)}${req}</label>${input}</div>`;
-    }).join('')}</div>`;
+    }).join('')}</div>${disp ? '<div class="agd-disp agd-disp-modal" id="agdf-disp" aria-live="polite"></div>' : ''}`;
     const rodape = `<button type="button" class="btn btn-outline btn-sm" id="agdf-voltar">Voltar</button>
         <button type="button" class="btn btn-success btn-sm" id="agdf-salvar">Salvar</button>`;
     const o = _agdAbrirModal(titulo, corpo, rodape);
@@ -7445,18 +7419,441 @@ function _agdFormulario(titulo, campos, onSalvar, voltar) {
         const s = document.getElementById('agdf-' + c.id);
         if (s) s.value = c.valor ? String(c.valor) : '';
     });
-    o.querySelector('#agdf-voltar').onclick = voltar || fecharModalAgenda;
-    o.querySelector('#agdf-salvar').onclick = async () => {
+    campos.filter(c => c.tipo === 'profissional').forEach(c => _agdPreencherProf('agdf-' + c.id, c.valor, c.vazio || '— A definir —'));
+    campos.filter(c => c.tipo === 'duracao').forEach(c => _agdPreencherDur('agdf-' + c.id, c.servico || (disp && disp.tipo) || 'inst', c.valor));
+
+    const lerValores = () => {
         const v = {};
         for (const c of campos) {
             const el = document.getElementById('agdf-' + c.id);
-            el.classList.remove('agd-erro');
-            v[c.id] = c.tipo === 'usuario' ? (parseInt(el.value) || null) : el.value.trim();
-            if (c.obrig && !v[c.id]) { el.classList.add('agd-erro'); el.focus(); return; }
+            if (c.tipo === 'usuario')           v[c.id] = parseInt(el.value) || null;
+            else if (c.tipo === 'profissional') v[c.id] = _agdLerProf('agdf-' + c.id);
+            else if (c.tipo === 'duracao')      v[c.id] = parseInt(el.value) || null;
+            else                                v[c.id] = el.value.trim();
         }
-        await onSalvar(v);
+        return v;
     };
-    o.querySelector('input, select, textarea')?.focus();
+    const consulta = () => {
+        const v = lerValores();
+        return { tipo: disp.tipo, prof: v.usu ? v.usu.chave : '', profNome: v.usu ? v.usu.pessoa.nome : '', data: v.data, hora: v.hora, dur: v.dur || _agdDurPadrao(disp.tipo), ignorar: disp.ignorar };
+    };
+    const atualizarDisp = () => {
+        if (!disp) return;
+        _agdDispCtx['agdf-disp'] = Object.assign(_agdDispCtx['agdf-disp'] || {}, { onHora: (d, h) => {
+            const de = document.getElementById('agdf-data'), he = document.getElementById('agdf-hora');
+            if (de) de.value = d;
+            if (he) { he.value = h; he.classList.remove('agd-erro'); }
+            atualizarDisp();
+        }, onProf: ch => {
+            const sel = document.getElementById('agdf-usu');
+            _agdPreencherProf('agdf-usu', ch, sel && sel.options[0] ? sel.options[0].text : '— A definir —');
+            atualizarDisp();
+        } });
+        _agdRenderDisp('agdf-disp', consulta());
+    };
+    if (disp) {
+        const prof = document.getElementById('agdf-usu');
+        if (prof) prof.addEventListener('change', () => { _agdProfMudou('agdf-usu'); atualizarDisp(); });
+        document.getElementById('agdf-usu-outro')?.addEventListener('input', atualizarDisp);
+        ['data', 'dur'].forEach(k => document.getElementById('agdf-' + k)?.addEventListener('change', atualizarDisp));
+        document.getElementById('agdf-hora')?.addEventListener('input', atualizarDisp);
+        atualizarDisp();
+    }
+
+    o.querySelector('#agdf-voltar').onclick = voltar || fecharModalAgenda;
+    o.querySelector('#agdf-salvar').onclick = async () => {
+        for (const c of campos) {
+            const el = document.getElementById('agdf-' + c.id);
+            el.classList.remove('agd-erro');
+            const vazio = c.tipo === 'profissional' ? !_agdLerProf('agdf-' + c.id).chave : !el.value.trim();
+            if (c.obrig && vazio) { el.classList.add('agd-erro'); el.focus(); return; }
+        }
+        if (disp) {
+            const q = consulta();
+            const horaEl = document.getElementById('agdf-hora');
+            if (q.prof && q.data && !q.hora && horaEl) {
+                horaEl.classList.add('agd-erro'); horaEl.focus();
+                await showAlert('Informe o horário: ele reserva a agenda do profissional.', '⚠️');
+                return;
+            }
+            if (!await _agdValidarDisp(q)) { atualizarDisp(); _agdRedesenharAgendas(); return; }
+        }
+        await onSalvar(lerValores());
+    };
+    o.querySelector('input:not([hidden]), select, textarea')?.focus();
+}
+
+// --- DISPONIBILIDADE COMPARTILHADA (Instalacoes + Medicoes) -----------------
+// O profissional e um so nas duas agendas: tudo o que esta agendado ocupa o
+// periodo [horario, horario + duracao) dele -- instalacao de pedido Pronto p/
+// Instalacao ja agendada e medicao com status Agendado. Concluido (Instalado,
+// Aguardando Pagamento, medicao Realizada) e cancelado nao ocupam nada.
+const _AGD_CFG_PADRAO = { dur_inst: 120, dur_med: 60, inicio: '08:00', fim: '18:00', passo: 60 };
+const _AGD_DURACOES = [30, 60, 90, 120, 150, 180, 240, 300, 360, 480];
+
+function getAgendaConfig() {
+    let c = {};
+    try { c = JSON.parse(localStorage.getItem('sc_agd_cfg') || '{}') || {}; } catch (e) { c = {}; }
+    return { ..._AGD_CFG_PADRAO, ...c };
+}
+function _agdDurPadrao(tipo) { const c = getAgendaConfig(); return +(tipo === 'med' ? c.dur_med : c.dur_inst) || 60; }
+function _agdMin(h) { const m = /^(\d{1,2}):(\d{2})/.exec(h || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; }
+function _agdHHMM(min) { return String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0'); }
+function _agdFmtDur(min) {
+    min = +min || 0;
+    const h = Math.floor(min / 60), m = min % 60;
+    if (!h) return m + ' min';
+    if (!m) return h + (h === 1 ? ' hora' : ' horas');
+    return h + 'h' + String(m).padStart(2, '0');
+}
+function _agdPeriodo(hora, dur) {
+    const i = _agdMin(hora);
+    return i === null ? '' : `${_agdHHMM(i)} – ${_agdHHMM(i + (+dur || 0))}`;
+}
+
+// Profissional = usuario do sistema (u:<id>) ou nome digitado (n:<nome>).
+function _profChave(id, nome) {
+    if (id) return 'u:' + id;
+    const n = _agdNorm(nome);
+    return n ? 'n:' + n : '';
+}
+function _instProf(p) { return _profChave(p.usuario_instalacao_id, p.instalador_nome); }
+function _medProf(m)  { return _profChave(m.usuario_id, m.responsavel_nome); }
+function _medNomeResp(m) { return nomeUsuario(m.usuario_id) || m.responsavel_nome || ''; }
+function _medDefinirResponsavel(m, pessoa) {
+    m.usuario_id = pessoa.id || null;
+    m.responsavel_nome = pessoa.id ? '' : (pessoa.nome || '');
+}
+
+// Usuarios ativos e os nomes avulsos ja usados em instalacoes e medicoes.
+function _agdProfissionais() {
+    const lista = db.usuarios.filter(u => u.ativo).map(u => {
+        const papel = (db.papeis || []).find(p => p.id === u.papel_id);
+        return { chave: 'u:' + u.id, nome: u.nome, sub: papel ? papel.nome : 'Instalações e Medições' };
+    });
+    const vistos = new Set(lista.map(x => x.chave));
+    const avulso = nome => {
+        const pessoa = resolverPessoa(nome);
+        const ch = _profChave(pessoa.id, pessoa.nome);
+        if (!ch || vistos.has(ch)) return;
+        vistos.add(ch);
+        lista.push({ chave: ch, nome: String(nome).trim(), sub: 'Profissional externo' });
+    };
+    db.pedidos.forEach(p => { if (!p.usuario_instalacao_id && p.instalador_nome) avulso(p.instalador_nome); });
+    (db.medicoes || []).forEach(m => { if (!m.usuario_id && m.responsavel_nome) avulso(m.responsavel_nome); });
+    return lista;
+}
+// nomeDigitado: o texto de "Outro" ainda nao gravado (a chave perde acentos).
+function _agdProfInfo(chave, nomeDigitado) {
+    if (!chave) return null;
+    const achado = _agdProfissionais().find(x => x.chave === chave);
+    if (achado) return achado;
+    if (chave.startsWith('u:')) return { chave, nome: nomeUsuario(+chave.slice(2)) || 'Usuário removido', sub: 'Usuário inativo' };
+    return { chave, nome: (nomeDigitado || '').trim() || chave.slice(2), sub: 'Profissional externo' };
+}
+
+// Seletor de profissional: lista + "Outro" (nome digitado, ex.: terceirizado).
+function _agdPreencherProf(id, chaveAtual, vazio) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const lista = _agdProfissionais();
+    if (chaveAtual && !lista.some(x => x.chave === chaveAtual)) lista.push(_agdProfInfo(chaveAtual));
+    sel.innerHTML = `<option value="">${escapeHtml(vazio || 'Selecione')}</option>` +
+        lista.map(x => `<option value="${escapeHtml(x.chave)}">${escapeHtml(x.nome)}</option>`).join('') +
+        '<option value="__outro">+ Outro (digitar nome)…</option>';
+    sel.value = chaveAtual || '';
+    const outro = document.getElementById(id + '-outro');
+    if (outro) { outro.value = ''; outro.hidden = true; }
+}
+function _agdProfMudou(id) {
+    const sel = document.getElementById(id), outro = document.getElementById(id + '-outro');
+    if (!sel || !outro) return;
+    outro.hidden = sel.value !== '__outro';
+    if (!outro.hidden) outro.focus();
+}
+function _agdLerProf(id) {
+    const nada = { chave: '', pessoa: { id: null, nome: '' } };
+    const sel = document.getElementById(id);
+    if (!sel || !sel.value) return nada;
+    if (sel.value === '__outro') {
+        const pessoa = resolverPessoa(document.getElementById(id + '-outro')?.value);
+        return { chave: _profChave(pessoa.id, pessoa.nome), pessoa };
+    }
+    if (sel.value.startsWith('u:')) return { chave: sel.value, pessoa: { id: +sel.value.slice(2), nome: '' } };
+    const info = _agdProfInfo(sel.value);
+    return { chave: sel.value, pessoa: { id: null, nome: info ? info.nome : sel.value.slice(2) } };
+}
+
+// Duracao: o padrao do tipo de servico vem marcado; da para ajustar por agendamento.
+function _agdPreencherDur(id, tipo, valor) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const padrao = _agdDurPadrao(tipo);
+    const opcoes = [...new Set([..._AGD_DURACOES, padrao, ...(valor ? [+valor] : [])])].sort((a, b) => a - b);
+    sel.innerHTML = opcoes.map(m => `<option value="${m}">${_agdFmtDur(m)}${m === padrao ? ' (padrão)' : ''}</option>`).join('');
+    sel.value = String(valor || padrao);
+}
+
+// Tudo o que ocupa a agenda de algum profissional.
+function _agdCompromissos() {
+    const cfg = getAgendaConfig();
+    const out = [];
+    db.pedidos.forEach(p => {
+        if (normalizarStatus(p.status) !== 'Pronto p/ Instalação' || !_instAgendada(p)) return;
+        const ini = _agdMin(p.inst_hora), prof = _instProf(p);
+        if (!p.data_entrega || ini === null || !prof) return;
+        out.push({ tipo: 'inst', id: p.id, prof, data: p.data_entrega, ini, fim: ini + (+p.inst_duracao || +cfg.dur_inst),
+            rotulo: `Instalação #${formatPedidoId(p.id)}`, cliente: p.clienteNome || '' });
+    });
+    (db.medicoes || []).forEach(m => {
+        if (m.status !== 'Agendado') return;
+        const ini = _agdMin(m.hora), prof = _medProf(m);
+        if (!m.data || ini === null || !prof) return;
+        out.push({ tipo: 'med', id: m.id, prof, data: m.data, ini, fim: ini + (+m.duracao || +cfg.dur_med),
+            rotulo: 'Medição', cliente: m.clienteNome || '' });
+    });
+    return out;
+}
+function _agdDoDia(prof, data, ignorar) {
+    return _agdCompromissos()
+        .filter(c => c.prof === prof && c.data === data && !(ignorar && c.tipo === ignorar.tipo && c.id == ignorar.id))
+        .sort((a, b) => a.ini - b.ini);
+}
+// Compromissos do profissional que se sobrepoem a [hora, hora + dur).
+function _agdConflitos(q) {
+    const ini = _agdMin(q.hora);
+    if (!q.prof || !q.data || ini === null) return [];
+    const fim = ini + (+q.dur || 0);
+    return _agdDoDia(q.prof, q.data, q.ignorar).filter(c => c.ini < fim && ini < c.fim);
+}
+function _agdDescComp(c) {
+    return `${c.rotulo}${c.cliente ? ' — ' + c.cliente : ''} (${_agdHHMM(c.ini)}–${_agdHHMM(c.fim)})`;
+}
+
+// Grade do dia. Verde: cabe a duracao escolhida. Vermelho: horario ocupado.
+// Cinza: passado, fora do expediente ou a duracao esbarra em outro compromisso.
+function _agdDisponibilidade(q) {
+    const cfg = getAgendaConfig();
+    const ini = _agdMin(cfg.inicio) ?? 480, fimDia = _agdMin(cfg.fim) ?? 1080, passo = +cfg.passo || 60;
+    const dur = +q.dur || passo;
+    const hoje = _agdHoje();
+    const agora = new Date(), agoraMin = agora.getHours() * 60 + agora.getMinutes();
+    const comps = q.prof && q.data ? _agdDoDia(q.prof, q.data, q.ignorar) : [];
+    const slots = [];
+    for (let s = ini; s + passo <= fimDia; s += passo) {
+        let estado = 'livre', motivo = 'Disponível';
+        const ocup = comps.find(c => c.ini < s + passo && s < c.fim);
+        if (q.data < hoje || (q.data === hoje && s <= agoraMin)) { estado = 'indisp'; motivo = 'Horário já passou'; }
+        else if (ocup) { estado = 'ocupado'; motivo = 'Ocupado: ' + _agdDescComp(ocup); }
+        else if (s + dur > fimDia) { estado = 'indisp'; motivo = `${_agdFmtDur(dur)} passam do fim do expediente (${cfg.fim})`; }
+        else {
+            const c = comps.find(x => x.ini < s + dur && s < x.fim);
+            if (c) { estado = 'indisp'; motivo = `Não cabem ${_agdFmtDur(dur)}: esbarra em ${_agdDescComp(c)}`; }
+        }
+        slots.push({ hora: _agdHHMM(s), estado, motivo });
+    }
+    return { slots, livres: slots.filter(x => x.estado === 'livre').map(x => x.hora), compromissos: comps };
+}
+function _agdSomarDias(data, n) {
+    const d = new Date(data + 'T12:00:00'); d.setDate(d.getDate() + n);
+    return d.toLocaleDateString('sv-SE');
+}
+// Primeiro dia (depois de q.data, ate 30 dias) com horario livre.
+function _agdProximoDiaLivre(q) {
+    let d = q.data < _agdHoje() ? _agdHoje() : q.data;
+    for (let i = 0; i < 30; i++) {
+        d = _agdSomarDias(d, 1);
+        const r = _agdDisponibilidade({ ...q, data: d });
+        if (r.livres.length) return { data: d, horas: r.livres };
+    }
+    return null;
+}
+
+// Releitura do que esta gravado (outra aba/usuario pode ter agendado) e
+// conferencia final. Devolve false e avisa quando ha conflito.
+function _agdRecarregar() {
+    try {
+        const ped = JSON.parse(localStorage.getItem('sc_ped'));
+        const med = JSON.parse(localStorage.getItem('sc_med'));
+        if (Array.isArray(ped)) db.pedidos  = ped;
+        if (Array.isArray(med)) db.medicoes = med;
+    } catch (e) { /* mantem o que esta em memoria */ }
+}
+async function _agdValidarDisp(q) {
+    if (!q.prof || !q.data || !q.hora) return true;
+    _agdRecarregar();
+    const c = _agdConflitos(q);
+    if (!c.length) return true;
+    const nome = _agdProfInfo(q.prof, q.profNome)?.nome || 'O profissional';
+    await showAlert(`${nome} já tem compromisso nesse período (${_agdFmtData(q.data)}, ${_agdPeriodo(q.hora, q.dur)}):\n\n${
+        c.map(x => '• ' + _agdDescComp(x)).join('\n')}\n\nEscolha outro horário — os livres aparecem em verde.`, '⛔');
+    return false;
+}
+function _agdRedesenharAgendas() {
+    renderAgenda();
+    renderMedicoes();
+}
+
+// --- Painel "Disponibilidade do profissional" ---
+const _agdDispCtx = {};
+function _agdDispEscolher(elId, data, hora) {
+    const ctx = _agdDispCtx[elId];
+    if (ctx && ctx.onHora) ctx.onHora(data, hora);
+}
+function _agdDispExpandir(elId) {
+    const ctx = _agdDispCtx[elId] || (_agdDispCtx[elId] = {});
+    ctx.expandido = true;
+    if (ctx.q) _agdRenderDisp(elId, ctx.q);
+}
+// Sem profissional escolhido o painel mostra todos (usuarios ativos e nomes
+// avulsos ja usados), com a situacao de cada um no dia; clicar seleciona.
+// Quem tem papel ligado ao servico (instal.../medi...) vem primeiro.
+function _agdListaProfissionais(elId, q) {
+    const lista = _agdProfissionais();
+    if (!lista.length) return '<div class="agd-disp-vazio">' + _agdIco('user', 22) + '<span>Nenhum profissional cadastrado. Cadastre em Configurações → Usuários ou use "+ Outro" no campo Profissional.</span></div>';
+    const data = q.data || _agdHoje();
+    const alvo = q.tipo === 'med' ? 'medi' : q.tipo === 'inst' ? 'instal' : '';
+    const peso = x => (alvo && _agdNorm(x.sub).includes(alvo) ? 0 : 1);
+    lista.sort((a, b) => peso(a) - peso(b) || a.nome.localeCompare(b.nome, 'pt-BR'));
+    const itens = lista.map(x => {
+        const d = _agdDisponibilidade({ ...q, prof: x.chave, data });
+        let [txt, cls] = d.livres.length ? [d.livres.length + (d.livres.length === 1 ? ' horário livre' : ' horários livres'), 'agd-pill-verde']
+            : d.compromissos.length ? ['Agenda cheia', 'agd-pill-verm'] : ['Indisponível', 'agd-pill-cinza'];
+        if (!d.livres.length) {   // dia sem vaga: mostra quando ha a proxima
+            const n = _agdProximoDiaLivre({ ...q, prof: x.chave, data });
+            if (n) { txt = 'Próx. vaga: ' + _agdFmtData(n.data).slice(0, 5); }
+        }
+        return `<button type="button" class="agd-disp-prof agd-disp-prof-btn" onclick="_agdDispEscolherProf('${elId}', '${escapeHtml(x.chave).replace(/'/g, '&#39;')}')" title="Ver a disponibilidade de ${escapeHtml(x.nome)}">
+            <span class="agd-avatar">${_agdIco('user', 18)}</span>
+            <span class="agd-disp-prof-info"><strong>${escapeHtml(x.nome)}</strong><small>${escapeHtml(x.sub)}</small></span>
+            <span class="agd-pill ${cls}">${txt}</span>
+        </button>`;
+    }).join('');
+    return `<div class="agd-disp-dia">${data === _agdHoje() ? 'Hoje' : _agdFmtData(data)} · escolha o profissional</div><div class="agd-disp-lista">${itens}</div>`;
+}
+function _agdDispEscolherProf(elId, chave) {
+    const ctx = _agdDispCtx[elId];
+    if (ctx && ctx.onProf) ctx.onProf(chave);
+}
+
+// Recarrega usuarios/papeis (cadastro feito em outra aba) e atualiza os
+// seletores de profissional sem perder o que ja estava escolhido.
+function _agdAtualizarListaProf() {
+    try {
+        const u = JSON.parse(localStorage.getItem('sc_usr')), p = JSON.parse(localStorage.getItem('sc_pap'));
+        if (Array.isArray(u)) db.usuarios = u;
+        if (Array.isArray(p)) db.papeis = p;
+    } catch (e) { /* mantem o que esta em memoria */ }
+    [['inst-prof', 'Selecione'], ['med-prof', '— A definir —'], ['agdf-usu', '— A definir —']].forEach(([id, vazio]) => {
+        const sel = document.getElementById(id);
+        if (!sel || sel.value === '__outro') return;
+        const vazioAtual = sel.options[0] ? sel.options[0].text : vazio;
+        _agdPreencherProf(id, sel.value, vazioAtual);
+    });
+}
+
+function _agdRenderDisp(elId, q) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    const ctx = _agdDispCtx[elId] || (_agdDispCtx[elId] = {});
+    const chaveCtx = (q.prof || '') + '|' + (q.data || '') + '|' + (q.dur || '');
+    if (ctx.chave !== chaveCtx) { ctx.expandido = false; ctx.chave = chaveCtx; }
+    ctx.q = q;
+    const cab = `<div class="agd-disp-tit"><span class="agd-disp-tit-ico">${_agdIco('user', 15)}</span>Disponibilidade do profissional</div>`;
+    if (!q.prof) { el.innerHTML = cab + _agdListaProfissionais(elId, q); return; }
+    if (!q.data) {
+        el.innerHTML = cab + `<div class="agd-disp-vazio">${_agdIco('cal', 22)}<span>Selecione a data para ver os horários livres.</span></div>`;
+        return;
+    }
+    const info = _agdProfInfo(q.prof, q.profNome);
+    const d = _agdDisponibilidade(q);
+    const hoje = _agdHoje();
+    const rotDia = q.data === hoje ? 'Hoje'
+        : new Date(q.data + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long' }).replace(/^./, c => c.toUpperCase());
+    const ocupados = d.compromissos.length;
+    const [badgeTxt, badgeCls] = d.livres.length ? ['Disponível', 'agd-pill-verde']
+        : ocupados ? ['Agenda cheia', 'agd-pill-verm'] : ['Indisponível', 'agd-pill-cinza'];
+
+    const grade = d.slots.map(s => {
+        const sel = q.hora && s.hora === _agdHHMM(_agdMin(q.hora)) ? ' agd-slot-sel' : '';
+        const tit = escapeHtml(`${s.hora} · ${s.motivo}`);
+        return s.estado === 'livre'
+            ? `<button type="button" class="agd-slot agd-slot-livre${sel}" title="${tit}" onclick="_agdDispEscolher('${elId}','${q.data}','${s.hora}')">${s.hora}</button>`
+            : `<span class="agd-slot agd-slot-${s.estado}${sel}" title="${tit}" aria-disabled="true">${s.hora}</span>`;
+    }).join('');
+
+    let prox = d.livres.map(h => ({ data: q.data, hora: h })), proxNota = '';
+    if (!prox.length) {
+        const n = _agdProximoDiaLivre(q);
+        if (n) { prox = n.horas.map(h => ({ data: n.data, hora: h })); proxNota = `Sem horário livre neste dia. Próximo dia com vaga: ${_agdFmtData(n.data)}`; }
+        else proxNota = 'Nenhum horário livre nos próximos 30 dias.';
+    }
+    const visiveis = ctx.expandido ? prox : prox.slice(0, 4);
+    const resto = prox.length - visiveis.length;
+    const chips = visiveis.map(x => `<button type="button" class="agd-chip" onclick="_agdDispEscolher('${elId}','${x.data}','${x.hora}')" title="${escapeHtml(_agdFmtData(x.data) + ' às ' + x.hora)}">${x.data !== q.data ? _agdFmtData(x.data).slice(0, 5) + ' ' : ''}${x.hora}</button>`).join('')
+        + (resto > 0 ? `<button type="button" class="agd-chip agd-chip-mais" onclick="_agdDispExpandir('${elId}')" title="Ver todos os horários livres">+${resto}</button>` : '');
+
+    const conflitos = q.hora ? _agdConflitos(q) : [];
+    const aviso = conflitos.length
+        ? `<div class="agd-disp-aviso" role="alert">⛔ ${escapeHtml(_agdPeriodo(q.hora, q.dur))} conflita com ${escapeHtml(conflitos.map(_agdDescComp).join('; '))}</div>`
+        : (q.hora ? `<div class="agd-disp-ok">✓ ${escapeHtml(_agdPeriodo(q.hora, q.dur))} livre para ${escapeHtml(info.nome)}</div>` : '');
+
+    const lista = ocupados
+        ? `<div class="agd-disp-comp"><div class="agd-disp-sub">Compromissos do dia</div>${d.compromissos.map(c =>
+            `<div class="agd-disp-comp-item"><span class="agd-pill ${c.tipo === 'inst' ? 'agd-pill-azul' : 'agd-pill-amar'}">${c.tipo === 'inst' ? 'Instalação' : 'Medição'}</span><span>${_agdHHMM(c.ini)}–${_agdHHMM(c.fim)}</span><span class="agd-disp-comp-cli">${escapeHtml(c.cliente || c.rotulo)}</span></div>`).join('')}</div>`
+        : '';
+
+    el.innerHTML = cab + `
+        <div class="agd-disp-prof">
+            <span class="agd-avatar">${_agdIco('user', 18)}</span>
+            <span class="agd-disp-prof-info"><strong>${escapeHtml(info.nome)}</strong><small>${escapeHtml(info.sub)}</small></span>
+            <span class="agd-pill ${badgeCls}">${badgeTxt}</span>
+        </div>
+        <div class="agd-disp-dia">${escapeHtml(rotDia)} - ${_agdFmtData(q.data)} <small>· ${escapeHtml(_agdFmtDur(q.dur))} por serviço</small></div>
+        <div class="agd-disp-leg">
+            <span><i class="agd-dot agd-dot-livre"></i>Horários disponíveis</span>
+            <span><i class="agd-dot agd-dot-ocupado"></i>Horários ocupados</span>
+            <span><i class="agd-dot agd-dot-indisp"></i>Não disponível</span>
+        </div>
+        <div class="agd-disp-grade">${grade}</div>
+        ${aviso}
+        <div class="agd-disp-sub">Próximos horários livres:</div>
+        ${proxNota ? `<div class="agd-disp-nota">${escapeHtml(proxNota)}</div>` : ''}
+        <div class="agd-disp-prox">${chips}</div>
+        ${lista}`;
+}
+
+// Duracao padrao por tipo de servico e expediente usado na grade.
+function abrirConfigAgenda() {
+    const c = getAgendaConfig();
+    const opt = sel => _AGD_DURACOES.map(m => `<option value="${m}"${m === +sel ? ' selected' : ''}>${_agdFmtDur(m)}</option>`).join('');
+    const corpo = `<div class="agd-form">
+        <div class="form-group"><label for="agdc-inst">Duração padrão — Instalação</label><select id="agdc-inst">${opt(c.dur_inst)}</select></div>
+        <div class="form-group"><label for="agdc-med">Duração padrão — Medição</label><select id="agdc-med">${opt(c.dur_med)}</select></div>
+        <div class="form-group"><label for="agdc-ini">Início do expediente</label><input type="time" id="agdc-ini" value="${escapeHtml(c.inicio)}"></div>
+        <div class="form-group"><label for="agdc-fim">Fim do expediente</label><input type="time" id="agdc-fim" value="${escapeHtml(c.fim)}"></div>
+        <div class="form-group agd-form-largo"><label for="agdc-passo">Intervalo entre horários da grade</label>
+            <select id="agdc-passo"><option value="30"${+c.passo === 30 ? ' selected' : ''}>30 min</option><option value="60"${+c.passo === 60 ? ' selected' : ''}>1 hora</option></select></div>
+    </div>
+    <small class="agd-form-dica">A duração padrão vem marcada em cada novo agendamento e pode ser ajustada individualmente. Vale para as duas agendas.</small>`;
+    const o = _agdAbrirModal('Duração padrão dos serviços', corpo,
+        `<button type="button" class="btn btn-outline btn-sm" onclick="fecharModalAgenda()">Cancelar</button>
+         <button type="button" class="btn btn-success btn-sm" id="agdc-salvar">Salvar</button>`);
+    o.querySelector('#agdc-salvar').onclick = async () => {
+        const ini = document.getElementById('agdc-ini').value, fim = document.getElementById('agdc-fim').value;
+        if (!ini || !fim || _agdMin(fim) <= _agdMin(ini)) { await showAlert('O fim do expediente precisa ser depois do início.', '⚠️'); return; }
+        localStorage.setItem('sc_agd_cfg', JSON.stringify({
+            dur_inst: +document.getElementById('agdc-inst').value,
+            dur_med:  +document.getElementById('agdc-med').value,
+            inicio: ini, fim, passo: +document.getElementById('agdc-passo').value,
+        }));
+        fecharModalAgenda();
+        // Os formularios abertos passam a sugerir a nova duracao padrao.
+        _agdPreencherDur('inst-dur', 'inst');
+        _agdPreencherDur('med-dur', 'med');
+        _agdRedesenharAgendas();
+        toast('Duração padrão salva!', 'success');
+    };
 }
 
 // --- MEDICOES ---------------------------------------------------------------
@@ -7469,6 +7866,25 @@ function _medAtualizar() {
     syncDB();
     renderMedicoes();
     renderDashboardMedicoes();
+    renderAgenda();   // a disponibilidade e compartilhada
+}
+
+// Painel ao lado do formulario "Agendar Visita de Medicao".
+function _medAtualizarDisp() {
+    if (!document.getElementById('med-disp')) return;
+    _agdDispCtx['med-disp'] = Object.assign(_agdDispCtx['med-disp'] || {}, { onHora: (d, h) => {
+        document.getElementById('med-data').value = d;
+        document.getElementById('med-hora').value = h;
+        _medAtualizarDisp();
+    } });
+    const prof = _agdLerProf('med-prof');
+    _agdDispCtx['med-disp'].onProf = ch => { _agdPreencherProf('med-prof', ch, '— A definir —'); _medAtualizarDisp(); };
+    _agdRenderDisp('med-disp', {
+        tipo: 'med', prof: prof.chave, profNome: prof.pessoa.nome,
+        data: document.getElementById('med-data')?.value || '',
+        hora: document.getElementById('med-hora')?.value || '',
+        dur:  parseInt(document.getElementById('med-dur')?.value) || _agdDurPadrao('med'),
+    });
 }
 
 function renderMedicoes() {
@@ -7491,6 +7907,7 @@ function renderMedicoes() {
         _agdCmp(_agdChave(b.data, b.hora), _agdChave(a.data, a.hora)) || (b.realizado_em || 0) - (a.realizado_em || 0));
     _agdPreencher('med-pend', pendF.map(linha), pend.length, 'Nenhuma visita agendada. Use o formulário acima para agendar.', _agdBusca.medPend, ['agendamento', 'agendamentos']);
     _agdPreencher('med-real', realF.map(linha), real.length, 'Nenhuma medição realizada ainda.', _agdBusca.medReal);
+    _medAtualizarDisp();
 }
 
 function abrirDetalheMedicao(id) {
@@ -7500,13 +7917,16 @@ function abrirDetalheMedicao(id) {
     const tel  = m.clienteTel
         ? `<a href="https://wa.me/55${m.clienteTel.replace(/\D/g, '')}" target="_blank" rel="noopener">${escapeHtml(m.clienteTel)}</a>`
         : '—';
+    const dur = +m.duracao || _agdDurPadrao('med');
     const corpo = `<div class="agd-det-topo">${_agdPill(_medPill(m, _agdHoje()))}</div>` + _agdCampos([
         ['Cliente',     escapeHtml(m.clienteNome || '—')],
         ['Telefone',    tel],
         ['Endereço',    escapeHtml(m.endereco || '—')],
         ['Data',        _agdFmtData(m.data)],
-        ['Horário',     escapeHtml(m.hora || '—')],
-        ['Responsável', escapeHtml(nomeUsuario(m.usuario_id) || 'A definir')],
+        ['Horário',     escapeHtml(m.hora ? _agdPeriodo(m.hora, dur) : '—')],
+        ['Duração',     escapeHtml(_agdFmtDur(dur))],
+        ['Responsável', escapeHtml(_medNomeResp(m) || 'A definir')],
+        m.agendado_por ? ['Agendado por', escapeHtml(nomeUsuario(m.agendado_por))] : null,
         ['Observações', escapeHtml(m.obs || '—')],
         m.realizado_em ? ['Confirmada em', _agdFmtMomento(m.realizado_em)] : null,
     ]) + _agdHistorico(m.historico);
@@ -7522,43 +7942,53 @@ function abrirDetalheMedicao(id) {
     _agdAbrirModal('Visita de medição', corpo, rodape);
 }
 
+function _medDisp(id) { return { disp: { tipo: 'med', ignorar: { tipo: 'med', id } } }; }
+
 function editarMedicao(id) {
     const m = (db.medicoes || []).find(x => x.id == id);
     if (!m) return;
     _agdFormulario('Editar agendamento', [
         { id: 'tel',  label: 'Telefone',    tipo: 'text', valor: m.clienteTel },
         { id: 'end',  label: 'Endereço da visita', tipo: 'text', valor: m.endereco, obrig: true },
+        { id: 'usu',  label: 'Responsável pela medição', tipo: 'profissional', valor: _medProf(m) },
         { id: 'data', label: 'Data da visita', tipo: 'date', valor: m.data, obrig: true },
         { id: 'hora', label: 'Horário',     tipo: 'time', valor: m.hora },
-        { id: 'usu',  label: 'Responsável pela medição', tipo: 'usuario', valor: m.usuario_id, largo: true },
+        { id: 'dur',  label: 'Duração do serviço', tipo: 'duracao', valor: m.duracao },
         { id: 'obs',  label: 'Observações', tipo: 'textarea', valor: m.obs, largo: true },
     ], v => {
-        m.clienteTel = v.tel; m.endereco = v.end; m.data = v.data; m.hora = v.hora;
-        m.usuario_id = v.usu; m.obs = v.obs;
+        const atual = (db.medicoes || []).find(x => x.id == id);   // relido na validacao
+        if (!atual) return;
+        atual.clienteTel = v.tel; atual.endereco = v.end; atual.data = v.data; atual.hora = v.hora;
+        atual.duracao = v.dur; atual.obs = v.obs;
+        _medDefinirResponsavel(atual, v.usu.pessoa);
         _medAtualizar();
         toast('Agendamento atualizado!', 'success');
         abrirDetalheMedicao(id);
-    }, () => abrirDetalheMedicao(id));
+    }, () => abrirDetalheMedicao(id), _medDisp(id));
 }
 
 function reagendarMedicao(id) {
     const m = (db.medicoes || []).find(x => x.id == id);
     if (!m) return;
     _agdFormulario('Reagendar visita', [
+        { id: 'usu',  label: 'Responsável pela medição', tipo: 'profissional', valor: _medProf(m) },
+        { id: 'dur',  label: 'Duração do serviço', tipo: 'duracao', valor: m.duracao },
         { id: 'data', label: 'Nova data', tipo: 'date', valor: m.data, obrig: true },
         { id: 'hora', label: 'Horário',   tipo: 'time', valor: m.hora },
-        { id: 'usu',  label: 'Responsável pela medição', tipo: 'usuario', valor: m.usuario_id, largo: true },
         { id: 'obs',  label: 'Observações', tipo: 'textarea', valor: m.obs, largo: true },
     ], v => {
-        if (v.data !== m.data || v.hora !== (m.hora || '')) {
-            if (!m.historico) m.historico = [];
-            _agdRegistrar(m.historico, 'reagendado', { de: { data: m.data, hora: m.hora || '' }, para: { data: v.data, hora: v.hora } });
+        const atual = (db.medicoes || []).find(x => x.id == id);
+        if (!atual) return;
+        if (v.data !== atual.data || v.hora !== (atual.hora || '')) {
+            if (!atual.historico) atual.historico = [];
+            _agdRegistrar(atual.historico, 'reagendado', { de: { data: atual.data, hora: atual.hora || '' }, para: { data: v.data, hora: v.hora } });
         }
-        m.data = v.data; m.hora = v.hora; m.usuario_id = v.usu; m.obs = v.obs;
+        atual.data = v.data; atual.hora = v.hora; atual.duracao = v.dur; atual.obs = v.obs;
+        _medDefinirResponsavel(atual, v.usu.pessoa);
         _medAtualizar();
         toast('Visita reagendada!', 'success');
         abrirDetalheMedicao(id);
-    }, () => abrirDetalheMedicao(id));
+    }, () => abrirDetalheMedicao(id), _medDisp(id));
 }
 
 async function confirmarMedicao(id) {
@@ -7575,12 +8005,13 @@ async function confirmarMedicao(id) {
 }
 
 // Cancelar nao apaga: o registro fica com status Cancelado e o momento, fora
-// das duas colunas e fora da contagem de realizadas.
+// das duas colunas e fora da contagem de realizadas. O horario do
+// profissional fica livre de novo.
 async function cancelarMedicao(id) {
     const m = (db.medicoes || []).find(x => x.id == id);
     if (!m || m.status !== 'Agendado') return;
     fecharModalAgenda();
-    const ok = await showConfirm(`Cancelar a visita de ${m.clienteNome || 'cliente'} em ${_agdFmtData(m.data)}?`, '⚠️', 'Sim, cancelar', 'Não');
+    const ok = await showConfirm(`Cancelar a visita de ${m.clienteNome || 'cliente'} em ${_agdFmtData(m.data)}?\n\nO horário do profissional fica livre.`, '⚠️', 'Sim, cancelar', 'Não');
     if (!ok) { abrirDetalheMedicao(id); return; }
     if (!m.historico) m.historico = [];
     _agdRegistrar(m.historico, 'cancelado');
@@ -7756,10 +8187,25 @@ function renderDashboardInstalacoes() {
 }
 
 // --- INSTALACOES --------------------------------------------------------------
-// Cada linha e um pedido. Pendentes: Pronto p/ Instalacao e Aguardando
-// Pagamento. Realizados: Instalado. A data da instalacao e a data_entrega do
-// pedido (a mesma do Kanban e do formulario do pedido).
-const _INST_PENDENTES = ['Pronto p/ Instalação', 'Aguardando Pagamento'];
+// O agendamento vive no proprio pedido (um pedido = no maximo uma instalacao),
+// entao nao ha como duplicar. Fluxo:
+//   Na Costura -> Pronto p/ Instalacao  => card em "Pedidos Prontos para Instalacao"
+//   Agendar (profissional/data/horario) => coluna "Agendamentos de Instalacao"
+//   Confirmar instalacao                => coluna "Realizados" (Instalado ou
+//                                          Aguardando Pagamento, conforme o saldo)
+// A data da instalacao e a data_entrega do pedido (a mesma do Kanban).
+
+// Pedido antigo (antes do campo inst_agendado) conta como agendado se ja
+// tinha data -- era assim que a agenda o tratava.
+function _instAgendada(p) {
+    if (!p) return false;
+    if (p.inst_agendado !== undefined) return !!p.inst_agendado;
+    return !!p.data_entrega;
+}
+function _instPendente(p) { return normalizarStatus(p.status) === 'Pronto p/ Instalação' && _instAgendada(p); }
+function _instRealizada(p) { const s = normalizarStatus(p.status); return s === 'Instalado' || s === 'Aguardando Pagamento'; }
+function _instProntos() { return db.pedidos.filter(p => normalizarStatus(p.status) === 'Pronto p/ Instalação' && !_instAgendada(p)); }
+function _instDur(p) { return +p.inst_duracao || _agdDurPadrao('inst'); }
 
 function _instPill(p, hoje) {
     const s = normalizarStatus(p.status);
@@ -7769,24 +8215,195 @@ function _instPill(p, hoje) {
     return p.data_entrega < hoje ? 'atrasado' : 'agendado';
 }
 
-// Data mostrada no Realizado: o dia em que virou Instalado; pedido antigo sem
+// Data mostrada no Realizado: o dia em que foi confirmada; pedido antigo sem
 // esse registro usa a data agendada.
-function _instDiaRealizado(p) { return p.data_instalado ? _agdDiaLocal(p.data_instalado) : (p.data_entrega || ''); }
+function _instDiaRealizado(p) {
+    const ts = p.inst_confirmada_em || p.data_instalado;
+    return ts ? _agdDiaLocal(ts) : (p.data_entrega || '');
+}
 
 // A agenda e o Kanban ficam na mesma pagina: o que muda o pedido aqui
-// (confirmar, reagendar, desmarcar) redesenha os dois, sem recarregar.
+// (agendar, confirmar, reagendar, cancelar) redesenha os dois, sem recarregar.
 function _instAtualizar() {
     syncDB();
     renderAgenda();
+    renderMedicoes();   // a disponibilidade e compartilhada
     renderKanban();
     renderDashboardInstalacoes();
 }
 
+// Botao do Kanban ("📅 Agendar") e links de outras telas: abre a agenda de
+// instalacoes com o pedido ja selecionado no formulario.
+function irParaAgendaInstalacao(id) {
+    if (!document.getElementById('inst-form')) {
+        window.location.href = 'pcp.html?view=agenda&pedido=' + encodeURIComponent(id);
+        return;
+    }
+    mostrarViewPCP('agenda');
+    const p = db.pedidos.find(x => x.id == id);
+    if (p && _instPendente(p)) { abrirDetalheInstalacao(p.id); return; }
+    selecionarPedidoInstalacao(id);
+    document.getElementById('inst-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// --- Cards "Pedidos Prontos para Instalacao" + formulario "Agendar Instalacao" ---
+let _instSelId = null;
+
+function _instRenderProntos() {
+    const lista = document.getElementById('inst-prontos-lista');
+    if (!lista) return;
+    const prontos = _instProntos().sort((a, b) => _agdCmp(_agdChave(a.data_entrega, ''), _agdChave(b.data_entrega, '')) || a.id - b.id);
+    if (_instSelId && !prontos.some(p => p.id == _instSelId)) _instLimparForm();
+    const cont = document.getElementById('inst-prontos-count');
+    if (cont) cont.textContent = prontos.length + (prontos.length === 1 ? ' pedido' : ' pedidos');
+    lista.innerHTML = prontos.length ? prontos.map(p => `
+        <button type="button" class="agd-pronto${p.id == _instSelId ? ' agd-pronto-sel' : ''}" onclick="selecionarPedidoInstalacao(${p.id})" title="Agendar a instalação deste pedido">
+            <span class="agd-pronto-ico">${_agdIco('caixa', 18)}</span>
+            <span class="agd-pronto-info">
+                <span class="agd-pronto-top"><strong>#${formatPedidoId(p.id)}</strong><span class="agd-pill agd-pill-verde">Pronto para Instalação</span></span>
+                <span class="agd-pronto-linha"><em>Cliente:</em> ${escapeHtml(p.clienteNome || '—')}</span>
+                <span class="agd-pronto-linha"><em>Produto:</em> ${escapeHtml(p.amb || '—')}</span>
+                <span class="agd-pronto-linha"><em>Entrega:</em> ${p.data_entrega ? _agdFmtData(p.data_entrega) : 'a definir'}</span>
+            </span>
+            <span class="agd-seta">${_agdIco('seta', 16)}</span>
+        </button>`).join('')
+        : '<div class="agd-vazio agd-prontos-vazio">Nenhum pedido aguardando agendamento. Ao passar um pedido de "Na Costura" para "Pronto p/ Instalação" ele aparece aqui.</div>';
+
+    const sel = document.getElementById('inst-pedido');
+    if (sel) {
+        sel.innerHTML = '<option value="">Selecione um pedido pronto para instalação</option>' +
+            prontos.map(p => `<option value="${p.id}">#${formatPedidoId(p.id)} - ${escapeHtml(p.clienteNome || '')}</option>`).join('');
+        sel.value = _instSelId ? String(_instSelId) : '';
+    }
+}
+
+function _instLimparForm() {
+    _instSelId = null;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) { el.value = v; el.classList.remove('agd-erro'); } };
+    set('inst-pedido', '');
+    set('inst-data', _agdHoje());
+    set('inst-hora', '');
+    set('inst-end', '');
+    set('inst-obs', '');
+    _agdPreencherProf('inst-prof', '', 'Selecione');
+    _agdPreencherDur('inst-dur', 'inst');
+    const sub = document.getElementById('inst-pedido-sub'); if (sub) sub.innerHTML = '';
+    const cli = document.getElementById('inst-cliente');
+    if (cli) cli.innerHTML = '<span class="agd-cli-vazio">Preenchido ao selecionar o pedido</span>';
+}
+
+// Seleciona o pedido e preenche cliente, telefone, endereco e o que o pedido
+// ja tiver (instalador, observacoes, duracao).
+function selecionarPedidoInstalacao(id) {
+    const p = id ? db.pedidos.find(x => x.id == id) : null;
+    if (!p) { _instLimparForm(); _instRenderProntos(); _instAtualizarDisp(); return; }
+    if (normalizarStatus(p.status) !== 'Pronto p/ Instalação' || _instAgendada(p)) {
+        toast(_instAgendada(p) ? `O pedido #${formatPedidoId(p.id)} já está agendado.` : `O pedido #${formatPedidoId(p.id)} não está pronto para instalação.`, 'info');
+        return;
+    }
+    _instSelId = p.id;
+    const cli = db.clientes.find(c => c.id == p.clienteId);
+    const hoje = _agdHoje();
+    const set = (eid, v) => { const el = document.getElementById(eid); if (el) { el.value = v; el.classList.remove('agd-erro'); } };
+    set('inst-end', p.inst_endereco || cli?.end || '');
+    set('inst-obs', p.inst_obs || '');
+    set('inst-data', p.data_entrega && p.data_entrega >= hoje ? p.data_entrega : hoje);
+    set('inst-hora', '');
+    _agdPreencherProf('inst-prof', _instProf(p), 'Selecione');
+    _agdPreencherDur('inst-dur', 'inst', p.inst_duracao);
+    const sub = document.getElementById('inst-pedido-sub');
+    if (sub) sub.innerHTML = `<span class="agd-pill agd-pill-verde">Pronto para Instalação</span><span>Produto: ${escapeHtml(p.amb || '—')}</span>`;
+    const box = document.getElementById('inst-cliente');
+    if (box) box.innerHTML = `<strong>${escapeHtml(p.clienteNome || '—')}</strong>` +
+        (cli?.tel ? `<span class="agd-linha">${_agdIco('tel', 12)}${escapeHtml(cli.tel)}</span>` : '');
+    _instRenderProntos();
+    _instAtualizarDisp();
+}
+
+function _instAtualizarDisp() {
+    if (!document.getElementById('inst-disp')) return;
+    _agdDispCtx['inst-disp'] = Object.assign(_agdDispCtx['inst-disp'] || {}, { onHora: (d, h) => {
+        document.getElementById('inst-data').value = d;
+        document.getElementById('inst-hora').value = h;
+        document.getElementById('inst-hora').classList.remove('agd-erro');
+        _instAtualizarDisp();
+    } });
+    const prof = _agdLerProf('inst-prof');
+    _agdDispCtx['inst-disp'].onProf = ch => { _agdPreencherProf('inst-prof', ch, 'Selecione'); _instAtualizarDisp(); };
+    _agdRenderDisp('inst-disp', {
+        tipo: 'inst', prof: prof.chave, profNome: prof.pessoa.nome,
+        data: document.getElementById('inst-data')?.value || '',
+        hora: document.getElementById('inst-hora')?.value || '',
+        dur:  parseInt(document.getElementById('inst-dur')?.value) || _agdDurPadrao('inst'),
+    });
+}
+
+async function salvarAgendamentoInstalacao() {
+    const campos = {
+        pedido: document.getElementById('inst-pedido'),
+        prof:   document.getElementById('inst-prof'),
+        data:   document.getElementById('inst-data'),
+        hora:   document.getElementById('inst-hora'),
+    };
+    Object.values(campos).forEach(el => el && el.classList.remove('agd-erro'));
+    const prof = _agdLerProf('inst-prof');
+    const v = {
+        id:   parseInt(campos.pedido?.value) || null,
+        data: campos.data?.value || '',
+        hora: campos.hora?.value || '',
+        dur:  parseInt(document.getElementById('inst-dur')?.value) || _agdDurPadrao('inst'),
+        end:  (document.getElementById('inst-end')?.value || '').trim(),
+        obs:  (document.getElementById('inst-obs')?.value || '').trim(),
+    };
+    const faltando = [];
+    if (!v.id)       faltando.push(['pedido', 'o pedido']);
+    if (!prof.chave) faltando.push(['prof', 'o profissional']);
+    if (!v.data)     faltando.push(['data', 'a data']);
+    if (!v.hora)     faltando.push(['hora', 'o horário']);
+    if (faltando.length) {
+        faltando.forEach(([k]) => campos[k]?.classList.add('agd-erro'));
+        campos[faltando[0][0]]?.focus();
+        await showAlert(`Informe ${faltando.map(f => f[1]).join(', ')}.`, '⚠️');
+        return;
+    }
+
+    // Confere de novo contra o que esta gravado: outro usuario/aba pode ter
+    // agendado o pedido ou ocupado o horario desde que a tela foi aberta.
+    if (!await _agdValidarDisp({ prof: prof.chave, profNome: prof.pessoa.nome, data: v.data, hora: v.hora, dur: v.dur })) { _agdRedesenharAgendas(); return; }
+    const p = db.pedidos.find(x => x.id == v.id);
+    if (!p || normalizarStatus(p.status) !== 'Pronto p/ Instalação') {
+        await showAlert('Este pedido não está mais em "Pronto p/ Instalação".', '⚠️');
+        _instLimparForm(); _agdRedesenharAgendas(); return;
+    }
+    if (_instAgendada(p)) {
+        const quem = p.inst_agendado_por ? ` por ${nomeUsuario(p.inst_agendado_por)}` : '';
+        await showAlert(`O pedido #${formatPedidoId(p.id)} já foi agendado${quem} para ${_agdFmtData(p.data_entrega)}${p.inst_hora ? ' às ' + p.inst_hora : ''}.\n\nNenhum agendamento novo foi criado.`, 'ℹ️');
+        _instLimparForm(); _agdRedesenharAgendas(); return;
+    }
+
+    p.data_entrega   = v.data;
+    p.inst_hora      = v.hora;
+    p.inst_duracao   = v.dur;
+    p.inst_endereco  = v.end;
+    p.inst_obs       = v.obs;
+    definirInstalador(p, prof.pessoa);
+    p.inst_agendado     = true;
+    p.inst_agendado_por = getUsuarioLogado()?.id || null;
+    p.inst_agendado_em  = Date.now();
+    if (!p.inst_historico) p.inst_historico = [];
+    _agdRegistrar(p.inst_historico, 'agendado', { para: { data: v.data, hora: v.hora }, prof: nomeInstalador(p) });
+
+    _instLimparForm();
+    _instAtualizar();
+    toast(`Instalação do pedido #${formatPedidoId(p.id)} agendada!`, 'success');
+}
+
 function renderAgenda() {
     if (!document.getElementById('inst-pend-lista')) return;
+    _instRenderProntos();
     const hoje = _agdHoje();
-    const pend = db.pedidos.filter(p => _INST_PENDENTES.includes(normalizarStatus(p.status)));
-    const real = db.pedidos.filter(p => normalizarStatus(p.status) === 'Instalado');
+    const pend = db.pedidos.filter(_instPendente);
+    const real = db.pedidos.filter(_instRealizada);
     const filtra = (lista, chave) => {
         const b = _agdNorm(_agdBusca[chave]);
         if (!b) return lista;
@@ -7798,7 +8415,7 @@ function renderAgenda() {
         return _agdLinha({
             onclick: `abrirDetalheInstalacao(${p.id})`,
             nome: p.clienteNome,
-            sub:  `Pedido #${formatPedidoId(p.id)}${p.amb ? ' · ' + p.amb : ''}`,
+            sub:  `Pedido #${formatPedidoId(p.id)}${p.amb ? ' · ' + p.amb : ''}${nomeInstalador(p) ? ' · ' + nomeInstalador(p) : ''}`,
             tel:  cli?.tel,
             end:  p.inst_endereco || cli?.end,
             data: realizado ? _instDiaRealizado(p) : p.data_entrega,
@@ -7809,16 +8426,18 @@ function renderAgenda() {
     const pendF = filtra(pend, 'instPend').sort((a, b) =>
         _agdCmp(_agdChave(a.data_entrega, a.inst_hora), _agdChave(b.data_entrega, b.inst_hora)));
     const realF = filtra(real, 'instReal').sort((a, b) =>
-        (b.data_instalado || 0) - (a.data_instalado || 0) || _agdCmp(_agdChave(b.data_entrega, b.inst_hora), _agdChave(a.data_entrega, a.inst_hora)));
-    _agdPreencher('inst-pend', pendF.map(p => linha(p, false)), pend.length, 'Nenhum pedido aguardando instalação.', _agdBusca.instPend, ['agendamento', 'agendamentos']);
+        (b.inst_confirmada_em || b.data_instalado || 0) - (a.inst_confirmada_em || a.data_instalado || 0)
+        || _agdCmp(_agdChave(b.data_entrega, b.inst_hora), _agdChave(a.data_entrega, a.inst_hora)));
+    _agdPreencher('inst-pend', pendF.map(p => linha(p, false)), pend.length, 'Nenhuma instalação agendada. Selecione um pedido pronto acima para agendar.', _agdBusca.instPend, ['agendamento', 'agendamentos']);
     _agdPreencher('inst-real', realF.map(p => linha(p, true)), real.length, 'Nenhuma instalação realizada ainda.', _agdBusca.instReal);
+    _instAtualizarDisp();
 }
 
 function abrirDetalheInstalacao(id) {
     const p = db.pedidos.find(x => x.id == id);
     if (!p) return;
     const cli   = db.clientes.find(c => c.id == p.clienteId);
-    const pend  = _INST_PENDENTES.includes(normalizarStatus(p.status));
+    const pend  = _instPendente(p);
     const pagto = statusPagamento(p);
     const tel   = cli?.tel
         ? `<a href="https://wa.me/55${cli.tel.replace(/\D/g, '')}" target="_blank" rel="noopener">${escapeHtml(cli.tel)}</a>`
@@ -7829,16 +8448,20 @@ function abrirDetalheInstalacao(id) {
         ['Telefone',    tel],
         ['Endereço',    escapeHtml(p.inst_endereco || cli?.end || '—')],
         ['Data',        _agdFmtData(p.data_entrega)],
-        ['Horário',     escapeHtml(p.inst_hora || '—')],
+        ['Horário',     escapeHtml(p.inst_hora ? _agdPeriodo(p.inst_hora, _instDur(p)) : '—')],
+        ['Duração',     escapeHtml(_agdFmtDur(_instDur(p)))],
         ['Instalador',  escapeHtml(nomeInstalador(p) || 'A definir')],
+        p.inst_agendado_por ? ['Agendado por', escapeHtml(nomeUsuario(p.inst_agendado_por))] : null,
+        p.vendedor_nome ? ['Vendedor', escapeHtml(p.vendedor_nome)] : null,
         ['Ambientes',   escapeHtml(p.amb || '—')],
         ['Valor',       'R$ ' + (p.valor || 0).toFixed(2)],
         ['Pagamento',   escapeHtml(pagto.label || '—')],
         ['Observações', escapeHtml(p.inst_obs || '—')],
+        p.inst_confirmada_em ? ['Confirmada em', _agdFmtMomento(p.inst_confirmada_em)] : null,
         p.data_instalado ? ['Instalado em', _agdFmtMomento(p.data_instalado)] : null,
     ]) + _agdHistorico(p.inst_historico);
     const rodape = pend
-        ? `${p.data_entrega ? `<button class="btn btn-outline btn-sm btn-danger" onclick="desmarcarInstalacao(${p.id})">✕ Desmarcar data</button>` : ''}
+        ? `<button class="btn btn-outline btn-sm btn-danger" onclick="cancelarAgendamentoInstalacao(${p.id})">✕ Cancelar agendamento</button>
            <button class="btn btn-outline btn-sm" onclick="fecharModalAgenda();abrirOS(${p.id})">📋 OS</button>
            <button class="btn btn-outline btn-sm" onclick="editarInstalacao(${p.id})">✏️ Editar</button>
            <button class="btn btn-outline btn-sm" onclick="reagendarInstalacao(${p.id})">📅 Reagendar</button>
@@ -7855,77 +8478,83 @@ async function _instConfirmarNovaData(p, novaData) {
         '📅', 'Confirmar', 'Cancelar');
 }
 
+function _instDispOpts(id) { return { disp: { tipo: 'inst', ignorar: { tipo: 'inst', id } } }; }
+
+// Grava a edicao/reagendamento: o pedido e relido depois da validacao da agenda.
+async function _instGravarEdicao(id, v, titulo) {
+    const p = db.pedidos.find(x => x.id == id);
+    if (!p || !_instPendente(p)) { await showAlert('Esta instalação não está mais agendada.', '⚠️'); fecharModalAgenda(); _agdRedesenharAgendas(); return; }
+    if (!await _instConfirmarNovaData(p, v.data)) return false;
+    if (v.data !== p.data_entrega || v.hora !== (p.inst_hora || '')) {
+        if (!p.inst_historico) p.inst_historico = [];
+        _agdRegistrar(p.inst_historico, 'reagendado', { de: { data: p.data_entrega || '', hora: p.inst_hora || '' }, para: { data: v.data, hora: v.hora } });
+    }
+    if (v.end !== undefined) p.inst_endereco = v.end;
+    p.data_entrega = v.data;
+    p.inst_hora    = v.hora;
+    p.inst_duracao = v.dur || _agdDurPadrao('inst');
+    p.inst_obs     = v.obs;
+    definirInstalador(p, v.usu.pessoa);
+    _instAtualizar();
+    toast(titulo, 'success');
+    abrirDetalheInstalacao(id);
+}
+
 function editarInstalacao(id) {
     const p = db.pedidos.find(x => x.id == id);
     if (!p) return;
     const cli = db.clientes.find(c => c.id == p.clienteId);
     _agdFormulario('Editar instalação', [
         { id: 'end',  label: 'Endereço da instalação', tipo: 'text', valor: p.inst_endereco, largo: true, placeholder: cli?.end || 'Endereço da instalação…' },
-        { id: 'data', label: 'Data de instalação', tipo: 'date', valor: p.data_entrega },
-        { id: 'hora', label: 'Horário', tipo: 'time', valor: p.inst_hora },
-        { id: 'usu',  label: 'Quem vai instalar', tipo: 'pessoa', valor: nomeInstalador(p), largo: true },
+        { id: 'usu',  label: 'Profissional', tipo: 'profissional', valor: _instProf(p), obrig: true, vazio: 'Selecione' },
+        { id: 'dur',  label: 'Duração do serviço', tipo: 'duracao', valor: p.inst_duracao },
+        { id: 'data', label: 'Data de instalação', tipo: 'date', valor: p.data_entrega, obrig: true },
+        { id: 'hora', label: 'Horário', tipo: 'time', valor: p.inst_hora, obrig: true },
         { id: 'obs',  label: 'Observações', tipo: 'textarea', valor: p.inst_obs, largo: true },
-    ], async v => {
-        if (v.data && !await _instConfirmarNovaData(p, v.data)) return false;
-        p.inst_endereco = v.end;
-        p.data_entrega  = v.data || null;
-        p.inst_hora     = v.hora;
-        definirInstalador(p, resolverPessoa(v.usu));
-        p.inst_obs      = v.obs;
-        _instAtualizar();
-        toast('Instalação atualizada!', 'success');
-        abrirDetalheInstalacao(id);
-    }, () => abrirDetalheInstalacao(id));
+    ], v => _instGravarEdicao(id, v, 'Instalação atualizada!'), () => abrirDetalheInstalacao(id), _instDispOpts(id));
 }
 
 function reagendarInstalacao(id) {
     const p = db.pedidos.find(x => x.id == id);
     if (!p) return;
     _agdFormulario('Reagendar instalação', [
+        { id: 'usu',  label: 'Profissional', tipo: 'profissional', valor: _instProf(p), obrig: true, vazio: 'Selecione' },
+        { id: 'dur',  label: 'Duração do serviço', tipo: 'duracao', valor: p.inst_duracao },
         { id: 'data', label: 'Nova data', tipo: 'date', valor: p.data_entrega, obrig: true },
-        { id: 'hora', label: 'Horário', tipo: 'time', valor: p.inst_hora },
-        { id: 'usu',  label: 'Quem vai instalar', tipo: 'pessoa', valor: nomeInstalador(p), largo: true },
+        { id: 'hora', label: 'Horário', tipo: 'time', valor: p.inst_hora, obrig: true },
         { id: 'obs',  label: 'Observações', tipo: 'textarea', valor: p.inst_obs, largo: true },
-    ], async v => {
-        if (!await _instConfirmarNovaData(p, v.data)) return false;
-        if (v.data !== p.data_entrega || v.hora !== (p.inst_hora || '')) {
-            if (!p.inst_historico) p.inst_historico = [];
-            _agdRegistrar(p.inst_historico, 'reagendado', { de: { data: p.data_entrega || '', hora: p.inst_hora || '' }, para: { data: v.data, hora: v.hora } });
-        }
-        p.data_entrega = v.data; p.inst_hora = v.hora; definirInstalador(p, resolverPessoa(v.usu)); p.inst_obs = v.obs;
-        _instAtualizar();
-        toast('Instalação reagendada!', 'success');
-        abrirDetalheInstalacao(id);
-    }, () => abrirDetalheInstalacao(id));
+    ], v => _instGravarEdicao(id, v, 'Instalação reagendada!'), () => abrirDetalheInstalacao(id), _instDispOpts(id));
 }
 
-// Tira data e horario; o pedido continua pendente, no fim da lista, ate ser
-// reagendado. O que havia fica no historico.
-async function desmarcarInstalacao(id) {
+// Cancela o agendamento: o horario do profissional fica livre e o pedido volta
+// para os cards "Pedidos Prontos para Instalacao", pronto para ser agendado de
+// novo. O que havia fica no historico.
+async function cancelarAgendamentoInstalacao(id) {
     const p = db.pedidos.find(x => x.id == id);
-    if (!p || !p.data_entrega) return;
+    if (!p || !_instPendente(p)) return;
     fecharModalAgenda();
-    const ok = await showConfirm(`Desmarcar a instalação do pedido #${formatPedidoId(p.id)} em ${_agdFmtData(p.data_entrega)}?\n\nO pedido continua na agenda, sem data, até ser reagendado.`, '⚠️', 'Desmarcar', 'Voltar');
+    const ok = await showConfirm(`Cancelar a instalação do pedido #${formatPedidoId(p.id)}${p.data_entrega ? ' em ' + _agdFmtData(p.data_entrega) : ''}?\n\nO horário do profissional fica livre e o pedido volta para "Pedidos Prontos para Instalação".`, '⚠️', 'Sim, cancelar', 'Voltar');
     if (!ok) { abrirDetalheInstalacao(id); return; }
     if (!p.inst_historico) p.inst_historico = [];
-    _agdRegistrar(p.inst_historico, 'desmarcado', { de: { data: p.data_entrega, hora: p.inst_hora || '' } });
-    p.data_entrega = null;
-    p.inst_hora = '';
+    _agdRegistrar(p.inst_historico, 'cancelado', { de: { data: p.data_entrega || '', hora: p.inst_hora || '' } });
+    p.inst_agendado = false;
+    p.data_entrega  = null;
+    p.inst_hora     = '';
     _instAtualizar();
-    toast('Data da instalação desmarcada.', 'info');
+    toast('Agendamento cancelado. O pedido voltou para os prontos.', 'info');
 }
 
-// Mesmo fluxo do Kanban: pago -> Instalado (vai para Realizados); com saldo ->
-// Aguardando Pagamento (continua pendente, com esse selo).
+// Mesmo desfecho do Kanban: pago -> Instalado; com saldo -> Aguardando
+// Pagamento. Nos dois casos a instalacao foi feita: vai para Realizados.
 function confirmarInstalacao(id) {
     const p = db.pedidos.find(x => x.id == id);
-    if (!p || !_INST_PENDENTES.includes(normalizarStatus(p.status))) return;
+    if (!p || !_instPendente(p)) return;
     fecharModalAgenda();
     mostrarModalPagamento(p, resultado => {
         if (!resultado) { abrirDetalheInstalacao(id); return; }
         aplicarConfirmacaoEntrega(p, resultado);
         _instAtualizar();
-        toast(resultado === 'pago' ? 'Instalação confirmada!' : 'Pedido em Aguardando Pagamento.', resultado === 'pago' ? 'success' : 'info');
+        toast(resultado === 'pago' ? 'Instalação confirmada!' : 'Instalação confirmada. Pedido em Aguardando Pagamento.', resultado === 'pago' ? 'success' : 'info');
     });
 }
 
@@ -7940,6 +8569,7 @@ function mostrarViewPCP(view) {
     document.getElementById('tab-btn-agenda').className   = 'tab-btn' + (view === 'agenda'   ? ' active' : '');
     document.getElementById('tab-btn-medicoes').className = 'tab-btn' + (view === 'medicoes' ? ' active' : '');
     if (view === 'kanban')   renderKanban();
+    if (view === 'agenda' || view === 'medicoes') _agdAtualizarListaProf();
     if (view === 'agenda')   renderAgenda();
     if (view === 'medicoes') renderMedicoes();
     _tabBackBtn('.tab-nav', _prevViewPCP, () => mostrarViewPCP(_prevViewPCP));
@@ -8120,7 +8750,10 @@ document.addEventListener('DOMContentLoaded', () => {
         renderKanban();
     }
     if (document.getElementById('os-container'))       renderOS();
-    if (document.getElementById('agenda-container'))   renderAgenda();
+    if (document.getElementById('agenda-container')) {
+        _instLimparForm();
+        renderAgenda();
+    }
     if (document.getElementById('tb-rel-fat'))         renderRelatorios();
 
     // Medições
@@ -8129,11 +8762,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sel) sel.innerHTML = '<option value="">— Selecione —</option>' +
             db.clientes.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
         const dataEl = document.getElementById('med-data');
-        if (dataEl) dataEl.value = new Date().toISOString().split('T')[0];
-        preencherSelectUsuarios('med-usuario', '— A definir —');
+        if (dataEl) dataEl.value = _agdHoje();
+        _agdPreencherProf('med-prof', '', '— A definir —');
+        _agdPreencherDur('med-dur', 'med');
         renderMedicoes();
-        const urlView = new URLSearchParams(window.location.search).get('view');
+        const params  = new URLSearchParams(window.location.search);
+        const urlView = params.get('view');
         if (urlView) mostrarViewPCP(urlView);
+        // Vindo de outra tela com ?pedido=: o pedido ja chega selecionado.
+        if (urlView === 'agenda' && params.get('pedido')) irParaAgendaInstalacao(params.get('pedido'));
+
+        // Outra aba/usuario mexeu nas agendas: a disponibilidade se atualiza aqui.
+        window.addEventListener('storage', e => {
+            if (e.key === 'sc_usr' || e.key === 'sc_pap') { _agdAtualizarListaProf(); _agdRedesenharAgendas(); return; }
+            if (e.key !== 'sc_ped' && e.key !== 'sc_med' && e.key !== 'sc_agd_cfg') return;
+            _agdRecarregar();
+            _agdRedesenharAgendas();
+            if (document.getElementById('kanban-board')) renderKanban();
+        });
     }
 
     if (document.getElementById('tb-vendedores')) {

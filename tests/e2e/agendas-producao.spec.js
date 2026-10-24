@@ -22,8 +22,8 @@ const MED = () => [
 ];
 
 const PED = () => [
-    { id: 26010, clienteId: 1, clienteNome: 'Pedro Alves',  status: 'Pronto p/ Instalação', valor: 1000, valor_recebido: 0, data_entrega: dia(3), inst_hora: '10:00', amb: 'Sala' },
-    { id: 26011, clienteId: 2, clienteNome: 'Bruna Costa',  status: 'Pronto p/ Instalação', valor: 800,  data_entrega: dia(1), inst_hora: '15:00' },
+    { id: 26010, clienteId: 1, clienteNome: 'Pedro Alves',  status: 'Pronto p/ Instalação', valor: 1000, valor_recebido: 0, data_entrega: dia(3), inst_hora: '10:00', amb: 'Sala', usuario_instalacao_id: 1 },
+    { id: 26011, clienteId: 2, clienteNome: 'Bruna Costa',  status: 'Pronto p/ Instalação', valor: 800,  data_entrega: dia(1), inst_hora: '15:00', usuario_instalacao_id: 1 },
     { id: 26012, clienteId: 1, clienteNome: 'Sem Data Ltda', status: 'Pronto p/ Instalação', valor: 500 },
     { id: 26013, clienteId: 2, clienteNome: 'Rita Instalada', status: 'Instalado', valor: 300, valor_recebido: 300, data_entrega: dia(-10), data_instalado: Date.now() - 86400000 * 9 },
     { id: 26014, clienteId: 2, clienteNome: 'Orçamento Fora', status: 'Orçamento', valor: 100, data_entrega: dia(2) },
@@ -183,14 +183,28 @@ test('medicoes: o realizado ainda permite criar o pedido', async ({ page }) => {
 
 // --- Instalacoes ----------------------------------------------------------------
 
-test('instalacoes: mesmo layout, sem formulario, pedidos nas colunas certas', async ({ page }) => {
+test('instalacoes: tres areas -- prontos, formulario + disponibilidade, colunas', async ({ page }) => {
     await abrir(page, 'agenda');
-    await expect(page.locator('#pcp-view-agenda .agd-form-card')).toHaveCount(0);
-    expect(await nomes(page, 'inst-pend-lista'), 'data mais proxima primeiro; sem data no fim')
-        .toEqual(['Bruna Costa', 'Pedro Alves', 'Sem Data Ltda']);
+    await expect(page.locator('#pcp-view-agenda .agd-prontos')).toBeVisible();
+    await expect(page.locator('#inst-form')).toContainText('Agendar Instalação');
+    await expect(page.locator('#inst-disp')).toContainText('Disponibilidade do profissional');
+    expect(await nomes(page, 'inst-pend-lista'), 'data mais proxima primeiro')
+        .toEqual(['Bruna Costa', 'Pedro Alves']);
+    await expect(page.locator('#inst-prontos-lista'), 'pronto sem data ainda nao foi agendado').toContainText('Sem Data Ltda');
+    await expect(page.locator('#inst-prontos-count')).toHaveText('1 pedido');
     expect(await nomes(page, 'inst-real-lista')).toEqual(['Rita Instalada']);
     await expect(page.locator('#pcp-view-agenda')).not.toContainText('Orçamento Fora');
-    await expect(page.locator('#inst-pend-lista .agd-item').nth(2).locator('.agd-pill')).toHaveText('Sem data');
+});
+
+test('instalacoes: em cima, o formulario fica ao lado do painel; embaixo, as colunas', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await abrir(page, 'agenda');
+    const [pr, fo, di, co] = await Promise.all(['.agd-prontos', '#inst-form', '#inst-disp', '#agenda-container']
+        .map(s => page.locator('#pcp-view-agenda ' + s).boundingBox()));
+    expect(fo.y).toBeGreaterThan(pr.y + pr.height - 1);
+    expect(Math.abs(fo.y - di.y), 'lado a lado').toBeLessThan(3);
+    expect(di.x).toBeGreaterThan(fo.x + fo.width - 1);
+    expect(co.y).toBeGreaterThan(Math.max(fo.y + fo.height, di.y + di.height) - 1);
 });
 
 test('instalacoes: a busca aceita o numero do pedido', async ({ page }) => {
@@ -212,12 +226,13 @@ test('instalacoes: confirmar com pagamento completo vai para Realizados como Ins
     expect(p.data_instalado).toBeGreaterThan(0);
 });
 
-test('instalacoes: confirmar com saldo deixa em Aguardando Pagamento, ainda pendente', async ({ page }) => {
+test('instalacoes: confirmar com saldo vai para Realizados como Aguardando Pagamento', async ({ page }) => {
     await abrir(page, 'agenda');
     await page.locator('#inst-pend-lista .agd-item', { hasText: 'Pedro Alves' }).click();
     await page.click('.agd-modal button:has-text("Confirmar instalação")');
     await page.click('#mpg-nao');
-    const linha = page.locator('#inst-pend-lista .agd-item', { hasText: 'Pedro Alves' });
+    await expect(page.locator('#inst-pend-lista')).not.toContainText('Pedro Alves');
+    const linha = page.locator('#inst-real-lista .agd-item', { hasText: 'Pedro Alves' });
     await expect(linha.locator('.agd-pill')).toHaveText('Aguard. pagamento');
     expect((await lerPed(page)).find(x => x.id === 26010).status).toBe('Aguardando Pagamento');
 });
@@ -236,17 +251,18 @@ test('instalacoes: reagendar muda a data do pedido e guarda o historico', async 
     expect((await lerPed(page)).length, 'nenhum pedido novo').toBe(5);
 });
 
-test('instalacoes: desmarcar tira a data, mantem o pedido e registra', async ({ page }) => {
+test('instalacoes: cancelar o agendamento devolve o pedido aos prontos e registra', async ({ page }) => {
     await abrir(page, 'agenda');
     await page.locator('#inst-pend-lista .agd-item', { hasText: 'Bruna Costa' }).click();
-    await page.click('.agd-modal button:has-text("Desmarcar data")');
+    await page.click('.agd-modal button:has-text("Cancelar agendamento")');
     await confirmar(page);
-    const linha = page.locator('#inst-pend-lista .agd-item', { hasText: 'Bruna Costa' });
-    await expect(linha.locator('.agd-pill')).toHaveText('Sem data');
+    await expect(page.locator('#inst-pend-lista')).not.toContainText('Bruna Costa');
+    await expect(page.locator('#inst-prontos-lista')).toContainText('Bruna Costa');
     const p = (await lerPed(page)).find(x => x.id === 26011);
     expect(p.data_entrega).toBeNull();
+    expect(p.inst_agendado).toBe(false);
     expect(p.status).toBe('Pronto p/ Instalação');
-    expect(p.inst_historico[0]).toMatchObject({ acao: 'desmarcado', de: { data: dia(1), hora: '15:00' } });
+    expect(p.inst_historico[0]).toMatchObject({ acao: 'cancelado', de: { data: dia(1), hora: '15:00' } });
 });
 
 test('instalacoes: editar grava endereco e observacoes no pedido', async ({ page }) => {

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Produção - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261019h">
+    <link rel="stylesheet" href="css/style.css?v=20261024b">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
@@ -56,8 +56,65 @@
             <div id="kanban-board" class="kanban-board"></div>
         </div>
         <div id="pcp-view-agenda" style="display:none">
-            <!-- Agenda de Instalacoes: cada linha e um pedido. Sem formulario:
-                 a instalacao nasce ao avancar o pedido para Pronto p/ Instalacao. -->
+            <!-- Agenda de Instalacoes em tres areas: pedidos prontos (cards), formulario
+                 + disponibilidade do profissional, e as colunas agendamentos/realizados.
+                 O agendamento sempre comeca pela selecao de um pedido pronto. -->
+            <section class="card agd-prontos" aria-labelledby="inst-prontos-titulo">
+                <header class="agd-prontos-head">
+                    <h3 id="inst-prontos-titulo">Pedidos Prontos para Instalação</h3>
+                    <span class="agd-count" id="inst-prontos-count">0 pedidos</span>
+                </header>
+                <div class="agd-prontos-lista" id="inst-prontos-lista"></div>
+            </section>
+
+            <div class="agd-agendar">
+                <section class="card agd-form-card" id="inst-form" aria-labelledby="inst-form-titulo">
+                    <h3 id="inst-form-titulo">Agendar Instalação</h3>
+                    <div class="agd-inst-grid">
+                        <div class="form-group agd-span2">
+                            <label for="inst-pedido">Pedido <span style="color:var(--danger)">*</span></label>
+                            <div class="agd-pedido-box">
+                                <select id="inst-pedido" onchange="selecionarPedidoInstalacao(this.value)"></select>
+                                <div class="agd-pedido-sub" id="inst-pedido-sub"></div>
+                            </div>
+                        </div>
+                        <div class="form-group agd-span2">
+                            <label>Cliente</label>
+                            <div class="agd-cli-box" id="inst-cliente" aria-live="polite"></div>
+                        </div>
+                        <div class="form-group agd-span2">
+                            <label for="inst-prof">Profissional <span style="color:var(--danger)">*</span></label>
+                            <select id="inst-prof" onchange="_agdProfMudou('inst-prof');_instAtualizarDisp()"></select>
+                            <input type="text" id="inst-prof-outro" class="agd-prof-outro" placeholder="Nome do profissional" autocomplete="off" hidden oninput="_instAtualizarDisp()">
+                        </div>
+                        <div class="form-group">
+                            <label for="inst-data">Data da instalação <span style="color:var(--danger)">*</span></label>
+                            <input type="date" id="inst-data" onchange="_instAtualizarDisp()">
+                        </div>
+                        <div class="form-group">
+                            <label for="inst-hora">Horário <span style="color:var(--danger)">*</span></label>
+                            <input type="time" id="inst-hora" oninput="_instAtualizarDisp()">
+                        </div>
+                        <div class="form-group agd-span2">
+                            <label for="inst-dur">Duração do serviço <button type="button" class="agd-cfg-btn" onclick="abrirConfigAgenda()" title="Definir a duração padrão por tipo de serviço" aria-label="Definir a duração padrão por tipo de serviço"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg></button></label>
+                            <select id="inst-dur" onchange="_instAtualizarDisp()"></select>
+                        </div>
+                        <div class="form-group agd-span2">
+                            <label for="inst-end">Endereço de instalação</label>
+                            <input type="text" id="inst-end" placeholder="Rua, nº, bairro, cidade...">
+                        </div>
+                        <div class="form-group agd-span4">
+                            <label for="inst-obs">Observações</label>
+                            <input type="text" id="inst-obs" placeholder="Referências, ponto de encontro, instruções...">
+                        </div>
+                    </div>
+                    <div class="agd-form-rodape">
+                        <button class="btn btn-success" id="inst-btn-agendar" onclick="salvarAgendamentoInstalacao()">📅 Agendar Instalação</button>
+                    </div>
+                </section>
+                <aside class="card agd-disp" id="inst-disp" aria-live="polite" aria-label="Disponibilidade do profissional"></aside>
+            </div>
+
             <div id="agenda-container" class="agd-colunas">
                 <section class="card agd-col" aria-labelledby="inst-pend-titulo">
                     <header class="agd-col-head">
@@ -88,6 +145,7 @@
             </div>
         </div>
         <div id="pcp-view-medicoes" style="display:none">
+            <div class="agd-agendar">
             <div class="card agd-form-card">
                 <h3>Agendar Visita de Medição</h3>
 
@@ -124,25 +182,28 @@
                         </select>
                     </div>
                     <div class="form-group">
+                        <label for="med-prof">Responsável pela medição</label>
+                        <select id="med-prof" onchange="_agdProfMudou('med-prof');_medAtualizarDisp()"></select>
+                        <input type="text" id="med-prof-outro" class="agd-prof-outro" placeholder="Nome do profissional" autocomplete="off" hidden oninput="_medAtualizarDisp()">
+                        <small class="agd-form-dica">A visita aparece como alerta para esta pessoa.</small>
+                    </div>
+                    <div class="form-group">
                         <label for="med-data">Data da visita <span style="color:var(--danger)">*</span></label>
-                        <input type="date" id="med-data">
+                        <input type="date" id="med-data" onchange="_medAtualizarDisp()">
                     </div>
                     <div class="form-group">
                         <label for="med-hora">Horário</label>
-                        <input type="time" id="med-hora">
+                        <input type="time" id="med-hora" oninput="_medAtualizarDisp()">
                     </div>
                     <div class="form-group">
+                        <label for="med-dur">Duração do serviço <button type="button" class="agd-cfg-btn" onclick="abrirConfigAgenda()" title="Definir a duração padrão por tipo de serviço" aria-label="Definir a duração padrão por tipo de serviço"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg></button></label>
+                        <select id="med-dur" onchange="_medAtualizarDisp()"></select>
+                    </div>
+                    <div class="form-group agd-span2">
                         <label for="med-end">Endereço da visita <span style="color:var(--danger)">*</span></label>
                         <input type="text" id="med-end" placeholder="Rua, nº, bairro, cidade…">
                     </div>
-                    <div class="form-group">
-                        <label for="med-usuario">Responsável pela medição</label>
-                        <select id="med-usuario">
-                            <option value="">— A definir —</option>
-                        </select>
-                        <small class="agd-form-dica">A visita aparece como alerta para esta pessoa.</small>
-                    </div>
-                    <div class="form-group agd-span2">
+                    <div class="form-group agd-span2" style="grid-column:1 / -1">
                         <label for="med-obs">Observações</label>
                         <input type="text" id="med-obs" placeholder="Referências, ponto de encontro, instruções…">
                     </div>
@@ -151,6 +212,8 @@
                 <div class="agd-form-rodape">
                     <button class="btn btn-success" onclick="salvarMedicao()">📐 Agendar Visita</button>
                 </div>
+            </div>
+            <aside class="card agd-disp" id="med-disp" aria-live="polite" aria-label="Disponibilidade do profissional"></aside>
             </div>
 
             <div id="medicoes-container" class="agd-colunas">
@@ -183,7 +246,7 @@
             </div>
         </div>
     </main>
-    <script src="js/app.js?v=20261019h"></script>
+    <script src="js/app.js?v=20261024b"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const view = new URLSearchParams(window.location.search).get('view');
