@@ -174,11 +174,115 @@ test('medicoes: cancelar tira dos agendamentos e nao conta como realizada', asyn
     expect(m.endereco, 'nada apagado').toBe('Av. Brasil, 250');
 });
 
-test('medicoes: o realizado ainda permite criar o pedido', async ({ page }) => {
+// --- Medicoes: Criar Pedido a partir do agendamento ---------------------------
+
+// Medicao do cliente cadastrado Pedro Alves (id 1), para o pedido preencher o cliente.
+const MED_PEDRO = { id: 7, clienteId: 1, clienteNome: 'Pedro Alves', endereco: 'Rua A, 1', data: dia(1), hora: '11:00', status: 'Agendado' };
+const VEND = [{ id: 1, nome: 'Ana', comissao_pct: 5 }];
+
+async function abrirComPedro(page, extras) {
+    await abrir(page, 'medicoes', { sc_med: [...MED(), MED_PEDRO], sc_vend: VEND, ...(extras || {}) });
+}
+// O ambiente do pedido novo nao passou pelo "Calcular Consumo"; marca como
+// calculado e salva. Nao aguarda: salvar pode abrir modal.
+async function salvarPedidoNovo(page) {
+    await page.selectOption('#ped-vendedor', '1');
+    await page.evaluate(() => { pedidoDraft.ambientes.forEach(a => { a.calculado = true; }); salvarPedido(); });
+}
+
+test('medicoes: o agendado mostra Criar Pedido junto do Confirmar', async ({ page }) => {
+    await abrir(page, 'medicoes');
+    await page.locator('#med-pend-lista .agd-item', { hasText: 'Carlos Souza' }).click();
+    const modal = page.locator('.agd-modal');
+    await expect(modal.locator('button', { hasText: 'Criar Pedido' })).toBeVisible();
+    await expect(modal.locator('button', { hasText: 'Confirmar medição' }), 'confirmar manual continua').toBeVisible();
+});
+
+test('medicoes: o realizado nao mostra mais Criar Pedido nem Reagendar', async ({ page }) => {
     await abrir(page, 'medicoes');
     await page.locator('#med-real-lista .agd-item', { hasText: 'João Silva' }).click();
-    await expect(page.locator('.agd-modal button', { hasText: 'Criar Pedido' })).toBeVisible();
-    await expect(page.locator('.agd-modal button', { hasText: 'Reagendar' })).toHaveCount(0);
+    const modal = page.locator('.agd-modal');
+    await expect(modal.locator('button', { hasText: 'Excluir' })).toBeVisible();
+    await expect(modal.locator('button', { hasText: 'Criar Pedido' })).toHaveCount(0);
+    await expect(modal.locator('button', { hasText: 'Reagendar' })).toHaveCount(0);
+});
+
+test('medicoes: Criar Pedido abre o pedido com o cliente e, ao salvar, a medicao vai para Realizados vinculada', async ({ page }) => {
+    await abrirComPedro(page);
+    await page.locator('#med-pend-lista .agd-item', { hasText: 'Pedro Alves' }).click();
+    await page.click('.agd-modal button:has-text("Criar Pedido")');
+    await page.waitForURL(/pedido\.html/);
+    await expect(page.locator('#ped-cliente')).toHaveValue('1');
+    await salvarPedidoNovo(page);
+    await page.waitForURL(/index\.html/);
+
+    const peds = await lerPed(page);
+    expect(peds.length, 'um pedido novo').toBe(PED().length + 1);
+    const novo = peds.find(p => p.medicao_id === 7);
+    expect(novo, 'pedido guarda a medicao').toBeTruthy();
+    expect(novo.clienteNome).toBe('Pedro Alves');
+    const m = (await lerMed(page)).find(x => x.id === 7);
+    expect(m.status, 'realizado sem confirmar a mao').toBe('Realizado');
+    expect(m.pedido_id).toBe(novo.id);
+    expect(m.realizado_via).toBe('pedido');
+    expect(m.realizado_em).toBeGreaterThan(0);
+    expect(m.historico.map(h => h.acao)).toContain('pedido');
+
+    await page.goto(BASE + '/pcp.html?view=medicoes');
+    await expect(page.locator('#med-real-lista')).toContainText('Pedro Alves');
+    await expect(page.locator('#med-pend-lista')).not.toContainText('Pedro Alves');
+});
+
+test('medicoes: agendamento que ja tem pedido abre esse pedido em vez de criar outro', async ({ page }) => {
+    const ped = { id: 26020, clienteId: 1, clienteNome: 'Pedro Alves', status: 'Orçamento', valor: 10, medicao_id: 7,
+        ambientes: [{ id: 1, amb: 'Sala', calculado: true, tecidos: [] }], itens: [] };
+    await abrirComPedro(page, { sc_ped: [...PED(), ped], sc_med: [...MED(), { ...MED_PEDRO, pedido_id: 26020 }] });
+    await page.locator('#med-pend-lista .agd-item', { hasText: 'Pedro Alves' }).click();
+    const modal = page.locator('.agd-modal');
+    await expect(modal.locator('button', { hasText: 'Criar Pedido' })).toHaveCount(0);
+    await modal.locator('button', { hasText: 'Abrir Pedido' }).click();
+    await page.waitForURL(/pedido\.html/);
+    await expect(page.locator('#titulo-pagina-pedido')).toContainText('Editando Pedido');
+    expect((await lerPed(page)).length, 'nada criado').toBe(PED().length + 1);
+});
+
+test('medicoes: salvar um segundo pedido para o mesmo agendamento e barrado', async ({ page }) => {
+    await abrirComPedro(page);
+    await page.locator('#med-pend-lista .agd-item', { hasText: 'Pedro Alves' }).click();
+    await page.click('.agd-modal button:has-text("Criar Pedido")');
+    await page.waitForURL(/pedido\.html/);
+    // Enquanto isso, outra aba ja criou o pedido deste agendamento.
+    await page.evaluate(() => {
+        db.pedidos.push({ id: 26030, clienteId: 1, clienteNome: 'Pedro Alves', status: 'Orçamento', valor: 1, medicao_id: 7 });
+        db.medicoes.find(m => m.id === 7).pedido_id = 26030;
+    });
+    await salvarPedidoNovo(page);
+    await expect(page.locator('#sc-modal-msg')).toContainText('já tem o pedido');
+    expect((await lerPed(page)).length, 'nenhum pedido gravado').toBe(PED().length);
+    expect(page.url()).toContain('pedido.html');
+});
+
+test('medicoes: editar o pedido vinculado mantem o vinculo', async ({ page }) => {
+    const ped = { id: 26020, clienteId: 1, clienteNome: 'Pedro Alves', status: 'Orçamento', valor: 10, medicao_id: 7, vendedor_id: 1,
+        ambientes: [{ id: 1, amb: 'Sala', calculado: true, tecidos: [] }], itens: [] };
+    await entrar(page, BASE, { sc_ped: [ped], sc_vend: VEND, sc_cli: [{ id: 1, nome: 'Pedro Alves' }],
+        sc_med: [{ ...MED_PEDRO, status: 'Realizado', pedido_id: 26020 }], sc_editando_id: 26020 });
+    await page.goto(BASE + '/pedido.html');
+    await salvarPedidoNovo(page);
+    await page.waitForURL(/index\.html/);
+    const peds = await lerPed(page);
+    expect(peds.length).toBe(1);
+    expect(peds[0].medicao_id).toBe(7);
+});
+
+test('medicoes: o realizado com pedido mostra Abrir Pedido', async ({ page }) => {
+    const ped = { id: 26020, clienteId: 1, clienteNome: 'Pedro Alves', status: 'Orçamento', valor: 10, medicao_id: 7 };
+    await abrirComPedro(page, { sc_ped: [...PED(), ped], sc_med: [...MED(), { ...MED_PEDRO, status: 'Realizado', pedido_id: 26020, realizado_em: Date.now(), realizado_via: 'pedido' }] });
+    await page.locator('#med-real-lista .agd-item', { hasText: 'Pedro Alves' }).click();
+    const modal = page.locator('.agd-modal');
+    await expect(modal).toContainText('ao salvar o pedido');
+    await expect(modal.locator('button', { hasText: 'Abrir Pedido' })).toBeVisible();
+    await expect(modal.locator('button', { hasText: 'Criar Pedido' })).toHaveCount(0);
 });
 
 // --- Instalacoes ----------------------------------------------------------------

@@ -4729,6 +4729,8 @@ function mostrarTabEstoque(tab) {
 
 // --- FORMULÁRIO DE PEDIDO (MULTI-AMBIENTE + ACESSÓRIOS) ---
 let editandoIdPedido = null;
+// Agendamento de medicao que originou o pedido novo ("Criar Pedido" na agenda).
+let pedidoMedicaoId = null;
 let pedidoDraft = { ambientes: [], itens: [] };
 let _ambienteCounter = 0;
 
@@ -5213,14 +5215,25 @@ async function salvarPedido() {
             // RT antiga (campo livre que saiu da tela): editar o pedido nao a apaga.
             dadosPedido.arquiteto_nome     = db.pedidos[index].arquiteto_nome     || '';
             dadosPedido.rt_pct             = db.pedidos[index].rt_pct             || 0;
+            // Editar nao desfaz o vinculo com o agendamento de medicao.
+            if (db.pedidos[index].medicao_id != null) dadosPedido.medicao_id = db.pedidos[index].medicao_id;
             if (dadosPedido.status === 'Na Costura' && !dadosPedido.baixa_realizada) {
                 realizarBaixaEstoque(dadosPedido);
             }
             db.pedidos[index] = dadosPedido;
         }
     } else {
+        // Vindo de "Criar Pedido" na agenda: se o agendamento ja ganhou pedido
+        // (outra aba, botao voltar), nao cria um segundo.
+        const med = pedidoMedicaoId ? (db.medicoes || []).find(m => m.id == pedidoMedicaoId) : null;
+        const jaTem = _medPedidoVinculado(med);
+        if (jaTem) {
+            await showAlert(`Este agendamento de medição já tem o pedido #${formatPedidoId(jaTem.id)}.\nAbra esse pedido para alterá-lo.`, '⚠️');
+            return;
+        }
         dadosPedido.id = gerarNumeroPedido();
         dadosPedido.data_criacao = Date.now();
+        if (med) _medVincularPedido(med, dadosPedido);
         dadosPedido.criado_por = getUsuarioLogado()?.id || null;
         if (dadosPedido.status === 'Na Costura') {
             realizarBaixaEstoque(dadosPedido);
@@ -7106,14 +7119,45 @@ function onMedClienteChange() {
     if (endEl && cli.end) endEl.value = cli.end;
 }
 
-function criarPedidoDaMedicao(medicaoId) {
-    const m = db.medicoes.find(x => x.id == medicaoId);
+// Pedido ligado ao agendamento de medicao. O vinculo vale nos dois sentidos
+// (medicao.pedido_id e pedido.medicao_id); um pedido excluido desfaz o vinculo.
+function _medPedidoVinculado(m) {
+    if (!m) return null;
+    return (m.pedido_id && db.pedidos.find(p => p.id == m.pedido_id))
+        || db.pedidos.find(p => p.medicao_id != null && p.medicao_id == m.id)
+        || null;
+}
+
+// Abre o fluxo de pedido com o cliente preenchido. Se o agendamento ja tem
+// pedido, abre esse pedido para edicao em vez de criar outro.
+async function criarPedidoDaMedicao(medicaoId) {
+    const m = (db.medicoes || []).find(x => x.id == medicaoId);
     if (!m) return;
+    const ped = _medPedidoVinculado(m);
+    if (ped) { editarPedido(ped.id); return; }
+    if (!await exigirPermissao('pedidos', 'completo')) return;
+    localStorage.removeItem('sc_editando_id');
     localStorage.setItem('sc_novo_pedido_pre', JSON.stringify({
         clienteId:   m.clienteId   || null,
         clienteNome: m.clienteNome || '',
+        medicaoId:   m.id,
     }));
     window.location.href = 'pedido.html';
+}
+
+// Chamado ao salvar um pedido novo vindo de "Criar Pedido": liga os dois e,
+// se a visita ainda estava agendada, ela passa para Realizados sozinha.
+function _medVincularPedido(m, ped) {
+    m.pedido_id = ped.id;
+    ped.medicao_id = m.id;
+    if (!m.historico) m.historico = [];
+    _agdRegistrar(m.historico, 'pedido', { pedido: ped.id });
+    if (m.status === 'Agendado') {
+        m.status = 'Realizado';
+        m.realizado_em  = Date.now();
+        m.realizado_por = getUsuarioLogado()?.id || null;
+        m.realizado_via = 'pedido';
+    }
 }
 
 async function salvarMedicao() {
@@ -7380,6 +7424,7 @@ function _agdDescHist(x) {
     if (x.acao === 'reagendado') return `${quando}: reagendado de ${fmt(x.de)} para ${fmt(x.para)}${por}`;
     if (x.acao === 'desmarcado') return `${quando}: data desmarcada, era ${fmt(x.de)}${por}`;
     if (x.acao === 'cancelado')  return `${quando}: agendamento cancelado${x.de ? ', era ' + fmt(x.de) : ''}${por}`;
+    if (x.acao === 'pedido')     return `${quando}: pedido #${formatPedidoId(x.pedido)} criado a partir deste agendamento${por}`;
     return `${quando}: ${x.acao}${por}`;
 }
 function _agdHistorico(h) {
@@ -7914,6 +7959,7 @@ function abrirDetalheMedicao(id) {
     const m = (db.medicoes || []).find(x => x.id == id);
     if (!m) return;
     const pend = m.status === 'Agendado';
+    const ped  = _medPedidoVinculado(m);
     const tel  = m.clienteTel
         ? `<a href="https://wa.me/55${m.clienteTel.replace(/\D/g, '')}" target="_blank" rel="noopener">${escapeHtml(m.clienteTel)}</a>`
         : '—';
@@ -7928,17 +7974,23 @@ function abrirDetalheMedicao(id) {
         ['Responsável', escapeHtml(_medNomeResp(m) || 'A definir')],
         m.agendado_por ? ['Agendado por', escapeHtml(nomeUsuario(m.agendado_por))] : null,
         ['Observações', escapeHtml(m.obs || '—')],
-        m.realizado_em ? ['Confirmada em', _agdFmtMomento(m.realizado_em)] : null,
+        m.realizado_em ? ['Confirmada em', _agdFmtMomento(m.realizado_em) + (m.realizado_via === 'pedido' ? ' (ao salvar o pedido)' : '')] : null,
+        ped ? ['Pedido', `#${formatPedidoId(ped.id)}`] : null,
     ]) + _agdHistorico(m.historico);
+    // Com pedido ja criado o botao abre esse pedido: o agendamento nunca gera dois.
+    const btnPedido = ped
+        ? `<button class="btn btn-outline btn-sm" onclick="criarPedidoDaMedicao(${m.id})" title="Abre o pedido criado a partir deste agendamento">📄 Abrir Pedido #${formatPedidoId(ped.id)}</button>`
+        : (pend ? `<button class="btn btn-sm" onclick="criarPedidoDaMedicao(${m.id})" title="Abre o formulário de pedido com o cliente já preenchido. Ao salvar, a medição vai para Realizados.">+ Criar Pedido</button>` : '');
     const rodape = pend
         ? `<button class="btn btn-outline btn-sm btn-danger" onclick="cancelarMedicao(${m.id})">✕ Cancelar agendamento</button>
            <button class="btn btn-outline btn-sm" onclick="fecharModalAgenda();imprimirAgendamentoMedicao(${m.id})">🖨️ Documento</button>
            <button class="btn btn-outline btn-sm" onclick="editarMedicao(${m.id})">✏️ Editar</button>
            <button class="btn btn-outline btn-sm" onclick="reagendarMedicao(${m.id})">📅 Reagendar</button>
+           ${btnPedido}
            <button class="btn btn-success btn-sm" onclick="confirmarMedicao(${m.id})">✓ Confirmar medição</button>`
         : `<button class="btn btn-outline btn-sm btn-danger" onclick="excluirMedicao(${m.id})">🗑️ Excluir</button>
            <button class="btn btn-outline btn-sm" onclick="fecharModalAgenda();imprimirAgendamentoMedicao(${m.id})">🖨️ Documento</button>
-           <button class="btn btn-success btn-sm" onclick="criarPedidoDaMedicao(${m.id})" title="Abre o formulário de pedido com o cliente já preenchido">+ Criar Pedido</button>`;
+           ${btnPedido}`;
     _agdAbrirModal('Visita de medição', corpo, rodape);
 }
 
@@ -8679,6 +8731,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.removeItem('sc_novo_pedido_pre');
                 try {
                     const d = JSON.parse(prePed);
+                    pedidoMedicaoId = d.medicaoId || null;
                     if (d.clienteId || d.clienteNome) {
                         const buscaEl = document.getElementById('ped-cliente-busca');
                         if (buscaEl && d.clienteNome) buscaEl.value = d.clienteNome;
