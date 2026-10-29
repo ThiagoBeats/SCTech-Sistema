@@ -1,6 +1,7 @@
 // "Parcelamento" virou "Forma de Pagamento". As opcoes sao so nomes, definidos
-// pela empresa em Configuracoes > Empresa; o pedido guarda o nome e o
-// Financeiro lanca um unico valor. Pedido antigo, com codigo de plano,
+// pela empresa em Configuracoes > Empresa, cada uma com um % de desconto que
+// preenche o desconto do pedido; o pedido guarda o nome e o Financeiro lanca um
+// unico valor. Pedido antigo, com codigo de plano,
 // continua mostrando a forma e dividindo como antes.
 const { test, expect } = require('@playwright/test');
 const { entrar } = require('./ajuda.js');
@@ -130,7 +131,7 @@ test('empresa: adicionar, renomear, reordenar e remover, gravando so ao salvar',
     expect(await ler(page, 'sc_formas_pag'), 'nada gravado antes de salvar').toBeNull();
 
     await page.click('button:has-text("Salvar Formas de Pagamento")');
-    expect(await ler(page, 'sc_formas_pag')).toEqual(['PIX', 'Dinheiro', 'À vista', '30% entrada + 70% na instalação']);
+    expect(await ler(page, 'sc_formas_pag')).toEqual(['PIX', 'Dinheiro', 'À vista', '30% entrada + 70% na instalação'].map(nome => ({ nome, desconto: 0 })));
 
     await page.goto(BASE + '/pedido.html');
     expect(await opcoes(page)).toEqual(['PIX', 'Dinheiro', 'À vista', '30% entrada + 70% na instalação']);
@@ -145,7 +146,7 @@ test('empresa: nomes vazios e repetidos sao descartados ao salvar', async ({ pag
     await page.click('button:has-text("Adicionar forma de pagamento")');
     await linhas(page).nth(3).fill(' Boleto ');
     await page.click('button:has-text("Salvar Formas de Pagamento")');
-    expect(await ler(page, 'sc_formas_pag')).toEqual(['PIX', 'Boleto']);
+    expect(await ler(page, 'sc_formas_pag')).toEqual([{ nome: 'PIX', desconto: 0 }, { nome: 'Boleto', desconto: 0 }]);
     await expect(linhas(page)).toHaveCount(2);
 });
 
@@ -155,7 +156,7 @@ test('empresa: nao deixa salvar a lista vazia', async ({ page }) => {
     await expect(page.locator('#emp-formas-pag')).toContainText('Nenhuma forma cadastrada');
     await page.click('button:has-text("Salvar Formas de Pagamento")');
     await expect(page.locator('#sc-modal-msg')).toContainText('pelo menos uma');
-    expect(await ler(page, 'sc_formas_pag')).toEqual(['PIX']);
+    expect(await ler(page, 'sc_formas_pag'), 'a lista antiga, so com nomes, fica como estava').toEqual(['PIX']);
 });
 
 test('empresa: restaurar padrao volta a lista original', async ({ page }) => {
@@ -163,4 +164,87 @@ test('empresa: restaurar padrao volta a lista original', async ({ page }) => {
     await page.click('button:has-text("Restaurar Padrão") >> nth=-1');
     expect(await linhas(page).evaluateAll(l => l.map(i => i.value))).toEqual(PADRAO);
     expect(await ler(page, 'sc_formas_pag')).toBeNull();
+});
+
+// --- Desconto por forma de pagamento -----------------------------------------
+
+const FORMAS_DESC = [
+    { nome: 'À vista', desconto: 5 },
+    { nome: 'Cartão em 10x', desconto: 0 },
+    { nome: 'PIX', desconto: 7.5 },
+];
+const desconto = page => page.locator('#ped-desconto');
+
+test('empresa: cada forma tem o % de desconto, gravado ao salvar', async ({ page }) => {
+    await abrir(page, 'empresa.html', { sc_formas_pag: FORMAS_DESC });
+    const campos = page.locator('#emp-formas-pag .forma-pag-desconto');
+    await expect(campos).toHaveCount(3);
+    expect(await campos.evaluateAll(l => l.map(i => i.value))).toEqual(['5', '0', '7.5']);
+    await campos.nth(1).fill('3');
+    await campos.nth(0).fill('150');   // acima de 100 vira 100
+    await page.click('button:has-text("Adicionar forma de pagamento")');
+    await linhas(page).nth(3).fill('Boleto');
+    await page.locator('#emp-formas-pag .forma-pag-desconto').nth(3).fill('-2');   // negativo vira 0
+    await page.click('button:has-text("Salvar Formas de Pagamento")');
+    expect(await ler(page, 'sc_formas_pag')).toEqual([
+        { nome: 'À vista', desconto: 100 }, { nome: 'Cartão em 10x', desconto: 3 },
+        { nome: 'PIX', desconto: 7.5 }, { nome: 'Boleto', desconto: 0 },
+    ]);
+});
+
+test('empresa: subir e descer leva o desconto junto', async ({ page }) => {
+    await abrir(page, 'empresa.html', { sc_formas_pag: FORMAS_DESC });
+    await page.locator('#emp-formas-pag .forma-pag-linha').nth(2).locator('button[title="Subir"]').click();
+    await page.click('button:has-text("Salvar Formas de Pagamento")');
+    expect((await ler(page, 'sc_formas_pag')).map(f => [f.nome, f.desconto]))
+        .toEqual([['À vista', 5], ['PIX', 7.5], ['Cartão em 10x', 0]]);
+});
+
+test('empresa: lista antiga so com nomes abre com desconto 0', async ({ page }) => {
+    await abrir(page, 'empresa.html', { sc_formas_pag: ['PIX', 'Boleto'] });
+    expect(await page.locator('#emp-formas-pag .forma-pag-desconto').evaluateAll(l => l.map(i => i.value))).toEqual(['0', '0']);
+});
+
+test('pedido novo: o desconto vem da forma marcada e muda ao trocar a forma', async ({ page }) => {
+    await abrir(page, 'pedido.html', { sc_formas_pag: FORMAS_DESC });
+    await expect(page.locator('#ped-forma-pagamento')).toHaveValue('À vista');
+    await expect(page.locator('#ped-forma-pagamento option').first()).toHaveText('À vista (5% de desconto)');
+    await expect(page.locator('#ped-forma-pagamento option').nth(1)).toHaveText('Cartão em 10x');
+    await expect(desconto(page)).toHaveValue('5');
+    await page.selectOption('#ped-forma-pagamento', 'PIX');
+    await expect(desconto(page)).toHaveValue('7.5');
+    await page.selectOption('#ped-forma-pagamento', 'Cartão em 10x');
+    await expect(desconto(page)).toHaveValue('0');
+});
+
+test('pedido: o desconto da forma continua editavel e o valor editado e o gravado', async ({ page }) => {
+    await abrir(page, 'pedido.html', { sc_formas_pag: FORMAS_DESC });
+    await page.selectOption('#ped-forma-pagamento', 'PIX');
+    await page.evaluate(() => {
+        pedidoDraft.ambientes.forEach(a => { a.calculado = true; });
+        pedidoDraft.itens = [{ materialId: 1, nome: 'X', quantidade: 1, preco_unit: 1000, subtotal: 1000 }];
+        atualizarTotalPedido();
+    });
+    await expect(page.locator('#ped-desconto-val')).toHaveText('75.00');
+    await desconto(page).fill('10');
+    await expect(page.locator('#ped-desconto-val')).toHaveText('100.00');
+    await page.fill('#ped-cliente-busca', 'Cli Teste');
+    await page.evaluate(() => filtrarClientes());
+    await page.selectOption('#ped-cliente', '9');
+    await page.selectOption('#ped-vendedor', '1');
+    await page.evaluate(() => { salvarPedido(); });
+    await page.waitForURL(/index\.html/);
+    const ped = (await ler(page, 'sc_ped'))[0];
+    expect(ped.forma_pagamento).toBe('PIX');
+    expect(ped.desconto_pct).toBe(10);
+});
+
+test('editar pedido mantem o desconto gravado nele, nao o da forma', async ({ page }) => {
+    await abrir(page, 'pedido.html', {
+        sc_formas_pag: FORMAS_DESC,
+        sc_ped: [PED_ANTIGO({ forma_pagamento: 'PIX', desconto_pct: 2 })], sc_editando_id: 25001 });
+    await expect(page.locator('#ped-forma-pagamento')).toHaveValue('PIX');
+    await expect(desconto(page)).toHaveValue('2');
+    await page.selectOption('#ped-forma-pagamento', 'À vista');   // trocar a forma, ai sim, aplica
+    await expect(desconto(page)).toHaveValue('5');
 });

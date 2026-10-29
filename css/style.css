@@ -1731,5 +1731,15 @@ html[data-theme="dark"] .kanban-inst-pend { color: #F7DE86; }
 .forma-pag-linha .btn-sm { margin-right: 0; }
 .forma-pag-ordem { width: 22px; text-align: center; font-size: 12px; font-weight: 700; color: var(--muted); flex-shrink: 0; }
 .forma-pag-nome { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; background: var(--white); color: var(--dark); }
+.forma-pag-desc { display: flex; align-items: center; gap: 4px; flex-shrink: 0; font-size: 12px; color: var(--muted); margin: 0; }
+.forma-pag-desconto { width: 64px; padding: 8px 6px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; text-align: right; background: var(--white); color: var(--dark); }
 .forma-pag-padrao { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: var(--radius-pill); background: #E3F7E2; color: #0F6B0D; flex-shrink: 0; }
 .forma-pag-vazia { color: var(--muted); font-size: 13px; font-style: italic; padding: 8px 0; }
+
+/* Busca rapida de material/kit na emissao de pedido: nome ocupa o meio,
+   unidade, preco e estoque ficam a direita. */
+.ped-sug-item { align-items: center; }
+.ped-sug-item .consulta-tag { min-width: 30px; text-align: center; margin-right: 0; }
+.ped-sug-item .consulta-sug-nome { flex: 1 1 auto; min-width: 0; }
+.ped-sug-det { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) { .ped-sug-det { display: none; } }

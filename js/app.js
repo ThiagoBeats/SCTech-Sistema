@@ -318,25 +318,45 @@ function salvarEmpresaConfigs() {
 }
 
 // --- FORMAS DE PAGAMENTO ---
-// A empresa define a lista em Configuracoes > Empresa. Cada forma e so um
-// nome: o pedido guarda o nome e o Financeiro lanca um unico valor.
+// A empresa define a lista em Configuracoes > Empresa. Cada forma tem um nome
+// e um % de desconto: o pedido guarda o nome, e escolher a forma preenche o
+// desconto do pedido (que continua editavel). O Financeiro lanca um unico valor.
 const _FORMAS_PAG_PADRAO = ['50% entrada + 50% na instalação', 'À vista', '30% entrada + 70% na instalação', '40% entrada + 60% na instalação'];
 // Pedidos antigos guardavam um codigo no lugar do nome.
 const _FORMAS_PAG_LEGADO = { avista: 'À vista', '50_50': '50% entrada + 50% na instalação', '30_70': '30% entrada + 70% na instalação', '40_60': '40% entrada + 60% na instalação' };
 
+function _descontoValido(v) {
+    const n = parseFloat(String(v == null ? '' : v).replace(',', '.'));
+    if (!isFinite(n) || n <= 0) return 0;
+    return Math.min(100, Math.round(n * 100) / 100);
+}
+
+// Aceita a lista antiga (so nomes) e a nova ({ nome, desconto }).
 function _formasLimpas(lista) {
     const vistas = new Set();
     return (Array.isArray(lista) ? lista : [])
-        .map(x => String(x == null ? '' : x).trim())
-        .filter(x => x && !vistas.has(x.toLowerCase()) && vistas.add(x.toLowerCase()));
+        .map(x => (x && typeof x === 'object')
+            ? { nome: String(x.nome == null ? '' : x.nome).trim(), desconto: _descontoValido(x.desconto) }
+            : { nome: String(x == null ? '' : x).trim(), desconto: 0 })
+        .filter(f => f.nome && !vistas.has(f.nome.toLowerCase()) && vistas.add(f.nome.toLowerCase()));
 }
 
-function getFormasPagamento() {
+function getFormasPagamentoCfg() {
     try {
         const salvas = _formasLimpas(JSON.parse(localStorage.getItem('sc_formas_pag')));
         if (salvas.length) return salvas;
     } catch (e) {}
-    return _FORMAS_PAG_PADRAO.slice();
+    return _FORMAS_PAG_PADRAO.map(nome => ({ nome, desconto: 0 }));
+}
+
+function getFormasPagamento() {
+    return getFormasPagamentoCfg().map(f => f.nome);
+}
+
+// Desconto pre-configurado da forma; 0 para forma fora da lista.
+function descontoDaFormaPagamento(nome) {
+    const f = getFormasPagamentoCfg().find(x => x.nome === nome);
+    return f ? f.desconto : 0;
 }
 
 function formaPagamentoDoPedido(ped) {
@@ -349,10 +369,25 @@ function formaPagamentoDoPedido(ped) {
 function preencherSelectFormaPagamento(atual) {
     const sel = document.getElementById('ped-forma-pagamento');
     if (!sel) return;
-    const formas = getFormasPagamento();
+    const cfg = getFormasPagamentoCfg();
+    const formas = cfg.map(f => f.nome);
     if (atual && !formas.includes(atual)) formas.push(atual);
-    sel.innerHTML = formas.map(f => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join('');
+    sel.innerHTML = formas.map(f => {
+        const d = (cfg.find(x => x.nome === f) || {}).desconto || 0;
+        const rot = d ? `${f} (${String(d).replace('.', ',')}% de desconto)` : f;
+        return `<option value="${escapeHtml(f)}">${escapeHtml(rot)}</option>`;
+    }).join('');
     sel.value = atual || formas[0];
+}
+
+// Escolher a forma no pedido traz o desconto dela. O vendedor ainda pode
+// mudar o campo depois; so uma nova troca de forma o sobrescreve.
+function aplicarDescontoDaFormaPagamento() {
+    const sel = document.getElementById('ped-forma-pagamento');
+    const desc = document.getElementById('ped-desconto');
+    if (!sel || !desc) return;
+    desc.value = descontoDaFormaPagamento(sel.value);
+    atualizarTotalPedido();
 }
 
 // Tela de configuracao: rascunho editavel, gravado so no "Salvar".
@@ -361,14 +396,19 @@ let _formasPagRascunho = null;
 function renderFormasPagamentoCfg() {
     const box = document.getElementById('emp-formas-pag');
     if (!box) return;
-    if (!_formasPagRascunho) _formasPagRascunho = getFormasPagamento();
+    if (!_formasPagRascunho) _formasPagRascunho = getFormasPagamentoCfg();
     const n = _formasPagRascunho.length;
     box.innerHTML = _formasPagRascunho.map((f, i) => `
         <div class="forma-pag-linha">
             <span class="forma-pag-ordem">${i + 1}</span>
-            <input type="text" class="forma-pag-nome" value="${escapeHtml(f)}" maxlength="80" aria-label="Forma de pagamento ${i + 1}"
-                oninput="_formasPagRascunho[${i}] = this.value" placeholder="Ex.: PIX, Cartão em 10x, Boleto 30/60/90">
-            ${i === 0 ? '<span class="forma-pag-padrao">padrão</span>' : ''}
+            <input type="text" class="forma-pag-nome" value="${escapeHtml(f.nome)}" maxlength="80" aria-label="Forma de pagamento ${i + 1}"
+                oninput="_formasPagRascunho[${i}].nome = this.value" placeholder="Ex.: PIX, Cartão em 10x, Boleto 30/60/90">
+            <label class="forma-pag-desc" title="Desconto aplicado ao pedido quando esta forma é escolhida">
+                <input type="number" class="forma-pag-desconto" value="${f.desconto || 0}" min="0" max="100" step="0.5"
+                    aria-label="Desconto da forma de pagamento ${i + 1}" oninput="_formasPagRascunho[${i}].desconto = this.value">
+                <span>% desc.</span>
+            </label>
+            <span class="forma-pag-padrao"${i === 0 ? '' : ' style="visibility:hidden" aria-hidden="true"'}>padrão</span>
             <button type="button" class="btn btn-outline btn-sm" onclick="moverFormaPagamento(${i},-1)" title="Subir" ${i === 0 ? 'disabled' : ''}>↑</button>
             <button type="button" class="btn btn-outline btn-sm" onclick="moverFormaPagamento(${i},1)" title="Descer" ${i === n - 1 ? 'disabled' : ''}>↓</button>
             <button type="button" class="btn btn-outline btn-sm btn-danger" onclick="removerFormaPagamento(${i})" title="Remover">✕</button>
@@ -376,7 +416,7 @@ function renderFormasPagamentoCfg() {
 }
 
 function adicionarFormaPagamento() {
-    _formasPagRascunho.push('');
+    _formasPagRascunho.push({ nome: '', desconto: 0 });
     renderFormasPagamentoCfg();
     const inputs = document.querySelectorAll('#emp-formas-pag .forma-pag-nome');
     inputs[inputs.length - 1]?.focus();
@@ -398,14 +438,14 @@ async function salvarFormasPagamento() {
     const limpas = _formasLimpas(_formasPagRascunho);
     if (!limpas.length) { await showAlert('Cadastre pelo menos uma forma de pagamento.', '⚠️'); return; }
     localStorage.setItem('sc_formas_pag', JSON.stringify(limpas));
-    _formasPagRascunho = limpas.slice();
+    _formasPagRascunho = limpas.map(f => ({ ...f }));
     renderFormasPagamentoCfg();
     toast('Formas de pagamento salvas!', 'success');
 }
 
 function restaurarFormasPagamento() {
     localStorage.removeItem('sc_formas_pag');
-    _formasPagRascunho = _FORMAS_PAG_PADRAO.slice();
+    _formasPagRascunho = getFormasPagamentoCfg();
     renderFormasPagamentoCfg();
     toast('Formas de pagamento restauradas para o padrão.', 'info', 1800);
 }
@@ -5188,6 +5228,108 @@ async function aplicarKit() {
     document.getElementById('ped-kit').value = '';
 }
 
+// ── Busca rapida de material ou kit no pedido ───────────────────────────────
+// Um campo so procura materiais e kits do cadastro pela referencia ou pelo
+// nome. Escolher um resultado adiciona o item ao pedido na hora: material com
+// a quantidade do campo "Quantidade", kit como em "Aplicar Kit". Materiais e
+// kits podem repetir o id, por isso cada achado leva o tipo junto.
+
+let _pedBuscaAtiva = -1;
+
+function _pedBuscaAchados() {
+    const termo = _buscaNormaliza(document.getElementById('ped-item-busca')?.value);
+    if (!termo) return [];
+    const casa = i => _buscaNormaliza(i.nome).includes(termo) || _buscaNormaliza(i.referencia).includes(termo);
+    const mats = (db.materiais || []).filter(casa).map(m => ({ tipo: 'mat', item: m }));
+    const kits = (db.kits || []).filter(casa).map(k => ({ tipo: 'kit', item: k }));
+    // Quem bate a referencia exata vem primeiro: quem digita o codigo sabe o que quer.
+    const exato = a => _buscaNormaliza(a.item.referencia) === termo ? 0 : 1;
+    return mats.concat(kits).sort((a, b) => exato(a) - exato(b)).slice(0, 12);
+}
+
+function _pedBuscaDetalhe(a) {
+    const i = a.item;
+    if (a.tipo === 'kit') {
+        return ehKitPronto(i)
+            ? `${i.medida ? i.medida + ' · ' : ''}R$ ${(i.preco || 0).toFixed(2)}`
+            : 'kit de montagem';
+    }
+    const est = temEstoqueInfinito(i) ? '∞' : (i.estoque_atual || 0).toFixed(1);
+    return `${i.unidade || 'un'} · R$ ${(i.preco || 0).toFixed(2)} · estoque: ${est}`;
+}
+
+function pedBuscaRender() {
+    const caixa = document.getElementById('ped-item-busca-sug');
+    if (!caixa) return;
+    if (!document.getElementById('ped-item-busca')?.value.trim()) { pedBuscaFechar(); return; }
+    const achados = _pedBuscaAchados();
+    if (!achados.length) {
+        caixa.innerHTML = '<div class="consulta-sug-item" style="cursor:default;color:var(--muted)">Nenhum material ou kit com essa referência ou nome</div>';
+        caixa.classList.add('aberta');
+        return;
+    }
+    caixa.innerHTML = achados.map((a, n) => `
+        <div class="consulta-sug-item ped-sug-item${n === _pedBuscaAtiva ? ' ativa' : ''}" onmousedown="event.preventDefault()" onclick="pedBuscaEscolher('${a.tipo}', ${a.item.id})">
+            <span class="consulta-tag ${a.tipo}">${a.tipo === 'kit' ? 'KIT' : 'MAT'}</span>
+            <span class="consulta-sug-cod">${escapeHtml(a.item.referencia || '—')}</span>
+            <span class="consulta-sug-nome" style="color:var(--dark)">${escapeHtml(a.item.nome)}</span>
+            <span class="ped-sug-det">${escapeHtml(_pedBuscaDetalhe(a))}</span>
+        </div>`).join('');
+    caixa.classList.add('aberta');
+    caixa.querySelector('.consulta-sug-item.ativa')?.scrollIntoView({ block: 'nearest' });
+}
+
+function pedBuscaDigitou() {
+    _pedBuscaAtiva = -1;
+    pedBuscaRender();
+}
+
+function pedBuscaFechar() {
+    _pedBuscaAtiva = -1;
+    const caixa = document.getElementById('ped-item-busca-sug');
+    if (caixa) { caixa.classList.remove('aberta'); caixa.innerHTML = ''; }
+}
+
+async function pedBuscaEscolher(tipo, id) {
+    const sel = document.getElementById(tipo === 'kit' ? 'ped-kit' : 'ped-item-mat');
+    if (!sel) return;
+    sel.value = String(id);
+    pedBuscaFechar();
+    if (tipo === 'kit') await aplicarKit();
+    else {
+        await adicionarItemPedido();
+        sel.value = '';
+    }
+    const campo = document.getElementById('ped-item-busca');
+    if (campo) { campo.value = ''; campo.focus(); }
+}
+
+function pedBuscaTecla(e) {
+    if (e.key === 'Escape') { pedBuscaFechar(); return; }
+    const achados = _pedBuscaAchados();
+    if (!achados.length) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const total = achados.length;
+        _pedBuscaAtiva = e.key === 'ArrowDown'
+            ? (_pedBuscaAtiva + 1) % total
+            : (_pedBuscaAtiva <= 0 ? total - 1 : _pedBuscaAtiva - 1);
+        pedBuscaRender();
+        return;
+    }
+    if (e.key === 'Enter') {
+        // Sem nada percorrido, um unico achado e' escolha obvia; varios, nao.
+        const alvo = _pedBuscaAtiva >= 0 ? achados[_pedBuscaAtiva]
+            : (achados.length === 1 ? achados[0] : null);
+        if (alvo) { e.preventDefault(); pedBuscaEscolher(alvo.tipo, alvo.item.id); }
+    }
+}
+
+document.addEventListener('click', e => {
+    if (e.target.closest && e.target.closest('#ped-item-busca, #ped-item-busca-sug')) return;
+    pedBuscaFechar();
+});
+
 // O valor do pedido e' a soma dos seus itens. O modo "por pedido" (margem
 // global sobre o custo) saiu da tela: os itens ja carregam a margem deles.
 // Pedidos antigos fechados naquele modo guardam os proprios valores e nao sao
@@ -8936,6 +9078,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             adicionarAmbiente();
             renderItensPedido();
+            aplicarDescontoDaFormaPagamento();   // desconto da forma que vem marcada
             // Pré-preenche cliente quando vindo de "Criar Pedido" na medição
             const prePed = localStorage.getItem('sc_novo_pedido_pre');
             if (prePed) {

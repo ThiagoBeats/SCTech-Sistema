@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Novo Pedido - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261028d">
+    <link rel="stylesheet" href="css/style.css?v=20261029b">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
@@ -68,6 +68,17 @@
         <div class="card section-card">
             <h3 style="color: var(--primary); margin-bottom: 20px;">3. Materiais e Acessórios</h3>
 
+            <!-- Busca rapida: material ou kit por codigo ou nome -->
+            <div class="form-group" style="margin-bottom:16px">
+                <label for="ped-item-busca">Buscar Material ou Kit</label>
+                <div class="busca-campo">
+                    <input type="text" id="ped-item-busca" autocomplete="off"
+                           placeholder="🔍 Digite a referência ou o nome do item..."
+                           oninput="pedBuscaDigitou()" onkeydown="pedBuscaTecla(event)" onfocus="pedBuscaRender()">
+                    <div class="consulta-sugestoes" id="ped-item-busca-sug"></div>
+                </div>
+            </div>
+
             <!-- Aplicar kit -->
             <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
                 <div class="form-group" style="flex:1;min-width:200px">
@@ -112,7 +123,7 @@
             <div class="grid">
                 <div class="form-group">
                     <label for="ped-forma-pagamento">Forma de Pagamento</label>
-                    <select id="ped-forma-pagamento"></select>
+                    <select id="ped-forma-pagamento" onchange="aplicarDescontoDaFormaPagamento()"></select>
                 </div>
             </div>
             <p style="font-size:12px;color:#888;margin-top:4px">O valor do pedido é lançado no módulo <a href="financeiro.html" style="color:var(--primary)">Financeiro</a> como uma conta a receber ao aprovar o pedido (status ≠ Orçamento). As opções desta lista são definidas em <a href="empresa.html" style="color:var(--primary)">Configurações › Empresa</a>. As comissões do vendedor e do arquiteto saem dos cadastros deles.</p>
@@ -155,6 +166,6 @@
             </div>
         </div>
     </main>
-    <script src="js/app.js?v=20261028d"></script>
+    <script src="js/app.js?v=20261029b"></script>
 </body>
 </html>
