@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Novo Pedido - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261028a">
+    <link rel="stylesheet" href="css/style.css?v=20261028d">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
@@ -106,21 +106,16 @@
             </div>
         </div>
 
-        <!-- SEÇÃO 4: PARCELAMENTO -->
+        <!-- SEÇÃO 4: FORMA DE PAGAMENTO -->
         <div class="card section-card">
-            <h3 style="color: var(--primary); margin-bottom: 20px;">4. Parcelamento</h3>
+            <h3 style="color: var(--primary); margin-bottom: 20px;">4. Forma de Pagamento</h3>
             <div class="grid">
                 <div class="form-group">
-                    <label>Plano de Pagamento</label>
-                    <select id="ped-tipo-pagamento">
-                        <option value="50_50">50% Entrada + 50% na Instalação</option>
-                        <option value="avista">À Vista (100% na aprovação)</option>
-                        <option value="30_70">30% Entrada + 70% na Instalação</option>
-                        <option value="40_60">40% Entrada + 60% na Instalação</option>
-                    </select>
+                    <label for="ped-forma-pagamento">Forma de Pagamento</label>
+                    <select id="ped-forma-pagamento"></select>
                 </div>
             </div>
-            <p style="font-size:12px;color:#888;margin-top:4px">As parcelas são geradas automaticamente no módulo <a href="financeiro.html" style="color:var(--primary)">Financeiro</a> ao aprovar o pedido (status ≠ Orçamento). As comissões do vendedor e do arquiteto saem dos cadastros deles.</p>
+            <p style="font-size:12px;color:#888;margin-top:4px">O valor do pedido é lançado no módulo <a href="financeiro.html" style="color:var(--primary)">Financeiro</a> como uma conta a receber ao aprovar o pedido (status ≠ Orçamento). As opções desta lista são definidas em <a href="empresa.html" style="color:var(--primary)">Configurações › Empresa</a>. As comissões do vendedor e do arquiteto saem dos cadastros deles.</p>
         </div>
 
         <!-- SEÇÃO 5: RESUMO E SALVAR -->
@@ -160,6 +155,6 @@
             </div>
         </div>
     </main>
-    <script src="js/app.js?v=20261028a"></script>
+    <script src="js/app.js?v=20261028d"></script>
 </body>
 </html>

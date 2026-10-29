@@ -375,19 +375,59 @@ td:last-child { white-space: nowrap; }
 
 /* ── KANBAN PCP ─────────────────────────────────────────────────────── */
 .aviso-orcamentos { background: #FEF6D8; border: 1px solid #F2C924; border-radius: 6px; padding: 10px 16px; margin-bottom: 16px; display: none; justify-content: space-between; align-items: center; font-size: 14px; gap: 12px; }
-.kanban-board { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 16px; align-items: flex-start; }
-.kanban-col { min-width: 220px; flex: 0 0 220px; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+/* O quadro ocupa a largura toda e a altura que sobra na tela (renderKanban
+   calcula a altura): a pagina nao rola, so o interior de cada coluna. */
+.kanban-board { display: flex; gap: 14px; overflow-x: auto; overflow-y: hidden; padding-bottom: 8px; align-items: stretch; height: var(--kanban-altura, auto); }
+.kanban-col { min-width: 200px; flex: 1 1 200px; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+.kanban-col-header { flex-shrink: 0; }
 .kanban-col-header { color: white; padding: 10px 14px; font-size: 13px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
 .kanban-count { background: rgba(255,255,255,0.28); border-radius: 12px; padding: 1px 8px; font-size: 12px; }
-.kanban-col-body { padding: 10px; min-height: 180px; }
+/* A coluna preenche a altura do quadro mesmo com poucos cards; com mais cards
+   do que cabem, rola so ela, com o cabecalho da etapa parado em cima. */
+.kanban-col-body { padding: 10px; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.kanban-board[hidden], .pcp-lista[hidden] { display: none; }
+
+/* Alternar Kanban / Lista */
+.pcp-modo { display: inline-flex; margin-left: auto; border: 1px solid var(--primary); border-radius: 8px; overflow: hidden; align-self: flex-end; }
+.pcp-modo-btn { background: var(--white); color: var(--primary); border: 0; border-radius: 0; margin: 0; padding: 7px 14px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: none; }
+.pcp-modo-btn + .pcp-modo-btn { border-left: 1px solid var(--primary); }
+.pcp-modo-btn:hover { background: rgba(0, 93, 59, .07); transform: none; }
+.pcp-modo-btn.ativo { background: var(--primary); color: #fff; }
+.pcp-modo-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* Modo Lista: um bloco por etapa, com a cor da etapa, que abre e fecha */
+.pcp-lista { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 16px; }
+.pcp-bloco { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--white); box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+.pcp-bloco-head { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0; padding: 10px 14px; border: 0; border-radius: 0; border-left: 5px solid var(--bloco-cor); background: var(--bloco-bg); color: var(--bloco-cor); font: inherit; font-size: 14px; font-weight: 800; text-align: left; cursor: pointer; box-shadow: none; }
+.pcp-bloco-head:hover { filter: brightness(.97); transform: none; }
+.pcp-bloco-head:focus-visible { outline: 2px solid var(--bloco-cor); outline-offset: -2px; }
+.pcp-bloco-seta { display: inline-block; transition: transform .15s; font-size: 12px; }
+.pcp-bloco.aberto .pcp-bloco-seta { transform: rotate(90deg); }
+.pcp-bloco-nome { flex: 1; }
+.pcp-bloco-count { background: var(--bloco-cor); color: #fff; border-radius: 12px; padding: 1px 9px; font-size: 12px; }
+.pcp-linha { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 9px 14px; border-top: 1px solid var(--border); }
+.pcp-linha:hover { background: rgba(0, 93, 59, .035); }
+.pcp-linha-num { background: none; border: 0; margin: 0; padding: 0; font: inherit; font-weight: 800; color: var(--primary); text-align: left; cursor: pointer; box-shadow: none; text-decoration: underline; text-underline-offset: 2px; }
+.pcp-linha-num:hover { transform: none; background: none; }
+.pcp-linha-cli { display: flex; flex-direction: column; min-width: 0; }
+.pcp-linha-nome { font-weight: 700; font-size: 14px; color: var(--dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pcp-linha-amb { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pcp-linha-obs { cursor: help; margin-left: 4px; }
+.pcp-linha-acoes { display: flex; gap: 4px; justify-content: flex-end; }
+.pcp-linha-acoes .btn-sm { margin-right: 0; }
+.pcp-lista-nada, .pcp-lista-vazia { color: var(--muted); font-size: 13px; font-style: italic; padding: 14px; text-align: center; }
+.pcp-lista-nada { border-top: 1px solid var(--border); }
+@media (max-width: 640px) {
+    .pcp-linha { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "num ent" "cli cli" "aco aco"; gap: 4px 10px; }
+    .pcp-linha-num { grid-area: num; } .pcp-linha-cli { grid-area: cli; }
+    .pcp-linha-entrega { grid-area: ent; } .pcp-linha-acoes { grid-area: aco; justify-content: flex-start; }
+}
 .kanban-card { background: white; border: 1px solid #E0E0E0; border-radius: 6px; padding: 11px 12px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
 .kanban-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
 .kanban-card-id { font-size: 11px; color: #8F8F8F; font-weight: bold; }
 .kanban-card-age { font-size: 11px; color: #8F8F8F; background: #F1F1F1; padding: 1px 6px; border-radius: 10px; }
 .kanban-card-vendedor { font-size: 11px; color: #8F8F8F; margin-bottom: 4px; }
 .kanban-card-cliente { font-weight: bold; font-size: 14px; color: var(--dark); margin-bottom: 1px; }
-.kanban-card-amb { font-size: 13px; color: #242424; margin-bottom: 6px; }
-.kanban-card-info { font-size: 12px; color: #8F8F8F; line-height: 1.6; margin-bottom: 8px; border-top: 1px solid #F1F1F1; padding-top: 6px; }
 .kanban-card-actions { display: flex; justify-content: space-between; align-items: center; }
 .kanban-empty { color: #8F8F8F; font-size: 13px; text-align: center; padding: 24px 8px; font-style: italic; }
 .kanban-nav-ph { display: inline-block; width: 35px; }
@@ -973,6 +1013,8 @@ html[data-theme="dark"] .logo-popup-sep { background: #282A2E; }
 html[data-theme="dark"] .logo-popup-name { color: #F5F6F8; }
 html[data-theme="dark"] .logo-popup-role { color: #9EA3AC; }
 html[data-theme="dark"] .kanban-col { background: #16181B !important; border-color: #282A2E !important; }
+html[data-theme="dark"] .pcp-bloco-head { background: #16181B; }
+html[data-theme="dark"] .pcp-modo-btn:not(.ativo) { background: var(--white); color: #E0E0E0; }
 html[data-theme="dark"] .kanban-col-title { color: #E0E0E0 !important; }
 html[data-theme="dark"] .kanban-card { background: #1D1F23; border-color: #282A2E; color: #F5F6F8; }
 html[data-theme="dark"] .kanban-card:hover { border-color: var(--secondary); }
@@ -1516,7 +1558,9 @@ html[data-theme="dark"] .pc-num-btn { color: var(--accent, #C9F775); }
 .agd-busca svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
 .agd-busca input { width: 100%; padding: 7px 10px 7px 30px; border: 1px solid var(--border); border-radius: var(--radius-input); font-size: 13px; background: var(--white); color: var(--dark); }
 
+/* Cerca de 6 linhas; dali em diante a coluna rola sozinha (busca e contagem ficam em cima). */
 .agd-lista { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.agd-colunas .agd-lista { max-height: var(--agd-lista-max, 400px); overflow-y: auto; overscroll-behavior: contain; }
 .agd-item { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto 16px; gap: 12px; align-items: center; width: 100%; padding: 10px 12px; margin: 0; background: var(--white); color: var(--dark); border: 0; border-bottom: 1px solid var(--border); border-radius: 0; text-align: left; font: inherit; cursor: pointer; box-shadow: none; }
 .agd-item:last-child { border-bottom: 0; }
 .agd-item:hover { background: rgba(0, 93, 59, .045); transform: none; }
@@ -1680,3 +1724,12 @@ html[data-theme="dark"] .agd-slot-ocupado,
 html[data-theme="dark"] .agd-disp-aviso { background: rgba(244, 57, 39, .18); color: #FF9A8F; border-color: rgba(244, 57, 39, .35); }
 html[data-theme="dark"] .agd-slot-indisp { background: rgba(255, 255, 255, .06); color: #8A8F96; }
 html[data-theme="dark"] .kanban-inst-pend { color: #F7DE86; }
+
+/* ── Configurações > Empresa: formas de pagamento ─────────────────────── */
+.formas-pag-lista { display: flex; flex-direction: column; gap: 8px; }
+.forma-pag-linha { display: flex; align-items: center; gap: 6px; }
+.forma-pag-linha .btn-sm { margin-right: 0; }
+.forma-pag-ordem { width: 22px; text-align: center; font-size: 12px; font-weight: 700; color: var(--muted); flex-shrink: 0; }
+.forma-pag-nome { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; background: var(--white); color: var(--dark); }
+.forma-pag-padrao { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: var(--radius-pill); background: #E3F7E2; color: #0F6B0D; flex-shrink: 0; }
+.forma-pag-vazia { color: var(--muted); font-size: 13px; font-style: italic; padding: 8px 0; }

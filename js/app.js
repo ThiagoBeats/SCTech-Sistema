@@ -317,6 +317,99 @@ function salvarEmpresaConfigs() {
     if (typeof atualizarPreviewCabecalho === 'function') atualizarPreviewCabecalho();
 }
 
+// --- FORMAS DE PAGAMENTO ---
+// A empresa define a lista em Configuracoes > Empresa. Cada forma e so um
+// nome: o pedido guarda o nome e o Financeiro lanca um unico valor.
+const _FORMAS_PAG_PADRAO = ['50% entrada + 50% na instalação', 'À vista', '30% entrada + 70% na instalação', '40% entrada + 60% na instalação'];
+// Pedidos antigos guardavam um codigo no lugar do nome.
+const _FORMAS_PAG_LEGADO = { avista: 'À vista', '50_50': '50% entrada + 50% na instalação', '30_70': '30% entrada + 70% na instalação', '40_60': '40% entrada + 60% na instalação' };
+
+function _formasLimpas(lista) {
+    const vistas = new Set();
+    return (Array.isArray(lista) ? lista : [])
+        .map(x => String(x == null ? '' : x).trim())
+        .filter(x => x && !vistas.has(x.toLowerCase()) && vistas.add(x.toLowerCase()));
+}
+
+function getFormasPagamento() {
+    try {
+        const salvas = _formasLimpas(JSON.parse(localStorage.getItem('sc_formas_pag')));
+        if (salvas.length) return salvas;
+    } catch (e) {}
+    return _FORMAS_PAG_PADRAO.slice();
+}
+
+function formaPagamentoDoPedido(ped) {
+    if (!ped) return '';
+    return ped.forma_pagamento || _FORMAS_PAG_LEGADO[ped.tipo_pagamento] || '';
+}
+
+// Preenche o select do pedido. Uma forma que saiu da lista mas esta gravada
+// no pedido continua aparecendo, para editar o pedido nao trocar a forma.
+function preencherSelectFormaPagamento(atual) {
+    const sel = document.getElementById('ped-forma-pagamento');
+    if (!sel) return;
+    const formas = getFormasPagamento();
+    if (atual && !formas.includes(atual)) formas.push(atual);
+    sel.innerHTML = formas.map(f => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join('');
+    sel.value = atual || formas[0];
+}
+
+// Tela de configuracao: rascunho editavel, gravado so no "Salvar".
+let _formasPagRascunho = null;
+
+function renderFormasPagamentoCfg() {
+    const box = document.getElementById('emp-formas-pag');
+    if (!box) return;
+    if (!_formasPagRascunho) _formasPagRascunho = getFormasPagamento();
+    const n = _formasPagRascunho.length;
+    box.innerHTML = _formasPagRascunho.map((f, i) => `
+        <div class="forma-pag-linha">
+            <span class="forma-pag-ordem">${i + 1}</span>
+            <input type="text" class="forma-pag-nome" value="${escapeHtml(f)}" maxlength="80" aria-label="Forma de pagamento ${i + 1}"
+                oninput="_formasPagRascunho[${i}] = this.value" placeholder="Ex.: PIX, Cartão em 10x, Boleto 30/60/90">
+            ${i === 0 ? '<span class="forma-pag-padrao">padrão</span>' : ''}
+            <button type="button" class="btn btn-outline btn-sm" onclick="moverFormaPagamento(${i},-1)" title="Subir" ${i === 0 ? 'disabled' : ''}>↑</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="moverFormaPagamento(${i},1)" title="Descer" ${i === n - 1 ? 'disabled' : ''}>↓</button>
+            <button type="button" class="btn btn-outline btn-sm btn-danger" onclick="removerFormaPagamento(${i})" title="Remover">✕</button>
+        </div>`).join('') || '<div class="forma-pag-vazia">Nenhuma forma cadastrada. Adicione pelo menos uma.</div>';
+}
+
+function adicionarFormaPagamento() {
+    _formasPagRascunho.push('');
+    renderFormasPagamentoCfg();
+    const inputs = document.querySelectorAll('#emp-formas-pag .forma-pag-nome');
+    inputs[inputs.length - 1]?.focus();
+}
+
+function moverFormaPagamento(i, dir) {
+    const j = i + dir, l = _formasPagRascunho;
+    if (j < 0 || j >= l.length) return;
+    [l[i], l[j]] = [l[j], l[i]];
+    renderFormasPagamentoCfg();
+}
+
+function removerFormaPagamento(i) {
+    _formasPagRascunho.splice(i, 1);
+    renderFormasPagamentoCfg();
+}
+
+async function salvarFormasPagamento() {
+    const limpas = _formasLimpas(_formasPagRascunho);
+    if (!limpas.length) { await showAlert('Cadastre pelo menos uma forma de pagamento.', '⚠️'); return; }
+    localStorage.setItem('sc_formas_pag', JSON.stringify(limpas));
+    _formasPagRascunho = limpas.slice();
+    renderFormasPagamentoCfg();
+    toast('Formas de pagamento salvas!', 'success');
+}
+
+function restaurarFormasPagamento() {
+    localStorage.removeItem('sc_formas_pag');
+    _formasPagRascunho = _FORMAS_PAG_PADRAO.slice();
+    renderFormasPagamentoCfg();
+    toast('Formas de pagamento restauradas para o padrão.', 'info', 1800);
+}
+
 function carregarEmpresaConfigs() {
     const emp = getEmpresa();
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
@@ -5196,7 +5289,7 @@ async function salvarPedido() {
         arq_comissao_valor,
         arquiteto_nome: '',
         rt_pct: 0,
-        tipo_pagamento: document.getElementById('ped-tipo-pagamento')?.value || '50_50'
+        forma_pagamento: document.getElementById('ped-forma-pagamento')?.value || getFormasPagamento()[0]
     };
     if (editandoIdPedido) {
         const index = db.pedidos.findIndex(p => p.id == editandoIdPedido);
@@ -5292,8 +5385,7 @@ function carregarPedidoParaEdicao(id) {
     if (vendedorEl) vendedorEl.value = String(ped.vendedor_id || '');
     const arqEl = document.getElementById('ped-arquiteto');
     if (arqEl) arqEl.value = String(ped.arq_id || '');
-    const pagEl = document.getElementById('ped-tipo-pagamento');
-    if (pagEl) pagEl.value = ped.tipo_pagamento || '50_50';
+    preencherSelectFormaPagamento(formaPagamentoDoPedido(ped));
     const ambientes = normalizarAmbientes(ped);
     _ambienteCounter = ambientes.length;
     pedidoDraft.ambientes = ambientes.map((a, i) => ({
@@ -5343,18 +5435,21 @@ function renderKanban() {
     }
     const filtroAtivo = _kanbanFiltro.cliente || _kanbanFiltro.vendedor || _kanbanFiltro.tecido;
     let totalFiltrado = 0;
-    board.innerHTML = COLUNAS.map(col => {
-        const pedidosCol = db.pedidos.filter(p => {
-            if (normalizarStatus(p.status) !== col.status) return false;
-            if (_kanbanFiltro.cliente && !(p.clienteNome||'').toLowerCase().includes(_kanbanFiltro.cliente)) return false;
-            if (_kanbanFiltro.vendedor && (p.vendedor_nome||p.vendedor||'') !== _kanbanFiltro.vendedor) return false;
-            if (_kanbanFiltro.tecido) {
-                const amb = normalizarAmbientes(p);
-                if (!amb.some(a => (a.tecidos||[]).some(t => String(t.tecidoId) === _kanbanFiltro.tecido))) return false;
-            }
-            return true;
-        });
-        totalFiltrado += pedidosCol.length;
+    // Os mesmos pedidos filtrados alimentam o Kanban e a Lista.
+    const grupos = COLUNAS.map(col => {
+        const pedidos = db.pedidos.filter(p => normalizarStatus(p.status) === col.status && _kanbanPassaFiltro(p));
+        totalFiltrado += pedidos.length;
+        return { col, pedidos };
+    });
+    const resEl = document.getElementById('kf-resultado');
+    if (resEl) resEl.textContent = filtroAtivo ? `${totalFiltrado} pedido(s) encontrado(s)` : '';
+    const modo = _pcpModo();
+    _pcpMarcarModo(modo);
+    const lista = document.getElementById('kanban-lista');
+    board.hidden = modo === 'lista';
+    if (lista) lista.hidden = modo !== 'lista';
+    if (modo === 'lista' && lista) { lista.innerHTML = _pcpListaHTML(grupos, filtroAtivo); return; }
+    board.innerHTML = grupos.map(({ col, pedidos: pedidosCol }) => {
         const idx = STATUS_PIPELINE.indexOf(col.status);
         const isInstalado = col.status === 'Instalado';
         const cards = pedidosCol.length === 0 ? `<div class="kanban-empty">Nenhum pedido nesta etapa</div>`
@@ -5376,7 +5471,6 @@ function renderKanban() {
                         </div>
                         ${vendedorLinha}
                         <div class="kanban-card-cliente" style="font-size:13px">${escapeHtml(p.clienteNome||'')}${obsBadge}</div>
-                        <div style="font-size:12px;color:#8F8F8F">${escapeHtml(p.amb||'')}</div>
                         <div class="kanban-card-actions" style="margin-top:6px">
                             <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})" title="Ver Ordem de Serviço">📋 OS</button>
                             <button class="btn btn-outline btn-sm" onclick="verTimeline(${p.id})" title="Ver timeline">⏱</button>
@@ -5384,10 +5478,6 @@ function renderKanban() {
                         </div>
                     </div>`;
                 }
-                const totalConsumo = ambientes.reduce((s,a)=>s+(a.tecidos||[]).reduce((ts,t)=>ts+(t.consumo_linear||0),0),0);
-                const totalPanos   = ambientes.reduce((s,a)=>s+(a.tecidos||[]).reduce((ts,t)=>ts+(t.num_panos||0),0),0);
-                const tecidoNomes  = [...new Set(ambientes.flatMap(a=>(a.tecidos||[]).map(t=>t.tecidoNome).filter(Boolean)))];
-                const pregaTipos   = [...new Set(ambientes.flatMap(a=>(a.tecidos||[]).map(t=>t.prega)).filter(Boolean))];
                 let badgeEst = '';
                 for (const a of ambientes) {
                     for (const t of (a.tecidos||[])) {
@@ -5421,10 +5511,8 @@ function renderKanban() {
                     </div>
                     ${vendedorLinha}
                     <div class="kanban-card-cliente">${escapeHtml(p.clienteNome||'')}${obsBadge}</div>
-                    <div class="kanban-card-amb">${escapeHtml(p.amb||'')}</div>
                     ${entregaBadge ? `<div style="margin:3px 0 5px">${entregaBadge}</div>` : ''}
                     ${instLinha}
-                    <div class="kanban-card-info">${pregaTipos.join(', ')||'—'} · ${tecidoNomes.join(', ')||'—'}<br>${totalPanos} pano(s) · ${totalConsumo.toFixed(2)} m</div>
                     ${badgeEst||badgeBaixa ? `<div style="margin-bottom:6px">${badgeEst}${badgeBaixa}</div>` : ''}
                     <div class="kanban-card-actions">
                         <div style="display:flex;gap:4px">
@@ -5444,8 +5532,130 @@ function renderKanban() {
             <div class="kanban-col-body" style="background:${col.bg}">${cards}</div>
         </div>`;
     }).join('');
-    const resEl = document.getElementById('kf-resultado');
-    if (resEl) resEl.textContent = filtroAtivo ? `${totalFiltrado} pedido(s) encontrado(s)` : '';
+    _kanbanAjustarAltura();
+}
+
+// Altura fixa do quadro: o espaco que sobra entre o topo do quadro e o fim da
+// area principal, para a pagina nao rolar. Mesmo com o aviso de orcamentos ou
+// os filtros quebrando linha, o calculo parte da posicao real do quadro.
+const _KANBAN_ALTURA_MIN = 320;
+function _kanbanAjustarAltura() {
+    const board = document.getElementById('kanban-board');
+    if (!board || board.hidden || !board.offsetParent) return;
+    const main = board.closest('.main');
+    const topoMain = main ? main.getBoundingClientRect().top : 0;
+    const altMain  = main ? main.clientHeight : window.innerHeight;
+    const padBaixo = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
+    const topo = board.getBoundingClientRect().top - topoMain + (main ? main.scrollTop : 0);
+    const alt = Math.max(_KANBAN_ALTURA_MIN, Math.floor(altMain - topo - padBaixo));
+    board.style.setProperty('--kanban-altura', alt + 'px');
+}
+window.addEventListener('resize', () => _kanbanAjustarAltura());
+
+// Busca do topo: nome do cliente ou numero do pedido (com ou sem #).
+function _kanbanPassaFiltro(p) {
+    const q = _kanbanFiltro.cliente;
+    if (q) {
+        const num = q.replace(/^#/, '');
+        const casaNome = (p.clienteNome || '').toLowerCase().includes(q);
+        const casaNum  = num && (String(p.id).includes(num) || String(formatPedidoId(p.id)).toLowerCase().includes(num));
+        if (!casaNome && !casaNum) return false;
+    }
+    if (_kanbanFiltro.vendedor && (p.vendedor_nome||p.vendedor||'') !== _kanbanFiltro.vendedor) return false;
+    if (_kanbanFiltro.tecido) {
+        const amb = normalizarAmbientes(p);
+        if (!amb.some(a => (a.tecidos||[]).some(t => String(t.tecidoId) === _kanbanFiltro.tecido))) return false;
+    }
+    return true;
+}
+
+// --- Status dos pedidos: modo Lista ------------------------------------------
+// A escolha Kanban/Lista e os blocos fechados ficam guardados por usuario,
+// neste navegador. Leitura e escrita protegidas: sem armazenamento, vale o padrao.
+function _pcpChave(nome) { return `sc_pcp_${nome}_${getUsuarioLogado()?.id || 0}`; }
+function _pcpLer(nome, padrao) {
+    try { const v = localStorage.getItem(_pcpChave(nome)); return v == null ? padrao : JSON.parse(v); } catch (e) { return padrao; }
+}
+function _pcpGravar(nome, valor) {
+    try { localStorage.setItem(_pcpChave(nome), JSON.stringify(valor)); } catch (e) {}
+}
+function _pcpModo() { return _pcpLer('modo', 'kanban') === 'lista' ? 'lista' : 'kanban'; }
+
+function _pcpMarcarModo(modo) {
+    ['kanban', 'lista'].forEach(m => {
+        const b = document.getElementById('pcp-modo-' + m);
+        if (!b) return;
+        b.classList.toggle('ativo', m === modo);
+        b.setAttribute('aria-pressed', String(m === modo));
+    });
+}
+
+function trocarModoPCP(modo) {
+    _pcpGravar('modo', modo === 'lista' ? 'lista' : 'kanban');
+    renderKanban();
+}
+
+// Instalado comeca fechado: e a etapa que so cresce.
+function _pcpFechados() {
+    const v = _pcpLer('fechados', ['Instalado']);
+    return Array.isArray(v) ? v : ['Instalado'];
+}
+
+function alternarBlocoPCP(status) {
+    const f = _pcpFechados();
+    const i = f.indexOf(status);
+    if (i >= 0) f.splice(i, 1); else f.push(status);
+    _pcpGravar('fechados', f);
+    renderKanban();
+}
+
+function _pcpListaHTML(grupos, filtroAtivo) {
+    const fechados = _pcpFechados();
+    // Com filtro, bloco sem resultado some; sem filtro, aparece com a contagem 0.
+    const visiveis = filtroAtivo ? grupos.filter(g => g.pedidos.length) : grupos;
+    if (!visiveis.length) return `<div class="pcp-lista-vazia">Nenhum pedido encontrado com esses filtros.</div>`;
+    return visiveis.map(({ col, pedidos }) => {
+        const aberto = !fechados.includes(col.status);
+        const idx = STATUS_PIPELINE.indexOf(col.status);
+        const linhas = !pedidos.length
+            ? `<div class="pcp-lista-nada">Nenhum pedido nesta etapa</div>`
+            : pedidos.map(p => _pcpLinhaHTML(p, col, idx)).join('');
+        const statusJs = escapeHtml(JSON.stringify(col.status));
+        return `<section class="pcp-bloco${aberto ? ' aberto' : ''}" data-status="${escapeHtml(col.status)}" style="--bloco-cor:${col.cor};--bloco-bg:${col.bg}">
+            <button type="button" class="pcp-bloco-head" onclick="alternarBlocoPCP(${statusJs})" aria-expanded="${aberto}">
+                <span class="pcp-bloco-seta" aria-hidden="true">▸</span>
+                <span class="pcp-bloco-nome">${escapeHtml(col.label)}</span>
+                <span class="pcp-bloco-count">${pedidos.length}</span>
+            </button>
+            ${aberto ? `<div class="pcp-bloco-corpo">${linhas}</div>` : ''}
+        </section>`;
+    }).join('');
+}
+
+function _pcpLinhaHTML(p, col, idx) {
+    const podeVoltar  = idx > 1;
+    const podeAvancar = idx < STATUS_PIPELINE.length - 1;
+    const prontoSemAgenda = col.status === 'Pronto p/ Instalação' && !_instAgendada(p);
+    const entrega = statusEntrega(p);
+    const obs = p.observacoes ? `<span class="pcp-linha-obs" title="${escapeHtml(p.observacoes)}">💬</span>` : '';
+    const avancar = !podeAvancar ? ''
+        : prontoSemAgenda
+            ? `<button class="btn btn-sm kanban-btn-agendar" onclick="irParaAgendaInstalacao(${p.id})" title="Agendar instalação">📅 Agendar</button>`
+            : `<button class="btn btn-sm" onclick="moverStatus(${p.id},1)" title="Avançar etapa">→</button>`;
+    return `<div class="pcp-linha">
+        <button type="button" class="pcp-linha-num" onclick="editarPedido(${p.id})" title="Abrir pedido">#${formatPedidoId(p.id)}</button>
+        <div class="pcp-linha-cli">
+            <span class="pcp-linha-nome">${escapeHtml(p.clienteNome || '')}${obs}</span>
+            ${p.amb ? `<span class="pcp-linha-amb">${escapeHtml(p.amb)}</span>` : ''}
+        </div>
+        <div class="pcp-linha-entrega">${entrega ? `<span class="${entrega.cls}">${entrega.label}</span>` : ''}</div>
+        <div class="pcp-linha-acoes">
+            <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})" title="Ver Ordem de Serviço">📋</button>
+            <button class="btn btn-outline btn-sm" onclick="verTimeline(${p.id})" title="Ver timeline">⏱</button>
+            ${podeVoltar ? `<button class="btn btn-outline btn-sm" onclick="moverStatus(${p.id},-1)" title="Voltar etapa">←</button>` : ''}
+            ${avancar}
+        </div>
+    </div>`;
 }
 
 // --- ASSINATURA DIGITAL (canvas) ---
@@ -8716,6 +8926,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (matSel) matSel.innerHTML = '<option value="">— Selecione o material —</option>' +
             db.materiais.map(m=>`<option value="${m.id}">${m.nome} (${m.unidade}) · estoque: ${(m.estoque_atual||0).toFixed(1)}</option>`).join('');
 
+        preencherSelectFormaPagamento();   // pedido novo: a primeira da lista
         const idParaEditar = localStorage.getItem('sc_editando_id');
         if (idParaEditar) {
             editandoIdPedido = parseInt(idParaEditar);
@@ -9290,6 +9501,14 @@ const PLANOS_PAGAMENTO = {
     '40_60':  [{ descricao: 'Entrada (40%)', pct: 40, dias: 0 }, { descricao: 'Saldo na instalação (60%)', pct: 60, dias: -1 }],
 };
 
+// Pedido com forma de pagamento (so um nome, definida pela empresa): um unico
+// lancamento com o valor todo, vencendo na aprovacao. Pedido antigo, gravado
+// com o codigo de um plano, continua dividido como era.
+function _planoPagamento(ped) {
+    if (ped.forma_pagamento) return [{ descricao: `Pagamento (${ped.forma_pagamento})`, pct: 100, dias: 0 }];
+    return PLANOS_PAGAMENTO[ped.tipo_pagamento || '50_50'] || PLANOS_PAGAMENTO['50_50'];
+}
+
 function _migrarFinanceiroPedidos() {
     const pendentes = db.pedidos.filter(p =>
         !p.financeiro_gerado &&
@@ -9314,7 +9533,7 @@ function _migrarFinanceiroPedidos() {
                 status: 'Pago'
             });
         } else {
-            const plano = PLANOS_PAGAMENTO[ped.tipo_pagamento || '50_50'] || PLANOS_PAGAMENTO['50_50'];
+            const plano = _planoPagamento(ped);
             const hoje = new Date();
             plano.forEach((parcela, i) => {
                 const valor = Math.round(ped.valor * parcela.pct / 100 * 100) / 100;
@@ -9340,7 +9559,7 @@ function _migrarFinanceiroPedidos() {
 
 function gerarFinanceiroPedido(ped) {
     if (ped.financeiro_gerado) return;
-    const plano = PLANOS_PAGAMENTO[ped.tipo_pagamento || '50_50'] || PLANOS_PAGAMENTO['50_50'];
+    const plano = _planoPagamento(ped);
     const hoje = new Date();
     plano.forEach((parcela, i) => {
         const valor = Math.round(ped.valor * parcela.pct / 100 * 100) / 100;

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Produção - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261028a">
+    <link rel="stylesheet" href="css/style.css?v=20261028d">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
@@ -27,8 +27,8 @@
             <!-- Filtros do Kanban -->
             <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;padding:12px 0 4px">
                 <div style="flex:1;min-width:160px">
-                    <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Cliente</label>
-                    <input id="kf-cliente" type="text" placeholder="🔍 Buscar cliente..."
+                    <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Cliente ou pedido</label>
+                    <input id="kf-cliente" type="text" placeholder="🔍 Buscar cliente ou nº do pedido..."
                            style="width:100%;padding:7px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px"
                            oninput="aplicarFiltroKanban()">
                 </div>
@@ -52,8 +52,13 @@
                     <button class="btn btn-outline btn-sm" onclick="limparFiltroKanban()" style="white-space:nowrap">✕ Limpar</button>
                     <span id="kf-resultado" style="font-size:12px;color:#8F8F8F;white-space:nowrap;line-height:32px"></span>
                 </div>
+                <div class="pcp-modo" role="group" aria-label="Modo de visualização">
+                    <button type="button" id="pcp-modo-kanban" class="pcp-modo-btn" onclick="trocarModoPCP('kanban')" aria-pressed="true">▦ Kanban</button>
+                    <button type="button" id="pcp-modo-lista"  class="pcp-modo-btn" onclick="trocarModoPCP('lista')"  aria-pressed="false">☰ Lista</button>
+                </div>
             </div>
             <div id="kanban-board" class="kanban-board"></div>
+            <div id="kanban-lista" class="pcp-lista" hidden></div>
         </div>
         <div id="pcp-view-agenda" style="display:none">
             <!-- Agenda de Instalacoes em tres areas: pedidos prontos (cards), formulario
@@ -246,7 +251,7 @@
             </div>
         </div>
     </main>
-    <script src="js/app.js?v=20261028a"></script>
+    <script src="js/app.js?v=20261028d"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const view = new URLSearchParams(window.location.search).get('view');

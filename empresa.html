@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Configurar Empresa - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261028a">
+    <link rel="stylesheet" href="css/style.css?v=20261028d">
     <style>
         .logo-upload-area {
             border: 2px dashed var(--border);
@@ -112,6 +112,20 @@
             </div>
         </div>
 
+        <div class="card" style="max-width:860px" id="emp-formas-pag-card">
+            <h3 style="margin-bottom:6px;color:var(--primary)">💳 Formas de Pagamento</h3>
+            <p style="font-size:12px;color:#8F8F8F;margin-bottom:14px">
+                Opções que aparecem no campo "Forma de Pagamento" ao emitir um pedido.
+                A primeira da lista já vem marcada nos pedidos novos. Use as setas para mudar a ordem.
+            </p>
+            <div id="emp-formas-pag" class="formas-pag-lista"></div>
+            <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px" onclick="adicionarFormaPagamento()">+ Adicionar forma de pagamento</button>
+            <div style="display:flex;gap:10px;margin-top:14px;align-items:center">
+                <button class="btn btn-success" onclick="salvarFormasPagamento()">💾 Salvar Formas de Pagamento</button>
+                <button class="btn btn-outline" onclick="restaurarFormasPagamento()">↩ Restaurar Padrão</button>
+            </div>
+        </div>
+
         <div class="card" style="max-width:860px">
             <h3 style="margin-bottom:6px;color:var(--primary)">🔔 Preferências de Alertas</h3>
             <p style="font-size:12px;color:#8F8F8F;margin-bottom:16px">Escolha quais alertas devem ser exibidos no sistema. Alertas desabilitados mostrarão um indicador 🔕 no cabeçalho de todas as páginas.</p>
@@ -129,7 +143,7 @@
             <div id="emp-cabecalho-preview" style="border:1px solid var(--border);border-radius:8px;padding:16px 20px;background:#fff"></div>
         </div>
     </main>
-    <script src="js/app.js?v=20261028a"></script>
+    <script src="js/app.js?v=20261028d"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             carregarEmpresaConfigs();
@@ -137,6 +151,7 @@
             renderEmpresaAlertasCfg();
             renderEmpresaDashCardsCfg();
             carregarCondicoesGerais();
+            renderFormasPagamentoCfg();
         });
         function atualizarPreviewCabecalho() {
             const card = document.getElementById('emp-preview-card');

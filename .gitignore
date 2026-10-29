@@ -6,3 +6,4 @@ LandingPage/
 
 # Worktrees do Claude Code (copias locais do repositorio)
 .claude/worktrees/
+.superpowers/
