@@ -68,28 +68,27 @@
         <div class="card section-card">
             <h3 style="color: var(--primary); margin-bottom: 20px;">3. Materiais e Acessórios</h3>
 
-            <!-- Busca rapida: material ou kit por codigo ou nome -->
-            <div class="form-group" style="margin-bottom:16px">
-                <label for="ped-item-busca">Buscar Material ou Kit</label>
-                <div class="busca-campo">
-                    <input type="text" id="ped-item-busca" autocomplete="off"
-                           placeholder="🔍 Digite a referência ou o nome do item..."
-                           oninput="pedBuscaDigitou()" onkeydown="pedBuscaTecla(event)" onfocus="pedBuscaRender()">
-                    <div class="consulta-sugestoes" id="ped-item-busca-sug"></div>
+            <!-- Aplicar kit: busca por codigo ou nome + lista de kits -->
+            <div class="ped-linha-busca">
+                <div class="form-group ped-busca">
+                    <label for="ped-kit-busca">Buscar Kit <small>(cód. ou nome)</small></label>
+                    <div class="busca-campo">
+                        <input type="text" id="ped-kit-busca" autocomplete="off" placeholder="🔍 Ref. ou nome..."
+                               oninput="pedBuscaDigitou('kit')" onkeydown="pedBuscaTecla(event, 'kit')" onfocus="pedBuscaRender('kit')">
+                        <div class="consulta-sugestoes" id="ped-kit-busca-sug"></div>
+                    </div>
                 </div>
-            </div>
-
-            <!-- Aplicar kit -->
-            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
-                <div class="form-group" style="flex:1;min-width:200px">
-                    <label>Aplicar Kit Pronto</label>
+                <div class="form-group ped-select">
+                    <label for="ped-kit">Aplicar Kit Pronto</label>
                     <select id="ped-kit"></select>
                 </div>
-                <button class="btn" style="margin-bottom:0" onclick="aplicarKit()">Aplicar Kit</button>
+                <div class="ped-acoes">
+                    <button class="btn" style="margin-bottom:0" onclick="aplicarKit()">Aplicar Kit</button>
+                </div>
             </div>
 
             <!-- Tabela de itens já adicionados -->
-            <table style="margin-bottom:14px">
+            <table style="margin-bottom:22px">
                 <thead>
                     <tr>
                         <th>Material</th>
@@ -104,16 +103,26 @@
             </table>
 
             <!-- Adicionar item avulso -->
-            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:14px">
-                <div class="form-group" style="flex:1;min-width:200px">
-                    <label>Adicionar Item Avulso</label>
+            <div class="ped-linha-busca" style="margin-bottom:0">
+                <div class="form-group ped-busca">
+                    <label for="ped-mat-busca">Buscar Material <small>(cód. ou nome)</small></label>
+                    <div class="busca-campo">
+                        <input type="text" id="ped-mat-busca" autocomplete="off" placeholder="🔍 Ref. ou nome..."
+                               oninput="pedBuscaDigitou('mat')" onkeydown="pedBuscaTecla(event, 'mat')" onfocus="pedBuscaRender('mat')">
+                        <div class="consulta-sugestoes" id="ped-mat-busca-sug"></div>
+                    </div>
+                </div>
+                <div class="form-group ped-select">
+                    <label for="ped-item-mat">Adicionar Item Avulso</label>
                     <select id="ped-item-mat"></select>
                 </div>
-                <div class="form-group" style="width:110px">
-                    <label>Quantidade</label>
-                    <input type="number" id="ped-item-qtd" value="1" step="0.01" min="0.01">
+                <div class="ped-acoes">
+                    <div class="form-group" style="width:70px;margin-bottom:0">
+                        <label for="ped-item-qtd">Quantidade</label>
+                        <input type="number" id="ped-item-qtd" value="1" step="0.01" min="0.01">
+                    </div>
+                    <button class="btn" style="margin-bottom:0" onclick="adicionarItemPedido()">+ Adicionar</button>
                 </div>
-                <button class="btn btn-outline" style="margin-bottom:0" onclick="adicionarItemPedido()">+ Adicionar</button>
             </div>
         </div>
 

@@ -1743,3 +1743,17 @@ html[data-theme="dark"] .kanban-inst-pend { color: #F7DE86; }
 .ped-sug-item .consulta-sug-nome { flex: 1 1 auto; min-width: 0; }
 .ped-sug-det { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 @media (max-width: 640px) { .ped-sug-det { display: none; } }
+
+/* Pedido > Materiais: [busca][select] ............ [acoes] */
+.ped-linha-busca { display: flex; gap: 2px; align-items: flex-end; flex-wrap: wrap; margin: 0 0 22px; }
+.ped-linha-busca .form-group { margin-bottom: 0; }
+.ped-linha-busca label small { font-weight: 400; font-size: 11px; color: var(--muted); margin-left: 6px; }
+.ped-busca { width: 190px; }
+.ped-busca .consulta-sugestoes { right: auto; width: 460px; max-width: calc(100vw - 32px); }
+.ped-select select { width: auto; min-width: 175px; max-width: 280px; }
+.ped-acoes { display: flex; gap: 20px; align-items: flex-end; margin-left: auto; }
+@media (max-width: 640px) {
+    .ped-linha-busca { gap: 10px; }
+    .ped-busca, .ped-select, .ped-select select { width: 100%; max-width: none; }
+    .ped-acoes { width: 100%; justify-content: flex-end; }
+}

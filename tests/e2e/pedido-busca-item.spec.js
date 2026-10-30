@@ -1,6 +1,7 @@
-// Emissao de pedido > Materiais e Acessorios: um campo de busca antes de
-// "Aplicar Kit" e do item avulso procura materiais e kits do cadastro pela
-// referencia ou pelo nome. Escolher o resultado ja adiciona ao pedido.
+// Emissao de pedido > Materiais e Acessorios: "Buscar Kit" fica ao lado de
+// "Aplicar Kit Pronto" e so procura kits; "Buscar Material" fica ao lado de
+// "Adicionar Item Avulso" e so procura materiais. Ambos pela referencia ou
+// pelo nome. Escolher o resultado ja adiciona ao pedido.
 const { test, expect } = require('@playwright/test');
 const { entrar } = require('./ajuda.js');
 
@@ -11,7 +12,7 @@ const MAT = [
     { id: 3, nome: 'Ponteira Cromada', referencia: 'PT-7', unidade: 'un', preco: 8, estoque_atual: 12 },
 ];
 const KITS = [
-    // Mesmo id de um material: a busca precisa saber de qual tipo e'.
+    // Mesmo id de um material: a busca de kit precisa aplicar o kit.
     { id: 1, nome: 'Kit Trilho Completo', referencia: 'KT-1', itens: [{ materialId: 1, quantidade: 2 }, { materialId: 2, quantidade: 20 }] },
     { id: 2, tipo: 'pronto', nome: 'Kit Varão Pronto', referencia: 'KV-2', medida: '2,00 m', preco: 150, itens: [] },
 ];
@@ -20,42 +21,47 @@ async function abrir(page) {
     await entrar(page, BASE, { sc_mat: MAT, sc_kits: KITS });
     await page.goto(BASE + '/pedido.html');
 }
-const busca = page => page.locator('#ped-item-busca');
-const sugestoes = page => page.locator('#ped-item-busca-sug .ped-sug-item');
+const bKit = page => page.locator('#ped-kit-busca');
+const bMat = page => page.locator('#ped-mat-busca');
+const sugKit = page => page.locator('#ped-kit-busca-sug .ped-sug-item');
+const sugMat = page => page.locator('#ped-mat-busca-sug .ped-sug-item');
 const itens = page => page.evaluate(() => pedidoDraft.itens);
 
-test('o campo de busca vem antes do kit e do item avulso', async ({ page }) => {
+test('cada busca fica logo antes do seu select', async ({ page }) => {
     await abrir(page);
-    await expect(page.locator('label[for="ped-item-busca"]')).toHaveText('Buscar Material ou Kit');
-    const antes = await page.evaluate(() => {
-        const b = document.getElementById('ped-item-busca');
-        const ok = el => !!(b.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
-        return ok(document.getElementById('ped-kit')) && ok(document.getElementById('ped-item-mat'));
+    await expect(page.locator('label[for="ped-kit-busca"]')).toContainText('Buscar Kit');
+    await expect(page.locator('label[for="ped-mat-busca"]')).toContainText('Buscar Material');
+    const ordem = await page.evaluate(() => {
+        const segue = (a, b) => !!(document.getElementById(a).compareDocumentPosition(document.getElementById(b)) & Node.DOCUMENT_POSITION_FOLLOWING);
+        return segue('ped-kit-busca', 'ped-kit') && segue('ped-kit', 'tb-itens-pedido')
+            && segue('tb-itens-pedido', 'ped-mat-busca') && segue('ped-mat-busca', 'ped-item-mat');
     });
-    expect(antes).toBe(true);
-    await expect(page.locator('#ped-item-busca-sug')).toBeHidden();
+    expect(ordem).toBe(true);
+    await expect(page.locator('#ped-kit-busca-sug')).toBeHidden();
+    await expect(page.locator('#ped-mat-busca-sug')).toBeHidden();
 });
 
-test('busca pelo nome, sem acento e sem diferenciar maiusculas, traz materiais e kits', async ({ page }) => {
+test('busca de kit so traz kits; busca de material so traz materiais', async ({ page }) => {
     await abrir(page);
-    await busca(page).fill('trilho');
-    await expect(sugestoes(page)).toHaveCount(3);
-    await expect(sugestoes(page).filter({ hasText: 'KIT' })).toHaveCount(1);
-    await busca(page).fill('rodizio');
-    await expect(sugestoes(page)).toHaveCount(1);
-    await expect(sugestoes(page).first()).toContainText('Rodízio Trilho');
-    await expect(sugestoes(page).first()).toContainText('estoque: 300.0');
+    await bKit(page).fill('trilho');
+    await expect(sugKit(page)).toHaveCount(1);
+    await expect(sugKit(page).first()).toContainText('Kit Trilho Completo');
+    await bMat(page).fill('trilho');
+    await expect(sugMat(page)).toHaveCount(2);
+    await expect(sugMat(page).filter({ hasText: 'KIT' })).toHaveCount(0);
+    await bMat(page).fill('rodizio');
+    await expect(sugMat(page)).toHaveCount(1);
+    await expect(sugMat(page).first()).toContainText('estoque: 300.0');
 });
 
-test('busca pela referencia, com a exata primeiro', async ({ page }) => {
+test('busca pela referencia', async ({ page }) => {
     await abrir(page);
-    await busca(page).fill('kv-2');
-    await expect(sugestoes(page)).toHaveCount(1);
-    await expect(sugestoes(page).first()).toContainText('Kit Varão Pronto');
-    await expect(sugestoes(page).first()).toContainText('R$ 150.00');
-    await busca(page).fill('rd-20');
-    await expect(sugestoes(page)).toHaveCount(1);
-    await expect(sugestoes(page).first()).toContainText('Rodízio Trilho');
+    await bKit(page).fill('kv-2');
+    await expect(sugKit(page)).toHaveCount(1);
+    await expect(sugKit(page).first()).toContainText('R$ 150.00');
+    await bMat(page).fill('rd-20');
+    await expect(sugMat(page)).toHaveCount(1);
+    await expect(sugMat(page).first()).toContainText('Rodízio Trilho');
 });
 
 test('referencia exata aparece antes dos que so casam pelo nome', async ({ page }) => {
@@ -64,68 +70,71 @@ test('referencia exata aparece antes dos que so casam pelo nome', async ({ page 
         { id: 2, nome: 'Suporte teto', referencia: 'AB12', unidade: 'un', preco: 1 },
     ], sc_kits: [] });
     await page.goto(BASE + '/pedido.html');
-    await busca(page).fill('ab12');
-    await expect(sugestoes(page)).toHaveCount(2);
-    await expect(sugestoes(page).first()).toContainText('Suporte teto');
+    await bMat(page).fill('ab12');
+    await expect(sugMat(page)).toHaveCount(2);
+    await expect(sugMat(page).first()).toContainText('Suporte teto');
 });
 
 test('sem resultado mostra o aviso', async ({ page }) => {
     await abrir(page);
-    await busca(page).fill('xyz');
-    await expect(page.locator('#ped-item-busca-sug')).toContainText('Nenhum material ou kit');
+    await bKit(page).fill('xyz');
+    await expect(page.locator('#ped-kit-busca-sug')).toContainText('Nenhum kit');
+    await bMat(page).fill('xyz');
+    await expect(page.locator('#ped-mat-busca-sug')).toContainText('Nenhum material');
 });
 
 test('clicar num material adiciona com a quantidade do campo e limpa a busca', async ({ page }) => {
     await abrir(page);
     await page.fill('#ped-item-qtd', '3');
-    await busca(page).fill('PT-7');
-    await sugestoes(page).first().click();
+    await bMat(page).fill('PT-7');
+    await sugMat(page).first().click();
     expect(await itens(page)).toEqual([expect.objectContaining({ materialId: 3, quantidade: 3, subtotal: 24 })]);
-    await expect(busca(page)).toHaveValue('');
-    await expect(busca(page)).toBeFocused();
-    await expect(page.locator('#ped-item-busca-sug')).toBeHidden();
+    await expect(bMat(page)).toHaveValue('');
+    await expect(bMat(page)).toBeFocused();
+    await expect(page.locator('#ped-mat-busca-sug')).toBeHidden();
     await expect(page.locator('#tb-itens-pedido')).toContainText('Ponteira Cromada');
 });
 
 test('clicar num kit de montagem explode os materiais, nao o material de mesmo id', async ({ page }) => {
     await abrir(page);
-    await busca(page).fill('Kit Trilho');
-    await sugestoes(page).first().click();
+    await bKit(page).fill('Kit Trilho');
+    await sugKit(page).first().click();
     const i = await itens(page);
     expect(i.map(x => [x.materialId, x.quantidade])).toEqual([[1, 2], [2, 20]]);
+    await expect(bKit(page)).toHaveValue('');
 });
 
 test('kit pronto entra como uma linha so', async ({ page }) => {
     await abrir(page);
-    await busca(page).fill('varao');
-    await sugestoes(page).first().click();
+    await bKit(page).fill('varao');
+    await sugKit(page).first().click();
     expect(await itens(page)).toEqual([expect.objectContaining({ kitId: 2, quantidade: 1, preco_unit: 150 })]);
 });
 
 test('teclado: Enter com um unico achado adiciona; setas escolhem; Esc fecha', async ({ page }) => {
     await abrir(page);
-    await busca(page).fill('PT-7');
-    await busca(page).press('Enter');
+    await bMat(page).fill('PT-7');
+    await bMat(page).press('Enter');
     expect((await itens(page)).length).toBe(1);
 
-    await busca(page).fill('trilho');
-    await busca(page).press('Enter');   // varios achados, nada percorrido: nao adiciona
+    await bMat(page).fill('trilho');
+    await bMat(page).press('Enter');   // varios achados, nada percorrido: nao adiciona
     expect((await itens(page)).length).toBe(1);
-    await busca(page).press('ArrowDown');
-    await busca(page).press('ArrowDown');
-    await expect(sugestoes(page).nth(1)).toHaveClass(/ativa/);
-    await busca(page).press('Enter');
+    await bMat(page).press('ArrowDown');
+    await bMat(page).press('ArrowDown');
+    await expect(sugMat(page).nth(1)).toHaveClass(/ativa/);
+    await bMat(page).press('Enter');
     expect((await itens(page)).length).toBe(2);
 
-    await busca(page).fill('trilho');
-    await busca(page).press('Escape');
-    await expect(page.locator('#ped-item-busca-sug')).toBeHidden();
+    await bMat(page).fill('trilho');
+    await bMat(page).press('Escape');
+    await expect(page.locator('#ped-mat-busca-sug')).toBeHidden();
 });
 
 test('clicar fora fecha as sugestoes', async ({ page }) => {
     await abrir(page);
-    await busca(page).fill('trilho');
-    await expect(sugestoes(page)).toHaveCount(3);
+    await bKit(page).fill('trilho');
+    await expect(sugKit(page)).toHaveCount(1);
     await page.locator('h3', { hasText: 'Materiais e Acessórios' }).click();
-    await expect(page.locator('#ped-item-busca-sug')).toBeHidden();
+    await expect(page.locator('#ped-kit-busca-sug')).toBeHidden();
 });

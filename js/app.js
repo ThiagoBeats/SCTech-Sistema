@@ -5228,23 +5228,23 @@ async function aplicarKit() {
     document.getElementById('ped-kit').value = '';
 }
 
-// ── Busca rapida de material ou kit no pedido ───────────────────────────────
-// Um campo so procura materiais e kits do cadastro pela referencia ou pelo
-// nome. Escolher um resultado adiciona o item ao pedido na hora: material com
-// a quantidade do campo "Quantidade", kit como em "Aplicar Kit". Materiais e
-// kits podem repetir o id, por isso cada achado leva o tipo junto.
+// ── Busca rapida de kit / material no pedido ────────────────────────────────
+// Dois campos: "Buscar Kit" (#ped-kit-busca) so procura kits, "Buscar
+// Material" (#ped-mat-busca) so materiais, pela referencia ou pelo nome.
+// Escolher um resultado adiciona o item ao pedido na hora: material com a
+// quantidade do campo "Quantidade", kit como em "Aplicar Kit".
 
 let _pedBuscaAtiva = -1;
 
-function _pedBuscaAchados() {
-    const termo = _buscaNormaliza(document.getElementById('ped-item-busca')?.value);
+function _pedBuscaAchados(tipo) {
+    const termo = _buscaNormaliza(document.getElementById(`ped-${tipo}-busca`)?.value);
     if (!termo) return [];
     const casa = i => _buscaNormaliza(i.nome).includes(termo) || _buscaNormaliza(i.referencia).includes(termo);
-    const mats = (db.materiais || []).filter(casa).map(m => ({ tipo: 'mat', item: m }));
-    const kits = (db.kits || []).filter(casa).map(k => ({ tipo: 'kit', item: k }));
+    const lista = tipo === 'kit' ? (db.kits || []) : (db.materiais || []);
     // Quem bate a referencia exata vem primeiro: quem digita o codigo sabe o que quer.
     const exato = a => _buscaNormaliza(a.item.referencia) === termo ? 0 : 1;
-    return mats.concat(kits).sort((a, b) => exato(a) - exato(b)).slice(0, 12);
+    return lista.filter(casa).map(item => ({ tipo, item }))
+        .sort((a, b) => exato(a) - exato(b)).slice(0, 12);
 }
 
 function _pedBuscaDetalhe(a) {
@@ -5258,13 +5258,13 @@ function _pedBuscaDetalhe(a) {
     return `${i.unidade || 'un'} · R$ ${(i.preco || 0).toFixed(2)} · estoque: ${est}`;
 }
 
-function pedBuscaRender() {
-    const caixa = document.getElementById('ped-item-busca-sug');
+function pedBuscaRender(tipo) {
+    const caixa = document.getElementById(`ped-${tipo}-busca-sug`);
     if (!caixa) return;
-    if (!document.getElementById('ped-item-busca')?.value.trim()) { pedBuscaFechar(); return; }
-    const achados = _pedBuscaAchados();
+    if (!document.getElementById(`ped-${tipo}-busca`)?.value.trim()) { pedBuscaFechar(tipo); return; }
+    const achados = _pedBuscaAchados(tipo);
     if (!achados.length) {
-        caixa.innerHTML = '<div class="consulta-sug-item" style="cursor:default;color:var(--muted)">Nenhum material ou kit com essa referência ou nome</div>';
+        caixa.innerHTML = `<div class="consulta-sug-item" style="cursor:default;color:var(--muted)">Nenhum ${tipo === 'kit' ? 'kit' : 'material'} com essa referência ou nome</div>`;
         caixa.classList.add('aberta');
         return;
     }
@@ -5279,15 +5279,18 @@ function pedBuscaRender() {
     caixa.querySelector('.consulta-sug-item.ativa')?.scrollIntoView({ block: 'nearest' });
 }
 
-function pedBuscaDigitou() {
+function pedBuscaDigitou(tipo) {
     _pedBuscaAtiva = -1;
-    pedBuscaRender();
+    pedBuscaRender(tipo);
 }
 
-function pedBuscaFechar() {
+// Sem tipo, fecha as duas listas.
+function pedBuscaFechar(tipo) {
     _pedBuscaAtiva = -1;
-    const caixa = document.getElementById('ped-item-busca-sug');
-    if (caixa) { caixa.classList.remove('aberta'); caixa.innerHTML = ''; }
+    for (const t of tipo ? [tipo] : ['kit', 'mat']) {
+        const caixa = document.getElementById(`ped-${t}-busca-sug`);
+        if (caixa) { caixa.classList.remove('aberta'); caixa.innerHTML = ''; }
+    }
 }
 
 async function pedBuscaEscolher(tipo, id) {
@@ -5300,13 +5303,13 @@ async function pedBuscaEscolher(tipo, id) {
         await adicionarItemPedido();
         sel.value = '';
     }
-    const campo = document.getElementById('ped-item-busca');
+    const campo = document.getElementById(`ped-${tipo}-busca`);
     if (campo) { campo.value = ''; campo.focus(); }
 }
 
-function pedBuscaTecla(e) {
-    if (e.key === 'Escape') { pedBuscaFechar(); return; }
-    const achados = _pedBuscaAchados();
+function pedBuscaTecla(e, tipo) {
+    if (e.key === 'Escape') { pedBuscaFechar(tipo); return; }
+    const achados = _pedBuscaAchados(tipo);
     if (!achados.length) return;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
@@ -5314,7 +5317,7 @@ function pedBuscaTecla(e) {
         _pedBuscaAtiva = e.key === 'ArrowDown'
             ? (_pedBuscaAtiva + 1) % total
             : (_pedBuscaAtiva <= 0 ? total - 1 : _pedBuscaAtiva - 1);
-        pedBuscaRender();
+        pedBuscaRender(tipo);
         return;
     }
     if (e.key === 'Enter') {
@@ -5326,7 +5329,7 @@ function pedBuscaTecla(e) {
 }
 
 document.addEventListener('click', e => {
-    if (e.target.closest && e.target.closest('#ped-item-busca, #ped-item-busca-sug')) return;
+    if (e.target.closest && e.target.closest('.ped-busca')) return;
     pedBuscaFechar();
 });
 
