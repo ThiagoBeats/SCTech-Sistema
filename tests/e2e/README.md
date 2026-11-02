@@ -56,7 +56,7 @@ TESTDIR=<projeto>/tests/e2e \
   npx playwright test --config=repo.config.js
 ```
 
-Esperado: **340 passando**.
+Esperado: **496 passando**.
 
 ## Sessão autenticada é obrigatória
 
@@ -116,4 +116,7 @@ navegar. Ele semeia um usuário com papel 1 (Administrador, que vem de
 | `forma-de-pagamento.spec.js` | "Parcelamento" virando "Forma de Pagamento" no pedido, a lista vindo de Configurações › Empresa (com a padrão quando não há lista ou ela está corrompida) e a primeira marcada no pedido novo; na tela da empresa, adicionar, renomear, reordenar e remover gravando só ao salvar, nomes vazios e repetidos descartados, a lista vazia barrada e o restaurar padrão; o pedido guardando o nome e o Financeiro lançando um único valor; e os pedidos antigos — o código de plano mostrado pelo nome e ainda dividido como antes, e a forma que saiu da lista preservada ao editar; o % de desconto de cada forma (gravado ao salvar, limitado a 0–100, acompanhando a forma ao reordenar, 0 para a lista antiga só com nomes), o pedido novo trazendo o desconto da forma marcada e trocando-o com a forma, o desconto continuando editável e o valor editado sendo o gravado, e o pedido editado mantendo o próprio desconto |
 | `pedido-busca-item.spec.js` | Em Materiais e Acessórios do pedido, "Buscar Kit" ao lado de "Aplicar Kit Pronto" (só kits) e "Buscar Material" ao lado de "Adicionar Item Avulso" (só materiais): busca por referência ou nome sem acento nem maiúsculas, a referência exata primeiro, o aviso sem resultado de cada um; clicar num material adiciona com a quantidade do campo e limpa a busca, um kit de montagem explode os materiais dele (e não o material de mesmo id), o kit pronto entra numa linha só; Enter, setas e Esc no teclado, e o clique fora fechando a lista |
 
-Esperado no total: **340 passando**.
+| `financeiro-bloqueio-menu.spec.js` | O pedido aprovado abrindo só para leitura (campos travados, sem salvar, e o salvar recusado mesmo chamado direto), o "Voltar para Orçamento" liberando a edição e refazendo os recebimentos em aberto, o Instalado sem volta; a etapa "Aguardando Financeiro" (e os pedidos antigos em "Aguardando Pagamento" renomeados); confirmar a instalação levando sempre para Aguardando Financeiro, com a marca "Pendente" quando há saldo; o card dessa etapa com a forma de pagamento e o botão "Confirmar pagamento" (Kanban e Lista), só para Administrador/Financeiro, levando a Instalado; e o alfinete do menu lateral — fixado aberto, solto só com ícones abrindo ao passar o mouse sem empurrar a tela, e a preferência guardada por usuário |
+| `pedido-compra-de-venda.spec.js` | "Importar de pedido" em Pedidos de Compra: só pedidos em aberto (não instalados) numa tabela com colunas (pedido, cliente, vendedor, status, entrega, itens, compras feitas), os filtros por nº/cliente, status, vendedor e entrega com o limpar, clicar (ou Enter) na linha abrindo os itens e o "Trocar pedido" voltando com o filtro mantido, os itens do pedido somados (tecido pelo consumo dos ambientes, materiais e kits pela quantidade) com fornecedor e estoque, o pedido sem itens, marcar/desmarcar e mudar quantidade, um fornecedor só indo direto ao formulário com a observação de origem, fornecedores diferentes oferecendo um pedido por fornecedor ou um genérico (e o cancelar voltando à escolha), a fila e o genérico gravando `pedido_venda_id`, o item já comprado vindo desmarcado e avisado, e o pedido feito à mão depois sem herdar a origem |
+
+Esperado no total: **496 passando**.

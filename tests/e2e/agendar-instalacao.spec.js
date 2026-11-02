@@ -332,10 +332,10 @@ test('confirmar a instalacao leva para Realizados (inclusive com saldo)', async 
     await page.click('.agd-modal button:has-text("Confirmar instalação")');
     await page.click('#mpg-nao');
     const linha = page.locator('#inst-real-lista .agd-item', { hasText: 'Ana Paula Lima' });
-    await expect(linha.locator('.agd-pill')).toHaveText('Aguard. pagamento');
+    await expect(linha.locator('.agd-pill')).toHaveText('Aguard. financeiro');
     await expect(page.locator('#inst-pend-lista')).not.toContainText('Ana Paula Lima');
     const p = await lerPed(page, 26200);
-    expect(p.status).toBe('Aguardando Pagamento');
+    expect(p.status).toBe('Aguardando Financeiro');
     expect(p.inst_confirmada_em).toBeGreaterThan(0);
 });
 

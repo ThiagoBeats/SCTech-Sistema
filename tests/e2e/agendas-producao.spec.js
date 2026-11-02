@@ -317,7 +317,7 @@ test('instalacoes: a busca aceita o numero do pedido', async ({ page }) => {
     expect(await nomes(page, 'inst-pend-lista')).toEqual(['Pedro Alves']);
 });
 
-test('instalacoes: confirmar com pagamento completo vai para Realizados como Instalado', async ({ page }) => {
+test('instalacoes: confirmar com pagamento completo vai para Realizados como Aguardando Financeiro', async ({ page }) => {
     await abrir(page, 'agenda');
     await page.locator('#inst-pend-lista .agd-item', { hasText: 'Pedro Alves' }).click();
     await page.click('.agd-modal button:has-text("Confirmar instalação")');
@@ -325,20 +325,20 @@ test('instalacoes: confirmar com pagamento completo vai para Realizados como Ins
     await expect(page.locator('#inst-real-lista')).toContainText('Pedro Alves');
     await expect(page.locator('#inst-pend-lista')).not.toContainText('Pedro Alves');
     const p = (await lerPed(page)).find(x => x.id === 26010);
-    expect(p.status).toBe('Instalado');
-    expect(p.valor_recebido).toBe(1000);
-    expect(p.data_instalado).toBeGreaterThan(0);
+    expect(p.status, 'quem fecha e o financeiro').toBe('Aguardando Financeiro');
+    expect(p.pagamento_pendente).toBe(false);
+    expect(p.valor_recebido, 'so muda quando o financeiro confirma').toBe(0);
 });
 
-test('instalacoes: confirmar com saldo vai para Realizados como Aguardando Pagamento', async ({ page }) => {
+test('instalacoes: confirmar com saldo vai para Realizados como Aguardando Financeiro', async ({ page }) => {
     await abrir(page, 'agenda');
     await page.locator('#inst-pend-lista .agd-item', { hasText: 'Pedro Alves' }).click();
     await page.click('.agd-modal button:has-text("Confirmar instalação")');
     await page.click('#mpg-nao');
     await expect(page.locator('#inst-pend-lista')).not.toContainText('Pedro Alves');
     const linha = page.locator('#inst-real-lista .agd-item', { hasText: 'Pedro Alves' });
-    await expect(linha.locator('.agd-pill')).toHaveText('Aguard. pagamento');
-    expect((await lerPed(page)).find(x => x.id === 26010).status).toBe('Aguardando Pagamento');
+    await expect(linha.locator('.agd-pill')).toHaveText('Aguard. financeiro');
+    expect((await lerPed(page)).find(x => x.id === 26010).status).toBe('Aguardando Financeiro');
 });
 
 test('instalacoes: reagendar muda a data do pedido e guarda o historico', async ({ page }) => {
@@ -400,9 +400,9 @@ test('o Kanban continua confirmando a entrega pelo mesmo desfecho', async ({ pag
         aplicarConfirmacaoEntrega(p, 'pago');
         const q = { id: 2, status: 'Pronto p/ Instalação', valor: 50 };
         aplicarConfirmacaoEntrega(q, 'pendente');
-        return [p.status, p.valor_recebido, q.status];
+        return [p.status, p.valor_recebido, q.status, p.pagamento_pendente, q.pagamento_pendente];
     });
-    expect(r).toEqual(['Instalado', 50, 'Aguardando Pagamento']);
+    expect(r).toEqual(['Aguardando Financeiro', undefined, 'Aguardando Financeiro', false, true]);
     const fonte = await page.evaluate(() => fetch('js/app.js').then(r => r.text()));
     const mover = fonte.slice(fonte.indexOf('async function moverStatus'));
     const corpo = mover.slice(0, mover.search(/\r?\n\}\r?\n/) + 1);   // o arquivo e servido com CRLF
@@ -455,17 +455,17 @@ test('confirmar na agenda move o card do Kanban sem recarregar a pagina', async 
     await page.click('#mpg-sim');
     await page.click('#tab-btn-kanban');
 
-    await expect(colunaKanban(page, 'Instalado')).toContainText('Pedro Alves');
+    await expect(colunaKanban(page, 'Aguardando Financeiro')).toContainText('Pedro Alves');
     await expect(colunaKanban(page, 'Pronto p/ Instalação')).not.toContainText('Pedro Alves');
     expect(await page.evaluate(() => window.__semRecarga), 'a pagina nao recarregou').toBe(true);
 });
 
-test('confirmar com saldo leva o card para Aguardando Pagamento', async ({ page }) => {
+test('confirmar com saldo leva o card para Aguardando Financeiro', async ({ page }) => {
     await abrir(page, 'agenda');
     await page.locator('#inst-pend-lista .agd-item', { hasText: 'Pedro Alves' }).click();
     await page.click('.agd-modal button:has-text("Confirmar instalação")');
     await page.click('#mpg-nao');
     await page.click('#tab-btn-kanban');
-    await expect(colunaKanban(page, 'Aguardando Pagamento')).toContainText('Pedro Alves');
+    await expect(colunaKanban(page, 'Aguardando Financeiro')).toContainText('Pedro Alves');
     await expect(colunaKanban(page, 'Pronto p/ Instalação')).not.toContainText('Pedro Alves');
 });

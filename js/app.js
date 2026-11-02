@@ -615,26 +615,55 @@ const SIDEBAR_MODULOS = [
     { href: 'configuracoes.html', icon: 'settings',   label: 'Configurações',     permModulo: 'configuracoes' },
 ];
 
-function getSidebarCollapsed() {
-    return localStorage.getItem('sc_sidebar') === 'collapsed';
+// Barra lateral fixada (aberta, empurra a tela) ou solta (so icones; abre
+// por cima da tela ao passar o mouse e fecha ao sair). A preferencia fica
+// por usuario e sobrevive ao sair/entrar. "sc_sidebar" guarda a ultima
+// escolha neste navegador: o <head> de cada pagina le essa chave antes de
+// desenhar, para a tela nao piscar. Valores: 'expanded' = fixada,
+// 'collapsed' = solta (os mesmos do antigo "Recolher menu").
+function _sidebarChaveUsuario() {
+    let id = null;
+    try { id = JSON.parse(sessionStorage.getItem('sc_user') || 'null')?.id ?? null; } catch (e) {}
+    return id == null ? null : `sc_sidebar_u${id}`;
 }
-
-function toggleSidebarCollapse() {
-    const collapsed = !getSidebarCollapsed();
-    localStorage.setItem('sc_sidebar', collapsed ? 'collapsed' : 'expanded');
-    document.documentElement.setAttribute('data-sidebar', collapsed ? 'collapsed' : 'expanded');
+function getSidebarFixada() {
+    try {
+        const chave = _sidebarChaveUsuario();
+        const v = (chave && localStorage.getItem(chave)) || localStorage.getItem('sc_sidebar');
+        return v !== 'collapsed';
+    } catch (e) { return true; }
+}
+function _aplicarSidebarFixada(fixada) {
+    document.documentElement.setAttribute('data-sidebar', fixada ? 'expanded' : 'collapsed');
     const sidebar = document.getElementById('main-sidebar');
-    if (sidebar) sidebar.classList.toggle('collapsed', collapsed);
-    const btn = document.getElementById('sidebar-toggle-btn');
-    if (btn) btn.title = collapsed ? 'Expandir menu' : 'Recolher menu';
+    if (sidebar) sidebar.classList.toggle('collapsed', !fixada);
+    const btn = document.getElementById('sidebar-pin-btn');
+    if (btn) {
+        btn.classList.toggle('fixado', fixada);
+        btn.title = fixada ? 'Desafixar menu (recolher e abrir ao passar o mouse)' : 'Fixar menu aberto';
+        btn.setAttribute('aria-pressed', String(fixada));
+    }
+}
+function alternarSidebarFixada(ev) {
+    if (ev) ev.stopPropagation();
+    const fixada = !getSidebarFixada();
+    const valor = fixada ? 'expanded' : 'collapsed';
+    try {
+        localStorage.setItem('sc_sidebar', valor);
+        const chave = _sidebarChaveUsuario();
+        if (chave) localStorage.setItem(chave, valor);
+    } catch (e) {}
+    _aplicarSidebarFixada(fixada);
+    // Graficos e o Kanban medem a largura disponivel: avisa quando a
+    // transicao da barra terminar.
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 260);
 }
 
 function renderSidebar() {
     const sidebar = document.getElementById('main-sidebar');
     if (!sidebar) return;
     const currentFile = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
-    const collapsed = getSidebarCollapsed();
-    sidebar.classList.toggle('collapsed', collapsed);
+    const fixada = getSidebarFixada();
 
     const usuarioAtual = getUsuarioLogado();
     const navHTML = SIDEBAR_MODULOS.filter(m => {
@@ -653,6 +682,7 @@ function renderSidebar() {
             <div class="logo" onclick="toggleLogoPopup(event)">
                 <img src="images/logo.png" alt="SCTech" class="sidebar-logo-img">
                 <h2>SCTech</h2>
+                <button type="button" class="sidebar-pin" id="sidebar-pin-btn" onclick="alternarSidebarFixada(event)" aria-label="Fixar menu">📌</button>
             </div>
             <div class="logo-popup" id="logo-popup">
                 <div class="logo-popup-header">
@@ -673,10 +703,8 @@ function renderSidebar() {
                 <button class="logo-popup-item logo-popup-logout" onclick="logout()">${navIcon('logout', 16)} Sair</button>
             </div>
         </div>
-        <nav class="nav-rows">${navHTML}</nav>
-        <button class="sidebar-toggle" id="sidebar-toggle-btn" onclick="toggleSidebarCollapse()" title="${collapsed ? 'Expandir menu' : 'Recolher menu'}">
-            ${navIcon('collapse', 18)}<span class="nav-text">Recolher menu</span>
-        </button>`;
+        <nav class="nav-rows">${navHTML}</nav>`;
+    _aplicarSidebarFixada(fixada);
 }
 
 function initPageNavigation() {
@@ -903,6 +931,7 @@ function checkAuth() {
     if (!sessionStorage.getItem('sc_user')) { window.location.replace('login.html'); return; }
     migrarPermissoesSalvas();
     migrarArquitetoDosPedidos();
+    migrarStatusAguardandoFinanceiro();
     const usuario = getUsuarioLogado();
     if (!usuario || !usuario.ativo) { logout(); return; }
     const arquivo  = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
@@ -2206,31 +2235,40 @@ function criarFilaDePedidos(grupos) {
     enviarParaFormularioPC(primeiro.itens, primeiro.fornecedor_id || 0);
 }
 
-async function iniciarPedidoDeCompra(itens) {
-    if (!itens.length) return;
+// opts.origem: pedido de venda de onde os itens vieram (fica gravado no
+// pedido de compra); opts.opcoes: quais escolhas mostrar; opts.texto(grupos):
+// a pergunta. Devolve true se seguiu para o formulario.
+async function iniciarPedidoDeCompra(itens, opts) {
+    opts = opts || {};
+    if (!itens.length) return false;
     localStorage.removeItem('sc_pc_fila');
+    if (opts.origem) localStorage.setItem('sc_pc_origem', JSON.stringify(opts.origem));
+    else localStorage.removeItem('sc_pc_origem');
     const grupos = agruparPorFornecedor(itens);
 
     // Um fornecedor só (ou nenhum item com fornecedor): vai direto.
     if (grupos.length === 1) {
         enviarParaFormularioPC(itens, grupos[0].fornecedor_id || '');
-        return;
+        return true;
     }
 
     const resumo = grupos.map(g => `• ${g.fornecedor_nome}: ${g.itens.length} item(ns)`).join('\n');
+    const todas = [
+        { rotulo: 'Um pedido para cada fornecedor', valor: 'separados', destaque: true },
+        { rotulo: 'Tudo para um fornecedor só (você escolhe)', valor: 'um' },
+        { rotulo: 'Pedido genérico, sem fornecedor (orçamento)', valor: 'generico' }
+    ];
     const escolha = await showEscolha(
-        `Os ${itens.length} produtos marcados são de ${grupos.length} fornecedores diferentes:\n\n${resumo}\n\nComo você quer criar o pedido?`,
+        opts.texto ? opts.texto(grupos)
+            : `Os ${itens.length} produtos marcados são de ${grupos.length} fornecedores diferentes:\n\n${resumo}\n\nComo você quer criar o pedido?`,
         '🛒',
-        [
-            { rotulo: 'Um pedido para cada fornecedor', valor: 'separados', destaque: true },
-            { rotulo: 'Tudo para um fornecedor só (você escolhe)', valor: 'um' },
-            { rotulo: 'Pedido genérico, sem fornecedor (orçamento)', valor: 'generico' }
-        ]
+        opts.opcoes ? todas.filter(o => opts.opcoes.includes(o.valor)) : todas
     );
-    if (!escolha) return;
+    if (!escolha) { localStorage.removeItem('sc_pc_origem'); return false; }
     if (escolha === 'separados')     criarFilaDePedidos(grupos);
     else if (escolha === 'um')       enviarParaFormularioPC(itens, '');
     else                             enviarParaFormularioPC(itens, 0);
+    return true;
 }
 
 function pedidoDaSelecao(tipo) {
@@ -2272,12 +2310,27 @@ function editarCatalogo(id) {
 }
 
 // --- PIPELINE DE STATUS ---
+// "Aguardando Pagamento" virou "Aguardando Financeiro": pedidos e timelines
+// gravados com o nome antigo sao renomeados no carregamento (checkAuth).
+const STATUS_AG_FIN_LEGADO = 'Aguardando Pagamento';
+function migrarStatusAguardandoFinanceiro() {
+    let mudou = false;
+    (db.pedidos || []).forEach(p => {
+        if (p.status === STATUS_AG_FIN_LEGADO) { p.status = 'Aguardando Financeiro'; mudou = true; }
+        (p.timeline || []).forEach(t => {
+            if (t.status === STATUS_AG_FIN_LEGADO) { t.status = 'Aguardando Financeiro'; mudou = true; }
+        });
+    });
+    if (mudou) syncDB();
+}
+
 const STATUS_PIPELINE = [
-    'Orçamento', 'Medição', 'Aguardando Tecido', 'Na Costura', 'Pronto p/ Instalação', 'Aguardando Pagamento', 'Instalado'
+    'Orçamento', 'Medição', 'Aguardando Tecido', 'Na Costura', 'Pronto p/ Instalação', 'Aguardando Financeiro', 'Instalado'
 ];
 
 function normalizarStatus(status) {
     if (status === 'Produção') return 'Medição';
+    if (status === STATUS_AG_FIN_LEGADO) return 'Aguardando Financeiro';
     if (status === 'Faturado') return 'Instalado';
     return STATUS_PIPELINE.includes(status) ? status : 'Orçamento';
 }
@@ -2387,7 +2440,7 @@ function verTimeline(id) {
     const STATUS_ICONS = {
         'Orçamento': '📋', 'Medição': '📐', 'Aguardando Tecido': '🧵',
         'Na Costura': '✂️', 'Pronto p/ Instalação': '📦',
-        'Aguardando Pagamento': '💳', 'Instalado': '✅'
+        'Aguardando Financeiro': '💳', 'Instalado': '✅'
     };
     const eventos = [];
     const dataCreate = ped.data_criacao || (String(ped.id).length > 10 ? ped.id : null);
@@ -2516,10 +2569,11 @@ function mostrarModalPagamento(ped, callback) {
                 <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:#555">Valor Recebido</span><strong style="color:#005D3B">R$ ${recebido.toFixed(2)}</strong></div>
                 <div style="display:flex;justify-content:space-between;padding:8px 0 4px;border-top:1px solid #E0E0E0;margin-top:4px"><span style="color:#555;font-weight:600">Saldo a Receber</span><strong style="color:${saldo > 0.01 ? '#F43927' : '#005D3B'}">R$ ${saldo.toFixed(2)}</strong></div>
             </div>
-            <p style="font-size:13px;color:var(--dark);font-weight:600;margin-bottom:14px">O pagamento foi recebido integralmente?</p>
+            <p style="font-size:13px;color:var(--dark);font-weight:600;margin-bottom:6px">O pagamento foi recebido integralmente?</p>
+            <p style="font-size:12px;color:#888;margin-bottom:14px">Nos dois casos o pedido vai para "Aguardando Financeiro", onde o financeiro confirma o pagamento.</p>
             <div style="display:flex;flex-direction:column;gap:10px">
-                <button id="mpg-sim" class="btn btn-success" style="padding:11px;font-size:14px">✓ Sim, pagamento completo → Instalado</button>
-                <button id="mpg-nao" class="btn" style="background:#F2C924;padding:11px;font-size:14px">⏳ Não, há saldo pendente → Aguardando Pagamento</button>
+                <button id="mpg-sim" class="btn btn-success" style="padding:11px;font-size:14px">✓ Sim, pagamento completo</button>
+                <button id="mpg-nao" class="btn" style="background:#F2C924;padding:11px;font-size:14px">⏳ Não, há saldo pendente</button>
                 <button id="mpg-cancel" class="btn btn-outline" style="padding:9px;font-size:13px">Cancelar</button>
             </div>
         </div>`;
@@ -2530,18 +2584,62 @@ function mostrarModalPagamento(ped, callback) {
 }
 
 // Desfecho de "Confirmar Entrega" (modal de pagamento), usado pelo Kanban e
-// pela Agenda de Instalacoes: pago -> Instalado; com saldo -> Aguardando Pagamento.
+// pela Agenda de Instalacoes. Pago ou nao, o pedido vai para Aguardando
+// Financeiro: quem fecha e' o financeiro (confirmarPagamentoPedido). Com saldo
+// pendente o card ganha a marca "Pendente".
 function aplicarConfirmacaoEntrega(ped, resultado) {
     if (!ped.timeline) ped.timeline = [];
     if (!ped.inst_confirmada_em) ped.inst_confirmada_em = Date.now();   // instalacao feita -> Realizados
-    if (resultado === 'pago') {
-        ped.valor_recebido = ped.valor;
-        ped.status = 'Instalado';
-        if (!ped.data_instalado) ped.data_instalado = Date.now();
-        ped.timeline.push({ status: 'Instalado', data: Date.now() });
+    ped.pagamento_pendente = resultado !== 'pago';
+    ped.status = 'Aguardando Financeiro';
+    ped.timeline.push({ status: 'Aguardando Financeiro', data: Date.now(), label: ped.pagamento_pendente ? 'Aguardando Financeiro (pagamento pendente)' : 'Aguardando Financeiro' });
+}
+
+// Quem fecha o pedido em Aguardando Financeiro: Administrador e Financeiro,
+// isto e', quem tem acesso completo a Financeiro > A Receber (o mesmo que
+// pode dar baixa num recebimento).
+function podeConfirmarPagamento(usuario) {
+    return temAcesso('financeiro.receber', 'completo', usuario);
+}
+
+// Aguardando Financeiro -> Instalado: o financeiro confirma que recebeu.
+async function confirmarPagamentoPedido(id) {
+    const ped = db.pedidos.find(p => p.id == id);
+    if (!ped || normalizarStatus(ped.status) !== 'Aguardando Financeiro') return;
+    if (!podeConfirmarPagamento()) {
+        await showAlert('Somente o Administrador ou o Financeiro pode confirmar o pagamento e avançar este pedido.', '🚫');
+        return;
+    }
+    const total = ped.valor || 0, recebido = ped.valor_recebido || 0;
+    const forma = formaPagamentoDoPedido(ped);
+    const msg = `Confirmar o pagamento do pedido #${formatPedidoId(ped.id)}?
+
+`
+        + (forma ? `Forma de pagamento: ${forma}
+` : '')
+        + `Valor total: R$ ${total.toFixed(2)}
+`
+        + (ped.pagamento_pendente ? `Saldo pendente informado na instalação: R$ ${Math.max(0, total - recebido).toFixed(2)}
+` : '')
+        + `
+O pedido vai para "Instalado".`;
+    if (!await showConfirm(msg, '💰', 'Confirmar pagamento', 'Cancelar')) return;
+    ped.valor_recebido = ped.valor;
+    ped.pagamento_pendente = false;
+    ped.pagamento_confirmado_em = Date.now();
+    ped.pagamento_confirmado_por = getUsuarioLogado()?.id || null;
+    ped.status = 'Instalado';
+    if (!ped.data_instalado) ped.data_instalado = ped.inst_confirmada_em || Date.now();
+    if (!ped.timeline) ped.timeline = [];
+    ped.timeline.push({ status: 'Instalado', data: Date.now(), label: 'Pagamento confirmado → Instalado' });
+    syncDB();
+    if (document.getElementById('kanban-board')) {
+        renderKanban();
+        if (typeof renderAgenda === 'function' && document.getElementById('pcp-view-agenda')) renderAgenda();
+        toast('Pagamento confirmado. Pedido instalado!', 'success');
     } else {
-        ped.status = 'Aguardando Pagamento';
-        ped.timeline.push({ status: 'Aguardando Pagamento', data: Date.now() });
+        toastReload('Pagamento confirmado. Pedido instalado!');
+        window.location.reload();
     }
 }
 
@@ -2627,8 +2725,14 @@ async function moverStatus(id, direcao) {
         return;
     }
 
-    // Intercept: avançar de "Pronto p/ Instalação" ou "Aguardando Pagamento" → verificar pagamento
-    if ((STATUS_PIPELINE[idx] === 'Pronto p/ Instalação' || STATUS_PIPELINE[idx] === 'Aguardando Pagamento') && direcao === 1) {
+    // Aguardando Financeiro só avança pela confirmação do pagamento (financeiro).
+    if (STATUS_PIPELINE[idx] === 'Aguardando Financeiro' && direcao === 1) {
+        await confirmarPagamentoPedido(ped.id);
+        return;
+    }
+
+    // Intercept: avançar de "Pronto p/ Instalação" → confirmar a instalação e perguntar do pagamento
+    if (STATUS_PIPELINE[idx] === 'Pronto p/ Instalação' && direcao === 1) {
         mostrarModalPagamento(ped, resultado => {
             if (!resultado) return;
             aplicarConfirmacaoEntrega(ped, resultado);
@@ -2653,7 +2757,7 @@ async function moverStatus(id, direcao) {
 const COR_STATUS = {
     'Orçamento': 'st-orcamento', 'Medição': 'st-medicao',
     'Aguardando Tecido': 'st-aguardando', 'Na Costura': 'st-costura',
-    'Pronto p/ Instalação': 'st-pronto', 'Aguardando Pagamento': 'st-ag-pagamento', 'Instalado': 'st-faturado'
+    'Pronto p/ Instalação': 'st-pronto', 'Aguardando Financeiro': 'st-ag-pagamento', 'Instalado': 'st-faturado'
 };
 
 function renderMetrics() {
@@ -2733,7 +2837,7 @@ function renderChartStatus() {
         return d.getFullYear() === ano && d.getMonth() === mes - 1;
     });
 
-    const statusLabels = ['Orçamento','Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Pagamento','Instalado'];
+    const statusLabels = ['Orçamento','Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Financeiro','Instalado'];
     const statusCores  = ['#F2C924','#2D77C1','#FF7F08','#9B31C8','#005D3B','#FF575F','#159912'];
     const statusCount  = statusLabels.map(s => pedidosFiltrados.filter(p => normalizarStatus(p.status) === s).length);
     const totalPedidos = statusCount.reduce((s, v) => s + v, 0);
@@ -3207,7 +3311,7 @@ function renderDashboardAlertas() {
 
     // Instalações atrasadas + hoje
     if (alertaAtivo('instalacao')) {
-        const instStatus = ['Pronto p/ Instalação', 'Aguardando Pagamento'];
+        const instStatus = ['Pronto p/ Instalação', 'Aguardando Financeiro'];
         const instAtrasadas = filtrarPedidosVisiveis(db.pedidos).filter(p =>
             instStatus.includes(normalizarStatus(p.status)) && p.data_entrega && p.data_entrega < hojeStr);
         if (instAtrasadas.length) {
@@ -4801,7 +4905,7 @@ function limparFiltrosHistorico() {
 function renderEstoqueFuturo() {
     const el = document.getElementById('tab-futuro');
     if (!el) return;
-    const statusAtivos = ['Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Pagamento'];
+    const statusAtivos = ['Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Financeiro'];
     const pedAtivos = db.pedidos.filter(p => statusAtivos.includes(normalizarStatus(p.status)));
     const consumoPorTecido = {};
     for (const ped of pedAtivos) {
@@ -5387,6 +5491,11 @@ async function salvarPedido() {
     const statusAnterior = editandoIdPedido
         ? normalizarStatus(db.pedidos.find(p => p.id == editandoIdPedido)?.status || 'Orçamento')
         : 'Orçamento';
+    if (statusAnterior !== 'Orçamento') {
+        await showAlert(`O pedido #${formatPedidoId(editandoIdPedido)} já foi aprovado (${statusAnterior}) e está bloqueado para edição.
+Volte o pedido para Orçamento para editar.`, '🔒');
+        return;
+    }
     const clienteId = document.getElementById('ped-cliente')?.value;
     if (!clienteId) { await showAlert('Selecione o cliente.', '⚠️'); return; }
     if (!pedidoDraft.ambientes.length) { await showAlert('Adicione pelo menos um ambiente.', '⚠️'); return; }
@@ -5443,6 +5552,11 @@ async function salvarPedido() {
             dadosPedido.data_producao     = db.pedidos[index].data_producao;
             dadosPedido.data_instalado    = db.pedidos[index].data_instalado;
             dadosPedido.baixa_realizada   = db.pedidos[index].baixa_realizada;
+            // Baixas parciais e a timeline sobrevivem a edicao (pedido que
+            // voltou para Orcamento nao repete baixa nem perde o historico).
+            dadosPedido.baixa_tecido_realizada = db.pedidos[index].baixa_tecido_realizada;
+            dadosPedido.baixa_mat_realizada    = db.pedidos[index].baixa_mat_realizada;
+            if (db.pedidos[index].timeline) dadosPedido.timeline = db.pedidos[index].timeline;
             dadosPedido.data_criacao      = db.pedidos[index].data_criacao || db.pedidos[index].id;
             dadosPedido.comissao_paga     = db.pedidos[index].comissao_paga     || false;
             dadosPedido.comissao_data_pgto = db.pedidos[index].comissao_data_pgto || null;
@@ -5487,26 +5601,67 @@ async function salvarPedido() {
     window.location.href = 'index.html';
 }
 
-function bloquearPedidoInstalado() {
+// Pedido aprovado (qualquer etapa depois de Orcamento) abre so para leitura.
+// Para editar, o pedido volta para Orcamento -- pelo botao do aviso, exceto
+// o Instalado, que fica fechado de vez.
+function bloquearPedidoAprovado() {
     const ped = db.pedidos.find(p => p.id == editandoIdPedido);
-    if (!ped || normalizarStatus(ped.status) !== 'Instalado') return;
+    if (!ped) return;
+    const status = normalizarStatus(ped.status);
+    if (status === 'Orçamento') return;
 
     document.querySelectorAll('.main input, .main select, .main textarea, .main button')
-        .forEach(el => {
-            if (el.id === 'ped-status') return;
-            el.disabled = true;
-        });
-
+        .forEach(el => { el.disabled = true; });
     const saveBtn = document.querySelector('.btn-success[onclick="salvarPedido()"]');
     if (saveBtn) saveBtn.style.display = 'none';
 
     const header = document.querySelector('.header');
-    if (header) {
-        const notice = document.createElement('div');
-        notice.style.cssText = 'background:#FEF6D8;border:1px solid #F2C924;color:#8A6A00;padding:8px 14px;border-radius:6px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;';
-        notice.innerHTML = '🔒 Pedido instalado — somente leitura';
-        header.appendChild(notice);
+    if (!header) return;
+    const instalado = status === 'Instalado';
+    const notice = document.createElement('div');
+    notice.id = 'ped-aviso-bloqueio';
+    notice.className = 'ped-aviso-bloqueio';
+    notice.innerHTML = instalado
+        ? '<span>🔒 Pedido instalado — somente leitura</span>'
+        : `<span>🔒 Pedido aprovado (${escapeHtml(status)}) — bloqueado para edição. Para alterar, volte o pedido para Orçamento.</span>
+           <button type="button" class="btn btn-sm" id="ped-voltar-orcamento" onclick="voltarPedidoParaOrcamento(${ped.id})">↩ Voltar para Orçamento</button>`;
+    header.appendChild(notice);
+}
+
+// Volta um pedido aprovado para Orcamento, liberando a edicao. Os
+// recebimentos ainda nao pagos saem do Financeiro e sao gerados de novo, com
+// os valores atualizados, quando o pedido for aprovado outra vez. Baixas de
+// estoque ja feitas continuam valendo (nao sao repetidas).
+async function voltarPedidoParaOrcamento(id) {
+    if (!await exigirPermissao('pedidos', 'completo')) return;
+    const ped = db.pedidos.find(p => p.id == id);
+    if (!ped) return;
+    const status = normalizarStatus(ped.status);
+    if (status === 'Orçamento' || status === 'Instalado') return;
+    const recebimentos = (db.contas_receber || []).filter(cr => cr.pedido_id == ped.id);
+    const pagos = recebimentos.filter(cr => cr.status === 'Pago');
+    const abertos = recebimentos.filter(cr => cr.status !== 'Pago');
+    const avisoFin = !recebimentos.length ? ''
+        : pagos.length
+            ? `
+
+O pedido já tem recebimento pago no Financeiro: os lançamentos ficam como estão. Confira o Financeiro se mudar o valor.`
+            : `
+
+${abertos.length} lançamento(s) a receber em aberto sairão do Financeiro e serão gerados de novo ao aprovar.`;
+    const ok = await showConfirm(`Voltar o pedido #${formatPedidoId(ped.id)} de "${status}" para Orçamento?
+
+Ele sai do painel de produção e fica liberado para edição até ser aprovado de novo.${avisoFin}`, '↩', 'Voltar para Orçamento', 'Cancelar');
+    if (!ok) return;
+    if (!pagos.length && recebimentos.length) {
+        db.contas_receber = db.contas_receber.filter(cr => cr.pedido_id != ped.id);
+        ped.financeiro_gerado = false;
     }
+    ped.status = 'Orçamento';
+    if (!ped.timeline) ped.timeline = [];
+    ped.timeline.push({ status: 'Orçamento', data: Date.now(), label: `Voltou para Orçamento (estava em ${status})` });
+    localStorage.setItem('sc_editando_id', ped.id);
+    salvarERecarregar('Pedido voltou para Orçamento e está liberado para edição.');
 }
 
 function carregarPedidoParaEdicao(id) {
@@ -5567,7 +5722,7 @@ function renderKanban() {
         { status: 'Aguardando Tecido',    label: 'Aguardando Tecido',       cor: '#FF7F08', bg: '#FFF0E0' },
         { status: 'Na Costura',           label: 'Na Costura',              cor: '#9B31C8', bg: '#F2E6F9' },
         { status: 'Pronto p/ Instalação', label: 'Pronto p/ Instalação',    cor: '#005D3B', bg: '#F0FBEF' },
-        { status: 'Aguardando Pagamento', label: 'Aguardando Pagamento',    cor: '#FF575F', bg: '#FEF4F2' },
+        { status: 'Aguardando Financeiro', label: 'Aguardando Financeiro',    cor: '#FF575F', bg: '#FEF4F2' },
         { status: 'Instalado',            label: 'Instalado / Entregue',    cor: '#159912', bg: '#E3F7E2' }
     ];
     const avisoEl = document.getElementById('aviso-orcamentos');
@@ -5644,7 +5799,9 @@ function renderKanban() {
                     : prontoSemAgenda
                         ? `<div class="kanban-inst kanban-inst-pend">📅 Aguardando agendamento</div>`
                         : `<div class="kanban-inst">📅 ${_agdFmtData(p.data_entrega)}${p.inst_hora ? ' · ' + escapeHtml(p.inst_hora) : ''}${nomeInstalador(p) ? ' · ' + escapeHtml(nomeInstalador(p)) : ''}</div>`;
-                const btnAvancar = prontoSemAgenda ? ''
+                const agFin = col.status === 'Aguardando Financeiro';
+                const finLinha = agFin ? _kanbanFinanceiroHTML(p) : '';
+                const btnAvancar = prontoSemAgenda || agFin ? ''
                     : `<button class="btn btn-sm" onclick="moverStatus(${p.id},1)" title="Avançar etapa">→</button>`;
                 const btnAgendar = prontoSemAgenda
                     ? `<button class="btn btn-sm kanban-btn-agendar" onclick="irParaAgendaInstalacao(${p.id})" title="Agendar instalação">📅 Agendar instalação</button>`
@@ -5658,6 +5815,7 @@ function renderKanban() {
                     <div class="kanban-card-cliente">${escapeHtml(p.clienteNome||'')}${obsBadge}</div>
                     ${entregaBadge ? `<div style="margin:3px 0 5px">${entregaBadge}</div>` : ''}
                     ${instLinha}
+                    ${finLinha}
                     ${badgeEst||badgeBaixa ? `<div style="margin-bottom:6px">${badgeEst}${badgeBaixa}</div>` : ''}
                     <div class="kanban-card-actions">
                         <div style="display:flex;gap:4px">
@@ -5670,6 +5828,7 @@ function renderKanban() {
                         </div>
                     </div>
                     ${btnAgendar}
+                    ${agFin ? _kanbanBtnConfirmarPagamento(p) : ''}
                 </div>`;
             }).join('');
         return `<div class="kanban-col">
@@ -5678,6 +5837,22 @@ function renderKanban() {
         </div>`;
     }).join('');
     _kanbanAjustarAltura();
+}
+
+// Card em Aguardando Financeiro: a forma de pagamento escolhida na emissao
+// (so nesta etapa) e a marca "Pendente" quando a instalacao informou saldo.
+function _kanbanFinanceiroHTML(p) {
+    const forma = formaPagamentoDoPedido(p);
+    const pend = p.pagamento_pendente ? `<span class="kanban-pag-pendente" title="Saldo pendente informado na instalação">⏳ Pendente</span>` : '';
+    if (!forma && !pend) return '';
+    return `<div class="kanban-fin">${forma ? `<span class="kanban-fin-forma" title="Forma de pagamento">💳 ${escapeHtml(forma)}</span>` : ''}${pend}</div>`;
+}
+
+// So Administrador/Financeiro veem o botao; os demais, o aviso de quem decide.
+function _kanbanBtnConfirmarPagamento(p, curto) {
+    return podeConfirmarPagamento()
+        ? `<button class="btn btn-sm kanban-btn-pagamento" onclick="confirmarPagamentoPedido(${p.id})" title="Confirmar pagamento e marcar como instalado">💰 ${curto ? 'Confirmar' : 'Confirmar pagamento'}</button>`
+        : `<div class="kanban-fin-aviso">Aguardando confirmação do financeiro</div>`;
 }
 
 // Altura fixa do quadro: o espaco que sobra entre o topo do quadro e o fim da
@@ -5783,7 +5958,9 @@ function _pcpLinhaHTML(p, col, idx) {
     const prontoSemAgenda = col.status === 'Pronto p/ Instalação' && !_instAgendada(p);
     const entrega = statusEntrega(p);
     const obs = p.observacoes ? `<span class="pcp-linha-obs" title="${escapeHtml(p.observacoes)}">💬</span>` : '';
+    const agFin = col.status === 'Aguardando Financeiro';
     const avancar = !podeAvancar ? ''
+        : agFin ? _kanbanBtnConfirmarPagamento(p, true)
         : prontoSemAgenda
             ? `<button class="btn btn-sm kanban-btn-agendar" onclick="irParaAgendaInstalacao(${p.id})" title="Agendar instalação">📅 Agendar</button>`
             : `<button class="btn btn-sm" onclick="moverStatus(${p.id},1)" title="Avançar etapa">→</button>`;
@@ -5792,6 +5969,7 @@ function _pcpLinhaHTML(p, col, idx) {
         <div class="pcp-linha-cli">
             <span class="pcp-linha-nome">${escapeHtml(p.clienteNome || '')}${obs}</span>
             ${p.amb ? `<span class="pcp-linha-amb">${escapeHtml(p.amb)}</span>` : ''}
+            ${agFin ? _kanbanFinanceiroHTML(p) : ''}
         </div>
         <div class="pcp-linha-entrega">${entrega ? `<span class="${entrega.cls}">${entrega.label}</span>` : ''}</div>
         <div class="pcp-linha-acoes">
@@ -7159,6 +7337,9 @@ async function salvarPedidoCompra() {
         itens,
         observacoes:     document.getElementById('pc-obs')?.value.trim() || ''
     };
+    // Veio de "Importar de pedido": guarda o pedido de venda de origem.
+    const origem = editandoPCId === null ? _pcLerOrigem() : null;
+    if (origem) dados.pedido_venda_id = origem.pedido_venda_id;
 
     if (editandoPCId !== null) {
         const alvo = db.pedidos_compra.find(p => p.id === editandoPCId);
@@ -7189,10 +7370,12 @@ async function salvarPedidoCompra() {
         } else {
             // Acabou a fila: leva para a lista, onde os pedidos estão.
             localStorage.removeItem('sc_pc_fila');
+            localStorage.removeItem('sc_pc_origem');
             irParaPedidosCompra(`${fila.total} pedidos de compra criados!`);
         }
         return;
     }
+    localStorage.removeItem('sc_pc_origem');
     irParaPedidosCompra('Pedido de compra criado!');
 }
 
@@ -7209,6 +7392,7 @@ async function cancelarFilaPC() {
     if (!fila) return;
     if (!await showConfirm(`Cancelar os ${fila.restantes.length} pedido(s) que ainda faltam? Os ${fila.feitos} já salvos continuam.`, '⚠️', 'Cancelar os restantes', 'Voltar')) return;
     localStorage.removeItem('sc_pc_fila');
+    localStorage.removeItem('sc_pc_origem');
     pcDraftItens = [];
     salvarERecarregar('Fila de pedidos cancelada.');
 }
@@ -7243,7 +7427,7 @@ function renderListaPedidosCompra() {
         const cls   = COR_PC[p.status] || 'st-orcamento';
         return `<tr>
             <td style="font-size:12px"><button class="pc-num-btn" onclick="editarPedidoCompra(${p.id})" title="Abrir para editar ou acrescentar itens">#${formatPedidoId(p.id)}</button></td>
-            <td><strong>${escapeHtml(p.fornecedor_nome)}</strong></td>
+            <td><strong>${escapeHtml(p.fornecedor_nome)}</strong>${p.pedido_venda_id ? `<div class="pc-origem" title="Itens importados do pedido de venda">↳ Pedido #${formatPedidoId(p.pedido_venda_id)}</div>` : ''}</td>
             <td style="font-size:12px;color:#8F8F8F;white-space:nowrap">${data}</td>
             <td style="text-align:center">${p.itens.length}</td>
             <td>R$ ${total.toFixed(2)}</td>
@@ -7374,6 +7558,344 @@ function pedirTecido(tecidoId) {
     if (catSelecao.tecido.size) { pedidoDaSelecao('tecido'); return; }
     const item = itemParaPedido('tecido', tecidoId);
     if (item) iniciarPedidoDeCompra([item]);
+}
+
+// ─── Pedido de compra a partir de um pedido de venda ─────────────────────
+// Para quem nao mantem estoque: abre um pedido de cortina em aberto, marca os
+// itens que vai comprar (tecidos pelo consumo calculado, materiais e kits
+// prontos pela quantidade do pedido) e gera a compra. Itens de fornecedores
+// diferentes: um pedido por fornecedor ou um generico com tudo. O pedido de
+// compra guarda de qual pedido de venda veio (pedido_venda_id).
+
+// Em aberto = ainda nao instalado.
+function _pcPedidosVendaAbertos() {
+    return db.pedidos
+        .filter(p => normalizarStatus(p.status) !== 'Instalado')
+        .sort((a, b) => b.id - a.id);
+}
+
+function _pcFornecedorDoCadastro(item) {
+    const id = item?.fornecedor_id || null;
+    const f = id ? db.fornecedores.find(x => x.id == id) : null;
+    return { fornecedor_id: f ? f.id : null, fornecedor_nome: f ? f.nome : '' };
+}
+
+// Itens compraveis do pedido de venda, somados por item (o mesmo tecido em
+// dois ambientes vira uma linha). Preco = custo, como no formulario manual.
+function itensCompraDoPedidoVenda(ped) {
+    const linhas = new Map();
+    const somar = (chave, base, qtd) => {
+        if (!(qtd > 0)) return;
+        const l = linhas.get(chave);
+        if (l) l.quantidade += qtd;
+        else linhas.set(chave, { ...base, quantidade: qtd });
+    };
+    for (const a of normalizarAmbientes(ped)) {
+        for (const t of (a.tecidos || [])) {
+            if (!t.tecidoId) continue;
+            const c = db.catalogo.find(x => x.id == t.tecidoId);
+            somar(`tecido|${t.tecidoId}`, {
+                tipo: 'tecido', item_id: c ? c.id : t.tecidoId, item_nome: c?.nome || t.tecidoNome || 'Tecido',
+                referencia: c?.referencia || '', unidade: 'm', preco_unit: ultimoPrecoTecido(t.tecidoId),
+                ..._pcFornecedorDoCadastro(c),
+            }, +t.consumo_linear || 0);
+        }
+    }
+    for (const i of (ped.itens || [])) {
+        if (i.kitId) {
+            const k = db.kits.find(x => x.id == i.kitId);
+            somar(`kit|${i.kitId}`, {
+                tipo: 'kit', item_id: k ? k.id : i.kitId, item_nome: k?.nome || i.nome || 'Kit',
+                referencia: k?.referencia || '', unidade: 'un', preco_unit: k?.preco_custo || 0,
+                ..._pcFornecedorDoCadastro(k),
+            }, +i.quantidade || 0);
+            continue;
+        }
+        const m = db.materiais.find(x => x.id == i.materialId);
+        somar(`material|${i.materialId}`, {
+            tipo: 'material', item_id: m ? m.id : i.materialId, item_nome: m?.nome || i.nome || 'Material',
+            referencia: m?.referencia || '', unidade: m?.unidade || i.unidade || 'un', preco_unit: m?.preco_custo || 0,
+            ..._pcFornecedorDoCadastro(m),
+        }, +i.quantidade || 0);
+    }
+    return [...linhas.values()].map(l => {
+        const quantidade = Math.round(l.quantidade * 100) / 100;
+        return { ...l, quantidade, subtotal: Math.round(quantidade * l.preco_unit * 100) / 100 };
+    });
+}
+
+// Pedidos de compra ja feitos para este pedido de venda que trazem o item.
+function _pcComprasDoItem(pedId, item) {
+    return db.pedidos_compra
+        .filter(pc => pc.pedido_venda_id == pedId && (pc.itens || []).some(i => i.tipo === item.tipo && i.item_id == item.item_id))
+        .map(pc => pc.id);
+}
+
+function _pcEstoqueTexto(item) {
+    if (item.tipo === 'tecido') {
+        if (tecidoTemEstoqueInfinito(item.item_id)) return '∞';
+        return `${estoqueDisponivel(item.item_id).toFixed(2)} m`;
+    }
+    const alvo = item.tipo === 'kit' ? db.kits.find(k => k.id == item.item_id) : db.materiais.find(m => m.id == item.item_id);
+    if (!alvo) return '—';
+    if (temEstoqueInfinito(alvo)) return '∞';
+    return `${(alvo.estoque_atual || 0).toFixed(2)} ${item.unidade}`;
+}
+
+let _pcImport = null;   // { pedId, itens }
+
+function abrirImportarPedidoVenda() {
+    _pcImport = null;
+    const abertos = _pcPedidosVendaAbertos();
+    document.getElementById('pc-import-overlay')?.remove();
+    // Filtros so com o que existe nos pedidos em aberto, na ordem do fluxo.
+    const status = STATUS_PIPELINE.filter(st => abertos.some(p => normalizarStatus(p.status) === st));
+    const vendedores = [...new Set(abertos.map(_pcVendedorDoPedido).filter(Boolean))].sort((x, y) => x.localeCompare(y, 'pt-BR'));
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'pc-import-overlay';
+    overlay.innerHTML = `<div class="modal-box pc-import-box">
+        <div class="modal-header">
+            <h3>Importar itens de um pedido</h3>
+            <button class="modal-close" onclick="fecharImportarPedidoVenda()" aria-label="Fechar">×</button>
+        </div>
+        <div class="modal-body">
+            ${abertos.length ? `
+            <div id="pc-import-etapa-pedido">
+                <div class="pc-import-filtros">
+                    <div class="form-group pc-import-f-busca">
+                        <label for="pc-import-busca">Buscar</label>
+                        <input type="text" id="pc-import-busca" autocomplete="off" placeholder="🔍 Nº do pedido ou cliente..." oninput="renderPedidosVendaImport()">
+                    </div>
+                    <div class="form-group">
+                        <label for="pc-import-f-status">Status</label>
+                        <select id="pc-import-f-status" onchange="renderPedidosVendaImport()">
+                            <option value="">Todos</option>
+                            ${status.map(st => `<option value="${escapeHtml(st)}">${escapeHtml(st)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="pc-import-f-vend">Vendedor / arquiteto</label>
+                        <select id="pc-import-f-vend" onchange="renderPedidosVendaImport()">
+                            <option value="">Todos</option>
+                            ${vendedores.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="pc-import-f-entrega">Entrega até</label>
+                        <input type="date" id="pc-import-f-entrega" onchange="renderPedidosVendaImport()">
+                    </div>
+                    <button type="button" class="btn btn-outline pc-import-limpar" onclick="limparFiltrosImport()">✕ Limpar</button>
+                </div>
+                <div class="pc-import-rolagem"><table class="pc-import-tabela pc-import-pedidos">
+                    <thead><tr>
+                        <th>Pedido</th><th>Cliente</th><th>Vendedor</th><th>Status</th><th>Entrega</th>
+                        <th style="text-align:center">Itens</th><th>Compras feitas</th>
+                    </tr></thead>
+                    <tbody id="pc-import-pedidos-tb"></tbody>
+                </table></div>
+            </div>
+            <div id="pc-import-etapa-itens" hidden>
+                <div class="pc-import-escolhido">
+                    <div id="pc-import-escolhido-info"></div>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="voltarParaPedidosImport()">← Trocar pedido</button>
+                </div>
+                <div id="pc-import-itens"></div>
+            </div>`
+            : `<p class="pc-import-vazio">Nenhum pedido em aberto. Só pedidos que ainda não foram instalados aparecem aqui.</p>`}
+        </div>
+        <div class="pc-import-rodape">
+            <span id="pc-import-resumo"></span>
+            <div class="pc-import-botoes">
+                <button class="btn btn-outline" onclick="fecharImportarPedidoVenda()">Cancelar</button>
+                <button class="btn btn-success" id="pc-import-gerar" onclick="gerarCompraDoPedidoVenda()" disabled>Gerar pedido de compra</button>
+            </div>
+        </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) fecharImportarPedidoVenda(); });
+    renderPedidosVendaImport();
+    document.getElementById('pc-import-busca')?.focus();
+}
+
+function _pcVendedorDoPedido(p) {
+    return p.vendedor_nome || p.arq_nome || '';
+}
+
+function limparFiltrosImport() {
+    ['pc-import-busca', 'pc-import-f-status', 'pc-import-f-vend', 'pc-import-f-entrega'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    renderPedidosVendaImport();
+}
+
+function _pcEscolherComTeclado(e, id) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selecionarPedidoVendaImport(id); }
+}
+
+// Tabela de pedidos em aberto com os filtros aplicados. Clicar na linha
+// escolhe o pedido e mostra os itens dele.
+function renderPedidosVendaImport() {
+    const tb = document.getElementById('pc-import-pedidos-tb');
+    if (!tb) return;
+    const termo = _buscaNormaliza(document.getElementById('pc-import-busca')?.value);
+    const num = termo.replace(/^#/, '');
+    const fStatus = document.getElementById('pc-import-f-status')?.value || '';
+    const fVend = document.getElementById('pc-import-f-vend')?.value || '';
+    const fAte = document.getElementById('pc-import-f-entrega')?.value || '';
+    const lista = _pcPedidosVendaAbertos().filter(p => {
+        if (termo && !_buscaNormaliza(p.clienteNome).includes(termo) && !String(p.id).includes(num)) return false;
+        if (fStatus && normalizarStatus(p.status) !== fStatus) return false;
+        if (fVend && _pcVendedorDoPedido(p) !== fVend) return false;
+        if (fAte && (!p.data_entrega || p.data_entrega > fAte)) return false;
+        return true;
+    });
+    if (!lista.length) {
+        tb.innerHTML = '<tr><td colspan="7" class="pc-import-vazio">Nenhum pedido encontrado com esses filtros.</td></tr>';
+        return;
+    }
+    tb.innerHTML = lista.map(p => {
+        const nItens = itensCompraDoPedidoVenda(p).length;
+        const compras = db.pedidos_compra.filter(pc => pc.pedido_venda_id == p.id).map(pc => '#' + formatPedidoId(pc.id));
+        const st = normalizarStatus(p.status);
+        return `<tr class="pc-import-ped" data-ped="${p.id}" tabindex="0" role="button" title="Ver os itens deste pedido"
+                    onclick="selecionarPedidoVendaImport(${p.id})" onkeydown="_pcEscolherComTeclado(event, ${p.id})">
+            <td class="pc-import-num">#${formatPedidoId(p.id)}</td>
+            <td class="pc-import-cli">${escapeHtml(p.clienteNome || 'Sem cliente')}</td>
+            <td>${escapeHtml(_pcVendedorDoPedido(p) || '—')}</td>
+            <td><span class="status-tag ${COR_STATUS[st] || 'st-orcamento'}">${escapeHtml(st)}</span></td>
+            <td class="pc-import-est">${p.data_entrega ? new Date(p.data_entrega + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+            <td style="text-align:center">${nItens}</td>
+            <td class="pc-import-compras">${compras.length ? compras.join(', ') : '—'}</td>
+        </tr>`;
+    }).join('');
+}
+
+function voltarParaPedidosImport() {
+    _pcImport = null;
+    document.getElementById('pc-import-etapa-itens').hidden = true;
+    document.getElementById('pc-import-etapa-pedido').hidden = false;
+    _pcImportResumo();
+    renderPedidosVendaImport();
+}
+
+function fecharImportarPedidoVenda() {
+    document.getElementById('pc-import-overlay')?.remove();
+    _pcImport = null;
+}
+
+function selecionarPedidoVendaImport(id) {
+    const ped = db.pedidos.find(p => p.id == id);
+    const box = document.getElementById('pc-import-itens');
+    if (!box) return;
+    if (!ped) { voltarParaPedidosImport(); return; }
+    document.getElementById('pc-import-etapa-pedido').hidden = true;
+    document.getElementById('pc-import-etapa-itens').hidden = false;
+    const st = normalizarStatus(ped.status);
+    document.getElementById('pc-import-escolhido-info').innerHTML =
+        `<strong>Pedido #${formatPedidoId(ped.id)}</strong> · ${escapeHtml(ped.clienteNome || 'Sem cliente')} <span class="status-tag ${COR_STATUS[st] || 'st-orcamento'}">${escapeHtml(st)}</span>`;
+    const itens = itensCompraDoPedidoVenda(ped).map(i => {
+        const compras = _pcComprasDoItem(ped.id, i);
+        // Item que ja foi comprado para este pedido vem desmarcado.
+        return { ...i, marcado: !compras.length, compras };
+    });
+    _pcImport = { pedId: ped.id, itens };
+    if (!itens.length) {
+        box.innerHTML = `<p class="pc-import-vazio">Este pedido não tem itens para comprar (tecido com consumo calculado, materiais ou kits).</p>`;
+        _pcImportResumo();
+        return;
+    }
+    box.innerHTML = `<div class="pc-import-rolagem"><table class="pc-import-tabela">
+        <thead><tr>
+            <th style="width:34px"><input type="checkbox" id="pc-import-todos" onchange="marcarTodosImport(this.checked)" aria-label="Marcar todos"></th>
+            <th>Código</th><th>Item</th><th>Tipo</th><th>Fornecedor</th><th style="width:130px">Quantidade</th><th>Em estoque</th>
+        </tr></thead>
+        <tbody>${itens.map((i, n) => `<tr class="${i.marcado ? '' : 'pc-import-off'}" data-n="${n}">
+            <td><input type="checkbox" class="pc-import-chk" ${i.marcado ? 'checked' : ''} onchange="marcarItemImport(${n}, this.checked)" aria-label="Comprar ${escapeHtml(i.item_nome)}"></td>
+            <td class="pc-import-cod">${escapeHtml(i.referencia || '—')}</td>
+            <td>
+                <div class="pc-import-nome">${escapeHtml(i.item_nome)}</div>
+                ${i.compras.length ? `<div class="pc-import-ja">Já comprado para este pedido: ${i.compras.map(c => '#' + formatPedidoId(c)).join(', ')}</div>` : ''}
+            </td>
+            <td class="pc-import-tipo">${_pcRotuloTipo(i.tipo)}</td>
+            <td class="pc-import-forn${i.fornecedor_id ? '' : ' pc-import-semforn'}">${escapeHtml(i.fornecedor_nome || 'Sem fornecedor')}</td>
+            <td><div class="pc-import-qtd"><input type="number" value="${i.quantidade}" step="0.01" min="0.01" onchange="qtdItemImport(${n}, this.value)" aria-label="Quantidade de ${escapeHtml(i.item_nome)}"> <span>${escapeHtml(i.unidade)}</span></div></td>
+            <td class="pc-import-est">${_pcEstoqueTexto(i)}</td>
+        </tr>`).join('')}</tbody>
+    </table></div>`;
+    _pcImportResumo();
+}
+
+function marcarItemImport(n, on) {
+    if (!_pcImport?.itens[n]) return;
+    _pcImport.itens[n].marcado = !!on;
+    const tr = document.querySelector(`.pc-import-tabela tr[data-n="${n}"]`);
+    if (tr) {
+        tr.classList.toggle('pc-import-off', !on);
+        const chk = tr.querySelector('.pc-import-chk');
+        if (chk) chk.checked = !!on;
+    }
+    _pcImportResumo();
+}
+
+function marcarTodosImport(on) {
+    if (!_pcImport) return;
+    _pcImport.itens.forEach((_, n) => marcarItemImport(n, on));
+}
+
+function qtdItemImport(n, val) {
+    const it = _pcImport?.itens[n];
+    if (!it) return;
+    const q = parseFloat(val);
+    if (q > 0) it.quantidade = q;
+}
+
+function _pcImportResumo() {
+    const marcados = _pcImport ? _pcImport.itens.filter(i => i.marcado) : [];
+    const res = document.getElementById('pc-import-resumo');
+    const btn = document.getElementById('pc-import-gerar');
+    const todos = document.getElementById('pc-import-todos');
+    if (todos && _pcImport) {
+        todos.checked = marcados.length === _pcImport.itens.length;
+        todos.indeterminate = marcados.length > 0 && marcados.length < _pcImport.itens.length;
+    }
+    if (btn) btn.disabled = !marcados.length;
+    if (!res) return;
+    if (!marcados.length) {
+        res.textContent = !_pcImport ? 'Clique em um pedido para ver os itens.'
+            : _pcImport.itens.length ? 'Nenhum item marcado' : '';
+        return;
+    }
+    const forns = new Set(marcados.map(i => String(i.fornecedor_id || ''))).size;
+    res.textContent = `${marcados.length} item(ns) marcado(s) · ${forns} fornecedor(es)`;
+}
+
+async function gerarCompraDoPedidoVenda() {
+    if (!_pcImport) return;
+    const ped = db.pedidos.find(p => p.id == _pcImport.pedId);
+    const itens = _pcImport.itens.filter(i => i.marcado)
+        .map(({ marcado, compras, ...i }) => ({ ...i, subtotal: Math.round(i.quantidade * i.preco_unit * 100) / 100 }));
+    if (!ped || !itens.length) return;
+    const origem = { pedido_venda_id: ped.id, cliente: ped.clienteNome || '' };
+    // O modal sai da frente para a pergunta aparecer; volta se cancelar.
+    const overlay = document.getElementById('pc-import-overlay');
+    if (overlay) overlay.style.display = 'none';
+    const ok = await iniciarPedidoDeCompra(itens, {
+        origem,
+        opcoes: ['separados', 'generico'],
+        texto: g => `Os ${itens.length} itens marcados do pedido #${formatPedidoId(ped.id)} são de ${g.length} fornecedores diferentes:\n\n${g.map(x => `• ${x.fornecedor_nome}: ${x.itens.length} item(ns)`).join('\n')}\n\nComo você quer gerar a compra?`,
+    });
+    if (!ok && overlay) overlay.style.display = '';
+}
+
+// Origem (pedido de venda) do pedido de compra em montagem. Sobrevive as
+// recargas da fila; sai quando a fila termina ou e' cancelada.
+function _pcLerOrigem() {
+    try { return JSON.parse(localStorage.getItem('sc_pc_origem') || 'null'); } catch { return null; }
+}
+function _pcObsDaOrigem(o) {
+    return o ? `Compra para o pedido #${formatPedidoId(o.pedido_venda_id)}${o.cliente ? ' — ' + o.cliente : ''}` : '';
 }
 
 function mostrarTabFornecedores(tab) {
@@ -7693,7 +8215,7 @@ const _AGD_PILLS = {
     atrasado:  ['Atrasado',          'agd-pill-verm'],
     realizado: ['Realizado',         'agd-pill-verde'],
     instalado: ['Instalado',         'agd-pill-verde'],
-    pagamento: ['Aguard. pagamento', 'agd-pill-amar'],
+    pagamento: ['Aguard. financeiro', 'agd-pill-amar'],
     semdata:   ['Sem data',          'agd-pill-cinza'],
 };
 function _agdPill(tipo) {
@@ -7887,7 +8409,7 @@ function _agdFormulario(titulo, campos, onSalvar, voltar, opts) {
 // O profissional e um so nas duas agendas: tudo o que esta agendado ocupa o
 // periodo [horario, horario + duracao) dele -- instalacao de pedido Pronto p/
 // Instalacao ja agendada e medicao com status Agendado. Concluido (Instalado,
-// Aguardando Pagamento, medicao Realizada) e cancelado nao ocupam nada.
+// Aguardando Financeiro, medicao Realizada) e cancelado nao ocupam nada.
 const _AGD_CFG_PADRAO = { dur_inst: 120, dur_med: 60, inicio: '08:00', fim: '18:00', passo: 60 };
 const _AGD_DURACOES = [30, 60, 90, 120, 150, 180, 240, 300, 360, 480];
 
@@ -8514,7 +9036,7 @@ function renderDashboardInstalacoes() {
 
     const hojeStr = new Date().toISOString().split('T')[0];
     const hoje    = new Date(); hoje.setHours(0, 0, 0, 0);
-    const statuses = ['Pronto p/ Instalação', 'Aguardando Pagamento'];
+    const statuses = ['Pronto p/ Instalação', 'Aguardando Financeiro'];
 
     const atrasados = filtrarPedidosVisiveis(db.pedidos)
         .filter(p => statuses.includes(normalizarStatus(p.status)) && p.data_entrega && p.data_entrega < hojeStr)
@@ -8598,8 +9120,8 @@ function renderDashboardInstalacoes() {
 // entao nao ha como duplicar. Fluxo:
 //   Na Costura -> Pronto p/ Instalacao  => card em "Pedidos Prontos para Instalacao"
 //   Agendar (profissional/data/horario) => coluna "Agendamentos de Instalacao"
-//   Confirmar instalacao                => coluna "Realizados" (Instalado ou
-//                                          Aguardando Pagamento, conforme o saldo)
+//   Confirmar instalacao                => coluna "Realizados" (Aguardando
+//                                          Financeiro; o financeiro leva a Instalado)
 // A data da instalacao e a data_entrega do pedido (a mesma do Kanban).
 
 // Pedido antigo (antes do campo inst_agendado) conta como agendado se ja
@@ -8610,14 +9132,14 @@ function _instAgendada(p) {
     return !!p.data_entrega;
 }
 function _instPendente(p) { return normalizarStatus(p.status) === 'Pronto p/ Instalação' && _instAgendada(p); }
-function _instRealizada(p) { const s = normalizarStatus(p.status); return s === 'Instalado' || s === 'Aguardando Pagamento'; }
+function _instRealizada(p) { const s = normalizarStatus(p.status); return s === 'Instalado' || s === 'Aguardando Financeiro'; }
 function _instProntos() { return db.pedidos.filter(p => normalizarStatus(p.status) === 'Pronto p/ Instalação' && !_instAgendada(p)); }
 function _instDur(p) { return +p.inst_duracao || _agdDurPadrao('inst'); }
 
 function _instPill(p, hoje) {
     const s = normalizarStatus(p.status);
     if (s === 'Instalado') return 'instalado';
-    if (s === 'Aguardando Pagamento') return 'pagamento';
+    if (s === 'Aguardando Financeiro') return 'pagamento';
     if (!p.data_entrega) return 'semdata';
     return p.data_entrega < hoje ? 'atrasado' : 'agendado';
 }
@@ -8951,8 +9473,9 @@ async function cancelarAgendamentoInstalacao(id) {
     toast('Agendamento cancelado. O pedido voltou para os prontos.', 'info');
 }
 
-// Mesmo desfecho do Kanban: pago -> Instalado; com saldo -> Aguardando
-// Pagamento. Nos dois casos a instalacao foi feita: vai para Realizados.
+// Mesmo desfecho do Kanban: pago ou com saldo, o pedido vai para Aguardando
+// Financeiro (com saldo, marcado como pendente). A instalacao foi feita: vai
+// para Realizados.
 function confirmarInstalacao(id) {
     const p = db.pedidos.find(x => x.id == id);
     if (!p || !_instPendente(p)) return;
@@ -8961,7 +9484,7 @@ function confirmarInstalacao(id) {
         if (!resultado) { abrirDetalheInstalacao(id); return; }
         aplicarConfirmacaoEntrega(p, resultado);
         _instAtualizar();
-        toast(resultado === 'pago' ? 'Instalação confirmada!' : 'Instalação confirmada. Pedido em Aguardando Pagamento.', resultado === 'pago' ? 'success' : 'info');
+        toast(resultado === 'pago' ? 'Instalação confirmada. Pedido em Aguardando Financeiro.' : 'Instalação confirmada. Pedido em Aguardando Financeiro, com pagamento pendente.', 'info');
     });
 }
 
@@ -9077,7 +9600,7 @@ document.addEventListener('DOMContentLoaded', () => {
             editandoIdPedido = parseInt(idParaEditar);
             document.getElementById('titulo-pagina-pedido').innerText = `Editando Pedido #${formatPedidoId(editandoIdPedido)}`;
             carregarPedidoParaEdicao(editandoIdPedido);
-            bloquearPedidoInstalado();
+            bloquearPedidoAprovado();
         } else {
             adicionarAmbiente();
             renderItensPedido();
@@ -9219,6 +9742,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const prefillItem = localStorage.getItem('sc_pc_prefill');
+        // A origem (pedido de venda) so vale para o pedido que chega pronto
+        // (importado ou da fila); um formulario aberto a mao nao a herda.
+        if (!prefillItem) localStorage.removeItem('sc_pc_origem');
         if (urlTab === 'novo' || prefillItem) {
             mostrarTabFornecedores('novo');
             if (prefillItem) {
@@ -9238,6 +9764,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const prefillForn = localStorage.getItem('sc_pc_prefill_forn');
             if (prefillForn !== null && pcFornSel) { pcFornSel.value = prefillForn; localStorage.removeItem('sc_pc_prefill_forn'); }
+            if (prefillItem) {
+                const obsEl = document.getElementById('pc-obs');
+                const o = _pcLerOrigem();
+                if (o && obsEl && !obsEl.value) obsEl.value = _pcObsDaOrigem(o);
+            }
             renderBannerFilaPC();
         } else {
             mostrarTabFornecedores(urlTab === 'pedidos' ? 'pedidos' : 'lista');
@@ -11176,7 +11707,7 @@ function renderDashboardFinanceiro() {
         {key:'Aguardando Tecido',    label:'Ag. Tecido',    color:'#FF7F08'},
         {key:'Na Costura',           label:'Na Costura',    color:'#9B31C8'},
         {key:'Pronto p/ Instalação', label:'Pronto Inst.',  color:'#005D3B'},
-        {key:'Aguardando Pagamento', label:'Ag. Pagamento', color:'#FF575F'},
+        {key:'Aguardando Financeiro', label:'Ag. Financeiro', color:'#FF575F'},
         {key:'Instalado',            label:'Instalado',     color:'#159912'},
     ];
     const funilCounts = FUNIL_ST.map(s=>db.pedidos.filter(p=>normalizarStatus(p.status)===s.key).length);

@@ -111,7 +111,7 @@ function _kpi(label, val, sub, cor) {
 function _badge(txt, cor) { return `<span class="dash-badge dash-badge-${cor}">${txt}</span>`; }
 
 function _statusBadge(s) {
-    const m={'Instalado':'green','Orçamento':'gray','Medição':'blue','Aguardando Tecido':'orange','Na Costura':'blue','Pronto p/ Instalação':'green','Aguardando Pagamento':'orange'};
+    const m={'Instalado':'green','Orçamento':'gray','Medição':'blue','Aguardando Tecido':'orange','Na Costura':'blue','Pronto p/ Instalação':'green','Aguardando Financeiro':'orange'};
     return _badge(s, m[s]||'gray');
 }
 
@@ -148,7 +148,7 @@ const _scaleX   = { grid:{display:false}, ticks:{font:{size:10}} };
 // ─── COMERCIAL ────────────────────────────────────────────────────────────────
 function _filtersComercial() {
     const vends = db.vendedores.map(v=>`<option value="${v.id}">${escapeHtml(v.nome)}</option>`).join('');
-    const status = ['Orçamento','Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Pagamento','Instalado'];
+    const status = ['Orçamento','Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Financeiro','Instalado'];
     return _periodoFiltro(`
         <div><label>Vendedor</label>
         <select id="df-vend" onchange="renderDash(_dashActive)">
@@ -233,7 +233,7 @@ function _dashComercial() {
 
     // Funil — só aplica filtro de vendedor (filtrar por status tornaria o funil inútil)
     const pedsVend = vendFiltro ? db.pedidos.filter(p=>String(p.vendedor_id)===vendFiltro) : db.pedidos;
-    const STATUS_P = ['Orçamento','Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Pagamento','Instalado'];
+    const STATUS_P = ['Orçamento','Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Financeiro','Instalado'];
     const CORES_F  = ['#F2C924','#2D77C1','#FF7F08','#9B31C8','#005D3B','#FF575F','#159912'];
     const countsF  = STATUS_P.map(s=>pedsVend.filter(p=>normalizarStatus(p.status)===s).length);
     const valoresF = STATUS_P.map(s=>pedsVend.filter(p=>normalizarStatus(p.status)===s).reduce((a,p)=>a+(p.valor||0),0));
@@ -279,7 +279,7 @@ function _dashComercial() {
 
 // ─── PRODUÇÃO ─────────────────────────────────────────────────────────────────
 function _filtersProducao() {
-    const status = ['Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Pagamento'];
+    const status = ['Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Financeiro'];
     const vends  = db.vendedores.map(v=>`<option value="${v.id}">${escapeHtml(v.nome)}</option>`).join('');
     const tecs   = db.catalogo.map(c=>`<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
     return _periodoFiltro(`
@@ -301,7 +301,7 @@ function _dashProducao() {
     const tecFiltro  = document.getElementById('df-tec-pcp')?.value || '';
     const hoje       = new Date().toISOString().split('T')[0];
 
-    const EM_PROD = ['Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Pagamento'];
+    const EM_PROD = ['Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Financeiro'];
 
     let peds = db.pedidos.filter(p => {
         const s = normalizarStatus(p.status);
@@ -317,7 +317,7 @@ function _dashProducao() {
 
     const atrasados  = peds.filter(p=>p.data_entrega&&p.data_entrega<hoje);
     const prontos    = peds.filter(p=>normalizarStatus(p.status)==='Pronto p/ Instalação');
-    const agPag      = peds.filter(p=>normalizarStatus(p.status)==='Aguardando Pagamento');
+    const agPag      = peds.filter(p=>normalizarStatus(p.status)==='Aguardando Financeiro');
     const instPer    = db.pedidos.filter(p=>normalizarStatus(p.status)==='Instalado'&&p.data_instalado&&new Date(p.data_instalado).toISOString().split('T')[0]>=ini&&new Date(p.data_instalado).toISOString().split('T')[0]<=fim);
 
     // Tempo médio de produção (criação → instalação)
@@ -333,7 +333,7 @@ function _dashProducao() {
         _kpi('Em Produção', _fmtN(peds.length), 'pedidos ativos', 'blue') +
         _kpi('Atrasados', _fmtN(atrasados.length), 'entrega vencida', 'red') +
         _kpi('Prontos p/ Instalar', _fmtN(prontos.length), 'aguardando agendamento', 'green') +
-        _kpi('Ag. Pagamento', _fmtN(agPag.length), 'antes de instalar', 'orange') +
+        _kpi('Ag. Financeiro', _fmtN(agPag.length), 'antes de instalar', 'orange') +
         _kpi('Tempo Médio', tmpMedio?tmpMedio+'d':'—', 'produção até entrega', 'teal') +
         _kpi('Instalados no Período', _fmtN(instPer.length), 'no período selecionado', 'purple')
     }</div>
@@ -367,7 +367,7 @@ function _dashProducao() {
         return true;
     });
     // Status dist
-    const stCores = {'Medição':'#2D77C1','Aguardando Tecido':'#FF7F08','Na Costura':'#9B31C8','Pronto p/ Instalação':'#005D3B','Aguardando Pagamento':'#FF575F'};
+    const stCores = {'Medição':'#2D77C1','Aguardando Tecido':'#FF7F08','Na Costura':'#9B31C8','Pronto p/ Instalação':'#005D3B','Aguardando Financeiro':'#FF575F'};
     const stData  = EM_PROD.map(s=>({s,q:pedsBase.filter(p=>normalizarStatus(p.status)===s).length}));
     _mkChart('dc-pcp-status',{type:'bar',data:{labels:stData.map(d=>d.s.length>14?d.s.slice(0,14)+'…':d.s),datasets:[
         {label:'Qtd.',data:stData.map(d=>d.q),backgroundColor:EM_PROD.map(s=>stCores[s]+'cc'),borderColor:EM_PROD.map(s=>stCores[s]),borderWidth:1,borderRadius:4,yAxisID:'y'}
@@ -518,7 +518,7 @@ function _dashInstalacoes() {
     const pagF = document.getElementById('df-inst-pag')?.value || '';
     const hoje = new Date().toISOString().split('T')[0];
 
-    const EM_INST = ['Pronto p/ Instalação','Aguardando Pagamento'];
+    const EM_INST = ['Pronto p/ Instalação','Aguardando Financeiro'];
     const agendadas = db.pedidos.filter(p=>EM_INST.includes(normalizarStatus(p.status)));
     const atrasadas = agendadas.filter(p=>p.data_entrega&&p.data_entrega<hoje);
     const instPer   = db.pedidos.filter(p=>normalizarStatus(p.status)==='Instalado'&&p.data_instalado&&new Date(p.data_instalado).toISOString().split('T')[0]>=ini&&new Date(p.data_instalado).toISOString().split('T')[0]<=fim);
@@ -704,7 +704,7 @@ function _dashGerencial() {
     const margemPct = recebido>0 ? lucro/recebido*100 : 0;
 
     // Produção
-    const EM_PROD = ['Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Pagamento'];
+    const EM_PROD = ['Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Financeiro'];
     const emProd  = db.pedidos.filter(p=>EM_PROD.includes(normalizarStatus(p.status))).length;
     const atrasados = db.pedidos.filter(p=>EM_PROD.includes(normalizarStatus(p.status))&&p.data_entrega&&p.data_entrega<hoje).length;
     const conv    = db.pedidos.length ? db.pedidos.filter(p=>normalizarStatus(p.status)!=='Orçamento').length/db.pedidos.length*100 : 0;
@@ -767,7 +767,7 @@ function _dashGerencial() {
     ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11,family:'"Nunito",sans-serif'},boxWidth:10}},tooltip:{callbacks:{label:ctx=>` ${_fmtR(ctx.raw)}`}}},scales:{y:{..._scaleY,position:'left'},x:{..._scaleX}}}});
 
     // Pipeline
-    const allStatus=['Orçamento','Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Pagamento','Instalado'];
+    const allStatus=['Orçamento','Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Financeiro','Instalado'];
     const coresPip=['#8F8F8F','#5E9BD4','#B65FE6','#FF575F','#159912','#F2C924','#159912'];
     const cntPip=allStatus.map(s=>db.pedidos.filter(p=>normalizarStatus(p.status)===s).length);
     _mkChart('dc-ger-pipeline',{type:'bar',data:{labels:allStatus.map(s=>s.length>14?s.slice(0,14)+'…':s),datasets:[{label:'Pedidos',data:cntPip,backgroundColor:coresPip.map(c=>c+'cc'),borderColor:coresPip,borderWidth:1,borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.raw} pedido(s)`}}},scales:{y:{ticks:{font:{size:10}},grid:{display:false}},x:{..._scaleYN}}}});
@@ -783,7 +783,7 @@ function _dashGerencial() {
 
 function _gerAlertas(hoje) {
     const al = [];
-    const EM_PROD=['Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Pagamento'];
+    const EM_PROD=['Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Financeiro'];
     const atras=db.pedidos.filter(p=>EM_PROD.includes(normalizarStatus(p.status))&&p.data_entrega&&p.data_entrega<hoje);
     if(atras.length) al.push({t:'danger',ic:'⚠️',txt:`<strong>${atras.length} pedido(s)</strong> com entrega atrasada em produção`});
     const crAtras=db.contas_receber.filter(c=>c.status==='Atrasado');

@@ -73,7 +73,7 @@ test('lista: um bloco por etapa, na ordem do Kanban, com a contagem', async ({ p
     await abrir(page);
     await page.click('#pcp-modo-lista');
     expect(await blocos(page)).toEqual(['Aguardando Medição Fina', 'Aguardando Tecido', 'Na Costura',
-        'Pronto p/ Instalação', 'Aguardando Pagamento', 'Instalado / Entregue']);
+        'Pronto p/ Instalação', 'Aguardando Financeiro', 'Instalado / Entregue']);
     await expect(bloco(page, 'Na Costura').locator('.pcp-bloco-count')).toHaveText('2');
     await expect(bloco(page, 'Aguardando Tecido').locator('.pcp-bloco-count')).toHaveText('0');
     await expect(bloco(page, 'Aguardando Tecido')).toContainText('Nenhum pedido nesta etapa');
