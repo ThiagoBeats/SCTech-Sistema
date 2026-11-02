@@ -31,7 +31,7 @@ const ped = (id, status, extra) => ({
 async function abrir(page, extras) {
     await entrar(page, BASE, {
         sc_forn: FORN, sc_cat: CAT, sc_mat: MAT, sc_kits: KITS, sc_est: [], sc_pc: [],
-        sc_ped: [ped(26001, 'Na Costura'), ped(26002, 'Instalado', { clienteNome: 'Já Instalado' }), ped(26003, 'Orçamento', { clienteNome: 'Bruna Costa', vendedor_nome: '', arq_nome: 'Studio M', data_entrega: null, itens: [], ambientes: [] })],
+        sc_ped: [ped(26001, 'Medição'), ped(26002, 'Instalado', { clienteNome: 'Já Instalado' }), ped(26004, 'Na Costura', { clienteNome: 'Em Producao' }), ped(26003, 'Orçamento', { clienteNome: 'Bruna Costa', vendedor_nome: '', arq_nome: 'Studio M', data_entrega: null, itens: [], ambientes: [] })],
         ...(extras || {}),
     });
     await page.evaluate(() => { localStorage.removeItem('sc_pc_seq'); localStorage.removeItem('sc_pc_origem'); });
@@ -45,14 +45,14 @@ const escolher = (page, id) => page.click(`#pc-import-pedidos-tb tr[data-ped="${
 const pedidosNaTabela = page => page.locator('#pc-import-pedidos-tb tr.pc-import-ped .pc-import-num').allInnerTexts();
 const lerPC = page => page.evaluate(() => JSON.parse(localStorage.getItem('sc_pc')));
 
-test('lista so pedidos em aberto (nao instalados), em tabela com colunas', async ({ page }) => {
+test('lista so pedidos em Orcamento ou Medicao, em tabela com colunas', async ({ page }) => {
     await abrir(page);
     await expect(page.locator('.pc-import-pedidos thead th')).toHaveText(['Pedido', 'Cliente', 'Vendedor', 'Status', 'Entrega', 'Itens', 'Compras feitas']);
     expect(await pedidosNaTabela(page)).toEqual(['#26003', '#26001']);
     const linha = page.locator('#pc-import-pedidos-tb tr[data-ped="26001"] td');
     await expect(linha.nth(1)).toHaveText('Pedro Alves');
     await expect(linha.nth(2)).toHaveText('Ana');
-    await expect(linha.nth(3)).toHaveText('Na Costura');
+    await expect(linha.nth(3)).toHaveText('Medição');
     await expect(linha.nth(4)).toHaveText('10/12/2026');
     await expect(linha.nth(5)).toHaveText('4');
 });
@@ -69,8 +69,8 @@ test('filtros: busca por numero ou cliente, status, vendedor e entrega', async (
     expect(await pedidosNaTabela(page)).toEqual(['#26003', '#26001']);
 
     // Status e vendedor so oferecem o que existe nos pedidos em aberto.
-    expect(await page.locator('#pc-import-f-status option').allInnerTexts()).toEqual(['Todos', 'Orçamento', 'Na Costura']);
-    await page.selectOption('#pc-import-f-status', 'Na Costura');
+    expect(await page.locator('#pc-import-f-status option').allInnerTexts()).toEqual(['Todos', 'Orçamento', 'Medição']);
+    await page.selectOption('#pc-import-f-status', 'Medição');
     expect(await pedidosNaTabela(page)).toEqual(['#26001']);
     await page.selectOption('#pc-import-f-status', '');
     await page.selectOption('#pc-import-f-vend', 'Studio M');

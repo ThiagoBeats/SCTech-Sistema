@@ -1836,3 +1836,16 @@ html[data-theme="dark"] .ped-aviso-bloqueio { background: #3A3110; border-color:
 .pc-import-botoes .btn { margin: 0; }
 .pc-origem { margin-top: 2px; font-size: 11.5px; font-weight: 600; color: var(--primary); }
 html[data-theme="dark"] .pc-import-ja { color: #F7DE86; }
+
+/* ─── Pedido de compra: observação por item, panos e especificações ────── */
+.pc-draft-obs { width: 100%; min-width: 160px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-input); font-size: 13px; background: var(--white); color: var(--dark); }
+.pc-item-obs { margin-top: 2px; font-size: 11.5px; color: #555; font-style: italic; }
+.pc-import-panos { margin-top: 3px; font-size: 11.5px; color: var(--muted); }
+.pc-especificacoes .pc-table td, .pc-especificacoes .pc-table th { font-size: 12px; padding: 6px 8px; }
+html[data-theme="dark"] .pc-item-obs { color: var(--muted); }
+
+/* ─── Pedido: acionamento da cortina (com/sem comando) ──────────────────── */
+.form-group[hidden] { display: none; }
+.amb-acion-opcoes { display: flex; flex-direction: column; gap: 4px; justify-content: center; min-height: 42px; }
+.amb-acion-op { display: flex; align-items: center; gap: 6px; margin: 0 !important; font-weight: 600 !important; font-size: 13px !important; cursor: pointer; white-space: nowrap; }
+.form-group .amb-acion-op input[type="radio"] { width: 16px; height: 16px; padding: 0; margin: 0; accent-color: var(--primary); cursor: pointer; }

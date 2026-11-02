@@ -5042,6 +5042,7 @@ function syncAmbientesFromDOM() {
         const local = v(`a-local-${a.id}`); if (local) a.local_instalacao = local;
         const larg = parseFloat(v(`a-larg-${a.id}`)); if (!isNaN(larg)) a.largura = larg;
         const alt = parseFloat(v(`a-alt-${a.id}`)); if (!isNaN(alt)) a.altura = alt;
+        _lerAcionamentoDOM(a);
         (a.tecidos || []).forEach((t, tidx) => {
             const sel = document.getElementById(`a-tecido-${a.id}-${tidx}`);
             if (sel && sel.value) t.tecidoId = parseInt(sel.value) || null;
@@ -5053,6 +5054,42 @@ function syncAmbientesFromDOM() {
             const cab = parseFloat(v(`t-cabecote-${a.id}-${tidx}`)); if (!isNaN(cab)) t.cabecote_cm = cab;
         });
     });
+}
+
+const ABERTURAS_OPTS = [
+    {v:'A',l:'Abertura A — Rec. Esq., Cmd. Esq.'},
+    {v:'B',l:'Abertura B — Rec. Dir., Cmd. Dir.'},
+    {v:'C',l:'Abertura C — Central, Cmd. Esq.'},
+    {v:'D',l:'Abertura D — Central, Cmd. Dir.'},
+    {v:'E',l:'Abertura E — Rec. Esq., Cmd. Dir.'},
+    {v:'F',l:'Abertura F — Rec. Dir., Cmd. Esq.'},
+    {v:'G',l:'Abertura G — Centro, Cmd. Esq.'},
+    {v:'H',l:'Abertura H — Centro, Cmd. Dir.'}
+];
+function rotuloAbertura(v) {
+    return (ABERTURAS_OPTS.find(o => o.v === v)?.l) || (v ? 'Abertura ' + v : '—');
+}
+
+// Acionamento da cortina: 'com' (comando de corda, com a altura do
+// comando em m) ou 'sem'. Vazio = nao informado (pedidos antigos).
+function textoAcionamento(a) {
+    if (a?.acionamento === 'com') return a.altura_acionamento > 0 ? `Com acionamento — altura ${String(a.altura_acionamento).replace('.', ',')} m` : 'Com acionamento';
+    if (a?.acionamento === 'sem') return 'Sem acionamento';
+    return '—';
+}
+function onAcionamentoChange(id) {
+    const com = document.querySelector(`input[name="a-acion-${id}"]:checked`)?.value === 'com';
+    const grupo = document.getElementById(`a-acion-alt-grupo-${id}`);
+    if (grupo) grupo.hidden = !com;
+}
+function _lerAcionamentoDOM(a) {
+    const marcado = document.querySelector(`input[name="a-acion-${a.id}"]:checked`);
+    if (!marcado) return;
+    a.acionamento = marcado.value;
+    if (a.acionamento === 'com') {
+        const alt = parseFloat(document.getElementById(`a-acion-alt-${a.id}`)?.value);
+        a.altura_acionamento = alt > 0 ? alt : null;
+    } else a.altura_acionamento = null;
 }
 
 function renderAmbientes() {
@@ -5079,16 +5116,7 @@ function renderAmbientes() {
             {v:'Varão Suíço/Wave',l:'Varão Suíço/Wave'}
         ].map(o=>`<option value="${o.v}"${a.fixacao===o.v?' selected':''}>${o.l}</option>`).join('');
         const localOpts = ['Parede','Teto'].map(o=>`<option value="${o}"${(a.local_instalacao||'Parede')===o?' selected':''}>${o}</option>`).join('');
-        const aberturaOpts = [
-            {v:'A',l:'Abertura A — Rec. Esq., Cmd. Esq.'},
-            {v:'B',l:'Abertura B — Rec. Dir., Cmd. Dir.'},
-            {v:'C',l:'Abertura C — Central, Cmd. Esq.'},
-            {v:'D',l:'Abertura D — Central, Cmd. Dir.'},
-            {v:'E',l:'Abertura E — Rec. Esq., Cmd. Dir.'},
-            {v:'F',l:'Abertura F — Rec. Dir., Cmd. Esq.'},
-            {v:'G',l:'Abertura G — Centro, Cmd. Esq.'},
-            {v:'H',l:'Abertura H — Centro, Cmd. Dir.'}
-        ].map(o=>`<option value="${o.v}"${(a.abertura||'A')===o.v?' selected':''}>${o.l}</option>`).join('');
+        const aberturaOpts = ABERTURAS_OPTS.map(o=>`<option value="${o.v}"${(a.abertura||'A')===o.v?' selected':''}>${o.l}</option>`).join('');
         const tecidos = a.tecidos || [];
         const buildTecOpts = (selId) => '<option value="">— Selecione o Tecido —</option>' + db.catalogo.map(c => {
             const disp = estoqueDisponivel(c.id);
@@ -5151,6 +5179,14 @@ function renderAmbientes() {
                 <div class="form-group"><label>Local de Instalação</label><select id="a-local-${a.id}">${localOpts}</select></div>
                 <div class="form-group"><label>Largura da Parede (m)</label><input type="number" id="a-larg-${a.id}" value="${a.largura||''}" placeholder="Ex: 2.40" step="0.01"></div>
                 <div class="form-group"><label>Altura da Parede (m)</label><input type="number" id="a-alt-${a.id}" value="${a.altura||''}" placeholder="Ex: 2.60" step="0.01"></div>
+                <div class="form-group amb-acion" id="a-acion-grupo-${a.id}">
+                    <label>Acionamento</label>
+                    <div class="amb-acion-opcoes" role="radiogroup" aria-label="Acionamento do ambiente ${n}">
+                        <label class="amb-acion-op"><input type="radio" name="a-acion-${a.id}" value="com"${a.acionamento==='com'?' checked':''} onchange="onAcionamentoChange(${a.id})"> Com acionamento</label>
+                        <label class="amb-acion-op"><input type="radio" name="a-acion-${a.id}" value="sem"${a.acionamento==='sem'?' checked':''} onchange="onAcionamentoChange(${a.id})"> Sem acionamento</label>
+                    </div>
+                </div>
+                <div class="form-group" id="a-acion-alt-grupo-${a.id}"${a.acionamento==='com'?'':' hidden'}><label>Altura do Acionamento (m)</label><input type="number" id="a-acion-alt-${a.id}" value="${a.altura_acionamento||''}" placeholder="Ex: 1.20" step="0.01" min="0"></div>
             </div>
             <div style="max-width:none">${tecidosHTML}${addTecBtn}</div>
             <div style="text-align:right;margin-top:5px">
@@ -5216,6 +5252,7 @@ async function calcularAmbiente(id) {
     a.abertura = document.getElementById(`a-abertura-${id}`)?.value || 'A';
     a.local_instalacao = document.getElementById(`a-local-${id}`)?.value || 'Parede';
     a.largura = larg; a.altura = alt;
+    _lerAcionamentoDOM(a);
     const tecidos = a.tecidos || [];
     if (!tecidos.length) { await showAlert('Adicione pelo menos um tecido ao ambiente.', '⚠️'); return; }
     let totalMat = 0;
@@ -6227,7 +6264,7 @@ function gerarHTMLOS(pedidoId) {
         <div class="os-amb-card">
             <div class="os-amb-head">
                 <span class="os-amb-name">Ambiente ${idx+1}${a.amb ? ': '+escapeHtml(a.amb) : ''}</span>
-                <span class="os-amb-meta">${escapeHtml(a.fixacao||'—')} · ${escapeHtml(a.local_instalacao||'Parede')} · Abertura ${escapeHtml(a.abertura||'A')} · ${a.largura||'—'}m × ${a.altura||'—'}m</span>
+                <span class="os-amb-meta">${escapeHtml(a.fixacao||'—')} · ${escapeHtml(a.local_instalacao||'Parede')} · Abertura ${escapeHtml(a.abertura||'A')} · ${a.largura||'—'}m × ${a.altura||'—'}m${a.acionamento ? ' · ' + escapeHtml(textoAcionamento(a)) : ''}</span>
             </div>
             ${tecBlocks}
             ${tecidos.length > 1 ? `<div class="os-amb-total">Total do ambiente: <strong>${totalConsumo.toFixed(2)} m lineares</strong></div>` : ''}
@@ -7169,6 +7206,8 @@ async function adicionarItemPC() {
     const tipo   = document.getElementById('pc-item-tipo')?.value || 'material';
     const itemId = parseInt(document.getElementById('pc-item-id')?.value);
     const qtd    = parseFloat(document.getElementById('pc-item-qtd')?.value) || 1;
+    const obsEl  = document.getElementById('pc-item-obs');
+    const observacao = (obsEl?.value || '').trim();
     if (!itemId) { await showAlert('Selecione o item.', '⚠️'); return; }
     if (qtd <= 0) { await showAlert('Informe uma quantidade válida.', '⚠️'); return; }
     let item_nome, unidade, preco_unit;
@@ -7189,10 +7228,12 @@ async function adicionarItemPC() {
         preco_unit = ultimoPrecoTecido(itemId);
         referencia = c.referencia || '';
     }
-    const chave = `${tipo}|${itemId}|${unidade}`;
-    const existing = pcDraftItens.find(i => `${i.tipo}|${i.item_id}|${i.unidade}` === chave);
+    // O mesmo item com outra observacao (outra cor, outra largura) e' outra linha.
+    const chave = `${tipo}|${itemId}|${unidade}|${observacao}`;
+    const existing = pcDraftItens.find(i => `${i.tipo}|${i.item_id}|${i.unidade}|${(i.observacao || '').trim()}` === chave);
     if (existing) { existing.quantidade += qtd; existing.subtotal = existing.quantidade * existing.preco_unit; }
-    else { pcDraftItens.push({ tipo, item_id: itemId, item_nome, referencia, unidade, quantidade: qtd, preco_unit, subtotal: qtd * preco_unit }); }
+    else { pcDraftItens.push({ tipo, item_id: itemId, item_nome, referencia, unidade, quantidade: qtd, preco_unit, subtotal: qtd * preco_unit, observacao }); }
+    if (obsEl) obsEl.value = '';
     renderItensPCDraft();
 }
 
@@ -7236,11 +7277,15 @@ function atualizarQtdPC(idx, val) {
     renderItensPCDraft();
 }
 
+function atualizarObsItemPC(idx, val) {
+    if (pcDraftItens[idx]) pcDraftItens[idx].observacao = String(val || '').trim();
+}
+
 function renderItensPCDraft() {
     const tb = document.getElementById('tb-pc-draft');
     if (!tb) return;
     if (!pcDraftItens.length) {
-        tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;padding:12px;font-size:13px">Nenhum item adicionado.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;padding:12px;font-size:13px">Nenhum item adicionado.</td></tr>';
         return;
     }
     const total = pcDraftItens.reduce((s, i) => s + i.subtotal, 0);
@@ -7250,12 +7295,13 @@ function renderItensPCDraft() {
             : `<span style="color:#8F8F8F;font-size:12px">sem registro</span>`;
         return `<tr>
             <td>${escapeHtml(i.item_nome)} <span style="font-size:11px;color:#888">(${_pcRotuloTipo(i.tipo)})</span></td>
+            <td><input type="text" class="pc-draft-obs" value="${escapeHtml(i.observacao || '')}" placeholder="Observações sobre este item..." onchange="atualizarObsItemPC(${idx},this.value)" aria-label="Observações de ${escapeHtml(i.item_nome)}"></td>
             <td><input type="number" value="${i.quantidade}" step="0.01" min="0.01" style="width:80px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:13px" onchange="atualizarQtdPC(${idx},this.value)"></td>
             <td>${i.unidade}</td>
             <td>${precoLabel}</td>
             <td><button class="btn btn-outline btn-sm btn-danger" onclick="removerItemPC(${idx})">✕</button></td>
         </tr>`;
-    }).join('') + `<tr style="background:#FAFAFA"><td colspan="3" style="text-align:right;font-weight:bold;color:#555;padding:10px 12px">Total estimado:</td><td style="font-weight:bold;padding:10px 12px">${total > 0 ? 'R$ ' + total.toFixed(2) : '<span style="color:#8F8F8F;font-size:12px">—</span>'}</td><td></td></tr>`;
+    }).join('') + `<tr style="background:#FAFAFA"><td colspan="4" style="text-align:right;font-weight:bold;color:#555;padding:10px 12px">Total estimado:</td><td style="font-weight:bold;padding:10px 12px">${total > 0 ? 'R$ ' + total.toFixed(2) : '<span style="color:#8F8F8F;font-size:12px">—</span>'}</td><td></td></tr>`;
 }
 
 // So kit PRONTO entra num pedido de compra: o kit de montagem e' feito aqui
@@ -7339,11 +7385,24 @@ async function salvarPedidoCompra() {
     };
     // Veio de "Importar de pedido": guarda o pedido de venda de origem.
     const origem = editandoPCId === null ? _pcLerOrigem() : null;
-    if (origem) dados.pedido_venda_id = origem.pedido_venda_id;
+    if (origem) {
+        dados.pedido_venda_id = origem.pedido_venda_id;
+        const pv = db.pedidos.find(p => p.id == origem.pedido_venda_id);
+        dados.pedido_venda_cliente = pv?.clienteNome || origem.cliente || '';
+        // Medidas e confeccao de cada ambiente, para o fornecedor. Copia do
+        // momento da compra: o documento nao muda se o pedido mudar depois.
+        if (pv) dados.especificacoes = _pcEspecificacoesDoPedido(pv);
+    }
 
     if (editandoPCId !== null) {
         const alvo = db.pedidos_compra.find(p => p.id === editandoPCId);
         if (!alvo) { await showAlert('O pedido que você estava editando não existe mais.', '⚠️'); cancelarEdicaoPC(); return; }
+        if (pcBloqueado(alvo)) { await showAlert(`O pedido #${formatPedidoId(alvo.id)} está ${alvo.status} e não pode mais ser editado.`, '🔒'); cancelarEdicaoPC(); return; }
+        // Rascunho importado: atualiza cliente e especificacoes do pedido de venda.
+        if (alvo.pedido_venda_id) {
+            const pv = db.pedidos.find(p => p.id == alvo.pedido_venda_id);
+            if (pv) { dados.pedido_venda_cliente = pv.clienteNome || alvo.pedido_venda_cliente || ''; dados.especificacoes = _pcEspecificacoesDoPedido(pv); }
+        }
         // Numero, data e status sao do pedido, nao do formulario: editar o
         // conteudo nao pode renumerar nem reabrir um pedido ja enviado.
         Object.assign(alvo, dados);
@@ -7413,9 +7472,11 @@ function renderListaPedidosCompra() {
     if (!tb) return;
     const filtroForn   = document.getElementById('filtro-pc-forn')?.value   || '';
     const filtroStatus = document.getElementById('filtro-pc-status')?.value || '';
+    const busca = _buscaNormaliza(document.getElementById('filtro-pc-busca')?.value);
     let lista = [...db.pedidos_compra].sort((a, b) => b.data_criacao - a.data_criacao);
     if (filtroForn)   lista = lista.filter(p => p.fornecedor_id == filtroForn);
     if (filtroStatus) lista = lista.filter(p => p.status === filtroStatus);
+    if (busca)        lista = lista.filter(p => _pcCasaBusca(p, busca));
     if (!lista.length) {
         tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:20px;">Nenhum pedido de compra encontrado.</td></tr>';
         return;
@@ -7426,8 +7487,10 @@ function renderListaPedidosCompra() {
         const total = p.itens.reduce((s, i) => s + i.subtotal, 0);
         const cls   = COR_PC[p.status] || 'st-orcamento';
         return `<tr>
-            <td style="font-size:12px"><button class="pc-num-btn" onclick="editarPedidoCompra(${p.id})" title="Abrir para editar ou acrescentar itens">#${formatPedidoId(p.id)}</button></td>
-            <td><strong>${escapeHtml(p.fornecedor_nome)}</strong>${p.pedido_venda_id ? `<div class="pc-origem" title="Itens importados do pedido de venda">↳ Pedido #${formatPedidoId(p.pedido_venda_id)}</div>` : ''}</td>
+            <td style="font-size:12px">${pcBloqueado(p)
+                ? `<button class="pc-num-btn" onclick="abrirPedidoCompra(${p.id})" title="${escapeHtml(p.status)}: somente leitura">🔒 #${formatPedidoId(p.id)}</button>`
+                : `<button class="pc-num-btn" onclick="editarPedidoCompra(${p.id})" title="Abrir para editar ou acrescentar itens">#${formatPedidoId(p.id)}</button>`}</td>
+            <td><strong>${escapeHtml(p.fornecedor_nome)}</strong>${p.pedido_venda_id ? `<div class="pc-origem" title="Itens importados do pedido de venda">↳ ${escapeHtml(_pcTextoOrigem(p))}</div>` : ''}</td>
             <td style="font-size:12px;color:#8F8F8F;white-space:nowrap">${data}</td>
             <td style="text-align:center">${p.itens.length}</td>
             <td>R$ ${total.toFixed(2)}</td>
@@ -7471,9 +7534,41 @@ function compartilharPC(id) {
     abrirDocModal(gerarHTMLPedidoCompra(id), 'Pedido de Compra #' + num, extra);
 }
 
-function atualizarStatusPC(id, status) {
+// Enviado ou Recebido: o pedido ja saiu para o fornecedor e nao se edita
+// mais. Para corrigir, volta para Rascunho (com confirmacao).
+function pcBloqueado(pc) {
+    return !!pc && (pc.status === 'Enviado' || pc.status === 'Recebido');
+}
+
+// Cliente do pedido de venda de origem: o gravado na compra; nas compras
+// antigas, o do pedido de venda.
+function _pcClienteOrigem(pc) {
+    if (pc.pedido_venda_cliente) return pc.pedido_venda_cliente;
+    return db.pedidos.find(p => p.id == pc.pedido_venda_id)?.clienteNome || '';
+}
+function _pcTextoOrigem(pc) {
+    const cli = _pcClienteOrigem(pc);
+    return `Pedido #${formatPedidoId(pc.pedido_venda_id)}${cli ? ' — ' + cli : ''}`;
+}
+
+// Busca da lista: numero da compra, cliente do pedido de origem ou data
+// (dd/mm/aaaa, ou parte dela, como "05/11").
+function _pcCasaBusca(pc, termo) {
+    const num = termo.replace(/^#/, '');
+    if (num && String(pc.id).includes(num)) return true;
+    if (pc.pedido_venda_id && _buscaNormaliza(_pcClienteOrigem(pc)).includes(termo)) return true;
+    const data = pc.data_criacao ? new Date(pc.data_criacao).toLocaleDateString('pt-BR') : '';
+    return !!data && data.includes(termo);
+}
+
+async function atualizarStatusPC(id, status) {
     const pc = db.pedidos_compra.find(p => p.id == id);
     if (!pc) return;
+    if (pcBloqueado(pc) && status === 'Rascunho'
+        && !await showConfirm(`Voltar o pedido #${formatPedidoId(pc.id)} para Rascunho? Ele volta a poder ser editado.`, '↩', 'Voltar para Rascunho', 'Cancelar')) {
+        renderListaPedidosCompra();
+        return;
+    }
     pc.status = status;
     syncDB();
     toast('Status atualizado!', 'success', 1500);
@@ -7496,6 +7591,7 @@ function abrirPedidoCompra(id) {
 function editarPedidoCompra(id) {
     const pc = db.pedidos_compra.find(p => p.id == id);
     if (!pc) return;
+    if (pcBloqueado(pc)) { abrirPedidoCompra(pc.id); return; }
     editandoPCId = pc.id;
     pcDraftItens = (pc.itens || []).map(i => ({ ...i }));
 
@@ -7520,6 +7616,8 @@ function cancelarEdicaoPC() {
     if (cnpjEl) cnpjEl.value = '';
     const obsEl = document.getElementById('pc-obs');
     if (obsEl) obsEl.value = '';
+    const obsItemEl = document.getElementById('pc-item-obs');
+    if (obsItemEl) obsItemEl.value = '';
     renderItensPCDraft();
     _pcPintarModoEdicao(null);
 }
@@ -7567,11 +7665,37 @@ function pedirTecido(tecidoId) {
 // diferentes: um pedido por fornecedor ou um generico com tudo. O pedido de
 // compra guarda de qual pedido de venda veio (pedido_venda_id).
 
-// Em aberto = ainda nao instalado.
+// So pedidos antes da producao (Orcamento ou Medicao) entram na importacao:
+// de Aguardando Tecido em diante a compra ja foi feita.
+const PC_STATUS_IMPORTAVEIS = ['Orçamento', 'Medição'];
 function _pcPedidosVendaAbertos() {
     return db.pedidos
-        .filter(p => normalizarStatus(p.status) !== 'Instalado')
+        .filter(p => PC_STATUS_IMPORTAVEIS.includes(normalizarStatus(p.status)))
         .sort((a, b) => b.id - a.id);
+}
+
+function _pcMetros(n) {
+    return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 }) + ' m';
+}
+
+// Panos de um tecido em cada ambiente: "Sala: 3 panos de 2,75 m".
+function _pcTextoPanos(lista) {
+    return lista.filter(x => x.num_panos > 0)
+        .map(x => `${x.amb ? x.amb + ': ' : ''}${x.num_panos} pano${x.num_panos > 1 ? 's' : ''}${x.alt_corte > 0 ? ' de ' + _pcMetros(x.alt_corte) : ''}`)
+        .join('; ');
+}
+
+// Medidas e confeccao de cada ambiente do pedido de venda (vai no PDF).
+function _pcEspecificacoesDoPedido(ped) {
+    return normalizarAmbientes(ped).map((a, i) => ({
+        amb: a.amb || `Ambiente ${i + 1}`,
+        largura: a.largura || null, altura: a.altura || null,
+        abertura: a.abertura || '', acionamento: a.acionamento || '', altura_acionamento: a.altura_acionamento || null,
+        tecidos: (a.tecidos || []).filter(t => t.tecidoId).map(t => ({
+            tecido_id: t.tecidoId, tecido_nome: t.tecidoNome || db.catalogo.find(c => c.id == t.tecidoId)?.nome || '',
+            prega: t.prega || '', fator: t.fator ?? null, num_panos: t.num_panos || 0, alt_corte: t.alt_corte || 0,
+        })),
+    }));
 }
 
 function _pcFornecedorDoCadastro(item) {
@@ -7585,20 +7709,23 @@ function _pcFornecedorDoCadastro(item) {
 function itensCompraDoPedidoVenda(ped) {
     const linhas = new Map();
     const somar = (chave, base, qtd) => {
-        if (!(qtd > 0)) return;
+        if (!(qtd > 0)) return null;
         const l = linhas.get(chave);
-        if (l) l.quantidade += qtd;
-        else linhas.set(chave, { ...base, quantidade: qtd });
+        if (l) { l.quantidade += qtd; return l; }
+        const nova = { ...base, quantidade: qtd };
+        linhas.set(chave, nova);
+        return nova;
     };
     for (const a of normalizarAmbientes(ped)) {
         for (const t of (a.tecidos || [])) {
             if (!t.tecidoId) continue;
             const c = db.catalogo.find(x => x.id == t.tecidoId);
-            somar(`tecido|${t.tecidoId}`, {
+            const linha = somar(`tecido|${t.tecidoId}`, {
                 tipo: 'tecido', item_id: c ? c.id : t.tecidoId, item_nome: c?.nome || t.tecidoNome || 'Tecido',
                 referencia: c?.referencia || '', unidade: 'm', preco_unit: ultimoPrecoTecido(t.tecidoId),
                 ..._pcFornecedorDoCadastro(c),
             }, +t.consumo_linear || 0);
+            if (linha) (linha._panos = linha._panos || []).push({ amb: a.amb || '', num_panos: +t.num_panos || 0, alt_corte: +t.alt_corte || 0 });
         }
     }
     for (const i of (ped.itens || [])) {
@@ -7618,9 +7745,13 @@ function itensCompraDoPedidoVenda(ped) {
             ..._pcFornecedorDoCadastro(m),
         }, +i.quantidade || 0);
     }
-    return [...linhas.values()].map(l => {
+    return [...linhas.values()].map(({ _panos, ...l }) => {
         const quantidade = Math.round(l.quantidade * 100) / 100;
-        return { ...l, quantidade, subtotal: Math.round(quantidade * l.preco_unit * 100) / 100 };
+        const item = { ...l, quantidade, subtotal: Math.round(quantidade * l.preco_unit * 100) / 100 };
+        // Tecido: quantidade e metragem dos panos viram a observacao da linha.
+        const panos = _panos ? _pcTextoPanos(_panos) : '';
+        if (panos) item.observacao = panos;
+        return item;
     });
 }
 
@@ -7702,7 +7833,7 @@ function abrirImportarPedidoVenda() {
                 </div>
                 <div id="pc-import-itens"></div>
             </div>`
-            : `<p class="pc-import-vazio">Nenhum pedido em aberto. Só pedidos que ainda não foram instalados aparecem aqui.</p>`}
+            : `<p class="pc-import-vazio">Nenhum pedido para importar. Só pedidos em Orçamento ou Medição aparecem aqui.</p>`}
         </div>
         <div class="pc-import-rodape">
             <span id="pc-import-resumo"></span>
@@ -7816,6 +7947,7 @@ function selecionarPedidoVendaImport(id) {
             <td class="pc-import-cod">${escapeHtml(i.referencia || '—')}</td>
             <td>
                 <div class="pc-import-nome">${escapeHtml(i.item_nome)}</div>
+                ${i.observacao ? `<div class="pc-import-panos">${escapeHtml(i.observacao)}</div>` : ''}
                 ${i.compras.length ? `<div class="pc-import-ja">Já comprado para este pedido: ${i.compras.map(c => '#' + formatPedidoId(c)).join(', ')}</div>` : ''}
             </td>
             <td class="pc-import-tipo">${_pcRotuloTipo(i.tipo)}</td>
@@ -7924,7 +8056,7 @@ function gerarHTMLPedidoCompra(id) {
         }
         return `<tr>
         <td style="font-size:12px;color:#555;white-space:nowrap">${ref ? escapeHtml(ref) : '<span style="color:#ccc">—</span>'}</td>
-        <td>${escapeHtml(i.item_nome)}</td>
+        <td>${escapeHtml(i.item_nome)}${i.observacao ? `<div class="pc-item-obs">Obs.: ${escapeHtml(i.observacao)}</div>` : ''}</td>
         <td style="text-align:center">${_pcRotuloTipo(i.tipo)}</td>
         <td style="text-align:right">${i.quantidade}</td>
         <td>${i.unidade}</td>
@@ -7961,12 +8093,52 @@ function gerarHTMLPedidoCompra(id) {
                 <tfoot><tr style="background:#FAFAFA"><td colspan="6" style="text-align:right;font-weight:bold;padding:10px 8px;color:#242424">Total Estimado:</td><td style="text-align:right;font-weight:bold;padding:10px 8px">R$ ${total.toFixed(2)}</td></tr></tfoot>
             </table>
         </div>
+        ${_pcEspecificacoesHTML(pc)}
         ${pc.observacoes ? `<div class="pc-section"><div class="pc-section-title">Observações</div><div style="padding:10px 14px;border:1px solid #E0E0E0;border-radius:4px;font-size:14px;min-height:50px">${escapeHtml(pc.observacoes)}</div></div>` : ''}
         <div class="pc-assinaturas">
             <div><div class="pc-section-title">Solicitado por</div><div class="pc-linha"></div><small>Nome / Data</small></div>
             <div><div class="pc-section-title">Aprovado por</div><div class="pc-linha"></div><small>Nome / Data</small></div>
             <div><div class="pc-section-title">Recebido por</div><div class="pc-linha"></div><small>Nome / Assinatura / Data</small></div>
         </div>`;
+}
+
+// Especificacoes dos ambientes do pedido de venda de origem: medidas da
+// parede, abertura, acionamento e, por tecido, prega, fator e panos. Com
+// tecido no pedido de compra, mostra so os tecidos que estao nele.
+function _pcEspecificacoesHTML(pc) {
+    if (!pc.pedido_venda_id) return '';
+    let specs = pc.especificacoes;
+    if (!specs) {
+        const pv = db.pedidos.find(p => p.id == pc.pedido_venda_id);
+        specs = pv ? _pcEspecificacoesDoPedido(pv) : [];
+    }
+    const tecidosDaCompra = new Set((pc.itens || []).filter(i => i.tipo === 'tecido').map(i => String(i.item_id)));
+    const filtrar = tecidosDaCompra.size > 0;
+    const m = v => v > 0 ? _pcMetros(Math.round(v * 1000) / 1000) : '—';
+    const linhas = [];
+    for (const a of specs) {
+        const tecidos = filtrar ? a.tecidos.filter(t => tecidosDaCompra.has(String(t.tecido_id))) : a.tecidos;
+        if (filtrar && !tecidos.length) continue;
+        const base = `<td><strong>${escapeHtml(a.amb)}</strong></td>
+            <td style="white-space:nowrap">${m(a.largura)} × ${m(a.altura)}</td>
+            <td>${escapeHtml(a.abertura ? rotuloAbertura(a.abertura) : '—')}</td>
+            <td>${escapeHtml(textoAcionamento(a))}</td>`;
+        if (!tecidos.length) { linhas.push(`<tr>${base}<td colspan="4" style="color:#999">—</td></tr>`); continue; }
+        for (const t of tecidos) linhas.push(`<tr>${base}
+            <td>${escapeHtml(t.tecido_nome || '—')}</td>
+            <td>${escapeHtml(t.prega || '—')}</td>
+            <td style="text-align:center">${t.fator ? t.fator + 'x' : '—'}</td>
+            <td style="white-space:nowrap">${t.num_panos > 0 ? t.num_panos + (t.alt_corte > 0 ? ' × ' + m(t.alt_corte) : '') : '—'}</td>
+        </tr>`);
+    }
+    if (!linhas.length) return '';
+    return `<div class="pc-section pc-especificacoes">
+        <div class="pc-section-title">Especificações — ${escapeHtml(_pcTextoOrigem(pc))}</div>
+        <table class="pc-table">
+            <thead><tr><th>Ambiente</th><th>Parede (L × A)</th><th>Abertura</th><th>Acionamento</th><th>Tecido</th><th>Prega</th><th style="text-align:center">Fator</th><th>Panos</th></tr></thead>
+            <tbody>${linhas.join('')}</tbody>
+        </table>
+    </div>`;
 }
 
 function renderPedidoCompraDoc() {

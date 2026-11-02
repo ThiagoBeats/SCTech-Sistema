@@ -212,7 +212,7 @@ test('acrescentar item num pedido existente nao cria outro pedido', async ({ pag
     expect(pcs[0].n).toBe(2);
 });
 
-test('editar um pedido ja enviado nao o devolve para Rascunho', async ({ page }) => {
+test('pedido ja enviado nao abre no formulario: nem itens nem status mudam', async ({ page }) => {
     await semear(page);
     await page.selectOption('#pc-fornecedor', '7');
     await umItem(page, 'material', 11);
@@ -221,11 +221,13 @@ test('editar um pedido ja enviado nao o devolve para Rascunho', async ({ page })
 
     await page.click('.forn-tab-btn[data-tab="pedidos"]');
     await page.locator('.pc-num-btn').first().click();
-    await umItem(page, 'tecido', 1);
-    await gravar(page);
+    // Abre o documento (somente leitura), nao o formulario de edicao.
+    await expect(page.locator('#doc-modal-overlay')).toBeVisible();
+    expect(await page.evaluate(() => editandoPCId)).toBeNull();
 
-    expect(await page.evaluate(() => db.pedidos_compra[0].status),
-        'status e do pedido, nao do formulario').toBe('Enviado');
+    const pc = await page.evaluate(() => db.pedidos_compra[0]);
+    expect(pc.status, 'status e do pedido, nao do formulario').toBe('Enviado');
+    expect(pc.itens).toHaveLength(1);
 });
 
 test('cancelar a edicao limpa o formulario e nao grava nada', async ({ page }) => {

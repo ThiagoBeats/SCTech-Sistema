@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Fornecedores - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261101c">
+    <link rel="stylesheet" href="css/style.css?v=20261102a">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
@@ -113,6 +113,10 @@
         <div id="tab-forn-pedidos" class="tab-panel">
             <div class="card">
                 <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+                    <div class="form-group" style="flex:1.4;min-width:220px;margin-bottom:0">
+                        <label for="filtro-pc-busca">Buscar</label>
+                        <input type="text" id="filtro-pc-busca" autocomplete="off" placeholder="🔍 Nº do pedido, cliente ou data (dd/mm/aaaa)" oninput="renderListaPedidosCompra()">
+                    </div>
                     <div class="form-group" style="flex:1;min-width:180px;margin-bottom:0">
                         <label>Fornecedor</label>
                         <select id="filtro-pc-forn" onchange="renderListaPedidosCompra()">
@@ -185,6 +189,10 @@
                         <label>Item</label>
                         <select id="pc-item-id" onchange="preencherCodigoItemPC()"></select>
                     </div>
+                    <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
+                        <label for="pc-item-obs">Observações do item</label>
+                        <input type="text" id="pc-item-obs" placeholder="Ex.: Cor específica, largura, etc...">
+                    </div>
                     <div class="form-group" id="pc-unidade-group" style="width:130px;margin-bottom:0;display:none">
                         <label>Unidade</label>
                         <select id="pc-item-unidade">
@@ -202,6 +210,7 @@
                     <thead>
                         <tr>
                             <th>Item</th>
+                            <th>Observações</th>
                             <th style="width:110px">Quantidade</th>
                             <th style="width:60px">Un.</th>
                             <th style="width:130px">Último preço pago</th>
@@ -221,6 +230,6 @@
             </div>
         </div>
     </main>
-    <script src="js/app.js?v=20261101c"></script>
+    <script src="js/app.js?v=20261102a"></script>
 </body>
 </html>
