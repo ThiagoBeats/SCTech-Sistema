@@ -1422,6 +1422,13 @@ html[data-theme="dark"] .kit-aviso { background: rgba(242, 201, 36, .10); }
 html[data-theme="dark"] .kit-selo { background: rgba(201, 247, 117, .12); border-color: var(--secondary); color: var(--secondary); }
 html[data-theme="dark"] .kit-selo-montagem { background: #1D2024; border-color: #282A2E; color: var(--muted); }
 
+/* Kit de fixação: selo na lista de kits, opção no cadastro e linha no pedido */
+.kit-selo-fixacao { background: rgba(0, 93, 59, .10); border-color: #005D3B; color: #005D3B; }
+html[data-theme="dark"] .kit-selo-fixacao { background: rgba(0, 93, 59, .25); border-color: #3FAF7F; color: #7FD3AE; }
+.kit-fixacao-op { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: normal; }
+.kit-fixacao-op input { width: auto; margin: 0; }
+.kit-item-modo-linha { padding: 3px 6px; font-size: 13px; }
+
 .imp-nota-preco {
     margin: 8px 0 0; padding: 7px 10px; border-radius: 5px;
     background: rgba(201, 247, 117, .20); border: 1px solid var(--primary);

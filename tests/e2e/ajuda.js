@@ -9,6 +9,11 @@ async function entrar(page, base, extras) {
             papel_id: 1, ativo: true, permissoes_extras: {}, senha_hash: ''
         }]));
         sessionStorage.setItem('sc_user', JSON.stringify({ id: 1 }));
+        // Os kits de fixação padrão nascem na primeira carga do app (a propria
+        // login.html ja os criou). Os testes partem sem eles, como antes; quem
+        // quer testar a criação apaga esta marca (ver kits-fixacao.spec.js).
+        localStorage.setItem('sc_kits_fixacao_padrao', '1');
+        if (!dados || !('sc_kits' in dados)) localStorage.setItem('sc_kits', '[]');
         Object.entries(dados || {}).forEach(([k, v]) => localStorage.setItem(k, JSON.stringify(v)));
     }, extras || {});
 }

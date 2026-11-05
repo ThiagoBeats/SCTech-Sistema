@@ -165,8 +165,8 @@
         <div id="tab-kits" class="tab-panel">
 
             <!-- Criar novo kit -->
-            <div class="card">
-                <h3 style="margin-bottom:16px">Criar Kit</h3>
+            <div class="card" id="kit-form-card">
+                <h3 style="margin-bottom:16px" id="kit-form-titulo">Criar Kit</h3>
                 <div class="grid">
                     <div class="form-group">
                         <label>Código <span class="info-tag">código único</span></label>
@@ -180,6 +180,12 @@
                         <label>Descrição (opcional)</label>
                         <input type="text" id="kit-desc" placeholder="Breve descrição do kit">
                     </div>
+                    <div class="form-group" style="grid-column:1/-1">
+                        <label class="kit-fixacao-op">
+                            <input type="checkbox" id="kit-fixacao">
+                            <span><strong>Kit de fixação</strong> — aparece em "Material de Instalação" no pedido e seus materiais entram sozinhos no pedido</span>
+                        </label>
+                    </div>
                 </div>
 
                 <h4 style="margin-bottom:10px;color:#555">Itens do Kit</h4>
@@ -192,6 +198,13 @@
                         <label>Quantidade</label>
                         <input type="number" id="kit-item-qtd" placeholder="Ex: 2" step="0.01" min="0.01" value="1">
                     </div>
+                    <div class="form-group" style="width:140px">
+                        <label for="kit-item-modo">Contagem</label>
+                        <select id="kit-item-modo" title="Por kit: quantidade fixa. Por metro: multiplicada pela largura da parede.">
+                            <option value="kit">Por kit</option>
+                            <option value="metro">Por metro</option>
+                        </select>
+                    </div>
                     <button class="btn btn-outline" style="margin-bottom:0" onclick="adicionarItemAoKit()">+ Adicionar Item</button>
                 </div>
 
@@ -199,13 +212,14 @@
                 <div style="margin-bottom:14px">
                     <table>
                         <thead>
-                            <tr><th>Material</th><th>Quantidade</th><th style="width:60px"></th></tr>
+                            <tr><th>Material</th><th>Quantidade</th><th>Contagem</th><th style="width:60px"></th></tr>
                         </thead>
                         <tbody id="tb-kit-draft"></tbody>
                     </table>
                 </div>
 
-                <button class="btn btn-success" onclick="salvarKit()">Salvar Kit</button>
+                <button class="btn btn-success" id="kit-btn-salvar" onclick="salvarKit()">Salvar Kit</button>
+                <button class="btn btn-outline" id="kit-btn-cancelar" onclick="cancelarEdicaoKit()" hidden>Cancelar edição</button>
             </div>
 
             <!-- Kits cadastrados -->

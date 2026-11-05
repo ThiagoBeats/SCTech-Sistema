@@ -222,6 +222,44 @@ let db = {
     import_perfis:   JSON.parse(localStorage.getItem('sc_imp_perfis')) || []
 };
 
+// ─── Kits de fixação padrão ──────────────────────────────────────────────
+// Os tipos de instalação que antes eram fixos no pedido nascem como kits de
+// fixação vazios: cada empresa coloca os materiais dela, ou os exclui. Criados
+// uma vez só (a marca em localStorage impede que um kit excluído volte).
+const KITS_FIXACAO_PADRAO = [
+    'Trilho Suíço Simples', 'Trilho Suíço Duplo', 'Trilho Suíço Duplo Com Espaço',
+    'Trilho Suíço Triplo', 'Trilho Motorizador', 'Varão Alumínio Comum', 'Varão Suíço/Wave'
+];
+const CHAVE_KITS_FIXACAO_PADRAO = 'sc_kits_fixacao_padrao';
+
+function _normNomeKit(t) {
+    return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function garantirKitsFixacaoPadrao() {
+    try { if (localStorage.getItem(CHAVE_KITS_FIXACAO_PADRAO)) return; } catch (e) { return; }
+    const codigos = new Set([...db.kits, ...db.materiais, ...db.catalogo]
+        .map(r => String(r.referencia || '').replace(/\s+/g, '').toUpperCase()).filter(Boolean));
+    const nomes = new Set(db.kits.map(k => _normNomeKit(k.nome)));
+    let seq = 0;
+    const proximoCodigo = () => {
+        let cod;
+        do { seq += 1; cod = 'FIX-' + String(seq).padStart(3, '0'); } while (codigos.has(cod));
+        codigos.add(cod);
+        return cod;
+    };
+    const base = Date.now();
+    KITS_FIXACAO_PADRAO.forEach((nome, i) => {
+        if (nomes.has(_normNomeKit(nome))) return;
+        db.kits.push({ id: base + i, referencia: proximoCodigo(), nome, descricao: '', fixacao: true, itens: [] });
+    });
+    try {
+        localStorage.setItem('sc_kits', JSON.stringify(db.kits));
+        localStorage.setItem(CHAVE_KITS_FIXACAO_PADRAO, '1');
+    } catch (e) { /* sem storage: tenta de novo na proxima carga */ }
+}
+garantirKitsFixacaoPadrao();
+
 function gerarNumeroPedido() {
     const seq = (parseInt(localStorage.getItem('sc_ped_seq') || '0') + 1);
     localStorage.setItem('sc_ped_seq', String(seq));
@@ -4488,37 +4526,86 @@ function sortKits(col) {
 
 // --- KITS ---
 let kitDraftItens = [];
+let kitEditandoId = null;   // kit de montagem aberto para edição (null = criando)
+
+// Kit de fixação: kit de montagem marcado para aparecer em "Material de
+// Instalação" no pedido. Kit pronto nunca é de fixação.
+function ehKitFixacao(kit) {
+    return !!(kit && kit.fixacao === true && !ehKitPronto(kit));
+}
+
+// Item de kit contado por metro (largura da parede) ou por kit (fixo).
+function textoQtdItemKit(i) {
+    return `${i.quantidade} ${i.unidade || ''}${i.por_metro ? '/m' : ''}`.replace(/\s+\//, '/').trim();
+}
 
 async function adicionarItemAoKit() {
     const matId = parseInt(document.getElementById('kit-item-mat')?.value);
     const qtd   = parseFloat(document.getElementById('kit-item-qtd')?.value);
+    const porMetro = document.getElementById('kit-item-modo')?.value === 'metro';
     if (!matId) { await showAlert('Escolha o material na lista de sugestões.', '⚠️'); return; }
     if (!qtd || qtd <= 0) { await showAlert('Informe uma quantidade válida.', '⚠️'); return; }
     const mat = db.materiais.find(m => m.id == matId);
     if (!mat) return;
-    const existing = kitDraftItens.find(i => i.materialId === matId);
+    // Mesmo material com a mesma contagem soma; com contagem diferente vira outra linha.
+    const existing = kitDraftItens.find(i => i.materialId === matId && !!i.por_metro === porMetro);
     if (existing) { existing.quantidade += qtd; }
-    else { kitDraftItens.push({ materialId: matId, nome: mat.nome, unidade: mat.unidade, quantidade: qtd }); }
+    else { kitDraftItens.push({ materialId: matId, nome: mat.nome, unidade: mat.unidade, quantidade: qtd, por_metro: porMetro }); }
     renderKitDraftItens();
 }
 
-function removerItemDoKit(materialId) {
-    kitDraftItens = kitDraftItens.filter(i => i.materialId !== materialId);
+function removerItemDoKit(idx) {
+    kitDraftItens.splice(idx, 1);
     renderKitDraftItens();
+}
+
+function mudarModoItemDoKit(idx, valor) {
+    if (kitDraftItens[idx]) kitDraftItens[idx].por_metro = valor === 'metro';
 }
 
 function renderKitDraftItens() {
     const tb = document.getElementById('tb-kit-draft');
     if (!tb) return;
     if (!kitDraftItens.length) {
-        tb.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;padding:10px;font-size:13px">Nenhum item adicionado ainda.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;padding:10px;font-size:13px">Nenhum item adicionado ainda.</td></tr>';
         return;
     }
-    tb.innerHTML = kitDraftItens.map(i => `<tr>
-        <td>${i.nome}</td>
-        <td>${i.quantidade} ${i.unidade}</td>
-        <td><button class="btn btn-outline btn-sm btn-danger" onclick="removerItemDoKit(${i.materialId})">✕</button></td>
+    tb.innerHTML = kitDraftItens.map((i, idx) => `<tr>
+        <td>${escapeHtml(i.nome)}</td>
+        <td>${i.quantidade} ${escapeHtml(i.unidade || '')}</td>
+        <td><select class="kit-item-modo-linha" onchange="mudarModoItemDoKit(${idx}, this.value)" aria-label="Contagem de ${escapeHtml(i.nome)}">
+            <option value="kit"${i.por_metro ? '' : ' selected'}>Por kit</option>
+            <option value="metro"${i.por_metro ? ' selected' : ''}>Por metro</option>
+        </select></td>
+        <td><button class="btn btn-outline btn-sm btn-danger" onclick="removerItemDoKit(${idx})">✕</button></td>
     </tr>`).join('');
+}
+
+function editarKit(id) {
+    const kit = db.kits.find(k => k.id == id);
+    if (!kit || ehKitPronto(kit) || !document.getElementById('kit-ref')) return;
+    kitEditandoId = kit.id;
+    document.getElementById('kit-ref').value = kit.referencia || '';
+    document.getElementById('kit-nome').value = kit.nome || '';
+    const desc = document.getElementById('kit-desc'); if (desc) desc.value = kit.descricao || '';
+    const fix = document.getElementById('kit-fixacao'); if (fix) fix.checked = ehKitFixacao(kit);
+    kitDraftItens = (kit.itens || []).map(i => ({ ...i }));
+    renderKitDraftItens();
+    const titulo = document.getElementById('kit-form-titulo'); if (titulo) titulo.textContent = 'Editar Kit';
+    const salvar = document.getElementById('kit-btn-salvar'); if (salvar) salvar.textContent = 'Salvar Alterações';
+    const cancelar = document.getElementById('kit-btn-cancelar'); if (cancelar) cancelar.hidden = false;
+    document.getElementById('kit-form-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function cancelarEdicaoKit() {
+    kitEditandoId = null;
+    ['kit-ref', 'kit-nome', 'kit-desc'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const fix = document.getElementById('kit-fixacao'); if (fix) fix.checked = false;
+    kitDraftItens = [];
+    renderKitDraftItens();
+    const titulo = document.getElementById('kit-form-titulo'); if (titulo) titulo.textContent = 'Criar Kit';
+    const salvar = document.getElementById('kit-btn-salvar'); if (salvar) salvar.textContent = 'Salvar Kit';
+    const cancelar = document.getElementById('kit-btn-cancelar'); if (cancelar) cancelar.hidden = true;
 }
 
 // Uma regra só de normalização de código em todo o sistema: a do importador.
@@ -4551,16 +4638,26 @@ async function salvarKit() {
     const nome = document.getElementById('kit-nome')?.value.trim();
     if (!ref) { await showAlert('Informe o código do kit.', '⚠️'); return; }
     if (!nome) { await showAlert('Informe o nome do kit.', '⚠️'); return; }
-    const dono = donoDoCodigo(ref);
+    const editando = kitEditandoId != null ? db.kits.find(k => k.id === kitEditandoId) : null;
+    const dono = donoDoCodigo(ref, editando ? editando.id : undefined);
     if (dono) { await showAlert(`O código ${ref} já é de ${dono}. Use outro código.`, '🚫'); return; }
-    if (!kitDraftItens.length) { await showAlert('Adicione pelo menos um item ao kit.', '⚠️'); return; }
-    db.kits.push({
-        id: Date.now(),
+    const fixacao = !!document.getElementById('kit-fixacao')?.checked;
+    // Kit de fixação pode nascer vazio: só registra o tipo de instalação.
+    if (!kitDraftItens.length && !fixacao) { await showAlert('Adicione pelo menos um item ao kit.', '⚠️'); return; }
+    const dados = {
         referencia: normalizarCodigoDoSistema(ref),
         nome,
         descricao: document.getElementById('kit-desc')?.value.trim() || '',
-        itens: kitDraftItens.map(i => ({ ...i }))
-    });
+        fixacao,
+        itens: kitDraftItens.map(i => ({ ...i, por_metro: !!i.por_metro }))
+    };
+    if (editando) {
+        Object.assign(editando, dados);
+        kitEditandoId = null;
+        salvarERecarregar('Kit atualizado!');
+        return;
+    }
+    db.kits.push({ id: Date.now(), ...dados });
     salvarERecarregar('Kit salvo!');
 }
 
@@ -4800,10 +4897,17 @@ function renderKits() {
             : (pronto ? `<strong>${(k.estoque_atual || 0).toFixed(0)}</strong> un` : '—');
         const composicao = pronto
             ? '<span style="color:#999">kit pronto do fornecedor</span>'
-            : (k.itens || []).map(i => `${escapeHtml(i.nome)}: ${i.quantidade} ${i.unidade}`).join(' · ');
+            : ((k.itens || []).length
+                ? k.itens.map(i => `${escapeHtml(i.nome)}: ${escapeHtml(textoQtdItemKit(i))}`).join(' · ')
+                : '<span style="color:#999">sem itens</span>');
         const selo = pronto
             ? '<span class="kit-selo">pronto</span>'
-            : '<span class="kit-selo kit-selo-montagem">montagem</span>';
+            : ehKitFixacao(k)
+                ? '<span class="kit-selo kit-selo-fixacao">fixação</span>'
+                : '<span class="kit-selo kit-selo-montagem">montagem</span>';
+        const editar = !pronto && document.getElementById('kit-ref')
+            ? `<button class="btn btn-outline btn-sm" onclick="editarKit(${k.id})" title="Editar kit">✏️</button>`
+            : '';
         const ajustar = pronto && !temEstoqueInfinito(k)
             ? `<button class="btn btn-outline btn-sm" onclick="mostrarAjusteForm('kit-${k.id}')" title="Ajustar estoque">± Ajustar</button>`
             : '';
@@ -4826,8 +4930,8 @@ function renderKits() {
             <td class="col-num" title="${escapeHtml(k.medida || '')}">${escapeHtml(k.medida || '—')}</td>
             <td class="col-num">${pronto ? 'R$ ' + (k.preco || 0).toFixed(2) : '—'}</td>
             <td class="col-num">${saldo}</td>
-            <td class="col-nome" title="${escapeHtml((k.itens || []).map(i => i.nome + ': ' + i.quantidade + ' ' + i.unidade).join(' · '))}">${composicao}</td>
-            <td class="col-acoes">${ajustar}
+            <td class="col-nome" title="${escapeHtml((k.itens || []).map(i => i.nome + ': ' + textoQtdItemKit(i)).join(' · '))}">${composicao}</td>
+            <td class="col-acoes">${ajustar}${editar}
                 <button class="btn btn-outline btn-sm btn-danger" onclick="excluirKit(${k.id})">🗑️</button></td>
         </tr>${linhaAjuste}`;
     }).join('');
@@ -5037,7 +5141,8 @@ function syncAmbientesFromDOM() {
     pedidoDraft.ambientes.forEach(a => {
         const v = id => document.getElementById(id)?.value;
         const amb = v(`a-amb-${a.id}`); if (amb !== undefined) a.amb = amb.trim();
-        const fixacao = v(`a-fixacao-${a.id}`); if (fixacao) a.fixacao = fixacao;
+        // A fixação não é lida aqui: só muda pelo onchange (onFixacaoChange),
+        // senão um pedido antigo ganharia kit sem ninguém ter escolhido.
         const abertura = v(`a-abertura-${a.id}`); if (abertura) a.abertura = abertura;
         const local = v(`a-local-${a.id}`); if (local) a.local_instalacao = local;
         const larg = parseFloat(v(`a-larg-${a.id}`)); if (!isNaN(larg)) a.largura = larg;
@@ -5106,15 +5211,7 @@ function renderAmbientes() {
     ];
     container.innerHTML = pedidoDraft.ambientes.map((a, idx) => {
         const n = idx + 1;
-        const fixacaoOpts = [
-            {v:'Trilho Suico Simples',l:'Trilho Suíço Simples'},
-            {v:'Trilho Suíço Duplo',l:'Trilho Suíço Duplo'},
-            {v:'Trilho Suíço Duplo Com Espaço',l:'Trilho Suíço Duplo Com Espaço'},
-            {v:'Trilho Suíço Triplo',l:'Trilho Suíço Triplo'},
-            {v:'Trilho Motorizador',l:'Trilho Motorizador'},
-            {v:'Varão Aluminio Comum',l:'Varão Aluminio Comum'},
-            {v:'Varão Suíço/Wave',l:'Varão Suíço/Wave'}
-        ].map(o=>`<option value="${o.v}"${a.fixacao===o.v?' selected':''}>${o.l}</option>`).join('');
+        const fixacaoOpts = opcoesFixacaoAmbiente(a);
         const localOpts = ['Parede','Teto'].map(o=>`<option value="${o}"${(a.local_instalacao||'Parede')===o?' selected':''}>${o}</option>`).join('');
         const aberturaOpts = ABERTURAS_OPTS.map(o=>`<option value="${o.v}"${(a.abertura||'A')===o.v?' selected':''}>${o.l}</option>`).join('');
         const tecidos = a.tecidos || [];
@@ -5174,10 +5271,10 @@ function renderAmbientes() {
                     <input type="text" id="a-amb-${a.id}" value="${escapeHtml(a.amb||'')}" placeholder="Ex: Quarto Casal"></div>
             </div>
             <div class="grid">
-                <div class="form-group"><label>Material de Instalação</label><select id="a-fixacao-${a.id}">${fixacaoOpts}</select></div>
+                <div class="form-group"><label>Material de Instalação</label><select id="a-fixacao-${a.id}" onchange="onFixacaoChange(${a.id})">${fixacaoOpts}</select></div>
                 <div class="form-group"><label>Tipo de Abertura</label><select id="a-abertura-${a.id}" onchange="onAberturaChange(${a.id})">${aberturaOpts}</select></div>
                 <div class="form-group"><label>Local de Instalação</label><select id="a-local-${a.id}">${localOpts}</select></div>
-                <div class="form-group"><label>Largura da Parede (m)</label><input type="number" id="a-larg-${a.id}" value="${a.largura||''}" placeholder="Ex: 2.40" step="0.01"></div>
+                <div class="form-group"><label>Largura da Parede (m)</label><input type="number" id="a-larg-${a.id}" value="${a.largura||''}" placeholder="Ex: 2.40" step="0.01" onchange="onLarguraAmbienteChange(${a.id})"></div>
                 <div class="form-group"><label>Altura da Parede (m)</label><input type="number" id="a-alt-${a.id}" value="${a.altura||''}" placeholder="Ex: 2.60" step="0.01"></div>
                 <div class="form-group amb-acion" id="a-acion-grupo-${a.id}">
                     <label>Acionamento</label>
@@ -5207,7 +5304,7 @@ function adicionarAmbiente() {
     syncAmbientesFromDOM();
     _ambienteCounter++;
     pedidoDraft.ambientes.push({
-        id: _ambienteCounter, calculado: false, amb: '', fixacao: 'Trilho Suico', abertura: 'A', local_instalacao: 'Parede',
+        id: _ambienteCounter, calculado: false, amb: '', fixacao: '', fixacao_kit_id: null, abertura: 'A', local_instalacao: 'Parede',
         largura: null, altura: null,
         tecidos: [{ tecidoId: null, tecidoNome: '', largura_rolo: 2.80, prega: 'Americana', fator: 2.5, bainha_cm: 15, cabecote_cm: 0, num_panos: 0, alt_corte: 0, consumo_linear: 0, total_material: 0 }],
         total_material: 0
@@ -5236,11 +5333,101 @@ function removerTecidoDoAmbiente(ambId, tidx) {
 
 function removerAmbiente(id) {
     syncAmbientesFromDOM();
+    const removido = pedidoDraft.ambientes.find(a => a.id === id);
     pedidoDraft.ambientes = pedidoDraft.ambientes.filter(a => a.id !== id);
+    if (removido?.fixacao_kit_id) { recalcularItensFixacao(); renderItensPedido(); }
     renderAmbientes(); atualizarTotalPedido();
 }
 
+// ─── Material de Instalação = kit de fixação ────────────────────────────
+// O ambiente guarda o nome (o que a OS e a proposta mostram) e o id do kit.
+// Pedido antigo só tem o nome: se ele bate com um kit, o kit aparece marcado;
+// senão o nome aparece como opção própria, sem kit.
+function _kitFixacaoDoAmbiente(a) {
+    const kits = db.kits.filter(ehKitFixacao);
+    if (a.fixacao_kit_id != null) {
+        const k = kits.find(x => x.id == a.fixacao_kit_id);
+        if (k) return k;
+    }
+    if (!a.fixacao) return null;
+    const alvo = _normNomeKit(a.fixacao);
+    return kits.find(x => _normNomeKit(x.nome) === alvo) || null;
+}
+
+function opcoesFixacaoAmbiente(a) {
+    const kits = db.kits.filter(ehKitFixacao)
+        .slice().sort((x, y) => String(x.nome).localeCompare(String(y.nome), 'pt-BR'));
+    const atual = _kitFixacaoDoAmbiente(a);
+    let html = `<option value=""${!atual && !a.fixacao ? ' selected' : ''}>— Selecione —</option>`;
+    if (!atual && a.fixacao) {
+        html += `<option value="__legado" selected>${escapeHtml(a.fixacao)}</option>`;
+    }
+    html += kits.map(k => `<option value="${k.id}"${atual && atual.id === k.id ? ' selected' : ''}>${escapeHtml(k.nome)}</option>`).join('');
+    return html;
+}
+
+function onFixacaoChange(ambId) {
+    syncAmbientesFromDOM();
+    const a = pedidoDraft.ambientes.find(x => x.id === ambId);
+    if (!a) return;
+    const valor = document.getElementById(`a-fixacao-${ambId}`)?.value || '';
+    if (valor === '__legado') return;   // voltou para o texto antigo: nada muda
+    const kit = valor ? db.kits.find(k => k.id == valor) : null;
+    a.fixacao_kit_id = kit ? kit.id : null;
+    a.fixacao = kit ? kit.nome : '';
+    recalcularItensFixacao();
+    renderAmbientes(); renderItensPedido(); atualizarTotalPedido();
+}
+
+function onLarguraAmbienteChange(ambId) {
+    const a = pedidoDraft.ambientes.find(x => x.id === ambId);
+    if (!a) return;
+    const larg = parseFloat(document.getElementById(`a-larg-${ambId}`)?.value);
+    a.largura = larg > 0 ? larg : null;
+    if (!a.fixacao_kit_id) return;
+    recalcularItensFixacao();
+    renderItensPedido(); atualizarTotalPedido();
+}
+
+// Quantidade de um item do kit para uma parede. "Por metro" multiplica pela
+// largura e arredonda para cima; o epsilon evita 1.1 × 10 = 11.000000000000002 → 12.
+function qtdItemFixacao(item, largura) {
+    const q = +item.quantidade || 0;
+    if (!item.por_metro) return q;
+    if (!(largura > 0)) return 0;
+    return Math.ceil(q * largura - 1e-9);
+}
+
+// Refaz as linhas de fixação do pedido a partir dos ambientes. Linhas lançadas
+// à mão (sem origem) não são tocadas; as de fixação são trocadas por inteiro.
+function recalcularItensFixacao() {
+    const somas = new Map();
+    pedidoDraft.ambientes.forEach(a => {
+        if (a.fixacao_kit_id == null) return;
+        const kit = db.kits.find(k => k.id == a.fixacao_kit_id);
+        if (!ehKitFixacao(kit)) return;
+        (kit.itens || []).forEach(it => {
+            const qtd = qtdItemFixacao(it, a.largura);
+            if (qtd <= 0) return;
+            somas.set(it.materialId, (somas.get(it.materialId) || 0) + qtd);
+        });
+    });
+    const manuais = pedidoDraft.itens.filter(i => i.origem !== 'fixacao');
+    const fixacao = [];
+    somas.forEach((qtd, materialId) => {
+        const mat = db.materiais.find(m => m.id == materialId);
+        if (!mat) return;
+        const preco = mat.preco || 0;
+        fixacao.push({ materialId: mat.id, nome: mat.nome, unidade: mat.unidade, quantidade: qtd,
+            preco_unit: preco, subtotal: qtd * preco, origem: 'fixacao' });
+    });
+    pedidoDraft.itens = [...manuais, ...fixacao];
+}
+
 async function calcularAmbiente(id) {
+    // Guarda o que foi digitado nos OUTROS ambientes antes do re-render,
+    // senao tecidos escolhidos e ainda nao calculados somem da tela.
+    syncAmbientesFromDOM();
     const a = pedidoDraft.ambientes.find(x => x.id === id);
     if (!a) return;
     const larg = parseFloat(document.getElementById(`a-larg-${id}`)?.value);
@@ -5248,7 +5435,6 @@ async function calcularAmbiente(id) {
     if (!larg || larg <= 0) { await showAlert('Informe a largura da parede.', '⚠️'); return; }
     if (!alt  || alt  <= 0) { await showAlert('Informe a altura da parede.', '⚠️'); return; }
     a.amb = document.getElementById(`a-amb-${id}`)?.value.trim() || '';
-    a.fixacao = document.getElementById(`a-fixacao-${id}`)?.value || 'Trilho Suico';
     a.abertura = document.getElementById(`a-abertura-${id}`)?.value || 'A';
     a.local_instalacao = document.getElementById(`a-local-${id}`)?.value || 'Parede';
     a.largura = larg; a.altura = alt;
@@ -5292,8 +5478,8 @@ function renderItensPedido() {
         tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;padding:12px;font-size:13px">Nenhum item adicionado. Use um kit ou adicione itens avulsos.</td></tr>';
         return;
     }
-    tb.innerHTML = pedidoDraft.itens.map((item, idx) => `<tr>
-        <td>${item.nome}</td>
+    tb.innerHTML = pedidoDraft.itens.map((item, idx) => `<tr${item.origem === 'fixacao' ? ' class="ped-item-fixacao"' : ''}>
+        <td>${escapeHtml(item.nome)}${item.origem === 'fixacao' ? ' <span class="kit-selo kit-selo-fixacao" title="Vem do Material de Instalação dos ambientes; é refeito ao trocar o kit ou a largura">fixação</span>' : ''}</td>
         <td><input type="number" value="${item.quantidade}" step="0.01" min="0.01" style="width:72px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:13px" onchange="atualizarQuantidadeItem(${idx},this.value)"></td>
         <td>${item.unidade}</td>
         <td>R$ ${item.preco_unit.toFixed(2)}</td>
@@ -5308,7 +5494,7 @@ async function adicionarItemPedido() {
     if (!matId) { await showAlert('Selecione um material.', '⚠️'); return; }
     const mat = db.materiais.find(m => m.id == matId);
     if (!mat) return;
-    const existing = pedidoDraft.itens.find(i => i.materialId === matId);
+    const existing = pedidoDraft.itens.find(i => i.materialId === matId && i.origem !== 'fixacao');
     if (existing) { existing.quantidade += qtd; existing.subtotal = existing.quantidade * existing.preco_unit; }
     else { pedidoDraft.itens.push({ materialId: mat.id, nome: mat.nome, unidade: mat.unidade, quantidade: qtd, preco_unit: mat.preco || 0, subtotal: qtd * (mat.preco || 0) }); }
     renderItensPedido(); atualizarTotalPedido();
@@ -5361,7 +5547,7 @@ async function aplicarKit() {
     for (const item of kit.itens) {
         const mat = db.materiais.find(m => m.id == item.materialId);
         if (!mat) continue;
-        const existing = pedidoDraft.itens.find(i => i.materialId === item.materialId);
+        const existing = pedidoDraft.itens.find(i => i.materialId === item.materialId && i.origem !== 'fixacao');
         if (existing) { existing.quantidade += item.quantidade; existing.subtotal = existing.quantidade * existing.preco_unit; }
         else { pedidoDraft.itens.push({ materialId: mat.id, nome: mat.nome, unidade: mat.unidade, quantidade: item.quantidade, preco_unit: mat.preco || 0, subtotal: item.quantidade * (mat.preco || 0) }); }
     }
@@ -9758,7 +9944,7 @@ document.addEventListener('DOMContentLoaded', () => {
             db.kits.map(k => {
                 const extra = ehKitPronto(k)
                     ? `${k.medida ? ' · ' + k.medida : ''} · R$ ${(k.preco || 0).toFixed(2)}`
-                    : ' (montagem)';
+                    : (ehKitFixacao(k) ? ' (fixação)' : ' (montagem)');
                 return `<option value="${k.id}">${escapeHtml(k.nome)}${escapeHtml(extra)}</option>`;
             }).join('');
 

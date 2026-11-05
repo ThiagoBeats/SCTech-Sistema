@@ -344,9 +344,17 @@ Tabela de Materiais em Estoque:
 Formulário de criação de kit:
   - Nome do Kit (text, obrigatório)
   - Descrição (text, opcional)
-  - Composição: select de material + quantidade + botão "+ Adicionar Item"
-  - Preview em tabela dos itens adicionados ao draft
-  - Botão "Salvar Kit"
+  - Kit de fixação (checkbox): o kit aparece em "Material de Instalação" do
+    pedido e pode ser salvo sem itens
+  - Composição: select de material + quantidade + Contagem (Por kit | Por
+    metro) + botão "+ Adicionar Item". Por metro = quantidade × largura da
+    parede, arredondada para cima
+  - Preview em tabela dos itens adicionados ao draft (contagem editável)
+  - Botão "Salvar Kit"; o ✏️ da tabela abre o kit de montagem para edição
+  - Kits padrão: os 7 tipos de instalação (Trilho Suíço Simples/Duplo/Duplo
+    Com Espaço/Triplo, Trilho Motorizador, Varão Alumínio Comum, Varão
+    Suíço/Wave) nascem uma vez como kits de fixação vazios (FIX-001…);
+    excluídos não voltam
 
 Tabela de Kits Cadastrados:
   - Colunas: Nome | Composição (lista de itens) | Ações (editar, excluir)
@@ -849,8 +857,11 @@ Cada ambiente é um painel colapsável com:
   - Fator de Franzimento (select): 1.0x | 1.5x | 2.0x | 2.5x | 2.7x |
     3.0x | 3.5x | 4.0x (label: "auto")
     → Valor selecionado é mantido mesmo após recalcular o consumo
-  - Material de Instalação (select): Trilho Suíço | Trilho Simples |
-    Varão | Bandô | Outros
+  - Material de Instalação (select): os kits de fixação cadastrados.
+    Escolher/trocar o kit, mudar a largura ou remover o ambiente refaz as
+    linhas "fixação" dos itens do pedido (somadas entre ambientes); itens
+    lançados à mão não mudam. Pedido antigo mostra o nome que tinha e não
+    ganha itens sozinho
   - Tipo de Abertura (select): A/B/C/D/E/F/G/H com descrições
     (Centro/Esq./Dir. + combinações)
   - Local de Instalação (select): Parede | Teto | Outro

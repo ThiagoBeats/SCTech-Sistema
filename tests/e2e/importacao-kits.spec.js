@@ -302,7 +302,7 @@ test('montar kit de materiais continua no Estoque, nao no catalogo', async ({ pa
     const k = await page.evaluate(() => db.kits[0]);
     expect(k.referencia).toBe('KIT-SALA');
     expect(k.nome).toBe('Kit Cortina Sala');
-    expect(k.itens).toEqual([{ materialId: 21, nome: 'TRILHO', unidade: 'm', quantidade: 3 }]);
+    expect(k.itens).toEqual([{ materialId: 21, nome: 'TRILHO', unidade: 'm', quantidade: 3, por_metro: false }]);
 });
 
 test('o kit importado entra no pedido como uma linha so', async ({ page }) => {
