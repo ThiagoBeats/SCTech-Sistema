@@ -79,7 +79,8 @@ test('kit de fixacao salva vazio; kit de montagem comum continua exigindo item',
 
     await page.check('#kit-fixacao');
     await page.click('button:has-text("Salvar Kit")');
-    await page.waitForFunction(() => db.kits.length === 1);
+    // salvar pode recarregar a pagina: no intervalo `db` ainda nao existe
+    await page.waitForFunction(() => typeof db !== 'undefined' && db.kits.length === 1);
     expect(await page.evaluate(() => db.kits[0])).toMatchObject({ nome: 'Kit vazio', fixacao: true, itens: [] });
     await expect(page.locator('#tb-kits tr').first()).toContainText('fixação');
 });
@@ -99,7 +100,8 @@ test('cada item escolhe por kit ou por metro, e a lista mostra un/m', async ({ p
     await page.selectOption('#kit-item-modo', 'metro');
     await page.click('button:has-text("+ Adicionar Item")');
     await page.click('button:has-text("Salvar Kit")');
-    await page.waitForFunction(() => db.kits.length === 1);
+    // salvar pode recarregar a pagina: no intervalo `db` ainda nao existe
+    await page.waitForFunction(() => typeof db !== 'undefined' && db.kits.length === 1);
     const k = await page.evaluate(() => db.kits[0]);
     expect(k.itens.map(i => [i.materialId, i.quantidade, i.por_metro])).toEqual([[21, 1, false], [22, 3, true]]);
     await expect(page.locator('#tb-kits tr').first()).toContainText('PARAFUSO: 3 un/m');
@@ -119,7 +121,7 @@ test('o kit de montagem pode ser editado: itens, contagem e marca de fixacao', a
     await page.click('button:has-text("+ Adicionar Item")');
     await page.selectOption('#tb-kit-draft select', 'metro');
     await page.click('button:has-text("Salvar Alterações")');
-    await page.waitForFunction(() => db.kits[0].itens.length === 1);
+    await page.waitForFunction(() => typeof db !== 'undefined' && db.kits[0] && db.kits[0].itens.length === 1);
     const k = await page.evaluate(() => db.kits);
     expect(k.length, 'editar não cria outro kit').toBe(1);
     expect(k[0]).toMatchObject({ id: 950, referencia: 'FIX-001', fixacao: true });
