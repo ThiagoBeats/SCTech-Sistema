@@ -120,13 +120,16 @@ function _expFoco() {
     if (c) c.focus();
 }
 
-// Devolve o foco ao campo quando ele cai no body, sem roubar com o modal do Ver OS aberto
+// Devolve o foco ao campo so quando ele esta perdido: no body ou num elemento que
+// deixou de ser visivel (ex.: botao Fechar de um modal ja fechado). Nao rouba o foco
+// de controle visivel (Tab, Espaco, menu do usuario) nem com algum modal aberto.
 function _expRecuperarFoco() {
     if (document.querySelector('#doc-modal-overlay.active')) return;
+    const sc = document.getElementById('sc-modal-overlay');
+    if (sc && sc.style.display === 'flex') return;
     const ae = document.activeElement;
-    // botao clicado (ex.: Fechar do modal, ja oculto) tambem nao serve para ler codigo
-    const editavel = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName);
-    if (!editavel) _expFoco();
+    const perdido = !ae || ae === document.body || ae.getClientRects().length === 0;
+    if (perdido) _expFoco();
 }
 
 function iniciarExpedicao() {

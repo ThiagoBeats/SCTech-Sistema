@@ -109,3 +109,23 @@ test('foco volta ao campo depois de Ver OS', async ({ page }) => {
     await page.keyboard.press('Enter');
     await expect(page.locator('#exp-resultado')).toContainText('Volume 1/3 conferido.');
 });
+
+test('Tab nao devolve o foco ao campo de leitura', async ({ page }) => {
+    await abrir(page);
+    await page.focus('#exp-encerrar');
+    await page.keyboard.press('Tab');
+    const id = await page.evaluate(() => document.activeElement && document.activeElement.id);
+    expect(id).not.toBe('exp-leitura');
+    await page.focus('#exp-encerrar');
+    await page.keyboard.press('Shift+Tab');
+    expect(await page.evaluate(() => document.activeElement.id)).not.toBe('exp-leitura');
+});
+
+test('modal do app aberto nao perde o foco para o campo', async ({ page }) => {
+    await abrir(page);
+    await page.evaluate(() => { showConfirm('Teste?'); });
+    await page.locator('#sc-modal-ok').waitFor();
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Shift+Tab');
+    expect(await page.evaluate(() => document.activeElement.id)).toMatch(/^sc-modal-/);
+});
