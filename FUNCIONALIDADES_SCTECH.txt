@@ -32,7 +32,7 @@ Módulos (telas):
  11. Formulário de Pedido
  12. Configurar Empresa
  13. Sobre o Sistema
- 14. Expedição (expedicao.html)
+ 16. Expedição (expedicao.html)
 
 Elementos globais presentes em todas as telas (exceto Login):
   - Barra lateral de navegação (sidebar) com links para todos os módulos
@@ -1146,6 +1146,9 @@ Impressão:
     configurada (sem margens)
   - Códigos de barras e QR gerados em SVG, para manter a nitidez na térmica
   - Configure o tamanho do papel no driver da impressora térmica uma vez
+  - Se o gerador de códigos não carregar (sem internet), a impressão não é
+    feita e aparece a mensagem "Não foi possível carregar o gerador de códigos.
+    Verifique a conexão com a internet e tente novamente." Nada é impresso sem o código
 
 Regras de conferência ligadas aos volumes:
   - Mudar a quantidade de volumes com conferência iniciada ou concluída zera a
@@ -1232,6 +1235,8 @@ conferência sempre começa pelo documento.
   - Bipar um pacote sem pedido ativo abre a CONSULTA rápida: resumo do pedido
     com cliente, endereço, telefone e volumes, e a orientação de bipar o pedido
     impresso para conferir
+  - O painel do pedido (conferência e consulta) tem o botão "Ver OS", que abre
+    a OS do pedido
   - Acerto: bipe curto. Erro: tom grave. Sons gerados por Web Audio, sem arquivos
 
 ── 16.3 PROGRESSO PARCIAL ──────────────────────────────────────────────────────
