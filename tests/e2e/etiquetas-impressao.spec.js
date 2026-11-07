@@ -75,11 +75,17 @@ test('pedido em Orcamento nao tem botao de etiqueta', async ({ page }) => {
 
 test('sem internet nao imprime', async ({ page }) => {
     await page.route(/jsdelivr/, r => r.abort());
-    await abrir(page, [ped()]);
+    const conf = { volumes_conferidos: [1], concluida_em: null, conferido_por: null };
+    await abrir(page, [ped({ volumes: 3, conferencia: conf })]);
     await page.locator('button[title="Imprimir etiquetas"]').first().click();
+    await page.fill('#etq-qtd-volumes', '5');
     await page.click('#etq-btn-imprimir');
+    // sem gerador de codigos: avisa antes de perguntar sobre zerar a conferencia
     await expect(page.locator('#sc-modal-msg')).toHaveText(MSG, { timeout: 15000 });
     expect(await page.evaluate(() => window.__etq)).toBeUndefined();
+    const p = await lerPedido(page);
+    expect(p.volumes).toBe(3);
+    expect(p.conferencia).toEqual(conf);
 });
 
 test('imprimir teste no editor', async ({ page }) => {

@@ -200,6 +200,13 @@ async function abrirImpressaoEtiquetas(pedidoId) {
             if (!Number.isInteger(so) || so < 1 || so > novo) { toast('Volume inválido: informe de 1 a ' + novo + '.', 'warning'); return; }
         }
         _etqFecharModalVolumes();
+        // sem gerador de codigos nada e gravado: volumes e conferencia ficam como estao
+        try {
+            await garantirLibsCodigo();
+        } catch (e) {
+            await showAlert(MSG_FALHA_CONEXAO_CODIGOS, '📡');
+            return;
+        }
         const C = window.EtiquetasCore;
         const mudou = novo !== ped.volumes;
         if (mudou && C.temConferenciaIniciada(ped)) {
