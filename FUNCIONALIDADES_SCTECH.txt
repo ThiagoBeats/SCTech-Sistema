@@ -1235,8 +1235,17 @@ conferência sempre começa pelo documento.
   - Bipar um pacote sem pedido ativo abre a CONSULTA rápida: resumo do pedido
     com cliente, endereço, telefone e volumes, e a orientação de bipar o pedido
     impresso para conferir
-  - O painel do pedido (conferência e consulta) tem o botão "Ver OS", que abre
-    a OS do pedido
+  - O painel de todo pedido lido (conferência, consulta ou sem etiquetas) tem
+    três botões:
+      · "Abrir pedido": vai para a tela do pedido, na mesma aba. Só aparece para
+        quem tem permissão completa em Pedidos. Ao voltar para a Expedição, a
+        conferência em andamento continua de onde parou
+      · "Ver OS": abre a OS do pedido
+      · "Imprimir etiquetas": a mesma janela do botão 🏷️ (quantidade de volumes
+        ou um volume só). Não aparece para pedido em Orçamento. Depois de
+        imprimir, o pedido vira o pedido ativo e a conferência já começa:
+        basta bipar os pacotes. Serve também para reimprimir uma etiqueta
+        desatualizada sem sair da Expedição
   - Acerto: bipe curto. Erro: tom grave. Sons gerados por Web Audio, sem arquivos
 
 ── 16.3 PROGRESSO PARCIAL ──────────────────────────────────────────────────────

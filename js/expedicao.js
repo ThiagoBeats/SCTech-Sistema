@@ -1,6 +1,7 @@
 // Tela de Expedicao: conferencia de volumes por leitor de codigo (teclado).
 // Nao depende de bibliotecas externas: funciona sem internet.
 const EXP_CHAVE_ATIVO = 'sc_exp_ativo';
+let _expPedidoExibido = null;   // pedido mostrado no painel (ativo ou so consultado)
 
 function _expAtivoId() {
     const v = sessionStorage.getItem(EXP_CHAVE_ATIVO);
@@ -43,7 +44,7 @@ function _expRenderPedido(id, mostrarVolumes) {
     const el = document.getElementById('exp-pedido');
     if (!el) return;
     const ped = _expPedido(id);
-    if (!ped) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    if (!ped) { el.style.display = 'none'; el.innerHTML = ''; _expPedidoExibido = null; return; }
     const cli = db.clientes.find(c => c.id == ped.clienteId) || null;
     const total = ped.volumes || 0;
     const v = EtiquetasCore.valoresEtiquetaPedido(ped, cli, 0, total, '');
@@ -56,6 +57,13 @@ function _expRenderPedido(id, mostrarVolumes) {
         }
     }
     const e = escapeHtml;
+    // Abrir pedido usa a tela do pedido, que exige permissao completa; pedido em Orcamento nao tem etiquetas
+    const podeAbrir = temAcesso('pedidos', 'completo');
+    const podeEtiquetas = temAcesso('pedidos', 'visualizar') && normalizarStatus(ped.status) !== 'Orçamento';
+    const acoes = (podeAbrir ? '<button class="btn btn-outline btn-sm" type="button" id="exp-abrir-pedido">📄 Abrir pedido</button>' : '')
+        + '<button class="btn btn-outline btn-sm" type="button" id="exp-ver-os">Ver OS</button>'
+        + (podeEtiquetas ? '<button class="btn btn-outline btn-sm" type="button" id="exp-imprimir-etiquetas">🏷️ Imprimir etiquetas</button>' : '');
+    _expPedidoExibido = ped.id;
     el.style.display = '';
     el.innerHTML = `
         <div class="exp-pedido-topo">
@@ -63,7 +71,7 @@ function _expRenderPedido(id, mostrarVolumes) {
                 <div class="exp-pedido-num">Pedido #${e(v.numero)}</div>
                 <div class="exp-pedido-cli">${e(v.cliente)}</div>
             </div>
-            <button class="btn btn-outline btn-sm" type="button" id="exp-ver-os">Ver OS</button>
+            <div class="exp-pedido-acoes">${acoes}</div>
         </div>
         <div class="exp-pedido-info">
             <div><b>Endereço:</b> ${e(v.endereco) || '—'}</div>
@@ -72,6 +80,27 @@ function _expRenderPedido(id, mostrarVolumes) {
         </div>
         <div id="exp-volumes" class="exp-volumes">${vols}</div>`;
     document.getElementById('exp-ver-os').onclick = () => abrirOS(ped.id);
+    // sai da Expedicao; o pedido ativo fica guardado na sessao e volta ao painel no retorno
+    if (podeAbrir) document.getElementById('exp-abrir-pedido').onclick = () => editarPedido(ped.id);
+    if (podeEtiquetas) document.getElementById('exp-imprimir-etiquetas').onclick = () => {
+        _expRecarregar();   // a impressao grava os pedidos: parte do que esta gravado agora
+        abrirImpressaoEtiquetas(ped.id);
+    };
+}
+
+// Chamada pela impressao de etiquetas (etiquetas-render.js) depois de imprimir.
+// O pedido do painel passa a ser o da conferencia: quem acabou de imprimir vai bipar os pacotes.
+function _expAposImprimirEtiquetas() {
+    const id = _expPedidoExibido;
+    const ped = id != null ? _expPedido(id) : null;
+    if (!ped || ped.volumes == null) return;
+    const jaAtivo = _expAtivoId() == id;
+    const conferidos = (ped.conferencia && ped.conferencia.volumes_conferidos) || [];
+    _expDefinirAtivo(id);
+    _expRenderPedido(id, true);
+    if (!jaAtivo || conferidos.length === 0) {
+        _expResultado(`Pedido #${id}: bipe os ${ped.volumes} volume(s).`, 'ok', true);
+    }
 }
 
 // Outra aba pode ter mudado pedidos/clientes: rele o que esta gravado antes de cada leitura
@@ -139,6 +168,7 @@ function _expFoco() {
 // de controle visivel (Tab, Espaco, menu do usuario) nem com algum modal aberto.
 function _expRecuperarFoco() {
     if (document.querySelector('#doc-modal-overlay.active')) return;
+    if (document.getElementById('etq-modal-volumes')) return;
     const sc = document.getElementById('sc-modal-overlay');
     if (sc && sc.style.display === 'flex') return;
     const ae = document.activeElement;

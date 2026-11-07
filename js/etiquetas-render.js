@@ -137,6 +137,7 @@ function imprimirEtiquetasHTML(paginas, largura_mm, altura_mm) {
 function _etqRerenderPagina() {
     if (typeof renderKanban === 'function') renderKanban();
     if (typeof renderDashboard === 'function') renderDashboard();
+    if (typeof _expAposImprimirEtiquetas === 'function') _expAposImprimirEtiquetas();
 }
 
 async function imprimirEtiquetasDoPedido(pedidoId, somenteVolume) {

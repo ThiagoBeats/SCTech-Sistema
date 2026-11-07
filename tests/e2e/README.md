@@ -56,7 +56,7 @@ TESTDIR=<projeto>/tests/e2e \
   npx playwright test --config=repo.config.js
 ```
 
-Esperado: **545 passando**.
+Esperado: **556 passando**.
 
 ## Sessão autenticada é obrigatória
 
@@ -120,4 +120,4 @@ navegar. Ele semeia um usuário com papel 1 (Administrador, que vem de
 | `financeiro-bloqueio-menu.spec.js` | O pedido aprovado abrindo só para leitura (campos travados, sem salvar, e o salvar recusado mesmo chamado direto), o "Voltar para Orçamento" liberando a edição e refazendo os recebimentos em aberto, o Instalado sem volta; a etapa "Aguardando Financeiro" (e os pedidos antigos em "Aguardando Pagamento" renomeados); confirmar a instalação levando sempre para Aguardando Financeiro, com a marca "Pendente" quando há saldo; o card dessa etapa com a forma de pagamento e o botão "Confirmar pagamento" (Kanban e Lista), só para Administrador/Financeiro, levando a Instalado; e o alfinete do menu lateral — fixado aberto, solto só com ícones abrindo ao passar o mouse sem empurrar a tela, e a preferência guardada por usuário |
 | `pedido-compra-de-venda.spec.js` | "Importar de pedido" em Pedidos de Compra: só pedidos em aberto (não instalados) numa tabela com colunas (pedido, cliente, vendedor, status, entrega, itens, compras feitas), os filtros por nº/cliente, status, vendedor e entrega com o limpar, clicar (ou Enter) na linha abrindo os itens e o "Trocar pedido" voltando com o filtro mantido, os itens do pedido somados (tecido pelo consumo dos ambientes, materiais e kits pela quantidade) com fornecedor e estoque, o pedido sem itens, marcar/desmarcar e mudar quantidade, um fornecedor só indo direto ao formulário com a observação de origem, fornecedores diferentes oferecendo um pedido por fornecedor ou um genérico (e o cancelar voltando à escolha), a fila e o genérico gravando `pedido_venda_id`, o item já comprado vindo desmarcado e avisado, e o pedido feito à mão depois sem herdar a origem |
 
-Esperado no total: **545 passando**.
+Esperado no total: **556 passando**.

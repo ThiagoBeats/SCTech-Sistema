@@ -180,3 +180,88 @@ test('papeis salvos sem expedicao: Instalacao e Producao/Costura ganham completo
     expect(nivel('Produção/Costura')).toBe('completo');
     expect(nivel('Conferente')).toBe('visualizar');
 });
+
+// --- Abrir pedido / Imprimir etiquetas a partir da leitura ---
+
+const SEED_ACOES = {
+    sc_ped: [
+        SEED.sc_ped[0],
+        { id: 26003, clienteId: 1, clienteNome: 'Maria', status: 'Pronto p/ Instalação', valor: 100, ambientes: AMB },
+        { id: 26004, clienteId: 2, clienteNome: 'Joana Lima', status: 'Orçamento', valor: 100, ambientes: AMB }
+    ],
+    sc_cli: SEED.sc_cli
+};
+
+async function abrirComImpressao(page) {
+    await page.addInitScript(() => {
+        window._etqDispararImpressao = f => {
+            window.__etq = [...f.contentDocument.querySelectorAll('.etq')].map(e => e.innerText);
+        };
+    });
+    await entrar(page, BASE, SEED_ACOES);
+    await page.goto(BASE + '/expedicao.html');
+    await page.waitForSelector('#exp-leitura');
+}
+
+test('pedido lido: Abrir pedido vai para a tela do pedido, e voltar mantem a conferencia', async ({ page }) => {
+    await abrirComImpressao(page);
+    await ler(page, '26001');
+    await ler(page, '26001-1-3');
+    await expect(page.locator('#exp-imprimir-etiquetas')).toBeVisible();
+    await page.click('#exp-abrir-pedido');
+    await page.waitForURL(/pedido\.html/);
+    await expect(page.locator('#titulo-pagina-pedido')).toContainText('26001');
+    await page.goto(BASE + '/expedicao.html');
+    await expect(page.locator('.exp-vol', { hasText: '✅' })).toHaveCount(1);
+});
+
+test('pedido sem etiquetas: imprimir pela Expedicao ja inicia a conferencia', async ({ page }) => {
+    await abrirComImpressao(page);
+    await ler(page, '26003');
+    await expect(page.locator('#exp-resultado')).toContainText('ainda não tem etiquetas');
+    await page.click('#exp-imprimir-etiquetas');
+    await page.fill('#etq-qtd-volumes', '2');
+    await page.click('#etq-btn-imprimir');
+    await page.waitForFunction(() => Array.isArray(window.__etq));
+    expect(await page.evaluate(() => window.__etq.length)).toBe(2);
+    await expect(page.locator('#exp-resultado')).toContainText('Pedido #26003: bipe os 2 volume(s).');
+    await expect(page.locator('.exp-vol')).toHaveCount(2);
+    await page.keyboard.type('26003-1-2');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#exp-resultado')).toContainText('Volume 1/2 conferido.');
+});
+
+test('pedido em Orcamento mostra so Abrir pedido', async ({ page }) => {
+    await abrirComImpressao(page);
+    await ler(page, '26004');
+    await expect(page.locator('#exp-abrir-pedido')).toBeVisible();
+    await expect(page.locator('#exp-imprimir-etiquetas')).toHaveCount(0);
+});
+
+test('cancelar a impressao devolve a leitura ao campo', async ({ page }) => {
+    await abrirComImpressao(page);
+    await ler(page, '26001');
+    await page.click('#exp-imprimir-etiquetas');
+    await page.locator('#etq-modal-volumes .etq-vol-box').click({ position: { x: 5, y: 5 } });
+    expect(await page.evaluate(() => document.activeElement.id)).not.toBe('exp-leitura');
+    await page.click('#etq-btn-cancelar');
+    await page.keyboard.type('26001-1-3');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#exp-resultado')).toContainText('Volume 1/3 conferido.');
+});
+
+test('sem permissao completa em Pedidos, Abrir pedido nao aparece', async ({ page }) => {
+    await abrirComImpressao(page);
+    await page.evaluate(() => {
+        const pap = papeisPadrao();
+        const adm = pap.find(p => p.id === 1);
+        adm.permissoes.pedidos = { nivel: 'visualizar', acoes_restritas: [] };
+        localStorage.setItem('sc_pap', JSON.stringify(pap));
+    });
+    await page.reload();
+    await page.waitForSelector('#exp-leitura');
+    await ler(page, '26001');
+    await expect(page.locator('#exp-ver-os')).toBeVisible();
+    await expect(page.locator('#exp-abrir-pedido')).toHaveCount(0);
+    await expect(page.locator('#exp-imprimir-etiquetas')).toBeVisible();
+});

@@ -1953,6 +1953,7 @@ html[data-theme="dark"] {
 .exp-resultado.erro  { background:#FDE8E5; color:var(--danger); border:2px solid #F79B90; }
 .exp-resultado.aviso { background:#FFF4D6; color:#8A5A00; border:2px solid #F0C969; }
 .exp-pedido-topo { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:10px; }
+.exp-pedido-acoes { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
 .exp-pedido-num { font-size:22px; font-weight:800; color:var(--dark); }
 .exp-pedido-cli { font-size:16px; color:var(--dark); }
 .exp-pedido-info { display:grid; gap:4px; font-size:14px; color:var(--dark); margin-bottom:14px; }
