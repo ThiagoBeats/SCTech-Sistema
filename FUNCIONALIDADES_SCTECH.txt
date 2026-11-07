@@ -32,6 +32,7 @@ Módulos (telas):
  11. Formulário de Pedido
  12. Configurar Empresa
  13. Sobre o Sistema
+ 14. Expedição (expedicao.html)
 
 Elementos globais presentes em todas as telas (exceto Login):
   - Barra lateral de navegação (sidebar) com links para todos os módulos
@@ -1069,6 +1070,184 @@ Seções:
   - Changelog: lista de atualizações com tags NOVO / MELHORIA / FIX
   - Stack técnico: HTML5, CSS3, JavaScript ES6+, Chart.js 4.4.0,
     localStorage, API CNPJ.ws (consulta de CNPJ de fornecedores)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 14. ETIQUETAS DE PEDIDO (empresa.html, pedidos.html, index.html, pcp.html)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Objetivo: identificar cada volume (pacote) do pedido com uma etiqueta adesiva
+impressa em impressora térmica, para a conferência na Expedição (item 16).
+Funciona com qualquer impressora térmica que tenha driver no Windows.
+
+── 14.1 EDITOR DE ETIQUETA (Configurar Empresa → "🏷️ Etiquetas de Pedido") ─────
+
+Paleta de elementos (esquerda), arrastar para a etiqueta:
+  - Campos do pedido: Nº do pedido, Cliente, Endereço, Telefone, Data de
+    entrega, Vendedor, Status, Qtd. de ambientes/itens, Observações e
+    Volume (ex.: "2/3")
+  - Elementos fixos: Texto livre, Logo da empresa, Linha, Código de barras
+    (Code128) e QR Code
+  - Barras, QR ou os dois; cada um é só mais um elemento
+
+Palco (centro):
+  - Etiqueta desenhada em escala proporcional ao tamanho real, com grade de 1 mm
+  - Elementos movidos e redimensionados com o mouse (Pointer Events)
+  - O elemento selecionado fica destacado
+
+Propriedades (direita), do elemento selecionado:
+  - Texto: tamanho da fonte, negrito e alinhamento
+  - Todos: posição (x, y) e tamanho (largura, altura) em mm
+  - Texto livre: conteúdo
+  - Botão "🗑 Remover" para excluir o elemento
+
+Formato:
+  - Presets: 100 x 50, 100 x 100, 100 x 150, 60 x 40 e 50 x 30 mm
+  - Tamanho personalizado (largura x altura em mm)
+  - Ao trocar de formato, os elementos que não cabem são ajustados para dentro
+    da nova área e o sistema avisa quantos foram ajustados
+  - Texto que não cabe na caixa é cortado com "…" e não ultrapassa a borda
+
+Modelo pronto:
+  - Na primeira vez, o editor já vem com um layout padrão: nº do pedido em
+    destaque, cliente, endereço, data de entrega, volume, código de barras e QR
+  - Há um único modelo de etiqueta de pedido por empresa
+
+Avisos de legibilidade:
+  - O editor alerta quando o código de barras ou o QR Code ficam pequenos
+    demais para leitura confiável (referência: impressora de 203 dpi)
+
+Ações:
+  - "💾 Salvar etiqueta": grava o modelo (chave localStorage: sc_etiqueta_cfg)
+  - "↩ Restaurar padrão": volta ao modelo pronto
+  - "🖨️ Imprimir teste": imprime a etiqueta com os dados de um pedido de exemplo
+
+Falha de conexão:
+  - As bibliotecas de código são carregadas sob demanda (CDN). Se não carregarem
+    (erro de rede ou timeout de 10 s), o editor mostra a mensagem
+    "Não foi possível carregar o gerador de códigos. Verifique a conexão com a
+    internet e tente novamente." Nada é impresso sem o código.
+
+── 14.2 IMPRESSÃO DE ETIQUETAS E VOLUMES ───────────────────────────────────────
+
+Onde fica o botão 🏷️ "Imprimir etiquetas":
+  - Lista de pedidos (pedidos.html) e tabela de pedidos da Página Inicial (index.html)
+  - Kanban da Produção (PCP), nos cards e na visualização em lista
+  - Só aparece para pedidos que já saíram de "Orçamento"
+
+Modal de volumes:
+  - Campo "Quantidade de volumes" (já vem preenchido com o valor salvo no pedido)
+  - "Todos os volumes" ou "Só o volume" (escolhe um número, ex.: reimprimir só o 2/3)
+  - A quantidade fica salva no pedido (campo volumes) e sugerida na próxima vez
+
+Impressão:
+  - Uma etiqueta por volume, uma por página, na ordem 1/N, 2/N, ...
+  - Impressão por HTML + window.print(), com @page no tamanho exato da etiqueta
+    configurada (sem margens)
+  - Códigos de barras e QR gerados em SVG, para manter a nitidez na térmica
+  - Configure o tamanho do papel no driver da impressora térmica uma vez
+
+Regras de conferência ligadas aos volumes:
+  - Mudar a quantidade de volumes com conferência iniciada ou concluída zera a
+    conferência (o sistema avisa antes) e registra o fato na linha do tempo
+  - Pedido que volta para "Orçamento" tem a conferência zerada, com registro na
+    linha do tempo; a quantidade de volumes é mantida como sugestão
+  - Nenhuma dessas ações muda o status do pedido
+
+── 14.3 CONTEÚDO DOS CÓDIGOS ───────────────────────────────────────────────────
+
+  - Código do documento (pedido impresso e OS): só o número do pedido, ex.: 26001
+  - Código do volume (etiqueta): pedido-volume-total, ex.: 26001-2-3 (volume 2
+    de 3). O texto legível da etiqueta mostra "Volume 2/3"
+  - Só dígitos e hífen: scanners USB emulam teclado, e esses caracteres saem
+    iguais nos layouts ABNT2 e US
+  - Simbologias: Code128 (barras) e QR Code (2D), com o mesmo conteúdo
+  - O código não contém URL
+
+── 14.4 DADOS NO PEDIDO ────────────────────────────────────────────────────────
+
+  - pedido.volumes: quantidade de volumes (null até a primeira impressão)
+  - pedido.conferencia: { volumes_conferidos, concluida_em, conferido_por }
+  - salvarPedido() preserva volumes e conferencia ao editar o pedido
+  - Persistência: localStorage, pelo mesmo fluxo de pedidos (db + syncDB)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 15. CÓDIGO NOS DOCUMENTOS: OS E PROPOSTA (os.html, proposta.html)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Posição fixa, sem editor: código de barras Code128 com o número do pedido
+legível logo abaixo (ex.: 26001).
+
+  - Proposta Comercial (proposta.html): aparece desde a fase de Orçamento, sem
+    esperar aprovação. É o pedido impresso que vai para o cliente
+  - Ordem de Serviço (os.html): aparece sempre
+  - O usuário não escolhe barras ou QR nos documentos
+  - Se o gerador de códigos não carregar, o documento não é impresso e a
+    mensagem de falha de conexão é mostrada (nunca se imprime código quebrado)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 16. EXPEDIÇÃO (expedicao.html)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Tela de conferência de volumes por leitor de código de barras (scanner USB).
+Não depende de bibliotecas externas: funciona sem internet.
+
+Acesso:
+  - Item "Expedição" no menu lateral
+  - Módulo de permissão próprio: expedicao
+  - Perfis padrão com acesso completo: Administrador, Produção/Costura e Instalação
+  - Conferir exige nível completo no módulo; sem ele, a leitura é recusada com
+    a mensagem "Você não tem permissão para conferir"
+
+Tela:
+  - Campo de leitura grande, sempre focado. O scanner digita o código e envia
+    Enter, e o sistema processa a leitura
+  - Botão "Encerrar": limpa o pedido ativo e volta ao campo de leitura
+
+── 16.1 FLUXO DE CONFERÊNCIA ───────────────────────────────────────────────────
+
+  1. Bipar o código do DOCUMENTO (ex.: 26001): o sistema mostra o pedido ativo
+     (nº, cliente, endereço, telefone, data de entrega) e a lista de volumes
+     esperados (⬜ Volume 1/3, 2/3, 3/3), com botão "Ver OS"
+  2. Bipar cada PACOTE (ex.: 26001-2-3): o volume recebe ✅
+  3. Quando todos os volumes batem, a conferência é concluída automaticamente
+     ("✅ Pedido #26001 conferido: 3 volume(s)")
+
+Regra: bipar um volume sem o documento antes não conta como conferido. A
+conferência sempre começa pelo documento.
+
+── 16.2 ALERTAS E SONS ─────────────────────────────────────────────────────────
+
+  - Pacote de outro pedido: alerta vermelho "Este pacote é do pedido #X, não do
+    #Y!" e som grave de erro
+  - Volume já conferido: aviso "já foi conferido", sem duplicar
+  - Etiqueta desatualizada (o total do pacote é diferente do total atual do
+    pedido): erro pedindo para reimprimir as etiquetas
+  - Pedido não encontrado (inexistente ou excluído): "Pedido #X não encontrado"
+  - Código não reconhecido (formato inválido): "Código não reconhecido"
+  - Pedido sem etiquetas impressas: mostra o resumo e avisa que ainda não há
+    etiquetas
+  - Bipar um pacote sem pedido ativo abre a CONSULTA rápida: resumo do pedido
+    com cliente, endereço, telefone e volumes, e a orientação de bipar o pedido
+    impresso para conferir
+  - Acerto: bipe curto. Erro: tom grave. Sons gerados por Web Audio, sem arquivos
+
+── 16.3 PROGRESSO PARCIAL ──────────────────────────────────────────────────────
+
+  - O progresso é salvo no pedido. Conferir 2 de 3 volumes e sair deixa a
+    conferência parcial, e ela continua de onde parou
+  - O pedido ativo é guardado na sessão da aba (sessionStorage): ao recarregar a
+    página, a tela volta ao mesmo pedido
+
+── 16.4 RESULTADO ──────────────────────────────────────────────────────────────
+
+  - O STATUS DO PEDIDO NÃO MUDA por causa da conferência
+  - Card do pedido (Kanban e lista): "2/3 conferidos" quando parcial e
+    "✓ Conferido" quando concluída
+  - Linha do tempo do pedido: "Conferido na expedição por <usuário> — 3
+    volume(s)", com data e hora. Zerar a conferência também fica registrado
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
