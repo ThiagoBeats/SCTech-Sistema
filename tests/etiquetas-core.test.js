@@ -186,3 +186,38 @@ test('zerarConferencia sem progresso nao escreve na timeline; pedido antigo sem 
     assert.strictEqual(E.marcacaoConferencia(antigo), null);
     assert.strictEqual((antigo.timeline || []).length, 0);
 });
+
+test('lerConfigEtiquetas descarta elementos corrompidos', () => {
+    const valido = { id: 'e1', tipo: 'campo', campo: 'numero', x_mm: 3, y_mm: '2', w_mm: 40, h_mm: 6 };
+    const cfg = { modelos: { pedido: { formato: '100x50', largura_mm: 100, altura_mm: 50, elementos: [
+        null, { tipo: 'qrcode' }, { tipo: 'xyz', x_mm: 1, y_mm: 1, w_mm: 5, h_mm: 5 },
+        'texto', { tipo: 'barcode', x_mm: 'a', y_mm: 1, w_mm: 5, h_mm: 5 }, valido
+    ] } } };
+    const els = E.lerConfigEtiquetas(JSON.stringify(cfg)).modelos.pedido.elementos;
+    assert.strictEqual(els.length, 1);
+    assert.strictEqual(els[0].id, 'e1');
+    assert.strictEqual(els[0].y_mm, 2);
+    const ruim = { modelos: { pedido: { formato: '60x40', largura_mm: 60, altura_mm: 40, elementos: [null, { tipo: 'qrcode' }] } } };
+    const m = E.lerConfigEtiquetas(JSON.stringify(ruim)).modelos.pedido;
+    assert.strictEqual(m.formato, '100x50');
+    assert.strictEqual(m.elementos.length, 7);
+});
+
+test('htmlEtiqueta trata geometria invalida como zero', () => {
+    const h = E.htmlEtiqueta({ largura_mm: 50, altura_mm: 30, elementos: [{ id: 'a', tipo: 'linha', x_mm: undefined, y_mm: 'x', w_mm: 10, h_mm: 1 }] }, {}, {});
+    assert.ok(h.includes('left:0mm;top:0mm;width:10mm'), h);
+});
+
+test('modeloTemCodigo exige barras ou QR', () => {
+    assert.strictEqual(E.modeloTemCodigo(E.modeloPadraoPedido()), true);
+    assert.strictEqual(E.modeloTemCodigo({ elementos: [{ tipo: 'qrcode' }] }), true);
+    assert.strictEqual(E.modeloTemCodigo({ elementos: [{ tipo: 'campo', campo: 'numero' }] }), false);
+    assert.strictEqual(E.modeloTemCodigo({}), false);
+});
+
+test('avaliarLeitura nao abre conferencia de pedido em Orcamento', () => {
+    const lista = [ped({ id: 26005, status: 'Orçamento' })];
+    assert.deepStrictEqual(E.avaliarLeitura('26005', null, lista), { tipo: 'sem_etiquetas', pedidoId: 26005 });
+    assert.deepStrictEqual(E.avaliarLeitura('26005-1-3', null, lista), { tipo: 'sem_etiquetas', pedidoId: 26005 });
+    assert.deepStrictEqual(E.avaliarLeitura('26005-1-3', 26005, lista), { tipo: 'sem_etiquetas', pedidoId: 26005 });
+});

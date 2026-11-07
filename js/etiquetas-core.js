@@ -135,12 +135,40 @@
             && Array.isArray(m.elementos) && m.elementos.length > 0;
     }
 
+    // Numero vindo do JSON salvo: aceita numero ou texto numerico; o resto vira NaN.
+    function numeroSalvo(v) {
+        if (typeof v === 'number') return v;
+        if (typeof v === 'string' && v.trim() !== '') return Number(v);
+        return NaN;
+    }
+
+    // Elemento salvo utilizavel: objeto de tipo conhecido com geometria numerica. Senao, null.
+    function elementoSalvo(el) {
+        if (!el || typeof el !== 'object' || Array.isArray(el) || TIPOS_ELEMENTO.indexOf(el.tipo) < 0) return null;
+        const n = Object.assign({}, el);
+        for (const k of ['x_mm', 'y_mm', 'w_mm', 'h_mm']) {
+            n[k] = numeroSalvo(el[k]);
+            if (!Number.isFinite(n[k])) return null;
+        }
+        return n;
+    }
+
     // Le a config salva; qualquer coisa invalida ou antiga volta ao modelo padrao.
+    // Elementos corrompidos sao descartados; se nao sobrar nenhum, tambem volta ao padrao.
     function lerConfigEtiquetas(json) {
         let obj = null;
         try { obj = json ? JSON.parse(json) : null; } catch (e) { obj = null; }
         const pedido = obj && obj.modelos && obj.modelos.pedido;
-        return { modelos: { pedido: modeloValido(pedido) ? pedido : modeloPadraoPedido() } };
+        if (!modeloValido(pedido)) return { modelos: { pedido: modeloPadraoPedido() } };
+        const elementos = pedido.elementos.map(elementoSalvo).filter(Boolean);
+        if (!elementos.length) return { modelos: { pedido: modeloPadraoPedido() } };
+        return { modelos: { pedido: Object.assign({}, pedido, { elementos }) } };
+    }
+
+    // A etiqueta so serve para a expedicao se tiver codigo de barras ou QR Code.
+    function modeloTemCodigo(modelo) {
+        return !!(modelo && Array.isArray(modelo.elementos) &&
+            modelo.elementos.some(e => e && (e.tipo === 'barcode' || e.tipo === 'qrcode')));
     }
 
     const ROTULOS_CAMPO = { numero: 'PEDIDO #', volume: 'VOLUME ', entrega: 'Entrega: ', telefone: 'Tel: ' };
@@ -197,10 +225,12 @@
     function htmlEtiqueta(modelo, valores, svgs) {
         const v = valores || {};
         const s = svgs || {};
-        const partes = (modelo.elementos || []).map(el => {
+        const partes = (modelo.elementos || []).filter(el => el && typeof el === 'object').map(el => {
             const fonte = el.fonte_pt || 10;
-            let estilo = 'position:absolute;left:' + el.x_mm + 'mm;top:' + el.y_mm + 'mm;width:' + el.w_mm +
-                'mm;height:' + el.h_mm + 'mm;overflow:hidden;box-sizing:border-box;';
+            // geometria corrompida nao pode quebrar o CSS: vira 0
+            let estilo = 'position:absolute;left:' + (Number(el.x_mm) || 0) + 'mm;top:' + (Number(el.y_mm) || 0) +
+                'mm;width:' + (Number(el.w_mm) || 0) + 'mm;height:' + (Number(el.h_mm) || 0) +
+                'mm;overflow:hidden;box-sizing:border-box;';
             let conteudo = '';
             if (el.tipo === 'campo' || el.tipo === 'texto') {
                 let texto;
@@ -252,6 +282,8 @@
         if (l.tipo === 'invalido') return { tipo: 'invalido' };
         const ped = (pedidos || []).find(p => p.id == l.pedidoId);
         if (!ped) return { tipo: 'nao_encontrado', pedidoId: l.pedidoId };
+        // pedido em Orcamento nao tem etiquetas validas: nunca abre conferencia
+        if (ped.status === 'Orçamento') return { tipo: 'sem_etiquetas', pedidoId: l.pedidoId };
         if (l.tipo === 'pedido') {
             return ped.volumes == null
                 ? { tipo: 'sem_etiquetas', pedidoId: l.pedidoId }
@@ -309,7 +341,7 @@
 
     const api = {
         montarCodigoVolume, lerCodigo, FORMATOS_ETIQUETA, CAMPOS_ETIQUETA_PEDIDO, TIPOS_ELEMENTO,
-        modeloPadraoPedido, ajustarAoFormato, encaixarNaGrade, avisosLegibilidade, lerConfigEtiquetas,
+        modeloPadraoPedido, ajustarAoFormato, encaixarNaGrade, avisosLegibilidade, lerConfigEtiquetas, modeloTemCodigo,
         ROTULOS_CAMPO, valoresEtiquetaPedido, pedidoExemplo, htmlEtiqueta,
         conferenciaVazia, avaliarLeitura, marcarVolume, zerarConferencia, alterarVolumes,
         temConferenciaIniciada, marcacaoConferencia
