@@ -408,7 +408,21 @@ async function restaurarModeloEtiqueta() {
     _etqRender();
 }
 
-// Ligado na impressao de etiquetas (Task 8).
-function imprimirTesteEtiqueta() {
+// Imprime uma etiqueta de exemplo (volume 1/3) com o modelo em edicao, mesmo sem salvar.
+async function imprimirTesteEtiqueta() {
     if (typeof imprimirEtiquetasHTML !== 'function') { toast('A impressão de teste ainda não está disponível.', 'warning'); return; }
+    if (!_etq.modelo) return;
+    try {
+        await garantirLibsCodigo();
+    } catch (e) {
+        await showAlert(MSG_FALHA_CONEXAO_CODIGOS, '📡');
+        return;
+    }
+    const ex = EtiquetasCore.pedidoExemplo();
+    const emp = typeof getEmpresa === 'function' ? getEmpresa() : {};
+    const logo = emp.logo_base64 || new URL('images/logo.png', location.href).href;
+    const valores = EtiquetasCore.valoresEtiquetaPedido(ex.pedido, ex.cliente, 1, 3, logo);
+    const cod = EtiquetasCore.montarCodigoVolume(ex.pedido.id, 1, 3);
+    const html = EtiquetasCore.htmlEtiqueta(_etq.modelo, valores, { barcode: svgCodigoBarras(cod), qrcode: svgQrCode(cod) });
+    imprimirEtiquetasHTML([html], _etq.modelo.largura_mm, _etq.modelo.altura_mm);
 }

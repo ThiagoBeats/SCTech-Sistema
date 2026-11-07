@@ -1932,3 +1932,14 @@ html[data-theme="dark"] {
     .etq-chip { width: auto; }
     .etq-editor-grupo, .etq-editor-dica { width: 100%; }
 }
+
+/* Etiquetas: marcacao de conferencia e modal de volumes */
+:root { --etq-conferido-bg: #E3F7E2; --etq-conferido-fg: #0F6B0D; --etq-conferindo-bg: #FFF4CE; --etq-conferindo-fg: #7A5B00; }
+.badge-conferido, .badge-conferindo { font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 10px; margin-left: 6px; white-space: nowrap; }
+.badge-conferido { background: var(--etq-conferido-bg); color: var(--etq-conferido-fg); }
+.badge-conferindo { background: var(--etq-conferindo-bg); color: var(--etq-conferindo-fg); }
+.etq-vol-box { text-align: left; }
+.etq-vol-box .sc-modal-icon, .etq-vol-box .sc-modal-msg { text-align: center; }
+.etq-vol-campos { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+.etq-vol-linha { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.etq-vol-linha input[type=number] { width: 72px; padding: 4px 6px; margin-left: auto; }

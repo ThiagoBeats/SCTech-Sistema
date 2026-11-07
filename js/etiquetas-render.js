@@ -100,3 +100,118 @@ async function imprimirPaginaDocumento() {
     if (!await documentoProntoParaImprimir(c)) return;
     window.print();
 }
+
+// ---- impressao de etiquetas de pedido (por volume) ----
+// Gancho substituivel nos testes: recebe o iframe pronto e imprime.
+function _etqDispararPadrao(iframe) {
+    const w = iframe.contentWindow;
+    const limpar = () => setTimeout(() => iframe.remove(), 1000);
+    w.addEventListener('afterprint', limpar);
+    w.focus();
+    w.print();
+    setTimeout(limpar, 60000);
+}
+
+function imprimirEtiquetasHTML(paginas, largura_mm, altura_mm) {
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument;
+    doc.open();
+    doc.write('<!doctype html><html><head><meta charset="utf-8"><title>Etiquetas</title><style>' +
+        '@page { size: ' + largura_mm + 'mm ' + altura_mm + 'mm; margin: 0 }' +
+        'html,body{margin:0;padding:0}body{margin:0}' +
+        '.etq{page-break-after:always;break-after:page}.etq:last-child{page-break-after:auto;break-after:auto}' +
+        '</style></head><body>' + paginas.join('') + '</body></html>');
+    doc.close();
+    const disparar = typeof window._etqDispararImpressao === 'function' ? window._etqDispararImpressao : _etqDispararPadrao;
+    disparar(iframe);
+}
+
+function _etqRerenderPagina() {
+    if (typeof renderKanban === 'function') renderKanban();
+    if (typeof renderDashboard === 'function') renderDashboard();
+}
+
+async function imprimirEtiquetasDoPedido(pedidoId, somenteVolume) {
+    const C = window.EtiquetasCore;
+    const ped = db.pedidos.find(p => p.id == pedidoId);
+    if (!ped) return false;
+    const modelo = C.lerConfigEtiquetas(localStorage.getItem('sc_etiqueta_cfg')).modelos.pedido;
+    try {
+        await garantirLibsCodigo();
+    } catch (e) {
+        await showAlert(MSG_FALHA_CONEXAO_CODIGOS, '📡');
+        return false;
+    }
+    const cliente = (db.clientes || []).find(c => c.id == ped.clienteId) || null;
+    const emp = getEmpresa();
+    const logo = emp.logo_base64 || new URL('images/logo.png', location.href).href;
+    const total = ped.volumes || 1;
+    const vols = somenteVolume ? [somenteVolume] : Array.from({ length: total }, (_, i) => i + 1);
+    const paginas = vols.map(v => {
+        const cod = C.montarCodigoVolume(ped.id, v, total);
+        const valores = C.valoresEtiquetaPedido(ped, cliente, v, total, logo);
+        return C.htmlEtiqueta(modelo, valores, { barcode: svgCodigoBarras(cod), qrcode: svgQrCode(cod) });
+    });
+    imprimirEtiquetasHTML(paginas, modelo.largura_mm, modelo.altura_mm);
+    return true;
+}
+
+function _etqFecharModalVolumes() {
+    const o = document.getElementById('etq-modal-volumes');
+    if (o) o.remove();
+}
+
+async function abrirImpressaoEtiquetas(pedidoId) {
+    if (!await exigirPermissao('pedidos', 'visualizar')) return;
+    const ped = db.pedidos.find(p => p.id == pedidoId);
+    if (!ped) return;
+    _etqFecharModalVolumes();
+    const qtd = ped.volumes || 1;
+    const o = document.createElement('div');
+    o.id = 'etq-modal-volumes';
+    o.className = 'sc-modal-overlay';
+    o.innerHTML = `<div class="sc-modal-box etq-vol-box">
+        <div class="sc-modal-icon">🏷️</div>
+        <p class="sc-modal-msg">Etiquetas do pedido #${escapeHtml(String(formatPedidoId(ped.id)))}</p>
+        <div class="etq-vol-campos">
+            <label class="etq-vol-linha">Quantidade de volumes
+                <input type="number" id="etq-qtd-volumes" min="1" max="99" step="1" value="${qtd}"></label>
+            <label class="etq-vol-linha"><input type="radio" name="etq-modo" id="etq-modo-todos" checked> Todos os volumes</label>
+            <label class="etq-vol-linha"><input type="radio" name="etq-modo" id="etq-modo-um"> Só o volume
+                <input type="number" id="etq-so-volume" min="1" max="99" step="1" value="1"></label>
+        </div>
+        <div class="sc-modal-btns">
+            <button type="button" class="btn btn-outline" id="etq-btn-cancelar">Cancelar</button>
+            <button type="button" class="btn btn-success" id="etq-btn-imprimir">Imprimir</button>
+        </div>
+    </div>`;
+    document.body.appendChild(o);
+    const q = id => document.getElementById(id);
+    q('etq-so-volume').addEventListener('input', () => { q('etq-modo-um').checked = true; });
+    q('etq-btn-cancelar').addEventListener('click', _etqFecharModalVolumes);
+    q('etq-btn-imprimir').addEventListener('click', async () => {
+        const novo = parseInt(q('etq-qtd-volumes').value, 10);
+        if (!Number.isInteger(novo) || novo < 1 || novo > 99) { toast('Informe de 1 a 99 volumes.', 'warning'); return; }
+        let so = null;
+        if (q('etq-modo-um').checked) {
+            so = parseInt(q('etq-so-volume').value, 10);
+            if (!Number.isInteger(so) || so < 1 || so > novo) { toast('Volume inválido: informe de 1 a ' + novo + '.', 'warning'); return; }
+        }
+        _etqFecharModalVolumes();
+        const C = window.EtiquetasCore;
+        const mudou = novo !== ped.volumes;
+        if (mudou && C.temConferenciaIniciada(ped)) {
+            const ok = await showConfirm('A conferência deste pedido será zerada porque a quantidade de volumes mudou. Continuar?', '⚠️', 'Continuar', 'Cancelar');
+            if (!ok) return;
+        }
+        if (mudou) {
+            C.alterarVolumes(ped, novo, Date.now());
+            syncDB();
+        }
+        await imprimirEtiquetasDoPedido(ped.id, so);
+        _etqRerenderPagina();
+    });
+    q('etq-qtd-volumes').focus();
+}

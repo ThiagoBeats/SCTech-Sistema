@@ -3047,11 +3047,12 @@ function renderDashboard() {
             <td>${escapeHtml(p.clienteNome||'')}</td>
             <td>R$ ${p.valor.toFixed(2)}${pagBadge}</td>
             <td>${entregaCell}</td>
-            <td><span class="status-tag ${colorClass}">${p._status}</span> ${baixaTag}</td>
+            <td><span class="status-tag ${colorClass}">${p._status}</span> ${baixaTag} ${_badgeConferencia(p)}</td>
             <td>${escapeHtml(p.vendedor_nome || '—')}</td>
             <td>
                 <button class="btn btn-outline btn-sm" onclick="gerarProposta(${p.id})" title="Gerar proposta PDF">📄</button>
                 <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})" title="Ver Ordem de Serviço">📋</button>
+                ${p._status !== 'Orçamento' ? _btnEtiquetas(p) : ''}
                 <button class="btn btn-outline btn-sm" onclick="verTimeline(${p.id})" title="Ver timeline do pedido">⏱</button>
                 ${btnAprovar}
                 ${podeEditarPedidos ? `<button class="btn btn-outline btn-sm" onclick="editarPedido(${p.id})" title="Editar pedido">✏️</button>
@@ -5999,8 +6000,10 @@ function renderKanban() {
                         </div>
                         ${vendedorLinha}
                         <div class="kanban-card-cliente" style="font-size:13px">${escapeHtml(p.clienteNome||'')}${obsBadge}</div>
+                        ${_badgeConferencia(p) ? `<div style="margin-top:4px">${_badgeConferencia(p)}</div>` : ''}
                         <div class="kanban-card-actions" style="margin-top:6px">
                             <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})" title="Ver Ordem de Serviço">📋 OS</button>
+                            ${_btnEtiquetas(p)}
                             <button class="btn btn-outline btn-sm" onclick="verTimeline(${p.id})" title="Ver timeline">⏱</button>
                             ${podeVoltar ? `<button class="btn btn-outline btn-sm" onclick="moverStatus(${p.id},-1)" title="Voltar status">←</button>` : ''}
                         </div>
@@ -6017,7 +6020,7 @@ function renderKanban() {
                     }
                     if (badgeEst.includes('Sem estoque')) break;
                 }
-                const badgeBaixa   = p.baixa_realizada ? `<span class="badge-baixa">✔ Baixa OK</span>` : '';
+                const badgeBaixa   = (p.baixa_realizada ? `<span class="badge-baixa">✔ Baixa OK</span>` : '') + _badgeConferencia(p);
                 const entregaInf   = statusEntrega(p);
                 const entregaBadge = entregaInf ? `<span class="${entregaInf.cls}">${entregaInf.label}</span>` : '';
                 // Pronto p/ Instalacao: sem agendamento, a seta leva para a
@@ -6048,6 +6051,7 @@ function renderKanban() {
                     <div class="kanban-card-actions">
                         <div style="display:flex;gap:4px">
                             <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})" title="Ver Ordem de Serviço">📋</button>
+                            ${_btnEtiquetas(p)}
                             <button class="btn btn-outline btn-sm" onclick="verTimeline(${p.id})" title="Ver timeline">⏱</button>
                         </div>
                         <div style="display:flex;gap:4px">
@@ -6180,6 +6184,14 @@ function _pcpListaHTML(grupos, filtroAtivo) {
     }).join('');
 }
 
+function _btnEtiquetas(p) {
+    return `<button class="btn btn-outline btn-sm" onclick="abrirImpressaoEtiquetas(${p.id})" title="Imprimir etiquetas">🏷️</button>`;
+}
+function _badgeConferencia(p) {
+    const m = (typeof EtiquetasCore !== 'undefined') ? EtiquetasCore.marcacaoConferencia(p) : null;
+    return m ? `<span class="${m.cls}">${m.texto}</span>` : '';
+}
+
 function _pcpLinhaHTML(p, col, idx) {
     const podeVoltar  = idx > 1;
     const podeAvancar = idx < STATUS_PIPELINE.length - 1;
@@ -6195,13 +6207,14 @@ function _pcpLinhaHTML(p, col, idx) {
     return `<div class="pcp-linha">
         <button type="button" class="pcp-linha-num" onclick="editarPedido(${p.id})" title="Abrir pedido">#${formatPedidoId(p.id)}</button>
         <div class="pcp-linha-cli">
-            <span class="pcp-linha-nome">${escapeHtml(p.clienteNome || '')}${obs}</span>
+            <span class="pcp-linha-nome">${escapeHtml(p.clienteNome || '')}${obs}${p.baixa_realizada ? '<span class="badge-baixa">✔ Baixa OK</span>' : ''}${_badgeConferencia(p)}</span>
             ${p.amb ? `<span class="pcp-linha-amb">${escapeHtml(p.amb)}</span>` : ''}
             ${agFin ? _kanbanFinanceiroHTML(p) : ''}
         </div>
         <div class="pcp-linha-entrega">${entrega ? `<span class="${entrega.cls}">${entrega.label}</span>` : ''}</div>
         <div class="pcp-linha-acoes">
             <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})" title="Ver Ordem de Serviço">📋</button>
+            ${_btnEtiquetas(p)}
             <button class="btn btn-outline btn-sm" onclick="verTimeline(${p.id})" title="Ver timeline">⏱</button>
             ${podeVoltar ? `<button class="btn btn-outline btn-sm" onclick="moverStatus(${p.id},-1)" title="Voltar etapa">←</button>` : ''}
             ${avancar}
