@@ -86,6 +86,7 @@ function iniciarEditorEtiquetas() {
         </div>
         ${_etq.podeEditar ? '' : '<div class="etq-editor-ro">Somente visualização: você não tem permissão para alterar a etiqueta.</div>'}
         <div id="etq-falha" class="etq-editor-falha" hidden></div>
+        <div id="etq-avisos-modelo" class="etq-editor-falha" hidden></div>
         <div class="etq-editor-colunas">
             <div id="etq-paleta" class="etq-editor-paleta">
                 <div class="etq-editor-grupo">Dados do pedido</div>
@@ -169,6 +170,24 @@ function _etqRenderPalco() {
         EtiquetasCore.htmlEtiqueta(m, _etq.valores, _etq.svgs) + '</div>' +
         `<div class="etq-editor-grade" style="--etq-mm:${s}px"></div>${camadas}</div>` +
         `<div class="etq-editor-medida">${m.largura_mm} × ${m.altura_mm} mm</div>`;
+    _etqRenderAvisosModelo();
+}
+
+// Avisos de legibilidade de todos os codigos da etiqueta, selecionados ou nao.
+function _etqAvisosModelo() {
+    const lista = [];
+    _etq.modelo.elementos.forEach(el => {
+        EtiquetasCore.avisosLegibilidade(el, _etq.codigo).forEach(a => lista.push(_etqNome(el) + ': ' + a));
+    });
+    return lista;
+}
+
+function _etqRenderAvisosModelo() {
+    const box = document.getElementById('etq-avisos-modelo');
+    if (!box) return;
+    const av = _etqAvisosModelo();
+    box.innerHTML = av.map(a => `<div>⚠ ${escapeHtml(a)}</div>`).join('');
+    box.hidden = !av.length;
 }
 
 function _etqRenderProps() {
@@ -393,6 +412,10 @@ async function salvarModeloEtiqueta() {
     if (!EtiquetasCore.modeloTemCodigo(_etq.modelo)) {
         await showAlert(MSG_ETIQUETA_SEM_CODIGO, '⚠️');
         return;
+    }
+    if (_etqAvisosModelo().length) {
+        const ok = await showConfirm('A etiqueta tem avisos de legibilidade. O scanner pode não ler o código. Salvar mesmo assim?', '⚠️', 'Salvar', 'Cancelar');
+        if (!ok) return;
     }
     let cfg = null;
     try { cfg = JSON.parse(localStorage.getItem('sc_etiqueta_cfg')); } catch (e) { cfg = null; }

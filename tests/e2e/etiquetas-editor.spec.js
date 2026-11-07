@@ -177,3 +177,25 @@ test('sem codigo de barras nem QR nao salva nem imprime teste', async ({ page })
     await expect(page.locator('#sc-modal-msg')).toHaveText(MSG_SEM_CODIGO);
     expect(await page.evaluate(() => window.__etqTeste)).toBeUndefined();
 });
+
+const MSG_AVISO_SALVAR = 'A etiqueta tem avisos de legibilidade. O scanner pode não ler o código. Salvar mesmo assim?';
+
+test('avisos de legibilidade aparecem sem selecionar e pedem confirmacao ao salvar', async ({ page }) => {
+    await abrir(page);
+    await expect(page.locator('#etq-avisos-modelo')).toBeHidden();
+    await page.selectOption('#etq-formato', '50x30');
+    // o modelo padrao de 50x30 tem codigo de barras estreito e baixo demais
+    await page.click('#etq-editor button:has-text("Restaurar padrão")');
+    await page.click('#sc-modal-ok');
+    const banner = page.locator('#etq-avisos-modelo');
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText('⚠ Código de barras:');
+    expect(await page.evaluate(() => _etq.selId)).toBeNull();
+    await page.click('button:has-text("Salvar etiqueta")');
+    await expect(page.locator('#sc-modal-msg')).toHaveText(MSG_AVISO_SALVAR);
+    await page.click('#sc-modal-cancel');
+    expect(await page.evaluate(() => localStorage.getItem('sc_etiqueta_cfg'))).toBeNull();
+    await page.click('button:has-text("Salvar etiqueta")');
+    await page.click('#sc-modal-ok');
+    expect((await modeloSalvo(page)).largura_mm).toBe(50);
+});
