@@ -250,6 +250,7 @@ function _etqRemover() {
     _etq.selId = null;
     _etqRenderPalco();
     _etqRenderProps();
+    toast('Elemento removido. As alterações só valem depois de Salvar.', 'warning');
 }
 
 // ---- formato ----

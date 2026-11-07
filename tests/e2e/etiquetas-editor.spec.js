@@ -72,3 +72,88 @@ test('sem internet o editor funciona e avisa', async ({ page }) => {
     await expect(page.locator('#emp-etiquetas-card')).toContainText(MSG, { timeout: 20000 });
     await expect(page.locator('#etq-palco .etq-el')).toHaveCount(7);
 });
+
+const modeloMemoria = page => page.evaluate(() => JSON.parse(JSON.stringify(_etq.modelo)));
+
+test('somente visualizacao: sem arrastar, salvar, restaurar nem remover', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await entrar(page, BASE, {
+        sc_usr: [{
+            id: 1, nome: 'Teste', email: 'teste@sctech.local', papel_id: 1, ativo: true, senha_hash: '',
+            permissoes_extras: { 'configuracoes.empresa': { nivel: 'visualizar', acoes_restritas: [] } }
+        }]
+    });
+    await page.evaluate(() => localStorage.removeItem('sc_etiqueta_cfg'));
+    await page.goto(BASE + '/empresa.html');
+    await expect(page.locator('#etq-editor')).toBeVisible();
+    expect(await page.evaluate(() => temAcesso('configuracoes.empresa', 'completo'))).toBe(false);
+    const els = page.locator('#etq-palco .etq-el');
+    await expect(els).toHaveCount(7);
+    await expect(page.locator('.etq-chip').first()).toBeDisabled();
+    await expect(page.locator('#etq-editor button:has-text("Salvar etiqueta")')).toBeDisabled();
+    await expect(page.locator('#etq-editor button:has-text("Restaurar padrão")')).toBeDisabled();
+    await expect(page.locator('#etq-formato')).toBeDisabled();
+
+    // Arrastar um chip para o palco nao cria nada.
+    const chip = page.locator('.etq-chip[data-campo="telefone"]');
+    await chip.scrollIntoViewIfNeeded();
+    const c = await chip.boundingBox();
+    const p = await page.locator('#etq-palco').boundingBox();
+    await page.mouse.move(c.x + c.width / 2, c.y + c.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(p.x + p.width / 2, p.y + p.height / 2, { steps: 10 });
+    await page.mouse.up();
+    await expect(els).toHaveCount(7);
+
+    // Selecionar e apertar Delete no palco nao remove; sem alca e sem botao Remover.
+    await page.locator('#etq-palco .etq-el[data-id="e1"]').click();
+    await expect(page.locator('#etq-prop-x')).toBeDisabled();
+    await expect(page.locator('#etq-palco .etq-alca')).toHaveCount(0);
+    await expect(page.locator('#etq-props button:has-text("Remover")')).toHaveCount(0);
+    await page.keyboard.press('Delete');
+    await page.keyboard.press('ArrowRight');
+    await expect(els).toHaveCount(7);
+    const m = await modeloMemoria(page);
+    expect(m.elementos.find(e => e.id === 'e1').x_mm).toBe(3);
+    expect(await page.evaluate(() => localStorage.getItem('sc_etiqueta_cfg'))).toBeNull();
+});
+
+test('teclado: nos campos de propriedade nao mexe no elemento; no palco move e remove', async ({ page }) => {
+    await abrir(page);
+    const els = page.locator('#etq-palco .etq-el');
+    await page.locator('#etq-palco .etq-el[data-id="e1"]').click();
+    const antes = (await modeloMemoria(page)).elementos.find(e => e.id === 'e1');
+
+    // Foco no campo X: Delete, Backspace e setas sao do campo, nao do palco.
+    // (Cima/baixo num campo numerico mudam o proprio valor de proposito; esquerda/direita so andam o cursor.)
+    await page.focus('#etq-prop-x');
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('Delete');
+    await page.keyboard.press('Backspace');
+    await page.locator('#etq-prop-x').blur();
+    await expect(els).toHaveCount(7);
+    const depois = (await modeloMemoria(page)).elementos.find(e => e.id === 'e1');
+    expect(depois.x_mm).toBe(antes.x_mm);
+    expect(depois.y_mm).toBe(antes.y_mm);
+    expect(depois.w_mm).toBe(antes.w_mm);
+    expect(depois.h_mm).toBe(antes.h_mm);
+
+    // Foco no palco: ArrowRight move +1 mm e Delete remove, com aviso.
+    await page.locator('#etq-palco .etq-el[data-id="e1"]').click();
+    const x0 = (await modeloMemoria(page)).elementos.find(e => e.id === 'e1').x_mm;
+    await page.keyboard.press('ArrowRight');
+    expect((await modeloMemoria(page)).elementos.find(e => e.id === 'e1').x_mm).toBe(x0 + 1);
+    await page.keyboard.press('Delete');
+    await expect(els).toHaveCount(6);
+    await expect(page.locator('#sc-toast-wrap')).toContainText('Elemento removido. As alterações só valem depois de Salvar.');
+    expect((await modeloMemoria(page)).elementos.some(e => e.id === 'e1')).toBe(false);
+});
+
+test('botao Remover tambem avisa', async ({ page }) => {
+    await abrir(page);
+    await page.locator('#etq-palco .etq-el[data-id="e2"]').click();
+    await page.click('#etq-props button:has-text("Remover")');
+    await expect(page.locator('#etq-palco .etq-el')).toHaveCount(6);
+    await expect(page.locator('#sc-toast-wrap')).toContainText('Elemento removido. As alterações só valem depois de Salvar.');
+});
