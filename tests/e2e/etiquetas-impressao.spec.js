@@ -18,12 +18,6 @@ async function abrir(page, pedidos, pagina) {
     });
     await entrar(page, BASE, { sc_ped: pedidos, sc_cli: CLI });
     await page.goto(BASE + '/' + (pagina || 'pcp.html'));
-    // O modelo padrao nao mostra rotulos; liga-os para conferir "VOLUME 2/3" e "PEDIDO #...".
-    await page.evaluate(() => {
-        const m = EtiquetasCore.modeloPadraoPedido();
-        m.elementos.forEach(e => { if (e.campo) e.mostrar_rotulo = true; });
-        localStorage.setItem('sc_etiqueta_cfg', JSON.stringify({ modelos: { pedido: m } }));
-    });
 }
 
 test('imprime 3 volumes e salva a quantidade', async ({ page }) => {

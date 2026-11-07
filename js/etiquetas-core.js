@@ -105,7 +105,7 @@
                 el.fonte_pt = Math.max(6, Math.round(b.fonte * sf));
                 el.negrito = !!b.negrito;
                 el.alinhamento = 'esq';
-                el.mostrar_rotulo = false;
+                el.mostrar_rotulo = b.campo === 'numero' || b.campo === 'volume';
             }
             return el;
         });
