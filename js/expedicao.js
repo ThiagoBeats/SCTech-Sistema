@@ -120,6 +120,15 @@ function _expFoco() {
     if (c) c.focus();
 }
 
+// Devolve o foco ao campo quando ele cai no body, sem roubar com o modal do Ver OS aberto
+function _expRecuperarFoco() {
+    if (document.querySelector('#doc-modal-overlay.active')) return;
+    const ae = document.activeElement;
+    // botao clicado (ex.: Fechar do modal, ja oculto) tambem nao serve para ler codigo
+    const editavel = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName);
+    if (!editavel) _expFoco();
+}
+
 function iniciarExpedicao() {
     const campo = document.getElementById('exp-leitura');
     if (!campo) return;
@@ -138,6 +147,9 @@ function iniciarExpedicao() {
             if (!ae || ae === document.body) _expFoco();
         }, 50);
     });
+    // fechar o modal (ou clicar fora) deixa o foco no body: recupera no clique e na primeira tecla
+    document.addEventListener('click', () => setTimeout(_expRecuperarFoco, 0));
+    document.addEventListener('keydown', _expRecuperarFoco, true);
     document.getElementById('exp-encerrar').addEventListener('click', () => {
         _expDefinirAtivo(null);
         _expRenderPedido(null, false);

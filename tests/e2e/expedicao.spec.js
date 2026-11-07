@@ -97,3 +97,15 @@ test('funciona sem internet', async ({ page }) => {
     await abrir(page);
     await conferenciaCompleta(page);
 });
+
+test('foco volta ao campo depois de Ver OS', async ({ page }) => {
+    await abrir(page);
+    await ler(page, '26001');
+    await page.click('#exp-ver-os');
+    await page.locator('#doc-modal-overlay.active').waitFor();
+    await page.locator('#doc-modal-overlay button', { hasText: 'Fechar' }).first().click();
+    await expect(page.locator('#doc-modal-overlay.active')).toHaveCount(0);
+    await page.keyboard.type('26001-1-3');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#exp-resultado')).toContainText('Volume 1/3 conferido.');
+});
