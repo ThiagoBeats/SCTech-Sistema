@@ -2478,7 +2478,7 @@ function verTimeline(id) {
     const STATUS_ICONS = {
         'Orçamento': '📋', 'Medição': '📐', 'Aguardando Tecido': '🧵',
         'Na Costura': '✂️', 'Pronto p/ Instalação': '📦',
-        'Aguardando Financeiro': '💳', 'Instalado': '✅'
+        'Aguardando Financeiro': '💳', 'Instalado': '✅', 'Conferência': '🏷️'
     };
     const eventos = [];
     const dataCreate = ped.data_criacao || (String(ped.id).length > 10 ? ped.id : null);
@@ -5780,6 +5780,9 @@ Volte o pedido para Orçamento para editar.`, '🔒');
             dadosPedido.baixa_tecido_realizada = db.pedidos[index].baixa_tecido_realizada;
             dadosPedido.baixa_mat_realizada    = db.pedidos[index].baixa_mat_realizada;
             if (db.pedidos[index].timeline) dadosPedido.timeline = db.pedidos[index].timeline;
+            // Etiquetas: volumes e conferencia sobrevivem a edicao (so se ja existiam).
+            if (db.pedidos[index].volumes !== undefined) dadosPedido.volumes = db.pedidos[index].volumes;
+            if (db.pedidos[index].conferencia !== undefined) dadosPedido.conferencia = db.pedidos[index].conferencia;
             dadosPedido.data_criacao      = db.pedidos[index].data_criacao || db.pedidos[index].id;
             dadosPedido.comissao_paga     = db.pedidos[index].comissao_paga     || false;
             dadosPedido.comissao_data_pgto = db.pedidos[index].comissao_data_pgto || null;
@@ -5883,6 +5886,8 @@ Ele sai do painel de produção e fica liberado para edição até ser aprovado 
     ped.status = 'Orçamento';
     if (!ped.timeline) ped.timeline = [];
     ped.timeline.push({ status: 'Orçamento', data: Date.now(), label: `Voltou para Orçamento (estava em ${status})` });
+    // Conferencia valia para o pedido aprovado; volumes continuam.
+    EtiquetasCore.zerarConferencia(ped, 'pedido voltou para Orçamento', Date.now());
     localStorage.setItem('sc_editando_id', ped.id);
     salvarERecarregar('Pedido voltou para Orçamento e está liberado para edição.');
 }
