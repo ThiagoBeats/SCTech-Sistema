@@ -19,3 +19,59 @@ test('lerCodigo recusa lixo e volume fora do total', () => {
         assert.deepStrictEqual(E.lerCodigo(t), { tipo: 'invalido' }, JSON.stringify(t));
     }
 });
+
+const dentro = (m) => m.elementos.every(e => e.x_mm >= 0 && e.y_mm >= 0 && e.x_mm + e.w_mm <= m.largura_mm && e.y_mm + e.h_mm <= m.altura_mm);
+
+test('formatos e campos padrao', () => {
+    assert.deepStrictEqual(E.FORMATOS_ETIQUETA.map(f => f.id), ['100x50', '100x100', '100x150', '60x40', '50x30']);
+    assert.deepStrictEqual(E.CAMPOS_ETIQUETA_PEDIDO.map(c => c.campo),
+        ['numero', 'cliente', 'endereco', 'telefone', 'entrega', 'vendedor', 'status', 'ambientes', 'observacoes', 'volume']);
+});
+
+test('modelo padrao 100x50 traz os elementos combinados e cabe na etiqueta', () => {
+    const m = E.modeloPadraoPedido(100, 50);
+    assert.strictEqual(m.formato, '100x50');
+    const chaves = m.elementos.map(e => e.tipo === 'campo' ? e.campo : e.tipo).sort();
+    assert.deepStrictEqual(chaves, ['barcode', 'cliente', 'endereco', 'entrega', 'numero', 'qrcode', 'volume']);
+    assert.ok(dentro(m));
+    assert.strictEqual(new Set(m.elementos.map(e => e.id)).size, m.elementos.length);
+});
+
+test('modelo padrao cabe em todos os formatos', () => {
+    for (const f of E.FORMATOS_ETIQUETA) assert.ok(dentro(E.modeloPadraoPedido(f.largura_mm, f.altura_mm)), f.id);
+});
+
+test('ajustarAoFormato traz para dentro e encolhe o que nao cabe', () => {
+    const m = E.modeloPadraoPedido(100, 150);
+    const r = E.ajustarAoFormato(m, 50, 30);
+    assert.ok(dentro(r.modelo));
+    assert.ok(r.ajustados.length > 0);
+    assert.strictEqual(r.modelo.largura_mm, 50);
+    assert.strictEqual(m.largura_mm, 100, 'nao muta a entrada');
+});
+
+test('encaixarNaGrade arredonda para 1 mm', () => {
+    assert.strictEqual(E.encaixarNaGrade(12.4), 12);
+    assert.strictEqual(E.encaixarNaGrade(12.6), 13);
+    assert.strictEqual(E.encaixarNaGrade(-3), 0);
+});
+
+test('avisosLegibilidade de barras e QR', () => {
+    // '26001-2-3' tem 9 caracteres: 11*(9+2)+13+20 = 154 modulos; 0,25 mm => 38,5 mm
+    assert.strictEqual(E.avisosLegibilidade({ tipo: 'barcode', w_mm: 45, h_mm: 12 }, '26001-2-3').length, 0);
+    assert.strictEqual(E.avisosLegibilidade({ tipo: 'barcode', w_mm: 30, h_mm: 12 }, '26001-2-3').length, 1);
+    assert.strictEqual(E.avisosLegibilidade({ tipo: 'barcode', w_mm: 45, h_mm: 6 }, '26001-2-3').length, 1);
+    assert.strictEqual(E.avisosLegibilidade({ tipo: 'qrcode', w_mm: 20, h_mm: 20 }, '26001-2-3').length, 0);
+    assert.strictEqual(E.avisosLegibilidade({ tipo: 'qrcode', w_mm: 12, h_mm: 20 }, '26001-2-3').length, 1);
+    assert.strictEqual(E.avisosLegibilidade({ tipo: 'campo', campo: 'cliente', w_mm: 5, h_mm: 5 }, 'x').length, 0);
+});
+
+test('lerConfigEtiquetas devolve o padrao para vazio, lixo ou formato antigo', () => {
+    for (const bruto of [null, '', '{', '[]', '{"modelos":{}}', '{"modelos":{"pedido":{"elementos":"x"}}}']) {
+        const cfg = E.lerConfigEtiquetas(bruto);
+        assert.strictEqual(cfg.modelos.pedido.formato, '100x50', bruto);
+        assert.ok(cfg.modelos.pedido.elementos.length > 0);
+    }
+    const salvo = { modelos: { pedido: E.modeloPadraoPedido(60, 40) } };
+    assert.strictEqual(E.lerConfigEtiquetas(JSON.stringify(salvo)).modelos.pedido.formato, '60x40');
+});
