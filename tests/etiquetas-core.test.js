@@ -75,3 +75,64 @@ test('lerConfigEtiquetas devolve o padrao para vazio, lixo ou formato antigo', (
     const salvo = { modelos: { pedido: E.modeloPadraoPedido(60, 40) } };
     assert.strictEqual(E.lerConfigEtiquetas(JSON.stringify(salvo)).modelos.pedido.formato, '60x40');
 });
+
+test('valoresEtiquetaPedido monta os textos', () => {
+    const { pedido, cliente } = E.pedidoExemplo();
+    const v = E.valoresEtiquetaPedido(pedido, cliente, 2, 3, 'logo.png');
+    assert.strictEqual(v.numero, '26001');
+    assert.strictEqual(v.cliente, 'Maria Souza');
+    assert.strictEqual(v.entrega, '14/11/2026');
+    assert.strictEqual(v.volume, '2/3');
+    assert.strictEqual(v.ambientes, '3');
+    assert.strictEqual(v.logo, 'logo.png');
+});
+
+test('valoresEtiquetaPedido aguenta cliente excluido e campos vazios', () => {
+    const v = E.valoresEtiquetaPedido({ id: 26002, clienteNome: 'Joao' }, null, 1, 1, '');
+    assert.strictEqual(v.cliente, 'Joao');
+    assert.strictEqual(v.endereco, '');
+    assert.strictEqual(v.telefone, '');
+    assert.strictEqual(v.entrega, '');
+    assert.strictEqual(v.ambientes, '0');
+});
+
+test('htmlEtiqueta posiciona em mm, escapa texto e insere os SVGs', () => {
+    const m = { formato: 'custom', largura_mm: 80, altura_mm: 40, elementos: [
+        { id: 'a', tipo: 'campo', campo: 'cliente', x_mm: 5, y_mm: 2, w_mm: 40, h_mm: 6, fonte_pt: 10 },
+        { id: 'b', tipo: 'campo', campo: 'numero', x_mm: 5, y_mm: 10, w_mm: 40, h_mm: 6, fonte_pt: 12, negrito: true },
+        { id: 'c', tipo: 'barcode', x_mm: 5, y_mm: 20, w_mm: 45, h_mm: 12 },
+        { id: 'd', tipo: 'qrcode', x_mm: 55, y_mm: 5, w_mm: 20, h_mm: 20 }
+    ] };
+    const v = { cliente: '<b>Ana</b>', numero: '26001' };
+    const html = E.htmlEtiqueta(m, v, { barcode: '<svg id="bc"></svg>', qrcode: '<svg id="qr"></svg>' });
+    assert.match(html, /width:80mm/);
+    assert.match(html, /left:5mm/);
+    assert.match(html, /&lt;b&gt;Ana&lt;\/b&gt;/);
+    assert.match(html, /PEDIDO #26001/);
+    assert.match(html, /<svg id="bc">/);
+    assert.match(html, /<svg id="qr">/);
+    assert.match(html, /data-id="a"/);
+    assert.match(html, /text-overflow:ellipsis|-webkit-line-clamp/);
+});
+
+test('htmlEtiqueta sem SVG mostra lugar reservado e respeita mostrar_rotulo', () => {
+    const m = { formato: 'custom', largura_mm: 50, altura_mm: 30, elementos: [
+        { id: 'a', tipo: 'campo', campo: 'numero', x_mm: 1, y_mm: 1, w_mm: 30, h_mm: 6, mostrar_rotulo: false },
+        { id: 'b', tipo: 'barcode', x_mm: 1, y_mm: 10, w_mm: 45, h_mm: 10 }
+    ] };
+    const html = E.htmlEtiqueta(m, { numero: '26001' }, {});
+    assert.doesNotMatch(html, /PEDIDO #/);
+    assert.match(html, /etq-cod-ph/);
+});
+
+test('htmlEtiqueta: valor ausente vira vazio, texto e escape de aspas', () => {
+    const m = { formato: 'custom', largura_mm: 50, altura_mm: 30, elementos: [
+        { id: 'a', tipo: 'campo', campo: 'cliente', x_mm: 1, y_mm: 1, w_mm: 30, h_mm: 6 },
+        { id: 't', tipo: 'texto', texto: 'A "B" & C', x_mm: 1, y_mm: 8, w_mm: 30, h_mm: 6 },
+        { id: 'e', tipo: 'campo', campo: 'endereco', x_mm: 1, y_mm: 15, w_mm: 30, h_mm: 8, fonte_pt: 8 }
+    ] };
+    const html = E.htmlEtiqueta(m, { endereco: 'Rua X' }, {});
+    assert.doesNotMatch(html, /undefined/);
+    assert.match(html, /A &quot;B&quot; &amp; C/);
+    assert.match(html, /-webkit-line-clamp:/);
+});

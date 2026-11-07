@@ -143,9 +143,100 @@
         return { modelos: { pedido: modeloValido(pedido) ? pedido : modeloPadraoPedido() } };
     }
 
+    const ROTULOS_CAMPO = { numero: 'PEDIDO #', volume: 'VOLUME ', entrega: 'Entrega: ', telefone: 'Tel: ' };
+
+    function txt(v) { return v === null || v === undefined ? '' : String(v); }
+
+    // Converte YYYY-MM-DD em DD/MM/AAAA por texto, sem Date (evita erro de fuso).
+    function formatarDataBR(s) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(txt(s));
+        return m ? m[3] + '/' + m[2] + '/' + m[1] : txt(s);
+    }
+
+    // Textos de uma etiqueta de pedido/volume (tudo string).
+    function valoresEtiquetaPedido(pedido, cliente, volume, total, logoUrl) {
+        const p = pedido || {};
+        const c = cliente || null;
+        return {
+            numero: txt(p.id),
+            cliente: txt((c && c.nome) || p.clienteNome),
+            endereco: txt(c && c.end),
+            telefone: txt(c && c.tel),
+            entrega: formatarDataBR(p.data_entrega),
+            vendedor: txt(p.vendedor_nome || p.arq_nome),
+            status: txt(p.status),
+            ambientes: String((p.ambientes || []).length),
+            observacoes: txt(p.observacoes),
+            volume: volume + '/' + total,
+            logo: txt(logoUrl)
+        };
+    }
+
+    // Dados de exemplo para pre-visualizar o modelo no editor.
+    function pedidoExemplo() {
+        return {
+            pedido: {
+                id: 26001, clienteNome: 'Maria Souza', data_entrega: '2026-11-14', vendedor_nome: 'Carlos',
+                status: 'Pronto p/ Instalação', observacoes: 'Entregar no periodo da manha',
+                ambientes: [{ nome: 'Sala' }, { nome: 'Quarto' }, { nome: 'Cozinha' }], volumes: 3
+            },
+            cliente: { nome: 'Maria Souza', end: 'R. das Flores, 120 – Centro', tel: '(11) 98888-7777' }
+        };
+    }
+
+    function esc(s) {
+        return txt(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    const CAMPOS_MULTILINHA = ['endereco', 'observacoes'];
+    const ALINHAMENTO_CSS = { esq: 'left', centro: 'center', dir: 'right' };
+    const MM_POR_PT = 0.3528;
+
+    // HTML da etiqueta: serve para pre-visualizacao e impressao. Cada elemento leva data-id.
+    function htmlEtiqueta(modelo, valores, svgs) {
+        const v = valores || {};
+        const s = svgs || {};
+        const partes = (modelo.elementos || []).map(el => {
+            const fonte = el.fonte_pt || 10;
+            let estilo = 'position:absolute;left:' + el.x_mm + 'mm;top:' + el.y_mm + 'mm;width:' + el.w_mm +
+                'mm;height:' + el.h_mm + 'mm;overflow:hidden;box-sizing:border-box;';
+            let conteudo = '';
+            if (el.tipo === 'campo' || el.tipo === 'texto') {
+                let texto;
+                if (el.tipo === 'texto') texto = txt(el.texto);
+                else {
+                    const val = txt(v[el.campo]);
+                    texto = (el.mostrar_rotulo !== false && val !== '' ? (ROTULOS_CAMPO[el.campo] || '') : '') + val;
+                }
+                estilo += 'font-size:' + fonte + 'pt;font-weight:' + (el.negrito ? 'bold' : 'normal') +
+                    ';text-align:' + (ALINHAMENTO_CSS[el.alinhamento] || 'left') + ';line-height:1.15;';
+                if (el.tipo === 'campo' && CAMPOS_MULTILINHA.indexOf(el.campo) >= 0) {
+                    const linhas = Math.max(1, Math.floor(el.h_mm / (fonte * MM_POR_PT * 1.15)));
+                    estilo += 'display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:' + linhas + ';';
+                } else {
+                    estilo += 'white-space:nowrap;text-overflow:ellipsis;';
+                }
+                conteudo = esc(texto);
+            } else if (el.tipo === 'logo') {
+                conteudo = v.logo ? '<img src="' + esc(v.logo) + '" style="width:100%;height:100%;object-fit:contain">' : '';
+            } else if (el.tipo === 'linha') {
+                estilo += 'border-top:0.3mm solid #000;height:0;';
+            } else if (el.tipo === 'barcode' || el.tipo === 'qrcode') {
+                conteudo = s[el.tipo] ||
+                    '<div class="etq-cod-ph" style="width:100%;height:100%;box-sizing:border-box;border:0.3mm dashed #888;' +
+                    'display:flex;align-items:center;justify-content:center;font-size:7pt;color:#666">código</div>';
+            }
+            return '<div data-id="' + esc(el.id) + '" style="' + estilo + '">' + conteudo + '</div>';
+        });
+        return '<div class="etq" style="position:relative;width:' + modelo.largura_mm + 'mm;height:' + modelo.altura_mm +
+            'mm;overflow:hidden;background:#fff;color:#000;font-family:Arial,sans-serif">' + partes.join('') + '</div>';
+    }
+
     const api = {
         montarCodigoVolume, lerCodigo, FORMATOS_ETIQUETA, CAMPOS_ETIQUETA_PEDIDO, TIPOS_ELEMENTO,
-        modeloPadraoPedido, ajustarAoFormato, encaixarNaGrade, avisosLegibilidade, lerConfigEtiquetas
+        modeloPadraoPedido, ajustarAoFormato, encaixarNaGrade, avisosLegibilidade, lerConfigEtiquetas,
+        ROTULOS_CAMPO, valoresEtiquetaPedido, pedidoExemplo, htmlEtiqueta
     };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
