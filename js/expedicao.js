@@ -74,9 +74,22 @@ function _expRenderPedido(id, mostrarVolumes) {
     document.getElementById('exp-ver-os').onclick = () => abrirOS(ped.id);
 }
 
+// Outra aba pode ter mudado pedidos/clientes: rele o que esta gravado antes de cada leitura
+function _expRecarregar() {
+    try {
+        const ped = JSON.parse(localStorage.getItem('sc_ped'));
+        const cli = JSON.parse(localStorage.getItem('sc_cli'));
+        if (Array.isArray(ped)) db.pedidos = ped;
+        if (Array.isArray(cli)) db.clientes = cli;
+    } catch (e) { /* mantem o que esta em memoria */ }
+}
+
 function processarLeituraExpedicao(texto) {
+    _expRecarregar();
     const ativo = _expAtivoId();
-    const r = EtiquetasCore.avaliarLeitura(String(texto || '').trim(), ativo, db.pedidos);
+    // status normalizado: legado que vira Orcamento tambem nao abre conferencia
+    const pedidos = db.pedidos.map(p => Object.assign({}, p, { status: normalizarStatus(p.status) }));
+    const r = EtiquetasCore.avaliarLeitura(String(texto || '').trim(), ativo, pedidos);
     const ped = r.pedidoId != null ? _expPedido(r.pedidoId) : null;
     switch (r.tipo) {
         case 'invalido':
@@ -105,7 +118,8 @@ function processarLeituraExpedicao(texto) {
             }
             const nome = (getUsuarioLogado() && getUsuarioLogado().nome) || 'Usuário';
             const m = EtiquetasCore.marcarVolume(ped, r.volume, nome, Date.now());
-            syncDB();
+            // grava so os pedidos: syncDB() reescreveria as demais chaves com dados desta aba
+            localStorage.setItem('sc_ped', JSON.stringify(db.pedidos));
             _expRenderPedido(ped.id, true);
             _expResultado(m.concluiu
                 ? `✅ Pedido #${ped.id} conferido: ${ped.volumes} volume(s).`
@@ -159,6 +173,13 @@ function iniciarExpedicao() {
         const r = document.getElementById('exp-resultado');
         if (r) { r.textContent = ''; r.className = 'exp-resultado'; }
         _expFoco();
+    });
+    // outra aba mudou pedidos/clientes: o painel do pedido ativo se atualiza
+    window.addEventListener('storage', e => {
+        if (e.key !== 'sc_ped' && e.key !== 'sc_cli') return;
+        _expRecarregar();
+        const id = _expAtivoId();
+        if (id != null && _expPedido(id)) _expRenderPedido(id, true);
     });
     // pedido ativo de antes do recarregamento volta ao painel
     const ativo = _expAtivoId();

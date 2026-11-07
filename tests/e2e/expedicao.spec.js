@@ -129,3 +129,25 @@ test('modal do app aberto nao perde o foco para o campo', async ({ page }) => {
     await page.keyboard.press('Shift+Tab');
     expect(await page.evaluate(() => document.activeElement.id)).toMatch(/^sc-modal-/);
 });
+
+test('le dados atuais de outra aba e nao apaga o que ela gravou', async ({ page }) => {
+    await abrir(page);
+    // outra aba muda os volumes e cadastra um cliente direto no localStorage
+    await page.evaluate(() => {
+        const ped = JSON.parse(localStorage.getItem('sc_ped'));
+        ped.find(p => p.id === 26001).volumes = 4;
+        localStorage.setItem('sc_ped', JSON.stringify(ped));
+        const cli = JSON.parse(localStorage.getItem('sc_cli'));
+        cli.push({ id: 3, nome: 'Cliente Outra Aba', end: '', tel: '' });
+        localStorage.setItem('sc_cli', JSON.stringify(cli));
+    });
+    await ler(page, '26001');
+    await expect(page.locator('#exp-resultado')).toContainText('bipe os 4 volume(s)');
+    await ler(page, '26001-1-4');
+    await expect(page.locator('#exp-resultado')).toContainText('Volume 1/4 conferido.');
+    const cli = await page.evaluate(() => JSON.parse(localStorage.getItem('sc_cli')));
+    expect(cli.map(c => c.nome)).toContain('Cliente Outra Aba');
+    const p = await lerPedido(page, 26001);
+    expect(p.volumes).toBe(4);
+    expect(p.conferencia.volumes_conferidos).toEqual([1]);
+});
