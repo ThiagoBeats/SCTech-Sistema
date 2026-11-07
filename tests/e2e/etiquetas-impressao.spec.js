@@ -88,6 +88,18 @@ test('sem internet nao imprime', async ({ page }) => {
     expect(p.conferencia).toEqual(conf);
 });
 
+test('modelo sem codigo de barras nem QR nao imprime', async ({ page }) => {
+    const modelo = { formato: '100x50', largura_mm: 100, altura_mm: 50, elementos: [
+        { id: 'e1', tipo: 'campo', campo: 'numero', x_mm: 3, y_mm: 2, w_mm: 58, h_mm: 7, fonte_pt: 14 }
+    ] };
+    await page.addInitScript(m => localStorage.setItem('sc_etiqueta_cfg', JSON.stringify({ modelos: { pedido: m } })), modelo);
+    await abrir(page, [ped({ volumes: 2 })]);
+    await page.locator('button[title="Imprimir etiquetas"]').first().click();
+    await page.click('#etq-btn-imprimir');
+    await expect(page.locator('#sc-modal-msg')).toHaveText('A etiqueta precisa ter pelo menos um código de barras ou QR Code.', { timeout: 15000 });
+    expect(await page.evaluate(() => window.__etq)).toBeUndefined();
+});
+
 test('imprimir teste no editor', async ({ page }) => {
     await abrir(page, [], 'empresa.html');
     await expect(page.locator('#etq-editor')).toBeVisible();

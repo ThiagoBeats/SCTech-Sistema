@@ -388,8 +388,12 @@ function _etqTeclado(e) {
 }
 
 // ---- acoes da barra ----
-function salvarModeloEtiqueta() {
+async function salvarModeloEtiqueta() {
     if (!_etq.podeEditar || !_etq.modelo) return;
+    if (!EtiquetasCore.modeloTemCodigo(_etq.modelo)) {
+        await showAlert(MSG_ETIQUETA_SEM_CODIGO, '⚠️');
+        return;
+    }
     let cfg = null;
     try { cfg = JSON.parse(localStorage.getItem('sc_etiqueta_cfg')); } catch (e) { cfg = null; }
     if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) cfg = {};
@@ -412,6 +416,10 @@ async function restaurarModeloEtiqueta() {
 async function imprimirTesteEtiqueta() {
     if (typeof imprimirEtiquetasHTML !== 'function') { toast('A impressão de teste ainda não está disponível.', 'warning'); return; }
     if (!_etq.modelo) return;
+    if (!EtiquetasCore.modeloTemCodigo(_etq.modelo)) {
+        await showAlert(MSG_ETIQUETA_SEM_CODIGO, '⚠️');
+        return;
+    }
     try {
         await garantirLibsCodigo();
     } catch (e) {

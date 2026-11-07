@@ -1,6 +1,12 @@
 // Renderizacao dos codigos de barras / QR (bibliotecas via CDN, sob demanda) e
 // codigo de pedido nos documentos (OS e Proposta). Somente navegador.
 const MSG_FALHA_CONEXAO_CODIGOS = 'Não foi possível carregar o gerador de códigos. Verifique a conexão com a internet e tente novamente.';
+const MSG_ETIQUETA_SEM_CODIGO = 'A etiqueta precisa ter pelo menos um código de barras ou QR Code.';
+
+// Modelo de etiqueta salvo em uso para os pedidos.
+function _etqModeloPedido() {
+    return window.EtiquetasCore.lerConfigEtiquetas(localStorage.getItem('sc_etiqueta_cfg')).modelos.pedido;
+}
 
 const _LIBS_CODIGO = [
     { global: 'JsBarcode', url: 'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js' },
@@ -137,7 +143,12 @@ async function imprimirEtiquetasDoPedido(pedidoId, somenteVolume) {
     const C = window.EtiquetasCore;
     const ped = db.pedidos.find(p => p.id == pedidoId);
     if (!ped) return false;
-    const modelo = C.lerConfigEtiquetas(localStorage.getItem('sc_etiqueta_cfg')).modelos.pedido;
+    const modelo = _etqModeloPedido();
+    // etiqueta sem codigo nao serve para a expedicao: nao imprime
+    if (!C.modeloTemCodigo(modelo)) {
+        await showAlert(MSG_ETIQUETA_SEM_CODIGO, '⚠️');
+        return false;
+    }
     try {
         await garantirLibsCodigo();
     } catch (e) {
@@ -200,6 +211,10 @@ async function abrirImpressaoEtiquetas(pedidoId) {
             if (!Number.isInteger(so) || so < 1 || so > novo) { toast('Volume inválido: informe de 1 a ' + novo + '.', 'warning'); return; }
         }
         _etqFecharModalVolumes();
+        if (!window.EtiquetasCore.modeloTemCodigo(_etqModeloPedido())) {
+            await showAlert(MSG_ETIQUETA_SEM_CODIGO, '⚠️');
+            return;
+        }
         // sem gerador de codigos nada e gravado: volumes e conferencia ficam como estao
         try {
             await garantirLibsCodigo();

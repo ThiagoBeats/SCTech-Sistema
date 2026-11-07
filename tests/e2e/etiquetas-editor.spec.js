@@ -157,3 +157,23 @@ test('botao Remover tambem avisa', async ({ page }) => {
     await expect(page.locator('#etq-palco .etq-el')).toHaveCount(6);
     await expect(page.locator('#sc-toast-wrap')).toContainText('Elemento removido. As alterações só valem depois de Salvar.');
 });
+
+const MSG_SEM_CODIGO = 'A etiqueta precisa ter pelo menos um código de barras ou QR Code.';
+
+test('sem codigo de barras nem QR nao salva nem imprime teste', async ({ page }) => {
+    await abrir(page);
+    const ids = await page.evaluate(() => _etq.modelo.elementos.filter(e => e.tipo === 'barcode' || e.tipo === 'qrcode').map(e => e.id));
+    expect(ids.length).toBe(2);
+    for (const id of ids) {
+        await page.locator(`#etq-palco .etq-el[data-id="${id}"]`).click();
+        await page.click('#etq-props button:has-text("Remover")');
+    }
+    await page.click('button:has-text("Salvar etiqueta")');
+    await expect(page.locator('#sc-modal-msg')).toHaveText(MSG_SEM_CODIGO);
+    await page.click('#sc-modal-ok');
+    expect(await page.evaluate(() => localStorage.getItem('sc_etiqueta_cfg'))).toBeNull();
+    await page.evaluate(() => { window._etqDispararImpressao = () => { window.__etqTeste = true; }; });
+    await page.getByRole('button', { name: /Imprimir teste/ }).click();
+    await expect(page.locator('#sc-modal-msg')).toHaveText(MSG_SEM_CODIGO);
+    expect(await page.evaluate(() => window.__etqTeste)).toBeUndefined();
+});
