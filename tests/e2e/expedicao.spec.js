@@ -151,3 +151,15 @@ test('le dados atuais de outra aba e nao apaga o que ela gravou', async ({ page 
     expect(p.volumes).toBe(4);
     expect(p.conferencia.volumes_conferidos).toEqual([1]);
 });
+
+test('timeline mostra o rotulo como texto, sem interpretar HTML', async ({ page }) => {
+    const ped = Object.assign({}, SEED.sc_ped[0], {
+        timeline: [{ status: 'Conferência', data: 1700000000000, label: 'Conferido por <b>Zé</b>' }]
+    });
+    await entrar(page, BASE, { sc_ped: [ped], sc_cli: SEED.sc_cli });
+    await page.goto(BASE + '/pcp.html');
+    await page.evaluate(() => verTimeline(26001));
+    const modal = page.locator('.modal-overlay', { hasText: 'Timeline' });
+    await expect(modal).toContainText('Conferido por <b>Zé</b>');
+    await expect(modal.locator('b', { hasText: 'Zé' })).toHaveCount(0);
+});

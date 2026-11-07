@@ -2508,7 +2508,7 @@ function verTimeline(id) {
         return `<div style="display:flex;gap:14px;align-items:flex-start;padding:10px 0;${i < eventos.length - 1 ? 'border-bottom:1px solid #F1F1F1' : ''}">
             <div style="min-width:38px;height:38px;border-radius:50%;background:${isCurrent ? 'var(--primary)' : '#E0E0E0'};color:${isCurrent ? '#fff' : '#8F8F8F'};display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">${icon}</div>
             <div>
-                <div style="font-weight:600;font-size:14px;color:${isCurrent ? 'var(--primary)' : '#242424'}">${e.label || e.status}</div>
+                <div style="font-weight:600;font-size:14px;color:${isCurrent ? 'var(--primary)' : '#242424'}">${escapeHtml(e.label || e.status)}</div>
                 <div style="font-size:12px;color:#8F8F8F;margin-top:3px">${dataStr}</div>
             </div>
         </div>`;
