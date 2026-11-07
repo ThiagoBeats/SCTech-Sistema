@@ -1862,3 +1862,73 @@ html[data-theme="dark"] .pc-item-obs { color: var(--muted); }
 .sc-codigo-doc-barras { width: 50mm; height: 12mm; }
 .sc-codigo-doc-num { font-size: 9px; line-height: 1.2; letter-spacing: 1px; color: #333; }
 .sc-codigo-falha { width: auto; font-size: 12px; color: var(--danger, #B3261E); text-align: right; }
+
+/* ─── Editor de etiquetas (Configurar Empresa) ─────────────────────────── */
+:root {
+    --etq-grade: rgba(45, 119, 193, 0.10);
+    --etq-grade-10: rgba(45, 119, 193, 0.28);
+    --etq-sel: #2D77C1;
+    --etq-aviso-bg: #FFF4E5;
+    --etq-aviso-fg: #8A4300;
+    --etq-palco-bg: #EEF1F4;
+}
+html[data-theme="dark"] {
+    --etq-aviso-bg: #431407;
+    --etq-aviso-fg: #FFC28A;
+    --etq-palco-bg: #141518;
+}
+.sc-toast-warning { border-left: 5px solid var(--kpi-orange); }
+.etq-editor-barra { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.etq-editor-formato { display: flex; align-items: center; gap: 8px; font-size: var(--fs-label); font-weight: 700; color: var(--muted); }
+.etq-editor-barra select, .etq-editor-custom input { padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius-input); font-size: 13px; background: var(--white); color: var(--dark); }
+.etq-editor-custom { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.etq-editor-custom[hidden] { display: none; }
+.etq-editor-custom input { width: 70px; }
+.etq-editor-acoes { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.etq-editor-acoes .btn { margin: 0; }
+.etq-editor-ro { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.etq-editor-falha { background: var(--etq-aviso-bg); color: var(--etq-aviso-fg); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; margin-bottom: 10px; }
+.etq-editor-falha[hidden] { display: none; }
+.etq-editor-colunas { display: grid; grid-template-columns: 160px minmax(0, 1fr) 210px; gap: 12px; align-items: start; }
+.etq-editor-paleta { display: flex; flex-direction: column; gap: 5px; }
+.etq-editor-grupo { font-size: var(--fs-aux); font-weight: 800; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 6px 0 2px; }
+.etq-editor-grupo:first-child { margin-top: 0; }
+.etq-editor-dica { font-size: var(--fs-aux); color: var(--muted); margin-top: 4px; }
+.etq-chip { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--white); color: var(--dark); font: inherit; font-size: 12.5px; font-weight: 600; text-align: left; cursor: grab; touch-action: none; user-select: none; }
+.etq-chip:hover:not(:disabled) { border-color: var(--primary); }
+.etq-chip:disabled { cursor: default; opacity: .6; }
+.etq-chip-ic { display: inline-flex; justify-content: center; min-width: 22px; font-size: 11px; font-weight: 800; color: var(--primary); }
+.etq-editor-palco { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 260px; padding: 16px; border-radius: 12px; background: var(--etq-palco-bg); outline: none; border: 2px dashed transparent; }
+.etq-editor-palco:focus-visible { border-color: var(--etq-sel); }
+.etq-editor-palco.alvo { border-color: var(--primary); }
+.etq-editor-folha { position: relative; flex: none; background: #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, .15); overflow: hidden; }
+.etq-editor-render { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
+.etq-editor-grade { position: absolute; inset: 0; pointer-events: none;
+    background-image:
+        linear-gradient(to right, var(--etq-grade-10) 1px, transparent 1px), linear-gradient(to bottom, var(--etq-grade-10) 1px, transparent 1px),
+        linear-gradient(to right, var(--etq-grade) 1px, transparent 1px), linear-gradient(to bottom, var(--etq-grade) 1px, transparent 1px);
+    background-size: calc(var(--etq-mm) * 10) calc(var(--etq-mm) * 10), calc(var(--etq-mm) * 10) calc(var(--etq-mm) * 10), var(--etq-mm) var(--etq-mm), var(--etq-mm) var(--etq-mm); }
+.etq-editor-medida { font-size: var(--fs-aux); color: var(--muted); }
+.etq-el { position: absolute; box-sizing: border-box; border: 1px dashed transparent; cursor: move; touch-action: none; }
+.etq-el:hover { border-color: rgba(45, 119, 193, .6); }
+.etq-el.sel { border: 2px solid var(--etq-sel); background: rgba(45, 119, 193, .06); }
+.etq-el-vazio { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 10px; color: #888; border: 1px dashed #bbb; box-sizing: border-box; }
+.etq-alca { position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px; background: var(--etq-sel); border: 2px solid #fff; border-radius: 2px; cursor: nwse-resize; display: none; }
+.etq-el.sel .etq-alca { display: block; }
+.etq-editor-fantasma { position: fixed; z-index: 9999; pointer-events: none; transform: translate(-50%, -50%); padding: 5px 10px; border-radius: 8px; background: var(--primary); color: #fff; font-size: 12px; font-weight: 700; box-shadow: 0 6px 18px rgba(0, 0, 0, .2); white-space: nowrap; }
+.etq-editor-props { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
+.etq-editor-props-vazio { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.etq-editor-props-titulo { font-weight: 800; font-size: var(--fs-texto-sm); color: var(--primary); }
+.etq-prop-grade { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.etq-prop { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-aux); font-weight: 700; color: var(--muted); }
+.etq-prop input, .etq-prop select { width: 100%; padding: 5px 7px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; background: var(--white); color: var(--dark); }
+.etq-prop-check { display: flex; align-items: center; gap: 6px; font-size: 12.5px; cursor: pointer; }
+.etq-prop-check input { accent-color: var(--primary); }
+.etq-prop-remover { align-self: flex-start; margin: 0; color: var(--danger); }
+.etq-editor-aviso { background: var(--etq-aviso-bg); color: var(--etq-aviso-fg); border-radius: 8px; padding: 6px 8px; font-size: 12px; line-height: 1.4; margin-bottom: 4px; }
+@media (max-width: 900px) {
+    .etq-editor-colunas { grid-template-columns: 1fr; }
+    .etq-editor-paleta { flex-direction: row; flex-wrap: wrap; }
+    .etq-chip { width: auto; }
+    .etq-editor-grupo, .etq-editor-dica { width: 100%; }
+}

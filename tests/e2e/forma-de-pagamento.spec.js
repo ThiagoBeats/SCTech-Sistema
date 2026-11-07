@@ -161,7 +161,7 @@ test('empresa: nao deixa salvar a lista vazia', async ({ page }) => {
 
 test('empresa: restaurar padrao volta a lista original', async ({ page }) => {
     await abrir(page, 'empresa.html', { sc_formas_pag: ['PIX'] });
-    await page.click('button:has-text("Restaurar Padrão") >> nth=-1');
+    await page.click('#emp-formas-pag-card button:has-text("Restaurar Padrão")');
     expect(await linhas(page).evaluateAll(l => l.map(i => i.value))).toEqual(PADRAO);
     expect(await ler(page, 'sc_formas_pag')).toBeNull();
 });
