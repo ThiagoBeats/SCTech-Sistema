@@ -233,10 +233,86 @@
             'mm;overflow:hidden;background:#fff;color:#000;font-family:Arial,sans-serif">' + partes.join('') + '</div>';
     }
 
+    // ---- conferencia de volumes (nunca mexe no status do pedido) ----
+    function conferenciaVazia() {
+        return { volumes_conferidos: [], concluida_em: null, conferido_por: null };
+    }
+
+    function _lista(pedido) {
+        return (pedido && pedido.conferencia && Array.isArray(pedido.conferencia.volumes_conferidos))
+            ? pedido.conferencia.volumes_conferidos : [];
+    }
+
+    function temConferenciaIniciada(pedido) {
+        return _lista(pedido).length > 0;
+    }
+
+    function avaliarLeitura(texto, ativoId, pedidos) {
+        const l = lerCodigo(texto);
+        if (l.tipo === 'invalido') return { tipo: 'invalido' };
+        const ped = (pedidos || []).find(p => p.id == l.pedidoId);
+        if (!ped) return { tipo: 'nao_encontrado', pedidoId: l.pedidoId };
+        if (l.tipo === 'pedido') {
+            return ped.volumes == null
+                ? { tipo: 'sem_etiquetas', pedidoId: l.pedidoId }
+                : { tipo: 'abrir', pedidoId: l.pedidoId };
+        }
+        if (ativoId == null) return { tipo: 'consulta', pedidoId: l.pedidoId };
+        if (ativoId != l.pedidoId) return { tipo: 'outro_pedido', pedidoId: l.pedidoId, ativoId: ativoId };
+        if (l.total !== ped.volumes) return { tipo: 'etiqueta_desatualizada', pedidoId: l.pedidoId };
+        if (_lista(ped).indexOf(l.volume) >= 0) return { tipo: 'repetido', pedidoId: l.pedidoId, volume: l.volume };
+        return { tipo: 'conferir', pedidoId: l.pedidoId, volume: l.volume };
+    }
+
+    function marcarVolume(pedido, volume, usuarioNome, agora) {
+        if (!pedido.conferencia) pedido.conferencia = conferenciaVazia();
+        if (!Array.isArray(pedido.conferencia.volumes_conferidos)) pedido.conferencia.volumes_conferidos = [];
+        if (!Array.isArray(pedido.timeline)) pedido.timeline = [];
+        const lista = pedido.conferencia.volumes_conferidos;
+        if (lista.indexOf(volume) < 0) lista.push(volume);
+        lista.sort((a, b) => a - b);
+        const concluiu = pedido.volumes > 0 && lista.length >= pedido.volumes;
+        if (concluiu) {
+            pedido.conferencia.concluida_em = agora;
+            pedido.conferencia.conferido_por = usuarioNome;
+            pedido.timeline.push({
+                status: 'Conferência', data: agora,
+                label: 'Conferido na expedição por ' + usuarioNome + ' — ' + pedido.volumes + ' volume(s)'
+            });
+        }
+        return { concluiu: concluiu };
+    }
+
+    function zerarConferencia(pedido, motivo, agora) {
+        const havia = temConferenciaIniciada(pedido);
+        if (!havia) return false;
+        pedido.conferencia = conferenciaVazia();
+        if (!Array.isArray(pedido.timeline)) pedido.timeline = [];
+        pedido.timeline.push({ status: 'Conferência', data: agora, label: 'Conferência zerada: ' + motivo });
+        return true;
+    }
+
+    function alterarVolumes(pedido, novoTotal, agora) {
+        const antigo = pedido.volumes;
+        pedido.volumes = novoTotal;
+        if (antigo === novoTotal) return { zerou: false };
+        const zerou = zerarConferencia(pedido, 'volumes alterados de ' + antigo + ' para ' + novoTotal, agora);
+        return { zerou: zerou };
+    }
+
+    function marcacaoConferencia(pedido) {
+        const n = _lista(pedido).length;
+        if (!n) return null;
+        if (pedido.conferencia.concluida_em) return { texto: '✓ Conferido', cls: 'badge-conferido' };
+        return { texto: n + '/' + pedido.volumes + ' conferidos', cls: 'badge-conferindo' };
+    }
+
     const api = {
         montarCodigoVolume, lerCodigo, FORMATOS_ETIQUETA, CAMPOS_ETIQUETA_PEDIDO, TIPOS_ELEMENTO,
         modeloPadraoPedido, ajustarAoFormato, encaixarNaGrade, avisosLegibilidade, lerConfigEtiquetas,
-        ROTULOS_CAMPO, valoresEtiquetaPedido, pedidoExemplo, htmlEtiqueta
+        ROTULOS_CAMPO, valoresEtiquetaPedido, pedidoExemplo, htmlEtiqueta,
+        conferenciaVazia, avaliarLeitura, marcarVolume, zerarConferencia, alterarVolumes,
+        temConferenciaIniciada, marcacaoConferencia
     };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

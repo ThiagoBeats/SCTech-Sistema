@@ -136,3 +136,53 @@ test('htmlEtiqueta: valor ausente vira vazio, texto e escape de aspas', () => {
     assert.match(html, /A &quot;B&quot; &amp; C/);
     assert.match(html, /-webkit-line-clamp:/);
 });
+
+// ---- conferencia de volumes ----
+const ped = (extra) => Object.assign({ id: 26001, volumes: 3, conferencia: E.conferenciaVazia(), timeline: [] }, extra);
+
+test('avaliarLeitura cobre todos os casos', () => {
+    const p = ped(); const q = ped({ id: 26002 }); const semEtq = ped({ id: 26003, volumes: null });
+    const lista = [p, q, semEtq];
+    assert.strictEqual(E.avaliarLeitura('xx', null, lista).tipo, 'invalido');
+    assert.deepStrictEqual(E.avaliarLeitura('99999', null, lista), { tipo: 'nao_encontrado', pedidoId: 99999 });
+    assert.deepStrictEqual(E.avaliarLeitura('26001', null, lista), { tipo: 'abrir', pedidoId: 26001 });
+    assert.deepStrictEqual(E.avaliarLeitura('26003', null, lista), { tipo: 'sem_etiquetas', pedidoId: 26003 });
+    assert.deepStrictEqual(E.avaliarLeitura('26001-2-3', null, lista), { tipo: 'consulta', pedidoId: 26001 });
+    assert.deepStrictEqual(E.avaliarLeitura('26002-1-3', 26001, lista), { tipo: 'outro_pedido', pedidoId: 26002, ativoId: 26001 });
+    assert.deepStrictEqual(E.avaliarLeitura('26001-2-4', 26001, lista), { tipo: 'etiqueta_desatualizada', pedidoId: 26001 });
+    assert.deepStrictEqual(E.avaliarLeitura('26001-2-3', 26001, lista), { tipo: 'conferir', pedidoId: 26001, volume: 2 });
+    p.conferencia.volumes_conferidos = [2];
+    assert.deepStrictEqual(E.avaliarLeitura('26001-2-3', 26001, lista), { tipo: 'repetido', pedidoId: 26001, volume: 2 });
+    assert.deepStrictEqual(E.avaliarLeitura('26002', 26001, lista), { tipo: 'abrir', pedidoId: 26002 });
+});
+
+test('marcarVolume conclui no ultimo volume e registra na timeline', () => {
+    const p = ped();
+    assert.deepStrictEqual(E.marcarVolume(p, 3, 'Ana', 1000), { concluiu: false });
+    assert.deepStrictEqual(E.marcarVolume(p, 1, 'Ana', 2000), { concluiu: false });
+    assert.deepStrictEqual(E.marcacaoConferencia(p), { texto: '2/3 conferidos', cls: 'badge-conferindo' });
+    assert.deepStrictEqual(E.marcarVolume(p, 2, 'Ana', 3000), { concluiu: true });
+    assert.deepStrictEqual(p.conferencia, { volumes_conferidos: [1, 2, 3], concluida_em: 3000, conferido_por: 'Ana' });
+    assert.deepStrictEqual(p.timeline.at(-1), { status: 'Conferência', data: 3000, label: 'Conferido na expedição por Ana — 3 volume(s)' });
+    assert.deepStrictEqual(E.marcacaoConferencia(p), { texto: '✓ Conferido', cls: 'badge-conferido' });
+    assert.strictEqual(p.status, undefined, 'status nao e tocado');
+});
+
+test('alterarVolumes zera a conferencia so quando ha progresso e o total muda', () => {
+    const p = ped();
+    assert.deepStrictEqual(E.alterarVolumes(p, 4, 10), { zerou: false });
+    assert.strictEqual(p.volumes, 4);
+    E.marcarVolume(p, 1, 'Ana', 20);
+    assert.deepStrictEqual(E.alterarVolumes(p, 4, 30), { zerou: false });
+    assert.deepStrictEqual(E.alterarVolumes(p, 2, 40), { zerou: true });
+    assert.deepStrictEqual(p.conferencia, E.conferenciaVazia());
+    assert.deepStrictEqual(p.timeline.at(-1), { status: 'Conferência', data: 40, label: 'Conferência zerada: volumes alterados de 4 para 2' });
+});
+
+test('zerarConferencia sem progresso nao escreve na timeline; pedido antigo sem campos', () => {
+    const antigo = { id: 1 };
+    assert.strictEqual(E.zerarConferencia(antigo, 'x', 1), false);
+    assert.strictEqual(E.temConferenciaIniciada(antigo), false);
+    assert.strictEqual(E.marcacaoConferencia(antigo), null);
+    assert.strictEqual((antigo.timeline || []).length, 0);
+});
