@@ -189,10 +189,12 @@ function migrarPermissoesSalvas() {
     (db.papeis || []).forEach(p => {
         const antes = JSON.stringify(p.permissoes);
         p.permissoes = migrarPermissoesParaArvore(p.permissoes);
-        // Expedicao nasceu depois: papel salvo sem a chave herda o nivel de producao
+        // Expedicao nasceu depois: papel salvo sem a chave herda o nivel de producao,
+        // exceto Instalacao e Producao/Costura, que conferem volumes (igual a papeisPadrao)
         if (p.permissoes && typeof p.permissoes === 'object' && !p.permissoes.expedicao) {
             const prod = p.permissoes.producao;
-            p.permissoes.expedicao = { nivel: (prod && prod.nivel) || 'sem_acesso', acoes_restritas: [] };
+            const conferem = p.nome === 'Instalação' || p.nome === 'Produção/Costura';
+            p.permissoes.expedicao = { nivel: conferem ? 'completo' : ((prod && prod.nivel) || 'sem_acesso'), acoes_restritas: [] };
         }
         if (JSON.stringify(p.permissoes) !== antes) mudou = true;
     });

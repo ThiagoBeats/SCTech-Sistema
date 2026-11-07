@@ -163,3 +163,20 @@ test('timeline mostra o rotulo como texto, sem interpretar HTML', async ({ page 
     await expect(modal).toContainText('Conferido por <b>Zé</b>');
     await expect(modal.locator('b', { hasText: 'Zé' })).toHaveCount(0);
 });
+
+test('papeis salvos sem expedicao: Instalacao e Producao/Costura ganham completo, os outros herdam producao', async ({ page }) => {
+    await entrar(page, BASE, SEED);
+    await page.goto(BASE + '/index.html');
+    await page.evaluate(() => {
+        const pap = papeisPadrao().map(p => { delete p.permissoes.expedicao; return p; });
+        pap.push({ id: 9, nome: 'Conferente', permissoes: JSON.parse(JSON.stringify(pap.find(p => p.id === 5).permissoes)) });
+        localStorage.setItem('sc_pap', JSON.stringify(pap));
+    });
+    await page.reload();
+    await page.waitForFunction(() => typeof db !== 'undefined');
+    const pap = await page.evaluate(() => JSON.parse(localStorage.getItem('sc_pap')));
+    const nivel = nome => pap.find(p => p.nome === nome).permissoes.expedicao.nivel;
+    expect(nivel('Instalação')).toBe('completo');
+    expect(nivel('Produção/Costura')).toBe('completo');
+    expect(nivel('Conferente')).toBe('visualizar');
+});
