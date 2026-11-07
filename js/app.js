@@ -6302,6 +6302,7 @@ function _refrescarDocModalAtual() {
         ? gerarHTMLOS(_docModalAtual.pedidoId)
         : gerarHTMLProposta(_docModalAtual.pedidoId, _docModalAtual.dias || 15);
     iniciarAssinaturaPads(paper);
+    preencherCodigosDocumento(paper);
 }
 
 function abrirDocModal(htmlContent, titulo, extraToolbar) {
@@ -6324,6 +6325,7 @@ function abrirDocModal(htmlContent, titulo, extraToolbar) {
     const paper = document.getElementById('doc-modal-paper');
     paper.innerHTML = htmlContent;
     iniciarAssinaturaPads(paper);
+    preencherCodigosDocumento(paper);
     document.getElementById('doc-modal-topbar-actions').innerHTML =
         (extraToolbar || '') +
         `<button class="doc-modal-btn" onclick="imprimirDocModal()">🖨️ Imprimir / PDF</button>` +
@@ -6339,9 +6341,10 @@ function fecharDocModal() {
     _docModalAtual = null;
 }
 
-function imprimirDocModal() {
+async function imprimirDocModal() {
     const paper = document.getElementById('doc-modal-paper');
     if (!paper) return;
+    if (!await documentoProntoParaImprimir(paper)) return;
     let printRoot = document.getElementById('doc-print-root');
     if (!printRoot) {
         printRoot = document.createElement('div');
@@ -6473,6 +6476,7 @@ function gerarHTMLOS(pedidoId) {
             </div>
             <div class="os-meta">
                 <div class="os-meta-item"><span>OS Nº</span><strong>${formatPedidoId(ped.id)}</strong></div>
+                ${htmlCodigoDocumento(ped.id)}
                 <div class="os-meta-item"><span>Emissão</span><strong>${hoje}</strong></div>
                 ${ped.data_entrega ? `<div class="os-meta-item"><span>Previsão entrega</span><strong>${new Date(ped.data_entrega + 'T12:00:00').toLocaleDateString('pt-BR')}</strong></div>` : ''}
                 <div class="os-meta-item"><span>Status</span><strong>${normalizarStatus(ped.status)}</strong></div>
@@ -6495,6 +6499,7 @@ function renderOS() {
     _docModalAtual = { tipo: 'os', pedidoId };
     container.innerHTML = gerarHTMLOS(pedidoId);
     iniciarAssinaturaPads(container);
+    preencherCodigosDocumento(container);
 }
 
 // --- CONDIÇÕES GERAIS DA PROPOSTA ---
@@ -6571,7 +6576,7 @@ function gerarHTMLProposta(pedidoId, diasValidade) {
     return `
         <div class="proposta-header">
             <div class="proposta-logo">${buildEmpresaHeaderHTML(64)}</div>
-            <div class="proposta-info"><h2>PROPOSTA COMERCIAL</h2><p>Nº <strong>${formatPedidoId(ped.id)}</strong></p><p>Data de emissão: ${hoje}</p><p>Válida até: ${validade}</p></div>
+            <div class="proposta-info"><h2>PROPOSTA COMERCIAL</h2><p>Nº <strong>${formatPedidoId(ped.id)}</strong></p>${htmlCodigoDocumento(ped.id)}<p>Data de emissão: ${hoje}</p><p>Válida até: ${validade}</p></div>
         </div>
         <div class="proposta-cliente">
             <h3>Cliente</h3>
@@ -6618,6 +6623,7 @@ function renderProposta() {
     _docModalAtual = { tipo: 'proposta', pedidoId, dias: 15 };
     container.innerHTML = gerarHTMLProposta(pedidoId, 15);
     iniciarAssinaturaPads(container);
+    preencherCodigosDocumento(container);
 }
 
 // --- BACKUP / EXPORTAR ---
