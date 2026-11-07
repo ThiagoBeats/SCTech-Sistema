@@ -1943,3 +1943,19 @@ html[data-theme="dark"] {
 .etq-vol-campos { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
 .etq-vol-linha { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .etq-vol-linha input[type=number] { width: 72px; padding: 4px 6px; margin-left: auto; }
+
+/* --- Expedicao (conferencia por scanner) --- */
+.exp-leitor label { display:block; font-size:12px; font-weight:600; color:#8F8F8F; text-transform:uppercase; letter-spacing:.4px; margin-bottom:8px; }
+.exp-leitura { width:100%; font-size:28px; padding:16px 18px; border:2px solid var(--dark); border-radius:10px; background:var(--white); color:var(--dark); box-sizing:border-box; }
+.exp-resultado { margin-top:14px; padding:14px 18px; border-radius:10px; font-size:20px; font-weight:700; }
+.exp-resultado:empty { display:none; }
+.exp-resultado.ok    { background:#E3F7E2; color:#0F6B0D; border:2px solid #8FD98D; }
+.exp-resultado.erro  { background:#FDE8E5; color:var(--danger); border:2px solid #F79B90; }
+.exp-resultado.aviso { background:#FFF4D6; color:#8A5A00; border:2px solid #F0C969; }
+.exp-pedido-topo { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:10px; }
+.exp-pedido-num { font-size:22px; font-weight:800; color:var(--dark); }
+.exp-pedido-cli { font-size:16px; color:var(--dark); }
+.exp-pedido-info { display:grid; gap:4px; font-size:14px; color:var(--dark); margin-bottom:14px; }
+.exp-volumes { display:flex; flex-wrap:wrap; gap:10px; }
+.exp-vol { padding:10px 16px; border:2px solid #E0E0E0; border-radius:8px; font-size:16px; font-weight:600; color:var(--dark); }
+.exp-vol.feito { border-color:#8FD98D; background:#E3F7E2; color:#0F6B0D; }

@@ -11,6 +11,7 @@ const MODULOS_PERMISSAO = [
         { key: 'agenda',   label: 'Agenda de Instalações' },
         { key: 'medicoes', label: 'Agenda de Medições' },
     ]},
+    { key: 'expedicao',     label: 'Expedição',          subs: [] },
     { key: 'estoque',       label: 'Estoque',            subs: [
         { key: 'tecidos',   label: 'Tecidos' },
         { key: 'materiais', label: 'Materiais' },
@@ -116,6 +117,7 @@ function papeisPadrao() {
             pedidos:   { nivel: 'visualizar', acoes_restritas: ['mudar_status'] },
             clientes:  'visualizar',
             producao:  'completo',
+            expedicao: 'completo',
             estoque:   'visualizar',
             catalogo:  'visualizar',
         })},
@@ -125,6 +127,7 @@ function papeisPadrao() {
             clientes:          'visualizar',
             producao:          'visualizar',
             'producao.agenda': 'completo',
+            expedicao:         'completo',
         })},
     ];
 }
@@ -186,6 +189,11 @@ function migrarPermissoesSalvas() {
     (db.papeis || []).forEach(p => {
         const antes = JSON.stringify(p.permissoes);
         p.permissoes = migrarPermissoesParaArvore(p.permissoes);
+        // Expedicao nasceu depois: papel salvo sem a chave herda o nivel de producao
+        if (p.permissoes && typeof p.permissoes === 'object' && !p.permissoes.expedicao) {
+            const prod = p.permissoes.producao;
+            p.permissoes.expedicao = { nivel: (prod && prod.nivel) || 'sem_acesso', acoes_restritas: [] };
+        }
         if (JSON.stringify(p.permissoes) !== antes) mudou = true;
     });
     (db.usuarios || []).forEach(u => {
@@ -617,6 +625,7 @@ const NAV_ICON_PATHS = {
     home: '<path d="M4 12 12 5l8 7"/><path d="M6 11v8a1 1 0 0 0 1 1h3v-5h4v5h3a1 1 0 0 0 1-1v-8"/>',
     pedidos: '<rect x="5" y="3" width="14" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="13" y2="16"/>',
     producao: '<circle cx="6" cy="6" r="2.1"/><circle cx="18" cy="6" r="2.1"/><circle cx="12" cy="18" r="2.1"/><line x1="7.7" y1="7.6" x2="10.6" y2="16"/><line x1="16.3" y1="7.6" x2="13.4" y2="16"/><line x1="8.1" y1="6" x2="15.9" y2="6"/>',
+    expedicao: '<path d="M12 3 20 7.5v9L12 21 4 16.5v-9L12 3Z"/><line x1="4" y1="7.5" x2="12" y2="12"/><line x1="20" y1="7.5" x2="12" y2="12"/><path d="M9 16.5l2 2 4-4.5"/>',
     estoque: '<path d="M12 3 20 7.5v9L12 21 4 16.5v-9L12 3Z"/><line x1="4" y1="7.5" x2="12" y2="12"/><line x1="20" y1="7.5" x2="12" y2="12"/><line x1="12" y1="12" x2="12" y2="21"/>',
     clientes: '<circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><circle cx="17" cy="8.5" r="2.3"/><path d="M15.3 14.7c2.4.5 4.2 2.4 4.2 5.3"/>',
     catalogo: '<path d="M11.5 3.5H5A1.5 1.5 0 0 0 3.5 5v6.5a1.5 1.5 0 0 0 .44 1.06l8.5 8.5a1.5 1.5 0 0 0 2.12 0l6.5-6.5a1.5 1.5 0 0 0 0-2.12l-8.5-8.5a1.5 1.5 0 0 0-1.06-.44Z"/><circle cx="8" cy="8" r="1.3"/>',
@@ -644,6 +653,7 @@ const SIDEBAR_MODULOS = [
     { href: 'index.html',       icon: 'home',         label: 'Página Inicial',    permModulo: 'inicio' },
     { href: 'pedidos.html',     icon: 'pedidos',      label: 'Pedidos',           permModulo: 'pedidos' },
     { href: 'pcp.html',         icon: 'producao',     label: 'Produção',          permModulo: 'producao' },
+    { href: 'expedicao.html',   icon: 'expedicao',    label: 'Expedição',         permModulo: 'expedicao' },
     { href: 'estoque.html',     icon: 'estoque',      label: 'Estoque',           permModulo: 'estoque' },
     { href: 'clientes.html',    icon: 'clientes',     label: 'Clientes',          permModulo: 'clientes' },
     { href: 'catalogo.html',    icon: 'catalogo',     label: 'Cadastro/Catálogo', permModulo: 'catalogo' },
@@ -875,6 +885,7 @@ const PAGINA_MODULO = {
     'pedidos.html':       'pedidos',
     'pedido.html':        'pedidos',
     'pcp.html':           'producao',
+    'expedicao.html':     'expedicao',
     'estoque.html':       'estoque',
     'clientes.html':      'clientes',
     'catalogo.html':      'catalogo',
