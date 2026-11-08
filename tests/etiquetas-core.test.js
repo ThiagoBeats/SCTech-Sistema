@@ -3,19 +3,34 @@ const test = require('node:test');
 const assert = require('node:assert');
 const E = require('../js/etiquetas-core.js');
 
-test('montarCodigoVolume usa so digitos e hifen', () => {
-    assert.strictEqual(E.montarCodigoVolume(26001, 2, 3), '26001-2-3');
-    assert.strictEqual(E.montarCodigoVolume(26001, 1, 1), '26001-1-1');
+test('montarCodigoVolume: pedido + volume e total com 2 digitos, so numeros', () => {
+    assert.strictEqual(E.montarCodigoVolume(26001, 2, 3), '260010203');
+    assert.strictEqual(E.montarCodigoVolume(26001, 1, 4), '260010104');
+    assert.strictEqual(E.montarCodigoVolume(26001, 12, 99), '260011299');
 });
 
 test('lerCodigo reconhece documento e volume', () => {
     assert.deepStrictEqual(E.lerCodigo('26001'), { tipo: 'pedido', pedidoId: 26001 });
-    assert.deepStrictEqual(E.lerCodigo(' 26001-2-3 \r\n'), { tipo: 'volume', pedidoId: 26001, volume: 2, total: 3 });
+    assert.deepStrictEqual(E.lerCodigo(' 260010203 \r\n'), { tipo: 'volume', pedidoId: 26001, volume: 2, total: 3 });
+    assert.deepStrictEqual(E.lerCodigo('260011299'), { tipo: 'volume', pedidoId: 26001, volume: 12, total: 99 });
     assert.deepStrictEqual(E.lerCodigo('026001'), { tipo: 'pedido', pedidoId: 26001 });
+    // etiquetas impressas no formato antigo, com hifen, continuam valendo
+    assert.deepStrictEqual(E.lerCodigo('26001-2-3'), { tipo: 'volume', pedidoId: 26001, volume: 2, total: 3 });
+});
+
+test('lerCodigo com a lista de pedidos: numero de pedido existente vence a divisao', () => {
+    const existe = id => [26001, 9999, 123456789].indexOf(id) >= 0;
+    assert.deepStrictEqual(E.lerCodigo('123456789', existe), { tipo: 'pedido', pedidoId: 123456789 });
+    assert.deepStrictEqual(E.lerCodigo('260010203', existe), { tipo: 'volume', pedidoId: 26001, volume: 2, total: 3 });
+    // pedido antigo com numero curto
+    assert.deepStrictEqual(E.lerCodigo('99990101', existe), { tipo: 'volume', pedidoId: 9999, volume: 1, total: 1 });
+    // pedido que nao existe: documento curto continua sendo documento
+    assert.deepStrictEqual(E.lerCodigo('26002', existe), { tipo: 'pedido', pedidoId: 26002 });
+    assert.deepStrictEqual(E.lerCodigo('260020101', existe), { tipo: 'volume', pedidoId: 26002, volume: 1, total: 1 });
 });
 
 test('lerCodigo recusa lixo e volume fora do total', () => {
-    for (const t of ['', '   ', 'abc', '26001-0-3', '26001-4-3', '26001-1-0', '26001-2', '26001/2/3', null, undefined]) {
+    for (const t of ['', '   ', 'abc', '260010003', '260010403', '260010100', '26001-0-3', '26001-4-3', '26001-1-0', '26001-2', '26001/2/3', '26001 0203', null, undefined]) {
         assert.deepStrictEqual(E.lerCodigo(t), { tipo: 'invalido' }, JSON.stringify(t));
     }
 });
@@ -57,12 +72,12 @@ test('encaixarNaGrade arredonda para 1 mm', () => {
 });
 
 test('avisosLegibilidade de barras e QR', () => {
-    // '26001-2-3' tem 9 caracteres: 11*(9+2)+13+20 = 154 modulos; 0,25 mm => 38,5 mm
-    assert.strictEqual(E.avisosLegibilidade({ tipo: 'barcode', w_mm: 45, h_mm: 12 }, '26001-2-3').length, 0);
-    assert.strictEqual(E.avisosLegibilidade({ tipo: 'barcode', w_mm: 30, h_mm: 12 }, '26001-2-3').length, 1);
-    assert.strictEqual(E.avisosLegibilidade({ tipo: 'barcode', w_mm: 45, h_mm: 6 }, '26001-2-3').length, 1);
-    assert.strictEqual(E.avisosLegibilidade({ tipo: 'qrcode', w_mm: 20, h_mm: 20 }, '26001-2-3').length, 0);
-    assert.strictEqual(E.avisosLegibilidade({ tipo: 'qrcode', w_mm: 12, h_mm: 20 }, '26001-2-3').length, 1);
+    // '260010203' tem 9 caracteres: 11*(9+2)+13+20 = 154 modulos; 0,25 mm => 38,5 mm
+    assert.strictEqual(E.avisosLegibilidade({ tipo: 'barcode', w_mm: 45, h_mm: 12 }, '260010203').length, 0);
+    assert.strictEqual(E.avisosLegibilidade({ tipo: 'barcode', w_mm: 30, h_mm: 12 }, '260010203').length, 1);
+    assert.strictEqual(E.avisosLegibilidade({ tipo: 'barcode', w_mm: 45, h_mm: 6 }, '260010203').length, 1);
+    assert.strictEqual(E.avisosLegibilidade({ tipo: 'qrcode', w_mm: 20, h_mm: 20 }, '260010203').length, 0);
+    assert.strictEqual(E.avisosLegibilidade({ tipo: 'qrcode', w_mm: 12, h_mm: 20 }, '260010203').length, 1);
     assert.strictEqual(E.avisosLegibilidade({ tipo: 'campo', campo: 'cliente', w_mm: 5, h_mm: 5 }, 'x').length, 0);
 });
 
@@ -147,12 +162,12 @@ test('avaliarLeitura cobre todos os casos', () => {
     assert.deepStrictEqual(E.avaliarLeitura('99999', null, lista), { tipo: 'nao_encontrado', pedidoId: 99999 });
     assert.deepStrictEqual(E.avaliarLeitura('26001', null, lista), { tipo: 'abrir', pedidoId: 26001 });
     assert.deepStrictEqual(E.avaliarLeitura('26003', null, lista), { tipo: 'sem_etiquetas', pedidoId: 26003 });
-    assert.deepStrictEqual(E.avaliarLeitura('26001-2-3', null, lista), { tipo: 'consulta', pedidoId: 26001 });
-    assert.deepStrictEqual(E.avaliarLeitura('26002-1-3', 26001, lista), { tipo: 'outro_pedido', pedidoId: 26002, ativoId: 26001 });
-    assert.deepStrictEqual(E.avaliarLeitura('26001-2-4', 26001, lista), { tipo: 'etiqueta_desatualizada', pedidoId: 26001 });
-    assert.deepStrictEqual(E.avaliarLeitura('26001-2-3', 26001, lista), { tipo: 'conferir', pedidoId: 26001, volume: 2 });
+    assert.deepStrictEqual(E.avaliarLeitura('260010203', null, lista), { tipo: 'consulta', pedidoId: 26001 });
+    assert.deepStrictEqual(E.avaliarLeitura('260020103', 26001, lista), { tipo: 'outro_pedido', pedidoId: 26002, ativoId: 26001 });
+    assert.deepStrictEqual(E.avaliarLeitura('260010204', 26001, lista), { tipo: 'etiqueta_desatualizada', pedidoId: 26001 });
+    assert.deepStrictEqual(E.avaliarLeitura('260010203', 26001, lista), { tipo: 'conferir', pedidoId: 26001, volume: 2 });
     p.conferencia.volumes_conferidos = [2];
-    assert.deepStrictEqual(E.avaliarLeitura('26001-2-3', 26001, lista), { tipo: 'repetido', pedidoId: 26001, volume: 2 });
+    assert.deepStrictEqual(E.avaliarLeitura('260010203', 26001, lista), { tipo: 'repetido', pedidoId: 26001, volume: 2 });
     assert.deepStrictEqual(E.avaliarLeitura('26002', 26001, lista), { tipo: 'abrir', pedidoId: 26002 });
 });
 
@@ -218,6 +233,6 @@ test('modeloTemCodigo exige barras ou QR', () => {
 test('avaliarLeitura nao abre conferencia de pedido em Orcamento', () => {
     const lista = [ped({ id: 26005, status: 'Orçamento' })];
     assert.deepStrictEqual(E.avaliarLeitura('26005', null, lista), { tipo: 'sem_etiquetas', pedidoId: 26005 });
-    assert.deepStrictEqual(E.avaliarLeitura('26005-1-3', null, lista), { tipo: 'sem_etiquetas', pedidoId: 26005 });
-    assert.deepStrictEqual(E.avaliarLeitura('26005-1-3', 26005, lista), { tipo: 'sem_etiquetas', pedidoId: 26005 });
+    assert.deepStrictEqual(E.avaliarLeitura('260050103', null, lista), { tipo: 'sem_etiquetas', pedidoId: 26005 });
+    assert.deepStrictEqual(E.avaliarLeitura('260050103', 26005, lista), { tipo: 'sem_etiquetas', pedidoId: 26005 });
 });

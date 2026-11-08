@@ -3,24 +3,48 @@
 // So funcoes puras — sem DOM, sem db, sem localStorage — para rodar em `node --test`.
 (function (raiz) {
 
-    const REGEX_CODIGO = /^(\d+)(?:-(\d+)-(\d+))?$/;
+    // Formato atual: so digitos. Formato antigo (com hifen) continua sendo lido,
+    // porque pode haver pacote com etiqueta impressa antes da mudanca.
+    const REGEX_DIGITOS = /^\d+$/;
+    const REGEX_ANTIGO = /^(\d+)-(\d+)-(\d+)$/;
+    const MAX_VOLUMES = 99;
+    const DIGITOS_VOLUME = 4;        // 2 do volume + 2 do total
+    const MIN_DIGITOS_VOLUME = 9;    // pedido com 5 digitos (ano + sequencial) + 4
 
-    // Codigo do volume: numero do pedido, volume e total de volumes separados por hifen.
+    const _dois = n => String(n).padStart(2, '0');
+
+    // Codigo do volume: numero do pedido, volume (2 digitos) e total (2 digitos).
+    // Ex.: pedido 26001, volume 1 de 4 => 260010104. Sem separador, facil de digitar.
     function montarCodigoVolume(pedidoId, volume, total) {
-        return pedidoId + '-' + volume + '-' + total;
+        return String(pedidoId) + _dois(volume) + _dois(total);
+    }
+
+    function _volume(pedidoId, volume, total) {
+        if (volume < 1 || total < 1 || total > MAX_VOLUMES || volume > total) return { tipo: 'invalido' };
+        return { tipo: 'volume', pedidoId, volume, total };
     }
 
     // Le o texto de um codigo (digitado ou lido por leitor). Retorna sempre um objeto com `tipo`.
-    function lerCodigo(texto) {
+    // `existePedido(id)` (opcional) desfaz a ambiguidade: um numero que e de um pedido
+    // existente e o documento; senao, os 4 ultimos digitos sao volume e total.
+    // Sem a funcao: ate 8 digitos e documento, 9 ou mais e volume.
+    function lerCodigo(texto, existePedido) {
         if (texto === null || texto === undefined) return { tipo: 'invalido' };
-        const m = REGEX_CODIGO.exec(String(texto).trim());
-        if (!m) return { tipo: 'invalido' };
-        const pedidoId = parseInt(m[1], 10);
-        if (m[2] === undefined) return { tipo: 'pedido', pedidoId };
-        const volume = parseInt(m[2], 10);
-        const total = parseInt(m[3], 10);
-        if (volume < 1 || total < 1 || volume > total) return { tipo: 'invalido' };
-        return { tipo: 'volume', pedidoId, volume, total };
+        const t = String(texto).trim();
+        const antigo = REGEX_ANTIGO.exec(t);
+        if (antigo) return _volume(parseInt(antigo[1], 10), parseInt(antigo[2], 10), parseInt(antigo[3], 10));
+        if (!REGEX_DIGITOS.test(t)) return { tipo: 'invalido' };
+        const inteiro = parseInt(t, 10);
+        const corte = t.length - DIGITOS_VOLUME;
+        const dividido = corte > 0
+            ? _volume(parseInt(t.slice(0, corte), 10), parseInt(t.slice(corte, corte + 2), 10), parseInt(t.slice(corte + 2), 10))
+            : { tipo: 'invalido' };
+        if (typeof existePedido === 'function') {
+            if (existePedido(inteiro)) return { tipo: 'pedido', pedidoId: inteiro };
+            if (dividido.tipo === 'volume' && existePedido(dividido.pedidoId)) return dividido;
+        }
+        if (t.length >= MIN_DIGITOS_VOLUME) return dividido;
+        return { tipo: 'pedido', pedidoId: inteiro };
     }
 
     const FORMATOS_ETIQUETA = [
@@ -278,7 +302,7 @@
     }
 
     function avaliarLeitura(texto, ativoId, pedidos) {
-        const l = lerCodigo(texto);
+        const l = lerCodigo(texto, id => (pedidos || []).some(p => p.id == id));
         if (l.tipo === 'invalido') return { tipo: 'invalido' };
         const ped = (pedidos || []).find(p => p.id == l.pedidoId);
         if (!ped) return { tipo: 'nao_encontrado', pedidoId: l.pedidoId };

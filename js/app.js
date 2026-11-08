@@ -8296,6 +8296,12 @@ function gerarHTMLPedidoCompra(id) {
                 <div style="margin-top:4px"><span class="status-tag ${pc.status==='Recebido'?'st-faturado':pc.status==='Enviado'?'st-costura':'st-orcamento'}">${pc.status}</span></div>
             </div>
         </div>
+        ${pc.pedido_venda_id ? `<div class="pc-section pc-cliente">
+            <div class="pc-section-title">Cliente</div>
+            <table class="pc-table">
+                <tr><td class="pc-th">Cliente</td><td><strong>${escapeHtml(_pcClienteOrigem(pc) || '—')}</strong></td><td class="pc-th" style="width:130px">Pedido de venda</td><td>#${escapeHtml(String(formatPedidoId(pc.pedido_venda_id)))}</td></tr>
+            </table>
+        </div>` : ''}
         <div class="pc-section">
             <div class="pc-section-title">Fornecedor</div>
             ${pc.fornecedor_id ? `<table class="pc-table">

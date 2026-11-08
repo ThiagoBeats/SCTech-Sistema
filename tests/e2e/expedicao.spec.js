@@ -25,9 +25,9 @@ async function abrir(page) {
 
 async function conferenciaCompleta(page) {
     await ler(page, '26001');
-    await ler(page, '26001-1-3');
-    await ler(page, '26001-3-3');
-    await ler(page, '26001-2-3');
+    await ler(page, '260010103');
+    await ler(page, '260010303');
+    await ler(page, '260010203');
     await expect(page.locator('#exp-resultado')).toContainText('✅ Pedido #26001 conferido: 3 volume(s).');
     await expect(page.locator('.exp-vol', { hasText: '✅' })).toHaveCount(3);
     const p = await lerPedido(page, 26001);
@@ -44,7 +44,7 @@ test('conferencia completa', async ({ page }) => {
 test('pacote de outro pedido', async ({ page }) => {
     await abrir(page);
     await ler(page, '26001');
-    await ler(page, '26002-1-2');
+    await ler(page, '260020102');
     await expect(page.locator('#exp-resultado')).toContainText('Este pacote é do pedido #26002, não do #26001');
     await expect(page.locator('#exp-resultado')).toHaveClass(/erro/);
 });
@@ -52,8 +52,8 @@ test('pacote de outro pedido', async ({ page }) => {
 test('repetido e desconhecido', async ({ page }) => {
     await abrir(page);
     await ler(page, '26001');
-    await ler(page, '26001-1-3');
-    await ler(page, '26001-1-3');
+    await ler(page, '260010103');
+    await ler(page, '260010103');
     await expect(page.locator('#exp-resultado')).toContainText('já foi conferido');
     await ler(page, '99999');
     await expect(page.locator('#exp-resultado')).toContainText('Pedido #99999 não encontrado.');
@@ -62,13 +62,13 @@ test('repetido e desconhecido', async ({ page }) => {
 test('etiqueta desatualizada', async ({ page }) => {
     await abrir(page);
     await ler(page, '26001');
-    await ler(page, '26001-1-2');
+    await ler(page, '260010102');
     await expect(page.locator('#exp-resultado')).toContainText('Etiqueta desatualizada');
 });
 
 test('consulta sem pedido ativo', async ({ page }) => {
     await abrir(page);
-    await ler(page, '26002-1-2');
+    await ler(page, '260020102');
     await expect(page.locator('#exp-resultado')).toContainText('Consulta: pedido #26002');
     await expect(page.locator('#exp-pedido')).toContainText('Joana Lima');
 });
@@ -76,7 +76,7 @@ test('consulta sem pedido ativo', async ({ page }) => {
 test('progresso parcial sobrevive e aparece no card', async ({ page }) => {
     await abrir(page);
     await ler(page, '26001');
-    await ler(page, '26001-1-3');
+    await ler(page, '260010103');
     await expect(page.locator('.exp-vol', { hasText: '✅' })).toHaveCount(1);
     await page.reload();
     await page.waitForSelector('#exp-leitura');
@@ -105,7 +105,7 @@ test('foco volta ao campo depois de Ver OS', async ({ page }) => {
     await page.locator('#doc-modal-overlay.active').waitFor();
     await page.locator('#doc-modal-overlay button', { hasText: 'Fechar' }).first().click();
     await expect(page.locator('#doc-modal-overlay.active')).toHaveCount(0);
-    await page.keyboard.type('26001-1-3');
+    await page.keyboard.type('260010103');
     await page.keyboard.press('Enter');
     await expect(page.locator('#exp-resultado')).toContainText('Volume 1/3 conferido.');
 });
@@ -143,7 +143,7 @@ test('le dados atuais de outra aba e nao apaga o que ela gravou', async ({ page 
     });
     await ler(page, '26001');
     await expect(page.locator('#exp-resultado')).toContainText('bipe os 4 volume(s)');
-    await ler(page, '26001-1-4');
+    await ler(page, '260010104');
     await expect(page.locator('#exp-resultado')).toContainText('Volume 1/4 conferido.');
     const cli = await page.evaluate(() => JSON.parse(localStorage.getItem('sc_cli')));
     expect(cli.map(c => c.nome)).toContain('Cliente Outra Aba');
@@ -206,7 +206,7 @@ async function abrirComImpressao(page) {
 test('pedido lido: Abrir pedido vai para a tela do pedido, e voltar mantem a conferencia', async ({ page }) => {
     await abrirComImpressao(page);
     await ler(page, '26001');
-    await ler(page, '26001-1-3');
+    await ler(page, '260010103');
     await expect(page.locator('#exp-imprimir-etiquetas')).toBeVisible();
     await page.click('#exp-abrir-pedido');
     await page.waitForURL(/pedido\.html/);
@@ -226,7 +226,7 @@ test('pedido sem etiquetas: imprimir pela Expedicao ja inicia a conferencia', as
     expect(await page.evaluate(() => window.__etq.length)).toBe(2);
     await expect(page.locator('#exp-resultado')).toContainText('Pedido #26003: bipe os 2 volume(s).');
     await expect(page.locator('.exp-vol')).toHaveCount(2);
-    await page.keyboard.type('26003-1-2');
+    await page.keyboard.type('260030102');
     await page.keyboard.press('Enter');
     await expect(page.locator('#exp-resultado')).toContainText('Volume 1/2 conferido.');
 });
@@ -245,7 +245,7 @@ test('cancelar a impressao devolve a leitura ao campo', async ({ page }) => {
     await page.locator('#etq-modal-volumes .etq-vol-box').click({ position: { x: 5, y: 5 } });
     expect(await page.evaluate(() => document.activeElement.id)).not.toBe('exp-leitura');
     await page.click('#etq-btn-cancelar');
-    await page.keyboard.type('26001-1-3');
+    await page.keyboard.type('260010103');
     await page.keyboard.press('Enter');
     await expect(page.locator('#exp-resultado')).toContainText('Volume 1/3 conferido.');
 });

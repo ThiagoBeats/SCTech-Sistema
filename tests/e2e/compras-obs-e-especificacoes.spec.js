@@ -254,3 +254,22 @@ test('acionamento: altura so aparece com acionamento e e gravada', async ({ page
     await page.evaluate(() => syncAmbientesFromDOM());
     expect(await page.evaluate(() => pedidoDraft.ambientes[0])).toMatchObject({ acionamento: 'sem', altura_acionamento: null });
 });
+
+// --- Cliente no topo do PDF da compra importada -----------------------------
+
+test('PDF da compra importada mostra o cliente antes do fornecedor', async ({ page }) => {
+    await abrirForn(page, 'pedidos', {
+        sc_ped: [pedVenda(26010, 'Na Costura')],
+        sc_pc: [pc(26001, 'Rascunho'), pc(26002, 'Rascunho', { pedido_venda_id: 26010, pedido_venda_cliente: 'Pedro Alves' })],
+    });
+    await page.evaluate(() => abrirPedidoCompra(26002));
+    const doc = page.locator('#doc-modal-paper');
+    await expect(doc.locator('.pc-cliente')).toContainText('Pedro Alves');
+    await expect(doc.locator('.pc-cliente')).toContainText('#26010');
+    const titulos = await doc.locator('.pc-section-title').allTextContents();
+    expect(titulos.slice(0, 2)).toEqual(['Cliente', 'Fornecedor']);
+    // compra feita a mao, sem pedido de venda: sem a secao
+    await page.evaluate(() => abrirPedidoCompra(26001));
+    await expect(doc).toContainText('PEDIDO DE COMPRA');
+    await expect(doc.locator('.pc-cliente')).toHaveCount(0);
+});

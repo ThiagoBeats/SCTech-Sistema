@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Expedição - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261107b">
+    <link rel="stylesheet" href="css/style.css?v=20261107c">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
@@ -18,18 +18,18 @@
         </div>
 
         <div class="card exp-leitor">
-            <label for="exp-leitura">Bipe o pedido impresso e depois cada volume</label>
-            <input type="text" id="exp-leitura" class="exp-leitura" autocomplete="off" autofocus placeholder="Aguardando leitura…">
+            <label for="exp-leitura">Bipe ou digite o código do pedido impresso e depois o de cada volume</label>
+            <input type="text" id="exp-leitura" class="exp-leitura" autocomplete="off" autofocus placeholder="Bipe ou digite o código e tecle Enter">
             <div id="exp-resultado" class="exp-resultado"></div>
         </div>
 
         <div class="card exp-pedido" id="exp-pedido" style="display:none"></div>
     </main>
 
-    <script src="js/etiquetas-core.js?v=20261107b"></script>
-    <script src="js/etiquetas-render.js?v=20261107b"></script>
-    <script src="js/app.js?v=20261107b"></script>
-    <script src="js/expedicao.js?v=20261107b"></script>
+    <script src="js/etiquetas-core.js?v=20261107c"></script>
+    <script src="js/etiquetas-render.js?v=20261107c"></script>
+    <script src="js/app.js?v=20261107c"></script>
+    <script src="js/expedicao.js?v=20261107c"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() { iniciarExpedicao(); });
     </script>
