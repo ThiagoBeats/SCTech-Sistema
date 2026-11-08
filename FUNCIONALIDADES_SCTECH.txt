@@ -1163,6 +1163,10 @@ Regras de conferência ligadas aos volumes:
   - Código do volume (etiqueta): número do pedido + volume com 2 dígitos +
     total de volumes com 2 dígitos, sem separador. Ex.: 260010104 = pedido
     26001, volume 01 de 04. O texto legível da etiqueta mostra "Volume 1/4"
+  - O código vem escrito em números embaixo do código de barras (ou embaixo
+    do QR Code, quando a etiqueta não tem barras), para o conferente ler e
+    digitar na Expedição sem leitor. Por isso o código de barras pede pelo
+    menos 11 mm de altura (8 mm de barras + o número)
   - Máximo de 99 volumes por pedido
   - Só dígitos: fácil de digitar à mão na Expedição quando não há leitor, e
     os scanners USB (que emulam teclado) leem igual nos layouts ABNT2 e US

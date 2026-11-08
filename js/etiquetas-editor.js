@@ -118,7 +118,7 @@ function iniciarEditorEtiquetas() {
 
 function _etqCarregarCodigos() {
     garantirLibsCodigo().then(() => {
-        _etq.svgs = { barcode: svgCodigoBarras(_etq.codigo), qrcode: svgQrCode(_etq.codigo) };
+        _etq.svgs = { barcode: svgCodigoBarras(_etq.codigo), qrcode: svgQrCode(_etq.codigo), texto: _etq.codigo };
         document.getElementById('etq-falha').hidden = true;
         _etqRenderPalco();
     }).catch(() => {
@@ -454,6 +454,6 @@ async function imprimirTesteEtiqueta() {
     const logo = emp.logo_base64 || new URL('images/logo.png', location.href).href;
     const valores = EtiquetasCore.valoresEtiquetaPedido(ex.pedido, ex.cliente, 1, 3, logo);
     const cod = EtiquetasCore.montarCodigoVolume(ex.pedido.id, 1, 3);
-    const html = EtiquetasCore.htmlEtiqueta(_etq.modelo, valores, { barcode: svgCodigoBarras(cod), qrcode: svgQrCode(cod) });
+    const html = EtiquetasCore.htmlEtiqueta(_etq.modelo, valores, { barcode: svgCodigoBarras(cod), qrcode: svgQrCode(cod), texto: cod });
     imprimirEtiquetasHTML([html], _etq.modelo.largura_mm, _etq.modelo.altura_mm);
 }

@@ -164,7 +164,7 @@ async function imprimirEtiquetasDoPedido(pedidoId, somenteVolume) {
     const paginas = vols.map(v => {
         const cod = C.montarCodigoVolume(ped.id, v, total);
         const valores = C.valoresEtiquetaPedido(ped, cliente, v, total, logo);
-        return C.htmlEtiqueta(modelo, valores, { barcode: svgCodigoBarras(cod), qrcode: svgQrCode(cod) });
+        return C.htmlEtiqueta(modelo, valores, { barcode: svgCodigoBarras(cod), qrcode: svgQrCode(cod), texto: cod });
     });
     imprimirEtiquetasHTML(paginas, modelo.largura_mm, modelo.altura_mm);
     return true;

@@ -29,6 +29,8 @@ test('imprime 3 volumes e salva a quantidade', async ({ page }) => {
     const etq = await page.evaluate(() => window.__etq);
     expect(etq[1]).toContain('VOLUME 2/3');
     expect(etq[1]).toContain('PEDIDO #26001');
+    // o codigo vem escrito embaixo das barras, para quem confere digitando
+    expect(etq[1]).toContain('260010203');
     const html = await page.evaluate(() => window.__etqHtml);
     expect(html).toContain('size: 100mm 50mm');
     expect(html).toContain('<svg');

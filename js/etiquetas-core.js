@@ -144,7 +144,8 @@
             const modulos = 11 * (n + 2) + 13 + 20;
             const min = modulos * 0.25;
             if (elemento.w_mm < min) avisos.push(`Código de barras estreito demais para o scanner: use pelo menos ${Math.ceil(min)} mm de largura.`);
-            if (elemento.h_mm < 8) avisos.push('Código de barras baixo demais: use pelo menos 8 mm de altura.');
+            // 8 mm de barras + o numero escrito embaixo
+            if (elemento.h_mm < 11) avisos.push('Código de barras baixo demais: use pelo menos 11 mm de altura.');
         } else if (elemento.tipo === 'qrcode') {
             if (Math.min(elemento.w_mm, elemento.h_mm) < 15) avisos.push('QR Code pequeno demais para o scanner: use pelo menos 15 mm.');
         }
@@ -249,7 +250,12 @@
     function htmlEtiqueta(modelo, valores, svgs) {
         const v = valores || {};
         const s = svgs || {};
-        const partes = (modelo.elementos || []).filter(el => el && typeof el === 'object').map(el => {
+        const elementos = (modelo.elementos || []).filter(el => el && typeof el === 'object');
+        // O codigo escrito (para digitar sem leitor) vai embaixo das barras; sem barras, embaixo do QR.
+        const texto = txt(s.texto);
+        const portaTexto = texto === '' ? null
+            : (elementos.find(el => el.tipo === 'barcode') || elementos.find(el => el.tipo === 'qrcode') || null);
+        const partes = elementos.map(el => {
             const fonte = el.fonte_pt || 10;
             // geometria corrompida nao pode quebrar o CSS: vira 0
             let estilo = 'position:absolute;left:' + (Number(el.x_mm) || 0) + 'mm;top:' + (Number(el.y_mm) || 0) +
@@ -280,11 +286,24 @@
                 conteudo = s[el.tipo] ||
                     '<div class="etq-cod-ph" style="width:100%;height:100%;box-sizing:border-box;border:0.3mm dashed #888;' +
                     'display:flex;align-items:center;justify-content:center;font-size:7pt;color:#666">código</div>';
+                if (el === portaTexto) conteudo = _comTextoDoCodigo(conteudo, texto, Number(el.w_mm) || 0, Number(el.h_mm) || 0);
             }
             return '<div data-id="' + esc(el.id) + '" style="' + estilo + '">' + conteudo + '</div>';
         });
         return '<div class="etq" style="position:relative;width:' + modelo.largura_mm + 'mm;height:' + modelo.altura_mm +
             'mm;overflow:hidden;background:#fff;color:#000;font-family:Arial,sans-serif">' + partes.join('') + '</div>';
+    }
+
+    // Codigo + numero legivel embaixo. A fonte cabe na largura e fica em ate 1/4 da altura,
+    // para as barras manterem pelo menos 8 mm num elemento de 11 mm.
+    function _comTextoDoCodigo(codigo, texto, w_mm, h_mm) {
+        const porLargura = (0.9 * w_mm) / (0.62 * MM_POR_PT * Math.max(1, texto.length));
+        const porAltura = (0.25 * h_mm) / MM_POR_PT;
+        const fonte = Math.round(Math.max(5, Math.min(10, porLargura, porAltura)) * 10) / 10;
+        return '<div style="display:flex;flex-direction:column;width:100%;height:100%">' +
+            '<div style="flex:1;min-height:0">' + codigo + '</div>' +
+            '<div class="etq-cod-txt" style="font-size:' + fonte + 'pt;font-weight:bold;line-height:1;text-align:center;' +
+            'white-space:nowrap;letter-spacing:0.2mm;padding-top:0.4mm">' + esc(texto) + '</div></div>';
     }
 
     // ---- conferencia de volumes (nunca mexe no status do pedido) ----

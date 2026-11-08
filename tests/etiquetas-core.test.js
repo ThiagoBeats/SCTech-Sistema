@@ -76,6 +76,9 @@ test('avisosLegibilidade de barras e QR', () => {
     assert.strictEqual(E.avisosLegibilidade({ tipo: 'barcode', w_mm: 45, h_mm: 12 }, '260010203').length, 0);
     assert.strictEqual(E.avisosLegibilidade({ tipo: 'barcode', w_mm: 30, h_mm: 12 }, '260010203').length, 1);
     assert.strictEqual(E.avisosLegibilidade({ tipo: 'barcode', w_mm: 45, h_mm: 6 }, '260010203').length, 1);
+    // o numero escrito embaixo ocupa parte da altura: barras com texto pedem 11 mm
+    assert.strictEqual(E.avisosLegibilidade({ tipo: 'barcode', w_mm: 45, h_mm: 10 }, '260010203').length, 1);
+    assert.strictEqual(E.avisosLegibilidade({ tipo: 'barcode', w_mm: 45, h_mm: 11 }, '260010203').length, 0);
     assert.strictEqual(E.avisosLegibilidade({ tipo: 'qrcode', w_mm: 20, h_mm: 20 }, '260010203').length, 0);
     assert.strictEqual(E.avisosLegibilidade({ tipo: 'qrcode', w_mm: 12, h_mm: 20 }, '260010203').length, 1);
     assert.strictEqual(E.avisosLegibilidade({ tipo: 'campo', campo: 'cliente', w_mm: 5, h_mm: 5 }, 'x').length, 0);
@@ -235,4 +238,25 @@ test('avaliarLeitura nao abre conferencia de pedido em Orcamento', () => {
     assert.deepStrictEqual(E.avaliarLeitura('26005', null, lista), { tipo: 'sem_etiquetas', pedidoId: 26005 });
     assert.deepStrictEqual(E.avaliarLeitura('260050103', null, lista), { tipo: 'sem_etiquetas', pedidoId: 26005 });
     assert.deepStrictEqual(E.avaliarLeitura('260050103', 26005, lista), { tipo: 'sem_etiquetas', pedidoId: 26005 });
+});
+
+test('htmlEtiqueta escreve o codigo embaixo das barras, uma vez so', () => {
+    const svgs = { barcode: '<svg id="b"></svg>', qrcode: '<svg id="q"></svg>', texto: '260010203' };
+    const html = E.htmlEtiqueta(E.modeloPadraoPedido(100, 50), {}, svgs);
+    assert.strictEqual(html.split('260010203').length - 1, 1);
+    const elBarras = html.slice(html.indexOf('<svg id="b">') - 400, html.indexOf('etq-cod-txt') + 300);
+    assert.ok(elBarras.indexOf('<svg id="b">') >= 0 && elBarras.indexOf('260010203') >= 0, 'texto no mesmo elemento das barras');
+});
+
+test('htmlEtiqueta so com QR escreve o codigo embaixo do QR', () => {
+    const m = E.modeloPadraoPedido(100, 50);
+    m.elementos = m.elementos.filter(e => e.tipo !== 'barcode');
+    const html = E.htmlEtiqueta(m, {}, { qrcode: '<svg id="q"></svg>', texto: '260010203' });
+    assert.strictEqual(html.split('260010203').length - 1, 1);
+    assert.ok(html.indexOf('<svg id="q">') < html.indexOf('260010203'));
+});
+
+test('htmlEtiqueta sem o texto do codigo nao escreve nada a mais', () => {
+    const html = E.htmlEtiqueta(E.modeloPadraoPedido(100, 50), {}, { barcode: '<svg id="b"></svg>', qrcode: '<svg id="q"></svg>' });
+    assert.strictEqual(html.indexOf('etq-cod-txt'), -1);
 });
