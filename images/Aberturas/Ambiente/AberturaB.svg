@@ -1,85 +1,110 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" width="1200" height="660" role="img" aria-label="Abertura B: Recolhimento à Direita / Comando à Direita">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 660" width="1500" height="660" role="img" aria-label="Abertura B: Recolhimento à Direita / Comando à Direita. Prega: Prega Americana">
 <defs>
-  <radialGradient id="parede" cx="600" cy="318" r="760" gradientUnits="userSpaceOnUse">
-    <stop offset="0" stop-color="#F6F1EA"/><stop offset=".55" stop-color="#E8E1D6"/><stop offset="1" stop-color="#CFC6B8"/>
+  <radialGradient id="parede" cx="600" cy="318" r="780" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#F4EEE5"/><stop offset=".5" stop-color="#E4DACB"/><stop offset="1" stop-color="#BFB3A2"/>
   </radialGradient>
   <linearGradient id="teto" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="#E6E1DA"/><stop offset="1" stop-color="#D3CCC2"/>
+    <stop offset="0" stop-color="#E2DCD3"/><stop offset="1" stop-color="#CCC4B8"/>
   </linearGradient>
   <linearGradient id="piso" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="#8E6A4B"/><stop offset=".5" stop-color="#9F7854"/><stop offset="1" stop-color="#7A5739"/>
+    <stop offset="0" stop-color="#7E5B3E"/><stop offset=".5" stop-color="#946D4B"/><stop offset="1" stop-color="#6B4B31"/>
   </linearGradient>
   <linearGradient id="luzPiso" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="#FFF6E6" stop-opacity=".55"/><stop offset="1" stop-color="#FFF6E6" stop-opacity=".12"/>
+    <stop offset="0" stop-color="#FFF4DE" stop-opacity=".6"/><stop offset="1" stop-color="#FFF4DE" stop-opacity=".1"/>
   </linearGradient>
   <linearGradient id="ceu" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="#8DB8E2"/><stop offset=".6" stop-color="#C9DFF0"/><stop offset="1" stop-color="#E9F1F4"/>
+    <stop offset="0" stop-color="#86B2DE"/><stop offset=".6" stop-color="#C6DDF0"/><stop offset="1" stop-color="#EAF1F3"/>
   </linearGradient>
   <linearGradient id="aluminio" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="#FFFFFF"/><stop offset=".5" stop-color="#ECEDEE"/><stop offset="1" stop-color="#C9CCD0"/>
+    <stop offset="0" stop-color="#FFFFFF"/><stop offset=".35" stop-color="#F1F2F3"/><stop offset=".6" stop-color="#D9DCDF"/><stop offset="1" stop-color="#AEB2B7"/>
   </linearGradient>
+  <linearGradient id="metal" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#C9CCD0"/><stop offset=".45" stop-color="#FFFFFF"/><stop offset="1" stop-color="#A3A7AC"/>
+  </linearGradient>
+  <radialGradient id="botao" cx=".35" cy=".35" r=".7">
+    <stop offset="0" stop-color="#FFFFFF"/><stop offset=".5" stop-color="#D8D2C8"/><stop offset="1" stop-color="#8E877C"/>
+  </radialGradient>
   <linearGradient id="caixilho" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0" stop-color="#FAFAFA"/><stop offset="1" stop-color="#D5D8DB"/>
+    <stop offset="0" stop-color="#FAFAFA"/><stop offset="1" stop-color="#D1D4D7"/>
   </linearGradient>
-  <linearGradient id="lamina" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0" stop-color="#A89C8A"/><stop offset=".25" stop-color="#D9CFBF"/>
-    <stop offset=".45" stop-color="#EEE7DB"/><stop offset=".7" stop-color="#D3C8B6"/><stop offset="1" stop-color="#9F937F"/>
+  <linearGradient id="volume" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#1B140E" stop-opacity=".34"/><stop offset=".05" stop-color="#1B140E" stop-opacity=".08"/>
+    <stop offset=".12" stop-color="#1B140E" stop-opacity="0"/><stop offset=".45" stop-color="#FFF8EA" stop-opacity=".08"/>
+    <stop offset=".85" stop-color="#1B140E" stop-opacity=".06"/><stop offset="1" stop-color="#1B140E" stop-opacity=".26"/>
   </linearGradient>
-  <linearGradient id="laminaAltura" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="#000" stop-opacity=".18"/><stop offset=".08" stop-color="#000" stop-opacity="0"/>
-    <stop offset=".55" stop-color="#FFF" stop-opacity=".06"/><stop offset="1" stop-color="#000" stop-opacity=".16"/>
-  </linearGradient>
+  <linearGradient id="dobra0Americana" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#daceb9"/><stop offset="0.3" stop-color="#dcd0bc"/><stop offset="0.38" stop-color="#d0c2aa"/><stop offset="0.43" stop-color="#877b6b"/><stop offset="0.47" stop-color="#afa18d"/><stop offset="0.5" stop-color="#e4dac8"/><stop offset="0.53" stop-color="#b9ab95"/><stop offset="0.57" stop-color="#8a7e6e"/><stop offset="0.62" stop-color="#cfc0a9"/><stop offset="0.7" stop-color="#dcd0bc"/><stop offset="1" stop-color="#daceb9"/></linearGradient>
+  <linearGradient id="cabecote0" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ddd1be"/><stop offset=".8" stop-color="#d5c8b2"/><stop offset="1" stop-color="#bcae98"/></linearGradient>
   <linearGradient id="reflexo" x1="0" y1="0" x2="1" y2="0">
     <stop offset="0" stop-color="#FFF" stop-opacity="0"/><stop offset=".5" stop-color="#FFF" stop-opacity=".35"/><stop offset="1" stop-color="#FFF" stop-opacity="0"/>
   </linearGradient>
   <radialGradient id="vinheta" cx=".5" cy=".5" r=".75">
-    <stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".28"/>
+    <stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".32"/>
   </radialGradient>
-  <radialGradient id="brilhoJanela" cx="600" cy="318" r="520" gradientUnits="userSpaceOnUse">
-    <stop offset="0" stop-color="#FFFBF2" stop-opacity=".55"/><stop offset="1" stop-color="#FFFBF2" stop-opacity="0"/>
+  <radialGradient id="brilhoJanela" cx="600" cy="318" r="560" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#FFF8EC" stop-opacity=".65"/><stop offset="1" stop-color="#FFF8EC" stop-opacity="0"/>
   </radialGradient>
+  <radialGradient id="luzNaCortina" cx="600" cy="278.8" r="520" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#FFF6E2" stop-opacity=".55"/><stop offset=".6" stop-color="#FFF6E2" stop-opacity=".12"/><stop offset="1" stop-color="#FFF6E2" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="fundoLupa" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#EEE7DC"/><stop offset="1" stop-color="#D9CFC0"/>
+  </linearGradient>
+  <linearGradient id="coluna" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#E9E3D9"/><stop offset=".05" stop-color="#F5F1EA"/><stop offset="1" stop-color="#F1ECE4"/>
+  </linearGradient>
+  <clipPath id="cena"><rect width="1200" height="660"/></clipPath>
   <clipPath id="vaos">
     <rect x="209" y="135" width="384.5" height="366"/>
     <rect x="606.5" y="135" width="384.5" height="366"/>
   </clipPath>
   <clipPath id="pisoClip"><rect x="0" y="588" width="1200" height="72"/></clipPath>
+  <clipPath id="lupa0"><circle cx="1350" cy="338" r="122"/></clipPath>
   <filter id="desfoque4" x="-10%" y="-30%" width="120%" height="160%"><feGaussianBlur stdDeviation="4"/></filter>
   <filter id="desfoque2"><feGaussianBlur stdDeviation="1.6"/></filter>
   <filter id="desfoque12" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="12"/></filter>
   <filter id="sombra" x="-10%" y="-20%" width="120%" height="150%">
     <feDropShadow dx="0" dy="7" stdDeviation="8" flood-color="#3A2E22" flood-opacity=".28"/>
   </filter>
-  <filter id="sombraLaminas" x="-10%" y="-5%" width="125%" height="115%">
-    <feDropShadow dx="6" dy="5" stdDeviation="6" flood-color="#2E2418" flood-opacity=".32"/>
+  <filter id="sombraCortina" x="-15%" y="-5%" width="135%" height="120%">
+    <feDropShadow dx="2" dy="3" stdDeviation="2.5" flood-color="#241B12" flood-opacity=".35" result="perto"/>
+    <feDropShadow dx="12" dy="9" stdDeviation="13" flood-color="#241B12" flood-opacity=".34"/>
   </filter>
   <filter id="tecido" x="0" y="0" width="100%" height="100%">
-    <feTurbulence type="fractalNoise" baseFrequency="0.9 0.015" numOctaves="2" seed="4" result="n"/>
-    <feColorMatrix in="n" type="matrix" values="0 0 0 0 .35  0 0 0 0 .30  0 0 0 0 .24  0 0 0 .55 -.12" result="nc"/>
-    <feComposite in="nc" in2="SourceGraphic" operator="in" result="t"/>
-    <feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="t"/></feMerge>
+    <feTurbulence type="fractalNoise" baseFrequency="1.5 0.03" numOctaves="2" seed="4" result="urdume"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.03 1.2" numOctaves="1" seed="11" result="trama"/>
+    <feBlend in="urdume" in2="trama" mode="multiply" result="fios"/>
+    <feColorMatrix in="fios" type="matrix" values="0 0 0 0 .28  0 0 0 0 .23  0 0 0 0 .18  0 0 0 .42 -.15" result="fiosCor"/>
+    <feComposite in="fiosCor" in2="SourceGraphic" operator="in" result="textura"/>
+    <feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="textura"/></feMerge>
+  </filter>
+  <filter id="reboco" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency=".55" numOctaves="3" seed="21"/>
+    <feColorMatrix type="matrix" values="0 0 0 0 .45  0 0 0 0 .40  0 0 0 0 .34  0 0 0 .09 0"/>
   </filter>
   <filter id="grao" x="0" y="0" width="100%" height="100%">
     <feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" seed="9"/>
-    <feColorMatrix type="matrix" values="0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .5  0 0 0 .07 0"/>
+    <feColorMatrix type="matrix" values="0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .5  0 0 0 .06 0"/>
   </filter>
   <filter id="veios" x="0" y="0" width="100%" height="100%">
     <feTurbulence type="fractalNoise" baseFrequency="0.004 0.18" numOctaves="3" seed="2"/>
-    <feColorMatrix type="matrix" values="0 0 0 0 .25  0 0 0 0 .14  0 0 0 0 .06  0 0 0 .5 -.1"/>
+    <feColorMatrix type="matrix" values="0 0 0 0 .25  0 0 0 0 .14  0 0 0 0 .06  0 0 0 .55 -.1"/>
   </filter>
 </defs>
+  <g clip-path="url(#cena)">
   <rect width="1200" height="660" fill="url(#parede)"/>
+  <rect width="1200" height="660" filter="url(#reboco)"/>
   <rect width="1200" height="660" fill="url(#brilhoJanela)"/>
   <rect width="1200" height="38" fill="url(#teto)"/>
   <rect y="32" width="1200" height="6" fill="#F3EFE9"/>
-  <rect y="38" width="1200" height="14" fill="#000" opacity=".06" filter="url(#desfoque4)"/>
+  <rect y="38" width="1200" height="16" fill="#000" opacity=".08" filter="url(#desfoque4)"/>
   <rect y="588" width="1200" height="72" fill="url(#piso)"/>
   <rect y="588" width="1200" height="72" filter="url(#veios)"/>
-  <g clip-path="url(#pisoClip)" stroke="#3E2817" stroke-opacity=".28" stroke-width="1.4"><line x1="-328" y1="588" x2="-531.7" y2="660"/><line x1="-270" y1="588" x2="-461" y2="660"/><line x1="-212" y1="588" x2="-390.2" y2="660"/><line x1="-154" y1="588" x2="-319.5" y2="660"/><line x1="-96" y1="588" x2="-248.8" y2="660"/><line x1="-38" y1="588" x2="-178" y2="660"/><line x1="20" y1="588" x2="-107.3" y2="660"/><line x1="78" y1="588" x2="-36.6" y2="660"/><line x1="136" y1="588" x2="34.1" y2="660"/><line x1="194" y1="588" x2="104.9" y2="660"/><line x1="252" y1="588" x2="175.6" y2="660"/><line x1="310" y1="588" x2="246.3" y2="660"/><line x1="368" y1="588" x2="317.1" y2="660"/><line x1="426" y1="588" x2="387.8" y2="660"/><line x1="484" y1="588" x2="458.5" y2="660"/><line x1="542" y1="588" x2="529.3" y2="660"/><line x1="600" y1="588" x2="600" y2="660"/><line x1="658" y1="588" x2="670.7" y2="660"/><line x1="716" y1="588" x2="741.5" y2="660"/><line x1="774" y1="588" x2="812.2" y2="660"/><line x1="832" y1="588" x2="882.9" y2="660"/><line x1="890" y1="588" x2="953.7" y2="660"/><line x1="948" y1="588" x2="1024.4" y2="660"/><line x1="1006" y1="588" x2="1095.1" y2="660"/><line x1="1064" y1="588" x2="1165.9" y2="660"/><line x1="1122" y1="588" x2="1236.6" y2="660"/><line x1="1180" y1="588" x2="1307.3" y2="660"/><line x1="1238" y1="588" x2="1378" y2="660"/><line x1="1296" y1="588" x2="1448.8" y2="660"/><line x1="1354" y1="588" x2="1519.5" y2="660"/><line x1="1412" y1="588" x2="1590.2" y2="660"/><line x1="1470" y1="588" x2="1661" y2="660"/><line x1="1528" y1="588" x2="1731.7" y2="660"/></g>
+  <g clip-path="url(#pisoClip)" stroke="#3E2817" stroke-opacity=".3" stroke-width="1.4"><line x1="-328" y1="588" x2="-531.7" y2="660"/><line x1="-270" y1="588" x2="-461" y2="660"/><line x1="-212" y1="588" x2="-390.2" y2="660"/><line x1="-154" y1="588" x2="-319.5" y2="660"/><line x1="-96" y1="588" x2="-248.8" y2="660"/><line x1="-38" y1="588" x2="-178" y2="660"/><line x1="20" y1="588" x2="-107.3" y2="660"/><line x1="78" y1="588" x2="-36.6" y2="660"/><line x1="136" y1="588" x2="34.1" y2="660"/><line x1="194" y1="588" x2="104.9" y2="660"/><line x1="252" y1="588" x2="175.6" y2="660"/><line x1="310" y1="588" x2="246.3" y2="660"/><line x1="368" y1="588" x2="317.1" y2="660"/><line x1="426" y1="588" x2="387.8" y2="660"/><line x1="484" y1="588" x2="458.5" y2="660"/><line x1="542" y1="588" x2="529.3" y2="660"/><line x1="600" y1="588" x2="600" y2="660"/><line x1="658" y1="588" x2="670.7" y2="660"/><line x1="716" y1="588" x2="741.5" y2="660"/><line x1="774" y1="588" x2="812.2" y2="660"/><line x1="832" y1="588" x2="882.9" y2="660"/><line x1="890" y1="588" x2="953.7" y2="660"/><line x1="948" y1="588" x2="1024.4" y2="660"/><line x1="1006" y1="588" x2="1095.1" y2="660"/><line x1="1064" y1="588" x2="1165.9" y2="660"/><line x1="1122" y1="588" x2="1236.6" y2="660"/><line x1="1180" y1="588" x2="1307.3" y2="660"/><line x1="1238" y1="588" x2="1378" y2="660"/><line x1="1296" y1="588" x2="1448.8" y2="660"/><line x1="1354" y1="588" x2="1519.5" y2="660"/><line x1="1412" y1="588" x2="1590.2" y2="660"/><line x1="1470" y1="588" x2="1661" y2="660"/><line x1="1528" y1="588" x2="1731.7" y2="660"/></g>
   <polygon points="226,588 974,588 1144,660 306,660" fill="url(#luzPiso)" filter="url(#desfoque12)"/>
   <rect y="572" width="1200" height="16" fill="#F7F5F1"/>
   <rect y="572" width="1200" height="2" fill="#FFFFFF"/>
-  <rect y="588" width="1200" height="5" fill="#000" opacity=".22" filter="url(#desfoque2)"/>
+  <rect y="588" width="1200" height="5" fill="#000" opacity=".24" filter="url(#desfoque2)"/>
   <rect x="186" y="112" width="828" height="412" fill="#FBF9F5" filter="url(#sombra)"/>
   <g clip-path="url(#vaos)">
     <rect x="196" y="122" width="808" height="392" fill="url(#ceu)"/>
@@ -109,56 +134,87 @@
   <rect x="593.5" y="135" width="2" height="366" fill="#000" opacity=".08"/>
   <rect x="182" y="514" width="836" height="10" rx="2" fill="#F1EEE8"/>
   <rect x="182" y="524" width="836" height="6" fill="#000" opacity=".12" filter="url(#desfoque2)"/>
-  <rect x="148" y="86" width="904" height="10" fill="#000" opacity=".18" filter="url(#desfoque4)"/>
-  <rect x="148" y="74" width="904" height="14" rx="3" fill="url(#aluminio)" stroke="#B8BBBF" stroke-width=".8"/>
-  <rect x="144" y="73" width="10" height="16" rx="2" fill="#E2E3E5" stroke="#B0B3B7" stroke-width=".8"/>
-  <rect x="1046" y="73" width="10" height="16" rx="2" fill="#E2E3E5" stroke="#B0B3B7" stroke-width=".8"/>
-  <rect x="208" y="65" width="14" height="9" rx="1.5" fill="#E4E5E7" stroke="#B5B8BC" stroke-width=".6"/><rect x="600" y="65" width="14" height="9" rx="1.5" fill="#E4E5E7" stroke="#B5B8BC" stroke-width=".6"/><rect x="982" y="65" width="14" height="9" rx="1.5" fill="#E4E5E7" stroke="#B5B8BC" stroke-width=".6"/>
-  <g filter="url(#sombraLaminas)"><g filter="url(#tecido)">
-    <g transform="translate(860 0)"><rect x="-3" y="85" width="6" height="12" rx="1.5" fill="#F4F4F4" stroke="#BDBFC2" stroke-width=".6"/><rect x="-10" y="94" width="20" height="462" rx="2.5" fill="url(#lamina)"/>
-      <rect x="-10" y="94" width="20" height="462" rx="2.5" fill="url(#laminaAltura)"/>
-      <rect x="-10" y="94" width="20" height="462" rx="2.5" fill="#000" opacity="0.05"/>
-      <rect x="-8" y="538" width="16" height="12" rx="3" fill="#000" opacity=".07"/></g>
-    <g transform="translate(884 0)"><rect x="-3" y="85" width="6" height="12" rx="1.5" fill="#F4F4F4" stroke="#BDBFC2" stroke-width=".6"/><rect x="-10" y="94" width="20" height="462" rx="2.5" fill="url(#lamina)"/>
-      <rect x="-10" y="94" width="20" height="462" rx="2.5" fill="url(#laminaAltura)"/>
-      <rect x="-10" y="94" width="20" height="462" rx="2.5" fill="#FFF" opacity="0.07"/>
-      <rect x="-8" y="538" width="16" height="12" rx="3" fill="#000" opacity=".07"/></g>
-    <g transform="translate(908 0)"><rect x="-3" y="85" width="6" height="12" rx="1.5" fill="#F4F4F4" stroke="#BDBFC2" stroke-width=".6"/><rect x="-10" y="94" width="20" height="462" rx="2.5" fill="url(#lamina)"/>
-      <rect x="-10" y="94" width="20" height="462" rx="2.5" fill="url(#laminaAltura)"/>
-      <rect x="-10" y="94" width="20" height="462" rx="2.5" fill="#000" opacity="0.1"/>
-      <rect x="-8" y="538" width="16" height="12" rx="3" fill="#000" opacity=".07"/></g>
-    <g transform="translate(932 0)"><rect x="-3" y="85" width="6" height="12" rx="1.5" fill="#F4F4F4" stroke="#BDBFC2" stroke-width=".6"/><rect x="-10" y="94" width="20" height="462" rx="2.5" fill="url(#lamina)"/>
-      <rect x="-10" y="94" width="20" height="462" rx="2.5" fill="url(#laminaAltura)"/>
-      <rect x="-10" y="94" width="20" height="462" rx="2.5" fill="#000" opacity="0.05"/>
-      <rect x="-8" y="538" width="16" height="12" rx="3" fill="#000" opacity=".07"/></g>
-    <g transform="translate(956 0)"><rect x="-3" y="85" width="6" height="12" rx="1.5" fill="#F4F4F4" stroke="#BDBFC2" stroke-width=".6"/><rect x="-10" y="94" width="20" height="462" rx="2.5" fill="url(#lamina)"/>
-      <rect x="-10" y="94" width="20" height="462" rx="2.5" fill="url(#laminaAltura)"/>
-      <rect x="-10" y="94" width="20" height="462" rx="2.5" fill="#FFF" opacity="0.07"/>
-      <rect x="-8" y="538" width="16" height="12" rx="3" fill="#000" opacity=".07"/></g>
-    <g transform="translate(980 0)"><rect x="-3" y="85" width="6" height="12" rx="1.5" fill="#F4F4F4" stroke="#BDBFC2" stroke-width=".6"/><rect x="-10" y="94" width="20" height="462" rx="2.5" fill="url(#lamina)"/>
-      <rect x="-10" y="94" width="20" height="462" rx="2.5" fill="url(#laminaAltura)"/>
-      <rect x="-10" y="94" width="20" height="462" rx="2.5" fill="#000" opacity="0.1"/>
-      <rect x="-8" y="538" width="16" height="12" rx="3" fill="#000" opacity=".07"/></g>
-    <g transform="translate(1004 0)"><rect x="-3" y="85" width="6" height="12" rx="1.5" fill="#F4F4F4" stroke="#BDBFC2" stroke-width=".6"/><rect x="-10" y="94" width="20" height="462" rx="2.5" fill="url(#lamina)"/>
-      <rect x="-10" y="94" width="20" height="462" rx="2.5" fill="url(#laminaAltura)"/>
-      <rect x="-10" y="94" width="20" height="462" rx="2.5" fill="#000" opacity="0.05"/>
-      <rect x="-8" y="538" width="16" height="12" rx="3" fill="#000" opacity=".07"/></g>
-    <g transform="translate(1028 0)"><rect x="-3" y="85" width="6" height="12" rx="1.5" fill="#F4F4F4" stroke="#BDBFC2" stroke-width=".6"/><rect x="-10" y="94" width="20" height="462" rx="2.5" fill="url(#lamina)"/>
-      <rect x="-10" y="94" width="20" height="462" rx="2.5" fill="url(#laminaAltura)"/>
-      <rect x="-10" y="94" width="20" height="462" rx="2.5" fill="#FFF" opacity="0.07"/>
-      <rect x="-8" y="538" width="16" height="12" rx="3" fill="#000" opacity=".07"/></g>
+  <rect x="208" y="65" width="14" height="9" rx="1.5" fill="url(#aluminio)" stroke="#A9ADB2" stroke-width=".6"/><rect x="600" y="65" width="14" height="9" rx="1.5" fill="url(#aluminio)" stroke="#A9ADB2" stroke-width=".6"/><rect x="982" y="65" width="14" height="9" rx="1.5" fill="url(#aluminio)" stroke="#A9ADB2" stroke-width=".6"/>
+  <rect x="148" y="86" width="904" height="10" fill="#000" opacity=".2" filter="url(#desfoque4)"/>
+  <rect x="148" y="74" width="904" height="14" rx="3" fill="url(#aluminio)" stroke="#A9ADB2" stroke-width=".8"/>
+  <rect x="150" y="76" width="900" height="2" rx="1" fill="#FFFFFF" opacity=".8"/>
+  <rect x="144" y="73" width="10" height="16" rx="2" fill="#E2E3E5" stroke="#A3A6AA" stroke-width=".8"/>
+  <rect x="1046" y="73" width="10" height="16" rx="2" fill="#E2E3E5" stroke="#A3A6AA" stroke-width=".8"/>
+  <g filter="url(#sombraCortina)"><g filter="url(#tecido)">
+    <g transform="translate(856 0)"><g><path d="M-15.5 92 H15.5 V556 Q0 559 -15.5 556 Z" fill="url(#dobra0Americana)"/>
+        <path d="M-15.5 92 H15.5 V556 Q0 559 -15.5 556 Z" fill="url(#volume)"/>
+        <line x1="-15.5" y1="541" x2="15.5" y2="541" stroke="#7a6f60" stroke-opacity=".28" stroke-width="1" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/><rect x="-15.5" y="92" width="31" height="30" fill="url(#cabecote0)" opacity=".6"/></g><rect x="-1.5" y="86" width="3" height="9" rx="1" fill="url(#metal)" stroke="#A9ACB0" stroke-width=".5"/><ellipse cx="0" cy="117" rx="6" ry="2.5" fill="#000" opacity=".18"/><ellipse cx="-3.8" cy="104" rx="2.4" ry="12" fill="#b9ab95" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="3.8" cy="104" rx="2.4" ry="12" fill="#ac9e8a" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="0" cy="104" rx="2.4" ry="12" fill="#e0d5c2" stroke="#8a7e6e" stroke-width=".5"/>
+        <rect x="-6" y="114.5" width="12" height="2.6" rx="1.2" fill="#827667"/></g>
+    <g transform="translate(884 0)"><g><path d="M-15.5 92 H15.5 V556 Q0 559 -15.5 556 Z" fill="url(#dobra0Americana)"/>
+        <path d="M-15.5 92 H15.5 V556 Q0 559 -15.5 556 Z" fill="url(#volume)"/>
+        <line x1="-15.5" y1="541" x2="15.5" y2="541" stroke="#7a6f60" stroke-opacity=".28" stroke-width="1" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/><rect x="-15.5" y="92" width="31" height="30" fill="url(#cabecote0)" opacity=".6"/></g><rect x="-1.5" y="86" width="3" height="9" rx="1" fill="url(#metal)" stroke="#A9ACB0" stroke-width=".5"/><ellipse cx="0" cy="117" rx="6" ry="2.5" fill="#000" opacity=".18"/><ellipse cx="-3.8" cy="104" rx="2.4" ry="12" fill="#b9ab95" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="3.8" cy="104" rx="2.4" ry="12" fill="#ac9e8a" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="0" cy="104" rx="2.4" ry="12" fill="#e0d5c2" stroke="#8a7e6e" stroke-width=".5"/>
+        <rect x="-6" y="114.5" width="12" height="2.6" rx="1.2" fill="#827667"/></g>
+    <g transform="translate(912 0)"><g><path d="M-15.5 92 H15.5 V556 Q0 559 -15.5 556 Z" fill="url(#dobra0Americana)"/>
+        <path d="M-15.5 92 H15.5 V556 Q0 559 -15.5 556 Z" fill="url(#volume)"/>
+        <line x1="-15.5" y1="541" x2="15.5" y2="541" stroke="#7a6f60" stroke-opacity=".28" stroke-width="1" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/><rect x="-15.5" y="92" width="31" height="30" fill="url(#cabecote0)" opacity=".6"/></g><rect x="-1.5" y="86" width="3" height="9" rx="1" fill="url(#metal)" stroke="#A9ACB0" stroke-width=".5"/><ellipse cx="0" cy="117" rx="6" ry="2.5" fill="#000" opacity=".18"/><ellipse cx="-3.8" cy="104" rx="2.4" ry="12" fill="#b9ab95" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="3.8" cy="104" rx="2.4" ry="12" fill="#ac9e8a" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="0" cy="104" rx="2.4" ry="12" fill="#e0d5c2" stroke="#8a7e6e" stroke-width=".5"/>
+        <rect x="-6" y="114.5" width="12" height="2.6" rx="1.2" fill="#827667"/></g>
+    <g transform="translate(940 0)"><g><path d="M-15.5 92 H15.5 V556 Q0 559 -15.5 556 Z" fill="url(#dobra0Americana)"/>
+        <path d="M-15.5 92 H15.5 V556 Q0 559 -15.5 556 Z" fill="url(#volume)"/>
+        <line x1="-15.5" y1="541" x2="15.5" y2="541" stroke="#7a6f60" stroke-opacity=".28" stroke-width="1" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/><rect x="-15.5" y="92" width="31" height="30" fill="url(#cabecote0)" opacity=".6"/></g><rect x="-1.5" y="86" width="3" height="9" rx="1" fill="url(#metal)" stroke="#A9ACB0" stroke-width=".5"/><ellipse cx="0" cy="117" rx="6" ry="2.5" fill="#000" opacity=".18"/><ellipse cx="-3.8" cy="104" rx="2.4" ry="12" fill="#b9ab95" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="3.8" cy="104" rx="2.4" ry="12" fill="#ac9e8a" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="0" cy="104" rx="2.4" ry="12" fill="#e0d5c2" stroke="#8a7e6e" stroke-width=".5"/>
+        <rect x="-6" y="114.5" width="12" height="2.6" rx="1.2" fill="#827667"/></g>
+    <g transform="translate(968 0)"><g><path d="M-15.5 92 H15.5 V556 Q0 559 -15.5 556 Z" fill="url(#dobra0Americana)"/>
+        <path d="M-15.5 92 H15.5 V556 Q0 559 -15.5 556 Z" fill="url(#volume)"/>
+        <line x1="-15.5" y1="541" x2="15.5" y2="541" stroke="#7a6f60" stroke-opacity=".28" stroke-width="1" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/><rect x="-15.5" y="92" width="31" height="30" fill="url(#cabecote0)" opacity=".6"/></g><rect x="-1.5" y="86" width="3" height="9" rx="1" fill="url(#metal)" stroke="#A9ACB0" stroke-width=".5"/><ellipse cx="0" cy="117" rx="6" ry="2.5" fill="#000" opacity=".18"/><ellipse cx="-3.8" cy="104" rx="2.4" ry="12" fill="#b9ab95" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="3.8" cy="104" rx="2.4" ry="12" fill="#ac9e8a" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="0" cy="104" rx="2.4" ry="12" fill="#e0d5c2" stroke="#8a7e6e" stroke-width=".5"/>
+        <rect x="-6" y="114.5" width="12" height="2.6" rx="1.2" fill="#827667"/></g>
+    <g transform="translate(996 0)"><g><path d="M-15.5 92 H15.5 V556 Q0 559 -15.5 556 Z" fill="url(#dobra0Americana)"/>
+        <path d="M-15.5 92 H15.5 V556 Q0 559 -15.5 556 Z" fill="url(#volume)"/>
+        <line x1="-15.5" y1="541" x2="15.5" y2="541" stroke="#7a6f60" stroke-opacity=".28" stroke-width="1" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/><rect x="-15.5" y="92" width="31" height="30" fill="url(#cabecote0)" opacity=".6"/></g><rect x="-1.5" y="86" width="3" height="9" rx="1" fill="url(#metal)" stroke="#A9ACB0" stroke-width=".5"/><ellipse cx="0" cy="117" rx="6" ry="2.5" fill="#000" opacity=".18"/><ellipse cx="-3.8" cy="104" rx="2.4" ry="12" fill="#b9ab95" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="3.8" cy="104" rx="2.4" ry="12" fill="#ac9e8a" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="0" cy="104" rx="2.4" ry="12" fill="#e0d5c2" stroke="#8a7e6e" stroke-width=".5"/>
+        <rect x="-6" y="114.5" width="12" height="2.6" rx="1.2" fill="#827667"/></g>
+    <g transform="translate(1024 0)"><g><path d="M-15.5 92 H15.5 V556 Q0 559 -15.5 556 Z" fill="url(#dobra0Americana)"/>
+        <path d="M-15.5 92 H15.5 V556 Q0 559 -15.5 556 Z" fill="url(#volume)"/>
+        <line x1="-15.5" y1="541" x2="15.5" y2="541" stroke="#7a6f60" stroke-opacity=".28" stroke-width="1" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/><rect x="-15.5" y="92" width="31" height="30" fill="url(#cabecote0)" opacity=".6"/></g><rect x="-1.5" y="86" width="3" height="9" rx="1" fill="url(#metal)" stroke="#A9ACB0" stroke-width=".5"/><ellipse cx="0" cy="117" rx="6" ry="2.5" fill="#000" opacity=".18"/><ellipse cx="-3.8" cy="104" rx="2.4" ry="12" fill="#b9ab95" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="3.8" cy="104" rx="2.4" ry="12" fill="#ac9e8a" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="0" cy="104" rx="2.4" ry="12" fill="#e0d5c2" stroke="#8a7e6e" stroke-width=".5"/>
+        <rect x="-6" y="114.5" width="12" height="2.6" rx="1.2" fill="#827667"/></g>
   </g></g>
-  <g><line x1="860" y1="546" x2="1028" y2="546" stroke="#E8E4DC" stroke-width="2" stroke-dasharray="1 3" stroke-linecap="round"/></g>
   <g filter="url(#sombra)">
     <path d="M1044 88 V420 Q1048 432 1052 420 V88" stroke="#8F9398" stroke-dasharray="0.1 5.5" stroke-linecap="round" stroke-width="3.6" fill="none"></path>
     <path d="M1044 88 V420 Q1048 432 1052 420 V88" stroke="#9A9DA1" stroke-width=".6" fill="none" opacity=".6"/>
     <rect x="1041" y="424" width="14" height="34" rx="7" fill="url(#aluminio)" stroke="#B5B8BC" stroke-width=".8"/>
   </g>
   <rect x="1035" y="70" width="26" height="24" rx="4" fill="url(#aluminio)" stroke="#B0B3B7" stroke-width=".8" filter="url(#sombra)"/>
+  <rect width="1200" height="660" fill="url(#luzNaCortina)" style="mix-blend-mode:soft-light"/>
   <rect width="1200" height="660" fill="url(#vinheta)"/>
   <rect width="1200" height="660" filter="url(#grao)"/>
   <g>
-    <rect x="22" y="602" width="597" height="38" rx="19" fill="#1C1A17" fill-opacity=".62"/>
-    <text x="40" y="627" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="18" fill="#FFFFFF"><tspan font-weight="700">Abertura B</tspan> — Recolhimento à Direita / Comando à Direita</text>
+    <rect x="22" y="576" width="597" height="64" rx="18" fill="#1C1A17" fill-opacity=".64"/>
+    <text x="40" y="601" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="18" fill="#FFFFFF"><tspan font-weight="700">Abertura B</tspan> — Recolhimento à Direita / Comando à Direita</text>
+    <text x="40" y="627" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="18" fill="#FFFFFF"><tspan font-weight="700">Prega:</tspan> Prega Americana</text>
   </g>
+  </g>
+  <rect x="1200" width="300" height="660" fill="url(#coluna)"/>
+  <rect x="1200" width="2" height="660" fill="#CFC5B7"/>
+  <text x="1350" y="52" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#4A4036">Detalhe da prega</text>
+  <circle cx="1350" cy="338" r="128" fill="#FFFFFF" filter="url(#sombra)"/>
+  <g clip-path="url(#lupa0)">
+    <rect x="1228" y="216" width="244" height="244" fill="url(#fundoLupa)"/>
+    <g transform="translate(1350 338) scale(2.773) translate(0 -106)">
+      <rect x="-74" y="74" width="148" height="14" rx="3" fill="url(#aluminio)" stroke="#A9ADB2" stroke-width=".8"/>
+      <rect x="-74" y="76" width="148" height="2" fill="#FFFFFF" opacity=".8"/>
+      <g filter="url(#sombraCortina)"><g filter="url(#tecido)"><g transform="translate(-59 0)"><g><path d="M-16.5 92 H16.5 V556 Q0 559 -16.5 556 Z" fill="url(#dobra0Americana)"/>
+        <path d="M-16.5 92 H16.5 V556 Q0 559 -16.5 556 Z" fill="url(#volume)"/>
+        <line x1="-16.5" y1="541" x2="16.5" y2="541" stroke="#7a6f60" stroke-opacity=".28" stroke-width="1" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/><rect x="-16.5" y="92" width="33" height="30" fill="url(#cabecote0)" opacity=".6"/></g><rect x="-1.5" y="86" width="3" height="9" rx="1" fill="url(#metal)" stroke="#A9ACB0" stroke-width=".5"/><ellipse cx="0" cy="117" rx="6" ry="2.5" fill="#000" opacity=".18"/><ellipse cx="-3.8" cy="104" rx="2.4" ry="12" fill="#b9ab95" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="3.8" cy="104" rx="2.4" ry="12" fill="#ac9e8a" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="0" cy="104" rx="2.4" ry="12" fill="#e0d5c2" stroke="#8a7e6e" stroke-width=".5"/>
+        <rect x="-6" y="114.5" width="12" height="2.6" rx="1.2" fill="#827667"/></g><g transform="translate(-29 0)"><g><path d="M-16.5 92 H16.5 V556 Q0 559 -16.5 556 Z" fill="url(#dobra0Americana)"/>
+        <path d="M-16.5 92 H16.5 V556 Q0 559 -16.5 556 Z" fill="url(#volume)"/>
+        <line x1="-16.5" y1="541" x2="16.5" y2="541" stroke="#7a6f60" stroke-opacity=".28" stroke-width="1" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/><rect x="-16.5" y="92" width="33" height="30" fill="url(#cabecote0)" opacity=".6"/></g><rect x="-1.5" y="86" width="3" height="9" rx="1" fill="url(#metal)" stroke="#A9ACB0" stroke-width=".5"/><ellipse cx="0" cy="117" rx="6" ry="2.5" fill="#000" opacity=".18"/><ellipse cx="-3.8" cy="104" rx="2.4" ry="12" fill="#b9ab95" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="3.8" cy="104" rx="2.4" ry="12" fill="#ac9e8a" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="0" cy="104" rx="2.4" ry="12" fill="#e0d5c2" stroke="#8a7e6e" stroke-width=".5"/>
+        <rect x="-6" y="114.5" width="12" height="2.6" rx="1.2" fill="#827667"/></g><g transform="translate(1 0)"><g><path d="M-16.5 92 H16.5 V556 Q0 559 -16.5 556 Z" fill="url(#dobra0Americana)"/>
+        <path d="M-16.5 92 H16.5 V556 Q0 559 -16.5 556 Z" fill="url(#volume)"/>
+        <line x1="-16.5" y1="541" x2="16.5" y2="541" stroke="#7a6f60" stroke-opacity=".28" stroke-width="1" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/><rect x="-16.5" y="92" width="33" height="30" fill="url(#cabecote0)" opacity=".6"/></g><rect x="-1.5" y="86" width="3" height="9" rx="1" fill="url(#metal)" stroke="#A9ACB0" stroke-width=".5"/><ellipse cx="0" cy="117" rx="6" ry="2.5" fill="#000" opacity=".18"/><ellipse cx="-3.8" cy="104" rx="2.4" ry="12" fill="#b9ab95" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="3.8" cy="104" rx="2.4" ry="12" fill="#ac9e8a" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="0" cy="104" rx="2.4" ry="12" fill="#e0d5c2" stroke="#8a7e6e" stroke-width=".5"/>
+        <rect x="-6" y="114.5" width="12" height="2.6" rx="1.2" fill="#827667"/></g><g transform="translate(31 0)"><g><path d="M-16.5 92 H16.5 V556 Q0 559 -16.5 556 Z" fill="url(#dobra0Americana)"/>
+        <path d="M-16.5 92 H16.5 V556 Q0 559 -16.5 556 Z" fill="url(#volume)"/>
+        <line x1="-16.5" y1="541" x2="16.5" y2="541" stroke="#7a6f60" stroke-opacity=".28" stroke-width="1" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/><rect x="-16.5" y="92" width="33" height="30" fill="url(#cabecote0)" opacity=".6"/></g><rect x="-1.5" y="86" width="3" height="9" rx="1" fill="url(#metal)" stroke="#A9ACB0" stroke-width=".5"/><ellipse cx="0" cy="117" rx="6" ry="2.5" fill="#000" opacity=".18"/><ellipse cx="-3.8" cy="104" rx="2.4" ry="12" fill="#b9ab95" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="3.8" cy="104" rx="2.4" ry="12" fill="#ac9e8a" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="0" cy="104" rx="2.4" ry="12" fill="#e0d5c2" stroke="#8a7e6e" stroke-width=".5"/>
+        <rect x="-6" y="114.5" width="12" height="2.6" rx="1.2" fill="#827667"/></g><g transform="translate(61 0)"><g><path d="M-16.5 92 H16.5 V556 Q0 559 -16.5 556 Z" fill="url(#dobra0Americana)"/>
+        <path d="M-16.5 92 H16.5 V556 Q0 559 -16.5 556 Z" fill="url(#volume)"/>
+        <line x1="-16.5" y1="541" x2="16.5" y2="541" stroke="#7a6f60" stroke-opacity=".28" stroke-width="1" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/><rect x="-16.5" y="92" width="33" height="30" fill="url(#cabecote0)" opacity=".6"/></g><rect x="-1.5" y="86" width="3" height="9" rx="1" fill="url(#metal)" stroke="#A9ACB0" stroke-width=".5"/><ellipse cx="0" cy="117" rx="6" ry="2.5" fill="#000" opacity=".18"/><ellipse cx="-3.8" cy="104" rx="2.4" ry="12" fill="#b9ab95" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="3.8" cy="104" rx="2.4" ry="12" fill="#ac9e8a" stroke="#8a7e6e" stroke-width=".5"/><ellipse cx="0" cy="104" rx="2.4" ry="12" fill="#e0d5c2" stroke="#8a7e6e" stroke-width=".5"/>
+        <rect x="-6" y="114.5" width="12" height="2.6" rx="1.2" fill="#827667"/></g></g></g>
+    </g>
+    <circle cx="1350" cy="338" r="122" fill="none" stroke="#000" stroke-opacity=".18" stroke-width="10" filter="url(#desfoque4)"/>
+  </g>
+  <circle cx="1350" cy="338" r="125" fill="none" stroke="#FFFFFF" stroke-width="6"/>
+  <circle cx="1350" cy="338" r="128" fill="none" stroke="#B4AB9D" stroke-width="1"/>
+  <rect x="1251" y="452" width="198" height="32" rx="16" fill="#2B241E" fill-opacity=".9"/>
+  <text x="1350" y="474" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#FFFFFF">Prega Americana</text>
 </svg>

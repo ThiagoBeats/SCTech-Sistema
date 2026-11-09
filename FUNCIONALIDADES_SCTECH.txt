@@ -868,6 +868,22 @@ Cada ambiente é um painel colapsável com:
     ganha itens sozinho
   - Tipo de Abertura (select): A/B/C/D/E/F/G/H com descrições
     (Centro/Esq./Dir. + combinações)
+  - Desenho da cortina ao lado do formulário: a cortina de tecido instalada
+    no ambiente, recolhida conforme a abertura, com a prega de cada tecido.
+    Cada tecido é uma camada da cortina (o primeiro fica na frente, os de trás
+    em trilhos mais altos e com outro tom). Tecido com trama, dobras com
+    volume, brilho e sombra, sombra da cortina na parede e luz da janela
+    batendo no tecido. Numa coluna à direita do ambiente, uma lupa por camada
+    (maior quando há menos camadas) mostra o alto da cortina ampliado, com o
+    nome da prega: dobras da Americana, botões da Wave Botão, deslizantes da
+    Wave Plus, franzido, costura da Macho-Fêmea, painel liso. Embaixo do
+    desenho: "Abertura C · Wave Botão + Prega Americana"
+  - Trocar a abertura ou a prega toca uma vez a cortina abrindo: começa
+    fechada, com o ambiente mais escuro e a claridade atravessando o tecido;
+    enquanto corre, a barra fica para trás (inércia e resistência do ar) e,
+    quando para, passa um pouco do ponto e balança até assentar, enquanto o
+    ambiente clareia. Parada para quem pede menos movimento no sistema. A
+    proposta comercial usa o mesmo desenho, parado
   - Local de Instalação (select): Parede | Teto | Outro
 
   Dimensões:

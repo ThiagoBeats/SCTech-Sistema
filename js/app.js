@@ -5103,12 +5103,50 @@ function urlAberturaAnimada(letra) {
     return `${PASTA_ABERTURAS}Abertura${letra}-anim.svg?t=${Date.now()}`;
 }
 
-function onAberturaChange(id) {
-    const val = document.getElementById(`a-abertura-${id}`)?.value || 'A';
+// Desenho da cortina com a abertura e a prega de cada tecido (js/cortina-desenho.js).
+// Sem o modulo carregado, cai na imagem fixa da abertura.
+function _semMovimento() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
+function urlDesenhoCortina(abertura, pregas, animado) {
+    if (typeof CortinaDesenho === 'undefined') {
+        return animado ? urlAberturaAnimada(abertura || 'A') : `${PASTA_ABERTURAS}Abertura${abertura || 'A'}.svg`;
+    }
+    return CortinaDesenho.urlSvg({ abertura, pregas, animado: animado && !_semMovimento() });
+}
+
+function descricaoDesenhoCortina(abertura, pregas) {
+    return typeof CortinaDesenho === 'undefined'
+        ? `Abertura ${abertura || 'A'}`
+        : CortinaDesenho.descricao({ abertura, pregas });
+}
+
+// Pregas do ambiente como estao na tela (um select por tecido), na ordem dos tecidos.
+function _pregasNaTela(ambId) {
+    const amb = (pedidoDraft.ambientes || []).find(a => a.id == ambId);
+    const n = amb ? (amb.tecidos || []).length : 0;
+    const pregas = [];
+    for (let i = 0; i < n; i++) {
+        const v = document.getElementById(`t-prega-${ambId}-${i}`)?.value;
+        pregas.push(v || (amb.tecidos[i] && amb.tecidos[i].prega) || '');
+    }
+    return pregas;
+}
+
+// Ao trocar a abertura ou a prega, toca uma vez a cortina abrindo.
+function atualizarDesenhoCortina(id) {
+    const abertura = document.getElementById(`a-abertura-${id}`)?.value || 'A';
+    const pregas = _pregasNaTela(id);
+    const desc = descricaoDesenhoCortina(abertura, pregas);
     const img = document.getElementById(`img-abertura-${id}`);
-    if (img) { img.src = urlAberturaAnimada(val); img.alt = `Abertura ${val}`; }
+    if (img) { img.src = urlDesenhoCortina(abertura, pregas, true); img.alt = desc; }
     const lbl = document.getElementById(`lbl-abertura-${id}`);
-    if (lbl) lbl.textContent = `Tipo ${val}`;
+    if (lbl) lbl.textContent = desc;
+}
+
+function onAberturaChange(id) {
+    atualizarDesenhoCortina(id);
 }
 
 function onPregaTecido(ambId, tidx) {
@@ -5120,6 +5158,7 @@ function onPregaTecido(ambId, tidx) {
     const prega = document.getElementById(`t-prega-${ambId}-${tidx}`)?.value;
     const fatorEl = document.getElementById(`t-fator-${ambId}-${tidx}`);
     if (fatorEl && prega) fatorEl.value = fatoresSugeridos[prega] || '2.5';
+    atualizarDesenhoCortina(ambId);
 }
 
 function renderAmbienteBreakdown(a) {
@@ -5304,9 +5343,9 @@ function renderAmbientes() {
                 <button class="btn" onclick="calcularAmbiente(${a.id})">Calcular Consumo &rarr;</button>
             </div>
         </div>
-        <div style="flex:0 1 475px;min-width:220px;max-width:475px;margin:0 auto;text-align:center">
-            <img id="img-abertura-${a.id}" src="${PASTA_ABERTURAS}Abertura${a.abertura||'A'}.svg" alt="Abertura ${a.abertura||'A'}" style="width:100%;height:auto;border:1px solid var(--border);border-radius:6px;display:block">
-            <div id="lbl-abertura-${a.id}" style="font-size:11px;color:#666;margin-top:4px;font-weight:600">Tipo ${a.abertura||'A'}</div>
+        <div style="flex:0 1 560px;min-width:220px;max-width:560px;margin:0 auto;text-align:center">
+            <img id="img-abertura-${a.id}" src="${urlDesenhoCortina(a.abertura||'A', tecidos.map(t => t.prega), false)}" alt="${escapeHtml(descricaoDesenhoCortina(a.abertura||'A', tecidos.map(t => t.prega)))}" style="width:100%;height:auto;border:1px solid var(--border);border-radius:6px;display:block">
+            <div id="lbl-abertura-${a.id}" style="font-size:11px;color:#666;margin-top:4px;font-weight:600">${escapeHtml(descricaoDesenhoCortina(a.abertura||'A', tecidos.map(t => t.prega)))}</div>
         </div>
     </div>
     ${a.calculado ? renderAmbienteBreakdown(a) : ''}
@@ -6616,7 +6655,7 @@ function gerarHTMLProposta(pedidoId, diasValidade) {
             return nome ? `${nome}${t.prega ? ' ('+escapeHtml(t.prega)+', '+t.fator+'x)' : ''}` : '';
         }).filter(Boolean).join(' + ') || 'Tecido selecionado';
         const aberturaImg = a.abertura
-            ? `<img src="${PASTA_ABERTURAS}Abertura${escapeHtml(a.abertura)}.svg" alt="Abertura ${escapeHtml(a.abertura)}"
+            ? `<img src="${urlDesenhoCortina(a.abertura, tecidos.map(t => t.prega), false)}" alt="${escapeHtml(descricaoDesenhoCortina(a.abertura, tecidos.map(t => t.prega)))}"
                 style="height:54px;width:auto;vertical-align:middle;margin-left:10px;border:1px solid #E0E0E0;border-radius:4px;padding:2px;background:#fff"
                 title="Tipo de abertura: ${escapeHtml(a.abertura)}">`
             : '';
