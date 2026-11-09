@@ -207,6 +207,9 @@ Filtros do kanban:
   - Filtro por vendedor (select)
   - Filtro por tecido (select com todos os tecidos do catálogo)
   - Botão "✕ Limpar" para resetar filtros
+  - Os filtros continuam valendo depois de mudar um pedido de etapa (a página
+    recarrega) e ao voltar para a tela na mesma aba. Só o "✕ Limpar" os apaga.
+    Vendedor ou tecido que não existe mais volta a "Todos"
   - Contador de resultado: "X pedido(s) encontrado(s)"
 
 Colunas do kanban (uma por status):
@@ -1216,6 +1219,12 @@ Acesso:
 Tela:
   - Campo de leitura grande, sempre focado. O scanner digita o código e envia
     Enter, e o sistema processa a leitura
+  - Sem leitor, não precisa apertar Enter: o código de volume completo é lido
+    assim que o último dígito é digitado. O número do pedido é lido depois de
+    uma pausa de pouco mais de 1 segundo na digitação, porque ele também é o
+    começo dos códigos de volume. Com um pedido já ativo, trocar de pedido
+    pelo número continua pedindo o Enter, para que um pacote de outro pedido
+    digitado devagar dê o aviso de pedido errado em vez de trocar o pedido
   - Botão "Encerrar": limpa o pedido ativo e volta ao campo de leitura
 
 ── 16.1 FLUXO DE CONFERÊNCIA ───────────────────────────────────────────────────

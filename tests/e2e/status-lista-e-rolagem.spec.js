@@ -157,6 +157,42 @@ test('lista: com filtro, bloco sem resultado some', async ({ page }) => {
     expect((await blocos(page)).length).toBe(6);
 });
 
+// --- Filtros guardados ao mudar de etapa (a pagina recarrega) -------------------
+
+const VEND = [{ id: 1, nome: 'Julia' }, { id: 2, nome: 'Marcos' }];
+
+test('filtros continuam depois de avancar o pedido de etapa', async ({ page }) => {
+    await abrir(page, { sc_vend: VEND, sc_ped: PED().map(p => ({ ...p, vendedor_nome: p.id === 26200 ? 'Julia' : 'Marcos' })) });
+    await page.fill('#kf-cliente', 'Pedro');
+    await page.selectOption('#kf-vendedor', 'Julia');
+    await expect(page.locator('#kanban-board .kanban-card')).toHaveCount(1);
+    await page.locator('#kanban-board .kanban-card button[title="Avançar etapa"]').click();
+    await page.waitForLoadState('load');
+    await expect(page.locator('#kanban-board .kanban-col', { hasText: 'Aguardando Tecido' })).toContainText('Pedro Alves');
+    await expect(page.locator('#kf-cliente')).toHaveValue('Pedro');
+    await expect(page.locator('#kf-vendedor')).toHaveValue('Julia');
+    await expect(page.locator('#kanban-board .kanban-card')).toHaveCount(1);
+    await expect(page.locator('#kf-resultado')).toHaveText('1 pedido(s) encontrado(s)');
+});
+
+test('Limpar apaga o filtro guardado: recarregar mostra todos', async ({ page }) => {
+    await abrir(page);
+    await page.fill('#kf-cliente', 'Pedro');
+    await page.click('button:has-text("Limpar")');
+    await page.reload();
+    await expect(page.locator('#kf-cliente')).toHaveValue('');
+    await expect(page.locator('#kf-resultado')).toHaveText('');
+});
+
+test('vendedor guardado que nao existe mais volta a Todos', async ({ page }) => {
+    await abrir(page, { sc_vend: VEND });
+    await page.selectOption('#kf-vendedor', 'Marcos');
+    await page.evaluate(() => localStorage.setItem('sc_vend', JSON.stringify([{ id: 1, nome: 'Julia' }])));
+    await page.reload();
+    await expect(page.locator('#kf-vendedor')).toHaveValue('');
+    await expect(page.locator('#kf-resultado')).toHaveText('');
+});
+
 // --- Rolagem por coluna ---------------------------------------------------------
 
 // Card como o de um pedido real: vendedor (obrigatorio ao salvar) e data de entrega.

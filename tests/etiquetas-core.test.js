@@ -260,3 +260,31 @@ test('htmlEtiqueta sem o texto do codigo nao escreve nada a mais', () => {
     const html = E.htmlEtiqueta(E.modeloPadraoPedido(100, 50), {}, { barcode: '<svg id="b"></svg>', qrcode: '<svg id="q"></svg>' });
     assert.strictEqual(html.indexOf('etq-cod-txt'), -1);
 });
+
+// ---- leitura sem Enter: quando o texto digitado ja e um codigo completo ----
+test('codigoCompleto: volume dispara na hora, pedido espera a pausa', () => {
+    const lista = [ped(), ped({ id: 26002, volumes: 2 })];
+    // volume de pedido existente: nenhum codigo maior comeca assim
+    assert.strictEqual(E.codigoCompleto('260010103', lista), 'agora');
+    assert.strictEqual(E.codigoCompleto('260020102', lista), 'agora');
+    // etiqueta antiga (total diferente) e pacote de outro pedido tambem disparam: o aviso aparece
+    assert.strictEqual(E.codigoCompleto('260010204', lista), 'agora');
+    // numero do pedido: tambem e o comeco dos codigos de volume, entao espera a pausa
+    assert.strictEqual(E.codigoCompleto('26001', lista), 'pausa');
+    // incompleto, invalido ou inexistente: espera o Enter
+    assert.strictEqual(E.codigoCompleto('2600', lista), null);
+    assert.strictEqual(E.codigoCompleto('2600101', lista), null);
+    assert.strictEqual(E.codigoCompleto('260010003', lista), null);   // volume 0
+    assert.strictEqual(E.codigoCompleto('260010302', lista), null);   // volume maior que o total
+    assert.strictEqual(E.codigoCompleto('990010103', lista), null);   // pedido inexistente
+    assert.strictEqual(E.codigoCompleto('26001-1-3', lista), null);   // formato antigo: so com Enter
+    assert.strictEqual(E.codigoCompleto('', lista), null);
+    assert.strictEqual(E.codigoCompleto('2600101030', lista), null);
+});
+
+test('codigoCompleto: codigo que e comeco de outro codigo existente espera a pausa', () => {
+    // pedido 26100 volume 1/4 = 261000104, que tambem e o comeco de 2610001040 (pedido 261000, volume 10/40)
+    const lista = [ped({ id: 26100, volumes: 4 }), ped({ id: 261000, volumes: 40 })];
+    assert.strictEqual(E.codigoCompleto('261000104', lista), 'pausa');
+    assert.strictEqual(E.codigoCompleto('2610001040', lista), 'agora');
+});

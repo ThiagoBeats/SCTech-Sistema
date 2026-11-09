@@ -5941,15 +5941,47 @@ function carregarPedidoParaEdicao(id) {
 // --- KANBAN PCP ---
 let _kanbanFiltro = { cliente: '', vendedor: '', tecido: '' };
 
-function aplicarFiltroKanban() {
+// Os filtros ficam guardados na aba (sessionStorage): mudar o pedido de etapa recarrega
+// a pagina, e o filtro escolhido tem que continuar valendo depois do recarregamento.
+const KANBAN_CHAVE_FILTRO = 'sc_pcp_filtro';
+
+function _kanbanLerCamposFiltro() {
     _kanbanFiltro.cliente  = (document.getElementById('kf-cliente')?.value  || '').toLowerCase().trim();
     _kanbanFiltro.vendedor = document.getElementById('kf-vendedor')?.value  || '';
     _kanbanFiltro.tecido   = document.getElementById('kf-tecido')?.value    || '';
+}
+
+function aplicarFiltroKanban() {
+    _kanbanLerCamposFiltro();
+    try {
+        sessionStorage.setItem(KANBAN_CHAVE_FILTRO, JSON.stringify({
+            cliente:  document.getElementById('kf-cliente')?.value || '',
+            vendedor: _kanbanFiltro.vendedor,
+            tecido:   _kanbanFiltro.tecido
+        }));
+    } catch (e) { /* sem sessionStorage: o filtro vale so ate recarregar */ }
     renderKanban();
+}
+
+// Devolve aos campos o filtro guardado. Vendedor ou tecido que nao existe mais volta a "Todos".
+function _kanbanRestaurarFiltro() {
+    let salvo = null;
+    try { salvo = JSON.parse(sessionStorage.getItem(KANBAN_CHAVE_FILTRO) || 'null'); } catch (e) { salvo = null; }
+    if (!salvo || typeof salvo !== 'object') return;
+    const c = document.getElementById('kf-cliente');
+    if (c) c.value = String(salvo.cliente || '');
+    [['kf-vendedor', salvo.vendedor], ['kf-tecido', salvo.tecido]].forEach(([id, valor]) => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const v = String(valor || '');
+        sel.value = [...sel.options].some(o => o.value === v) ? v : '';
+    });
+    _kanbanLerCamposFiltro();
 }
 
 function limparFiltroKanban() {
     _kanbanFiltro = { cliente: '', vendedor: '', tecido: '' };
+    try { sessionStorage.removeItem(KANBAN_CHAVE_FILTRO); } catch (e) { /* nada a limpar */ }
     const c = document.getElementById('kf-cliente');   if (c) c.value = '';
     const v = document.getElementById('kf-vendedor');  if (v) v.value = '';
     const t = document.getElementById('kf-tecido');    if (t) t.value = '';
@@ -10081,6 +10113,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const kfTec = document.getElementById('kf-tecido');
         if (kfTec) kfTec.innerHTML = '<option value="">Todos</option>' +
             db.catalogo.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
+        _kanbanRestaurarFiltro();
         renderKanban();
     }
     if (document.getElementById('os-container'))       renderOS();

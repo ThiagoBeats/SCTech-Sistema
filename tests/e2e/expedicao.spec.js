@@ -265,3 +265,42 @@ test('sem permissao completa em Pedidos, Abrir pedido nao aparece', async ({ pag
     await expect(page.locator('#exp-abrir-pedido')).toHaveCount(0);
     await expect(page.locator('#exp-imprimir-etiquetas')).toBeVisible();
 });
+
+// ---- leitura sem Enter (quem digita o codigo a mao) ----
+const digitar = (page, codigo) => page.locator('#exp-leitura').pressSequentially(codigo, { delay: 60 });
+
+test('digitando a mao: pedido abre apos a pausa e cada volume e conferido sem Enter', async ({ page }) => {
+    await abrir(page);
+    await digitar(page, '26001');
+    await expect(page.locator('#exp-resultado')).toContainText('Pedido #26001: bipe os 3 volume(s).');
+    await expect(page.locator('#exp-leitura')).toHaveValue('');
+    await digitar(page, '260010103');
+    await expect(page.locator('#exp-resultado')).toContainText('✅ Volume 1/3 conferido.');
+    await expect(page.locator('#exp-leitura')).toHaveValue('');
+    await digitar(page, '260010203');
+    await digitar(page, '260010303');
+    await expect(page.locator('#exp-resultado')).toContainText('✅ Pedido #26001 conferido: 3 volume(s).');
+});
+
+test('digitando a mao: pacote de outro pedido avisa sem trocar o pedido ativo', async ({ page }) => {
+    await abrir(page);
+    await ler(page, '26001');
+    // passa pelo numero 26002 no meio da digitacao, com pausa: nao troca o pedido
+    await digitar(page, '26002');
+    await page.waitForTimeout(1600);
+    await expect(page.locator('#exp-leitura')).toHaveValue('26002');
+    await digitar(page, '0102');
+    await expect(page.locator('#exp-resultado')).toContainText('Este pacote é do pedido #26002, não do #26001');
+    expect(await page.evaluate(() => sessionStorage.getItem('sc_exp_ativo'))).toBe('26001');
+});
+
+test('leitor que manda Enter no fim: le uma vez e nao acusa erro', async ({ page }) => {
+    await abrir(page);
+    await page.locator('#exp-leitura').pressSequentially('26001\n', { delay: 5 });
+    await expect(page.locator('#exp-resultado')).toContainText('Pedido #26001: bipe os 3 volume(s).');
+    await page.locator('#exp-leitura').pressSequentially('260010103\n', { delay: 5 });
+    await expect(page.locator('#exp-resultado')).toContainText('✅ Volume 1/3 conferido.');
+    await expect(page.locator('#exp-resultado')).toHaveClass(/ok/);
+    await page.waitForTimeout(1500);   // a pausa do numero do pedido nao dispara uma segunda leitura
+    await expect(page.locator('#exp-resultado')).toContainText('✅ Volume 1/3 conferido.');
+});

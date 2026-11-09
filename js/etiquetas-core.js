@@ -320,6 +320,41 @@
         return _lista(pedido).length > 0;
     }
 
+    // Algum final de volume+total valido (VVTT) comeca com `r` (0 a 4 digitos)?
+    function _finalVolumePossivel(r) {
+        for (let v = 1; v <= MAX_VOLUMES; v++) {
+            for (let t = v; t <= MAX_VOLUMES; t++) {
+                if ((_dois(v) + _dois(t)).startsWith(r)) return true;
+            }
+        }
+        return false;
+    }
+
+    // Leitura sem Enter (quem digita o codigo a mao). Diz se o texto ja e um codigo
+    // completo de pedido existente: 'agora' quando nenhum codigo maior comeca com ele
+    // (pode ler na hora); 'pausa' quando ainda pode ser o comeco de outro codigo, como o
+    // numero do pedido, que inicia os codigos de volume (le depois de uma pausa na digitacao);
+    // null quando ainda nao e um codigo completo (espera mais digitos ou o Enter).
+    function codigoCompleto(texto, pedidos) {
+        const t = String(texto == null ? '' : texto).trim();
+        if (!REGEX_DIGITOS.test(t)) return null;
+        let completo = false;
+        let comeco = false;
+        for (const p of pedidos || []) {
+            const s = String(p.id);
+            if (t === s) completo = true;
+            else if (t.length === s.length + DIGITOS_VOLUME && t.startsWith(s)) {
+                const r = t.slice(s.length);
+                if (_volume(p.id, parseInt(r.slice(0, 2), 10), parseInt(r.slice(2), 10)).tipo === 'volume') completo = true;
+            }
+            // `t` ainda pode crescer ate o numero ou um codigo de volume deste pedido?
+            if (t.length < s.length) { if (s.startsWith(t)) comeco = true; }
+            else if (t.length < s.length + DIGITOS_VOLUME && t.startsWith(s) && _finalVolumePossivel(t.slice(s.length))) comeco = true;
+        }
+        if (!completo) return null;
+        return comeco ? 'pausa' : 'agora';
+    }
+
     function avaliarLeitura(texto, ativoId, pedidos) {
         const l = lerCodigo(texto, id => (pedidos || []).some(p => p.id == id));
         if (l.tipo === 'invalido') return { tipo: 'invalido' };
@@ -386,7 +421,7 @@
         montarCodigoVolume, lerCodigo, FORMATOS_ETIQUETA, CAMPOS_ETIQUETA_PEDIDO, TIPOS_ELEMENTO,
         modeloPadraoPedido, ajustarAoFormato, encaixarNaGrade, avisosLegibilidade, lerConfigEtiquetas, modeloTemCodigo,
         ROTULOS_CAMPO, valoresEtiquetaPedido, pedidoExemplo, htmlEtiqueta,
-        conferenciaVazia, avaliarLeitura, marcarVolume, zerarConferencia, alterarVolumes,
+        conferenciaVazia, avaliarLeitura, codigoCompleto, marcarVolume, zerarConferencia, alterarVolumes,
         temConferenciaIniciada, marcacaoConferencia
     };
 

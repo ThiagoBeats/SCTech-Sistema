@@ -1,6 +1,7 @@
 // Tela de Expedicao: conferencia de volumes por leitor de codigo (teclado).
 // Nao depende de bibliotecas externas: funciona sem internet.
 const EXP_CHAVE_ATIVO = 'sc_exp_ativo';
+const EXP_PAUSA_MS = 1200;   // pausa na digitacao que confirma o numero do pedido sem Enter
 let _expPedidoExibido = null;   // pedido mostrado no painel (ativo ou so consultado)
 
 function _expAtivoId() {
@@ -179,13 +180,30 @@ function _expRecuperarFoco() {
 function iniciarExpedicao() {
     const campo = document.getElementById('exp-leitura');
     if (!campo) return;
-    campo.addEventListener('keydown', ev => {
-        if (ev.key !== 'Enter') return;
-        ev.preventDefault();
+    let pausa = null;
+    const ler = () => {
+        clearTimeout(pausa);
         const valor = campo.value;
         campo.value = '';
         processarLeituraExpedicao(valor);
         _expFoco();
+    };
+    campo.addEventListener('keydown', ev => {
+        if (ev.key !== 'Enter') return;
+        ev.preventDefault();
+        // campo vazio: o codigo ja foi lido sem Enter (leitor que manda Enter no fim)
+        if (campo.value.trim() === '') return;
+        ler();
+    });
+    // Quem digita a mao nao precisa do Enter: codigo de volume completo e lido na hora.
+    // O numero do pedido tambem e o comeco dos codigos de volume, entao so e lido depois
+    // de uma pausa, e so sem pedido ativo: com um ativo, trocar de pedido pede o Enter,
+    // para um pacote de outro pedido digitado devagar nao trocar o pedido sem aviso.
+    campo.addEventListener('input', () => {
+        clearTimeout(pausa);
+        const r = EtiquetasCore.codigoCompleto(campo.value, db.pedidos);
+        if (r === 'agora') ler();
+        else if (r === 'pausa' && _expAtivoId() == null) pausa = setTimeout(ler, EXP_PAUSA_MS);
     });
     // o foco volta ao campo, exceto quando outro controle (modal do Ver OS) o tomou
     campo.addEventListener('blur', () => {
