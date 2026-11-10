@@ -1029,7 +1029,7 @@ Comportamentos automáticos ao salvar:
   - Redimensionamento automático para 400px na horizontal
   - Armazenamento como base64 no localStorage
   - Botão "✕ Remover logo": limpa a imagem selecionada
-  - Logo é usada nos documentos gerados (proposta e OS)
+  - Logo é usada nos documentos gerados (e, se escolhido, no fundo deles — ver 12.4)
 
 ── 12.2 DADOS DA EMPRESA ───────────────────────────────────────────────────────
 
@@ -1069,6 +1069,44 @@ Comportamento dos toggles:
   - Quando qualquer alerta está desabilitado: indicador 🔕 aparece no cabeçalho
     de TODAS as telas do sistema
   - Padrão: todos os alertas ativos
+
+
+── 12.4 LAYOUT DOS DOCUMENTOS ──────────────────────────────────────────────────
+
+Card "📄 Layout dos Documentos": cada documento impresso ganha a cara da empresa.
+Documentos: Proposta Comercial, Ordem de Serviço, Pedido de Compra, Agendamento
+de Medição e Relatório Financeiro — cada um editado separadamente.
+
+Tela (painel à esquerda, folha A4 à direita mudando na hora):
+  - Topo: escolha do documento · "Copiar estilo de…" (traz cores, fonte, logo no
+    fundo e a posição do cabeçalho de outro documento já salvo) · "Voltar ao
+    padrão" (com confirmação; apaga o layout só daquele documento) · "Salvar"
+  - A folha mostra o registro mais recente daquele tipo; sem nenhum, um exemplo
+  - Trocar de documento ou sair com alterações não salvas pede confirmação
+  - Sem acesso completo à configuração da empresa: só visualização
+
+O que dá para mudar:
+  - Cores: principal, destaque e fundo das caixas (livre ou por paleta pronta;
+    "padrão" volta à cor do sistema)
+  - Fonte: Padrão do sistema, Arial, Georgia, Lora, Montserrat, Playfair Display, Nunito
+  - Logo no fundo: liga/desliga, tamanho (P/M/G) e transparência (3–20%);
+    usa a logo cadastrada (sem logo a opção fica desabilitada); na impressão
+    repete em todas as páginas
+  - Título do documento
+  - Blocos: arrumação (ex.: logo à esquerda/centro/direita, dados em uma
+    coluna/duas colunas/faixa, totais à direita/largura total, assinaturas lado a
+    lado/empilhadas), mostrar/esconder, subir/descer. O cabeçalho fica sempre no
+    topo (leva o número e o código de barras do documento)
+  - Textos: títulos dos blocos, aviso da OS, condições gerais, legendas das
+    assinaturas (uma linha por assinatura: "Título | legenda"), rodapés
+  - "+ Texto próprio": blocos de texto livres (ex.: Sobre nós, Cuidados com o tecido)
+  - "+ dado": insere no texto um campo do documento, ex.: {cliente}, {validade},
+    {total}; na impressão vira o valor. Marcador desconhecido aparece como está
+
+Armazenamento: localStorage sc_doc_layouts. Sem layout salvo os documentos saem
+como sempre saíram. As Condições Gerais da proposta, antes num card próprio
+(sc_cond_gerais), passaram para o bloco "Condições gerais" deste editor; o texto
+já salvo é trazido automaticamente.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
