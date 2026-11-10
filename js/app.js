@@ -22,6 +22,7 @@ const MODULOS_PERMISSAO = [
         { key: 'backup',    label: 'Backup' },
     ]},
     { key: 'clientes',      label: 'Clientes',           subs: [] },
+    { key: 'galeria',       label: 'Galeria',            subs: [] },
     { key: 'catalogo',      label: 'Cadastro/Catálogo',  subs: [
         { key: 'tecidos',   label: 'Tecidos' },
         { key: 'materiais', label: 'Materiais e Acessórios' },
@@ -99,6 +100,7 @@ function papeisPadrao() {
             pedidos:       'visualizar',
             clientes:      'visualizar',
             configuracoes: 'sem_acesso',
+            galeria:       'visualizar',
         })},
         { id: 3, nome: 'Vendedor/Atendimento', permissoes: comSubs(base('sem_acesso'), {
             inicio:                'completo',
@@ -111,6 +113,7 @@ function papeisPadrao() {
             'financeiro.dre':      'sem_acesso',
             producao:              'visualizar',
             catalogo:              'visualizar',
+            galeria:               'visualizar',
         })},
         { id: 4, nome: 'Produção/Costura', permissoes: comSubs(base('sem_acesso'), {
             inicio:    'completo',
@@ -120,6 +123,7 @@ function papeisPadrao() {
             expedicao: 'completo',
             estoque:   'visualizar',
             catalogo:  'visualizar',
+            galeria:   'visualizar',
         })},
         { id: 5, nome: 'Instalação', permissoes: comSubs(base('sem_acesso'), {
             inicio:            'completo',
@@ -128,6 +132,7 @@ function papeisPadrao() {
             producao:          'visualizar',
             'producao.agenda': 'completo',
             expedicao:         'completo',
+            galeria:           'visualizar',
         })},
     ];
 }
@@ -195,6 +200,11 @@ function migrarPermissoesSalvas() {
             const prod = p.permissoes.producao;
             const conferem = p.nome === 'Instalação' || p.nome === 'Produção/Costura';
             p.permissoes.expedicao = { nivel: conferem ? 'completo' : ((prod && prod.nivel) || 'sem_acesso'), acoes_restritas: [] };
+        }
+        // Galeria nasceu depois: todos passam a ver (o administrador, completo),
+        // para o instalador e o medidor ja poderem mostrar os modelos ao cliente
+        if (p.permissoes && typeof p.permissoes === 'object' && !p.permissoes.galeria) {
+            p.permissoes.galeria = { nivel: p.nome === 'Administrador' ? 'completo' : 'visualizar', acoes_restritas: [] };
         }
         if (JSON.stringify(p.permissoes) !== antes) mudou = true;
     });
@@ -624,6 +634,7 @@ function _saveNavHistory(hist) {
 
 // --- SIDEBAR (navegação lateral) ---
 const NAV_ICON_PATHS = {
+    galeria: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="m21 16-5-5-8 8"/>',
     home: '<path d="M4 12 12 5l8 7"/><path d="M6 11v8a1 1 0 0 0 1 1h3v-5h4v5h3a1 1 0 0 0 1-1v-8"/>',
     pedidos: '<rect x="5" y="3" width="14" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="13" y2="16"/>',
     producao: '<circle cx="6" cy="6" r="2.1"/><circle cx="18" cy="6" r="2.1"/><circle cx="12" cy="18" r="2.1"/><line x1="7.7" y1="7.6" x2="10.6" y2="16"/><line x1="16.3" y1="7.6" x2="13.4" y2="16"/><line x1="8.1" y1="6" x2="15.9" y2="6"/>',
@@ -658,6 +669,7 @@ const SIDEBAR_MODULOS = [
     { href: 'expedicao.html',   icon: 'expedicao',    label: 'Expedição',         permModulo: 'expedicao' },
     { href: 'estoque.html',     icon: 'estoque',      label: 'Estoque',           permModulo: 'estoque' },
     { href: 'clientes.html',    icon: 'clientes',     label: 'Clientes',          permModulo: 'clientes' },
+    { href: 'galeria.html',     icon: 'galeria',      label: 'Galeria',           permModulo: 'galeria' },
     { href: 'catalogo.html',    icon: 'catalogo',     label: 'Cadastro/Catálogo', permModulo: 'catalogo' },
     { href: 'vendedores.html',  icon: 'vendedores',   label: 'Vendedores/Arquitetos', permModulo: 'vendedores' },
     { href: 'fornecedores.html', icon: 'fornecedores', label: 'Fornecedores',     permModulo: 'fornecedores' },
@@ -890,6 +902,7 @@ const PAGINA_MODULO = {
     'expedicao.html':     'expedicao',
     'estoque.html':       'estoque',
     'clientes.html':      'clientes',
+    'galeria.html':       'galeria',
     'catalogo.html':      'catalogo',
     'vendedores.html':    'vendedores',
     'fornecedores.html':  'fornecedores',
@@ -10388,6 +10401,21 @@ document.addEventListener('DOMContentLoaded', () => {
 // =============================================
 // CATÁLOGO — TABS
 // =============================================
+
+// Mostruario da Galeria (sc_mostruario): so ids das imagens; os bytes ficam
+// em GaleriaImagens. Os trilhos partem dos kits de fixacao da empresa.
+function nomesTrilhosMostruario() {
+    const kits = (db.kits || []).filter(k => k && k.fixacao === true && k.nome).map(k => k.nome);
+    return kits.length ? kits : KITS_FIXACAO_PADRAO.slice();
+}
+function lerMostruarioSalvo() {
+    let bruto = null;
+    try { bruto = JSON.parse(localStorage.getItem('sc_mostruario')); } catch (e) { bruto = null; }
+    return GaleriaCore.lerMostruario(bruto, nomesTrilhosMostruario());
+}
+function gravarMostruario(m) {
+    localStorage.setItem('sc_mostruario', JSON.stringify(m));
+}
 
 // Configurar Empresa: abas Dados, Preferencias, Layout dos Documentos e
 // Etiquetas. A aba aberta vai para o endereco (#layout), para o recarregar

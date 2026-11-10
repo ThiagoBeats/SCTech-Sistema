@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Galeria - SCTech</title>
+    <link rel="icon" href="images/logo.png">
+    <link rel="stylesheet" href="css/style.css?v=20261110a">
+    <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
+</head>
+<body>
+    <aside class="sidebar" id="main-sidebar"></aside>
+    <main class="main">
+        <div class="header">
+            <h2>🖼️ Galeria</h2>
+            <a href="galeria.html#simular" class="btn btn-success gal-simular-topo">📐 Simular na parede do cliente</a>
+        </div>
+        <div id="gal-conteudo" class="gal-conteudo"></div>
+    </main>
+    <div id="gal-visor-raiz"></div>
+    <div id="sim" class="sim" hidden></div>
+    <script src="js/etiquetas-core.js?v=20261110a"></script>
+    <script src="js/etiquetas-render.js?v=20261110a"></script>
+    <script src="js/cortina-desenho.js?v=20261110a"></script>
+    <script src="js/docs-layout-core.js?v=20261110a"></script>
+    <script src="js/galeria-core.js?v=20261110a"></script>
+    <script src="js/galeria-imagens.js?v=20261110a"></script>
+    <script src="js/app.js?v=20261110a"></script>
+    <script src="js/galeria-tela.js?v=20261110a"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() { iniciarGaleria(); });
+    </script>
+</body>
+</html>
