@@ -294,3 +294,43 @@ test('sem WebGL mostra aviso claro', async ({ page }) => {
     await abrirSim(page);
     await expect(page.locator('.sim-sem-3d')).toContainText('não consegue mostrar o simulador 3D');
 });
+
+// Foto da galeria ligada a um modelo vira o tecido da cortina daquele modelo.
+async function semearFotoLigada(page) {
+    await entrar(page, BASE);
+    await page.goto(BASE + '/galeria.html');
+    await page.evaluate(async () => {
+        const c = document.createElement('canvas'); c.width = 200; c.height = 150;
+        const g = c.getContext('2d'); g.fillStyle = 'rgb(200,30,40)'; g.fillRect(0, 0, 200, 150);
+        const imagemId = await GaleriaImagens.salvar(await new Promise(r => c.toBlob(r, 'image/png')));
+        localStorage.setItem('sc_mostruario', JSON.stringify({ versao: 1, cores: [], fotos: [
+            { id: 'f1', grupo: 'pregas', legenda: 'Americana vermelha', imagemId, liga: { tipo: 'prega', valor: 'Americana' } }] }));
+    });
+}
+
+test('escolher o modelo com foto ligada usa a foto como tecido', async ({ page }) => {
+    await semearFotoLigada(page);
+    await page.goto(BASE + '/galeria.html#simular');
+    await expect(page.locator('#sim')).toBeVisible();
+    await comFoto(page);
+    await page.locator('.sim-aba[data-aba="modelo"]').click();
+    await page.locator('.sim-op[data-valor="prega:Americana"]').click();
+    expect(await page.evaluate(() => window._sim.estado.corId)).toBe('foto:f1');
+    await page.locator('.sim-aba[data-aba="cor"]').click();
+    await expect(page.locator('.sim-cor[data-valor="foto:f1"]')).toContainText('Americana vermelha');
+    const centro = await centroJanela(page);
+    await expect.poll(async () => { const c = await corEm(page, centro); return c[0] - c[1]; }, { timeout: 8000 }).toBeGreaterThan(60);
+    // outro modelo sem foto: volta para uma cor do mostruario
+    await page.locator('.sim-aba[data-aba="modelo"]').click();
+    await page.locator('.sim-op[data-valor="prega:Wave Botao"]').click();
+    expect(await page.evaluate(() => window._sim.estado.corId)).not.toMatch(/^foto:/);
+    await page.locator('.sim-aba[data-aba="cor"]').click();
+    await expect(page.locator('.sim-cor[data-valor="foto:f1"]')).toHaveCount(0);
+});
+
+test('Simular pela foto da galeria ja abre com a foto como tecido', async ({ page }) => {
+    await semearFotoLigada(page);
+    await page.goto(BASE + '/galeria.html#simular?prega=Americana');
+    await expect(page.locator('#sim')).toBeVisible();
+    expect(await page.evaluate(() => window._sim.estado)).toMatchObject({ prega: 'Americana', corId: 'foto:f1' });
+});

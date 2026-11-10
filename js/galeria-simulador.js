@@ -67,7 +67,6 @@ function abrirSimulador(pre) {
     _sim.m = lerMostruarioSalvo();
     _sim.cores = GaleriaCore.coresDisponiveis(_sim.m);
     const e = _sim.estado;
-    if (!_sim.cores.some(c => c.id === e.corId)) e.corId = _sim.cores[0].id;
     const pregas = _simPregas();
     if (!pregas.includes(e.prega)) e.prega = pregas.includes('Wave Botao') ? 'Wave Botao' : pregas[0];
     const trilhos = _sim.m.modelos.trilhos;
@@ -76,6 +75,8 @@ function abrirSimulador(pre) {
     if (pre.prega && GaleriaCore.PREGAS[pre.prega]) { e.produto = 'cortina'; e.prega = pre.prega; e.aberto = 0; _sim.aba = 'cor'; }
     if (pre.persiana && GaleriaCore.PERSIANAS[pre.persiana]) { e.produto = 'persiana'; e.persiana = pre.persiana; e.aberto = 0; _sim.aba = 'cor'; }
     if (pre.trilho) { e.produto = 'cortina'; e.trilho = pre.trilho; _sim.aba = 'cor'; }
+    if (pre.prega || pre.persiana) _simCorDoModelo();
+    else if (!_simCoresAtuais().some(c => c.id === e.corId)) e.corId = _sim.cores[0].id;
     raiz.hidden = false;
     document.body.classList.add('sim-aberto');
     document.getElementById('sim-sem-3d').hidden = _sim.gl;
@@ -89,6 +90,26 @@ function fecharSimulador() {
     if (!raiz || raiz.hidden) return;
     raiz.hidden = true;
     document.body.classList.remove('sim-aberto');
+}
+
+// Fotos da galeria ligadas ao modelo escolhido viram opcoes de tecido: a foto
+// e esticada sobre a cortina (com as dobras por cima).
+function _simFotosDoModelo() {
+    const e = _sim.estado;
+    const tipo = e.produto === 'cortina' ? 'prega' : 'persiana';
+    const valor = e.produto === 'cortina' ? e.prega : e.persiana;
+    return (_sim.m.fotos || []).filter(f => f.liga && f.liga.tipo === tipo && f.liga.valor === valor)
+        .map(f => ({ id: 'foto:' + f.id, nome: f.legenda || 'Foto da galeria', hex: '#9a9a9a', texturaId: f.imagemId, foto: true }));
+}
+function _simCoresAtuais() {
+    return _simFotosDoModelo().concat(_sim.cores);
+}
+// Ao trocar de modelo: com foto ligada, ela ja entra como tecido; sem foto,
+// sai a foto do modelo anterior e volta uma cor do mostruario.
+function _simCorDoModelo() {
+    const e = _sim.estado, fotos = _simFotosDoModelo();
+    if (fotos.length) e.corId = fotos[0].id;
+    else if (!_simCoresAtuais().some(c => c.id === e.corId)) e.corId = _sim.cores[0].id;
 }
 
 function _simPregas() {
@@ -117,7 +138,7 @@ function _simRenderGaveta() {
             + (persianas.length ? `<div class="sim-grupo-rotulo">Persianas</div><div class="sim-lista">${persianas.map(k =>
             op('modelo', 'persiana:' + k, G.PERSIANAS[k], !cortina && e.persiana === k, _simIconeModelo('persiana', k))).join('')}</div>` : '');
     } else if (_sim.aba === 'cor') {
-        html = `<div class="sim-lista sim-lista-cores">${_sim.cores.map(c => `<button type="button" class="sim-cor${e.corId === c.id ? ' ativa' : ''}" data-valor="${escapeHtml(c.id)}" aria-pressed="${e.corId === c.id}" title="${escapeHtml(c.nome)}">
+        html = `<div class="sim-lista sim-lista-cores">${_simCoresAtuais().map(c => `<button type="button" class="sim-cor${e.corId === c.id ? ' ativa' : ''}" data-valor="${escapeHtml(c.id)}" aria-pressed="${e.corId === c.id}" title="${escapeHtml(c.nome)}">
             <span class="sim-cor-amostra" style="background:${c.hex}" data-textura="${escapeHtml(c.texturaId || '')}"></span><span>${escapeHtml(c.nome || c.hex)}</span></button>`).join('')}</div>`;
     } else if (_sim.aba === 'trilho') {
         html = `<div class="sim-lista">${_sim.m.modelos.trilhos.map(t => op('trilho', t, t, e.trilho === t)).join('')}</div>`;
@@ -153,6 +174,7 @@ function _simEscolher(campo, valor) {
         const i = valor.indexOf(':'), tipo = valor.slice(0, i), k = valor.slice(i + 1);
         if (tipo === 'prega') { e.produto = 'cortina'; e.prega = k; } else { e.produto = 'persiana'; e.persiana = k; }
         e.aberto = 0;
+        _simCorDoModelo();
     } else if (campo === 'cor') e.corId = valor;
     else if (campo === 'trilho') e.trilho = valor;
     else if (campo === 'abertura') e.abertura = valor;
@@ -508,14 +530,14 @@ function _simTexturaCor(cor) {
 }
 
 // Malha em grade: colunas (x, z) x linhas (v); y da cena = -v.
-function _simGrade(xs, zs, v0, v1, linhas, larguraTecido, flare) {
+function _simGrade(xs, zs, v0, v1, linhas, larguraTecido, flare, uIni) {
     const T = THREE, n = xs.length, pos = [], uv = [], idx = [];
     for (let j = 0; j <= linhas; j++) {
         const t = j / linhas, v = v0 + (v1 - v0) * t;
         for (let i = 0; i < n; i++) {
             const k = flare ? 0.85 + 0.3 * t : 1;
             pos.push(xs[i], -v, zs[i] * k);
-            uv.push((i / (n - 1)) * larguraTecido, v);
+            uv.push((uIni || 0) + (i / (n - 1)) * larguraTecido, 1 - v);
         }
     }
     for (let j = 0; j < linhas; j++) for (let i = 0; i < n - 1; i++) {
@@ -533,15 +555,16 @@ function _simGrade(xs, zs, v0, v1, linhas, larguraTecido, flare) {
 function _simMontarProduto() {
     const T = THREE, e = _sim.estado, G = GaleriaCore, cena = _sim.prodCena;
     cena.children.slice().forEach(o => { cena.remove(o); if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
-    const cor = _sim.cores.find(c => c.id === e.corId) || _sim.cores[0];
+    const cor = _simCoresAtuais().find(c => c.id === e.corId) || _sim.cores[0];
     const mapa = _simTexturaCor(cor);
-    const tecido = op => _simMaterial(cor.hex, Object.assign({ mapa }, op));
+    const tecido = op => _simMaterial(cor.hex, Object.assign({ mapa, rep: cor.foto ? 1 : 6 }, op));
     if (e.produto === 'cortina') {
         const g = G.geometriaCortina({ prega: e.prega, abertura: e.abertura, aberto: e.aberto, colunas: 140 });
         const prof = Math.max(0.004, ...g.paineis.flatMap(p => p.z.map(Math.abs)));
         g.paineis.forEach(p => {
             const larg = e.abertura === 'central' ? 0.5 : 1;
-            cena.add(new T.Mesh(_simGrade(p.x, p.z, SIM_TOPO_TRILHO, 1, 24, larg, true), tecido({ prof })));
+            const uIni = e.abertura === 'central' && p.lado === 'direita' ? 0.5 : 0;
+            cena.add(new T.Mesh(_simGrade(p.x, p.z, SIM_TOPO_TRILHO, 1, 24, larg, true, uIni), tecido({ prof })));
         });
         const visual = G.visualTrilho(e.trilho);
         if (visual === 'varao') {
@@ -561,7 +584,7 @@ function _simMontarProduto() {
         if (e.persiana === 'romana') {
             // linhas da romana: a grade e transposta (dobras na horizontal)
             const pos = [], uv = [], idx = [], n = p.y.length;
-            for (let j = 0; j < n; j++) for (let i = 0; i < cols.length; i++) { pos.push(cols[i], -(0.04 + p.y[j] * 0.96), p.z[j]); uv.push(cols[i], p.y[j]); }
+            for (let j = 0; j < n; j++) for (let i = 0; i < cols.length; i++) { pos.push(cols[i], -(0.04 + p.y[j] * 0.96), p.z[j]); uv.push(cols[i], 1 - p.y[j]); }
             for (let j = 0; j < n - 1; j++) for (let i = 0; i < cols.length - 1; i++) { const a = j * cols.length + i, b = a + 1, c = a + cols.length, d = c + 1; idx.push(a, c, b, b, c, d); }
             const g = new T.BufferGeometry();
             g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));

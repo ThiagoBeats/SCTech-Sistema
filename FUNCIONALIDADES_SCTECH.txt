@@ -1383,6 +1383,13 @@ Passos do instalador:
      para o seu lado); persiana: arrastar para cima sobe
   5. "Até o chão": a barra da cortina tem uma alça para acertar a altura do
      chão da foto (nasce ~1 altura de janela abaixo da janela)
+  - Segurando um canto (ou a barra): a cortina fica 50% transparente e
+    aparece uma lupa com mira acima do dedo, com a foto ampliada no ponto
+  - ▶ Animar: a cortina abre e fecha uma vez na tela, sem baixar nada
+  - Foto da galeria ligada a um modelo ("Simular com" no mostruário) vira
+    tecido: ao escolher esse modelo, a cortina já usa a foto, esticada uma
+    vez sobre a cortina inteira com as dobras por cima; ela aparece também
+    na aba Cor, com a legenda. Outro modelo sem foto volta a uma cor
 
   - Cortina em 3D (Three.js, copiado em js/vendor/three.min.js — não depende de
     site externo): dobras com luz e sombra por tipo de prega, mais fundas ao
