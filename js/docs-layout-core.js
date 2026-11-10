@@ -311,7 +311,7 @@
     function variaveisCss(estilo) {
         if (!estilo) return '';
         let css = '';
-        if (estilo.cor) css += '--primary:' + estilo.cor + ';';
+        if (estilo.cor) css += '--primary:' + estilo.cor + ';--doc-cor:' + estilo.cor + ';';
         if (estilo.destaque) css += '--doc-destaque:' + estilo.destaque + ';';
         if (estilo.fundo) css += '--doc-fundo:' + estilo.fundo + ';';
         const f = FONTES.find(x => x.id === estilo.fonte);

@@ -114,6 +114,7 @@ test('variaveisCss emite so o que foi escolhido', () => {
     e.fonte = 'georgia';
     const css = D.variaveisCss(e);
     assert.match(css, /--primary:#7A1F3D;/);
+    assert.match(css, /--doc-cor:#7A1F3D;/);
     assert.match(css, /--doc-fonte:Georgia/);
     assert.doesNotMatch(css, /--doc-fundo/);
 });

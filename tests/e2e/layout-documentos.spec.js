@@ -191,3 +191,60 @@ test('pedido de compra com layout: cor, especificacoes antes dos itens, titulo d
     const cor = await doc.locator('.pc-header').evaluate(e => getComputedStyle(e).borderBottomColor);
     expect(cor).toBe('rgb(31, 58, 95)');
 });
+
+// --- Agendamento de Medicao e Relatorio Financeiro ---------------------------
+const MED = { id: 77, clienteId: 1, clienteNome: 'Maria', clienteTel: '(11) 9999-0000', data: '2026-12-02', hora: '14:00', duracao: 60,
+    status: 'Agendado', endereco: 'Rua das Flores, 120', obs: 'Portão azul' };
+
+async function abrirMedicao(page, extras) {
+    await entrar(page, BASE, Object.assign({ sc_cli: [CLI], sc_med: [MED] }, extras || {}));
+    await page.goto(BASE + '/pcp.html');
+    await page.evaluate(() => imprimirAgendamentoMedicao(77));
+    const doc = page.locator('#doc-modal-paper');
+    await expect(doc).toContainText('AGENDAMENTO DE MEDIÇÃO');
+    return doc;
+}
+
+test('agendamento sem layout mantem secoes e rodape de hoje', async ({ page }) => {
+    const doc = await abrirMedicao(page);
+    await expect(doc).toContainText('Dados do Cliente');
+    await expect(doc).toContainText('Dados do Agendamento');
+    await expect(doc).toContainText('Assinatura do responsável');
+    await expect(doc).toContainText('ID do agendamento: 77');
+    await expect(doc).toContainText('Portão azul');
+});
+
+test('agendamento com layout: rodape com dado e cliente em duas colunas', async ({ page }) => {
+    const l = { blocos: [
+        { id: 'cliente', variante: 'colunas', visivel: true, titulo: 'Quem vamos visitar' },
+        { id: 'rodape', variante: 'padrao', visivel: true, corpo: 'Até breve, {cliente}!\nVisita {data_visita}' }
+    ] };
+    const doc = await abrirMedicao(page, { sc_doc_layouts: { versao: 1, docs: { medicao: l } } });
+    await expect(doc).toContainText('Quem vamos visitar');
+    await expect(doc).toContainText('Até breve, Maria!');
+    await expect(doc).not.toContainText('ID do agendamento');
+    await expect(doc.locator('.doc-bloco-cliente.doc-var-colunas .med-dados')).toHaveCount(1);
+});
+
+async function abrirRelatorio(page, extras) {
+    await entrar(page, BASE, Object.assign({ sc_cr: [], sc_cp: [] }, extras || {}));
+    await page.goto(BASE + '/financeiro.html');
+    await page.evaluate(() => gerarRelatorioFinanceiro());
+    const doc = page.locator('#doc-modal-paper');
+    await expect(doc).toContainText('Próximos Recebimentos');
+    return doc;
+}
+
+test('relatorio financeiro sem layout mantem titulo e rodape de hoje', async ({ page }) => {
+    const doc = await abrirRelatorio(page);
+    await expect(doc).toContainText('Relatório Financeiro · ');
+    await expect(doc).toContainText('Relatório gerado pelo sistema SCTech · ');
+    await expect(doc).toContainText('Próximos Pagamentos');
+});
+
+test('relatorio financeiro com layout: titulo com periodo e pagamentos escondidos', async ({ page }) => {
+    const l = { titulo: 'Fechamento {periodo}', blocos: [{ id: 'pagamentos', variante: 'padrao', visivel: false }] };
+    const doc = await abrirRelatorio(page, { sc_doc_layouts: { versao: 1, docs: { financeiro: l } } });
+    await expect(doc.locator('.fin-cab p')).toHaveText(/^Fechamento \S/);
+    await expect(doc).not.toContainText('Próximos Pagamentos');
+});

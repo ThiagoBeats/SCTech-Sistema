@@ -8718,58 +8718,81 @@ async function salvarMedicao() {
 function imprimirAgendamentoMedicao(id) {
     const v = db.medicoes.find(x => x.id == id);
     if (!v) return;
+    abrirDocModal(gerarHTMLAgendamentoMedicao(v), 'Agendamento de Medição');
+}
 
+// Pares rotulo/valor de um bloco de dados, nas tres arrumacoes do layout:
+// lista (tabela, como sempre foi), duas colunas ou faixa compacta.
+function _htmlParesDoc(pares, variante) {
+    pares = pares.filter(([, val]) => val);
+    if (!pares.length) return '';
+    if (variante === 'colunas') return `<div class="med-dados med-colunas">${pares.map(([l, val]) =>
+        `<div><span class="med-rot">${l}</span><span>${val}</span></div>`).join('')}</div>`;
+    if (variante === 'faixa') return `<div class="med-dados med-faixa">${pares.map(([l, val]) =>
+        `<span><span class="med-rot">${l}:</span> ${val}</span>`).join('')}</div>`;
+    return `<table class="med-dados" style="width:100%;border-collapse:collapse">${pares.map(([l, val]) => `<tr>
+            <td style="padding:8px 12px;font-weight:600;color:#555;width:180px;border-bottom:1px solid #E0E0E0">${l}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid #E0E0E0">${val}</td>
+           </tr>`).join('')}</table>`;
+}
+
+function gerarHTMLAgendamentoMedicao(v, layout) {
+    layout = layout || getLayoutDocumento('medicao');
     const cli = v.clienteId ? db.clientes.find(c => c.id == v.clienteId) : null;
     const d   = new Date(v.data + 'T12:00:00');
     const dataFmt = d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
-    const horaFmt = v.hora || '—';
+    const horaFmt = v.hora ? _agdPeriodo(v.hora, +v.duracao || _agdDurPadrao('med')) : '—';
     const badgeBg  = v.status === 'Realizado' ? '#E3F7E2' : '#E4EFF9';
     const badgeClr = v.status === 'Realizado' ? '#0F6B0D' : '#1F5A96';
-
-    const row = (label, val) => val
-        ? `<tr>
-            <td style="padding:8px 12px;font-weight:600;color:#555;width:180px;border-bottom:1px solid #E0E0E0">${label}</td>
-            <td style="padding:8px 12px;border-bottom:1px solid #E0E0E0">${val}</td>
-           </tr>`
-        : '';
-
-    const secTitle = (t) => `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#8F8F8F;margin:20px 0 8px;padding-bottom:4px;border-bottom:1px solid #E0E0E0">${t}</div>`;
-
-    const html = `
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #005D3B;padding-bottom:16px;margin-bottom:24px">
+    const valores = Object.assign(valoresComunsEmpresa(), {
+        cliente: v.clienteNome || '', cliente_telefone: v.clienteTel || '',
+        data_visita: d.toLocaleDateString('pt-BR'), horario: v.hora ? horaFmt : '',
+        responsavel: _medNomeResp(v), endereco_visita: v.endereco || '', id: v.id
+    });
+    const secTitle = id => {
+        const t = blocoDoLayout(layout, id).titulo;
+        return (t || '').trim() ? `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#8F8F8F;margin:20px 0 8px;padding-bottom:4px;border-bottom:1px solid #E0E0E0">${textoDoc(t, valores)}</div>` : '';
+    };
+    const dados = (id, pares) => {
+        const html = _htmlParesDoc(pares, blocoDoLayout(layout, id).variante);
+        return html ? secTitle(id) + html : '';
+    };
+    const rodape = String(blocoDoLayout(layout, 'rodape').corpo || '').split('\n').filter(l => l.trim());
+    const blocos = {
+        cabecalho: `
+        <div class="doc-cab" style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid var(--doc-cor,#005D3B);padding-bottom:16px;margin-bottom:24px">
             <div>${buildEmpresaHeaderHTML(52)}</div>
             <div style="text-align:right">
-                <div style="font-size:16px;font-weight:700;color:#242424">AGENDAMENTO DE MEDIÇÃO</div>
+                <div style="font-size:16px;font-weight:700;color:#242424">${textoDoc(layout.titulo, valores)}</div>
                 <div style="font-size:12px;color:#8F8F8F;margin-top:2px">Emitido em ${new Date().toLocaleString('pt-BR')}</div>
                 <span style="display:inline-block;margin-top:6px;padding:3px 12px;border-radius:12px;font-size:12px;font-weight:700;background:${badgeBg};color:${badgeClr}">${escapeHtml(v.status)}</span>
             </div>
-        </div>
-        ${secTitle('Dados do Cliente')}
-        <table style="width:100%;border-collapse:collapse">
-            ${row('Nome', escapeHtml(v.clienteNome || '—'))}
-            ${row('Telefone / WhatsApp', escapeHtml(v.clienteTel || ''))}
-            ${row('E-mail', escapeHtml(cli?.email || ''))}
-            ${row('CPF / CNPJ', escapeHtml(cli?.cpf || ''))}
-            ${row('Endereço cadastrado', escapeHtml(cli?.end || ''))}
-        </table>
-        ${secTitle('Dados do Agendamento')}
-        <table style="width:100%;border-collapse:collapse">
-            ${row('Data da visita', dataFmt)}
-            ${row('Horário', v.hora ? _agdPeriodo(v.hora, +v.duracao || _agdDurPadrao('med')) : horaFmt)}
-            ${row('Responsável', escapeHtml(_medNomeResp(v)))}
-            ${row('Endereço da visita', escapeHtml(v.endereco || ''))}
-            ${row('Observações', escapeHtml(v.obs || ''))}
-        </table>
+        </div>`,
+        cliente: dados('cliente', [
+            ['Nome', escapeHtml(v.clienteNome || '—')],
+            ['Telefone / WhatsApp', escapeHtml(v.clienteTel || '')],
+            ['E-mail', escapeHtml(cli?.email || '')],
+            ['CPF / CNPJ', escapeHtml(cli?.cpf || '')],
+            ['Endereço cadastrado', escapeHtml(cli?.end || '')]
+        ]),
+        agendamento: dados('agendamento', [
+            ['Data da visita', dataFmt],
+            ['Horário', horaFmt],
+            ['Responsável', escapeHtml(_medNomeResp(v))],
+            ['Endereço da visita', escapeHtml(v.endereco || '')],
+            ['Observações', escapeHtml(v.obs || '')]
+        ]),
+        assinatura: `
         <div style="margin-top:48px;text-align:center">
             <div style="border-top:1px solid #242424;width:260px;margin:0 auto 6px"></div>
-            <p style="font-size:12px;color:#8F8F8F">Assinatura do responsável</p>
-        </div>
-        <div style="margin-top:40px;padding-top:16px;border-top:1px solid #E0E0E0;font-size:12px;color:#8F8F8F;display:flex;justify-content:space-between">
-            <span>${escapeHtml(getEmpresa().nome_fantasia || getEmpresa().razao_social || 'SCTech')}</span>
-            <span>ID do agendamento: ${v.id}</span>
-        </div>`;
-
-    abrirDocModal(html, 'Agendamento de Medição');
+            <p style="font-size:12px;color:#8F8F8F">${textoDoc(blocoDoLayout(layout, 'assinatura').corpo, valores)}</p>
+        </div>`,
+        rodape: rodape.length ? `
+        <div style="margin-top:40px;padding-top:16px;border-top:1px solid #E0E0E0;font-size:12px;color:#8F8F8F;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            ${rodape.map(l => `<span>${textoDoc(l.trim(), valores)}</span>`).join('')}
+        </div>` : ''
+    };
+    return montarDocumentoLayout('medicao', layout, blocos, valores);
 }
 
 // --- AGENDAS DA PRODUCAO (Medicoes e Instalacoes) ---------------------------
@@ -11899,7 +11922,8 @@ function _finGerarBuckets(ini, fim) {
     return buckets;
 }
 
-function gerarRelatorioFinanceiro() {
+function gerarHTMLRelatorioFinanceiro(layout) {
+    layout = layout || getLayoutDocumento('financeiro');
     const { ini, fim, label } = getFinPeriodo();
     const inRange = d => d && d >= ini && d <= fim;
     const fmt = v => (v||0).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
@@ -11963,17 +11987,23 @@ function gerarRelatorioFinanceiro() {
         </tr>`;
     });
 
-    const html = `<div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:20px;color:#242424">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #005D3B;padding-bottom:14px;margin-bottom:20px">
+    const agora = new Date();
+    const valores = Object.assign(valoresComunsEmpresa(), { periodo: label, data_geracao: agora.toLocaleString('pt-BR') });
+    const titFin = id => textoDoc(blocoDoLayout(layout, id).titulo, valores);
+    const rodape = String(blocoDoLayout(layout, 'rodape').corpo || '').split('\n').filter(l => l.trim());
+    const blocos = {
+        cabecalho: `
+    <div class="fin-cab doc-cab" style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid var(--doc-cor,#005D3B);padding-bottom:14px;margin-bottom:20px">
         <div>${empresa.logo?`<img src="${empresa.logo}" style="height:32px;margin-bottom:4px;display:block">`:''}
-            <h1 style="color:#005D3B;margin:0;font-size:20px">${escapeHtml(empresa.nome||'SCTech')}</h1>
-            <p style="margin:2px 0 0;color:#8F8F8F;font-size:12px">Relatório Financeiro · ${escapeHtml(label)}</p>
+            <h1 style="color:var(--doc-cor,#005D3B);margin:0;font-size:20px">${escapeHtml(empresa.nome||'SCTech')}</h1>
+            <p style="margin:2px 0 0;color:#8F8F8F;font-size:12px">${textoDoc(layout.titulo, valores)}</p>
         </div>
         <div style="text-align:right;font-size:11px;color:#8F8F8F">
-            <div>Gerado em ${new Date().toLocaleDateString('pt-BR')}</div>
+            <div>Gerado em ${agora.toLocaleDateString('pt-BR')}</div>
             <div>${ini.split('-').reverse().join('/')} – ${fim.split('-').reverse().join('/')}</div>
         </div>
-    </div>
+    </div>`,
+        indicadores: `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
         ${kpiBox('Total Recebido', 'R$ '+fmt(recebido), label, '#005D3B')}
         ${kpiBox('A Receber', 'R$ '+fmt(aReceber), 'vence no período', '#2D77C1')}
@@ -11981,7 +12011,8 @@ function gerarRelatorioFinanceiro() {
         ${kpiBox('Saldo Previsto', 'R$ '+fmt(saldoPrev), 'receb.+a receber−despesas', saldoPrev>=0?'#17E8FF':'#F43927')}
         ${kpiBox('Lucro (Caixa)', 'R$ '+fmt(lucro), 'recebido − saídas pagas', lucro>=0?'#159912':'#F43927')}
         ${kpiBox('Ticket Médio', ticketMedio>0?'R$ '+fmt(ticketMedio):'—', pedPagos.size+' pedido(s)', '#9B31C8')}
-    </div>
+    </div>`,
+        graficos: `
     ${evolImg?`<h3 style="font-size:13px;color:#242424;margin:0 0 6px">Evolução Mensal (12 meses)</h3><img src="${evolImg}" style="width:100%;border-radius:6px;margin-bottom:14px">`:''}
     ${comboImg?`<h3 style="font-size:13px;color:#242424;margin:0 0 6px">Entradas × Saídas × Saldo (período)</h3><img src="${comboImg}" style="width:100%;border-radius:6px;margin-bottom:14px">`:''}
     ${(agingImg||topImg||funilImg)?`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
@@ -11992,15 +12023,24 @@ function gerarRelatorioFinanceiro() {
     ${(recImg||despImg)?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
         ${recImg?`<div><h3 style="font-size:13px;color:#242424;margin:0 0 4px">Recebimentos</h3><img src="${recImg}" style="width:100%"></div>`:''}
         ${despImg?`<div><h3 style="font-size:13px;color:#242424;margin:0 0 4px">Despesas por Categoria</h3><img src="${despImg}" style="width:100%"></div>`:''}
-    </div>`:''}
-    <h3 style="font-size:13px;color:#242424;margin:8px 0 6px;border-bottom:1px solid #E0E0E0;padding-bottom:4px">📥 Próximos Recebimentos</h3>
-    ${mkTable(rowsRec, [{label:'Vencimento'},{label:'Cliente'},{label:'Descrição'},{label:'Valor',right:true},{label:'Status'}], 'Nenhum recebimento pendente.')}
-    <h3 style="font-size:13px;color:#242424;margin:8px 0 6px;border-bottom:1px solid #E0E0E0;padding-bottom:4px">📤 Próximos Pagamentos</h3>
-    ${mkTable(rowsPag, [{label:'Vencimento'},{label:'Credor'},{label:'Descrição'},{label:'Valor',right:true},{label:'Status'}], 'Nenhum pagamento pendente.')}
+    </div>`:''}`,
+        recebimentos: `
+    <h3 style="font-size:13px;color:#242424;margin:8px 0 6px;border-bottom:1px solid #E0E0E0;padding-bottom:4px">${titFin('recebimentos')}</h3>
+    ${mkTable(rowsRec, [{label:'Vencimento'},{label:'Cliente'},{label:'Descrição'},{label:'Valor',right:true},{label:'Status'}], 'Nenhum recebimento pendente.')}`,
+        pagamentos: `
+    <h3 style="font-size:13px;color:#242424;margin:8px 0 6px;border-bottom:1px solid #E0E0E0;padding-bottom:4px">${titFin('pagamentos')}</h3>
+    ${mkTable(rowsPag, [{label:'Vencimento'},{label:'Credor'},{label:'Descrição'},{label:'Valor',right:true},{label:'Status'}], 'Nenhum pagamento pendente.')}`,
+        rodape: rodape.length ? `
     <div style="margin-top:20px;padding-top:10px;border-top:1px solid #E0E0E0;font-size:10px;color:#8F8F8F;text-align:center">
-        Relatório gerado pelo sistema SCTech · ${new Date().toLocaleString('pt-BR')}
-    </div>
-</div>`;
+        ${rodape.map(l => textoDoc(l.trim(), valores)).join('<br>')}
+    </div>` : ''
+    };
+    const html = `<div style="max-width:800px;margin:0 auto;padding:20px;color:#242424">${montarDocumentoLayout('financeiro', layout, blocos, valores)}</div>`;
+    return { html, label };
+}
+
+function gerarRelatorioFinanceiro() {
+    const { html, label } = gerarHTMLRelatorioFinanceiro();
     abrirDocModal(html, `Relatório Financeiro — ${label}`);
 }
 

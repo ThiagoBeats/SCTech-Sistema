@@ -2001,3 +2001,9 @@ html[data-theme="dark"] {
 .doc-var-caixa > * { background: var(--doc-fundo, #FAFAFA); padding: 12px 16px; border-radius: 6px; }
 .doc-var-lateral > * { border-left: 3px solid var(--doc-destaque, var(--primary)); padding: 4px 0 4px 14px; }
 .doc-var-caixa > .proposta-termos, .doc-var-lateral > .proposta-termos { border-top: none; }
+/* Dados do agendamento de medicao em duas colunas ou faixa */
+.med-dados .med-rot { font-weight: 600; color: #555; }
+.med-colunas { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; font-size: 14px; }
+.med-colunas > div { display: flex; flex-direction: column; gap: 2px; padding-bottom: 6px; border-bottom: 1px solid #E0E0E0; }
+.med-colunas .med-rot { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: #8F8F8F; }
+.med-faixa { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; }
