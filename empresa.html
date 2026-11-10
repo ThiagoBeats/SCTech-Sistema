@@ -37,6 +37,7 @@
             <button class="tab-btn emp-tab-btn"        data-tab="preferencias" onclick="mostrarTabEmpresa('preferencias')">⚙️ Preferências</button>
             <button class="tab-btn emp-tab-btn"        data-tab="layout"       onclick="mostrarTabEmpresa('layout')">📄 Layout dos Documentos</button>
             <button class="tab-btn emp-tab-btn"        data-tab="etiquetas"    onclick="mostrarTabEmpresa('etiquetas')">🏷️ Etiquetas</button>
+            <button class="tab-btn emp-tab-btn"        data-tab="galeria"      onclick="mostrarTabEmpresa('galeria')">🖼️ Galeria e Mostruário</button>
         </div>
 
         <!-- ══════════════ ABA: DADOS DA EMPRESA ══════════════ -->
@@ -167,14 +168,29 @@
         </div>
         </div>
 
+        <!-- ══════════════ ABA: GALERIA E MOSTRUARIO ══════════════ -->
+        <div id="tab-emp-galeria" class="tab-panel emp-tab-panel">
+        <div class="card" style="max-width:1040px" id="emp-galeria-card">
+            <h3 style="margin-bottom:6px;color:var(--primary)">🖼️ Galeria e Mostruário</h3>
+            <p style="font-size:12px;color:#8F8F8F;margin-bottom:14px">
+                O que o instalador e o medidor mostram ao cliente na tela <strong>Galeria</strong>: fotos reais de modelos,
+                as cores e tecidos do simulador e quais modelos aparecem nele. Cada alteração é salva na hora.
+            </p>
+            <div id="gm-editor" class="gm-editor"></div>
+        </div>
+        </div>
+
     </main>
     <script src="js/etiquetas-core.js?v=20261110a"></script>
     <script src="js/etiquetas-render.js?v=20261110a"></script>
     <script src="js/cortina-desenho.js?v=20261110a"></script>
     <script src="js/docs-layout-core.js?v=20261110a"></script>
+    <script src="js/galeria-core.js?v=20261110a"></script>
+    <script src="js/galeria-imagens.js?v=20261110a"></script>
     <script src="js/app.js?v=20261110a"></script>
     <script src="js/etiquetas-editor.js?v=20261110a"></script>
     <script src="js/docs-layout-editor.js?v=20261110a"></script>
+    <script src="js/galeria-mostruario.js?v=20261110a"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             carregarEmpresaConfigs();
@@ -184,6 +200,7 @@
             renderFormasPagamentoCfg();
             iniciarEditorEtiquetas();
             iniciarEditorLayouts();
+            iniciarEditorMostruario();
             mostrarTabEmpresa(location.hash.slice(1));
             window.addEventListener('hashchange', () => mostrarTabEmpresa(location.hash.slice(1)));
         });

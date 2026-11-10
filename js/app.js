@@ -10417,10 +10417,10 @@ function gravarMostruario(m) {
     localStorage.setItem('sc_mostruario', JSON.stringify(m));
 }
 
-// Configurar Empresa: abas Dados, Preferencias, Layout dos Documentos e
-// Etiquetas. A aba aberta vai para o endereco (#layout), para o recarregar
+// Configurar Empresa: abas Dados, Preferencias, Layout dos Documentos,
+// Etiquetas e Galeria e Mostruario. A aba aberta vai para o endereco (#layout), para o recarregar
 // e os atalhos voltarem nela.
-const ABAS_EMPRESA = ['dados', 'preferencias', 'layout', 'etiquetas'];
+const ABAS_EMPRESA = ['dados', 'preferencias', 'layout', 'etiquetas', 'galeria'];
 function mostrarTabEmpresa(tab) {
     if (!ABAS_EMPRESA.includes(tab)) tab = 'dados';
     document.querySelectorAll('.emp-tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-emp-' + tab));

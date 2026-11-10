@@ -2107,3 +2107,40 @@ html[data-theme="dark"] .dl-folha .pc-table td, html[data-theme="dark"] .dl-folh
 .gal-visor-legenda { font-weight: 600; flex: 1; }
 .gal-visor-conta { opacity: .7; font-size: 12px; }
 .gal-visor-rodape .gal-simular { position: static; }
+
+/* ===== Mostruario (Configurar Empresa > Galeria e Mostruario) ===== */
+.gm-aviso { background: #FFF6E5; border: 1px solid #F2C46D; color: #7A5200; border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-bottom: 14px; }
+.gm-secao { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; }
+.gm-secao:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+.gm-secao h4 { font-size: 14px; color: var(--dark); margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+.gm-secao-topo { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.gm-contador { font-size: 12px; font-weight: 600; color: #8F8F8F; background: var(--light); border-radius: 10px; padding: 1px 8px; }
+.gm-envio { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gm-envio-rotulo { font-size: 12px; color: #8F8F8F; display: flex; align-items: center; gap: 6px; }
+.gm-envio select { width: auto; padding: 5px 8px; }
+.gm-desligado { opacity: .45; pointer-events: none; }
+.gm-dica { font-size: 12px; color: #8F8F8F; margin: 4px 0 10px; }
+.gm-limite { color: #B5651D; font-weight: 600; }
+.gm-vazio { font-size: 13px; color: #8F8F8F; }
+.gm-fotos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 10px; }
+.gm-foto { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--border); border-radius: 10px; padding: 8px; }
+.gm-foto-img { width: 84px; height: 64px; flex: 0 0 auto; border-radius: 6px; overflow: hidden; background: var(--light); display: flex; align-items: center; justify-content: center; font-size: 10px; color: #8F8F8F; }
+.gm-foto-img img { width: 100%; height: 100%; object-fit: cover; }
+.gm-foto-campos { flex: 1; min-width: 0; display: grid; gap: 5px; }
+.gm-foto-campos select, .gm-foto-campos input { padding: 5px 8px; font-size: 12px; }
+.gm-foto-liga-rotulo { font-size: 11px; color: #8F8F8F; display: grid; gap: 2px; }
+.gm-foto-remover, .gm-cor-remover { border: none; background: none; cursor: pointer; font-size: 15px; padding: 4px 6px; border-radius: 6px; color: #8F8F8F; }
+.gm-foto-remover:hover, .gm-cor-remover:hover { background: #FDECEA; color: #F43927; }
+.gm-nova-cor { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.gm-nova-cor #gm-cor-nome { flex: 1 1 180px; width: auto; }
+.gm-nova-cor #gm-cor-hex { width: 46px; height: 36px; padding: 2px; }
+.gm-arquivo { font-size: 12px; color: #8F8F8F; display: flex; align-items: center; gap: 6px; }
+.gm-arquivo input { font-size: 11px; max-width: 200px; }
+.gm-cores { display: flex; flex-wrap: wrap; gap: 8px; }
+.gm-cor { display: flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 20px; padding: 3px 4px 3px 4px; font-size: 13px; }
+.gm-cor-amostra { width: 26px; height: 26px; border-radius: 50%; background-size: cover; background-position: center; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+.gm-modelos { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.gm-modelos > div { display: grid; gap: 4px; align-content: start; }
+.gm-modelos strong { font-size: 12px; color: #8F8F8F; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 2px; }
+.gm-check { font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.gm-check input { width: auto; }
