@@ -2211,3 +2211,13 @@ html[data-theme="dark"] .sim-aba { background: #25282D; color: #BDBDBD; }
 .sim-acao-principal { background: var(--primary); color: #fff; }
 html[data-theme="dark"] .sim-acoes { border-top-color: #33363C; }
 html[data-theme="dark"] .sim-acao:not(.sim-acao-principal) { background: #25282D; }
+/* Lupa com mira ao ajustar um canto da janela */
+.sim-lupa { position: absolute; width: 132px; height: 132px; border-radius: 50%; overflow: hidden; border: 3px solid #fff; box-shadow: 0 4px 18px rgba(0,0,0,.55); pointer-events: none; z-index: 3; background: #111; }
+.sim-lupa[hidden] { display: none; }
+.sim-lupa canvas { width: 100%; height: 100%; display: block; }
+.sim-lupa-mira { position: absolute; inset: 0; }
+.sim-lupa-mira::before, .sim-lupa-mira::after { content: ''; position: absolute; filter: drop-shadow(0 0 1px rgba(0,0,0,.8)); }
+.sim-lupa-mira::before { background: linear-gradient(#FFD23F 0 43%, transparent 43% 57%, #FFD23F 57%); }
+.sim-lupa-mira::after { background: linear-gradient(90deg, #FFD23F 0 43%, transparent 43% 57%, #FFD23F 57%); }
+.sim-lupa-mira::before { left: 50%; top: 18%; bottom: 18%; width: 2px; margin-left: -1px; }
+.sim-lupa-mira::after { top: 50%; left: 18%; right: 18%; height: 2px; margin-top: -1px; }

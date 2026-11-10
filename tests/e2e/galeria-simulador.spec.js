@@ -173,6 +173,81 @@ test('cortina volta depois que o aparelho perde o 3D (ex.: atendeu uma ligacao)'
     expect(distancia(antes, depois)).toBeLessThan(20);
 });
 
+test('segurando um canto: cortina meio transparente e lupa com mira', async ({ page }) => {
+    await abrirSim(page);
+    await comFoto(page);
+    await page.locator('.sim-aba[data-aba="cor"]').click();
+    await page.locator('.sim-cor[data-valor="ini-grafite"]').click();
+    const centro = await centroJanela(page);
+    const cheia = await corEm(page, centro);
+    await expect(page.locator('.sim-lupa')).toBeHidden();
+    const b = await page.locator('.sim-alca[data-i="0"]').boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width / 2 + 3, b.y + b.height / 2 + 3, { steps: 2 });
+    // a cortina deixa ver a parede: fica entre a cor dela e a da parede
+    const meia = await corEm(page, centro);
+    expect(distancia(meia, cheia)).toBeGreaterThan(30);
+    expect(distancia(meia, BEGE)).toBeGreaterThan(30);
+    const lupa = page.locator('.sim-lupa');
+    await expect(lupa).toBeVisible();
+    await expect(lupa.locator('canvas')).toHaveCount(1);
+    await expect(lupa.locator('.sim-lupa-mira')).toHaveCount(1);
+    // a lupa nao fica embaixo do dedo
+    const lb = await lupa.boundingBox();
+    const dedo = [b.x + b.width / 2 + 3, b.y + b.height / 2 + 3];
+    const cobre = dedo[0] > lb.x && dedo[0] < lb.x + lb.width && dedo[1] > lb.y && dedo[1] < lb.y + lb.height;
+    expect(cobre).toBe(false);
+    await page.mouse.up();
+    await expect(lupa).toBeHidden();
+    expect(distancia(await corEm(page, centro), cheia)).toBeLessThan(12);
+});
+
+test('lupa mostra a foto ampliada no ponto do canto', async ({ page }) => {
+    await abrirSim(page);
+    // foto com um quadrado vermelho exatamente onde nasce o canto 0 (30% x 25%)
+    const b64 = await page.evaluate(() => {
+        const c = document.createElement('canvas'); c.width = 1200; c.height = 900;
+        const g = c.getContext('2d'); g.fillStyle = 'rgb(217,207,194)'; g.fillRect(0, 0, 1200, 900);
+        g.fillStyle = 'rgb(220,20,20)'; g.fillRect(360 - 6, 225 - 6, 12, 12);
+        return c.toDataURL('image/png').split(',')[1];
+    });
+    await page.locator('#sim-foto-arquivo').setInputFiles([{ name: 'p.png', mimeType: 'image/png', buffer: Buffer.from(b64, 'base64') }]);
+    await expect.poll(() => page.evaluate(() => !!(window._sim && window._sim.foto))).toBe(true);
+    await page.evaluate(() => window._sim.renderAgora());
+    const b = await page.locator('.sim-alca[data-i="0"]').boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    await expect(page.locator('.sim-lupa')).toBeVisible();
+    const px = await page.evaluate(() => {
+        const c = document.querySelector('.sim-lupa canvas');
+        return Array.from(c.getContext('2d').getImageData(Math.floor(c.width / 2) + 2, Math.floor(c.height / 2) + 2, 1, 1).data.slice(0, 3));
+    });
+    await page.mouse.up();
+    expect(px[0]).toBeGreaterThan(180);
+    expect(px[1]).toBeLessThan(90);
+});
+
+test('Animar abre e fecha a cortina na tela, sem baixar nada', async ({ page }) => {
+    await abrirSim(page);
+    await comFoto(page);
+    let baixou = false;
+    page.on('download', () => { baixou = true; });
+    const botao = page.locator('#sim-animar');
+    await expect(botao).toBeVisible();
+    await page.evaluate(() => {
+        window.__maxAberto = 0;
+        const t = setInterval(() => { window.__maxAberto = Math.max(window.__maxAberto, window._sim.estado.aberto); }, 50);
+        setTimeout(() => clearInterval(t), 8000);
+    });
+    await botao.click();
+    await expect(botao).toBeDisabled();
+    await expect(botao).toBeEnabled({ timeout: 10000 });
+    expect(await page.evaluate(() => window.__maxAberto)).toBeGreaterThan(0.8);
+    expect(await page.evaluate(() => window._sim.estado.aberto)).toBe(0);
+    expect(baixou).toBe(false);
+});
+
 test('link da galeria abre com a prega escolhida', async ({ page }) => {
     await abrirSim(page, '#simular?prega=Wave%20Botao');
     expect(await page.evaluate(() => window._sim.estado)).toMatchObject({ produto: 'cortina', prega: 'Wave Botao' });

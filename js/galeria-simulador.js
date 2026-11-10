@@ -27,6 +27,7 @@ function _simMontar() {
                 <label class="sim-btn-grande" for="sim-foto-camera">📷 Tirar foto</label>
                 <label class="sim-btn-grande sim-btn-claro" for="sim-foto-arquivo">🖼️ Escolher foto</label>
             </div>
+            <div class="sim-lupa" id="sim-lupa" hidden aria-hidden="true"><canvas></canvas><span class="sim-lupa-mira"></span></div>
             <div class="sim-dica" id="sim-dica" hidden>Arraste os <b>cantos amarelos</b> até a janela.<br>Depois arraste a cortina para abrir e fechar.</div>
             <div class="sim-sem-3d" id="sim-sem-3d" hidden>Este aparelho não consegue mostrar o simulador 3D. Tente em outro navegador (Chrome ou Safari atualizados).</div>
             <div class="sim-topo">
@@ -268,7 +269,7 @@ function _simEsconderDica() {
 }
 
 function _simPonteiroBaixo(ev) {
-    if (!_sim.foto || ev.target.closest('.sim-topo, .sim-inicio, label, button')) return;
+    if (!_sim.foto || _sim.animando || ev.target.closest('.sim-topo, .sim-inicio, label, button')) return;
     _simEsconderDica();
     const alca = ev.target.closest('.sim-alca');
     if (alca && alca.dataset.i === 'barra') {
@@ -289,6 +290,8 @@ function _simPonteiroBaixo(ev) {
     }
     ev.currentTarget.setPointerCapture && ev.currentTarget.setPointerCapture(ev.pointerId);
     ev.preventDefault();
+    if (_sim.arrasto.tipo !== 'abrir') _simLupa(ev.clientX, ev.clientY);
+    _simAgendar();
 }
 
 function _simPonteiroMove(ev) {
@@ -301,10 +304,12 @@ function _simPonteiroMove(ev) {
         const p = GaleriaCore.prenderCantos([_simDaTela(ev.clientX, ev.clientY)], _sim.foto.w, _sim.foto.h)[0];
         const novo = e.cantos.map((c, i) => i === a.i ? p : c);
         if (GaleriaCore.quadValido(novo, 20)) e.cantos = novo;
+        _simLupa(ev.clientX, ev.clientY);
     } else if (a.tipo === 'barra') {
         const p = _simDaTela(ev.clientX, ev.clientY);
         const baseJanela = Math.max(e.cantos[2][1], e.cantos[3][1]);
         e.barra = Math.min(_sim.foto.h, Math.max(baseJanela + 10, p[1]));
+        _simLupa(ev.clientX, ev.clientY);
     } else {
         let d;
         if (e.produto === 'persiana') d = -(ev.clientY - a.y0) / Math.max(40, a.altura * 0.92);
@@ -320,7 +325,45 @@ function _simPonteiroCima() {
         _sim.estado.cantos = GaleriaCore.prenderCantos(GaleriaCore.ordenarCantos(_sim.estado.cantos), _sim.foto.w, _sim.foto.h);
     }
     _sim.arrasto = null;
+    const lupa = document.getElementById('sim-lupa');
+    if (lupa) lupa.hidden = true;
     _simAgendar();
+}
+
+// Ponto da foto que o arrasto esta ajustando: o canto (ja corrigido) ou o
+// meio da barra da cortina.
+function _simPontoArrastado() {
+    const a = _sim.arrasto, e = _sim.estado;
+    if (!a) return null;
+    if (a.tipo === 'canto') return e.cantos[a.i];
+    if (a.tipo === 'barra') { const q = _simArea(); return [(q[2][0] + q[3][0]) / 2, (q[2][1] + q[3][1]) / 2]; }
+    return null;
+}
+
+// Lupa com mira: mostra a foto da parede (sem a cortina) ampliada em volta do
+// ponto, acima do dedo — o dedo nao cobre o que se quer acertar.
+const SIM_LUPA = 132, SIM_LUPA_ZOOM = 3;
+function _simLupa(cx, cy) {
+    const lupa = document.getElementById('sim-lupa'), p = _simPontoArrastado();
+    if (!lupa || !p || !_sim.foto) return;
+    const palco = document.getElementById('sim-palco').getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const cv = lupa.querySelector('canvas');
+    const lado = Math.round(SIM_LUPA * dpr);
+    if (cv.width !== lado) { cv.width = lado; cv.height = lado; }
+    const g = cv.getContext('2d');
+    const meio = SIM_LUPA / (2 * _sim.layout.s * SIM_LUPA_ZOOM);   // meia janela, em px da foto
+    g.fillStyle = '#111'; g.fillRect(0, 0, lado, lado);
+    g.imageSmoothingEnabled = true;
+    g.drawImage(_sim.foto.canvas, p[0] - meio, p[1] - meio, meio * 2, meio * 2, 0, 0, lado, lado);
+    // acima do dedo; sem espaco em cima, vai para baixo; sempre dentro do palco
+    const x = cx - palco.left, y = cy - palco.top, folga = 34;
+    let top = y - folga - SIM_LUPA;
+    if (top < 8) top = y + folga;
+    const left = Math.min(palco.width - SIM_LUPA - 8, Math.max(8, x - SIM_LUPA / 2));
+    lupa.style.left = left + 'px';
+    lupa.style.top = top + 'px';
+    lupa.hidden = false;
 }
 
 function _simDesenharAlcas() {
@@ -376,10 +419,10 @@ function _simIniciar3D() {
     geo.setAttribute('position', new T.BufferAttribute(new Float32Array(12), 3));
     geo.setIndex([0, 1, 2, 0, 2, 3]);
     _sim.quadMat = new T.ShaderMaterial({
-        uniforms: { uHinv: { value: new T.Matrix3() }, uRT: { value: _sim.rt.texture } },
+        uniforms: { uHinv: { value: new T.Matrix3() }, uRT: { value: _sim.rt.texture }, uOpacidade: { value: 1 } },
         vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
         // produto + sombra suave na parede (alfa deslocado para baixo e a direita)
-        fragmentShader: `uniform mat3 uHinv; uniform sampler2D uRT; varying vec2 vP;
+        fragmentShader: `uniform mat3 uHinv; uniform sampler2D uRT; uniform float uOpacidade; varying vec2 vP;
             float alfa(vec2 uv){ if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 0.0; return texture2D(uRT, vec2(uv.x, 1.0 - uv.y)).a; }
             void main(){ vec3 q = uHinv * vec3(vP.x, -vP.y, 1.0); vec2 uv = q.xy / q.z;
               vec4 c = vec4(0.0);
@@ -388,7 +431,7 @@ function _simIniciar3D() {
               float s = 0.0;
               for (int i = -2; i <= 2; i++) for (int j = -2; j <= 2; j++) s += alfa(o + vec2(float(i), float(j)) * 0.007);
               float sombra = 0.30 * s / 25.0;
-              gl_FragColor = vec4(c.rgb, c.a + (1.0 - c.a) * sombra); }`,
+              gl_FragColor = vec4(c.rgb, c.a + (1.0 - c.a) * sombra) * uOpacidade; }`,
         transparent: true, depthTest: false, depthWrite: false, side: T.DoubleSide,
         blending: T.CustomBlending, blendSrc: T.OneFactor, blendDst: T.OneMinusSrcAlphaFactor,
         blendSrcAlpha: T.OneFactor, blendDstAlpha: T.OneMinusSrcAlphaFactor
@@ -577,6 +620,8 @@ _sim.renderAgora = function () {
         pos.needsUpdate = true;
         const Hinv = GaleriaCore.homografia(area, [[0, 0], [1, 0], [1, 1], [0, 1]]);
         _sim.quadMat.uniforms.uHinv.value.set(...Hinv);
+        // ajustando um canto ou a barra: cortina meio transparente para ver a janela
+        _sim.quadMat.uniforms.uOpacidade.value = _sim.arrasto && _sim.arrasto.tipo !== 'abrir' ? 0.5 : 1;
         _sim.quad.visible = true;
     } else {
         _sim.quad.visible = false;
@@ -594,12 +639,20 @@ function _simRenderAcoes() {
     const caixa = document.getElementById('sim-acoes');
     if (!caixa) return;
     if (!_sim.foto || !_sim.gl) { caixa.innerHTML = ''; return; }
-    caixa.innerHTML = `<button type="button" id="sim-salvar-imagem" class="sim-acao">💾 Imagem</button>
+    caixa.innerHTML = `<button type="button" id="sim-animar" class="sim-acao">▶ Animar</button>
+        <button type="button" id="sim-salvar-imagem" class="sim-acao">💾 Imagem</button>
         ${_simPodeGravar() ? '<button type="button" id="sim-gravar-video" class="sim-acao">🎥 Vídeo</button>' : ''}
         <button type="button" id="sim-enviar" class="sim-acao sim-acao-principal">📤 Enviar</button>`;
+    const anim = caixa.querySelector('#sim-animar');
+    anim.onclick = async () => {
+        if (_sim.animando) return;
+        anim.disabled = true;
+        try { await animarSimulacao(); } finally { anim.disabled = false; }
+    };
     caixa.querySelector('#sim-salvar-imagem').onclick = async () => baixarArquivoSimulacao(await salvarImagemSimulacao(), 'jpg');
     const v = caixa.querySelector('#sim-gravar-video');
     if (v) v.onclick = async () => {
+        if (_sim.animando) return;
         v.disabled = true; v.textContent = '⏺ Gravando…';
         try {
             const blob = await gravarVideoSimulacao();
@@ -642,6 +695,28 @@ function salvarImagemSimulacao() {
 
 // Video curto: a cortina abre e fecha uma vez (4 s). Grava um canvas 2D com o
 // recorte da foto, para o video nao levar a moldura preta.
+// A cortina abre e fecha uma vez, suave (fecha -> abre -> fecha), e volta
+// como estava. `aCadaQuadro` desenha cada quadro (o video usa para gravar).
+const SIM_DUR_ANIMACAO = 4000;
+function animarSimulacao(aCadaQuadro) {
+    const e = _sim.estado, inicial = e.aberto;
+    _sim.animando = true;
+    return new Promise(ok => {
+        const t0 = performance.now();
+        const passo = agora => {
+            const t = Math.min(1, (agora - t0) / SIM_DUR_ANIMACAO);
+            e.aberto = 0.5 - 0.5 * Math.cos(t * 2 * Math.PI);
+            if (aCadaQuadro) aCadaQuadro(); else _sim.renderAgora();
+            if (t < 1) { requestAnimationFrame(passo); return; }
+            e.aberto = inicial;
+            _sim.animando = false;
+            _simAgendar();
+            ok();
+        };
+        requestAnimationFrame(passo);
+    });
+}
+
 function gravarVideoSimulacao() {
     if (!_simPodeGravar()) return Promise.resolve(null);
     const r = _simRecorte();
@@ -654,25 +729,13 @@ function gravarVideoSimulacao() {
     try {
         gravador = new MediaRecorder(c.captureStream(30), tipo ? { mimeType: tipo, videoBitsPerSecond: 4e6 } : undefined);
     } catch (e) { return Promise.resolve(null); }
-    const partes = [], e = _sim.estado, inicial = e.aberto, DUR = 4000;
+    const partes = [];
     return new Promise(ok => {
         gravador.ondataavailable = ev => { if (ev.data && ev.data.size) partes.push(ev.data); };
-        gravador.onstop = () => {
-            e.aberto = inicial; _simAgendar();
-            ok(partes.length ? new Blob(partes, { type: (gravador.mimeType || tipo || 'video/webm').split(';')[0] }) : null);
-        };
+        gravador.onstop = () => ok(partes.length ? new Blob(partes, { type: (gravador.mimeType || tipo || 'video/webm').split(';')[0] }) : null);
         _simQuadroLimpo(c);
         gravador.start(250);
-        const t0 = performance.now();
-        const passo = agora => {
-            const t = Math.min(1, (agora - t0) / DUR);
-            // fecha -> abre -> fecha, suave
-            e.aberto = 0.5 - 0.5 * Math.cos(t * 2 * Math.PI);
-            _simQuadroLimpo(c);
-            if (t < 1) requestAnimationFrame(passo);
-            else setTimeout(() => gravador.stop(), 200);
-        };
-        requestAnimationFrame(passo);
+        animarSimulacao(() => _simQuadroLimpo(c)).then(() => setTimeout(() => gravador.stop(), 200));
     });
 }
 
