@@ -79,6 +79,7 @@ function abrirSimulador(pre) {
     document.body.classList.add('sim-aberto');
     document.getElementById('sim-sem-3d').hidden = _sim.gl;
     _simRenderGaveta();
+    _simRenderAcoes();
     _simLayout();
 }
 
@@ -179,6 +180,7 @@ async function _simCarregarFoto(arquivo) {
         let viu = false;
         try { viu = localStorage.getItem('sc_sim_dica') === '1'; } catch (e) { viu = false; }
         document.getElementById('sim-dica').hidden = viu;
+        _simRenderAcoes();
         _simLayout();
     } catch (e) {
         toast('Não foi possível abrir essa foto. Tente outra.', 'error', 4000);
@@ -570,3 +572,116 @@ _sim.renderAgora = function () {
     r.setClearColor(0x111111, 1);
     r.render(_sim.cena, _sim.camera);
 };
+
+// ---------- salvar e enviar ----------
+function _simPodeGravar() {
+    return typeof window.MediaRecorder === 'function' && typeof HTMLCanvasElement.prototype.captureStream === 'function';
+}
+
+function _simRenderAcoes() {
+    const caixa = document.getElementById('sim-acoes');
+    if (!caixa) return;
+    if (!_sim.foto || !_sim.gl) { caixa.innerHTML = ''; return; }
+    caixa.innerHTML = `<button type="button" id="sim-salvar-imagem" class="sim-acao">💾 Imagem</button>
+        ${_simPodeGravar() ? '<button type="button" id="sim-gravar-video" class="sim-acao">🎥 Vídeo</button>' : ''}
+        <button type="button" id="sim-enviar" class="sim-acao sim-acao-principal">📤 Enviar</button>`;
+    caixa.querySelector('#sim-salvar-imagem').onclick = async () => baixarArquivoSimulacao(await salvarImagemSimulacao(), 'jpg');
+    const v = caixa.querySelector('#sim-gravar-video');
+    if (v) v.onclick = async () => {
+        v.disabled = true; v.textContent = '⏺ Gravando…';
+        try {
+            const blob = await gravarVideoSimulacao();
+            if (blob) baixarArquivoSimulacao(blob, /mp4/.test(blob.type) ? 'mp4' : 'webm');
+            else toast('Este aparelho não conseguiu gravar o vídeo. Salve a imagem.', 'warning', 4500);
+        } finally { v.disabled = false; v.textContent = '🎥 Vídeo'; }
+    };
+    caixa.querySelector('#sim-enviar').onclick = async () => enviarSimulacao(await salvarImagemSimulacao(), _simNomeArquivo('jpg'));
+}
+
+function _simNomeArquivo(ext) {
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    return `simulacao-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.${ext}`;
+}
+
+// Recorte da foto no canvas (sem a moldura preta), em px do aparelho.
+function _simRecorte() {
+    const L = _sim.layout, k = _sim.renderer.getPixelRatio();
+    return { x: Math.round(L.x * k), y: Math.round(L.y * k), w: Math.round(_sim.foto.w * L.s * k), h: Math.round(_sim.foto.h * L.s * k) };
+}
+
+function _simQuadroLimpo(destino) {
+    _sim.renderAgora();
+    const r = _simRecorte();
+    destino.getContext('2d').drawImage(_sim.canvas, r.x, r.y, r.w, r.h, 0, 0, destino.width, destino.height);
+}
+
+// Imagem JPEG so da foto com a cortina (as alcas e dicas sao HTML por cima,
+// nao entram). Sai no tamanho da foto, ate 1600 px.
+function salvarImagemSimulacao() {
+    const r = _simRecorte();
+    const k = Math.min(1600 / Math.max(r.w, r.h), _sim.foto.w / r.w, 4);
+    const c = document.createElement('canvas');
+    c.width = Math.round(r.w * Math.max(1, k)); c.height = Math.round(r.h * Math.max(1, k));
+    const g = c.getContext('2d');
+    g.imageSmoothingQuality = 'high';
+    _simQuadroLimpo(c);
+    return new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.92));
+}
+
+// Video curto: a cortina abre e fecha uma vez (4 s). Grava um canvas 2D com o
+// recorte da foto, para o video nao levar a moldura preta.
+function gravarVideoSimulacao() {
+    if (!_simPodeGravar()) return Promise.resolve(null);
+    const r = _simRecorte();
+    const k = Math.min(1, 1280 / Math.max(r.w, r.h));
+    const c = document.createElement('canvas');
+    c.width = Math.round(r.w * k / 2) * 2; c.height = Math.round(r.h * k / 2) * 2;
+    const tipos = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+    const tipo = tipos.find(t => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
+    let gravador;
+    try {
+        gravador = new MediaRecorder(c.captureStream(30), tipo ? { mimeType: tipo, videoBitsPerSecond: 4e6 } : undefined);
+    } catch (e) { return Promise.resolve(null); }
+    const partes = [], e = _sim.estado, inicial = e.aberto, DUR = 4000;
+    return new Promise(ok => {
+        gravador.ondataavailable = ev => { if (ev.data && ev.data.size) partes.push(ev.data); };
+        gravador.onstop = () => {
+            e.aberto = inicial; _simAgendar();
+            ok(partes.length ? new Blob(partes, { type: (gravador.mimeType || tipo || 'video/webm').split(';')[0] }) : null);
+        };
+        _simQuadroLimpo(c);
+        gravador.start(250);
+        const t0 = performance.now();
+        const passo = agora => {
+            const t = Math.min(1, (agora - t0) / DUR);
+            // fecha -> abre -> fecha, suave
+            e.aberto = 0.5 - 0.5 * Math.cos(t * 2 * Math.PI);
+            _simQuadroLimpo(c);
+            if (t < 1) requestAnimationFrame(passo);
+            else setTimeout(() => gravador.stop(), 200);
+        };
+        requestAnimationFrame(passo);
+    });
+}
+
+function baixarArquivoSimulacao(blob, ext) {
+    if (!blob) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = _simNomeArquivo(ext);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+// No celular abre o compartilhar (WhatsApp, e-mail...); sem ele, baixa.
+async function enviarSimulacao(blob, nome) {
+    if (!blob) return;
+    const arquivo = new File([blob], nome, { type: blob.type });
+    if (navigator.canShare && navigator.share && navigator.canShare({ files: [arquivo] })) {
+        try { await navigator.share({ files: [arquivo], title: 'Simulação da cortina' }); return; }
+        catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    baixarArquivoSimulacao(blob, nome.split('.').pop());
+}

@@ -2205,3 +2205,9 @@ html[data-theme="dark"] .sim-aba { background: #25282D; color: #BDBDBD; }
 .sim-alca-barra { cursor: ns-resize; }
 .sim-alca-barra::after { width: 30px; height: 10px; margin: -5px 0 0 -15px; border-radius: 5px; }
 .sim-alca[hidden] { display: none; }
+.sim-acoes { padding-top: 10px; border-top: 1px solid #eee; margin-top: 4px; }
+.sim-acao { flex: 1; border: 1.5px solid var(--primary); background: #fff; color: var(--primary); border-radius: 12px; padding: 10px 6px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.sim-acao:disabled { opacity: .6; cursor: progress; }
+.sim-acao-principal { background: var(--primary); color: #fff; }
+html[data-theme="dark"] .sim-acoes { border-top-color: #33363C; }
+html[data-theme="dark"] .sim-acao:not(.sim-acao-principal) { background: #25282D; }
