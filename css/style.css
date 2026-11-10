@@ -1960,3 +1960,44 @@ html[data-theme="dark"] {
 .exp-volumes { display:flex; flex-wrap:wrap; gap:10px; }
 .exp-vol { padding:10px 16px; border:2px solid #E0E0E0; border-radius:8px; font-size:16px; font-weight:600; color:var(--dark); }
 .exp-vol.feito { border-color:#8FD98D; background:#E3F7E2; color:#0F6B0D; }
+
+/* --- Layout dos documentos (Configurar Empresa > Layout dos documentos) ---
+   Cores e fonte chegam por variaveis no .doc-layout (--primary, --doc-destaque,
+   --doc-fundo, --doc-fonte); sem layout salvo nenhuma variavel e emitida e o
+   documento fica como sempre foi. */
+.doc-layout { position: relative; }
+/* o seletor * do topo fixa a fonte em cada elemento; aqui ela passa a vir do layout */
+.doc-layout, .doc-layout * { font-family: var(--doc-fonte, 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif); }
+.doc-layout > .doc-bloco { position: relative; z-index: 1; }
+.doc-marca-dagua { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 0; overflow: hidden; }
+.doc-marca-dagua img { max-height: 80%; object-fit: contain; }
+.doc-marca-P img { width: 30%; }
+.doc-marca-M img { width: 50%; }
+.doc-marca-G img { width: 75%; }
+@media print { .doc-marca-dagua { position: fixed; } }
+/* Cabecalho */
+.doc-var-centro > .doc-cab { flex-direction: column; align-items: center; text-align: center; gap: 12px; }
+.doc-var-centro > .doc-cab > * { text-align: center !important; }
+.doc-var-centro > .doc-cab > :first-child > div,
+.doc-var-centro > .doc-cab > :first-child { justify-content: center; }
+.doc-var-direita > .doc-cab { flex-direction: row-reverse; }
+.doc-var-direita > .doc-cab > :last-child { text-align: left !important; }
+.doc-var-direita > .doc-cab > :first-child > div { flex-direction: row-reverse; text-align: right; }
+/* Dados de pessoa */
+.doc-pessoa { background: var(--doc-fundo, #FAFAFA); }
+.doc-var-colunas > .doc-pessoa { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; }
+.doc-var-colunas > .doc-pessoa > :nth-child(-n+2) { grid-column: 1 / -1; }
+.doc-var-faixa > .doc-pessoa { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 18px; padding-top: 10px; padding-bottom: 10px; }
+.doc-var-faixa > .doc-pessoa > h3 { margin: 0; }
+.doc-var-faixa > .doc-pessoa p { line-height: 1.4; }
+/* Totais e assinaturas */
+.doc-var-largura > .proposta-totais { max-width: none; }
+.doc-var-empilhadas > .os-assinaturas { grid-template-columns: 1fr; }
+.doc-var-empilhadas > .pc-assinaturas { flex-direction: column; }
+/* Blocos de texto */
+.doc-texto { margin: 16px 0; font-size: 13px; line-height: 1.7; }
+.doc-texto p { margin: 0 0 4px; }
+.doc-texto-titulo { font-size: 12px; text-transform: uppercase; color: var(--primary); margin-bottom: 6px; letter-spacing: .3px; }
+.doc-var-caixa > * { background: var(--doc-fundo, #FAFAFA); padding: 12px 16px; border-radius: 6px; }
+.doc-var-lateral > * { border-left: 3px solid var(--doc-destaque, var(--primary)); padding: 4px 0 4px 14px; }
+.doc-var-caixa > .proposta-termos, .doc-var-lateral > .proposta-termos { border-top: none; }

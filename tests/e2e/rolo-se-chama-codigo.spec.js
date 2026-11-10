@@ -130,7 +130,9 @@ test('nos Pedidos, "lote" continua querendo dizer banho de cor', async ({ page }
     await semear(page, 'estoque.html');
     // A palavra nao foi varrida do sistema: nos Pedidos ela nomeia o banho de
     // cor, e trocar por "codigo" ali diria outra coisa.
-    const fonte = await page.evaluate(() => fetch('js/app.js').then(r => r.text()));
+    // as condicoes gerais padrao moraram para o nucleo do layout dos documentos
+    const fonte = await page.evaluate(() => Promise.all(['js/app.js', 'js/docs-layout-core.js']
+        .map(f => fetch(f).then(r => r.text()))).then(t => t.join('\n')));
     expect(fonte, 'o aviso de tonalidade entre rolos').toContain('Múltiplos lotes');
     expect(fonte, 'e o trecho do contrato').toContain('lotes distintos');
     // mas nenhum cabecalho de tabela sobrou chamando o rolo de Lote

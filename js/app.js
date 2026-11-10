@@ -6604,15 +6604,92 @@ function renderOS() {
     preencherCodigosDocumento(container);
 }
 
+// --- LAYOUT DOS DOCUMENTOS ---
+// Cada documento impresso e montado bloco a bloco a partir do layout salvo em
+// Configurar Empresa (sc_doc_layouts). O catalogo, os padroes e a leitura
+// tolerante ficam em js/docs-layout-core.js (DocsLayout).
+function getLayoutsDocumentos() {
+    const l = DocsLayout.ler(localStorage.getItem('sc_doc_layouts'));
+    return DocsLayout.migrarCondicoes(l, localStorage.getItem('sc_cond_gerais'));
+}
+
+function getLayoutDocumento(docId) {
+    return DocsLayout.doDocumento(getLayoutsDocumentos(), docId);
+}
+
+function valoresComunsEmpresa() {
+    const emp = getEmpresa();
+    return {
+        empresa:          emp.nome_fantasia || emp.razao_social || 'SCTech',
+        empresa_telefone: emp.telefone || '',
+        empresa_email:    emp.email || '',
+        empresa_site:     emp.site || '',
+        empresa_endereco: emp.endereco || '',
+        empresa_cnpj:     emp.cnpj || ''
+    };
+}
+
+// Texto do usuario com marcadores: o texto e escapado e cada {campo} vira o
+// valor (tambem escapado). Marcador desconhecido fica como esta.
+function textoDoc(texto, valores) {
+    return DocsLayout.preencher(escapeHtml(texto || ''), valores, escapeHtml);
+}
+
+function blocoDoLayout(layout, id) {
+    return layout.blocos.find(b => b.id === id) || {};
+}
+
+const _fontesDocCarregadas = new Set();
+function _carregarFonteDocumento(fonteId) {
+    const f = DocsLayout.FONTES.find(x => x.id === fonteId);
+    if (!f || !f.google || _fontesDocCarregadas.has(f.google) || typeof document === 'undefined') return;
+    _fontesDocCarregadas.add(f.google);
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(f.google).replace(/%20/g, '+') + ':wght@400;600;700&display=swap';
+    document.head.appendChild(link);
+}
+
+// Bloco de texto livre (blocos proprios): titulo + um paragrafo por linha.
+function htmlBlocoTexto(bloco, valores) {
+    const linhas = String(bloco.corpo || '').split('\n').filter(l => l.trim());
+    if (!linhas.length && !(bloco.titulo || '').trim()) return '';
+    const titulo = (bloco.titulo || '').trim() ? `<h4 class="doc-texto-titulo">${textoDoc(bloco.titulo, valores)}</h4>` : '';
+    return `<div class="doc-texto">${titulo}${linhas.map(l => `<p>${textoDoc(l.trim(), valores)}</p>`).join('')}</div>`;
+}
+
+// Legendas das assinaturas: uma linha "Titulo | legenda" por assinatura, na
+// ordem; linha faltando usa a do padrao.
+function legendasAssinaturas(bloco, docId) {
+    const cat = DocsLayout.DOCUMENTOS[docId].blocos.find(b => b.id === bloco.id) || {};
+    const ler = t => String(t || '').split('\n').map(l => { const [a, b] = l.split('|'); return { titulo: (a || '').trim(), legenda: (b || '').trim() }; });
+    const salvas = ler(bloco.corpo);
+    return ler(cat.corpo).map((p, i) => salvas[i] && (salvas[i].titulo || salvas[i].legenda) ? salvas[i] : p);
+}
+
+// Junta os blocos na ordem do layout, aplica cores/fonte por variaveis CSS e
+// poe a logo no fundo. `blocos` e { idDoBloco: html }; bloco vazio e pulado.
+function montarDocumentoLayout(docId, layout, blocos, valores) {
+    const emp = getEmpresa();
+    _carregarFonteDocumento(layout.estilo.fonte);
+    const css = DocsLayout.variaveisCss(layout.estilo);
+    const m = layout.estilo.marca;
+    const marca = m.ativa && emp.logo_base64
+        ? `<div class="doc-marca-dagua doc-marca-${m.tamanho}" style="opacity:${m.opacidade / 100}" aria-hidden="true"><img src="${escapeHtml(emp.logo_base64)}" alt=""></div>`
+        : '';
+    const corpo = layout.blocos.filter(b => b.visivel).map(b => {
+        const html = b.proprio ? htmlBlocoTexto(b, valores) : (blocos[b.id] || '');
+        if (!String(html).trim()) return '';
+        return `<div class="doc-bloco doc-bloco-${b.id} doc-var-${b.variante}" data-bloco="${b.id}">${html}</div>`;
+    }).join('');
+    return `<div class="doc-layout doc-layout-${docId}"${css ? ` style="${escapeHtml(css)}"` : ''}>${marca}${corpo}</div>`;
+}
+
 // --- CONDIÇÕES GERAIS DA PROPOSTA ---
-const _COND_GERAIS_DEFAULT = `Proposta válida por {diasValidade} dias a partir da data de emissão.
-O prazo de produção inicia após a confirmação formal e o recebimento do sinal combinado.
-As medidas estão sujeitas a conferência técnica in loco antes do corte definitivo do tecido.
-Alterações no projeto após a aprovação podem gerar custos adicionais.
-Não nos responsabilizamos por variações de tonalidade entre rolos de tecido de lotes distintos não informados previamente.`;
+const _COND_GERAIS_DEFAULT = DocsLayout.COND_GERAIS_PADRAO;
 
 function getCondicoesGerais() {
-    return localStorage.getItem('sc_cond_gerais') || _COND_GERAIS_DEFAULT;
+    return blocoDoLayout(getLayoutDocumento('proposta'), 'condicoes').corpo || '';
 }
 
 function salvarCondicoesGerais() {
@@ -6636,17 +6713,28 @@ function carregarCondicoesGerais() {
 }
 
 // --- PROPOSTA PDF ---
-function gerarHTMLProposta(pedidoId, diasValidade) {
+function gerarHTMLProposta(pedidoId, diasValidade, layout) {
     const ped = db.pedidos.find(p => p.id == pedidoId);
     if (!ped) return '<p style="text-align:center;color:#999;padding:40px;">Pedido não encontrado.</p>';
+    const cliente = db.clientes.find(c => c.id == ped.clienteId);
+    return _htmlProposta(ped, cliente, diasValidade, layout);
+}
+
+function _htmlProposta(ped, cliente, diasValidade, layout) {
+    layout = layout || getLayoutDocumento('proposta');
     diasValidade = diasValidade || 15;
     const ambientes    = normalizarAmbientes(ped);
-    const cliente      = db.clientes.find(c => c.id == ped.clienteId);
     const hoje           = new Date().toLocaleDateString('pt-BR');
     const validade       = new Date(Date.now() + diasValidade * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR');
-    const totalConsumo = ambientes.reduce((s,a)=>s+(a.tecidos||[]).reduce((ts,t)=>ts+(t.consumo_linear||0),0),0);
-    const totalMat     = ped.total_material || ambientes.reduce((s,a)=>s+(a.total_material||0),0);
-    const totalAcess   = ped.total_acessorios || 0;
+    const entrega = ped.data_entrega ? new Date(ped.data_entrega + 'T12:00:00').toLocaleDateString('pt-BR') : '';
+    const valores = Object.assign(valoresComunsEmpresa(), {
+        cliente: cliente ? cliente.nome : (ped.clienteNome || ''),
+        cliente_telefone: cliente?.tel || '', cliente_email: cliente?.email || '', cliente_endereco: cliente?.end || '',
+        numero: formatPedidoId(ped.id), data_emissao: hoje, validade, diasValidade,
+        total: 'R$ ' + (ped.valor || 0).toFixed(2), previsao_entrega: entrega,
+        vendedor: ped.vendedor_nome || '', forma_pagamento: formaPagamentoDoPedido(ped)
+    });
+    const tit = id => textoDoc(blocoDoLayout(layout, id).titulo, valores);
     const ambRows = ambientes.map(a => {
         const tecidos = a.tecidos || [];
         const primTec = tecidos[0] || {};
@@ -6675,47 +6763,51 @@ function gerarHTMLProposta(pedidoId, diasValidade) {
     const acessRows = ped.itens && ped.itens.length ? ped.itens.map(i =>
         `<tr><td><em>Acessório</em></td><td>${escapeHtml(i.nome)} — ${i.quantidade} ${escapeHtml(i.unidade)}</td></tr>`
     ).join('') : '';
-    return `
-        <div class="proposta-header">
+    const condicoes = String(blocoDoLayout(layout, 'condicoes').corpo || '').split('\n').filter(l => l.trim());
+    const blocos = {
+        cabecalho: `
+        <div class="proposta-header doc-cab">
             <div class="proposta-logo">${buildEmpresaHeaderHTML(64)}</div>
-            <div class="proposta-info"><h2>PROPOSTA COMERCIAL</h2><p>Nº <strong>${formatPedidoId(ped.id)}</strong></p>${htmlCodigoDocumento(ped.id)}<p>Data de emissão: ${hoje}</p><p>Válida até: ${validade}</p></div>
-        </div>
-        <div class="proposta-cliente">
-            <h3>Cliente</h3>
+            <div class="proposta-info"><h2>${textoDoc(layout.titulo, valores)}</h2><p>Nº <strong>${formatPedidoId(ped.id)}</strong></p>${htmlCodigoDocumento(ped.id)}<p>Data de emissão: ${hoje}</p><p>Válida até: ${validade}</p></div>
+        </div>`,
+        cliente: `
+        <div class="proposta-cliente doc-pessoa">
+            <h3>${tit('cliente')}</h3>
             <p><strong>${escapeHtml(cliente?cliente.nome:'Não vinculado')}</strong></p>
             ${cliente&&cliente.cpf   ? `<p>CPF: ${escapeHtml(cliente.cpf)}</p>`     : ''}
             ${cliente&&cliente.tel   ? `<p>Tel: ${escapeHtml(cliente.tel)}</p>`     : ''}
             ${cliente&&cliente.email ? `<p>${escapeHtml(cliente.email)}</p>`        : ''}
             ${cliente&&cliente.end   ? `<p>${escapeHtml(cliente.end)}</p>`          : ''}
-        </div>
+        </div>`,
+        ambientes: `
         <table class="proposta-tabela">
             <thead><tr><th style="width:15%">Ambiente</th><th>Descrição</th></tr></thead>
             <tbody>${ambRows}${acessRows}</tbody>
-        </table>
-        ${ped.observacoes ? `<div style="margin:16px 0;padding:12px 16px;background:#FAFAFA;border-left:3px solid #005D3B;border-radius:0 6px 6px 0">
-            <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Observações</div>
+        </table>`,
+        observacoes: ped.observacoes ? `<div class="proposta-obs" style="margin:16px 0;padding:12px 16px;background:var(--doc-fundo,#FAFAFA);border-left:3px solid var(--doc-destaque,#005D3B);border-radius:0 6px 6px 0">
+            <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${tit('observacoes')}</div>
             <p style="font-size:13px;color:var(--dark);margin:0;white-space:pre-line">${escapeHtml(ped.observacoes)}</p>
-        </div>` : ''}
+        </div>` : '',
+        totais: `
         <div class="proposta-totais">
             ${ped.desconto_pct > 0 ? `<div class="proposta-linha" style="color:#F43927"><span>Desconto (${ped.desconto_pct}%)</span><span>− R$ ${(ped.desconto_valor||0).toFixed(2)}</span></div>` : ''}
-            <div class="proposta-linha proposta-total"><span>VALOR TOTAL</span><span>R$ ${ped.valor.toFixed(2)}</span></div>
-            ${ped.data_entrega ? `<div class="proposta-linha" style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;font-weight:600"><span>Previsão de Entrega</span><span>${new Date(ped.data_entrega + 'T12:00:00').toLocaleDateString('pt-BR')}</span></div>` : ''}
-        </div>
+            <div class="proposta-linha proposta-total"><span>${tit('totais')}</span><span>R$ ${ped.valor.toFixed(2)}</span></div>
+            ${entrega ? `<div class="proposta-linha" style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;font-weight:600"><span>Previsão de Entrega</span><span>${entrega}</span></div>` : ''}
+        </div>`,
+        condicoes: condicoes.length ? `
         <div class="proposta-termos">
-            <h4>Condições Gerais</h4>
-            <ul>${getCondicoesGerais()
-                .replace(/\{diasValidade\}/g, diasValidade)
-                .split('\n')
-                .filter(l => l.trim())
-                .map(l => `<li>${escapeHtml(l.trim())}</li>`)
-                .join('')}
+            <h4>${tit('condicoes')}</h4>
+            <ul>${condicoes.map(l => `<li>${textoDoc(l.trim(), valores)}</li>`).join('')}
             </ul>
-        </div>
+        </div>` : '',
+        aprovacao: `
         <div class="proposta-aprovacao">
             <p>Aprovado em: _____ / _____ / _________</p>
-            <p style="margin-top:12px">Assinatura do cliente:</p>
+            <p style="margin-top:12px">${textoDoc(blocoDoLayout(layout, 'aprovacao').corpo, valores)}</p>
             ${buildAssinaturaHTML(ped.id,'cliente',300,100)}
-        </div>`;
+        </div>`
+    };
+    return montarDocumentoLayout('proposta', layout, blocos, valores);
 }
 
 function renderProposta() {
