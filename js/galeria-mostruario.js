@@ -116,9 +116,12 @@ function _gmLigar(raiz) {
     raiz.querySelector('#gm-cor-adicionar').addEventListener('click', _gmAdicionarCor);
     raiz.querySelectorAll('.gm-cor-remover').forEach(b => b.addEventListener('click', () => _gmRemoverCor(b.closest('.gm-cor').dataset.id)));
     raiz.querySelectorAll('.gm-modelo').forEach(c => c.addEventListener('change', () => {
-        const chave = { prega: 'pregas', persiana: 'persianas', trilho: 'trilhos' }[c.dataset.tipo];
-        const marcados = [...raiz.querySelectorAll(`.gm-modelo[data-tipo="${c.dataset.tipo}"]:checked`)].map(x => x.value);
-        _gm.m.modelos[chave] = marcados;
+        const tipo = c.dataset.tipo, sel = `.gm-modelo[data-tipo="${tipo}"]`;
+        if (tipo === 'trilho') {
+            _gm.m.modelos.trilhosOcultos = [...raiz.querySelectorAll(sel + ':not(:checked)')].map(x => x.value);
+        } else {
+            _gm.m.modelos[tipo === 'prega' ? 'pregas' : 'persianas'] = [...raiz.querySelectorAll(sel + ':checked')].map(x => x.value);
+        }
         _gmGravar();
     }));
 }

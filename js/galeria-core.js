@@ -53,7 +53,8 @@
             modelos: {
                 pregas: Object.keys(PREGAS),
                 persianas: Object.keys(PERSIANAS),
-                trilhos: (kitsNomes || []).filter(ehTexto)
+                trilhos: (kitsNomes || []).filter(ehTexto),
+                trilhosOcultos: []
             }
         };
     }
@@ -91,7 +92,12 @@
         const mod = ehObj(bruto.modelos) ? bruto.modelos : {};
         if (Array.isArray(mod.pregas)) m.modelos.pregas = mod.pregas.filter(p => PREGAS[p]);
         if (Array.isArray(mod.persianas)) m.modelos.persianas = mod.persianas.filter(p => PERSIANAS[p]);
-        if (Array.isArray(mod.trilhos)) m.modelos.trilhos = mod.trilhos.filter(ehTexto);
+        // Trilhos vem dos kits de fixacao da empresa: guarda-se so o que foi
+        // desmarcado, para um kit novo ja aparecer e um kit apagado sumir.
+        const kits = m.modelos.trilhos;
+        const ocultos = Array.isArray(mod.trilhosOcultos) ? mod.trilhosOcultos.filter(ehTexto) : [];
+        m.modelos.trilhosOcultos = ocultos.filter(n => kits.includes(n));
+        m.modelos.trilhos = kits.filter(n => !ocultos.includes(n));
         return m;
     }
 
@@ -144,6 +150,26 @@
             if (s < m || (s === m && p[1] < ord[ini][1])) ini = i;
         });
         return ord.slice(ini).concat(ord.slice(0, ini));
+    }
+
+    // Quadrilatero utilizavel: convexo, sem se cruzar, sem tres cantos
+    // alinhados e com os cantos a pelo menos `minDist` uns dos outros.
+    function quadValido(q, minDist) {
+        if (!Array.isArray(q) || q.length !== 4) return false;
+        const md = minDist === undefined ? 20 : minDist;
+        for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) {
+            if (Math.hypot(q[i][0] - q[j][0], q[i][1] - q[j][1]) < md) return false;
+        }
+        let sinal = 0;
+        for (let i = 0; i < 4; i++) {
+            const a = q[i], b = q[(i + 1) % 4], c = q[(i + 2) % 4];
+            const cr = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+            if (Math.abs(cr) < 1e-6) return false;
+            const s = Math.sign(cr);
+            if (sinal && s !== sinal) return false;
+            sinal = s;
+        }
+        return true;
     }
 
     function prenderCantos(q, w, h) {
@@ -247,7 +273,7 @@
     const api = {
         PREGAS, PERSIANAS, ABERTURAS, NOMES_ABERTURA, GRUPOS, LIMITE_FOTOS, MAX_FOTO, MAX_TEXTURA, CORES_INICIAIS,
         visualTrilho, padraoMostruario, lerMostruario, coresDisponiveis,
-        homografia, aplicarHomografia, ordenarCantos, prenderCantos, areaProduto,
+        homografia, aplicarHomografia, ordenarCantos, prenderCantos, quadValido, areaProduto,
         geometriaCortina, geometriaPersiana, dimensaoReduzida
     };
     if (typeof module === 'object' && module.exports) module.exports = api;

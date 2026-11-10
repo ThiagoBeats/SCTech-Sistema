@@ -102,6 +102,10 @@ test('desligar uma prega tira do mostruario', async ({ page }) => {
     expect(m.modelos.pregas).not.toContain('Franzido');
     expect(m.modelos.pregas).toContain('Wave Botao');
     expect(m.modelos.persianas).toEqual(['rolo', 'romana']);
+    await page.locator('.gm-modelo[data-tipo="trilho"][value="Trilho Motorizador"]').uncheck();
+    const m2 = await salvo(page);
+    expect(m2.modelos.trilhosOcultos).toEqual(['Trilho Motorizador']);
+    expect(m2.modelos.trilhos).not.toContain('Trilho Motorizador');
 });
 
 test('sem acesso completo a empresa, so ve', async ({ page }) => {

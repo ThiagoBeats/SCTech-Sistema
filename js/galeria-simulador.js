@@ -296,8 +296,11 @@ function _simPonteiroMove(ev) {
     if (!a) return;
     const e = _sim.estado;
     if (a.tipo === 'canto') {
-        const p = _simDaTela(ev.clientX, ev.clientY);
-        e.cantos[a.i] = GaleriaCore.prenderCantos([p], _sim.foto.w, _sim.foto.h)[0];
+        // so aceita a posicao se a janela continua um quadrilatero de verdade
+        // (convexo, sem cruzar, cantos afastados); senao o canto para onde estava
+        const p = GaleriaCore.prenderCantos([_simDaTela(ev.clientX, ev.clientY)], _sim.foto.w, _sim.foto.h)[0];
+        const novo = e.cantos.map((c, i) => i === a.i ? p : c);
+        if (GaleriaCore.quadValido(novo, 20)) e.cantos = novo;
     } else if (a.tipo === 'barra') {
         const p = _simDaTela(ev.clientX, ev.clientY);
         const baseJanela = Math.max(e.cantos[2][1], e.cantos[3][1]);
@@ -346,7 +349,16 @@ function _simIniciar3D() {
     if (!ctx || typeof THREE === 'undefined') { _sim.gl = false; return; }
     const T = THREE;
     T.ColorManagement.enabled = false;
-    const r = new T.WebGLRenderer({ canvas, context: ctx, antialias: true, preserveDrawingBuffer: true });
+    let r;
+    try { r = new T.WebGLRenderer({ canvas, context: ctx, antialias: true, preserveDrawingBuffer: true }); }
+    catch (e) { _sim.gl = false; return; }
+    // Celular em segundo plano (uma ligacao) pode perder o contexto 3D: o
+    // Three.js refaz o contexto e as texturas; aqui so redesenha ao voltar.
+    canvas.addEventListener('webglcontextlost', ev => ev.preventDefault());
+    canvas.addEventListener('webglcontextrestored', () => {
+        if (_sim.fundo && _sim.fundo.material.map) _sim.fundo.material.map.needsUpdate = true;
+        _simAgendar();
+    });
     r.outputColorSpace = T.LinearSRGBColorSpace;
     _sim.renderer = r;
     _sim.camera = new T.OrthographicCamera(0, 1, 0, -1, -10, 10);

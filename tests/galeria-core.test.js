@@ -141,3 +141,20 @@ test('dimensaoReduzida nao amplia', () => {
     assert.deepStrictEqual(G.dimensaoReduzida(3000, 4000, 1600), { w: 1200, h: 1600 });
     assert.deepStrictEqual(G.dimensaoReduzida(800, 600, 1600), { w: 800, h: 600 });
 });
+
+test('quadValido: so quadrilatero convexo, sem cruzar e sem cantos colados', () => {
+    const ret = [[300, 250], [700, 250], [700, 600], [300, 600]];
+    assert.strictEqual(G.quadValido(ret), true);
+    assert.strictEqual(G.quadValido([[300, 250], [700, 250], [450, 320], [300, 600]]), false, 'concavo');
+    assert.strictEqual(G.quadValido([[300, 250], [700, 600], [700, 250], [300, 600]]), false, 'gravata');
+    assert.strictEqual(G.quadValido([[0, 0], [0, 0], [700, 600], [300, 600]]), false, 'cantos colados');
+    assert.strictEqual(G.quadValido([[300, 250], [310, 250], [700, 600], [300, 600]], 20), false, 'perto demais');
+    assert.strictEqual(G.quadValido([[0, 0], [400, 0], [800, 0], [400, 300]]), false, 'tres alinhados');
+});
+
+test('trilhos: guarda os desmarcados; kit novo aparece, kit apagado some', () => {
+    const m = G.lerMostruario({ modelos: { trilhosOcultos: ['Trilho B', 'Kit apagado'] } }, ['Trilho A', 'Trilho B', 'Trilho Novo']);
+    assert.deepStrictEqual(m.modelos.trilhos, ['Trilho A', 'Trilho Novo']);
+    assert.deepStrictEqual(m.modelos.trilhosOcultos, ['Trilho B']);
+    assert.deepStrictEqual(G.padraoMostruario(['X']).modelos.trilhosOcultos, []);
+});

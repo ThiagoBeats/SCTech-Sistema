@@ -140,6 +140,39 @@ test('barra da cortina arrastavel; some quando vai ate a janela', async ({ page 
     await expect(page.locator('.sim-alca-barra')).toBeHidden();
 });
 
+test('canto puxado para dentro nao torce a cortina; cantos colados nao a somem', async ({ page }) => {
+    await abrirSim(page);
+    await comFoto(page);
+    const centro = async i => { const b = await page.locator(`.sim-alca[data-i="${i}"]`).boundingBox(); return [b.x + b.width / 2, b.y + b.height / 2]; };
+    const c0 = await centro(0), c2 = await centro(2);
+    // canto inf-dir puxado para perto do sup-esq, alem da diagonal: ficaria concavo
+    await arrastar(page, c2, [c0[0] + (c2[0] - c0[0]) * 0.3, c0[1] + (c2[1] - c0[1]) * 0.15]);
+    expect(await page.evaluate(() => GaleriaCore.quadValido(window._sim.estado.cantos))).toBe(true);
+    // canto sup-dir em cima do sup-esq
+    await arrastar(page, await centro(1), await centro(0));
+    expect(await page.evaluate(() => GaleriaCore.quadValido(window._sim.estado.cantos))).toBe(true);
+});
+
+test('cortina volta depois que o aparelho perde o 3D (ex.: atendeu uma ligacao)', async ({ page }) => {
+    await abrirSim(page);
+    await comFoto(page);
+    await page.locator('.sim-aba[data-aba="cor"]').click();
+    await page.locator('.sim-cor[data-valor="ini-grafite"]').click();
+    const centro = await centroJanela(page);
+    const antes = await corEm(page, centro);
+    await page.evaluate(() => { window.__perda = window._sim.renderer.getContext().getExtension('WEBGL_lose_context'); window.__perda.loseContext(); });
+    await page.waitForTimeout(300);
+    await page.evaluate(() => window.__perda.restoreContext());
+    await page.waitForTimeout(600);
+    const depois = await page.evaluate(p => {
+        const cv = window._sim.canvas, r = cv.getBoundingClientRect();
+        const c2 = document.createElement('canvas'); c2.width = cv.width; c2.height = cv.height;
+        const g = c2.getContext('2d'); g.drawImage(cv, 0, 0);
+        return Array.from(g.getImageData(Math.round((p[0] - r.left) * cv.width / r.width), Math.round((p[1] - r.top) * cv.height / r.height), 1, 1).data.slice(0, 3));
+    }, centro);
+    expect(distancia(antes, depois)).toBeLessThan(20);
+});
+
 test('link da galeria abre com a prega escolhida', async ({ page }) => {
     await abrirSim(page, '#simular?prega=Wave%20Botao');
     expect(await page.evaluate(() => window._sim.estado)).toMatchObject({ produto: 'cortina', prega: 'Wave Botao' });
