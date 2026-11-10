@@ -33,6 +33,7 @@ Módulos (telas):
  12. Configurar Empresa
  13. Sobre o Sistema
  16. Expedição (expedicao.html)
+ 17. Galeria e Simulador (galeria.html)
 
 Elementos globais presentes em todas as telas (exceto Login):
   - Barra lateral de navegação (sidebar) com links para todos os módulos
@@ -1028,6 +1029,7 @@ então recarregar a página ou seguir um atalho volta nela:
   • 📄 Layout dos Documentos (#layout): o editor da seção 12.4. Ao abrir a aba,
     a folha se ajusta à largura e a logo salva na aba Dados já fica disponível.
   • 🏷️ Etiquetas (#etiquetas): o editor de etiqueta da seção 14.1.
+  • 🖼️ Galeria e Mostruário (#galeria): o mostruário da seção 17.3.
 No celular a barra de abas rola de lado.
 
 ── 12.1 LOGOTIPO DA EMPRESA ────────────────────────────────────────────────────
@@ -1345,6 +1347,80 @@ conferência sempre começa pelo documento.
     "✓ Conferido" quando concluída
   - Linha do tempo do pedido: "Conferido na expedição por <usuário> — 3
     volume(s)", com data e hora. Zerar a conferência também fica registrado
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 17. GALERIA E SIMULADOR (galeria.html)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Para o instalador ou o medidor mostrar ao cliente, na casa dele, fotos reais de
+modelos e uma simulação 3D da cortina ou persiana na parede dele. Item
+"Galeria" no menu, com permissão própria (módulo "Galeria"): já vem liberada
+para visualizar em todos os papéis; o Administrador tem acesso completo.
+
+── 17.1 GALERIA DE FOTOS ───────────────────────────────────────────────────────
+
+  - Fotos reais cadastradas pela empresa (até 60), separadas em grupos:
+    Pregas, Trilhos e varões, Rolô, Romana e Double Vision
+  - Tocar numa foto abre o visor em tela cheia: passar com o dedo (ou setas
+    ‹ › / teclado ← →), Esc ou ✕ fecha
+  - Foto ligada a um modelo mostra "📐 Simular": abre o simulador já com
+    aquele modelo (ex.: galeria.html#simular?prega=Wave%20Botao)
+  - Sem fotos: convite para montar o mostruário (quem pode) e atalho para o
+    simulador, que já funciona com 6 cores neutras
+
+── 17.2 SIMULADOR (galeria.html#simular) ───────────────────────────────────────
+
+Passos do instalador:
+  1. "📷 Tirar foto" (câmera traseira) ou "🖼️ Escolher foto" da parede
+  2. Arrastar os 4 cantos amarelos até a janela (já nascem no meio da foto,
+     então a cortina aparece na hora); a dica aparece só na primeira vez
+  3. Escolher na gaveta: Modelo (6 pregas: Americana, Wave Botão, Wave
+     Plus/Flex, Franzido, Macho-Fêmea, Painel; persianas Rolô, Romana, Double
+     Vision), Cor, Trilho (trilho fino ou varão aparente) e Abertura (central,
+     para a esquerda, para a direita; até o chão ou até a janela)
+  4. Arrastar a cortina para o lado abre/fecha (na central, cada metade abre
+     para o seu lado); persiana: arrastar para cima sobe
+  5. "Até o chão": a barra da cortina tem uma alça para acertar a altura do
+     chão da foto (nasce ~1 altura de janela abaixo da janela)
+
+  - Cortina em 3D (Three.js, copiado em js/vendor/three.min.js — não depende de
+    site externo): dobras com luz e sombra por tipo de prega, mais fundas ao
+    recolher; sombra suave na parede; brilho acompanha a luz média da foto
+  - Encaixe em perspectiva: os 4 cantos definem uma homografia (foto tirada
+    meio de lado continua certa); cantos cruzados são reordenados e presos
+    dentro da foto
+  - Double Vision: as faixas se alinham (passa luz) e depois a persiana sobe
+  - Celular: foto em tela cheia e gaveta embaixo (puxador recolhe); tablet e
+    PC (≥ 900 px): opções num painel ao lado
+  - Foto da parede reduzida no aparelho (lado maior 1600 px, foto em pé
+    respeitada) e nunca guardada
+  - Sem WebGL: aviso "Este aparelho não consegue mostrar o simulador 3D"
+
+Salvar e enviar:
+  - 💾 Imagem: JPEG só da foto com a cortina (sem as alças), simulacao-AAAA-MM-DD.jpg
+  - 🎥 Vídeo: ~4 s da cortina abrindo e fechando (MP4 ou WebM, conforme o
+    aparelho); o botão some se o aparelho não grava vídeo
+  - 📤 Enviar: abre o compartilhar do celular (WhatsApp, e-mail) com a
+    imagem; sem ele, baixa a imagem
+
+── 17.3 MOSTRUÁRIO (Configurar Empresa → aba "🖼️ Galeria e Mostruário") ───────
+
+  - Fotos da galeria: "Enviar para" escolhe o grupo; várias de uma vez; cada
+    foto tem grupo, legenda e "Simular com" (prega, persiana ou trilho);
+    remover pede confirmação; contador n/60 e aviso no limite
+  - Cores e tecidos: nome, cor e foto do tecido opcional (vira textura no
+    simulador, reduzida a 512 px)
+  - Modelos que aparecem: caixas para as pregas, persianas e trilhos/varões
+    (os trilhos vêm dos kits de fixação da empresa)
+  - Cada alteração é salva na hora; sem acesso completo a Configurar Empresa,
+    só visualiza
+
+Armazenamento: o mostruário fica em sc_mostruario (só ids das imagens); as
+fotos e texturas ficam no IndexedDB do navegador (banco sctech-imagens), todo
+o acesso passando por js/galeria-imagens.js — quando o sistema for para o
+servidor da empresa, só esse arquivo muda. Sem IndexedDB (ex.: janela
+anônima) a tela avisa e o simulador segue com as cores.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
