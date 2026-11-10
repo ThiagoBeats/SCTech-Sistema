@@ -2075,3 +2075,10 @@ html[data-theme="dark"] .dl-folha .pc-table td, html[data-theme="dark"] .dl-folh
 .doc-layout .proposta-termos h4:empty, .doc-layout .proposta-obs-titulo:empty, .doc-layout .os-cliente-label:empty,
 .doc-layout .doc-texto-titulo:empty { display: none; }
 .doc-graficos-reserva { border: 1px dashed #C9C9C9; border-radius: 6px; padding: 28px 12px; margin-bottom: 14px; text-align: center; font-size: 12px; color: #8F8F8F; background: #FAFAFA; }
+
+/* Abas da Configurar Empresa: no celular a barra rola de lado em vez de
+   quebrar os nomes ou esconder a ultima aba. */
+.emp-tab-nav { flex-shrink: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+    border-bottom: none; box-shadow: inset 0 -2px 0 var(--border); }
+.emp-tab-nav::-webkit-scrollbar { display: none; }
+.emp-tab-nav .tab-btn { white-space: nowrap; flex: 0 0 auto; margin-bottom: 0; }

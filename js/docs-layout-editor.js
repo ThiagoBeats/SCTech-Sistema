@@ -113,6 +113,15 @@ function iniciarEditorLayouts() {
     _dlRenderTudo();
 }
 
+// Chamado ao abrir a aba "Layout dos Documentos": a logo pode ter sido salva
+// na aba Dados, e escondida a folha mediu largura zero. As edicoes ainda nao
+// salvas ficam, porque o painel e redesenhado a partir de _dl.layout.
+function atualizarEditorLayouts() {
+    if (!_dl.layout || !document.getElementById('dl-previa')) return;
+    _dlRenderPainel();
+    _dlRenderPrevia();
+}
+
 function _dlRenderTudo() {
     _dlRenderCopiar();
     _dlRenderPainel();
@@ -187,7 +196,7 @@ function _dlRenderPainel() {
         <section class="dl-grupo">
             <h4>Logo no fundo</h4>
             <label class="dl-check"><input type="checkbox" id="dl-marca"${e.marca.ativa ? ' checked' : ''}${temLogo ? '' : ' disabled'}> Mostrar a logo clarinha atrás do texto</label>
-            ${temLogo ? '' : '<small class="dl-dica">Cadastre a logo da empresa no topo desta página para usar.</small>'}
+            ${temLogo ? '' : '<small class="dl-dica">Cadastre a logo da empresa na aba Dados da Empresa para usar.</small>'}
             <div class="dl-marca-ajustes"${e.marca.ativa && temLogo ? '' : ' hidden'}>
                 <label class="dl-txt"><span>Tamanho</span><select id="dl-marca-tamanho">${[['P', 'Pequena'], ['M', 'Média'], ['G', 'Grande']].map(([v, n]) =>
                     `<option value="${v}"${v === e.marca.tamanho ? ' selected' : ''}>${n}</option>`).join('')}</select></label>

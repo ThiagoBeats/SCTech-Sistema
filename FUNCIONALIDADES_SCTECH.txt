@@ -1019,6 +1019,17 @@ Comportamentos automáticos ao salvar:
  12. CONFIGURAR EMPRESA (empresa.html)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+A tela é dividida em abas; a aba aberta fica no endereço (empresa.html#layout),
+então recarregar a página ou seguir um atalho volta nela:
+  • 🏢 Dados da Empresa (#dados, a padrão): logotipo, dados e pré-visualização
+    do cabeçalho.
+  • ⚙️ Preferências (#preferencias): formas de pagamento, alertas e cards da
+    Página Inicial. O sininho "🔕 Alertas desabilitados" leva direto para ela.
+  • 📄 Layout dos Documentos (#layout): o editor da seção 12.4. Ao abrir a aba,
+    a folha se ajusta à largura e a logo salva na aba Dados já fica disponível.
+  • 🏷️ Etiquetas (#etiquetas): o editor de etiqueta da seção 14.1.
+No celular a barra de abas rola de lado.
+
 ── 12.1 LOGOTIPO DA EMPRESA ────────────────────────────────────────────────────
 
 Área de upload com clique ou drag (borda tracejada):
@@ -1073,7 +1084,7 @@ Comportamento dos toggles:
 
 ── 12.4 LAYOUT DOS DOCUMENTOS ──────────────────────────────────────────────────
 
-Card "📄 Layout dos Documentos": cada documento impresso ganha a cara da empresa.
+Aba "📄 Layout dos Documentos": cada documento impresso ganha a cara da empresa.
 Documentos: Proposta Comercial, Ordem de Serviço, Pedido de Compra, Agendamento
 de Medição e Relatório Financeiro — cada um editado separadamente.
 
@@ -1137,7 +1148,7 @@ Objetivo: identificar cada volume (pacote) do pedido com uma etiqueta adesiva
 impressa em impressora térmica, para a conferência na Expedição (item 16).
 Funciona com qualquer impressora térmica que tenha driver no Windows.
 
-── 14.1 EDITOR DE ETIQUETA (Configurar Empresa → "🏷️ Etiquetas de Pedido") ─────
+── 14.1 EDITOR DE ETIQUETA (Configurar Empresa → aba "🏷️ Etiquetas") ─────
 
 Paleta de elementos (esquerda), arrastar para a etiqueta:
   - Campos do pedido: Nº do pedido, Cliente, Endereço, Telefone, Data de

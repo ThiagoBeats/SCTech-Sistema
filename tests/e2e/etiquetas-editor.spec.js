@@ -8,7 +8,7 @@ async function abrir(page) {
     await page.setViewportSize({ width: 1440, height: 900 });
     await entrar(page, BASE);
     await page.evaluate(() => localStorage.removeItem('sc_etiqueta_cfg'));
-    await page.goto(BASE + '/empresa.html');
+    await page.goto(BASE + '/empresa.html#etiquetas');
     await expect(page.locator('#etq-editor')).toBeVisible();
 }
 
@@ -84,7 +84,7 @@ test('somente visualizacao: sem arrastar, salvar, restaurar nem remover', async 
         }]
     });
     await page.evaluate(() => localStorage.removeItem('sc_etiqueta_cfg'));
-    await page.goto(BASE + '/empresa.html');
+    await page.goto(BASE + '/empresa.html#etiquetas');
     await expect(page.locator('#etq-editor')).toBeVisible();
     expect(await page.evaluate(() => temAcesso('configuracoes.empresa', 'completo'))).toBe(false);
     const els = page.locator('#etq-palco .etq-el');

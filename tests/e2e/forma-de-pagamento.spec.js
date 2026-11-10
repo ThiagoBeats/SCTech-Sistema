@@ -111,7 +111,7 @@ test('Financeiro: pedido antigo com codigo de plano continua dividido como antes
 const linhas = page => page.locator('#emp-formas-pag .forma-pag-nome');
 
 test('empresa: lista a padrao e marca a primeira como padrao', async ({ page }) => {
-    await abrir(page, 'empresa.html');
+    await abrir(page, 'empresa.html#preferencias');
     await expect(page.locator('#emp-formas-pag-card h3')).toContainText('Formas de Pagamento');
     await expect(linhas(page)).toHaveCount(4);
     expect(await linhas(page).evaluateAll(l => l.map(i => i.value))).toEqual(PADRAO);
@@ -119,7 +119,7 @@ test('empresa: lista a padrao e marca a primeira como padrao', async ({ page }) 
 });
 
 test('empresa: adicionar, renomear, reordenar e remover, gravando so ao salvar', async ({ page }) => {
-    await abrir(page, 'empresa.html');
+    await abrir(page, 'empresa.html#preferencias');
     await page.click('button:has-text("Adicionar forma de pagamento")');
     await expect(linhas(page)).toHaveCount(5);
     await expect(linhas(page).nth(4)).toBeFocused();
@@ -139,7 +139,7 @@ test('empresa: adicionar, renomear, reordenar e remover, gravando so ao salvar',
 });
 
 test('empresa: nomes vazios e repetidos sao descartados ao salvar', async ({ page }) => {
-    await abrir(page, 'empresa.html', { sc_formas_pag: ['PIX'] });
+    await abrir(page, 'empresa.html#preferencias', { sc_formas_pag: ['PIX'] });
     await page.click('button:has-text("Adicionar forma de pagamento")');
     await linhas(page).nth(1).fill('  pix ');
     await page.click('button:has-text("Adicionar forma de pagamento")');
@@ -151,7 +151,7 @@ test('empresa: nomes vazios e repetidos sao descartados ao salvar', async ({ pag
 });
 
 test('empresa: nao deixa salvar a lista vazia', async ({ page }) => {
-    await abrir(page, 'empresa.html', { sc_formas_pag: ['PIX'] });
+    await abrir(page, 'empresa.html#preferencias', { sc_formas_pag: ['PIX'] });
     await page.locator('#emp-formas-pag button[title="Remover"]').click();
     await expect(page.locator('#emp-formas-pag')).toContainText('Nenhuma forma cadastrada');
     await page.click('button:has-text("Salvar Formas de Pagamento")');
@@ -160,7 +160,7 @@ test('empresa: nao deixa salvar a lista vazia', async ({ page }) => {
 });
 
 test('empresa: restaurar padrao volta a lista original', async ({ page }) => {
-    await abrir(page, 'empresa.html', { sc_formas_pag: ['PIX'] });
+    await abrir(page, 'empresa.html#preferencias', { sc_formas_pag: ['PIX'] });
     await page.click('#emp-formas-pag-card button:has-text("Restaurar Padrão")');
     expect(await linhas(page).evaluateAll(l => l.map(i => i.value))).toEqual(PADRAO);
     expect(await ler(page, 'sc_formas_pag')).toBeNull();
@@ -176,7 +176,7 @@ const FORMAS_DESC = [
 const desconto = page => page.locator('#ped-desconto');
 
 test('empresa: cada forma tem o % de desconto, gravado ao salvar', async ({ page }) => {
-    await abrir(page, 'empresa.html', { sc_formas_pag: FORMAS_DESC });
+    await abrir(page, 'empresa.html#preferencias', { sc_formas_pag: FORMAS_DESC });
     const campos = page.locator('#emp-formas-pag .forma-pag-desconto');
     await expect(campos).toHaveCount(3);
     expect(await campos.evaluateAll(l => l.map(i => i.value))).toEqual(['5', '0', '7.5']);
@@ -193,7 +193,7 @@ test('empresa: cada forma tem o % de desconto, gravado ao salvar', async ({ page
 });
 
 test('empresa: subir e descer leva o desconto junto', async ({ page }) => {
-    await abrir(page, 'empresa.html', { sc_formas_pag: FORMAS_DESC });
+    await abrir(page, 'empresa.html#preferencias', { sc_formas_pag: FORMAS_DESC });
     await page.locator('#emp-formas-pag .forma-pag-linha').nth(2).locator('button[title="Subir"]').click();
     await page.click('button:has-text("Salvar Formas de Pagamento")');
     expect((await ler(page, 'sc_formas_pag')).map(f => [f.nome, f.desconto]))
@@ -201,7 +201,7 @@ test('empresa: subir e descer leva o desconto junto', async ({ page }) => {
 });
 
 test('empresa: lista antiga so com nomes abre com desconto 0', async ({ page }) => {
-    await abrir(page, 'empresa.html', { sc_formas_pag: ['PIX', 'Boleto'] });
+    await abrir(page, 'empresa.html#preferencias', { sc_formas_pag: ['PIX', 'Boleto'] });
     expect(await page.locator('#emp-formas-pag .forma-pag-desconto').evaluateAll(l => l.map(i => i.value))).toEqual(['0', '0']);
 });
 

@@ -103,7 +103,7 @@ test('modelo sem codigo de barras nem QR nao imprime', async ({ page }) => {
 });
 
 test('imprimir teste no editor', async ({ page }) => {
-    await abrir(page, [], 'empresa.html');
+    await abrir(page, [], 'empresa.html#etiquetas');
     await expect(page.locator('#etq-editor')).toBeVisible();
     await page.getByRole('button', { name: /Imprimir teste/ }).click();
     await page.waitForFunction(() => window.__etq && window.__etq.length === 1, null, { timeout: 15000 });

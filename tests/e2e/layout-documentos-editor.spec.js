@@ -8,7 +8,7 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
 
 async function abrirEditor(page, extras) {
     await entrar(page, BASE, Object.assign({ sc_empresa: { razao_social: 'Lírio Cortinas' } }, extras || {}));
-    await page.goto(BASE + '/empresa.html');
+    await page.goto(BASE + '/empresa.html#layout');
     const ed = page.locator('#dl-editor');
     await ed.scrollIntoViewIfNeeded();
     await expect(ed.locator('#dl-previa .doc-layout')).toBeVisible();
@@ -105,7 +105,7 @@ test('voltar ao padrao apaga o layout do documento', async ({ page }) => {
 test('condicoes antigas aparecem no editor e o card antigo saiu', async ({ page }) => {
     await entrar(page, BASE, {});
     await page.evaluate(() => localStorage.setItem('sc_cond_gerais', 'Pagamento à vista'));
-    await page.goto(BASE + '/empresa.html');
+    await page.goto(BASE + '/empresa.html#layout');
     await expect(page.locator('#emp-condicoes-gerais')).toHaveCount(0);
     await expect(page.locator('.dl-bloco[data-bloco="condicoes"] .dl-bloco-corpo')).toHaveValue('Pagamento à vista');
 });

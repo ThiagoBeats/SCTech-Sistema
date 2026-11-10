@@ -7,7 +7,7 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
 
 async function abrirEditor(page, extras) {
     await entrar(page, BASE, Object.assign({ sc_empresa: { razao_social: 'Lírio Cortinas' } }, extras || {}));
-    await page.goto(BASE + '/empresa.html');
+    await page.goto(BASE + '/empresa.html#layout');
     const ed = page.locator('#dl-editor');
     await expect(ed.locator('#dl-previa .doc-layout')).toBeVisible();
     return ed;
@@ -16,7 +16,7 @@ async function abrirEditor(page, extras) {
 test('previa legivel no tema escuro: celulas escuras e cabecalho da tabela na cor do documento', async ({ page }) => {
     await entrar(page, BASE, { sc_empresa: { razao_social: 'L' } });
     await page.evaluate(() => localStorage.setItem('sc_tema', 'dark'));
-    await page.goto(BASE + '/empresa.html');
+    await page.goto(BASE + '/empresa.html#layout');
     const prev = page.locator('#dl-previa');
     await expect(prev.locator('.proposta-tabela td').first()).toBeVisible();
     expect(await prev.locator('.proposta-tabela td').first().evaluate(e => getComputedStyle(e).color)).toBe('rgb(36, 36, 36)');

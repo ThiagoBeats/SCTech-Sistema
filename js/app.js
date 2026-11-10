@@ -3219,7 +3219,7 @@ function renderBellIndicator() {
     if (!bell) {
         bell = document.createElement('div');
         bell.id = 'alerta-bell-disabled';
-        bell.onclick = () => window.location.href = 'empresa.html';
+        bell.onclick = () => window.location.href = 'empresa.html#preferencias';
         const grp = _getHeaderGroup();
         if (grp) grp.appendChild(bell);
     }
@@ -10388,6 +10388,23 @@ document.addEventListener('DOMContentLoaded', () => {
 // =============================================
 // CATÁLOGO — TABS
 // =============================================
+
+// Configurar Empresa: abas Dados, Preferencias, Layout dos Documentos e
+// Etiquetas. A aba aberta vai para o endereco (#layout), para o recarregar
+// e os atalhos voltarem nela.
+const ABAS_EMPRESA = ['dados', 'preferencias', 'layout', 'etiquetas'];
+function mostrarTabEmpresa(tab) {
+    if (!ABAS_EMPRESA.includes(tab)) tab = 'dados';
+    document.querySelectorAll('.emp-tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-emp-' + tab));
+    document.querySelectorAll('.emp-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    const btn = document.querySelector(`.emp-tab-btn[data-tab="${tab}"]`);
+    if (btn && btn.scrollIntoView) btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (location.hash.slice(1) !== tab && (tab !== 'dados' || location.hash)) history.replaceState(null, '', '#' + tab);
+    // os editores medem a largura da tela (escondidos, mediram zero), e a
+    // logo pode ter mudado na aba Dados
+    if (tab === 'layout' && typeof atualizarEditorLayouts === 'function') atualizarEditorLayouts();
+    if (tab === 'etiquetas' && typeof _etqRender === 'function') _etqRender();
+}
 
 function mostrarTabCatalogo(tab) {
     if (_curTabCatalogo !== tab) { _prevTabCatalogo = _curTabCatalogo; _curTabCatalogo = tab; }

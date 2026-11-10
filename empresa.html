@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Configurar Empresa - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261109e">
+    <link rel="stylesheet" href="css/style.css?v=20261110a">
     <style>
         .logo-upload-area {
             border: 2px dashed var(--border);
@@ -32,6 +32,15 @@
     <main class="main">
         <div class="header"><h2>⚙️ Configurar Empresa</h2></div>
 
+        <div class="tab-nav emp-tab-nav">
+            <button class="tab-btn emp-tab-btn active" data-tab="dados"        onclick="mostrarTabEmpresa('dados')">🏢 Dados da Empresa</button>
+            <button class="tab-btn emp-tab-btn"        data-tab="preferencias" onclick="mostrarTabEmpresa('preferencias')">⚙️ Preferências</button>
+            <button class="tab-btn emp-tab-btn"        data-tab="layout"       onclick="mostrarTabEmpresa('layout')">📄 Layout dos Documentos</button>
+            <button class="tab-btn emp-tab-btn"        data-tab="etiquetas"    onclick="mostrarTabEmpresa('etiquetas')">🏷️ Etiquetas</button>
+        </div>
+
+        <!-- ══════════════ ABA: DADOS DA EMPRESA ══════════════ -->
+        <div id="tab-emp-dados" class="tab-panel emp-tab-panel active">
         <div class="card" style="max-width:860px">
             <h3 style="margin-bottom:20px;color:var(--primary)">Logotipo da Empresa</h3>
             <div class="logo-upload-area" onclick="document.getElementById('emp-logo-input').click()">
@@ -98,6 +107,14 @@
             </div>
         </div>
 
+        <div class="card" style="max-width:860px" id="emp-preview-card">
+            <h3 style="margin-bottom:14px;color:var(--primary)">Pré-visualização do Cabeçalho</h3>
+            <div id="emp-cabecalho-preview" style="border:1px solid var(--border);border-radius:8px;padding:16px 20px;background:#fff"></div>
+        </div>
+        </div>
+
+        <!-- ══════════════ ABA: PREFERENCIAS ══════════════ -->
+        <div id="tab-emp-preferencias" class="tab-panel emp-tab-panel">
         <div class="card" style="max-width:860px" id="emp-formas-pag-card">
             <h3 style="margin-bottom:6px;color:var(--primary)">💳 Formas de Pagamento</h3>
             <p style="font-size:12px;color:#8F8F8F;margin-bottom:14px">
@@ -125,6 +142,10 @@
             <div id="emp-dashcards-cfg"></div>
         </div>
 
+        </div>
+
+        <!-- ══════════════ ABA: LAYOUT DOS DOCUMENTOS ══════════════ -->
+        <div id="tab-emp-layout" class="tab-panel emp-tab-panel">
         <div class="card" style="max-width:1240px" id="emp-layout-docs-card">
             <h3 style="margin-bottom:6px;color:var(--primary)">📄 Layout dos Documentos</h3>
             <p style="font-size:12px;color:#8F8F8F;margin-bottom:14px">
@@ -135,24 +156,25 @@
             <div id="dl-editor" class="dl-editor"></div>
         </div>
 
+        </div>
+
+        <!-- ══════════════ ABA: ETIQUETAS ══════════════ -->
+        <div id="tab-emp-etiquetas" class="tab-panel emp-tab-panel">
         <div class="card" style="max-width:860px" id="emp-etiquetas-card">
             <h3 style="margin-bottom:6px;color:var(--primary)">🏷️ Etiquetas de Pedido</h3>
             <p style="font-size:12px;color:#8F8F8F;margin-bottom:14px">Monte a etiqueta colada nos volumes do pedido: arraste os itens da esquerda para a etiqueta, clique num item para ajustar e salve. A etiqueta mostra um pedido de exemplo.</p>
             <div id="etq-editor" class="etq-editor"></div>
         </div>
-
-        <div class="card" style="max-width:860px" id="emp-preview-card" style="display:none">
-            <h3 style="margin-bottom:14px;color:var(--primary)">Pré-visualização do Cabeçalho</h3>
-            <div id="emp-cabecalho-preview" style="border:1px solid var(--border);border-radius:8px;padding:16px 20px;background:#fff"></div>
         </div>
+
     </main>
-    <script src="js/etiquetas-core.js?v=20261109e"></script>
-    <script src="js/etiquetas-render.js?v=20261109e"></script>
-    <script src="js/cortina-desenho.js?v=20261109e"></script>
-    <script src="js/docs-layout-core.js?v=20261109e"></script>
-    <script src="js/app.js?v=20261109e"></script>
-    <script src="js/etiquetas-editor.js?v=20261109e"></script>
-    <script src="js/docs-layout-editor.js?v=20261109e"></script>
+    <script src="js/etiquetas-core.js?v=20261110a"></script>
+    <script src="js/etiquetas-render.js?v=20261110a"></script>
+    <script src="js/cortina-desenho.js?v=20261110a"></script>
+    <script src="js/docs-layout-core.js?v=20261110a"></script>
+    <script src="js/app.js?v=20261110a"></script>
+    <script src="js/etiquetas-editor.js?v=20261110a"></script>
+    <script src="js/docs-layout-editor.js?v=20261110a"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             carregarEmpresaConfigs();
@@ -162,6 +184,8 @@
             renderFormasPagamentoCfg();
             iniciarEditorEtiquetas();
             iniciarEditorLayouts();
+            mostrarTabEmpresa(location.hash.slice(1));
+            window.addEventListener('hashchange', () => mostrarTabEmpresa(location.hash.slice(1)));
         });
         function atualizarPreviewCabecalho() {
             const card = document.getElementById('emp-preview-card');
