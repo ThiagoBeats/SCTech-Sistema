@@ -6524,12 +6524,23 @@ function mostrarSharePC() {
 }
 
 // --- ORDEM DE SERVIÇO ---
-function gerarHTMLOS(pedidoId) {
+function gerarHTMLOS(pedidoId, layout) {
     const ped = db.pedidos.find(p => p.id == pedidoId);
     if (!ped) return '<p style="text-align:center;color:#999;padding:40px;">OS não encontrada.</p>';
+    return _htmlOS(ped, db.clientes.find(c => c.id == ped.clienteId), layout);
+}
+
+function _htmlOS(ped, cliente, layout) {
+    layout = layout || getLayoutDocumento('os');
     const ambientes = normalizarAmbientes(ped);
-    const cliente   = db.clientes.find(c => c.id == ped.clienteId);
     const hoje      = new Date().toLocaleDateString('pt-BR');
+    const entrega   = ped.data_entrega ? new Date(ped.data_entrega + 'T12:00:00').toLocaleDateString('pt-BR') : '';
+    const valores = Object.assign(valoresComunsEmpresa(), {
+        cliente: cliente ? cliente.nome : (ped.clienteNome || ''),
+        numero: formatPedidoId(ped.id), data_emissao: hoje, previsao_entrega: entrega,
+        status: normalizarStatus(ped.status)
+    });
+    const tit = id => textoDoc(blocoDoLayout(layout, id).titulo, valores);
     const osSpec = (label, val) => `<span class="os-spec"><span class="os-spec-lbl">${label}</span>${val}</span>`;
     const ambientesHTML = ambientes.map((a, idx) => {
         const tecidos = a.tecidos || [];
@@ -6561,37 +6572,41 @@ function gerarHTMLOS(pedidoId) {
             ${tecidos.length > 1 ? `<div class="os-amb-total">Total do ambiente: <strong>${totalConsumo.toFixed(2)} m lineares</strong></div>` : ''}
         </div>`;
     }).join('');
-    const itensHTML = ped.itens && ped.itens.length ? `
-        <div class="os-section">
-            <div class="os-section-title">Materiais e Acessórios</div>
-            <table class="os-table">
-                <tr><td class="os-th" style="width:40%">Material</td><td class="os-th">Quantidade</td><td class="os-th">Unidade</td></tr>
-                ${ped.itens.map(i=>`<tr><td>${escapeHtml(i.nome)}</td><td>${i.quantidade}</td><td>${escapeHtml(i.unidade)}</td></tr>`).join('')}
-            </table>
-        </div>` : '';
-    return `
-        <div class="os-header">
+    const assin = legendasAssinaturas(blocoDoLayout(layout, 'assinaturas'), 'os');
+    const chavesAssin = [['costureira', assin[0]], ['instalador', assin[1]], ['conferencia', assin[2]]];
+    const blocos = {
+        cabecalho: `
+        <div class="os-header doc-cab">
             <div>
                 <div class="os-empresa">${buildEmpresaHeaderHTML(42)}</div>
-                <div class="os-titulo">ORDEM DE SERVIÇO INTERNA</div>
-                <div class="os-aviso">⚠ SEM VALOR COMERCIAL — USO EXCLUSIVAMENTE INTERNO</div>
+                <div class="os-titulo">${textoDoc(layout.titulo, valores)}</div>
+                ${(blocoDoLayout(layout, 'cabecalho').aviso || '').trim() ? `<div class="os-aviso">${textoDoc(blocoDoLayout(layout, 'cabecalho').aviso, valores)}</div>` : ''}
             </div>
             <div class="os-meta">
                 <div class="os-meta-item"><span>OS Nº</span><strong>${formatPedidoId(ped.id)}</strong></div>
                 ${htmlCodigoDocumento(ped.id)}
                 <div class="os-meta-item"><span>Emissão</span><strong>${hoje}</strong></div>
-                ${ped.data_entrega ? `<div class="os-meta-item"><span>Previsão entrega</span><strong>${new Date(ped.data_entrega + 'T12:00:00').toLocaleDateString('pt-BR')}</strong></div>` : ''}
+                ${entrega ? `<div class="os-meta-item"><span>Previsão entrega</span><strong>${entrega}</strong></div>` : ''}
                 <div class="os-meta-item"><span>Status</span><strong>${normalizarStatus(ped.status)}</strong></div>
             </div>
-        </div>
-        <div class="os-cliente-bar"><span class="os-cliente-label">Cliente</span><strong>${escapeHtml(cliente?cliente.nome:'—')}</strong></div>
-        ${ambientesHTML}${itensHTML}
-        <div class="os-section"><div class="os-section-title">Observações</div><div class="os-obs-box" style="padding:10px 14px;font-size:14px;min-height:64px">${ped.observacoes ? escapeHtml(ped.observacoes) : ''}</div></div>
+        </div>`,
+        cliente: `<div class="os-cliente-bar"><span class="os-cliente-label">${tit('cliente')}</span><strong>${escapeHtml(cliente?cliente.nome:'—')}</strong></div>`,
+        ambientes: ambientesHTML,
+        materiais: ped.itens && ped.itens.length ? `
+        <div class="os-section">
+            <div class="os-section-title">${tit('materiais')}</div>
+            <table class="os-table">
+                <tr><td class="os-th" style="width:40%">Material</td><td class="os-th">Quantidade</td><td class="os-th">Unidade</td></tr>
+                ${ped.itens.map(i=>`<tr><td>${escapeHtml(i.nome)}</td><td>${i.quantidade}</td><td>${escapeHtml(i.unidade)}</td></tr>`).join('')}
+            </table>
+        </div>` : '',
+        observacoes: `<div class="os-section"><div class="os-section-title">${tit('observacoes')}</div><div class="os-obs-box" style="padding:10px 14px;font-size:14px;min-height:64px">${ped.observacoes ? escapeHtml(ped.observacoes) : ''}</div></div>`,
+        assinaturas: `
         <div class="os-assinaturas">
-            <div class="os-assinatura-item"><div class="os-section-title">Costureira</div>${buildAssinaturaHTML(ped.id,'costureira',200,70)}<small>Nome / Assinatura / Data conclusão</small></div>
-            <div class="os-assinatura-item"><div class="os-section-title">Instalador</div>${buildAssinaturaHTML(ped.id,'instalador',200,70)}<small>Nome / Assinatura / Data instalação</small></div>
-            <div class="os-assinatura-item"><div class="os-section-title">Conferência (Gerência)</div>${buildAssinaturaHTML(ped.id,'conferencia',200,70)}<small>Nome / Visto / Data</small></div>
-        </div>`;
+            ${chavesAssin.map(([chave, a]) => `<div class="os-assinatura-item"><div class="os-section-title">${textoDoc(a.titulo, valores)}</div>${buildAssinaturaHTML(ped.id, chave, 200, 70)}<small>${textoDoc(a.legenda, valores)}</small></div>`).join('')}
+        </div>`
+    };
+    return montarDocumentoLayout('os', layout, blocos, valores);
 }
 
 function renderOS() {
@@ -8429,12 +8444,24 @@ function mostrarTabFornecedores(tab) {
 }
 
 // --- PEDIDO DE COMPRA (documento imprimível) ---
-function gerarHTMLPedidoCompra(id) {
+function gerarHTMLPedidoCompra(id, layout) {
     const pc = db.pedidos_compra.find(p => p.id == id);
     if (!pc) return '<p style="text-align:center;color:#999;padding:40px;">Pedido não encontrado.</p>';
-    const forn  = db.fornecedores.find(f => f.id == pc.fornecedor_id);
+    return _htmlPedidoCompra(pc, db.fornecedores.find(f => f.id == pc.fornecedor_id), layout);
+}
+
+function _htmlPedidoCompra(pc, forn, layout) {
+    layout = layout || getLayoutDocumento('compra');
     const hoje  = new Date().toLocaleDateString('pt-BR');
     const total = pc.itens.reduce((s, i) => s + i.subtotal, 0);
+    const valores = Object.assign(valoresComunsEmpresa(), {
+        fornecedor: forn ? forn.nome : (pc.fornecedor_nome || ''),
+        numero: formatPedidoId(pc.id), data_emissao: hoje, total: 'R$ ' + total.toFixed(2),
+        cliente_origem: pc.pedido_venda_id ? (_pcClienteOrigem(pc) || '') : '',
+        pedido_venda: pc.pedido_venda_id ? '#' + formatPedidoId(pc.pedido_venda_id) : '',
+        origem: pc.pedido_venda_id ? _pcTextoOrigem(pc) : ''
+    });
+    const tit = id => textoDoc(blocoDoLayout(layout, id).titulo, valores);
     const linhas = pc.itens.map(i => {
         let ref = i.referencia || '';
         if (!ref && i.item_id) {
@@ -8450,23 +8477,26 @@ function gerarHTMLPedidoCompra(id) {
         <td style="text-align:right"><strong>R$ ${i.subtotal.toFixed(2)}</strong></td>
     </tr>`;
     }).join('');
-    return `
-        <div class="pc-header">
+    const assin = legendasAssinaturas(blocoDoLayout(layout, 'assinaturas'), 'compra');
+    const blocos = {
+        cabecalho: `
+        <div class="pc-header doc-cab">
             ${buildEmpresaHeaderHTML(52)}
             <div style="text-align:right">
-                <div style="font-size:20px;font-weight:bold;color:var(--dark)">PEDIDO DE COMPRA</div>
+                <div style="font-size:20px;font-weight:bold;color:var(--dark)">${textoDoc(layout.titulo, valores)}</div>
                 <div style="font-size:13px;color:#888">Nº ${formatPedidoId(pc.id)} · Emitido em ${hoje}</div>
                 <div style="margin-top:4px"><span class="status-tag ${pc.status==='Recebido'?'st-faturado':pc.status==='Enviado'?'st-costura':'st-orcamento'}">${pc.status}</span></div>
             </div>
-        </div>
-        ${pc.pedido_venda_id ? `<div class="pc-section pc-cliente">
-            <div class="pc-section-title">Cliente</div>
+        </div>`,
+        cliente: pc.pedido_venda_id ? `<div class="pc-section pc-cliente">
+            <div class="pc-section-title">${tit('cliente')}</div>
             <table class="pc-table">
                 <tr><td class="pc-th">Cliente</td><td><strong>${escapeHtml(_pcClienteOrigem(pc) || '—')}</strong></td><td class="pc-th" style="width:130px">Pedido de venda</td><td>#${escapeHtml(String(formatPedidoId(pc.pedido_venda_id)))}</td></tr>
             </table>
-        </div>` : ''}
+        </div>` : '',
+        fornecedor: `
         <div class="pc-section">
-            <div class="pc-section-title">Fornecedor</div>
+            <div class="pc-section-title">${tit('fornecedor')}</div>
             ${pc.fornecedor_id ? `<table class="pc-table">
                 <tr><td class="pc-th">Razão Social / Nome</td><td><strong>${forn ? escapeHtml(forn.nome) : escapeHtml(pc.fornecedor_nome)}</strong></td><td class="pc-th" style="width:100px">CNPJ</td><td>${forn ? escapeHtml(forn.cnpj || '—') : '—'}</td></tr>
                 <tr><td class="pc-th">Telefone</td><td>${forn ? escapeHtml(forn.tel || '—') : '—'}</td><td class="pc-th">E-mail</td><td>${forn ? escapeHtml(forn.email || '—') : '—'}</td></tr>
@@ -8476,28 +8506,30 @@ function gerarHTMLPedidoCompra(id) {
                 <tr><td class="pc-th">Telefone</td><td style="height:26px"></td><td class="pc-th" style="width:100px">E-mail</td><td></td></tr>
             </table>
             <div style="font-size:11px;color:#888;margin-top:5px">Solicitação de orçamento — preencher os dados do fornecedor.</div>`}
-        </div>
+        </div>`,
+        itens: `
         <div class="pc-section">
-            <div class="pc-section-title">Itens Solicitados</div>
+            <div class="pc-section-title">${tit('itens')}</div>
             <table class="pc-table">
                 <thead><tr><th style="width:100px">Código</th><th>Descrição</th><th style="text-align:center">Tipo</th><th style="text-align:right;width:80px">Qtd</th><th style="width:50px">Un.</th><th style="text-align:right;width:100px">R$/Un.</th><th style="text-align:right;width:110px">Subtotal</th></tr></thead>
                 <tbody>${linhas}</tbody>
                 <tfoot><tr style="background:#FAFAFA"><td colspan="6" style="text-align:right;font-weight:bold;padding:10px 8px;color:#242424">Total Estimado:</td><td style="text-align:right;font-weight:bold;padding:10px 8px">R$ ${total.toFixed(2)}</td></tr></tfoot>
             </table>
-        </div>
-        ${_pcEspecificacoesHTML(pc)}
-        ${pc.observacoes ? `<div class="pc-section"><div class="pc-section-title">Observações</div><div style="padding:10px 14px;border:1px solid #E0E0E0;border-radius:4px;font-size:14px;min-height:50px">${escapeHtml(pc.observacoes)}</div></div>` : ''}
+        </div>`,
+        especificacoes: _pcEspecificacoesHTML(pc, tit('especificacoes')),
+        observacoes: pc.observacoes ? `<div class="pc-section"><div class="pc-section-title">${tit('observacoes')}</div><div style="padding:10px 14px;border:1px solid #E0E0E0;border-radius:4px;font-size:14px;min-height:50px">${escapeHtml(pc.observacoes)}</div></div>` : '',
+        assinaturas: `
         <div class="pc-assinaturas">
-            <div><div class="pc-section-title">Solicitado por</div><div class="pc-linha"></div><small>Nome / Data</small></div>
-            <div><div class="pc-section-title">Aprovado por</div><div class="pc-linha"></div><small>Nome / Data</small></div>
-            <div><div class="pc-section-title">Recebido por</div><div class="pc-linha"></div><small>Nome / Assinatura / Data</small></div>
-        </div>`;
+            ${assin.map(a => `<div><div class="pc-section-title">${textoDoc(a.titulo, valores)}</div><div class="pc-linha"></div><small>${textoDoc(a.legenda, valores)}</small></div>`).join('')}
+        </div>`
+    };
+    return montarDocumentoLayout('compra', layout, blocos, valores);
 }
 
 // Especificacoes dos ambientes do pedido de venda de origem: medidas da
 // parede, abertura, acionamento e, por tecido, prega, fator e panos. Com
 // tecido no pedido de compra, mostra so os tecidos que estao nele.
-function _pcEspecificacoesHTML(pc) {
+function _pcEspecificacoesHTML(pc, tituloHtml) {
     if (!pc.pedido_venda_id) return '';
     let specs = pc.especificacoes;
     if (!specs) {
@@ -8525,7 +8557,7 @@ function _pcEspecificacoesHTML(pc) {
     }
     if (!linhas.length) return '';
     return `<div class="pc-section pc-especificacoes">
-        <div class="pc-section-title">Especificações — ${escapeHtml(_pcTextoOrigem(pc))}</div>
+        <div class="pc-section-title">${tituloHtml != null ? tituloHtml : 'Especificações — ' + escapeHtml(_pcTextoOrigem(pc))}</div>
         <table class="pc-table">
             <thead><tr><th>Ambiente</th><th>Parede (L × A)</th><th>Abertura</th><th>Acionamento</th><th>Tecido</th><th>Prega</th><th style="text-align:center">Fator</th><th>Panos</th></tr></thead>
             <tbody>${linhas.join('')}</tbody>
