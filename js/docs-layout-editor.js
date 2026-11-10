@@ -63,7 +63,7 @@ function _dlHtmlDocumento(docId, layout) {
             : _htmlPedidoCompra(_dlExemploCompra(), _DL_EXEMPLO_FORNECEDOR, layout);
     }
     if (docId === 'medicao') return gerarHTMLAgendamentoMedicao(_dlUltimo(db.medicoes) || _dlExemploMedicao(), layout);
-    return gerarHTMLRelatorioFinanceiro(layout).html;
+    return gerarHTMLRelatorioFinanceiro(layout, { previa: true }).html;
 }
 
 // ---- estado ----

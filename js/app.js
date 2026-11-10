@@ -6647,6 +6647,7 @@ function valoresComunsEmpresa() {
 // Texto do usuario com marcadores: o texto e escapado e cada {campo} vira o
 // valor (tambem escapado). Marcador desconhecido fica como esta.
 function textoDoc(texto, valores) {
+    if (!String(texto || '').trim()) return '';
     return DocsLayout.preencher(escapeHtml(texto || ''), valores, escapeHtml);
 }
 
@@ -6773,7 +6774,7 @@ function _htmlProposta(ped, cliente, diasValidade, layout) {
             <tbody>${ambRows}${acessRows}</tbody>
         </table>`,
         observacoes: ped.observacoes ? `<div class="proposta-obs" style="margin:16px 0;padding:12px 16px;background:var(--doc-fundo,#FAFAFA);border-left:3px solid var(--doc-destaque,#005D3B);border-radius:0 6px 6px 0">
-            <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${tit('observacoes')}</div>
+            <div class="proposta-obs-titulo" style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${tit('observacoes')}</div>
             <p style="font-size:13px;color:var(--dark);margin:0;white-space:pre-line">${escapeHtml(ped.observacoes)}</p>
         </div>` : '',
         totais: `
@@ -8542,7 +8543,7 @@ function renderPedidoCompraDoc() {
     const container = document.getElementById('pedido-compra-container');
     if (!container) return;
     container.innerHTML = gerarHTMLPedidoCompra(localStorage.getItem('sc_pc_id'));
-    setTimeout(() => window.print(), 500);
+    setTimeout(() => esperarFontesDocumento().then(() => window.print()), 500);
 }
 
 // --- AGENDA DE INSTALAÇÕES ---
@@ -11895,7 +11896,7 @@ function _finGerarBuckets(ini, fim) {
     return buckets;
 }
 
-function gerarHTMLRelatorioFinanceiro(layout) {
+function gerarHTMLRelatorioFinanceiro(layout, opcoes) {
     layout = layout || getLayoutDocumento('financeiro');
     const { ini, fim, label } = getFinPeriodo();
     const inRange = d => d && d >= ini && d <= fim;
@@ -11967,8 +11968,8 @@ function gerarHTMLRelatorioFinanceiro(layout) {
     const blocos = {
         cabecalho: `
     <div class="fin-cab doc-cab" style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid var(--doc-cor,#005D3B);padding-bottom:14px;margin-bottom:20px">
-        <div>${empresa.logo?`<img src="${empresa.logo}" style="height:32px;margin-bottom:4px;display:block">`:''}
-            <h1 style="color:var(--doc-cor,#005D3B);margin:0;font-size:20px">${escapeHtml(empresa.nome||'SCTech')}</h1>
+        <div>${empresa.logo_base64?`<img src="${escapeHtml(empresa.logo_base64)}" alt="" style="height:32px;margin-bottom:4px;display:block">`:''}
+            <h1 style="color:var(--doc-cor,#005D3B);margin:0;font-size:20px">${escapeHtml(empresa.nome_fantasia||empresa.razao_social||'SCTech')}</h1>
             <p style="margin:2px 0 0;color:#8F8F8F;font-size:12px">${textoDoc(layout.titulo, valores)}</p>
         </div>
         <div style="text-align:right;font-size:11px;color:#8F8F8F">
@@ -11996,7 +11997,8 @@ function gerarHTMLRelatorioFinanceiro(layout) {
     ${(recImg||despImg)?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
         ${recImg?`<div><h3 style="font-size:13px;color:#242424;margin:0 0 4px">Recebimentos</h3><img src="${recImg}" style="width:100%"></div>`:''}
         ${despImg?`<div><h3 style="font-size:13px;color:#242424;margin:0 0 4px">Despesas por Categoria</h3><img src="${despImg}" style="width:100%"></div>`:''}
-    </div>`:''}`,
+    </div>`:''}
+    ${(opcoes && opcoes.previa && !(evolImg||comboImg||agingImg||topImg||funilImg||recImg||despImg)) ? '<div class="doc-graficos-reserva">Os gráficos do período aparecem aqui ao gerar o relatório pela tela do Financeiro.</div>' : ''}`,
         recebimentos: `
     <h3 style="font-size:13px;color:#242424;margin:8px 0 6px;border-bottom:1px solid #E0E0E0;padding-bottom:4px">${titFin('recebimentos')}</h3>
     ${mkTable(rowsRec, [{label:'Vencimento'},{label:'Cliente'},{label:'Descrição'},{label:'Valor',right:true},{label:'Status'}], 'Nenhum recebimento pendente.')}`,

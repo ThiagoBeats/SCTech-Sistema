@@ -94,7 +94,15 @@ async function preencherCodigosDocumento(container) {
     }
 }
 
+// A fonte do layout (Google Fonts) e carregada ao montar o documento; imprimir
+// antes dela chegar sai com a fonte reserva. Espera no maximo 3 s.
+function esperarFontesDocumento() {
+    if (typeof document === 'undefined' || !document.fonts || !document.fonts.ready) return Promise.resolve();
+    return Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 3000))]);
+}
+
 async function documentoProntoParaImprimir(container) {
+    await esperarFontesDocumento();
     const ok = await preencherCodigosDocumento(container);
     if (!ok) { await showAlert(MSG_FALHA_CONEXAO_CODIGOS, '📡'); return false; }
     return true;
