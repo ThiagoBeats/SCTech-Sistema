@@ -199,7 +199,7 @@
         const aberto = Math.min(1, Math.max(0, Number(op && op.aberto) || 0));
         const n = Math.max(4, Math.round((op && op.colunas) || 80));
         const fator = 1 - aberto * RECOLHE;
-        const A = AMPLITUDE[prega] * (1 + 2.5 * aberto);
+        const A = AMPLITUDE[prega] * (1 + 1.3 * aberto);
         const paineis = abertura === 'central'
             ? [{ ini: 0, fim: 0.5, lado: 'esquerda' }, { ini: 0.5, fim: 1, lado: 'direita' }]
             : [{ ini: 0, fim: 1, lado: abertura }];
