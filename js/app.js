@@ -6700,33 +6700,6 @@ function montarDocumentoLayout(docId, layout, blocos, valores) {
     return `<div class="doc-layout doc-layout-${docId}"${css ? ` style="${escapeHtml(css)}"` : ''}>${marca}${corpo}</div>`;
 }
 
-// --- CONDIÇÕES GERAIS DA PROPOSTA ---
-const _COND_GERAIS_DEFAULT = DocsLayout.COND_GERAIS_PADRAO;
-
-function getCondicoesGerais() {
-    return blocoDoLayout(getLayoutDocumento('proposta'), 'condicoes').corpo || '';
-}
-
-function salvarCondicoesGerais() {
-    const el = document.getElementById('emp-condicoes-gerais');
-    if (!el) return;
-    localStorage.setItem('sc_cond_gerais', el.value);
-    toast('Condições Gerais salvas!', 'success', 1800);
-}
-
-function restaurarCondicoesGerais() {
-    const el = document.getElementById('emp-condicoes-gerais');
-    if (!el) return;
-    el.value = _COND_GERAIS_DEFAULT;
-    localStorage.removeItem('sc_cond_gerais');
-    toast('Condições restauradas para o padrão.', 'info', 1800);
-}
-
-function carregarCondicoesGerais() {
-    const el = document.getElementById('emp-condicoes-gerais');
-    if (el) el.value = getCondicoesGerais();
-}
-
 // --- PROPOSTA PDF ---
 function gerarHTMLProposta(pedidoId, diasValidade, layout) {
     const ped = db.pedidos.find(p => p.id == pedidoId);
