@@ -263,15 +263,15 @@
                         <input type="text" id="dre-filtro-cliente" placeholder="Nome do cliente…" oninput="renderDRE()">
                     </div>
                 </div>
-                <p style="font-size:12px;color:#888;margin-bottom:12px">Receita vs. custos por pedido. Custos de material e mão de obra vêm do pedido; comissão RT é gerada automaticamente após quitação. Verde ≥ 30% · Amarelo ≥ 15% · Vermelho &lt; 15%.</p>
+                <p style="font-size:12px;color:#888;margin-bottom:12px">Receita vs. custos por pedido. O material é o custo guardado na aprovação do pedido; serviços e comissões vêm das contas a pagar. Mão de obra própria não entra como custo. Verde ≥ 30% · Amarelo ≥ 15% · Vermelho &lt; 15%.</p>
                 <table>
                     <thead><tr>
                         <th>Pedido</th><th>Cliente</th>
                         <th style="text-align:right">Receita</th>
-                        <th style="text-align:right">Mat./Acess.</th>
-                        <th style="text-align:right">M.O.</th>
-                        <th style="text-align:right">RT</th>
-                        <th style="text-align:right">Lucro Líq.</th>
+                        <th style="text-align:right">Material</th>
+                        <th style="text-align:right">Serviços e outros</th>
+                        <th style="text-align:right">Comissões</th>
+                        <th style="text-align:right">Resultado</th>
                         <th style="text-align:center">Margem</th>
                     </tr></thead>
                     <tbody id="tb-dre"></tbody>

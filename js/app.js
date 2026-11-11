@@ -2757,6 +2757,7 @@ async function aprovarPedido(id) {
     if (!ped.timeline) ped.timeline = [];
     ped.timeline.push({ status: 'Medição', data: Date.now() });
     gerarFinanceiroPedido(ped);
+    registrarCustoPedido(ped);
     salvarERecarregar('Pedido aprovado!');
 }
 
@@ -3074,7 +3075,7 @@ async function moverStatus(id, direcao) {
     ped.status = STATUS_PIPELINE[novoIdx];
     if (!ped.timeline) ped.timeline = [];
     ped.timeline.push({ status: STATUS_PIPELINE[novoIdx], data: Date.now() });
-    if (idx === 0) gerarFinanceiroPedido(ped);
+    if (idx === 0) { gerarFinanceiroPedido(ped); registrarCustoPedido(ped); }
     if (novoIdx === 1 && !ped.data_producao)  ped.data_producao  = Date.now();
     if (STATUS_PIPELINE[novoIdx] === 'Instalado' && !ped.data_instalado) ped.data_instalado = Date.now();
     if (STATUS_PIPELINE[novoIdx] === 'Instalado') gerarComissoesPedido(ped);
@@ -6222,6 +6223,7 @@ Volte o pedido para Orçamento para editar.`, '🔒');
     }
     if (statusAnterior === 'Orçamento' && normalizarStatus(dadosPedido.status) !== 'Orçamento') {
         gerarFinanceiroPedido(dadosPedido);
+        registrarCustoPedido(dadosPedido);
     }
     if (normalizarStatus(dadosPedido.status) === 'Instalado') gerarComissoesPedido(dadosPedido);
     syncDB();
@@ -11292,6 +11294,15 @@ function _migrarFinanceiroPedidos() {
     syncDB();
 }
 
+// Guarda o custo do material no momento da aprovacao: mudar o preco do tecido
+// depois nao altera o resultado de um pedido ja aprovado. Refeito a cada reaprovacao.
+function registrarCustoPedido(ped) {
+    ped.custo_snapshot = {
+        ...FinanceiroCore.custoSnapshotPedido(ped, { catalogo: db.catalogo, materiais: db.materiais, kits: db.kits }),
+        data: new Date().toLocaleDateString('sv-SE')
+    };
+}
+
 function gerarFinanceiroPedido(ped) {
     if (ped.financeiro_gerado) return;
     const num = formatPedidoId(ped.id);
@@ -13151,39 +13162,40 @@ function renderDRE() {
     if (filtroCliente) pedidos = pedidos.filter(p=>(p.clienteNome||'').toLowerCase().includes(filtroCliente));
     pedidos = pedidos.sort((a,b)=>b.id-a.id).slice(0,50);
     if (!pedidos.length) { tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:#999;padding:24px">Nenhum pedido aprovado encontrado.</td></tr>'; return; }
-    let totRec=0, totCusto=0, totLucro=0;
+    const brl = v => 'R$ ' + (v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+    const corDe = m => m>=30?'#005D3B':m>=15?'#F2C924':'#F43927';
+    const cad = { catalogo: db.catalogo, materiais: db.materiais, kits: db.kits };
+    let totRec=0, totMat=0, totServ=0, totCom=0, totLucro=0;
     const rows = pedidos.map(p=>{
-        const receita   = p.valor||0;
-        const custoMat  = (p.tipo_precificacao === 'pedido' && p.custo_mat != null)
-            ? (p.custo_mat||0) + (p.custo_acess||0)
-            : (p.total_material||0) + (p.total_acessorios||0);
-        const custoMao  = p.maoObra||0;
-        const custoRT   = db.contas_pagar.filter(cp=>cp.pedido_id===p.id&&cp.categoria==='comissao_rt').reduce((s,cp)=>s+cp.valor,0);
-        const custoExtra= db.contas_pagar.filter(cp=>cp.pedido_id===p.id&&cp.categoria!=='comissao_rt').reduce((s,cp)=>s+cp.valor,0);
-        const custo     = custoMat+custoMao+custoRT+custoExtra;
-        const lucro     = receita-custo;
-        const margem    = receita>0?(lucro/receita*100):0;
-        const cor       = margem>=30?'#005D3B':margem>=15?'#F2C924':'#F43927';
-        totRec+=receita; totCusto+=custo; totLucro+=lucro;
+        const r = FinanceiroCore.resultadoPedido(p, db.contas_pagar, cad);
+        const receita = FinanceiroCore.arredondar(r.receita);
+        const cor = corDe(r.margem_pct);
+        totRec+=receita; totMat+=r.custo_material; totServ+=r.custos_vinculados; totCom+=r.comissoes; totLucro+=r.lucro;
+        const aviso = [];
+        if (r.origem_custo === 'estimado') aviso.push('custo estimado');
+        if (r.itens_sem_custo > 0) aviso.push(`custo não informado (${r.itens_sem_custo} ${r.itens_sem_custo === 1 ? 'item' : 'itens'})`);
+        const badges = aviso.map(t => `<div style="font-size:10px;color:#B26A00;font-weight:600">${t}</div>`).join('');
         return `<tr>
             <td style="font-size:12px;color:#888">#${formatPedidoId(p.id)}</td>
             <td>${escapeHtml(p.clienteNome||'—')}</td>
-            <td style="text-align:right">R$ ${receita.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-            <td style="text-align:right;color:#888">R$ ${custoMat.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-            <td style="text-align:right;color:#888">R$ ${custoMao.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-            <td style="text-align:right;color:#888">R$ ${custoRT.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-            <td style="text-align:right"><strong style="color:${cor}">R$ ${lucro.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
-            <td style="text-align:center"><strong style="color:${cor}">${margem.toFixed(1)}%</strong></td>
+            <td style="text-align:right">${brl(receita)}</td>
+            <td style="text-align:right;color:#888">${brl(r.custo_material)}${badges}</td>
+            <td style="text-align:right;color:#888">${brl(r.custos_vinculados)}</td>
+            <td style="text-align:right;color:#888">${brl(r.comissoes)}</td>
+            <td style="text-align:right"><strong style="color:${cor}">${brl(r.lucro)}</strong></td>
+            <td style="text-align:center"><strong style="color:${cor}">${r.margem_pct.toFixed(1).replace('.',',')}%</strong></td>
         </tr>`;
     });
-    const totM = totRec>0?(totLucro/totRec*100):0;
-    const corT = totM>=30?'#005D3B':totM>=15?'#F2C924':'#F43927';
+    const totM = totRec>0?Math.round(totLucro/totRec*1000)/10:0;
+    const corT = corDe(totM);
     tb.innerHTML = rows.join('') + `
         <tr style="border-top:2px solid #242424;background:#FAFAFA;font-weight:700">
             <td colspan="2">TOTAL (${pedidos.length} pedidos)</td>
-            <td style="text-align:right">R$ ${totRec.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-            <td colspan="3" style="text-align:right;color:#888">Custos: R$ ${totCusto.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-            <td style="text-align:right"><strong style="color:${corT}">R$ ${totLucro.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
-            <td style="text-align:center"><strong style="color:${corT}">${totM.toFixed(1)}%</strong></td>
+            <td style="text-align:right">${brl(totRec)}</td>
+            <td style="text-align:right;color:#888">${brl(totMat)}</td>
+            <td style="text-align:right;color:#888">${brl(totServ)}</td>
+            <td style="text-align:right;color:#888">${brl(totCom)}</td>
+            <td style="text-align:right"><strong style="color:${corT}">${brl(totLucro)}</strong></td>
+            <td style="text-align:center"><strong style="color:${corT}">${totM.toFixed(1).replace('.',',')}%</strong></td>
         </tr>`;
 }
