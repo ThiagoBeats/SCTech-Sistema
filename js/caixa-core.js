@@ -16,6 +16,23 @@
         return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
     }
 
+    function mesmoId(a, b) {
+        return a != null && b != null && String(a) === String(b);
+    }
+
+    const CARTAO_PADRAO = { debito_taxa: 1.5, debito_dias: 1, credito_taxa: 3, credito_dias: 30, parcelado_taxa: 4, antecipacao_taxa: 2, antecipacao_dias: 1 };
+
+    // Cartao da conta com padroes; numeros vindos de formulario (texto) viram numero.
+    function cartaoDa(conta) {
+        const bruto = (conta && conta.cartao) || {};
+        const c = {};
+        Object.keys(CARTAO_PADRAO).forEach(k => {
+            const v = bruto[k] === '' || bruto[k] == null ? NaN : Number(bruto[k]);
+            c[k] = Number.isFinite(v) ? v : CARTAO_PADRAO[k];
+        });
+        return c;
+    }
+
     function contaAceitaMovimento(conta, data) {
         return !!conta && conta.ativo !== false && data >= conta.data_saldo_inicial;
     }
@@ -23,7 +40,7 @@
     function saldoConta(conta, movimentos, ateData) {
         let saldo = Number(conta.saldo_inicial) || 0;
         (movimentos || []).forEach(m => {
-            if (m.conta_id !== conta.id) return;
+            if (!mesmoId(m.conta_id, conta.id)) return;
             if (m.data < conta.data_saldo_inicial || m.data > ateData) return;
             saldo += m.sentido === 'entrada' ? Number(m.valor) : -Number(m.valor);
         });
@@ -36,7 +53,7 @@
             const saldo = saldoConta(c, movimentos, hoje);
             let aCair = 0;
             (movimentos || []).forEach(m => {
-                if (m.conta_id !== c.id || m.data <= hoje) return;
+                if (!mesmoId(m.conta_id, c.id) || m.data <= hoje) return;
                 aCair += m.sentido === 'entrada' ? Number(m.valor) : -Number(m.valor);
             });
             total += saldo;
@@ -56,7 +73,7 @@
     }
 
     function repassesCartao({ valor, data, conta, tipo, vezes = 1, antecipar = false }) {
-        const c = conta.cartao;
+        const c = cartaoDa(conta);
         const n = Math.max(1, Math.floor(Number(vezes) || 1));
         if (tipo === 'debito') {
             const taxa = arredondar(valor * c.debito_taxa / 100);

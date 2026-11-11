@@ -40,3 +40,23 @@ test('dividirParcela', () => {
     assert.throws(() => C.dividirParcela({ valor: 3000 }, 3001));
     assert.throws(() => C.dividirParcela({ valor: 3000 }, 0));
 });
+test('ids misturados (texto e numero) casam nos saldos', () => {
+    const banco = { id: '1', nome: 'Banco', tipo: 'banco', saldo_inicial: 100, data_saldo_inicial: '2026-11-01' };
+    const mov = [{ conta_id: 1, data: '2026-11-05', sentido: 'entrada', valor: 50 }, { conta_id: '1', data: '2026-11-20', sentido: 'entrada', valor: 10 }];
+    assert.strictEqual(C.saldoConta(banco, mov, '2026-11-12'), 150);
+    const s = C.saldosHoje([banco], mov, '2026-11-12');
+    assert.strictEqual(s.contas[0].saldo, 150);
+    assert.strictEqual(s.contas[0].a_cair, 10);
+});
+test('repassesCartao: taxas em texto e conta sem cartao usam numero/padrao', () => {
+    const txt = { cartao: { credito_taxa: '3', credito_dias: '30', parcelado_taxa: '4' } };
+    assert.deepStrictEqual(C.repassesCartao({ valor: 100, data: '2026-11-12', conta: txt, tipo: 'credito', vezes: 1 }),
+        [{ data: '2026-12-12', bruto: 100, taxa: 3, liquido: 97 }]);
+    const p = C.repassesCartao({ valor: 100, data: '2026-11-12', conta: txt, tipo: 'credito', vezes: 3 });
+    assert.strictEqual(FinanceiroCore.arredondar(p.reduce((s, x) => s + x.taxa, 0)), 4);
+    const sem = { id: 9, tipo: 'maquininha' };
+    assert.deepStrictEqual(C.repassesCartao({ valor: 200, data: '2026-11-12', conta: sem, tipo: 'debito' }),
+        [{ data: '2026-11-13', bruto: 200, taxa: 3, liquido: 197 }]);
+    assert.deepStrictEqual(C.repassesCartao({ valor: 100, data: '2026-11-12', conta: sem, tipo: 'credito', vezes: 3, antecipar: true }),
+        [{ data: '2026-11-13', bruto: 100, taxa: 6, liquido: 94 }]);
+});
