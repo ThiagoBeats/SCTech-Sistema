@@ -394,7 +394,8 @@ function salvarEmpresaConfigs() {
 // --- FORMAS DE PAGAMENTO ---
 // A empresa define a lista em Configuracoes > Empresa. Cada forma tem um nome
 // e um % de desconto: o pedido guarda o nome, e escolher a forma preenche o
-// desconto do pedido (que continua editavel). O Financeiro lanca um unico valor.
+// desconto e o % de entrada do pedido (que continuam editaveis). Ao aprovar, o
+// Financeiro lanca a entrada (hoje) e o saldo (na entrega).
 const _FORMAS_PAG_PADRAO = ['50% entrada + 50% na instalação', 'À vista', '30% entrada + 70% na instalação', '40% entrada + 60% na instalação'];
 // Pedidos antigos guardavam um codigo no lugar do nome.
 const _FORMAS_PAG_LEGADO = { avista: 'À vista', '50_50': '50% entrada + 50% na instalação', '30_70': '30% entrada + 70% na instalação', '40_60': '40% entrada + 60% na instalação' };
@@ -405,13 +406,23 @@ function _descontoValido(v) {
     return Math.min(100, Math.round(n * 100) / 100);
 }
 
-// Aceita a lista antiga (so nomes) e a nova ({ nome, desconto }).
+// Entrada em % inteiro de 0 a 100; vazio/invalido cai no valor de reserva.
+function _entradaValida(v, reserva) {
+    const n = parseFloat(String(v == null ? '' : v).replace(',', '.'));
+    if (v == null || String(v).trim() === '' || !isFinite(n)) return reserva;
+    return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+// Aceita a lista antiga (so nomes) e a nova ({ nome, desconto, entrada }).
+// Forma sem entrada ganha o % que o nome indica ("30% entrada...", "a vista").
 function _formasLimpas(lista) {
     const vistas = new Set();
     return (Array.isArray(lista) ? lista : [])
-        .map(x => (x && typeof x === 'object')
-            ? { nome: String(x.nome == null ? '' : x.nome).trim(), desconto: _descontoValido(x.desconto) }
-            : { nome: String(x == null ? '' : x).trim(), desconto: 0 })
+        .map(x => {
+            const o = (x && typeof x === 'object') ? x : { nome: x };
+            const nome = String(o.nome == null ? '' : o.nome).trim();
+            return { nome, desconto: _descontoValido(o.desconto), entrada: _entradaValida(o.entrada, FinanceiroCore.entradaPctDoNome(nome)) };
+        })
         .filter(f => f.nome && !vistas.has(f.nome.toLowerCase()) && vistas.add(f.nome.toLowerCase()));
 }
 
@@ -420,7 +431,7 @@ function getFormasPagamentoCfg() {
         const salvas = _formasLimpas(JSON.parse(localStorage.getItem('sc_formas_pag')));
         if (salvas.length) return salvas;
     } catch (e) {}
-    return _FORMAS_PAG_PADRAO.map(nome => ({ nome, desconto: 0 }));
+    return _FORMAS_PAG_PADRAO.map(nome => ({ nome, desconto: 0, entrada: FinanceiroCore.entradaPctDoNome(nome) }));
 }
 
 function getFormasPagamento() {
@@ -431,6 +442,12 @@ function getFormasPagamento() {
 function descontoDaFormaPagamento(nome) {
     const f = getFormasPagamentoCfg().find(x => x.nome === nome);
     return f ? f.desconto : 0;
+}
+
+// % de entrada da forma; para forma fora da lista, o que o nome indica.
+function entradaDaFormaPagamento(nome) {
+    const f = getFormasPagamentoCfg().find(x => x.nome === nome);
+    return f ? f.entrada : FinanceiroCore.entradaPctDoNome(nome);
 }
 
 function formaPagamentoDoPedido(ped) {
@@ -454,12 +471,14 @@ function preencherSelectFormaPagamento(atual) {
     sel.value = atual || formas[0];
 }
 
-// Escolher a forma no pedido traz o desconto dela. O vendedor ainda pode
-// mudar o campo depois; so uma nova troca de forma o sobrescreve.
+// Escolher a forma no pedido traz o desconto e a entrada dela. O vendedor
+// ainda pode mudar os campos depois; so uma nova troca de forma os sobrescreve.
 function aplicarDescontoDaFormaPagamento() {
     const sel = document.getElementById('ped-forma-pagamento');
     const desc = document.getElementById('ped-desconto');
     if (!sel || !desc) return;
+    const entr = document.getElementById('ped-entrada-pct');
+    if (entr) entr.value = entradaDaFormaPagamento(sel.value);
     desc.value = descontoDaFormaPagamento(sel.value);
     atualizarTotalPedido();
 }
@@ -482,6 +501,11 @@ function renderFormasPagamentoCfg() {
                     aria-label="Desconto da forma de pagamento ${i + 1}" oninput="_formasPagRascunho[${i}].desconto = this.value">
                 <span>% desc.</span>
             </label>
+            <label class="forma-pag-desc" title="Parte do valor cobrada na aprovação; o resto vence na entrega">
+                <input type="number" class="forma-pag-entrada" value="${f.entrada == null ? '' : f.entrada}" min="0" max="100" step="1"
+                    aria-label="Entrada da forma de pagamento ${i + 1}" oninput="_formasPagRascunho[${i}].entrada = this.value">
+                <span>% entrada</span>
+            </label>
             <span class="forma-pag-padrao"${i === 0 ? '' : ' style="visibility:hidden" aria-hidden="true"'}>padrão</span>
             <button type="button" class="btn btn-outline btn-sm" onclick="moverFormaPagamento(${i},-1)" title="Subir" ${i === 0 ? 'disabled' : ''}>↑</button>
             <button type="button" class="btn btn-outline btn-sm" onclick="moverFormaPagamento(${i},1)" title="Descer" ${i === n - 1 ? 'disabled' : ''}>↓</button>
@@ -490,7 +514,7 @@ function renderFormasPagamentoCfg() {
 }
 
 function adicionarFormaPagamento() {
-    _formasPagRascunho.push({ nome: '', desconto: 0 });
+    _formasPagRascunho.push({ nome: '', desconto: 0, entrada: 50 });
     renderFormasPagamentoCfg();
     const inputs = document.querySelectorAll('#emp-formas-pag .forma-pag-nome');
     inputs[inputs.length - 1]?.focus();
@@ -6142,6 +6166,7 @@ Volte o pedido para Orçamento para editar.`, '🔒');
         rt_pct: 0,
         forma_pagamento: document.getElementById('ped-forma-pagamento')?.value || getFormasPagamento()[0]
     };
+    dadosPedido.entrada_pct = _entradaValida(document.getElementById('ped-entrada-pct')?.value, entradaDaFormaPagamento(dadosPedido.forma_pagamento));
     if (editandoIdPedido) {
         const index = db.pedidos.findIndex(p => p.id == editandoIdPedido);
         dadosPedido.id = editandoIdPedido;
@@ -6232,8 +6257,9 @@ function bloquearPedidoAprovado() {
 }
 
 // Volta um pedido aprovado para Orcamento, liberando a edicao. Os
-// recebimentos ainda nao pagos saem do Financeiro e sao gerados de novo, com
-// os valores atualizados, quando o pedido for aprovado outra vez. Baixas de
+// recebimentos em aberto saem do Financeiro e sao gerados de novo, com os
+// valores atualizados, quando o pedido for aprovado outra vez; os ja pagos
+// ficam e a nova aprovacao so cobra o que falta. Baixas de
 // estoque ja feitas continuam valendo (nao sao repetidas).
 async function voltarPedidoParaOrcamento(id) {
     if (!await exigirPermissao('pedidos', 'completo')) return;
@@ -6248,7 +6274,7 @@ async function voltarPedidoParaOrcamento(id) {
         : pagos.length
             ? `
 
-O pedido já tem recebimento pago no Financeiro: os lançamentos ficam como estão. Confira o Financeiro se mudar o valor.`
+O que já foi recebido continua no Financeiro.${abertos.length ? ` ${abertos.length} lançamento(s) em aberto saem do Financeiro e` : ' Ao aprovar de novo,'} ${abertos.length ? 'serão gerados de novo ao aprovar, só com o que falta receber.' : 'só será cobrado o que falta receber.'}`
             : `
 
 ${abertos.length} lançamento(s) a receber em aberto sairão do Financeiro e serão gerados de novo ao aprovar.`;
@@ -6256,10 +6282,10 @@ ${abertos.length} lançamento(s) a receber em aberto sairão do Financeiro e ser
 
 Ele sai do painel de produção e fica liberado para edição até ser aprovado de novo.${avisoFin}`, '↩', 'Voltar para Orçamento', 'Cancelar');
     if (!ok) return;
-    if (!pagos.length && recebimentos.length) {
-        db.contas_receber = db.contas_receber.filter(cr => cr.pedido_id != ped.id);
-        ped.financeiro_gerado = false;
+    if (recebimentos.length) {
+        db.contas_receber = db.contas_receber.filter(cr => cr.pedido_id != ped.id || cr.status === 'Pago');
     }
+    ped.financeiro_gerado = false;
     ped.status = 'Orçamento';
     if (!ped.timeline) ped.timeline = [];
     ped.timeline.push({ status: 'Orçamento', data: Date.now(), label: `Voltou para Orçamento (estava em ${status})` });
@@ -6291,6 +6317,8 @@ function carregarPedidoParaEdicao(id) {
     const arqEl = document.getElementById('ped-arquiteto');
     if (arqEl) arqEl.value = String(ped.arq_id || '');
     preencherSelectFormaPagamento(formaPagamentoDoPedido(ped));
+    const entradaEl = document.getElementById('ped-entrada-pct');
+    if (entradaEl) entradaEl.value = Number.isFinite(ped.entrada_pct) ? ped.entrada_pct : entradaDaFormaPagamento(formaPagamentoDoPedido(ped));
     const ambientes = normalizarAmbientes(ped);
     _ambienteCounter = ambientes.length;
     pedidoDraft.ambientes = ambientes.map((a, i) => ({
@@ -11256,25 +11284,47 @@ function _migrarFinanceiroPedidos() {
 
 function gerarFinanceiroPedido(ped) {
     if (ped.financeiro_gerado) return;
-    const plano = _planoPagamento(ped);
-    const hoje = new Date();
-    plano.forEach((parcela, i) => {
-        const valor = Math.round(ped.valor * parcela.pct / 100 * 100) / 100;
-        let vencimento;
-        if (parcela.dias === -1) {
-            vencimento = ped.data_entrega || new Date(hoje.getTime() + 30 * 86400000).toISOString().split('T')[0];
-        } else {
-            vencimento = new Date(hoje.getTime() + parcela.dias * 86400000).toISOString().split('T')[0];
-        }
+    const num = formatPedidoId(ped.id);
+    const hoje = new Date().toLocaleDateString('sv-SE');
+    let parcelas;
+    if (ped.forma_pagamento || !ped.tipo_pagamento) {
+        const pct = Number.isFinite(ped.entrada_pct) ? ped.entrada_pct : entradaDaFormaPagamento(ped.forma_pagamento);
+        parcelas = FinanceiroCore.planejarParcelas({
+            valor: ped.valor || 0, entradaPct: pct,
+            jaPago: FinanceiroCore.totalRecebido(db.contas_receber, ped.id),
+            dataAprovacao: hoje, dataEntrega: ped.data_entrega
+        }).map(p => ({
+            ...p,
+            descricao: p.tipo === 'entrada' ? `Entrada (${pct}%) — Pedido #${num}`
+                : p.tipo === 'saldo' ? `Saldo na instalação — Pedido #${num}`
+                : `Pagamento — Pedido #${num}`
+        }));
+    } else {
+        // Pedido antigo, gravado com o codigo de um plano.
+        parcelas = _planoPagamento(ped).map(pl => ({
+            tipo: pl.dias === -1 ? 'saldo' : (pl.pct >= 100 ? 'unica' : 'entrada'),
+            valor: Math.round(ped.valor * pl.pct / 100 * 100) / 100,
+            data_vencimento: pl.dias === -1
+                ? (ped.data_entrega || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0])
+                : new Date(Date.now() + pl.dias * 86400000).toISOString().split('T')[0],
+            descricao: `${pl.descricao} — Pedido #${num}`
+        }));
+    }
+    const usados = new Set((db.contas_receber || []).map(c => c.id));
+    let proximoId = Date.now();
+    parcelas.forEach(p => {
+        while (usados.has(proximoId)) proximoId++;
+        usados.add(proximoId);
         db.contas_receber.push({
-            id: Date.now() + i,
+            id: proximoId,
             pedido_id: ped.id,
             cliente_nome: ped.clienteNome || '',
-            descricao: `${parcela.descricao} — Pedido #${formatPedidoId(ped.id)}`,
-            valor,
-            data_vencimento: vencimento,
+            descricao: p.descricao,
+            valor: p.valor,
+            data_vencimento: p.data_vencimento,
             data_pagamento: null,
-            status: 'Pendente'
+            status: 'Pendente',
+            parcela_tipo: p.tipo
         });
     });
     ped.financeiro_gerado = true;

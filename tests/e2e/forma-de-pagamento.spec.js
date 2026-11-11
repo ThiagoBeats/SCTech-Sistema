@@ -1,7 +1,7 @@
 // "Parcelamento" virou "Forma de Pagamento". As opcoes sao so nomes, definidos
 // pela empresa em Configuracoes > Empresa, cada uma com um % de desconto que
-// preenche o desconto do pedido; o pedido guarda o nome e o Financeiro lanca um
-// unico valor. Pedido antigo, com codigo de plano,
+// preenche o desconto do pedido; o pedido guarda o nome e o Financeiro lanca
+// entrada + saldo (ver financeiro-fase0-entrada). Pedido antigo, com codigo de plano,
 // continua mostrando a forma e dividindo como antes.
 const { test, expect } = require('@playwright/test');
 const { entrar } = require('./ajuda.js');
@@ -58,16 +58,17 @@ async function salvarNovo(page, forma, status) {
     await page.waitForURL(/index\.html/);
 }
 
-test('pedido aprovado: guarda o nome da forma e lanca um unico valor no Financeiro', async ({ page }) => {
+test('pedido aprovado: guarda o nome da forma e lanca entrada e saldo no Financeiro', async ({ page }) => {
     await abrir(page, 'pedido.html', { sc_formas_pag: ['PIX', 'Cartão em 10x'] });
     await salvarNovo(page, 'Cartão em 10x', 'Medição');
     const ped = (await ler(page, 'sc_ped'))[0];
     expect(ped.forma_pagamento).toBe('Cartão em 10x');
     const cr = (await ler(page, 'sc_cr')).filter(c => c.pedido_id === ped.id);
-    expect(cr.length, 'um lancamento so').toBe(1);
-    expect(cr[0].valor).toBe(ped.valor);
-    expect(cr[0].descricao).toContain('Cartão em 10x');
-    expect(cr[0].data_vencimento).toBe(new Date().toISOString().split('T')[0]);
+    expect(cr.length, 'entrada + saldo').toBe(2);
+    expect(cr.map(c => c.parcela_tipo)).toEqual(['entrada', 'saldo']);
+    expect(cr.reduce((s, c) => s + c.valor, 0)).toBe(ped.valor);
+    expect(cr[0].descricao).toContain('Entrada');
+    expect(cr[0].data_vencimento).toBe(new Date().toLocaleDateString('sv-SE'));
 });
 
 test('orcamento nao lanca nada no Financeiro', async ({ page }) => {
@@ -131,7 +132,7 @@ test('empresa: adicionar, renomear, reordenar e remover, gravando so ao salvar',
     expect(await ler(page, 'sc_formas_pag'), 'nada gravado antes de salvar').toBeNull();
 
     await page.click('button:has-text("Salvar Formas de Pagamento")');
-    expect(await ler(page, 'sc_formas_pag')).toEqual(['PIX', 'Dinheiro', 'À vista', '30% entrada + 70% na instalação'].map(nome => ({ nome, desconto: 0 })));
+    expect(await ler(page, 'sc_formas_pag')).toEqual([['PIX', 50], ['Dinheiro', 50], ['À vista', 100], ['30% entrada + 70% na instalação', 30]].map(([nome, entrada]) => ({ nome, desconto: 0, entrada })));
 
     await page.goto(BASE + '/pedido.html');
     expect(await opcoes(page)).toEqual(['PIX', 'Dinheiro', 'À vista', '30% entrada + 70% na instalação']);
@@ -146,7 +147,7 @@ test('empresa: nomes vazios e repetidos sao descartados ao salvar', async ({ pag
     await page.click('button:has-text("Adicionar forma de pagamento")');
     await linhas(page).nth(3).fill(' Boleto ');
     await page.click('button:has-text("Salvar Formas de Pagamento")');
-    expect(await ler(page, 'sc_formas_pag')).toEqual([{ nome: 'PIX', desconto: 0 }, { nome: 'Boleto', desconto: 0 }]);
+    expect(await ler(page, 'sc_formas_pag')).toEqual([{ nome: 'PIX', desconto: 0, entrada: 50 }, { nome: 'Boleto', desconto: 0, entrada: 50 }]);
     await expect(linhas(page)).toHaveCount(2);
 });
 
@@ -187,8 +188,8 @@ test('empresa: cada forma tem o % de desconto, gravado ao salvar', async ({ page
     await page.locator('#emp-formas-pag .forma-pag-desconto').nth(3).fill('-2');   // negativo vira 0
     await page.click('button:has-text("Salvar Formas de Pagamento")');
     expect(await ler(page, 'sc_formas_pag')).toEqual([
-        { nome: 'À vista', desconto: 100 }, { nome: 'Cartão em 10x', desconto: 3 },
-        { nome: 'PIX', desconto: 7.5 }, { nome: 'Boleto', desconto: 0 },
+        { nome: 'À vista', desconto: 100, entrada: 100 }, { nome: 'Cartão em 10x', desconto: 3, entrada: 50 },
+        { nome: 'PIX', desconto: 7.5, entrada: 50 }, { nome: 'Boleto', desconto: 0, entrada: 50 },
     ]);
 });
 
