@@ -254,6 +254,7 @@ test('sem contas configuradas a baixa funciona, avisa uma vez e nao gera movimen
     await expect(modal.locator('#baixa-aviso-geral')).toBeVisible();
     await expect(modal.locator('.baixa-aviso:visible')).toHaveCount(0);
     await modal.locator('.baixa-linha').first().locator('.baixa-meio').selectOption({ label: 'PIX' });
+    await modal.locator('.baixa-linha').nth(1).locator('.baixa-meio').selectOption({ label: 'Dinheiro' });
     await modal.locator('#baixa-ok').click();
     await expect.poll(async () => (await ler(page, 'sc_cr')).every(c => c.status === 'Pago')).toBe(true);
     const lidas = await ler(page, 'sc_cr');

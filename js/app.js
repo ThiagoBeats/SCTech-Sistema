@@ -7938,12 +7938,14 @@ function renderHistoricoComissoes() {
     if (filtroVend) pedidos = pedidos.filter(p => p[c.id] == filtroVend);
     pedidos.sort((a, b) => (b[c.data] || 0) - (a[c.data] || 0));
     if (!pedidos.length) {
-        tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;padding:20px;">Nenhum pagamento registrado.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:20px;">Nenhum pagamento registrado.</td></tr>';
         return;
     }
     tb.innerHTML = pedidos.map(p => {
         const v        = db.vendedores.find(x => x.id == p[c.id]);
         const dataPgto = p[c.data] ? new Date(p[c.data]).toLocaleDateString('pt-BR') : '—';
+        const cpPaga = db.contas_pagar.find(x => x.pedido_id == p.id && x.papel_comissao === _tipoVend && x.status === 'Pago');
+        const estornar = cpPaga ? `<button class="btn btn-outline btn-sm" onclick="estornarCP(${cpPaga.id})" title="Desfazer este pagamento">↩ Estornar</button>` : '';
         return `<tr>
             <td style="font-size:12px;white-space:nowrap">${dataPgto}</td>
             <td style="font-size:12px">#${formatPedidoId(p.id)}</td>
@@ -7951,6 +7953,7 @@ function renderHistoricoComissoes() {
             <td>${escapeHtml(v?.nome || p[c.nome] || '—')}</td>
             <td>R$ ${(p.valor || 0).toFixed(2)}</td>
             <td><span class="badge-comissao-paga">R$ ${(p[c.valor] || 0).toFixed(2)} pago</span></td>
+            <td>${estornar}</td>
         </tr>`;
     }).join('');
 }
@@ -7974,10 +7977,10 @@ async function _baixarComissoes(pedidos, titulo) {
         if (cp) itens.push({ id: cp.id, descricao: `#${formatPedidoId(p.id)} — ${cp.credor_nome || ''}`, valor: cp.valor, marcado: true });
     });
     if (!itens.length) { await showAlert('Nenhuma comissão pendente para pagar.', 'ℹ️'); return; }
-    const r = _baixaPagarAntiga(await abrirModalBaixa({ titulo, itens, permiteCartao: false, permiteParcial: false }));
-    if (!r) return;
-    baixarContasPagar(r.ids, r.data, r.forma);
-    salvarERecarregar(r.ids.length > 1 ? 'Comissões pagas!' : 'Comissão paga!');
+    const r = await abrirModalBaixa({ titulo, itens, permiteCartao: false, permiteParcial: false });
+    if (!r || !r.linhas.length) return;
+    baixarContasPagar(r.data, r.linhas);
+    salvarERecarregar(r.linhas.length > 1 ? 'Comissões pagas!' : 'Comissão paga!');
 }
 
 async function pagarTodasFiltradas() {
@@ -12020,9 +12023,13 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
             const porId = mp && meios.find(m => m.id != null && CaixaCore.mesmoId(m.id, mp.meio_id));
             if (porId) return porId;
             const nome = String(it.forma_padrao || formaPadrao || '').trim().toLowerCase();
-            return (nome && meios.find(m => m.nome.trim().toLowerCase() === nome)) || meios[0];
+            return (nome && meios.find(m => m.nome.trim().toLowerCase() === nome)) || null;
         };
         const contaDe = m => (m && m.conta_id != null && _contaFinPorId(m.conta_id)) ? String(m.conta_id) : '';
+        const ehCartao = m => !!m && (m.tipo === 'cartao_debito' || m.tipo === 'cartao_credito');
+        // Cartao so cai em conta de maquininha.
+        const contasDoMeio = m => ehCartao(m) ? contas.filter(c => c.tipo === 'maquininha') : contas;
+        const opcoesConta = (m, escolhida) => '<option value="">— sem conta —</option>' + contasDoMeio(m).map(c => `<option value="${escapeHtml(String(c.id))}" ${String(c.id) === escolhida ? 'selected' : ''}>${escapeHtml(c.nome || '')}</option>`).join('');
         const sel = 'width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:13px;box-sizing:border-box';
         const o = document.createElement('div');
         o.id = 'baixa-modal';
@@ -12044,8 +12051,8 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
                     </label>
                     <div class="baixa-detalhe" style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0 24px">
                         <input type="text" inputmode="decimal" class="baixa-valor" title="Valor recebido" value="${(Number(it.valor) || 0).toFixed(2).replace('.', ',')}" ${permiteParcial ? '' : 'readonly'} style="${sel};flex:1 1 90px;${permiteParcial ? '' : 'background:#f5f5f5'}">
-                        <select class="baixa-meio" title="Meio" style="${sel};flex:2 1 130px">${meios.map(x => `<option value="${escapeHtml(x.chave)}" ${x === m ? 'selected' : ''}>${escapeHtml(x.nome)}</option>`).join('')}</select>
-                        <select class="baixa-conta" title="Conta" style="${sel};flex:2 1 130px;${semContas ? 'display:none' : ''}"><option value="">— sem conta —</option>${contas.map(c => `<option value="${escapeHtml(String(c.id))}" ${String(c.id) === contaDe(m) ? 'selected' : ''}>${escapeHtml(c.nome || '')}</option>`).join('')}</select>
+                        <select class="baixa-meio" title="Meio" style="${sel};flex:2 1 130px">${m.chave ? '' : '<option value="" selected>Escolha o meio</option>'}${meios.map(x => `<option value="${escapeHtml(x.chave)}" ${x === m ? 'selected' : ''}>${escapeHtml(x.nome)}</option>`).join('')}</select>
+                        <select class="baixa-conta" title="Conta" style="${sel};flex:2 1 130px;${semContas ? 'display:none' : ''}">${opcoesConta(m, contaDe(m))}</select>
                         <div class="baixa-cartao" style="display:none;flex:1 1 100%;gap:10px;align-items:center">
                             <label style="font-size:12px">Vezes <select class="baixa-vezes" style="padding:4px;border:1px solid #ccc;border-radius:4px">${Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}" ${i + 1 === vezes ? 'selected' : ''}>${i + 1}x</option>`).join('')}</select></label>
                             <label style="font-size:12px;cursor:pointer"><input type="checkbox" class="baixa-antecipar" ${mp.antecipar ? 'checked' : ''}> Antecipar</label>
@@ -12060,6 +12067,7 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
         </div>`;
         document.body.appendChild(o);
         const linhas = [...o.querySelectorAll('.baixa-linha')];
+        let tentou = false;
         const dataAtual = () => o.querySelector('#baixa-data')?.value || hoje;
         const meioDa = l => meios.find(x => x.chave === l.querySelector('.baixa-meio').value) || null;
         // Valor da linha: numero ou NaN; mensagem de erro ou ''.
@@ -12082,7 +12090,8 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
             const mostrar = !semContas && !CaixaCore.contaAceitaMovimento(conta, dataAtual());
             aviso.textContent = mostrar ? AVISO_CONTA_BAIXA : '';
             aviso.style.display = mostrar ? 'block' : 'none';
-            const { erro } = lerLinha(l);
+            let { erro } = lerLinha(l);
+            if (!erro && !m && tentou) erro = 'Escolha o meio.';
             const e = l.querySelector('.baixa-erro');
             e.textContent = erro;
             e.style.display = marcada && erro ? 'block' : 'none';
@@ -12095,7 +12104,8 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
         };
         linhas.forEach(l => {
             l.querySelector('.baixa-meio').addEventListener('change', () => {
-                l.querySelector('.baixa-conta').value = contaDe(meioDa(l));
+                const m = meioDa(l);
+                l.querySelector('.baixa-conta').innerHTML = opcoesConta(m, contaDe(m));
                 atualizar();
             });
             l.querySelectorAll('.baixa-check,.baixa-conta').forEach(x => x.addEventListener('change', atualizar));
@@ -12109,9 +12119,10 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
         document.addEventListener('keydown', esc);
         o.querySelector('#baixa-cancel').onclick = () => fechar(null);
         o.querySelector('#baixa-ok').onclick = () => {
+            tentou = true;
             atualizar();
             const marcadas = linhas.filter(l => l.querySelector('.baixa-check').checked);
-            if (marcadas.some(l => lerLinha(l).erro)) return;
+            if (marcadas.some(l => lerLinha(l).erro || !meioDa(l))) return;
             fechar({
                 data: dataAtual(),
                 linhas: marcadas.map(l => {
@@ -12130,13 +12141,6 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
             });
         };
     });
-}
-
-// Adaptador provisorio (ate a baixa de pagamentos ganhar meio e conta): o
-// modal novo devolve linhas; a baixa de contas a pagar ainda recebe ids e forma.
-function _baixaPagarAntiga(r) {
-    if (!r || !r.linhas.length) return null;
-    return { ids: r.linhas.map(l => l.id), data: r.data, forma: r.linhas[0].meio_nome || '' };
 }
 
 function _novosIdsFin(colecao) {
@@ -12240,14 +12244,22 @@ function gerarComissoesPedido(ped) {
     });
 }
 
-function baixarContasPagar(ids, data, forma) {
+// Baixa de pagamentos, linha a linha: grava meio e conta e gera uma saida se a
+// conta aceita. A comissao so e marcada como paga aqui (Fase 0).
+function baixarContasPagar(data, linhas) {
     const usuario = getUsuarioLogado();
-    (ids || []).forEach(id => {
-        const cp = db.contas_pagar.find(x => x.id == id);
+    if (!Array.isArray(db.movimentos_fin)) db.movimentos_fin = [];
+    const novoIdMov = _novosIdsFin(db.movimentos_fin);
+    (linhas || []).forEach(linha => {
+        const cp = db.contas_pagar.find(x => CaixaCore.mesmoId(x.id, linha.id));
         if (!cp || cp.status === 'Pago') return;
+        const meio = linha.meio_id == null ? null : getMeiosPag().find(m => CaixaCore.mesmoId(m.id, linha.meio_id));
+        const conta = _contaFinPorId(linha.conta_id);
         cp.status = 'Pago';
         cp.data_pagamento = data;
-        cp.forma_pagamento = forma;
+        cp.meio_id = meio ? meio.id : null;
+        cp.conta_id = conta ? conta.id : null;
+        cp.forma_pagamento = meio ? meio.nome : (linha.meio_nome || null);
         cp.baixado_por = usuario?.id || null;
         cp.baixado_em = Date.now();
         if (cp.papel_comissao && cp.pedido_id) {
@@ -12258,7 +12270,41 @@ function baixarContasPagar(ids, data, forma) {
                 ped[c.data] = new Date(data + 'T12:00:00').getTime();
             }
         }
+        if (!CaixaCore.contaAceitaMovimento(conta, data)) return;
+        db.movimentos_fin.push({ id: novoIdMov(), conta_id: conta.id, data, sentido: 'saida', valor: CaixaCore.arredondar(cp.valor), origem: 'cp', origem_id: cp.id, grupo_id: null, descricao: cp.descricao || 'Pagamento' });
     });
+}
+
+// Desfaz o pagamento de uma conta a pagar (a taxa de cartao sai pelo estorno
+// do recebimento). Comissao volta a ficar pendente no pedido.
+async function estornarCP(id) {
+    if (!await exigirPermissao('financeiro.pagar', 'completo')) return;
+    const cp = db.contas_pagar.find(x => CaixaCore.mesmoId(x.id, id));
+    if (!cp || cp.status !== 'Pago') return;
+    if (cp.categoria === 'taxa_cartao') { await showAlert('A taxa do cartão sai pelo estorno do recebimento.', 'ℹ️'); return; }
+    if (!await showConfirm('Estornar este pagamento? A conta volta a ficar em aberto.', '↩', 'Estornar', 'Cancelar')) return;
+    db.movimentos_fin = (db.movimentos_fin || []).filter(m => !(m.origem === 'cp' && CaixaCore.mesmoId(m.origem_id, cp.id)));
+    const hoje = hojeLocal();
+    cp.status = (cp.data_vencimento && cp.data_vencimento < hoje) ? 'Atrasado' : 'Pendente';
+    ['data_pagamento', 'forma_pagamento', 'meio_id', 'conta_id', 'baixado_por', 'baixado_em'].forEach(k => { cp[k] = null; });
+    cp.estornado_por = getUsuarioLogado()?.id || null;
+    cp.estornado_em = Date.now();
+    if (cp.papel_comissao && cp.pedido_id) {
+        const ped = db.pedidos.find(p => p.id == cp.pedido_id);
+        const c = CAMPOS_COMISSAO[cp.papel_comissao];
+        if (ped && c) { ped[c.paga] = false; ped[c.data] = null; }
+    }
+    salvarERecarregar('Pagamento estornado.');
+}
+
+// Mesma regra do excluirCR: pago com movimento so sai pelo estorno; taxa de
+// cartao nunca sai por aqui. Devolve true se bloqueou.
+async function _bloqueiaExclusaoCP(cps) {
+    if (cps.some(cp => cp.categoria === 'taxa_cartao')) { await showAlert('A taxa do cartão sai pelo estorno do recebimento.', 'ℹ️'); return true; }
+    if (cps.some(cp => cp.status === 'Pago' && (db.movimentos_fin || []).some(m => m.origem === 'cp' && CaixaCore.mesmoId(m.origem_id, cp.id)))) {
+        await showAlert('Estorne o pagamento antes de excluir.', '⚠️'); return true;
+    }
+    return false;
 }
 
 async function marcarCRPago(id) {
@@ -12483,14 +12529,15 @@ async function marcarCPPago(id) {
         itens: [{ id: cp.id, descricao: cp.descricao, valor: cp.valor, marcado: true }],
         formaPadrao: cp.forma_pagamento || '',
         permiteCartao: false, permiteParcial: false
-    }).then(_baixaPagarAntiga);
-    if (!r) return;
-    baixarContasPagar(r.ids, r.data, r.forma);
+    });
+    if (!r || !r.linhas.length) return;
+    baixarContasPagar(r.data, r.linhas);
     salvarERecarregar('Pagamento registrado!');
 }
 
 async function excluirCP(id) {
     if (!await exigirPermissao('financeiro.pagar', 'completo')) return;
+    if (await _bloqueiaExclusaoCP(db.contas_pagar.filter(x => x.id == id))) return;
     if (!await showConfirm('Remover este lançamento a pagar?', '🗑️', 'Remover', 'Cancelar')) return;
     db.contas_pagar = db.contas_pagar.filter(x => x.id != id);
     salvarERecarregar('Lançamento removido.');
@@ -12500,6 +12547,7 @@ async function excluirGrupoCP(paiId) {
     if (!await exigirPermissao('financeiro.pagar', 'completo')) return;
     const grupo = db.contas_pagar.filter(x => x.lancamento_pai_id === paiId);
     if (!grupo.length) return;
+    if (await _bloqueiaExclusaoCP(grupo)) return;
     if (!await showConfirm(`Remover todos os ${grupo.length} lançamentos deste grupo (parcelas ou recorrência)?\n\nEsta ação não pode ser desfeita.`, '🗑️', 'Remover grupo', 'Cancelar')) return;
     db.contas_pagar = db.contas_pagar.filter(x => x.lancamento_pai_id !== paiId);
     db.despesas_fixas = db.despesas_fixas.filter(x => x.id !== paiId);
@@ -13986,7 +14034,7 @@ function renderContasPagar() {
         const anexoBtn = cp.arquivo_anexo_url ? `<button class="btn btn-outline btn-sm" onclick="verAnexoCP(${cp.id})" title="Ver documento anexado" style="margin-left:4px">📎</button>` : '';
         const grupoDelBtn = (podeEditar && cp.lancamento_pai_id) ? `<button class="btn btn-outline btn-sm btn-danger" onclick="excluirGrupoCP(${cp.lancamento_pai_id})" title="Excluir todo o grupo" style="margin-left:4px">🗑️ grupo</button>` : '';
         const acoes = podeEditar
-            ? `${!pago?`<button class="btn btn-sm btn-success" onclick="marcarCPPago(${cp.id})" title="Confirmar pagamento">✓ Pagar</button>`:''}<button class="btn btn-outline btn-sm btn-danger" onclick="excluirCP(${cp.id})" title="Excluir" style="margin-left:4px">🗑️</button>${grupoDelBtn}${anexoBtn}`
+            ? `${!pago?`<button class="btn btn-sm btn-success" onclick="marcarCPPago(${cp.id})" title="Confirmar pagamento">✓ Pagar</button>`:(cp.categoria==='taxa_cartao'?'':`<button class="btn btn-outline btn-sm" onclick="estornarCP(${cp.id})" title="Desfazer este pagamento">↩ Estornar</button>`)}<button class="btn btn-outline btn-sm btn-danger" onclick="excluirCP(${cp.id})" title="Excluir" style="margin-left:4px">🗑️</button>${grupoDelBtn}${anexoBtn}`
             : anexoBtn;
         return `<tr class="${at?'fin-atrasado':''}">
             <td>${new Date(cp.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR')}</td>

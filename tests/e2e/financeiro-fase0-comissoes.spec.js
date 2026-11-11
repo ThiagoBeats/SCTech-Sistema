@@ -66,6 +66,7 @@ test('pagar no A Pagar reflete na tela de vendedores', async ({ page }) => {
     await page.locator('.fin-tab-btn[data-tab="pagar"]').click();
     const linha = page.locator('#tb-contas-pagar tr', { hasText: 'Bruno' });
     await linha.locator('button', { hasText: 'Pagar' }).click();
+    await page.locator('#baixa-modal .baixa-meio').selectOption('PIX');
     await page.locator('#baixa-modal #baixa-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_ped'))[0].comissao_paga).toBe(true);
     await page.goto(BASE + '/vendedores.html?aba=pendentes');
@@ -82,7 +83,8 @@ test('pagar todas da pessoa', async ({ page }) => {
     const modal = page.locator('#baixa-modal');
     await expect(modal.locator('.baixa-check')).toHaveCount(2);
     await modal.locator('#baixa-data').fill('2026-11-06');
-    await modal.locator('.baixa-meio').first().selectOption('Dinheiro');
+    await modal.locator('.baixa-meio').nth(0).selectOption('Dinheiro');
+    await modal.locator('.baixa-meio').nth(1).selectOption('Dinheiro');
     await modal.locator('#baixa-ok').click();
     await expect.poll(async () => ((await lerChave(page, 'sc_cp')) || []).filter(c => c.status === 'Pago').length).toBe(2);
     const pagas = (await lerChave(page, 'sc_cp')).filter(c => c.status === 'Pago');
@@ -98,6 +100,7 @@ test('Pagar no A Pagar nao usa prompt', async ({ page }) => {
     await page.goto(BASE + '/financeiro.html');
     await page.locator('.fin-tab-btn[data-tab="pagar"]').click();
     await page.locator('#tb-contas-pagar button', { hasText: 'Pagar' }).click();
+    await page.locator('#baixa-modal .baixa-meio').selectOption('PIX');
     await page.locator('#baixa-modal #baixa-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_cp'))[0].status).toBe('Pago');
     expect(await page.evaluate(() => window.__prompt)).toBeFalsy();
