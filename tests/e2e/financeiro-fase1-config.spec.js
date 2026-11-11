@@ -187,3 +187,21 @@ test('adicionar maquininha depois liga os meios de cartao sem conta', async ({ p
     expect(meios.find(m => m.tipo === 'cartao_debito').conta_id).toBe(contas[2].id);
     expect(meios.find(m => m.nome === 'PIX').conta_id).toBe(contas0[1].id);
 });
+
+test('saldo inicial com ponto de milhar sem virgula vale mil e taxa com ponto segue decimal', async ({ page }) => {
+    await abrir(page);
+    await page.click('#emp-contas-card button:has-text("Adicionar conta")');
+    const linha = page.locator('#emp-contas .conta-linha').first();
+    await linha.locator('.conta-nome').fill('Maq');
+    await linha.locator('.conta-tipo').selectOption('maquininha');
+    await linha.locator('.conta-saldo').fill('15.000');
+    await linha.locator('.conta-cartao-debito_taxa').fill('1.5');
+    await page.click('#emp-contas-card button:has-text("Salvar contas")');
+    let c = (await ler(page, 'sc_contas_fin'))[0];
+    expect(c.saldo_inicial).toBe(15000);
+    expect(c.cartao.debito_taxa).toBe(1.5);
+    await linha.locator('.conta-saldo').fill('1.000');
+    await page.click('#emp-contas-card button:has-text("Salvar contas")');
+    c = (await ler(page, 'sc_contas_fin'))[0];
+    expect(c.saldo_inicial).toBe(1000);
+});

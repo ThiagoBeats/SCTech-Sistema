@@ -148,3 +148,17 @@ test('sem extrato completo nao ve Transferir', async ({ page }) => {
     await expect(page.locator('#extrato-linhas .extrato-linha')).toHaveCount(3);
     await expect(page.locator('#extrato-btn-transferir')).toBeHidden();
 });
+
+test('transferir 1.000 (so ponto de milhar) move mil reais', async ({ page }) => {
+    await abrir(page);
+    await page.locator('#extrato-btn-transferir').click();
+    const m = page.locator('#transf-modal');
+    await m.locator('#transf-de').selectOption('10');
+    await m.locator('#transf-para').selectOption('11');
+    await m.locator('#transf-valor').fill('1.000');
+    await m.locator('#transf-ok').click();
+    await expect(m).toHaveCount(0);
+    const movs = (await ler(page, 'sc_mov_fin')).filter(x => x.origem === 'transferencia');
+    expect(movs).toHaveLength(2);
+    expect(movs.every(x => x.valor === 1000)).toBe(true);
+});

@@ -761,7 +761,7 @@ function removerContaCfg(i) {
 async function salvarContasCfg() {
     const rasc = _contasRascunho.filter(c => (c.nome || '').trim());
     if (rasc.some(c => !/^\d{4}-\d{2}-\d{2}$/.test(c.data || ''))) { await showAlert('Informe a data do saldo inicial de cada conta.', '⚠️'); return; }
-    const invalido = rasc.some(c => Number.isNaN(_numeroBR(c.saldo, 0)) ||
+    const invalido = rasc.some(c => Number.isNaN(_valorDigitadoBaixa(c.saldo, 0)) ||
         (c.tipo === 'maquininha' && CARTAO_CAMPOS_CFG.some(([k]) => Number.isNaN(_numeroBR(c.cartao && c.cartao[k], 0)))));
     if (invalido) { await showAlert('Use só números no saldo e nas taxas (ex.: 1250,50 ou 1,5).', '⚠️'); return; }
     const usados = new Set(getContasFin().map(c => c.id));
@@ -770,7 +770,7 @@ async function salvarContasCfg() {
         const conta = {
             id: c.id != null ? c.id : _novoIdCfgFin(usados),
             nome: c.nome.trim(), tipo: c.tipo,
-            saldo_inicial: CaixaCore.arredondar(_numeroBR(c.saldo, 0)),
+            saldo_inicial: CaixaCore.arredondar(_valorDigitadoBaixa(c.saldo, 0)),
             data_saldo_inicial: c.data, ativo: c.ativo !== false
         };
         if (c.tipo === 'maquininha') {
@@ -12063,11 +12063,12 @@ function _contaFinPorId(id) {
     return id == null || id === '' ? null : (getContasFin().find(c => CaixaCore.mesmoId(c.id, id)) || null);
 }
 
-// Valor digitado na baixa: alem do _numeroBR, "1.000" e "1.000.000" (so
-// ponto de milhar) valem mil e um milhao, e nao 1.
-function _valorDigitadoBaixa(t) {
+// Valor em dinheiro digitado (baixa, saldo inicial, transferencia): alem do
+// _numeroBR, "1.000" e "1.000.000" (so ponto de milhar) valem mil e um
+// milhao, e nao 1. Vazio devolve o padrao. Nao serve para taxa nem dias.
+function _valorDigitadoBaixa(t, padrao) {
     const s = String(t == null ? '' : t).trim();
-    return _numeroBR(/^\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, '') : s, NaN);
+    return _numeroBR(/^\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, '') : s, padrao === undefined ? NaN : padrao);
 }
 
 const AVISO_CONTA_BAIXA = 'Esta conta ainda não está configurada / data anterior ao saldo inicial — não entra no saldo';
@@ -13644,6 +13645,7 @@ function renderHoje() {
     const linhaCR = cr => `<div class="hoje-item">
         <div class="hoje-item-desc">${escapeHtml(cr.cliente_nome || '')}<small>${escapeHtml(cr.descricao || '')} · vence ${fmtData(cr.data_vencimento)}</small></div>
         <div class="hoje-item-valor">${brl(cr.valor)}</div>
+        ${cr.ultima_cobranca === hoje ? '<small style="color:var(--muted);white-space:nowrap">cobrado hoje</small>' : ''}
         ${podeReceber ? `<button class="btn btn-outline btn-sm" onclick='cobrarNoWhatsApp(${jid(cr.id)})'>💬 Cobrar</button>
         <button class="btn btn-success btn-sm" onclick='marcarCRPago(${jid(cr.id)})'>✓ Recebi</button>` : ''}</div>`;
     const linhaCP = cp => `<div class="hoje-item">
@@ -13817,7 +13819,7 @@ async function abrirModalTransferencia() {
     o.querySelector('#transf-cancel').onclick = fechar;
     o.querySelector('#transf-ok').onclick = () => {
         const deId = o.querySelector('#transf-de').value, paraId = para.value;
-        const valor = _numeroBR(o.querySelector('#transf-valor').value, NaN);
+        const valor = _valorDigitadoBaixa(o.querySelector('#transf-valor').value);
         const data = o.querySelector('#transf-data').value;
         const de = _contaFinPorId(deId), dest = _contaFinPorId(paraId);
         if (!de || !dest) return erro('Escolha as duas contas.');
@@ -14337,6 +14339,7 @@ async function cobrarNoWhatsApp(crId) {
     cr.ultima_cobranca = hojeLocal();
     syncDB();
     renderContasReceber();
+    if (document.getElementById('hoje-tarefas')) renderHoje();
 }
 
 function renderContasPagar() {

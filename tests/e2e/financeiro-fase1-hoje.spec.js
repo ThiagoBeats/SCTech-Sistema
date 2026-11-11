@@ -138,3 +138,19 @@ test('aviso de pedidos para revisar aparece em Hoje sem clicar em aba', async ({
     await expect(page.locator('#fin-revisar')).toContainText('Confira estes pedidos');
     await expect(page.locator('#fin-revisar')).toContainText('#26501');
 });
+
+test('cobrar na tela Hoje marca "cobrado hoje" e o selo vem salvo', async ({ page }) => {
+    await abrir(page, {
+        sc_contas_fin: CONTAS,
+        sc_cli: [{ id: 1, nome: 'Atrasado Rec', tel: '(11) 98765-4321' }],
+        sc_cr: [cr(1, 'Atrasado Rec', somarDias(HOJE, -3))]
+    });
+    await page.evaluate(() => { window.__abertos = []; window.open = (u, t) => { window.__abertos.push(u); return null; }; });
+    const grupo = page.locator('#hoje-tarefas .hoje-grupo[data-grupo="receber-atrasados"]');
+    await expect(grupo).not.toContainText('cobrado hoje');
+    await grupo.locator('button', { hasText: 'Cobrar' }).click();
+    expect(await page.evaluate(() => window.__abertos.length)).toBe(1);
+    await expect(grupo).toContainText('cobrado hoje');
+    await page.reload();
+    await expect(page.locator('#hoje-tarefas .hoje-grupo[data-grupo="receber-atrasados"]')).toContainText('cobrado hoje');
+});
