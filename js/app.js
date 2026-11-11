@@ -7690,6 +7690,7 @@ async function pagarComissao(pedidoId) {
 
 // Localiza (gerando se faltarem) as contas do papel da aba e abre uma baixa unica.
 async function _baixarComissoes(pedidos, titulo) {
+    if (!await exigirPermissao('financeiro.pagar', 'completo')) return;
     const papel = _tipoVend;
     const itens = [];
     pedidos.forEach(p => {

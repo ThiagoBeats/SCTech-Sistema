@@ -103,3 +103,17 @@ test('Pagar no A Pagar nao usa prompt', async ({ page }) => {
     expect(await page.evaluate(() => window.__prompt)).toBeFalsy();
     expect((await lerChave(page, 'sc_cp'))[0].forma_pagamento).toBeTruthy();
 });
+
+test('pagar comissao exige permissao de contas a pagar', async ({ page }) => {
+    await entrar(page, BASE, { sc_cli: CLI, sc_vend: VEND, sc_ped: [pedido({ status: 'Instalado' })] });
+    await page.evaluate(() => {
+        const u = JSON.parse(localStorage.getItem('sc_usr'));
+        u[0].permissoes_extras = { 'financeiro.pagar': { nivel: 'visualizar', acoes_restritas: [] } };
+        localStorage.setItem('sc_usr', JSON.stringify(u));
+    });
+    await page.goto(BASE + '/vendedores.html?aba=pendentes');
+    await page.evaluate(() => { pagarComissao(26400); });
+    await expect(page.locator('#sc-modal-msg')).toContainText('permissão');
+    await expect(page.locator('#baixa-modal')).toHaveCount(0);
+    expect(((await lerChave(page, 'sc_cp')) || []).filter(c => c.status === 'Pago')).toHaveLength(0);
+});
