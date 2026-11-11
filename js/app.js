@@ -11602,7 +11602,13 @@ function atualizarStatusVencimentos() {
 // Valor recebido do pedido = soma das parcelas pagas (fonte unica).
 function sincronizarRecebidoPedido(pedidoId) {
     const ped = db.pedidos.find(p => p.id == pedidoId);
-    if (!ped || !db.contas_receber.some(c => c.pedido_id == pedidoId)) return;   // sem parcelas, mantem o legado
+    if (!ped) return;
+    if (!db.contas_receber.some(c => c.pedido_id == pedidoId)) {
+        // Sem parcelas: o pedido que ja teve financeiro nao recebeu nada; o que
+        // nunca teve mantem o valor antigo (vai para a revisao da migracao).
+        if (ped.financeiro_gerado) ped.valor_recebido = 0;
+        return;
+    }
     ped.valor_recebido = FinanceiroCore.totalRecebido(db.contas_receber, pedidoId);
 }
 
@@ -11664,7 +11670,12 @@ function baixarContasReceber(ids, data, forma) {
         cr.baixado_em = Date.now();
         if (cr.pedido_id) peds.add(cr.pedido_id);
     });
-    peds.forEach(sincronizarRecebidoPedido);
+    peds.forEach(id => {
+        sincronizarRecebidoPedido(id);
+        // Tudo recebido de novo (depois de um estorno, por exemplo): nao ha mais pendencia.
+        const ped = db.pedidos.find(p => p.id == id);
+        if (ped && ped.pagamento_pendente && FinanceiroCore.saldoEmAberto(db.contas_receber, id) <= 0.01) ped.pagamento_pendente = false;
+    });
 }
 
 // Comissoes do pedido instalado viram contas a pagar (uma por papel). Idempotente.
@@ -11732,14 +11743,25 @@ async function estornarCR(id) {
     cr.baixado_em = null;
     cr.estornado_por = getUsuarioLogado()?.id || null;
     cr.estornado_em = Date.now();
-    if (cr.pedido_id) sincronizarRecebidoPedido(cr.pedido_id);
+    if (cr.pedido_id) {
+        sincronizarRecebidoPedido(cr.pedido_id);
+        // O pedido deixa de estar quitado: a migracao da Fase 0 (por exemplo, ao
+        // importar um backup antigo) nao pode baixar esta parcela de novo.
+        const ped = db.pedidos.find(p => p.id == cr.pedido_id);
+        if (ped) ped.pagamento_pendente = true;
+    }
     salvarERecarregar('Recebimento estornado.');
 }
 
 async function excluirCR(id) {
     if (!await exigirPermissao('financeiro.receber', 'completo')) return;
+    const cr = db.contas_receber.find(x => x.id == id);
+    if (!cr) return;
+    // Recebimento so sai pelo estorno (que registra quem desfez e quando).
+    if (cr.status === 'Pago') { await showAlert('Estorne o recebimento antes de excluir.', '⚠️'); return; }
     if (!await showConfirm('Remover este lançamento a receber?', '🗑️', 'Remover', 'Cancelar')) return;
     db.contas_receber = db.contas_receber.filter(x => x.id != id);
+    if (cr.pedido_id) sincronizarRecebidoPedido(cr.pedido_id);
     salvarERecarregar('Lançamento removido.');
 }
 
