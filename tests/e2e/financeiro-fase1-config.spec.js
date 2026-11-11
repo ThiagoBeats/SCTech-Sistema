@@ -126,3 +126,64 @@ test('permissoes Hoje e Extrato aparecem em Configuracoes > Acessos', async ({ p
     expect(rotulos).toContain('Hoje');
     expect(rotulos).toContain('Extrato');
 });
+
+test('papel Vendedor ja salvo: Hoje e Extrato nao herdam o modulo; Administrador e Financeiro seguem completos', async ({ page }) => {
+    const nivel = n => ({ nivel: n, acoes_restritas: [] });
+    const papeis = [
+        { id: 1, nome: 'Administrador', permissoes: { financeiro: nivel('completo'), configuracoes: nivel('completo') } },
+        { id: 2, nome: 'Financeiro', permissoes: { financeiro: nivel('completo') } },
+        { id: 3, nome: 'Vendedor/Atendimento', permissoes: { financeiro: nivel('visualizar'), 'financeiro.dashboard': nivel('sem_acesso'), 'financeiro.receber': nivel('visualizar') } }
+    ];
+    await entrar(page, BASE, { sc_pap: papeis });
+    await page.goto(BASE + '/configuracoes.html');
+    const r = await page.evaluate(() => {
+        const n = (papel, k) => resolverPermissao(k, { papel_id: papel, permissoes_extras: {} }).nivel;
+        return { v: [n(3, 'financeiro.hoje'), n(3, 'financeiro.extrato'), n(3, 'financeiro.receber')],
+                 a: [n(1, 'financeiro.hoje'), n(1, 'financeiro.extrato')], f: [n(2, 'financeiro.hoje'), n(2, 'financeiro.extrato')] };
+    });
+    expect(r.v).toEqual(['sem_acesso', 'sem_acesso', 'visualizar']);
+    expect(r.a).toEqual(['completo', 'completo']);
+    expect(r.f).toEqual(['completo', 'completo']);
+});
+
+test('saldo inicial aceita 1.250,50 e 1,5 e recusa texto', async ({ page }) => {
+    await abrir(page);
+    await page.click('#emp-contas-card button:has-text("Adicionar conta")');
+    const linha = page.locator('#emp-contas .conta-linha').first();
+    await linha.locator('.conta-nome').fill('Caixa');
+    await linha.locator('.conta-saldo').fill('1.250,50');
+    await page.click('#emp-contas-card button:has-text("Salvar contas")');
+    expect((await ler(page, 'sc_contas_fin'))[0].saldo_inicial).toBe(1250.5);
+    await linha.locator('.conta-saldo').fill('1,5');
+    await page.click('#emp-contas-card button:has-text("Salvar contas")');
+    expect((await ler(page, 'sc_contas_fin'))[0].saldo_inicial).toBe(1.5);
+    await linha.locator('.conta-saldo').fill('abc');
+    await page.click('#emp-contas-card button:has-text("Salvar contas")');
+    await expect(page.locator('#sc-modal-ok')).toBeVisible();
+    await page.locator('#sc-modal-ok').click();
+    expect((await ler(page, 'sc_contas_fin'))[0].saldo_inicial).toBe(1.5);
+});
+
+test('adicionar maquininha depois liga os meios de cartao sem conta', async ({ page }) => {
+    await abrir(page);
+    for (const [i, [nome, tipo]] of [['Caixa', 'caixa'], ['Banco', 'banco']].entries()) {
+        await page.click('#emp-contas-card button:has-text("Adicionar conta")');
+        const l = page.locator('#emp-contas .conta-linha').nth(i);
+        await l.locator('.conta-nome').fill(nome);
+        await l.locator('.conta-tipo').selectOption(tipo);
+    }
+    await page.click('#emp-contas-card button:has-text("Salvar contas")');
+    let meios = await ler(page, 'sc_meios_pag');
+    expect(meios.find(m => m.tipo === 'cartao_credito').conta_id).toBeNull();
+    const contas0 = await ler(page, 'sc_contas_fin');
+    await page.click('#emp-contas-card button:has-text("Adicionar conta")');
+    const l = page.locator('#emp-contas .conta-linha').nth(2);
+    await l.locator('.conta-nome').fill('Maq');
+    await l.locator('.conta-tipo').selectOption('maquininha');
+    await page.click('#emp-contas-card button:has-text("Salvar contas")');
+    const contas = await ler(page, 'sc_contas_fin');
+    meios = await ler(page, 'sc_meios_pag');
+    expect(meios.find(m => m.tipo === 'cartao_credito').conta_id).toBe(contas[2].id);
+    expect(meios.find(m => m.tipo === 'cartao_debito').conta_id).toBe(contas[2].id);
+    expect(meios.find(m => m.nome === 'PIX').conta_id).toBe(contas0[1].id);
+});

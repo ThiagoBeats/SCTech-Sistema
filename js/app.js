@@ -214,6 +214,15 @@ function migrarPermissoesSalvas() {
         if (p.permissoes && typeof p.permissoes === 'object' && !p.permissoes.galeria) {
             p.permissoes.galeria = { nivel: p.nome === 'Administrador' ? 'completo' : 'visualizar', acoes_restritas: [] };
         }
+        // Hoje e Extrato nasceram depois: sem chave, herdariam o nivel do modulo
+        // inteiro e abririam saldos/previsao para quem so ve A Receber. Passam a
+        // seguir o nivel da Visao Geral (sem acesso se nao houver).
+        if (p.permissoes && typeof p.permissoes === 'object') {
+            const base = p.permissoes['financeiro.dashboard'] || p.permissoes.financeiro;
+            ['financeiro.hoje', 'financeiro.extrato'].forEach(k => {
+                if (!p.permissoes[k]) p.permissoes[k] = { nivel: (base && base.nivel) || 'sem_acesso', acoes_restritas: [] };
+            });
+        }
         if (JSON.stringify(p.permissoes) !== antes) mudou = true;
     });
     // Gerente nasceu depois: entra uma vez (a marca impede que um excluido volte)
@@ -234,6 +243,12 @@ function migrarPermissoesSalvas() {
         Object.entries(u.permissoes_extras).forEach(([k, v]) => {
             novo[MAPA_MODULOS_LEGADO[k] || k] = v;
         });
+        if (novo.financeiro) {
+            const base = novo['financeiro.dashboard'] || novo.financeiro;
+            ['financeiro.hoje', 'financeiro.extrato'].forEach(k => {
+                if (!novo[k]) novo[k] = { nivel: base.nivel || 'sem_acesso', acoes_restritas: [] };
+            });
+        }
         if (JSON.stringify(novo) !== JSON.stringify(u.permissoes_extras)) { u.permissoes_extras = novo; mudou = true; }
     });
     if (mudou) syncDB();
@@ -592,9 +607,13 @@ function _novoIdCfgFin(usados) {
     usados.add(_idCfgFin);
     return _idCfgFin++;
 }
+// Numero digitado em formulario: "1.250,50" e "1,5" valem; vazio usa o padrao;
+// texto que nao e numero volta NaN (a tela recusa).
 function _numeroBR(v, padrao) {
-    const n = parseFloat(String(v == null ? '' : v).trim().replace(',', '.'));
-    return Number.isFinite(n) ? n : padrao;
+    let t = String(v == null ? '' : v).trim();
+    if (t === '') return padrao;
+    if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+    return /^-?\d+(\.\d+)?$/.test(t) ? parseFloat(t) : NaN;
 }
 
 function garantirMeiosPadrao() {
@@ -691,6 +710,9 @@ function removerContaCfg(i) {
 async function salvarContasCfg() {
     const rasc = _contasRascunho.filter(c => (c.nome || '').trim());
     if (rasc.some(c => !/^\d{4}-\d{2}-\d{2}$/.test(c.data || ''))) { await showAlert('Informe a data do saldo inicial de cada conta.', '⚠️'); return; }
+    const invalido = rasc.some(c => Number.isNaN(_numeroBR(c.saldo, 0)) ||
+        (c.tipo === 'maquininha' && CARTAO_CAMPOS_CFG.some(([k]) => Number.isNaN(_numeroBR(c.cartao && c.cartao[k], 0)))));
+    if (invalido) { await showAlert('Use só números no saldo e nas taxas (ex.: 1250,50 ou 1,5).', '⚠️'); return; }
     const usados = new Set(getContasFin().map(c => c.id));
     rasc.forEach(c => { if (c.id != null) usados.add(c.id); });
     const contas = rasc.map(c => {
@@ -710,6 +732,13 @@ async function salvarContasCfg() {
     // meio ligado a uma conta que sumiu fica sem conta
     getMeiosPag().forEach(m => { if (m.conta_id != null && !contas.some(c => CaixaCore.mesmoId(c.id, m.conta_id))) m.conta_id = null; });
     garantirMeiosPadrao();
+    // meio sem conta ganha a primeira conta do tipo certo; conta escolhida nunca muda
+    const contaDoTipo = { dinheiro: 'caixa', pix: 'banco', transferencia: 'banco', boleto: 'banco', cartao_debito: 'maquininha', cartao_credito: 'maquininha' };
+    getMeiosPag().forEach(m => {
+        if (m.conta_id != null || !contaDoTipo[m.tipo]) return;
+        const c = contas.find(x => x.tipo === contaDoTipo[m.tipo]);
+        if (c) m.conta_id = c.id;
+    });
     syncDB();
     _contasRascunho = contas.map(_contaParaRascunho);
     _meiosRascunho = null;
