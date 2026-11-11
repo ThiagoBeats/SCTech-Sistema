@@ -180,25 +180,6 @@ test('sem logo cadastrada, continua a do SCTech', async ({ page }) => {
     await expect(page.locator('#main-sidebar .sidebar-logo-img')).toHaveAttribute('src', 'images/logo.png');
 });
 
-test('fornecedores: total de compras soma so pedidos enviados ou recebidos daquele fornecedor', async ({ page }) => {
-    const it = v => [{ tipo: 'material', nome: 'X', quantidade: 1, preco_unit: v, subtotal: v }];
-    await entrar(page, BASE, {
-        sc_forn: [{ id: 1, nome: 'Tecidos Alfa' }, { id: 2, nome: 'Trilhos Beta' }],
-        sc_pc: [
-            { id: 1, fornecedor_id: 1, fornecedor_nome: 'Tecidos Alfa', status: 'Enviado', data_criacao: 1, itens: it(100) },
-            { id: 2, fornecedor_id: 1, fornecedor_nome: 'Tecidos Alfa', status: 'Recebido', data_criacao: 2, itens: it(250.5) },
-            { id: 3, fornecedor_id: 1, fornecedor_nome: 'Tecidos Alfa', status: 'Rascunho', data_criacao: 3, itens: it(999) },
-            { id: 4, fornecedor_id: 0, fornecedor_nome: 'Orçamento — sem fornecedor definido', status: 'Enviado', data_criacao: 4, itens: it(777) }
-        ]
-    });
-    await page.goto(BASE + '/fornecedores.html');
-    await expect(page.locator('#tb-fornecedores').locator('..').locator('thead')).toContainText('Total de compras');
-    const linha = nome => page.locator('#tb-fornecedores tr', { hasText: nome }).locator('.forn-total-compras');
-    await expect(linha('Tecidos Alfa')).toContainText('R$ 350,50');
-    await expect(linha('Tecidos Alfa')).toContainText('2 pedido(s)');
-    await expect(linha('Trilhos Beta')).toContainText('R$ 0,00');
-});
-
 // --- Pedidos: menu de acoes --------------------------------------------------
 
 test('a coluna Acao dos pedidos tem so os tres pontos; as acoes ficam no menu', async ({ page }) => {

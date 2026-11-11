@@ -2238,11 +2238,11 @@ function renderTabelaClientes(lista) {
             <td>${escapeHtml(c.email||'—')}</td>
             <td>${escapeHtml(c.cpf||'—')}</td>
             <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(c.end||'')}">${escapeHtml(c.end||'—')}</td>
-            <td>
-                ${nPed > 0 ? `<button class="btn btn-outline btn-sm" onclick="mostrarPedidosCliente(${c.id})" title="Ver pedidos">📋 ${nPed}</button>` : ''}
-                ${podeEditar ? `<button class="btn btn-outline btn-sm" onclick="editarCliente(${c.id})">✏️</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirCliente(${c.id})">🗑️</button>` : ''}
-            </td>
+            <td class="td-acoes">${menuAcoesHtml([
+                { icone: '📋', rotulo: `Ver pedidos (${nPed})`, onclick: `mostrarPedidosCliente(${c.id})`, oculto: !(nPed > 0) },
+                { icone: '✏️', rotulo: 'Editar cliente', onclick: `editarCliente(${c.id})`, oculto: !podeEditar },
+                { icone: '🗑️', rotulo: 'Excluir cliente', onclick: `excluirCliente(${c.id})`, perigo: true, oculto: !podeEditar }
+            ])}</td>
         </tr>`;
     }).join('');
 }
@@ -3597,9 +3597,9 @@ function _menuAcoesFechar() {
     if (m) m.remove();
     document.querySelectorAll('.btn-kebab[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
 }
-function abrirMenuAcoes(ev, itens) {
+function abrirMenuAcoes(ev, itens, botaoAlvo) {
     ev.stopPropagation();
-    const botao = ev.currentTarget;
+    const botao = botaoAlvo || ev.currentTarget;
     const jaAberto = botao.getAttribute('aria-expanded') === 'true';
     _menuAcoesFechar();
     if (jaAberto) return;
@@ -3636,10 +3636,39 @@ function _menuAcoesAoRolar(e) {
     if (performance.now() - _menuAcoesAbertoEm < 250) return;
     _menuAcoesFechar();
 }
-document.addEventListener('click', e => { if (!e.target.closest('#menu-acoes-flutuante')) _menuAcoesFechar(); });
+document.addEventListener('click', e => { if (!e.target.closest('#menu-acoes-flutuante, .btn-acoes')) _menuAcoesFechar(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') _menuAcoesFechar(); });
 window.addEventListener('scroll', _menuAcoesAoRolar, true);
 window.addEventListener('resize', _menuAcoesFechar);
+
+// Botao ⋮ para linhas de tabela montadas em template (HTML). Cada acao traz o
+// onclick como string, igual ao botao que ela substitui; "oculto" a tira do menu.
+// As perigosas vao para o fim, separadas. Um unico listener global (abaixo) abre
+// o menu, entao as linhas podem ser re-renderizadas a vontade.
+function menuAcoesHtml(acoes) {
+    const lista = (acoes || []).filter(a => a && !a.oculto);
+    if (!lista.length) return '';
+    const ordenadas = lista.filter(a => !a.perigo).concat(lista.filter(a => a.perigo));
+    const dados = ordenadas.map(a => ({ icone: a.icone || '', rotulo: a.rotulo, onclick: a.onclick, perigo: !!a.perigo }));
+    return `<button type="button" class="btn-kebab btn-acoes" aria-label="Ações" aria-haspopup="menu" aria-expanded="false" title="Ações" data-acoes="${escapeHtml(JSON.stringify(dados))}">⋮</button>`;
+}
+document.addEventListener('click', e => {
+    const botao = e.target.closest && e.target.closest('.btn-acoes');
+    if (!botao) return;
+    let dados;
+    try { dados = JSON.parse(botao.dataset.acoes || '[]'); } catch (_) { return; }
+    const itens = [];
+    dados.forEach((a, i) => {
+        if (a.perigo && i > 0 && !dados[i - 1].perigo) itens.push({ sep: true });
+        // roda a string como o onclick inline do botao antigo (escopo global)
+        itens.push({ icone: a.icone, rotulo: a.rotulo, perigo: a.perigo, acao: () => {
+            const b = document.createElement('button');
+            b.setAttribute('onclick', a.onclick);
+            b.click();
+        } });
+    });
+    abrirMenuAcoes(e, itens, botao);
+});
 
 function abrirMenuAcoesPedido(ev, id) {
     const p = db.pedidos.find(x => x.id == id);
@@ -7924,7 +7953,7 @@ function renderTabelaVendedores() {
     const c = CAMPOS_COMISSAO[_tipoVend];
     const lista = vendedoresDoTipo(_tipoVend);
     if (!lista.length) {
-        tb.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#999;padding:20px;">Nenhum ${TIPOS_VENDEDOR[_tipoVend].um.toLowerCase()} cadastrado.</td></tr>`;
+        tb.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#999;padding:20px;">Nenhum ${TIPOS_VENDEDOR[_tipoVend].um.toLowerCase()} cadastrado.</td></tr>`;
         return;
     }
     tb.innerHTML = lista.map(v => {
@@ -7937,11 +7966,11 @@ function renderTabelaVendedores() {
             <td style="text-align:center">${v.comissao_pct || 0}%</td>
             <td>${escapeHtml(v.tel || '—')}</td>
             <td style="text-align:center">${pedidos.length}</td>
-            <td>
-                ${pendente > 0.01 ? `<span class="badge-comissao-pendente">R$ ${pendente.toFixed(2)} pendente</span>` : '<span class="badge-comissao-paga">Em dia</span>'}
-                <button class="btn btn-outline btn-sm" onclick="editarVendedor(${v.id})" style="margin-left:6px" title="Editar">✏️</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirVendedor(${v.id})" title="Excluir">🗑️</button>
-            </td>
+            <td>${pendente > 0.01 ? `<span class="badge-comissao-pendente">R$ ${pendente.toFixed(2)} pendente</span>` : '<span class="badge-comissao-paga">Em dia</span>'}</td>
+            <td class="td-acoes">${menuAcoesHtml([
+                { icone: '✏️', rotulo: 'Editar', onclick: `editarVendedor(${v.id})` },
+                { icone: '🗑️', rotulo: 'Excluir', onclick: `excluirVendedor(${v.id})`, perigo: true }
+            ])}</td>
         </tr>`;
     }).join('');
 }
@@ -8288,33 +8317,11 @@ async function excluirFornecedor(id) {
     salvarERecarregar('Fornecedor excluído.');
 }
 
-// Total ja comprado de um fornecedor: soma os pedidos de compra feitos para
-// ele de verdade. Fica de fora o orcamento generico (sem fornecedor, id 0) e o
-// Rascunho, que ainda nao foi enviado — so Enviado e Recebido contam.
-const PC_STATUS_COMPRADOS = ['Enviado', 'Recebido'];
-function totalPedidoCompra(pc) {
-    return (pc.itens || []).reduce((s, i) => s + (Number(i.subtotal) || 0), 0);
-}
-function comprasDoFornecedor(fornId) {
-    const id = Number(fornId);
-    if (!id) return { total: 0, qtd: 0, rascunhos: 0 };
-    const doForn = (db.pedidos_compra || []).filter(pc => Number(pc.fornecedor_id) === id);
-    const feitos = doForn.filter(pc => PC_STATUS_COMPRADOS.includes(pc.status));
-    return {
-        total: feitos.reduce((s, pc) => s + totalPedidoCompra(pc), 0),
-        qtd: feitos.length,
-        rascunhos: doForn.length - feitos.length
-    };
-}
-function formatarMoeda(v) {
-    return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
 function renderTabelaFornecedores() {
     const tb = document.getElementById('tb-fornecedores');
     if (!tb) return;
     if (!db.fornecedores.length) {
-        tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;padding:20px;">Nenhum fornecedor cadastrado.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:20px;">Nenhum fornecedor cadastrado.</td></tr>';
         return;
     }
     tb.innerHTML = db.fornecedores.map(f => {
@@ -8323,7 +8330,6 @@ function renderTabelaFornecedores() {
         const vinc = [nMat > 0 ? `${nMat} mat.` : '', nCat > 0 ? `${nCat} tec.` : ''].filter(Boolean).join(' · ') || '—';
         const cidadeUF = [f.cidade, f.estado].filter(Boolean).join(' / ') || '—';
         const nomeFantasia = f.nome_fantasia ? `<br><small style="color:#888;font-size:12px">${escapeHtml(f.nome_fantasia)}</small>` : '';
-        const compras = comprasDoFornecedor(f.id);
         return `<tr>
             <td><strong>${escapeHtml(f.nome)}</strong>${nomeFantasia}</td>
             <td style="font-size:13px">${escapeHtml(f.cnpj || '—')}</td>
@@ -8331,14 +8337,11 @@ function renderTabelaFornecedores() {
             <td style="font-size:13px">${escapeHtml(f.tel || '—')}</td>
             <td style="font-size:13px">${escapeHtml(f.email || '—')}</td>
             <td style="font-size:12px;color:#555">${vinc}</td>
-            <td class="forn-total-compras" title="${compras.qtd} pedido(s) enviado(s) ou recebido(s)${compras.rascunhos ? ` · ${compras.rascunhos} em rascunho não somam` : ''}">
-                <strong>${formatarMoeda(compras.total)}</strong>${compras.qtd ? `<br><small style="color:#888;font-size:11px">${compras.qtd} pedido(s)</small>` : ''}
-            </td>
-            <td>
-                <button class="btn btn-outline btn-sm" onclick="criarPCParaFornecedor(${f.id})" title="Novo pedido de compra">🛒</button>
-                <button class="btn btn-outline btn-sm" onclick="editarFornecedor(${f.id})" title="Editar fornecedor">✏️</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirFornecedor(${f.id})" title="Excluir fornecedor">🗑️</button>
-            </td>
+            <td class="td-acoes">${menuAcoesHtml([
+                { icone: '🛒', rotulo: 'Novo pedido de compra', onclick: `criarPCParaFornecedor(${f.id})` },
+                { icone: '✏️', rotulo: 'Editar fornecedor', onclick: `editarFornecedor(${f.id})` },
+                { icone: '🗑️', rotulo: 'Excluir fornecedor', onclick: `excluirFornecedor(${f.id})`, perigo: true }
+            ])}</td>
         </tr>`;
     }).join('');
 }

@@ -97,7 +97,8 @@ test('nome repetido e barrado mesmo entre tipos diferentes', async ({ page }) =>
 
 test('editar um arquiteto nao o transforma em vendedor', async ({ page }) => {
     await abrir(page, 'vendedores.html?tipo=arquiteto');
-    await page.click('#tb-vendedores button[title="Editar"]');
+    await page.click('#tb-vendedores button[aria-label="Ações"]');
+    await page.click('#menu-acoes-flutuante .menu-acoes-item:has-text("Editar")');
     await expect(page.locator('#vend-form-titulo')).toHaveText('Editar Arquiteto');
     await page.fill('#vend-comissao', '12');
     await page.click('#vend-btn-salvar');

@@ -2379,7 +2379,6 @@ body.galped-aberta { overflow: hidden; }
 }
 
 /* Fornecedores: total de compras sem quebrar o valor */
-.forn-total-compras { white-space: nowrap; }
 
 /* Financeiro: tela Hoje (tarefas primeiro; saldos e previsao ao lado) */
 .hoje-grid { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items: start; }
