@@ -376,7 +376,9 @@ function buildEmpresaHeaderHTML(logoHeight) {
 function salvarEmpresaConfigs() {
     const razao = (document.getElementById('emp-razao')?.value || '').trim().toLocaleUpperCase('pt-BR');
     if (!razao) { showAlert('Informe a Razão Social.', '⚠️'); return; }
+    const aliq = parseFloat(String(document.getElementById('emp-aliquota')?.value || '').replace(',', '.'));
     const emp = {
+        ...getEmpresa(),
         razao_social:  razao,
         nome_fantasia: (document.getElementById('emp-fantasia')?.value || '').trim().toLocaleUpperCase('pt-BR'),
         cnpj:          (document.getElementById('emp-cnpj')?.value     || '').trim(),
@@ -384,7 +386,9 @@ function salvarEmpresaConfigs() {
         telefone:      (document.getElementById('emp-tel')?.value       || '').trim(),
         email:         (document.getElementById('emp-email')?.value     || '').trim(),
         site:          (document.getElementById('emp-site')?.value      || '').trim(),
-        logo_base64:   document.getElementById('emp-logo-preview')?.dataset.base64 || ''
+        logo_base64:   document.getElementById('emp-logo-preview')?.dataset.base64 || '',
+        regime_tributario: document.getElementById('emp-regime')?.value || '',
+        aliquota_estimada: Number.isFinite(aliq) ? Math.min(100, Math.max(0, aliq)) : 0
     };
     localStorage.setItem('sc_empresa', JSON.stringify(emp));
     toast('Configurações da empresa salvas!', 'success');
@@ -558,6 +562,8 @@ function carregarEmpresaConfigs() {
     set('emp-tel',      emp.telefone);
     set('emp-email',    emp.email);
     set('emp-site',     emp.site);
+    set('emp-regime',   emp.regime_tributario);
+    set('emp-aliquota', emp.aliquota_estimada);
     if (emp.logo_base64) {
         const preview = document.getElementById('emp-logo-preview');
         const removeBtn = document.getElementById('emp-remove-logo');
