@@ -11531,9 +11531,11 @@ function marcarRevisaoFinanceiroFeita() {
 
 // Guarda o custo do material no momento da aprovacao: mudar o preco do tecido
 // depois nao altera o resultado de um pedido ja aprovado. Refeito a cada reaprovacao.
+// Pedido de formato antigo (tecido no ambiente ou no proprio pedido) passa por
+// normalizarAmbientes so para o calculo; o pedido guardado nao muda.
 function registrarCustoPedido(ped) {
     ped.custo_snapshot = {
-        ...FinanceiroCore.custoSnapshotPedido(ped, { catalogo: db.catalogo, materiais: db.materiais, kits: db.kits }),
+        ...FinanceiroCore.custoSnapshotPedido({ ...ped, ambientes: normalizarAmbientes(ped) }, { catalogo: db.catalogo, materiais: db.materiais, kits: db.kits }),
         data: hojeLocal()
     };
 }
@@ -13431,7 +13433,7 @@ function renderDRE() {
     const cad = { catalogo: db.catalogo, materiais: db.materiais, kits: db.kits };
     let totRec=0, totMat=0, totServ=0, totCom=0, totLucro=0;
     const rows = pedidos.map(p=>{
-        const r = FinanceiroCore.resultadoPedido(p, db.contas_pagar, cad);
+        const r = FinanceiroCore.resultadoPedido({ ...p, ambientes: normalizarAmbientes(p) }, db.contas_pagar, cad);
         const receita = FinanceiroCore.arredondar(r.receita);
         const cor = corDe(r.margem_pct);
         totRec+=receita; totMat+=r.custo_material; totServ+=r.custos_vinculados; totCom+=r.comissoes; totLucro+=r.lucro;

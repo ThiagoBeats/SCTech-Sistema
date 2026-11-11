@@ -58,6 +58,22 @@
         return arredondar(_doPedido(contasReceber, pedidoId).filter(c => c.status !== 'Pago').reduce((s, c) => s + (Number(c.valor) || 0), 0));
     }
 
+    // Tecidos do pedido em qualquer formato: o atual (ambiente.tecidos[]) e os
+    // antigos (tecidoId/consumo_linear no ambiente ou no proprio pedido). Linha
+    // sem tecido escolhido e sem consumo nao e item de custo.
+    function tecidosDoPedido(ped) {
+        const ambs = (ped.ambientes && ped.ambientes.length) ? ped.ambientes : (ped.tecidoId != null ? [ped] : []);
+        const out = [];
+        ambs.forEach(a => {
+            const lista = (a.tecidos && a.tecidos.length) ? a.tecidos : (a.tecidoId != null ? [a] : []);
+            lista.forEach(t => {
+                if ((t.tecidoId == null || t.tecidoId === '') && !(Number(t.consumo_linear) > 0)) return;
+                out.push(t);
+            });
+        });
+        return out;
+    }
+
     function custoSnapshotPedido(ped, { catalogo, materiais, kits } = {}) {
         const itens = [];
         let total = 0, faltando = 0;
@@ -69,10 +85,10 @@
             if (ok) total += custo_total; else faltando++;
             itens.push({ origem, ref_id, nome, quantidade: q, custo_unit: ok ? Number(unit) : null, custo_total });
         };
-        (ped.ambientes || []).forEach(a => (a.tecidos || []).forEach(t => {
+        tecidosDoPedido(ped).forEach(t => {
             const c = achar(catalogo, t.tecidoId);
-            add('tecido', t.tecidoId, c ? c.nome : (t.nome || ''), t.consumo_linear, c && c.preco_custo);
-        }));
+            add('tecido', t.tecidoId, c ? c.nome : (t.nome || t.tecidoNome || ''), t.consumo_linear, c && c.preco_custo);
+        });
         (ped.itens || []).forEach(i => {
             if (i.kitId != null) {
                 const k = achar(kits, i.kitId);
@@ -118,7 +134,9 @@
             const id = ped[c.id];
             const valor = Number(ped[c.valor]) || 0;
             if (!id || !(valor > 0)) return;
-            const existe = (contasPagar || []).some(cp => cp.pedido_id == ped.id && cp.papel_comissao === papel);
+            // A antiga 'comissao_rt' (sem papel) era a comissao do arquiteto.
+            const existe = (contasPagar || []).some(cp => cp.pedido_id == ped.id && (cp.papel_comissao === papel
+                || (papel === 'arquiteto' && !cp.papel_comissao && cp.categoria === 'comissao_rt')));
             if (existe) return;
             const v = (vendedores || []).find(x => x.id == id);
             const nome = (v && v.nome) || ped[c.nome] || '';
@@ -179,6 +197,8 @@
         return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
     }
 
+    const MOTIVO_SEM_LANCAMENTO = 'valor recebido digitado no pedido sem lançamento no Financeiro';
+
     // Plano da migracao unica dos dados antigos para a Fase 0. So le os dados:
     // quem aplica e o app. Nunca redivide parcelas nem cria custo do pedido.
     function planoMigracaoFase0({ pedidos, contas_receber, contas_pagar, vendedores, hoje, rotuloPedido }) {
@@ -202,6 +222,9 @@
             } else if (recebidoPed > 0 && recebidoPed < valor && _doPedido(crs, ped.id).length
                        && Math.abs(arredondar(recebidoPed - totalRecebido(crs, ped.id))) >= 0.01) {
                 plano.revisar.push({ pedido_id: ped.id, motivo: 'valor recebido digitado no pedido não bate com o Financeiro' });
+            } else if (recebidoPed > 0 && !_doPedido(crs, ped.id).length) {
+                // Sem parcela nenhuma o valor digitado nao tem onde ficar: so avisa (quem aplica nao mexe nele).
+                plano.revisar.push({ pedido_id: ped.id, motivo: MOTIVO_SEM_LANCAMENTO, sem_lancamento: true });
             }
 
             if (!instalado(ped.status)) return;
@@ -251,7 +274,7 @@
 
     const api = {
         CAMPOS_COMISSAO, arredondar, somarDias, entradaPctDoNome, planejarParcelas, totalRecebido, saldoEmAberto,
-        custoSnapshotPedido, resultadoPedido, contasComissaoDoPedido, parcelasCompra, acharContaDuplicadaNota,
+        tecidosDoPedido, custoSnapshotPedido, resultadoPedido, contasComissaoDoPedido, parcelasCompra, acharContaDuplicadaNota,
         dataLocalISO, planoMigracaoFase0
     };
 

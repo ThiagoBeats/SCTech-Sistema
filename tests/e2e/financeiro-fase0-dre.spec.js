@@ -54,6 +54,21 @@ test('item sem custo mostra aviso', async ({ page }) => {
     await expect(page.locator('#tb-dre tr', { hasText: 'Ana Paula' }).first()).toContainText('custo não informado');
 });
 
+test('pedido de formato antigo (tecido no ambiente ou no pedido) tem custo', async ({ page }) => {
+    await entrar(page, BASE, { sc_cli: CLI, sc_cat: CAT(20),
+        sc_ped: [aprovado({ tecidoId: 7, consumo_linear: 10, largura: 3 })] });
+    await abrirDRE(page);
+    const linha = page.locator('#tb-dre tr', { hasText: 'Ana Paula' }).first();
+    await expect(linha).toContainText('custo estimado');
+    await expect(linha).toContainText('200,00');
+    const snap = await page.evaluate(() => {
+        const p = { id: 1, valor: 500, ambientes: [{ nome: 'Sala', tecidoId: 7, consumo_linear: 5 }], itens: [] };
+        registrarCustoPedido(p);
+        return [p.custo_snapshot.total, p.custo_snapshot.faltando, p.ambientes[0].tecidos];
+    });
+    expect(snap, 'o pedido guardado nao muda de formato').toEqual([100, 0, undefined]);
+});
+
 test('pedido antigo sem snapshot aparece como custo estimado', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_cat: CAT(20),
         sc_ped: [aprovado({ ambientes: [{ nome: 'Sala', tecidos: [{ tecidoId: 7, nome: 'Linho Bege', consumo_linear: 10 }] }] })] });

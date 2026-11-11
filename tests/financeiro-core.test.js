@@ -196,11 +196,50 @@ test('aplicar o plano e planejar de novo da vazio', () => {
         c.contas_receber = c.contas_receber.filter(x => !p.removerCR.includes(x.id));
         p.marcarCRPedidoExcluido.forEach(id => { c.contas_receber.find(x => x.id === id).pedido_excluido = true; });
         p.criarCP.forEach((cp, i) => c.contas_pagar.push({ id: 1000 + i, ...cp }));
-        p.revisar.forEach(r => tocados.add(r.pedido_id));
+        p.revisar.forEach(r => { if (!r.sem_lancamento) tocados.add(r.pedido_id); });   // sem parcelas: o valor digitado fica
         tocados.forEach(id => { c.pedidos.find(x => x.id === id).valor_recebido = F.totalRecebido(c.contas_receber, id); });
         return c;
     };
     const plano1 = F.planoMigracaoFase0(dados);
     assert.ok(plano1.baixarCR.length && plano1.removerCR.length && plano1.marcarCRPedidoExcluido.length && plano1.criarCP.length === 2 && plano1.revisar.length);
     assert.deepStrictEqual(F.planoMigracaoFase0(aplicar(dados, plano1)), planoVazio);
+
+    // Pedido sem parcelas com valor digitado: o aviso se repete, mas nada muda nos dados.
+    const comAviso = { ...dados, pedidos: [...dados.pedidos, { id: 3, status: 'Orçamento', valor: 500, valor_recebido: 200 }] };
+    const aplicado = aplicar(comAviso, F.planoMigracaoFase0(comAviso));
+    assert.strictEqual(aplicado.pedidos.find(x => x.id === 3).valor_recebido, 200);
+    const plano2 = F.planoMigracaoFase0(aplicado);
+    assert.deepStrictEqual({ ...plano2, revisar: [] }, planoVazio);
+    assert.deepStrictEqual(plano2.revisar.map(r => r.pedido_id), [3]);
+});
+
+// ── Acertos da revisao final ────────────────────────────────────────
+test('custoSnapshotPedido: pedido antigo com tecido no ambiente ou no proprio pedido', () => {
+    const cad = { catalogo: [{ id: 10, nome: 'Linho', preco_custo: 20 }], materiais: [], kits: [] };
+    const noAmbiente = { ambientes: [{ tecidoId: 10, consumo_linear: 2 }], itens: [] };
+    assert.deepStrictEqual([F.custoSnapshotPedido(noAmbiente, cad).total, F.custoSnapshotPedido(noAmbiente, cad).faltando], [40, 0]);
+    const noPedido = { tecidoId: 10, consumo_linear: 3 };
+    assert.deepStrictEqual([F.custoSnapshotPedido(noPedido, cad).total, F.custoSnapshotPedido(noPedido, cad).faltando], [60, 0]);
+    // Ambiente vazio (sem tecido escolhido nem consumo) nao vira item sem custo.
+    const vazio = { ambientes: [{ tecidos: [] }, { tecidos: [{ tecidoId: null, consumo_linear: 0 }] }], itens: [] };
+    assert.deepStrictEqual([F.custoSnapshotPedido(vazio, cad).total, F.custoSnapshotPedido(vazio, cad).faltando], [0, 0]);
+    const r = F.resultadoPedido({ id: 1, valor: 100, ...noPedido }, [], cad);
+    assert.deepStrictEqual([r.origem_custo, r.custo_material], ['estimado', 60]);
+});
+test('contasComissaoDoPedido: comissao_rt antiga do pedido conta como a do arquiteto', () => {
+    const ped = { id: 1, vendedor_id: 3, comissao_valor: 50, arq_id: 4, arq_comissao_valor: 100 };
+    const cps = [{ id: 9, pedido_id: 1, categoria: 'comissao_rt', valor: 100, status: 'Pago' }];
+    const novas = F.contasComissaoDoPedido(ped, { vendedores: [], contasPagar: cps, data: '2026-11-11', rotuloPedido: '#1' });
+    assert.deepStrictEqual(novas.map(c => c.papel_comissao), ['vendedor']);
+});
+test('planoMigracaoFase0: valor recebido digitado em pedido sem parcelas vai para revisao', () => {
+    const plano = F.planoMigracaoFase0(baseMig({
+        pedidos: [{ id: 1, status: 'Orçamento', valor: 1000, valor_recebido: 300 },
+                  { id: 2, status: 'Orçamento', valor: 1000, valor_recebido: 0 },
+                  { id: 3, status: 'Orçamento', valor: 500, valor_recebido: 500 }]
+    }));
+    assert.deepStrictEqual(plano.revisar, [
+        { pedido_id: 1, motivo: 'valor recebido digitado no pedido sem lançamento no Financeiro', sem_lancamento: true },
+        { pedido_id: 3, motivo: 'valor recebido digitado no pedido sem lançamento no Financeiro', sem_lancamento: true }]);
+    assert.deepStrictEqual(plano.baixarCR, []);
 });
