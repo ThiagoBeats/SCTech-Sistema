@@ -11294,7 +11294,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const visivel = abasVisiveis.some(([t]) => t === tab);
             document.querySelector(`.fin-tab-btn[data-tab="${tab}"]`)?.style.setProperty('display', visivel ? '' : 'none');
         });
-        const abaInicial = abasVisiveis.some(([t]) => t === 'dashboard') ? 'dashboard' : (abasVisiveis[0]?.[0] || 'dashboard');
+        const abaInicial = abasVisiveis.some(([t]) => t === 'hoje') ? 'hoje' : abasVisiveis.some(([t]) => t === 'dashboard') ? 'dashboard' : (abasVisiveis[0]?.[0] || 'dashboard');
         mostrarTabFinanceiro(abaInicial);
         if (!temAcesso('financeiro.pagar', 'completo')) document.getElementById('cp-toolbar')?.style.setProperty('display', 'none');
         if (!temAcesso('financeiro.fixas', 'completo')) document.getElementById('df-form-card')?.style.setProperty('display', 'none');
@@ -13611,7 +13611,95 @@ function mostrarTabFinanceiro(tab) {
     else if (tab === 'fixas')   renderDespesasFixas();
     else if (tab === 'dre')     renderDRE();
     else if (tab === 'extrato') renderExtrato();
+    else if (tab === 'hoje')    renderHoje();
     _tabBackBtn('.tab-nav', _prevTabFin, () => mostrarTabFinanceiro(_prevTabFin));
+}
+
+// =============================================
+// FINANCEIRO — TELA "HOJE"
+// =============================================
+
+let _chartHoje = null;
+
+// Tarefas do dia (esquerda) + saldos e previsao das proximas semanas (direita).
+// Recebi/Cobrar/Paguei recarregam a pagina (salvarERecarregar), que reabre em Hoje.
+function renderHoje() {
+    const elT = document.getElementById('hoje-tarefas');
+    if (!elT) return;
+    const hoje = hojeLocal();
+    const brl = v => 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtData = d => String(d || '').split('-').reverse().join('/');
+    const ddmm = d => d.slice(8, 10) + '/' + d.slice(5, 7);
+    const todasContas = getContasFin();
+    const movs = Array.isArray(db.movimentos_fin) ? db.movimentos_fin : [];
+    const t = CaixaCore.tarefasHoje({ hoje, contasReceber: db.contas_receber, contasPagar: db.contas_pagar, movimentos: movs, contas: todasContas });
+
+    const podeReceber = temAcesso('financeiro.receber', 'completo');
+    const podePagar = temAcesso('financeiro.pagar', 'completo');
+    const jid = id => escapeHtml(JSON.stringify(id));
+    const grupo = (chave, titulo, cor, itens, linha) => itens.length
+        ? `<div class="hoje-grupo hoje-${cor}" data-grupo="${chave}"><h4>${titulo}</h4>${itens.map(linha).join('')}</div>` : '';
+    const linhaCR = cr => `<div class="hoje-item">
+        <div class="hoje-item-desc">${escapeHtml(cr.cliente_nome || '')}<small>${escapeHtml(cr.descricao || '')} · vence ${fmtData(cr.data_vencimento)}</small></div>
+        <div class="hoje-item-valor">${brl(cr.valor)}</div>
+        ${podeReceber ? `<button class="btn btn-outline btn-sm" onclick='cobrarNoWhatsApp(${jid(cr.id)})'>💬 Cobrar</button>
+        <button class="btn btn-success btn-sm" onclick='marcarCRPago(${jid(cr.id)})'>✓ Recebi</button>` : ''}</div>`;
+    const linhaCP = cp => `<div class="hoje-item">
+        <div class="hoje-item-desc">${escapeHtml(cp.descricao || '')}<small>${escapeHtml(cp.fornecedor || '')}${cp.fornecedor ? ' · ' : ''}vence ${fmtData(cp.data_vencimento)}</small></div>
+        <div class="hoje-item-valor">${brl(cp.valor)}</div>
+        ${podePagar ? `<button class="btn btn-success btn-sm" onclick='marcarCPPago(${jid(cp.id)})'>✓ Paguei</button>` : ''}</div>`;
+    const linhaCartao = m => {
+        const c = todasContas.find(x => CaixaCore.mesmoId(x.id, m.conta_id));
+        return `<div class="hoje-item"><div class="hoje-item-desc">${escapeHtml(m.descricao || 'Repasse do cartão')}<small>${escapeHtml(c ? c.nome : '')}</small></div><div class="hoje-item-valor">${brl(m.valor)}</div></div>`;
+    };
+    const html = grupo('receber-atrasados', 'A receber — atrasados', 'vermelho', t.receberAtrasados, linhaCR)
+        + grupo('receber-hoje', 'A receber hoje', 'amarelo', t.receberHoje, linhaCR)
+        + grupo('pagar-atrasados', 'A pagar — atrasados', 'vermelho', t.pagarAtrasados, linhaCP)
+        + grupo('pagar-proximos', 'A pagar nos próximos 7 dias', 'cinza', t.pagarProximos, linhaCP)
+        + grupo('cartao-hoje', 'Cartão que cai hoje', 'info', t.cartaoHoje, linhaCartao);
+    elT.innerHTML = html || '<p style="color:#888;margin:0">Tudo em dia 👍</p>';
+
+    // Lado direito: so com permissao de ver o Extrato.
+    const lado = document.getElementById('hoje-lado');
+    const grid = document.querySelector('#fin-hoje .hoje-grid');
+    const veLado = temAcesso('financeiro.extrato', 'visualizar');
+    if (lado) lado.classList.toggle('hoje-sem-lado', !veLado);
+    if (grid) grid.classList.toggle('hoje-sem-lado-grid', !veLado);
+    if (_chartHoje) { _chartHoje.destroy(); _chartHoje = null; }
+    if (!veLado) return;
+
+    const contas = todasContas.filter(c => c.ativo !== false);
+    const elS = document.getElementById('hoje-saldos');
+    const convite = document.getElementById('hoje-convite');
+    const cardPrev = document.getElementById('hoje-previsao-card');
+    if (!contas.length) {
+        elS.innerHTML = '';
+        convite.style.display = '';
+        convite.innerHTML = '<p style="margin:0 0 8px">Configure suas contas para ver quanto você tem</p><a class="btn btn-primary btn-sm" href="empresa.html#preferencias">Configurar contas</a>';
+        if (cardPrev) cardPrev.style.display = 'none';
+        return;
+    }
+    convite.style.display = 'none';
+    if (cardPrev) cardPrev.style.display = '';
+    const sd = CaixaCore.saldosHoje(contas, movs, hoje);
+    elS.innerHTML = `<div class="hoje-total">Total <span id="hoje-total">${brl(sd.total)}</span></div>` + sd.contas.map(c =>
+        `<div class="hoje-conta" onclick='abrirExtratoDaConta(${jid(c.id)})'><span>${escapeHtml(c.nome || '')}${c.a_cair > 0 ? `<small>${brl(c.a_cair)} a cair</small>` : ''}</span><strong>${brl(c.saldo)}</strong></div>`).join('');
+
+    const semanas = CaixaCore.previsaoSemanal({ hoje, saldoHoje: sd.total, movimentos: movs, contasReceber: db.contas_receber, contasPagar: db.contas_pagar, despesasFixas: db.despesas_fixas, contas, meios: getMeiosPag(), semanas: 8 });
+    const neg = CaixaCore.primeiraSemanaNegativa(semanas);
+    document.getElementById('hoje-previsao-aviso').textContent = neg ? `Semana de ${ddmm(neg.inicio)}: falta ${brl(neg.falta)}` : '';
+    document.getElementById('hoje-previsao-legenda').textContent = semanas.some(s => s.inclui_atrasados) ? '* inclui atrasados' : '';
+    const cv = document.getElementById('chart-hoje-previsao');
+    if (cv && typeof Chart !== 'undefined') {
+        _chartHoje = new Chart(cv, {
+            type: 'bar',
+            data: {
+                labels: semanas.map(s => ddmm(s.inicio) + (s.inclui_atrasados ? '*' : '')),
+                datasets: [{ label: 'Saldo no fim da semana', data: semanas.map(s => s.saldo_final), backgroundColor: semanas.map(s => s.saldo_final < 0 ? '#F43927' : '#159912') }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => brl(ctx.parsed.y) } } } }
+        });
+    }
 }
 
 // =============================================

@@ -2380,3 +2380,31 @@ body.galped-aberta { overflow: hidden; }
 
 /* Fornecedores: total de compras sem quebrar o valor */
 .forn-total-compras { white-space: nowrap; }
+
+/* Financeiro: tela Hoje (tarefas primeiro; saldos e previsao ao lado) */
+.hoje-grid { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items: start; }
+.hoje-grid .card { margin-bottom: 16px; }
+.hoje-col-lado.hoje-sem-lado { display: none; }
+.hoje-grid.hoje-sem-lado-grid { grid-template-columns: 1fr; }
+.hoje-titulo { margin: 0 0 12px; font-size: 16px; }
+.hoje-grupo { border-left: 4px solid #BDBDBD; padding: 4px 0 4px 12px; margin-bottom: 16px; }
+.hoje-grupo h4 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .03em; color: #666; }
+.hoje-grupo.hoje-vermelho { border-left-color: var(--danger); }
+.hoje-grupo.hoje-vermelho h4 { color: var(--danger); }
+.hoje-grupo.hoje-amarelo { border-left-color: #F2C924; }
+.hoje-grupo.hoje-cinza { border-left-color: #BDBDBD; }
+.hoje-grupo.hoje-info { border-left-color: #3B82F6; }
+.hoje-item { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.hoje-item:last-child { border-bottom: 0; }
+.hoje-item-desc { flex: 1; min-width: 140px; }
+.hoje-item-desc small { display: block; color: #888; }
+.hoje-item-valor { font-weight: 600; white-space: nowrap; }
+.hoje-conta { display: flex; justify-content: space-between; gap: 10px; padding: 8px 6px; border-bottom: 1px solid var(--border); cursor: pointer; border-radius: 6px; }
+.hoje-conta:hover { background: rgba(0, 0, 0, .04); }
+.hoje-conta small { color: #8A6A00; display: block; }
+.hoje-total { display: flex; justify-content: space-between; font-size: 18px; font-weight: 700; padding: 4px 6px 10px; }
+#hoje-previsao-aviso { margin-top: 10px; font-weight: 600; color: var(--danger); }
+#hoje-previsao-legenda { margin-top: 4px; font-size: 12px; color: #888; }
+@media (max-width: 768px) {
+    .hoje-grid { grid-template-columns: 1fr; }
+}
