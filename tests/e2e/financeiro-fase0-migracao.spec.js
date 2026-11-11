@@ -145,3 +145,121 @@ test('sem nada para migrar, so grava a marca (sem copia)', async ({ page }) => {
     await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
     expect(await page.evaluate(() => localStorage.getItem('sc_fin_backup_fase0'))).toBeNull();
 });
+
+const fs = require('fs');
+const lerDownload = async dl => JSON.parse(fs.readFileSync(await dl.path(), 'utf8'));
+const importar = (page, dados) => page.evaluate(json => importarDados({ target: { files: [new File([json], 'b.json', { type: 'application/json' })], value: '' } }), JSON.stringify(dados));
+
+test('exportar leva a marca da Fase 0, a empresa e as formas; importar esse arquivo nao migra de novo', async ({ page }) => {
+    const empresa = { razao_social: 'CORTINAS X', regime_tributario: 'simples', aliquota_estimada: 6 };
+    const formas = [{ nome: 'PIX', desconto: 3, entrada: 100 }, { nome: '30% entrada + 70%', desconto: 0, entrada: 30 }];
+    // Pedido quitado no fluxo antigo com parcela em aberto: a migracao o baixaria.
+    await entrar(page, BASE, { sc_empresa: empresa, sc_formas_pag: formas, sc_cli: [{ id: 1, nome: 'Ana' }], sc_cp: [],
+        sc_ped: [{ id: 26800, clienteNome: 'Ana', status: 'Instalado', financeiro_gerado: true, valor: 200, valor_recebido: 0, ambientes: [], pagamento_confirmado_em: CONFIRMADO }],
+        sc_cr: [{ id: 811, pedido_id: 26800, valor: 200, data_vencimento: '2099-10-01', status: 'Pendente' }] });
+    await page.goto(BASE + '/index.html');
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.evaluate(() => exportarDados())]);
+    const arq = await lerDownload(dl);
+    expect(arq.fin_fase0).toBe(1);
+    expect(arq.empresa).toEqual(empresa);
+    expect(arq.formas_pag).toEqual(formas);
+
+    await page.evaluate(() => {
+        localStorage.removeItem('sc_empresa'); localStorage.removeItem('sc_formas_pag');
+        localStorage.setItem('sc_fin_backup_fase0', '{"velha":true}'); localStorage.setItem('sc_fin_revisar', '[{"pedido_id":1}]');
+    });
+    await importar(page, arq);
+    await page.locator('#sc-modal-ok').click();
+    await page.waitForLoadState('load');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
+    await page.goto(BASE + '/financeiro.html');
+    await expect(page.locator('#fin-kpis')).not.toBeEmpty();
+    expect((await lerChave(page, 'sc_cr')).find(c => c.id === 811).status, 'nao baixa de novo').toBe('Pendente');
+    expect(await page.evaluate(() => [localStorage.getItem('sc_fin_backup_fase0'), localStorage.getItem('sc_fin_revisar')])).toEqual([null, null]);
+    expect(await lerChave(page, 'sc_empresa')).toEqual(empresa);
+    expect(await lerChave(page, 'sc_formas_pag')).toEqual(formas);
+});
+
+test('backup antigo sem empresa nem formas nao apaga as atuais', async ({ page }) => {
+    const empresa = { razao_social: 'CORTINAS X' };
+    await entrar(page, BASE, { sc_empresa: empresa, sc_ped: [], sc_cr: [], sc_cp: [] });
+    await page.goto(BASE + '/index.html');
+    await importar(page, { clientes: [], catalogo: [], pedidos: [] });
+    await page.locator('#sc-modal-ok').click();
+    await page.waitForLoadState('load');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
+    expect(await lerChave(page, 'sc_empresa')).toEqual(empresa);
+});
+
+test('valor recebido digitado em pedido sem parcelas fica e vai para revisao', async ({ page }) => {
+    await entrar(page, BASE, { sc_cli: [{ id: 1, nome: 'Ana' }], sc_cp: [], sc_cr: [],
+        sc_ped: [{ id: 26900, clienteNome: 'Ana', status: 'Orçamento', valor: 1000, valor_recebido: 300, ambientes: [] }] });
+    await page.evaluate(() => localStorage.removeItem('sc_fin_migracao'));
+    await page.goto(BASE + '/financeiro.html');
+    await expect(page.locator('#fin-revisar')).toContainText('sem lançamento no Financeiro');
+    await expect(page.locator('#fin-revisar')).toContainText('#26900');
+    expect((await lerChave(page, 'sc_ped'))[0].valor_recebido).toBe(300);
+    expect((await lerChave(page, 'sc_fin_revisar')).map(r => [r.pedido_id, r.valor_digitado])).toEqual([[26900, 300]]);
+});
+
+test('sem espaco para a copia: nao migra, avisa e oferece baixar a copia e corrigir', async ({ page }) => {
+    await semearDadosAntigos(page);
+    await page.addInitScript(() => {
+        const orig = Storage.prototype.setItem;
+        Storage.prototype.setItem = function (k, v) {
+            if (k === 'sc_fin_backup_fase0') throw new DOMException('cheio', 'QuotaExceededError');
+            return orig.call(this, k, v);
+        };
+    });
+    await page.goto(BASE + '/financeiro.html');
+    const aviso = page.locator('#fin-backup');
+    await expect(aviso).toContainText('Não foi possível guardar a cópia de segurança no navegador. Baixe a cópia para continuar.');
+    expect(await page.evaluate(() => [localStorage.getItem('sc_fin_migracao'), localStorage.getItem('sc_fin_backup_falhou')])).toEqual([null, '1']);
+    expect((await lerChave(page, 'sc_cr')).find(c => c.id === 602).status, 'nada migrado').toBe('Atrasado');
+
+    const [dl] = await Promise.all([page.waitForEvent('download'), aviso.locator('button', { hasText: 'Baixar cópia e corrigir dados' }).click()]);
+    expect(dl.suggestedFilename()).toMatch(/^sctech_backup_antes_fase0_\d{4}-\d{2}-\d{2}\.json$/);
+    const copia = await lerDownload(dl);
+    expect(copia.contas_receber.find(c => c.id === 602).status).toBe('Atrasado');
+    expect(copia.fin_fase0, 'a copia e de antes da migracao').toBeUndefined();
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
+    await expect(page.locator('#fin-kpis')).not.toBeEmpty();
+    expect((await lerChave(page, 'sc_cr')).find(c => c.id === 602).status).toBe('Pago');
+    expect(await page.evaluate(() => [localStorage.getItem('sc_fin_backup_falhou'), localStorage.getItem('sc_fin_backup_fase0')])).toEqual([null, null]);
+    await expect(page.locator('#fin-backup')).toBeEmpty();
+});
+
+test('com a copia guardada, a Visao Geral oferece baixar e descartar', async ({ page }) => {
+    await semearDadosAntigos(page);
+    await page.goto(BASE + '/financeiro.html');
+    const aviso = page.locator('#fin-backup');
+    const [dl] = await Promise.all([page.waitForEvent('download'), aviso.locator('button', { hasText: /^Baixar cópia$/ }).click()]);
+    const copia = await lerDownload(dl);
+    expect(copia.contas_receber.find(c => c.id === 602).status).toBe('Atrasado');
+    await aviso.locator('button', { hasText: 'Descartar cópia' }).click();
+    await page.locator('#sc-modal-ok').click();
+    await expect(aviso).toBeEmpty();
+    expect(await page.evaluate(() => localStorage.getItem('sc_fin_backup_fase0'))).toBeNull();
+});
+
+test('erro ao salvar a migracao deixa a marca sem gravar e aparece no aviso', async ({ page }) => {
+    await semearDadosAntigos(page);
+    await page.addInitScript(() => {
+        const orig = Storage.prototype.setItem;
+        Storage.prototype.setItem = function (k, v) {
+            // So a gravacao com a comissao criada pela migracao estoura (o resto da pagina salva normal).
+            if (k === 'sc_cp' && String(v).includes('papel_comissao') && !sessionStorage.getItem('libera')) throw new DOMException('cheio', 'QuotaExceededError');
+            return orig.call(this, k, v);
+        };
+    });
+    await page.goto(BASE + '/financeiro.html');
+    await expect(page.locator('#fin-backup')).toContainText('Não foi possível salvar');
+    expect(await page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBeNull();
+    expect((await lerChave(page, 'sc_cr')).find(c => c.id === 602).status, 'volta ao que era').toBe('Atrasado');
+    // Com espaco de novo, a proxima abertura migra e o aviso de erro some.
+    await page.evaluate(() => sessionStorage.setItem('libera', '1'));
+    await page.reload();
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
+    expect((await lerChave(page, 'sc_cr')).find(c => c.id === 602).status).toBe('Pago');
+    await expect(page.locator('#fin-backup')).not.toContainText('Não foi possível salvar');
+});

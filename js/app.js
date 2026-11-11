@@ -7222,7 +7222,9 @@ function renderProposta() {
 }
 
 // --- BACKUP / EXPORTAR ---
-function exportarDados() {
+// Dados do backup. fin_fase0: 1 diz que o arquivo ja passou pela migracao do
+// Financeiro (Fase 0); importar um arquivo sem a marca migra de novo.
+function _dadosExportacao(marcaFase0) {
     const dados = {
         versao: '1.0', exportado_em: new Date().toISOString(),
         clientes: db.clientes, catalogo: db.catalogo, pedidos: db.pedidos,
@@ -7230,13 +7232,21 @@ function exportarDados() {
         movimentos: db.movimentos, vendedores: db.vendedores,
         fornecedores: db.fornecedores, pedidos_compra: db.pedidos_compra,
         contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, despesas_fixas: db.despesas_fixas,
-        medicoes: db.medicoes
+        medicoes: db.medicoes,
+        empresa: getEmpresa(), formas_pag: getFormasPagamentoCfg()
     };
+    if (marcaFase0) dados.fin_fase0 = 1;
+    return dados;
+}
+function _baixarJSON(dados, nome) {
     const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
-    a.href = url; a.download = `sctech_backup_${new Date().toISOString().slice(0,10)}.json`;
-    a.click(); URL.revokeObjectURL(url);
+    a.href = url; a.download = nome;
+    a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function exportarDados() {
+    _baixarJSON(_dadosExportacao(localStorage.getItem('sc_fin_migracao') === '1'), `sctech_backup_${hojeLocal()}.json`);
     toast('Backup exportado com sucesso!');
 }
 function importarDados(event) {
@@ -7264,8 +7274,14 @@ function importarDados(event) {
             db.despesas_fixas = dados.despesas_fixas || [];
             db.medicoes       = dados.medicoes       || [];
             syncDB();
-            // Backup antigo passa pela migracao do Financeiro ao recarregar, com copia e lista novas.
-            ['sc_fin_migracao', 'sc_fin_backup_fase0', 'sc_fin_revisar'].forEach(k => localStorage.removeItem(k));
+            // Backup antigo (sem empresa/formas) mantem as atuais.
+            if (dados.empresa && typeof dados.empresa === 'object') localStorage.setItem('sc_empresa', JSON.stringify(dados.empresa));
+            if (Array.isArray(dados.formas_pag) && dados.formas_pag.length) localStorage.setItem('sc_formas_pag', JSON.stringify(dados.formas_pag));
+            // Copia, revisao e avisos eram dos dados anteriores. Backup antigo (sem a
+            // marca fin_fase0) passa pela migracao do Financeiro ao recarregar; com a
+            // marca, ja esta migrado.
+            ['sc_fin_migracao', 'sc_fin_backup_fase0', 'sc_fin_revisar', 'sc_fin_backup_falhou', 'sc_fin_migracao_erro'].forEach(k => localStorage.removeItem(k));
+            if (dados.fin_fase0) localStorage.setItem('sc_fin_migracao', '1');
             toastReload('Dados importados com sucesso!', 'info');
             window.location.reload();
         } catch { await showAlert('Erro ao ler o arquivo. Certifique-se que é um backup válido do SCTech.', '❌'); }
@@ -11446,10 +11462,22 @@ function _migrarFinanceiroPedidos() {
 
 // Migracao unica dos dados antigos para a Fase 0 (ver FinanceiroCore.planoMigracaoFase0).
 // Antes de mexer em qualquer coisa guarda uma copia em sc_fin_backup_fase0; os
-// pedidos que precisam de conferencia manual ficam em sc_fin_revisar.
+// pedidos que precisam de conferencia manual ficam em sc_fin_revisar. Sem espaco
+// para a copia, nao migra: marca sc_fin_backup_falhou e a Visao Geral oferece
+// baixar a copia e seguir. Erro ao salvar o resultado desfaz tudo, deixa a marca
+// sem gravar (tenta de novo na proxima abertura) e marca sc_fin_migracao_erro.
 const CHAVE_FIN_MIGRACAO = 'sc_fin_migracao';
-function _migrarFinanceiroFase0() {
-    if (localStorage.getItem(CHAVE_FIN_MIGRACAO) === '1') return;
+const CHAVE_FIN_BACKUP = 'sc_fin_backup_fase0';
+const CHAVE_FIN_BACKUP_FALHOU = 'sc_fin_backup_falhou';
+const CHAVE_FIN_MIGRACAO_ERRO = 'sc_fin_migracao_erro';
+
+function _gravarSemFalhar(chave, valor) {
+    try { localStorage.setItem(chave, valor); return true; } catch (e) { return false; }
+}
+
+// Devolve true quando a migracao esta feita (agora ou antes).
+function _migrarFinanceiroFase0({ semCopia = false } = {}) {
+    if (localStorage.getItem(CHAVE_FIN_MIGRACAO) === '1') return true;
     // Acertos antigos do pedido antes de planejar: o arquiteto que estava no campo
     // de vendedor vai para arq_* (senao a comissao dele nasceria como de vendedor).
     migrarArquitetoDosPedidos();
@@ -11461,15 +11489,17 @@ function _migrarFinanceiroFase0() {
     });
     const vazio = Object.values(plano).every(l => !l.length);
     if (!vazio) {
-        try {
-            // Uma copia so: numa nova tentativa ela ja guarda o estado de antes de tudo.
-            if (localStorage.getItem('sc_fin_backup_fase0') == null) localStorage.setItem('sc_fin_backup_fase0', JSON.stringify({
-                criado_em: Date.now(),
-                contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, pedidos: db.pedidos
-            }));
-        } catch (e) {
-            console.warn('Migração do Financeiro adiada: não foi possível guardar a cópia de segurança.', e);
-            return;   // sem copia, nao migra; tenta de novo na proxima carga
+        const antes = JSON.stringify({ contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, pedidos: db.pedidos });
+        // Uma copia so: numa nova tentativa ela ja guarda o estado de antes de tudo.
+        // semCopia: quem chama ja baixou a copia em arquivo (sem espaco no navegador).
+        if (!semCopia && localStorage.getItem(CHAVE_FIN_BACKUP) == null) {
+            try {
+                localStorage.setItem(CHAVE_FIN_BACKUP, '{"criado_em":' + Date.now() + ',' + antes.slice(1));
+            } catch (e) {
+                console.warn('Migração do Financeiro adiada: não foi possível guardar a cópia de segurança.', e);
+                _gravarSemFalhar(CHAVE_FIN_BACKUP_FALHOU, '1');
+                return false;   // sem copia, nao migra; a Visao Geral oferece baixar a copia
+            }
         }
         const agora = Date.now();
         const tocados = new Set();
@@ -11499,12 +11529,92 @@ function _migrarFinanceiroFase0() {
             usados.add(proximoId);
             db.contas_pagar.push({ id: proximoId, ...cp, ...(cp.status === 'Pago' ? { baixado_em: agora } : {}) });
         });
-        plano.revisar.forEach(r => tocados.add(r.pedido_id));
+        // Pedido sem parcelas: o valor digitado fica no pedido (so o aviso).
+        plano.revisar.forEach(r => { if (!r.sem_lancamento) tocados.add(r.pedido_id); });
         tocados.forEach(sincronizarRecebidoPedido);
-        syncDB();
-        if (revisar.length) localStorage.setItem('sc_fin_revisar', JSON.stringify(revisar));
+        try {
+            syncDB();
+            if (revisar.length) localStorage.setItem('sc_fin_revisar', JSON.stringify(revisar));
+            localStorage.setItem(CHAVE_FIN_MIGRACAO, '1');
+        } catch (e) {
+            // Volta ao que era (na memoria e, no que couber, no navegador) e avisa.
+            console.warn('Migração do Financeiro não pôde ser salva.', e);
+            const orig = JSON.parse(antes);
+            db.contas_receber = orig.contas_receber; db.contas_pagar = orig.contas_pagar; db.pedidos = orig.pedidos;
+            _gravarSemFalhar('sc_ped', JSON.stringify(db.pedidos));
+            _gravarSemFalhar('sc_cr', JSON.stringify(db.contas_receber));
+            _gravarSemFalhar('sc_cp', JSON.stringify(db.contas_pagar));
+            localStorage.removeItem('sc_fin_revisar');
+            _gravarSemFalhar(CHAVE_FIN_MIGRACAO_ERRO, String(Date.now()));
+            return false;
+        }
+    } else if (!_gravarSemFalhar(CHAVE_FIN_MIGRACAO, '1')) {
+        _gravarSemFalhar(CHAVE_FIN_MIGRACAO_ERRO, String(Date.now()));
+        return false;
     }
-    localStorage.setItem(CHAVE_FIN_MIGRACAO, '1');
+    localStorage.removeItem(CHAVE_FIN_BACKUP_FALHOU);
+    localStorage.removeItem(CHAVE_FIN_MIGRACAO_ERRO);
+    return true;
+}
+
+// Aviso na Visao Geral sobre a copia de seguranca da migracao: sem espaco para
+// guarda-la (baixar e seguir), erro ao salvar, ou copia guardada (baixar/descartar).
+function renderAvisoCopiaFinanceiro() {
+    const el = document.getElementById('fin-backup');
+    if (!el) return;
+    const falhou = localStorage.getItem(CHAVE_FIN_BACKUP_FALHOU) === '1';
+    const erro = localStorage.getItem(CHAVE_FIN_MIGRACAO_ERRO) != null;
+    const temCopia = localStorage.getItem(CHAVE_FIN_BACKUP) != null;
+    const blocos = [];
+    if (falhou) blocos.push(`<div class="fin-alerta fin-alerta-warning" style="align-items:flex-start">
+        <span style="font-size:18px;flex-shrink:0">⚠️</span>
+        <div style="flex:1">
+            <strong>Não foi possível guardar a cópia de segurança no navegador. Baixe a cópia para continuar.</strong>
+            Os dados do Financeiro ainda não foram atualizados. A cópia fica salva no seu computador.
+            <div style="margin-top:8px"><button class="btn btn-success btn-sm" onclick="baixarCopiaEMigrarFinanceiro()">Baixar cópia e corrigir dados</button></div>
+        </div>
+    </div>`);
+    if (erro) blocos.push(`<div class="fin-alerta fin-alerta-warning" style="align-items:flex-start">
+        <span style="font-size:18px;flex-shrink:0">⚠️</span>
+        <div style="flex:1">
+            <strong>Não foi possível salvar a atualização do Financeiro.</strong> O espaço do navegador está cheio e nada foi alterado.
+            Libere espaço${temCopia ? ' (por exemplo, baixe e descarte a cópia de segurança abaixo)' : ''} e abra o Financeiro de novo.
+        </div>
+    </div>`);
+    if (temCopia) blocos.push(`<div class="fin-alerta fin-alerta-info" style="align-items:flex-start">
+        <span style="font-size:18px;flex-shrink:0">💾</span>
+        <div style="flex:1">
+            Há uma cópia de segurança dos dados de antes da atualização do Financeiro guardada neste navegador.
+            <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-outline btn-sm" onclick="baixarCopiaFinanceiro()">Baixar cópia</button>
+                <button class="btn btn-outline btn-sm btn-danger" onclick="descartarCopiaFinanceiro()">Descartar cópia</button>
+            </div>
+        </div>
+    </div>`);
+    el.innerHTML = blocos.join('');
+}
+
+// Sem espaco para a copia no navegador: baixa a copia em arquivo (no formato do
+// backup, importavel) e migra sem a copia interna.
+function baixarCopiaEMigrarFinanceiro() {
+    _baixarJSON(_dadosExportacao(false), `sctech_backup_antes_fase0_${hojeLocal()}.json`);
+    try { _migrarFinanceiroFase0({ semCopia: true }); }
+    catch (e) { console.error('Migração do Financeiro falhou:', e); _gravarSemFalhar(CHAVE_FIN_MIGRACAO_ERRO, String(Date.now())); }
+    setTimeout(() => window.location.reload(), 300);
+}
+
+function baixarCopiaFinanceiro() {
+    const copia = localStorage.getItem(CHAVE_FIN_BACKUP);
+    if (copia == null) return;
+    let dados;
+    try { dados = JSON.parse(copia); } catch (e) { dados = copia; }
+    _baixarJSON(dados, `sctech_copia_financeiro_${hojeLocal()}.json`);
+}
+
+async function descartarCopiaFinanceiro() {
+    if (!await showConfirm('Descartar a cópia de segurança de antes da atualização do Financeiro? Baixe a cópia antes se quiser guardá-la.', '🗑️', 'Descartar', 'Cancelar')) return;
+    localStorage.removeItem(CHAVE_FIN_BACKUP);
+    renderAvisoCopiaFinanceiro();
 }
 
 // Aviso na Visao Geral: pedidos que a migracao nao conseguiu acertar sozinha.
@@ -11519,7 +11629,7 @@ function renderAvisoRevisaoFinanceiro() {
         <span style="font-size:18px;flex-shrink:0">🔎</span>
         <div style="flex:1">
             <strong>Confira estes pedidos.</strong> Na atualização do Financeiro eles não puderam ser acertados sozinhos. Agora vale o que está no Financeiro; acerte as parcelas se precisar.
-            <ul style="margin:6px 0 8px 18px;padding:0">${lista.map(r => `<li>Pedido ${escapeHtml(String(r.rotulo || '#' + r.pedido_id))}${r.cliente ? ' — ' + escapeHtml(String(r.cliente)) : ''}: ${escapeHtml(String(r.motivo || ''))}${r.valor_digitado != null ? ` (no pedido R$ ${fmt(r.valor_digitado)}, no Financeiro R$ ${fmt(r.valor_financeiro)})` : ''}</li>`).join('')}</ul>
+            <ul style="margin:6px 0 8px 18px;padding:0">${lista.map(r => `<li>Pedido ${escapeHtml(String(r.rotulo || '#' + r.pedido_id))}${r.cliente ? ' — ' + escapeHtml(String(r.cliente)) : ''}: ${escapeHtml(String(r.motivo || ''))}${r.valor_digitado != null ? ` (no pedido R$ ${fmt(r.valor_digitado)}, no Financeiro R$ ${fmt(r.valor_financeiro)})` : ''}${r.sem_lancamento ? ' — ao aprovar, o Financeiro não desconta esse valor: registre o recebimento no Financeiro.' : ''}</li>`).join('')}</ul>
             <button class="btn btn-outline btn-sm" id="fin-revisar-ok" onclick="marcarRevisaoFinanceiroFeita()">Marcar como revisado</button>
         </div>
     </div>`;
@@ -12933,6 +13043,7 @@ function mostrarTabFinanceiro(tab) {
 }
 
 function renderDashboardFinanceiro() {
+    renderAvisoCopiaFinanceiro();
     renderAvisoRevisaoFinanceiro();
     if (typeof Chart === 'undefined') return;
     _migrarFinanceiroPedidos();
