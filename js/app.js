@@ -509,7 +509,58 @@ function aplicarDescontoDaFormaPagamento() {
     const entr = document.getElementById('ped-entrada-pct');
     if (entr) entr.value = entradaDaFormaPagamento(sel.value);
     desc.value = descontoDaFormaPagamento(sel.value);
+    atualizarMeiosPedido();
     atualizarTotalPedido();
+}
+
+// Meio previsto da entrada e do saldo no pedido: so uma previsao, aparece
+// na baixa ja marcada. Sem meios configurados fica so "a definir".
+function preencherSelectsMeioPedido() {
+    const meios = getMeiosPag();
+    ['entrada', 'saldo'].forEach(k => {
+        const sel = document.getElementById('ped-meio-' + k);
+        if (!sel) return;
+        sel.innerHTML = '<option value="">— a definir —</option>' + meios.map(m => `<option value="${escapeHtml(String(m.id))}">${escapeHtml(m.nome || '')}</option>`).join('');
+    });
+    atualizarMeiosPedido();
+}
+
+function _meioDoPedidoSelecionado(k) {
+    const v = document.getElementById('ped-meio-' + k)?.value;
+    return v ? (getMeiosPag().find(m => String(m.id) === v) || null) : null;
+}
+
+// Mostra vezes/antecipar so para cartao de credito; plano de 100% so pede um meio.
+function atualizarMeiosPedido() {
+    const pct = _entradaValida(document.getElementById('ped-entrada-pct')?.value, 50);
+    const unico = pct >= 100;
+    const saldo = document.getElementById('ped-grupo-saldo');
+    if (saldo) saldo.style.display = unico ? 'none' : '';
+    const rot = document.getElementById('ped-rot-meio-entrada');
+    if (rot) rot.textContent = unico ? 'Meio de pagamento' : 'Meio da entrada';
+    ['entrada', 'saldo'].forEach(k => {
+        const m = _meioDoPedidoSelecionado(k);
+        const box = document.getElementById('ped-cartao-' + k);
+        if (box) box.style.display = m && m.tipo === 'cartao_credito' ? 'flex' : 'none';
+    });
+}
+
+function _lerMeioPedido(k) {
+    const m = _meioDoPedidoSelecionado(k);
+    if (!m) return null;
+    const credito = m.tipo === 'cartao_credito';
+    const vezes = credito ? Math.min(12, Math.max(1, parseInt(document.getElementById('ped-vezes-' + k)?.value, 10) || 1)) : 1;
+    return { meio_id: m.id, vezes, antecipar: credito && !!document.getElementById('ped-antecipar-' + k)?.checked };
+}
+
+function _mostrarMeioPedido(k, mp) {
+    const sel = document.getElementById('ped-meio-' + k);
+    if (!sel) return;
+    sel.value = mp && getMeiosPag().some(m => String(m.id) === String(mp.meio_id)) ? String(mp.meio_id) : '';
+    const v = document.getElementById('ped-vezes-' + k);
+    if (v) v.value = String(mp && mp.vezes >= 1 ? Math.min(12, Math.floor(mp.vezes)) : 1);
+    const a = document.getElementById('ped-antecipar-' + k);
+    if (a) a.checked = !!(mp && mp.antecipar);
 }
 
 // Tela de configuracao: rascunho editavel, gravado so no "Salvar".
@@ -6458,6 +6509,8 @@ Volte o pedido para Orçamento para editar.`, '🔒');
         forma_pagamento: document.getElementById('ped-forma-pagamento')?.value || getFormasPagamento()[0]
     };
     dadosPedido.entrada_pct = _entradaValida(document.getElementById('ped-entrada-pct')?.value, entradaDaFormaPagamento(dadosPedido.forma_pagamento));
+    dadosPedido.meio_entrada = _lerMeioPedido('entrada');
+    dadosPedido.meio_saldo = dadosPedido.entrada_pct >= 100 ? null : _lerMeioPedido('saldo');
     if (editandoIdPedido) {
         const index = db.pedidos.findIndex(p => p.id == editandoIdPedido);
         dadosPedido.id = editandoIdPedido;
@@ -6610,6 +6663,9 @@ function carregarPedidoParaEdicao(id) {
     preencherSelectFormaPagamento(formaPagamentoDoPedido(ped));
     const entradaEl = document.getElementById('ped-entrada-pct');
     if (entradaEl) entradaEl.value = Number.isFinite(ped.entrada_pct) ? ped.entrada_pct : entradaDaFormaPagamento(formaPagamentoDoPedido(ped));
+    _mostrarMeioPedido('entrada', ped.meio_entrada);
+    _mostrarMeioPedido('saldo', ped.meio_saldo);
+    atualizarMeiosPedido();
     const ambientes = normalizarAmbientes(ped);
     _ambienteCounter = ambientes.length;
     pedidoDraft.ambientes = ambientes.map((a, i) => ({
@@ -11047,6 +11103,7 @@ document.addEventListener('DOMContentLoaded', () => {
             db.materiais.map(m=>`<option value="${m.id}">${m.nome} (${m.unidade}) · estoque: ${(m.estoque_atual||0).toFixed(1)}</option>`).join('');
 
         preencherSelectFormaPagamento();   // pedido novo: a primeira da lista
+        preencherSelectsMeioPedido();
         const idParaEditar = localStorage.getItem('sc_editando_id');
         if (idParaEditar) {
             editandoIdPedido = parseInt(idParaEditar);
@@ -11913,6 +11970,10 @@ function registrarCustoPedido(ped) {
     };
 }
 
+function _copiaMeioPrevisto(mp) {
+    return mp && mp.meio_id != null ? { meio_id: mp.meio_id, vezes: mp.vezes || 1, antecipar: !!mp.antecipar } : null;
+}
+
 function gerarFinanceiroPedido(ped) {
     if (ped.financeiro_gerado) return;
     const num = formatPedidoId(ped.id);
@@ -11953,7 +12014,8 @@ function gerarFinanceiroPedido(ped) {
             data_vencimento: p.data_vencimento,
             data_pagamento: null,
             status: 'Pendente',
-            parcela_tipo: p.tipo
+            parcela_tipo: p.tipo,
+            meio_previsto: _copiaMeioPrevisto(p.tipo === 'saldo' ? ped.meio_saldo : ped.meio_entrada)
         });
     });
     ped.financeiro_gerado = true;

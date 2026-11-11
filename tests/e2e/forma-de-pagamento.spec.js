@@ -23,7 +23,7 @@ const ler = (page, chave) => page.evaluate(k => JSON.parse(localStorage.getItem(
 test('pedido: a secao se chama Forma de Pagamento e traz a lista padrao', async ({ page }) => {
     await abrir(page, 'pedido.html');
     await expect(page.locator('h3', { hasText: '4. Forma de Pagamento' })).toBeVisible();
-    await expect(page.locator('label[for="ped-forma-pagamento"]')).toHaveText('Forma de Pagamento');
+    await expect(page.locator('label[for="ped-forma-pagamento"]')).toHaveText('Plano');
     await expect(page.locator('body')).not.toContainText('Parcelamento');
     await expect(page.locator('body')).not.toContainText('Plano de Pagamento');
     expect(await opcoes(page)).toEqual(PADRAO);
