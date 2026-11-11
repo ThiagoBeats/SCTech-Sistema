@@ -150,11 +150,12 @@
             }
         });
         (contasPagar || []).filter(aberto).forEach(cp => lanca(maxData(cp.data_vencimento, hoje), cp.valor, 'saida', cp.data_vencimento < hoje));
-        (despesasFixas || []).forEach(df => {
-            ocorrenciasFixa(df, hoje, limite).forEach(data => {
+        // Com periodicidade, as ocorrencias ja viram CP pre-gerados; so as antigas (sem periodicidade) sao projetadas por mes.
+        (despesasFixas || []).filter(df => !df.periodicidade).forEach(df => {
+            ocorrenciasFixa(df, hoje.slice(0, 8) + '01', limite).forEach(data => {
                 const mes = data.slice(0, 7);
                 const gerada = (contasPagar || []).some(cp => cp.tipo === 'fixo' && cp.descricao === df.descricao && String(cp.data_vencimento).slice(0, 7) === mes);
-                if (!gerada) lanca(data, df.valor, 'saida', false);
+                if (!gerada) lanca(maxData(data, hoje), df.valor, 'saida', data < hoje);
             });
         });
         let saldo = Number(saldoHoje) || 0;

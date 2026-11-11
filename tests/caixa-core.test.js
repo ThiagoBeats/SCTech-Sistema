@@ -143,3 +143,31 @@ test('montarMensagem e linkWhatsApp', () => {
     assert.ok(C.linkWhatsApp('5511987654321', m).startsWith('https://wa.me/5511987654321?text=Ol%C3%A1'));
     assert.strictEqual(C.linkWhatsApp(null, m), null);
 });
+
+// ---- Task 2 fix round 1 ----
+test('previsao: despesa fixa com periodicidade nao e projetada (so o CP pre-gerado)', () => {
+    const df = { id: 1, descricao: 'Seguro', valor: 1200, dia_vencimento: 20, ativo: true, periodicidade: 'anual' };
+    const cp = { id: 7, tipo: 'fixo', descricao: 'Seguro', valor: 1200, data_vencimento: '2026-11-20', status: 'Pendente' };
+    const s = C.previsaoSemanal(Object.assign({}, base, { despesasFixas: [df], contasPagar: [cp] }));
+    assert.strictEqual(s.reduce((a, x) => a + x.saidas, 0), 1200);
+});
+test('previsao: despesa fixa antiga ja vencida no mes e sem CP entra na semana 1 como atrasada', () => {
+    const df = { id: 1, descricao: 'Internet', valor: 100, dia_vencimento: 5, ativo: true };
+    const s = C.previsaoSemanal(Object.assign({}, base, { despesasFixas: [df] }));
+    assert.strictEqual(s[0].saidas, 100);
+    assert.strictEqual(s[0].inclui_atrasados, true);
+    const cp = { id: 8, tipo: 'fixo', descricao: 'Internet', valor: 100, data_vencimento: '2026-11-05', status: 'Pago' };
+    const s2 = C.previsaoSemanal(Object.assign({}, base, { despesasFixas: [df], contasPagar: [cp] }));
+    assert.strictEqual(s2[0].saidas, 0);
+});
+test('previsao: CR/CP pagos ficam fora e ids misturados string/numero casam o meio', () => {
+    const s = C.previsaoSemanal(Object.assign({}, base, {
+        contasReceber: [{ id: 1, valor: 500, data_vencimento: '2026-11-14', status: 'Pago' },
+            { id: 2, valor: 100, data_vencimento: '2026-11-12', status: 'Pendente', meio_previsto: { meio_id: '9', vezes: 1, antecipar: false } }],
+        contasPagar: [{ id: 1, tipo: 'variavel', descricao: 'x', valor: 300, data_vencimento: '2026-11-14', status: 'Pago' }],
+        meios: [{ id: 9, tipo: 'cartao_credito', conta_id: '3' }]
+    }));
+    assert.strictEqual(s[0].entradas, 0);
+    assert.strictEqual(s[0].saidas, 0);
+    assert.strictEqual(s[4].entradas, 97);
+});
