@@ -55,13 +55,27 @@ test('filtro por conta', async ({ page }) => {
 });
 
 test('cartao a cair aparece marcado', async ({ page }) => {
-    const futura = somarDias(HOJE, 3);
-    test.skip(futura.slice(0, 7) !== MES, 'fim do mes: a data futura cai no mes seguinte');
-    await abrir(page, [...MOVS, mov(5, 10, futura, 'entrada', 1000, 'Repasse do cartao')]);
+    const d = new Date();
+    const proximo = iso(new Date(d.getFullYear(), d.getMonth() + 1, 15));
+    await abrir(page, [...MOVS, mov(5, 10, proximo, 'entrada', 1000, 'Repasse do cartao')]);
+    // mes atual: o repasse nao aparece e o fim e "ate hoje"
+    await expect(page.locator('#extrato-lbl-fim')).toHaveText('Saldo até hoje');
+    await expect(page.locator('#extrato-linhas')).not.toContainText('Repasse do cartao');
+    // navegando para o mes seguinte pela tela
+    await page.locator('#extrato-mes').fill(proximo.slice(0, 7));
     const linha = page.locator('#extrato-linhas .extrato-linha', { hasText: 'Repasse do cartao' });
     await expect(linha).toContainText('a cair');
-    // fim e "ate hoje": nao inclui a cair
+    await expect(page.locator('#extrato-lbl-fim')).toHaveText('Saldo previsto no fim do mês');
+    expect(await txt(page.locator('#extrato-saldo-inicio'))).toContain('570,00');
+    expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('1.570,00');
+    // volta ao mes atual: fim ate hoje nao inclui o repasse
+    await page.locator('#extrato-mes').fill(MES);
+    await expect(page.locator('#extrato-lbl-fim')).toHaveText('Saldo até hoje');
     expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('570,00');
+    // mes passado: rotulo simples, fim = saldo ao fim daquele mes (100 + 50)
+    await page.locator('#extrato-mes').fill(MES_ANT.slice(0, 7));
+    await expect(page.locator('#extrato-lbl-fim')).toHaveText('Saldo no fim');
+    expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('150,00');
 });
 
 test('transferir caixa para banco muda os dois saldos e nao o total', async ({ page }) => {

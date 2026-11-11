@@ -13629,7 +13629,8 @@ function abrirExtratoDaConta(contaId) {
 
 // Saldo no inicio = saldo no dia anterior ao primeiro dia do mes. Saldo no fim =
 // saldo no ultimo dia do mes, ou ate hoje se o mes for o atual (o que ainda vai
-// cair fica na lista com o selo "a cair" e nao entra no saldo do fim).
+// cair fica na lista com o selo "a cair" e nao entra no saldo do fim). Mes
+// futuro: o fim e o saldo previsto no ultimo dia, com os movimentos futuros.
 function renderExtrato(opts) {
     if (!document.getElementById('extrato-linhas')) return;
     if (opts && typeof opts === 'object') {
@@ -13652,7 +13653,8 @@ function renderExtrato(opts) {
     const [ano, m2] = mes.split('-').map(Number);
     const primeiro = mes + '-01';
     const ultimo = mes + '-' + String(new Date(ano, m2, 0).getDate()).padStart(2, '0');
-    const ateFim = ultimo < hoje ? ultimo : hoje;
+    const mesFuturo = primeiro > hoje;
+    const ateFim = (mesFuturo || ultimo < hoje) ? ultimo : hoje;
     const filtradas = _extratoFiltro.contaId === '' ? contas : contas.filter(c => CaixaCore.mesmoId(c.id, _extratoFiltro.contaId));
     const movs = Array.isArray(db.movimentos_fin) ? db.movimentos_fin : [];
     const antes = CaixaCore.somarDias(primeiro, -1);
@@ -13660,7 +13662,7 @@ function renderExtrato(opts) {
     const fim = CaixaCore.arredondar(filtradas.reduce((s, c) => s + CaixaCore.saldoConta(c, movs, ateFim), 0));
     document.getElementById('extrato-saldo-inicio').textContent = brl(inicio);
     document.getElementById('extrato-saldo-fim').textContent = brl(fim);
-    document.getElementById('extrato-lbl-fim').textContent = ultimo >= hoje && primeiro <= hoje ? 'Saldo até hoje' : 'Saldo no fim';
+    document.getElementById('extrato-lbl-fim').textContent = mesFuturo ? 'Saldo previsto no fim do mês' : (ultimo >= hoje ? 'Saldo até hoje' : 'Saldo no fim');
 
     const fmtData = d => d.split('-').reverse().join('/');
     const linhas = movs.filter(mv => {
