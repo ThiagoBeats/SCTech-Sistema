@@ -113,7 +113,7 @@ const linhas = page => page.locator('#emp-formas-pag .forma-pag-nome');
 
 test('empresa: lista a padrao e marca a primeira como padrao', async ({ page }) => {
     await abrir(page, 'empresa.html#preferencias');
-    await expect(page.locator('#emp-formas-pag-card h3')).toContainText('Formas de Pagamento');
+    await expect(page.locator('#emp-formas-pag-card h3')).toContainText('Planos de pagamento');
     await expect(linhas(page)).toHaveCount(4);
     expect(await linhas(page).evaluateAll(l => l.map(i => i.value))).toEqual(PADRAO);
     await expect(page.locator('#emp-formas-pag .forma-pag-linha').first().locator('.forma-pag-padrao')).toHaveText('padrão');

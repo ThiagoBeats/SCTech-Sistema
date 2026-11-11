@@ -42,6 +42,8 @@ const MODULOS_PERMISSAO = [
         { key: 'pagar',     label: 'A Pagar' },
         { key: 'fixas',     label: 'Despesas Fixas' },
         { key: 'dre',       label: 'DRE por Pedido' },
+        { key: 'hoje',      label: 'Hoje' },
+        { key: 'extrato',   label: 'Extrato' },
     ]},
     { key: 'relatorios',    label: 'Relatórios',         subs: [
         { key: 'faturamento', label: 'Faturamento Mensal' },
@@ -114,6 +116,8 @@ function papeisPadrao() {
             'financeiro.pagar':    'sem_acesso',
             'financeiro.fixas':    'sem_acesso',
             'financeiro.dre':      'sem_acesso',
+            'financeiro.hoje':     'sem_acesso',
+            'financeiro.extrato':  'sem_acesso',
             producao:              'visualizar',
             catalogo:              'visualizar',
             galeria:               'visualizar',
@@ -252,6 +256,9 @@ let db = {
     contas_receber:  JSON.parse(localStorage.getItem('sc_cr'))   || [],
     contas_pagar:    JSON.parse(localStorage.getItem('sc_cp'))   || [],
     despesas_fixas:  JSON.parse(localStorage.getItem('sc_df'))   || [],
+    contas_fin:      JSON.parse(localStorage.getItem('sc_contas_fin')) || [],
+    meios_pag:       JSON.parse(localStorage.getItem('sc_meios_pag'))  || [],
+    movimentos_fin:  JSON.parse(localStorage.getItem('sc_mov_fin'))    || [],
     medicoes:        JSON.parse(localStorage.getItem('sc_med'))  || [],
     papeis:          JSON.parse(localStorage.getItem('sc_pap'))  || papeisPadrao(),
     usuarios:        JSON.parse(localStorage.getItem('sc_usr'))  || [],
@@ -336,6 +343,9 @@ function syncDB() {
     localStorage.setItem('sc_cr',   JSON.stringify(db.contas_receber));
     localStorage.setItem('sc_cp',   JSON.stringify(db.contas_pagar));
     localStorage.setItem('sc_df',   JSON.stringify(db.despesas_fixas));
+    localStorage.setItem('sc_contas_fin', JSON.stringify(db.contas_fin));
+    localStorage.setItem('sc_meios_pag',  JSON.stringify(db.meios_pag));
+    localStorage.setItem('sc_mov_fin',    JSON.stringify(db.movimentos_fin));
     localStorage.setItem('sc_med',  JSON.stringify(db.medicoes));
     localStorage.setItem('sc_pap',  JSON.stringify(db.papeis));
     localStorage.setItem('sc_usr',  JSON.stringify(db.usuarios));
@@ -552,6 +562,220 @@ function restaurarFormasPagamento() {
     toast('Formas de pagamento restauradas para o padrão.', 'info', 1800);
 }
 
+// --- CONTAS, MEIOS DE PAGAMENTO E MENSAGEM DE COBRANCA (Caixa) ---
+// Contas: onde o dinheiro fica (caixa, banco, maquininha). Meios: como o
+// cliente paga; cada um cai numa conta (cartao cai na maquininha). Telas em
+// Empresa > Preferencias, com rascunho gravado so no "Salvar".
+const CARTAO_PADRAO_CFG = { debito_taxa: 1.5, debito_dias: 1, credito_taxa: 3, credito_dias: 30, parcelado_taxa: 4, antecipacao_taxa: 2, antecipacao_dias: 1 };
+const CARTAO_CAMPOS_CFG = [
+    ['debito_taxa', 'Débito: taxa %'], ['debito_dias', 'Débito: dias p/ cair'],
+    ['credito_taxa', 'Crédito à vista: taxa %'], ['credito_dias', 'Crédito: dias p/ cair'],
+    ['parcelado_taxa', 'Parcelado: taxa %'],
+    ['antecipacao_taxa', 'Antecipar: taxa % extra'], ['antecipacao_dias', 'Antecipar: dias p/ cair']
+];
+const TIPOS_CONTA_CFG = [['caixa', 'Caixa (dinheiro vivo)'], ['banco', 'Banco'], ['maquininha', 'Maquininha de cartão']];
+const TIPOS_MEIO_CFG = [['dinheiro', 'Dinheiro'], ['pix', 'PIX'], ['transferencia', 'Transferência'], ['boleto', 'Boleto'],
+    ['cartao_debito', 'Cartão de débito'], ['cartao_credito', 'Cartão de crédito'], ['outro', 'Outro']];
+
+function getContasFin() { return Array.isArray(db.contas_fin) ? db.contas_fin : []; }
+function getMeiosPag()  { return Array.isArray(db.meios_pag)  ? db.meios_pag  : []; }
+function contaDoMeio(meioId) {
+    const meio = getMeiosPag().find(m => CaixaCore.mesmoId(m.id, meioId));
+    if (!meio || meio.conta_id == null) return null;
+    return getContasFin().find(c => CaixaCore.mesmoId(c.id, meio.conta_id)) || null;
+}
+
+// Ids novos: contador a partir de Date.now() que pula os ids ja usados.
+let _idCfgFin = Date.now();
+function _novoIdCfgFin(usados) {
+    while (usados.has(_idCfgFin)) _idCfgFin++;
+    usados.add(_idCfgFin);
+    return _idCfgFin++;
+}
+function _numeroBR(v, padrao) {
+    const n = parseFloat(String(v == null ? '' : v).trim().replace(',', '.'));
+    return Number.isFinite(n) ? n : padrao;
+}
+
+function garantirMeiosPadrao() {
+    if (getMeiosPag().length) return;
+    const contas = getContasFin();
+    const primeira = tipo => (contas.find(c => c.tipo === tipo) || {}).id;
+    const usados = new Set();
+    const mk = (nome, tipo, contaTipo) => {
+        const cid = primeira(contaTipo);
+        return { id: _novoIdCfgFin(usados), nome, tipo, conta_id: cid == null ? null : cid };
+    };
+    db.meios_pag = [
+        mk('Dinheiro', 'dinheiro', 'caixa'),
+        mk('PIX', 'pix', 'banco'),
+        mk('Transferência', 'transferencia', 'banco'),
+        mk('Boleto', 'boleto', 'banco'),
+        mk('Cartão de débito', 'cartao_debito', 'maquininha'),
+        mk('Cartão de crédito', 'cartao_credito', 'maquininha')
+    ];
+    syncDB();
+}
+
+let _contasRascunho = null;
+let _meiosRascunho = null;
+
+function _contaParaRascunho(c) {
+    const r = { id: c.id, nome: c.nome || '', tipo: c.tipo, ativo: c.ativo !== false,
+        saldo: String(c.saldo_inicial == null ? 0 : c.saldo_inicial).replace('.', ','),
+        data: c.data_saldo_inicial || hojeLocal() };
+    if (c.tipo === 'maquininha') {
+        r.cartao = {};
+        CARTAO_CAMPOS_CFG.forEach(([k]) => {
+            const v = c.cartao && c.cartao[k] != null ? c.cartao[k] : CARTAO_PADRAO_CFG[k];
+            r.cartao[k] = String(v).replace('.', ',');
+        });
+    }
+    return r;
+}
+
+function renderContasCfg() {
+    const box = document.getElementById('emp-contas');
+    if (!box) return;
+    if (!_contasRascunho) _contasRascunho = getContasFin().map(_contaParaRascunho);
+    box.innerHTML = _contasRascunho.map((c, i) => `
+        <div class="conta-linha" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
+            <div class="grid" style="display:grid;grid-template-columns:2fr 1.5fr 1fr 1fr auto;gap:8px;align-items:end">
+                <div class="form-group" style="margin:0"><label>Nome da conta</label>
+                    <input type="text" class="conta-nome" value="${escapeHtml(c.nome)}" maxlength="60" placeholder="Ex.: Caixa da loja, Banco Itaú"
+                        oninput="_contasRascunho[${i}].nome = this.value"></div>
+                <div class="form-group" style="margin:0"><label>Tipo</label>
+                    <select class="conta-tipo" onchange="mudarTipoContaCfg(${i}, this.value)">
+                        ${TIPOS_CONTA_CFG.map(([v, l]) => `<option value="${v}"${c.tipo === v ? ' selected' : ''}>${l}</option>`).join('')}
+                    </select></div>
+                <div class="form-group" style="margin:0"><label>Saldo inicial (R$)</label>
+                    <input type="text" inputmode="decimal" class="conta-saldo" value="${escapeHtml(c.saldo)}"
+                        oninput="_contasRascunho[${i}].saldo = this.value"></div>
+                <div class="form-group" style="margin:0"><label>Data do saldo</label>
+                    <input type="date" class="conta-data" value="${escapeHtml(c.data)}"
+                        oninput="_contasRascunho[${i}].data = this.value"></div>
+                <button type="button" class="btn btn-outline btn-sm btn-danger" onclick="removerContaCfg(${i})" title="Remover conta">✕</button>
+            </div>
+            ${c.tipo === 'maquininha' ? `
+            <div class="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:8px">
+                ${CARTAO_CAMPOS_CFG.map(([k, l]) => `
+                <div class="form-group" style="margin:0"><label>${l}</label>
+                    <input type="text" inputmode="decimal" class="conta-cartao-${k}" value="${escapeHtml(c.cartao[k])}"
+                        oninput="_contasRascunho[${i}].cartao['${k}'] = this.value"></div>`).join('')}
+            </div>` : ''}
+        </div>`).join('') || '<div class="forma-pag-vazia">Nenhuma conta cadastrada. Comece pelo Caixa e pelo Banco.</div>';
+}
+
+function adicionarContaCfg() {
+    _contasRascunho.push({ id: null, nome: '', tipo: 'caixa', ativo: true, saldo: '0', data: hojeLocal() });
+    renderContasCfg();
+    const inputs = document.querySelectorAll('#emp-contas .conta-nome');
+    inputs[inputs.length - 1]?.focus();
+}
+
+function mudarTipoContaCfg(i, tipo) {
+    const c = _contasRascunho[i];
+    c.tipo = tipo;
+    if (tipo === 'maquininha' && !c.cartao) {
+        c.cartao = {};
+        CARTAO_CAMPOS_CFG.forEach(([k]) => { c.cartao[k] = String(CARTAO_PADRAO_CFG[k]).replace('.', ','); });
+    }
+    renderContasCfg();
+}
+
+function removerContaCfg(i) {
+    _contasRascunho.splice(i, 1);
+    renderContasCfg();
+}
+
+async function salvarContasCfg() {
+    const rasc = _contasRascunho.filter(c => (c.nome || '').trim());
+    if (rasc.some(c => !/^\d{4}-\d{2}-\d{2}$/.test(c.data || ''))) { await showAlert('Informe a data do saldo inicial de cada conta.', '⚠️'); return; }
+    const usados = new Set(getContasFin().map(c => c.id));
+    rasc.forEach(c => { if (c.id != null) usados.add(c.id); });
+    const contas = rasc.map(c => {
+        const conta = {
+            id: c.id != null ? c.id : _novoIdCfgFin(usados),
+            nome: c.nome.trim(), tipo: c.tipo,
+            saldo_inicial: CaixaCore.arredondar(_numeroBR(c.saldo, 0)),
+            data_saldo_inicial: c.data, ativo: c.ativo !== false
+        };
+        if (c.tipo === 'maquininha') {
+            conta.cartao = {};
+            CARTAO_CAMPOS_CFG.forEach(([k]) => { conta.cartao[k] = _numeroBR(c.cartao && c.cartao[k], CARTAO_PADRAO_CFG[k]); });
+        }
+        return conta;
+    });
+    db.contas_fin = contas;
+    // meio ligado a uma conta que sumiu fica sem conta
+    getMeiosPag().forEach(m => { if (m.conta_id != null && !contas.some(c => CaixaCore.mesmoId(c.id, m.conta_id))) m.conta_id = null; });
+    garantirMeiosPadrao();
+    syncDB();
+    _contasRascunho = contas.map(_contaParaRascunho);
+    _meiosRascunho = null;
+    renderContasCfg();
+    renderMeiosCfg();
+    toast('Contas salvas!', 'success');
+}
+
+function renderMeiosCfg() {
+    const box = document.getElementById('emp-meios');
+    if (!box) return;
+    if (!_meiosRascunho) _meiosRascunho = getMeiosPag().map(m => ({ ...m }));
+    const contas = getContasFin();
+    box.innerHTML = _meiosRascunho.map((m, i) => `
+        <div class="meio-linha" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+            <input type="text" class="meio-nome" value="${escapeHtml(m.nome)}" maxlength="60" aria-label="Nome do meio ${i + 1}"
+                oninput="_meiosRascunho[${i}].nome = this.value" style="flex:2;min-width:150px">
+            <select class="meio-tipo" aria-label="Tipo do meio ${i + 1}" onchange="_meiosRascunho[${i}].tipo = this.value" style="flex:1.5;min-width:140px">
+                ${TIPOS_MEIO_CFG.map(([v, l]) => `<option value="${v}"${m.tipo === v ? ' selected' : ''}>${l}</option>`).join('')}
+            </select>
+            <select class="meio-conta" aria-label="Conta do meio ${i + 1}" onchange="_meiosRascunho[${i}].conta_id = this.value === '' ? null : Number(this.value)" style="flex:2;min-width:150px">
+                <option value="">(sem conta)</option>
+                ${contas.map(c => `<option value="${escapeHtml(c.id)}"${CaixaCore.mesmoId(c.id, m.conta_id) ? ' selected' : ''}>${escapeHtml(c.nome)}</option>`).join('')}
+            </select>
+            <button type="button" class="btn btn-outline btn-sm btn-danger" onclick="removerMeioCfg(${i})" title="Remover meio">✕</button>
+        </div>`).join('') || '<div class="forma-pag-vazia">Nenhum meio cadastrado. Salve as contas para criar os meios padrão.</div>';
+}
+
+function adicionarMeioCfg() {
+    _meiosRascunho.push({ id: null, nome: '', tipo: 'outro', conta_id: null });
+    renderMeiosCfg();
+    const inputs = document.querySelectorAll('#emp-meios .meio-nome');
+    inputs[inputs.length - 1]?.focus();
+}
+
+function removerMeioCfg(i) {
+    _meiosRascunho.splice(i, 1);
+    renderMeiosCfg();
+}
+
+function salvarMeiosCfg() {
+    const rasc = _meiosRascunho.filter(m => (m.nome || '').trim());
+    const usados = new Set(getMeiosPag().map(m => m.id));
+    rasc.forEach(m => { if (m.id != null) usados.add(m.id); });
+    db.meios_pag = rasc.map(m => ({
+        id: m.id != null ? m.id : _novoIdCfgFin(usados),
+        nome: m.nome.trim(), tipo: m.tipo, conta_id: m.conta_id == null ? null : m.conta_id
+    }));
+    syncDB();
+    _meiosRascunho = db.meios_pag.map(m => ({ ...m }));
+    renderMeiosCfg();
+    toast('Meios de pagamento salvos!', 'success');
+}
+
+function salvarMensagemCobranca() {
+    const texto = (document.getElementById('emp-msg-cobranca')?.value || '').trim();
+    const emp = { ...getEmpresa(), mensagem_cobranca: texto || CaixaCore.MENSAGEM_COBRANCA_PADRAO };
+    localStorage.setItem('sc_empresa', JSON.stringify(emp));
+    toast('Mensagem de cobrança salva!', 'success');
+}
+
+function restaurarMensagemCobranca() {
+    const el = document.getElementById('emp-msg-cobranca');
+    if (el) el.value = CaixaCore.MENSAGEM_COBRANCA_PADRAO;
+}
+
 function carregarEmpresaConfigs() {
     const emp = getEmpresa();
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
@@ -564,6 +788,7 @@ function carregarEmpresaConfigs() {
     set('emp-site',     emp.site);
     set('emp-regime',   emp.regime_tributario);
     set('emp-aliquota', emp.aliquota_estimada);
+    set('emp-msg-cobranca', emp.mensagem_cobranca || (typeof CaixaCore !== 'undefined' ? CaixaCore.MENSAGEM_COBRANCA_PADRAO : ''));
     if (emp.logo_base64) {
         const preview = document.getElementById('emp-logo-preview');
         const removeBtn = document.getElementById('emp-remove-logo');
@@ -947,7 +1172,7 @@ function salvarERecarregar(msg = 'Salvo com sucesso!') {
 // não guardar a senha em texto puro; quando o sistema migrar para um banco de
 // dados/backend real, a autenticação deve ser refeita lá (hash forte no
 // servidor, verificação em cada rota) e este arquivo deixa de ser a fonte da verdade.
-const FIN_TAB_MODULO = { dashboard: 'financeiro.dashboard', receber: 'financeiro.receber', pagar: 'financeiro.pagar', fixas: 'financeiro.fixas', dre: 'financeiro.dre' };
+const FIN_TAB_MODULO = { dashboard: 'financeiro.dashboard', receber: 'financeiro.receber', pagar: 'financeiro.pagar', fixas: 'financeiro.fixas', dre: 'financeiro.dre', hoje: 'financeiro.hoje', extrato: 'financeiro.extrato' };
 
 const PAGINA_MODULO = {
     'index.html':         'inicio',
@@ -7232,6 +7457,7 @@ function _dadosExportacao(marcaFase0) {
         movimentos: db.movimentos, vendedores: db.vendedores,
         fornecedores: db.fornecedores, pedidos_compra: db.pedidos_compra,
         contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, despesas_fixas: db.despesas_fixas,
+        contas_fin: db.contas_fin, meios_pag: db.meios_pag, movimentos_fin: db.movimentos_fin,
         medicoes: db.medicoes,
         empresa: getEmpresa(), formas_pag: getFormasPagamentoCfg()
     };
@@ -7273,6 +7499,9 @@ function importarDados(event) {
             db.contas_pagar   = dados.contas_pagar   || [];
             db.despesas_fixas = dados.despesas_fixas || [];
             db.medicoes       = dados.medicoes       || [];
+            db.contas_fin     = dados.contas_fin     || [];
+            db.meios_pag      = dados.meios_pag      || [];
+            db.movimentos_fin = dados.movimentos_fin || [];
             syncDB();
             // Backup antigo (sem empresa/formas) mantem as atuais.
             if (dados.empresa && typeof dados.empresa === 'object') localStorage.setItem('sc_empresa', JSON.stringify(dados.empresa));
