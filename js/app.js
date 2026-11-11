@@ -11377,6 +11377,11 @@ function renderEstoqueMateriais() {
 // MÓDULO FINANCEIRO
 // =============================================
 
+// Datas do Financeiro sempre no fuso local ('YYYY-MM-DD'). toISOString() e UTC:
+// depois das 21h no Brasil ja e o dia seguinte.
+function dataLocal(ms) { return FinanceiroCore.dataLocalISO(ms == null ? Date.now() : ms); }
+function hojeLocal() { return dataLocal(Date.now()); }
+
 const PLANOS_PAGAMENTO = {
     'avista': [{ descricao: 'Pagamento à vista', pct: 100, dias: 0 }],
     '50_50':  [{ descricao: 'Entrada (50%)', pct: 50, dias: 0 }, { descricao: 'Saldo na instalação (50%)', pct: 50, dias: -1 }],
@@ -11402,9 +11407,7 @@ function _migrarFinanceiroPedidos() {
     let nextId = Date.now();
     pendentes.forEach(ped => {
         if (normalizarStatus(ped.status) === 'Instalado' && (ped.valor_recebido || 0) >= (ped.valor || 0)) {
-            const dataPgto = ped.data_instalado
-                ? new Date(ped.data_instalado).toISOString().split('T')[0]
-                : new Date().toISOString().split('T')[0];
+            const dataPgto = dataLocal(ped.data_instalado) || hojeLocal();
             db.contas_receber.push({
                 id: nextId++,
                 pedido_id: ped.id,
@@ -11417,12 +11420,12 @@ function _migrarFinanceiroPedidos() {
             });
         } else {
             const plano = _planoPagamento(ped);
-            const hoje = new Date();
+            const hoje = hojeLocal();
             plano.forEach((parcela, i) => {
                 const valor = Math.round(ped.valor * parcela.pct / 100 * 100) / 100;
                 const vencimento = parcela.dias === -1
-                    ? (ped.data_entrega || new Date(hoje.getTime() + 30 * 86400000).toISOString().split('T')[0])
-                    : new Date(hoje.getTime() + parcela.dias * 86400000).toISOString().split('T')[0];
+                    ? (ped.data_entrega || FinanceiroCore.somarDias(hoje, 30))
+                    : FinanceiroCore.somarDias(hoje, parcela.dias);
                 db.contas_receber.push({
                     id: nextId++,
                     pedido_id: ped.id,
@@ -11452,7 +11455,7 @@ function _migrarFinanceiroFase0() {
     migrarStatusAguardandoFinanceiro();
     const plano = FinanceiroCore.planoMigracaoFase0({
         pedidos: db.pedidos, contas_receber: db.contas_receber, contas_pagar: db.contas_pagar,
-        vendedores: db.vendedores, hoje: new Date().toLocaleDateString('sv-SE'),
+        vendedores: db.vendedores, hoje: hojeLocal(),
         rotuloPedido: p => '#' + formatPedidoId(p.id)
     });
     const vazio = Object.values(plano).every(l => !l.length);
@@ -11531,21 +11534,21 @@ function marcarRevisaoFinanceiroFeita() {
 function registrarCustoPedido(ped) {
     ped.custo_snapshot = {
         ...FinanceiroCore.custoSnapshotPedido(ped, { catalogo: db.catalogo, materiais: db.materiais, kits: db.kits }),
-        data: new Date().toLocaleDateString('sv-SE')
+        data: hojeLocal()
     };
 }
 
 function gerarFinanceiroPedido(ped) {
     if (ped.financeiro_gerado) return;
     const num = formatPedidoId(ped.id);
-    const hoje = new Date().toLocaleDateString('sv-SE');
+    const hoje = hojeLocal();
+    const jaPago = FinanceiroCore.totalRecebido(db.contas_receber, ped.id);
     let parcelas;
     if (ped.forma_pagamento || !ped.tipo_pagamento) {
         const pct = Number.isFinite(ped.entrada_pct) ? ped.entrada_pct : entradaDaFormaPagamento(ped.forma_pagamento);
         parcelas = FinanceiroCore.planejarParcelas({
             valor: ped.valor || 0, entradaPct: pct,
-            jaPago: FinanceiroCore.totalRecebido(db.contas_receber, ped.id),
-            dataAprovacao: hoje, dataEntrega: ped.data_entrega
+            jaPago, dataAprovacao: hoje, dataEntrega: ped.data_entrega
         }).map(p => ({
             ...p,
             descricao: p.tipo === 'entrada' ? `Entrada (${pct}%) — Pedido #${num}`
@@ -11553,15 +11556,13 @@ function gerarFinanceiroPedido(ped) {
                 : `Pagamento — Pedido #${num}`
         }));
     } else {
-        // Pedido antigo, gravado com o codigo de um plano.
-        parcelas = _planoPagamento(ped).map(pl => ({
-            tipo: pl.dias === -1 ? 'saldo' : (pl.pct >= 100 ? 'unica' : 'entrada'),
-            valor: Math.round(ped.valor * pl.pct / 100 * 100) / 100,
-            data_vencimento: pl.dias === -1
-                ? (ped.data_entrega || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0])
-                : new Date(Date.now() + pl.dias * 86400000).toISOString().split('T')[0],
-            descricao: `${pl.descricao} — Pedido #${num}`
-        }));
+        // Pedido antigo, gravado com o codigo de um plano: mesma divisao (entrada
+        // do plano), descontando o que ja foi pago, com as descricoes de sempre.
+        const plano = _planoPagamento(ped);
+        parcelas = FinanceiroCore.planejarParcelas({
+            valor: ped.valor || 0, entradaPct: plano[0].pct,
+            jaPago, dataAprovacao: hoje, dataEntrega: ped.data_entrega
+        }).map(p => ({ ...p, descricao: `${(p.tipo === 'saldo' ? plano[plano.length - 1] : plano[0]).descricao} — Pedido #${num}` }));
     }
     const usados = new Set((db.contas_receber || []).map(c => c.id));
     let proximoId = Date.now();
@@ -11584,7 +11585,7 @@ function gerarFinanceiroPedido(ped) {
 }
 
 function atualizarStatusVencimentos() {
-    const hoje = new Date().toISOString().split('T')[0];
+    const hoje = hojeLocal();
     let changed = false;
     [...db.contas_receber, ...db.contas_pagar].forEach(item => {
         if (item.status === 'Pendente' && item.data_vencimento < hoje) {
@@ -11606,7 +11607,7 @@ function sincronizarRecebidoPedido(pedidoId) {
 // forma. Devolve { ids, data, forma } ou null se o usuario desistir.
 function abrirModalBaixa({ titulo, itens, formaPadrao, comData = true }) {
     return new Promise(resolve => {
-        const hoje = new Date().toLocaleDateString('sv-SE');
+        const hoje = hojeLocal();
         const formas = [...new Set([...getFormasPagamento(), 'Dinheiro', 'PIX', 'Cartão', 'Transferência'])];
         if (formaPadrao && !formas.includes(formaPadrao)) formas.unshift(formaPadrao);
         const o = document.createElement('div');
@@ -11665,9 +11666,7 @@ function baixarContasReceber(ids, data, forma) {
 
 // Comissoes do pedido instalado viram contas a pagar (uma por papel). Idempotente.
 function gerarComissoesPedido(ped) {
-    const dataInst = ped.data_instalado
-        ? new Date(ped.data_instalado).toLocaleDateString('sv-SE')
-        : new Date().toLocaleDateString('sv-SE');
+    const dataInst = dataLocal(ped.data_instalado) || hojeLocal();
     const novas = FinanceiroCore.contasComissaoDoPedido(ped, {
         vendedores: db.vendedores, contasPagar: db.contas_pagar,
         data: dataInst, rotuloPedido: '#' + formatPedidoId(ped.id)
@@ -11722,7 +11721,7 @@ async function estornarCR(id) {
     const cr = db.contas_receber.find(x => x.id == id);
     if (!cr || cr.status !== 'Pago') return;
     if (!await showConfirm('Estornar este recebimento? A parcela volta a ficar em aberto.', '↩', 'Estornar', 'Cancelar')) return;
-    const hoje = new Date().toLocaleDateString('sv-SE');
+    const hoje = hojeLocal();
     cr.status = (cr.data_vencimento && cr.data_vencimento < hoje) ? 'Atrasado' : 'Pendente';
     cr.data_pagamento = null;
     cr.forma_pagamento = null;
@@ -11872,7 +11871,7 @@ function gerarOcorrenciasRecorrentes(dataInicioStr, periodicidade, dataFimStr) {
     const limite = dataFimStr ? new Date(Math.min(new Date(dataFimStr + 'T12:00:00').getTime(), limiteMax.getTime())) : limiteMax;
     let guard = 0;
     while (atual <= limite && guard < 240) {
-        datas.push(atual.toISOString().split('T')[0]);
+        datas.push(dataLocal(atual.getTime()));
         if (periodicidade === 'quinzenal') { atual = new Date(atual); atual.setDate(atual.getDate() + 15); }
         else { const meses = passosMeses[periodicidade] || 1; atual = new Date(atual); atual.setMonth(atual.getMonth() + meses); }
         guard++;
@@ -12248,7 +12247,7 @@ async function adicionarContaPagarManual() {
             db.contas_pagar.push({
                 id: paiId + i + 1, pedido_id: pedidoId ? parseInt(pedidoId) : null,
                 tipo: 'variavel', categoria, descricao: `${descricao} (parcela ${i + 1}/${numParcelas})`,
-                credor_nome: credor, valor: valorFinal, data_vencimento: venc.toISOString().split('T')[0],
+                credor_nome: credor, valor: valorFinal, data_vencimento: dataLocal(venc.getTime()),
                 data_pagamento: null, status: 'Pendente',
                 lancamento_pai_id: paiId, parcelado: true, numero_parcelas: numParcelas, parcela_atual: i + 1,
                 ...camposDoc
@@ -12698,15 +12697,15 @@ function _finSortToggle(which, col) {
 
 function getFinPeriodo() {
     const hoje = new Date();
-    const hojeStr = hoje.toISOString().split('T')[0];
+    const hojeStr = hojeLocal();
     if (_finPeriodo === 'hoje') return { ini: hojeStr, fim: hojeStr, label: 'Hoje' };
     if (_finPeriodo === '7d') {
         const d = new Date(hoje); d.setDate(d.getDate() - 6);
-        return { ini: d.toISOString().split('T')[0], fim: hojeStr, label: 'Últimos 7 dias' };
+        return { ini: dataLocal(d.getTime()), fim: hojeStr, label: 'Últimos 7 dias' };
     }
     if (_finPeriodo === '30d') {
         const d = new Date(hoje); d.setDate(d.getDate() - 29);
-        return { ini: d.toISOString().split('T')[0], fim: hojeStr, label: 'Últimos 30 dias' };
+        return { ini: dataLocal(d.getTime()), fim: hojeStr, label: 'Últimos 30 dias' };
     }
     if (_finPeriodo === 'mes') {
         const ini = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-01`;
@@ -12752,7 +12751,7 @@ function _finGerarBuckets(ini, fim) {
     if (dias <= 35) {
         return Array.from({ length: dias }, (_, i) => {
             const d = new Date(iniD); d.setDate(d.getDate() + i);
-            const ds = d.toISOString().split('T')[0];
+            const ds = dataLocal(d.getTime());
             return { label: d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }), ini: ds, fim: ds };
         });
     }
@@ -12763,8 +12762,8 @@ function _finGerarBuckets(ini, fim) {
         if (we > fimD) we.setTime(fimD.getTime());
         buckets.push({
             label: cur.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }),
-            ini: cur.toISOString().split('T')[0],
-            fim: we.toISOString().split('T')[0]
+            ini: dataLocal(cur.getTime()),
+            fim: dataLocal(we.getTime())
         });
         cur.setDate(cur.getDate() + 7);
     }
@@ -12918,7 +12917,7 @@ function renderDashboardFinanceiro() {
 
     const { ini, fim, label } = getFinPeriodo();
     const inRange = d => d && d >= ini && d <= fim;
-    const hojeStr = new Date().toISOString().split('T')[0];
+    const hojeStr = hojeLocal();
     const fmt = v => (v||0).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
     const kpiBox = (lbl, val, sub, cor) =>
         `<div class="fin-kpi fin-kpi-${cor}"><div class="fin-kpi-label">${lbl}</div><div class="fin-kpi-value">${val}</div>${sub?`<div class="fin-kpi-sub">${sub}</div>`:''}</div>`;
@@ -12985,7 +12984,7 @@ function renderDashboardFinanceiro() {
 
     // ── PROJEÇÃO DE FLUXO: bloco único com seletor 30/60/90 ─────────
     document.querySelectorAll('.fin-proj-btn').forEach(b => b.classList.toggle('active', Number(b.dataset.d) === _finProjDias));
-    const horizStr = new Date(new Date().getTime()+_finProjDias*86400000).toISOString().split('T')[0];
+    const horizStr = FinanceiroCore.somarDias(hojeStr, _finProjDias);
     const projBuckets = _finGerarBuckets(hojeStr, horizStr);
     const projEnt = projBuckets.map(b => db.contas_receber.filter(cr=>cr.status!=='Pago'&&cr.data_vencimento>=b.ini&&cr.data_vencimento<=b.fim).reduce((s,cr)=>s+cr.valor,0));
     const projSai = projBuckets.map(b => db.contas_pagar.filter(cp=>cp.status!=='Pago'&&cp.data_vencimento>=b.ini&&cp.data_vencimento<=b.fim).reduce((s,cp)=>s+cp.valor,0));
@@ -13059,14 +13058,14 @@ function renderDashboardFinanceiro() {
         }
 
         const em7 = new Date(hojeStr+'T00:00:00'); em7.setDate(em7.getDate()+7);
-        const em7Str = em7.toISOString().split('T')[0];
+        const em7Str = dataLocal(em7.getTime());
         const proxVenc = db.contas_receber.filter(cr=>cr.status!=='Pago'&&cr.data_vencimento>hojeStr&&cr.data_vencimento<=em7Str).length
                        + db.contas_pagar.filter(cp=>cp.status!=='Pago'&&cp.data_vencimento>hojeStr&&cp.data_vencimento<=em7Str).length;
         if (alertaAtivo('fin_vencimento') && proxVenc>=3)
             alertas.push(mkA('info','📋',`<strong>${proxVenc} conta(s)</strong> vencem nos próximos 7 dias`));
 
         const _h7 = new Date(hojeStr+'T00:00:00'); _h7.setDate(_h7.getDate()+7);
-        const _h7s = _h7.toISOString().split('T')[0];
+        const _h7s = dataLocal(_h7.getTime());
         const _ent7 = db.contas_receber.filter(cr=>cr.status!=='Pago'&&cr.data_vencimento>=hojeStr&&cr.data_vencimento<=_h7s).reduce((s,cr)=>s+cr.valor,0);
         const _sai7 = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&cp.data_vencimento>=hojeStr&&cp.data_vencimento<=_h7s).reduce((s,cp)=>s+cp.valor,0);
         if (alertaAtivo('fin_gap') && _sai7 > _ent7 && _sai7 > 0)

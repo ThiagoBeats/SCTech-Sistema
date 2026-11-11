@@ -108,3 +108,43 @@ test('reaprovar com entrada paga gera so o que falta', async ({ page }) => {
     expect(cr.map(c => [c.parcela_tipo, c.valor, c.status]))
         .toEqual([['entrada', 400, 'Pago'], ['saldo', 600, 'Pendente']]);
 });
+
+test('pedido antigo com codigo de plano: reaprovar desconta o que ja foi pago', async ({ page }) => {
+    // Em Orcamento para a carga da pagina nao gerar as parcelas antes do teste.
+    const ped = (id, tp) => ({ id, clienteId: 9, clienteNome: 'Cli Teste', status: 'Orçamento', valor: 1000, tipo_pagamento: tp,
+        financeiro_gerado: false, data_entrega: '2026-12-01', ambientes: [], itens: [] });
+    const pago = (id, pedido_id, valor) => ({ id, pedido_id, cliente_nome: 'Cli Teste', descricao: 'Entrada', valor,
+        data_vencimento: '2026-11-01', data_pagamento: '2026-11-01', status: 'Pago', parcela_tipo: 'entrada' });
+    await entrar(page, BASE, { sc_cli: CLI,
+        sc_ped: [ped(27101, '30_70'), ped(27102, '30_70'), ped(27103, 'avista')],
+        sc_cr: [pago(901, 27101, 300), pago(902, 27102, 100), pago(903, 27103, 400)] });
+    await page.goto(BASE + '/index.html');
+    const cr = await page.evaluate(() => {
+        db.pedidos.forEach(p => gerarFinanceiroPedido(p));
+        return db.contas_receber.filter(c => c.status !== 'Pago')
+            .map(c => [c.pedido_id, c.parcela_tipo, c.valor, c.data_vencimento, c.descricao]);
+    });
+    expect(cr).toEqual([
+        [27101, 'saldo', 700, '2026-12-01', 'Saldo na instalação (70%) — Pedido #27101'],
+        [27102, 'entrada', 200, hoje(), 'Entrada (30%) — Pedido #27102'],
+        [27102, 'saldo', 700, '2026-12-01', 'Saldo na instalação (70%) — Pedido #27102'],
+        [27103, 'unica', 600, hoje(), 'Pagamento à vista — Pedido #27103']]);
+});
+
+test.describe('datas no fuso local', () => {
+    test.use({ timezoneId: 'America/Sao_Paulo' });
+    test('depois das 21h a parcela que vence hoje nao fica atrasada', async ({ page }) => {
+        await page.clock.install({ time: new Date('2026-11-11T22:30:00-03:00') });
+        await entrar(page, BASE, { sc_cli: CLI,
+            sc_ped: [{ id: 27201, clienteId: 9, clienteNome: 'Cli Teste', status: 'Medição', valor: 1000, tipo_pagamento: '50_50',
+                       financeiro_gerado: false, ambientes: [], itens: [] }],
+            sc_cr: [{ id: 951, pedido_id: null, cliente_nome: 'X', descricao: 'Avulsa', valor: 10, data_vencimento: '2026-11-11', data_pagamento: null, status: 'Pendente' }] });
+        await page.goto(BASE + '/index.html');
+        const r = await page.evaluate(() => {
+            atualizarStatusVencimentos();   // as parcelas do pedido nasceram na carga (_migrarFinanceiroPedidos)
+            return { hoje: new Date().toLocaleDateString('sv-SE'), avulsa: db.contas_receber.find(c => c.id === 951).status,
+                     parcelas: db.contas_receber.filter(c => c.pedido_id === 27201).map(c => c.data_vencimento) };
+        });
+        expect(r).toEqual({ hoje: '2026-11-11', avulsa: 'Pendente', parcelas: ['2026-11-11', '2026-12-11'] });
+    });
+});
