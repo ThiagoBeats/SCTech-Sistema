@@ -640,7 +640,8 @@ Formulário:
  10. FINANCEIRO (financeiro.html)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-5 abas: Visão Geral | A Receber | A Pagar | Despesas Fixas | DRE por Pedido
+7 abas: Hoje | Visão Geral | A Receber | A Pagar | Despesas Fixas | DRE por Pedido | Extrato
+(Hoje e Extrato são da Fase 1, seções 10.14 a 10.20)
 
 Como o dinheiro é controlado (resumo, detalhes nas seções 10.7 a 10.13):
   - Tudo o que o cliente pagou fica nas parcelas do A Receber. O "Valor recebido"
@@ -984,6 +985,120 @@ antigos uma única vez:
   - Parcelas existentes não são redivididas em entrada + saldo
   - O custo do material não é criado para trás: pedidos antigos mostram "custo
     estimado" no DRE
+
+
+── 10.14 FASE 1: CONTAS, MEIOS DE PAGAMENTO E MAQUININHA ───────────────────────
+
+Onde se configura: Configurar Empresa › Preferências.
+
+Contas (Caixa, Banco, Maquininha):
+  - Você cadastra quantas quiser de cada tipo (ex.: 2 bancos, 2 maquininhas)
+  - Cada conta tem nome, tipo, saldo inicial e a data desse saldo. Isso é feito
+    uma vez só: o saldo inicial já representa tudo o que aconteceu antes
+  - Saldo de hoje = saldo inicial + entradas − saídas com data até hoje
+  - O dinheiro do cartão que ainda não caiu ("a cair") NÃO entra no saldo de
+    hoje. No dia em que a data chega, ele passa a contar sozinho
+
+Meios de pagamento:
+  - Lista própria: dinheiro, PIX, transferência, boleto, cartão de débito,
+    cartão de crédito ou outro
+  - Cada meio leva a uma conta (cartão: leva a uma maquininha)
+  - Já vem pronto: Dinheiro → Caixa; PIX, Transferência e Boleto → Banco;
+    Cartão de débito e de crédito → Maquininha
+
+Maquininha (taxas e prazos), para cada maquininha:
+  - Débito: taxa % e em quantos dias o dinheiro cai (padrão 1 dia)
+  - Crédito à vista: taxa % e dias (padrão 30)
+  - Crédito parcelado: taxa % e uma parcela caindo a cada 30 dias, mês a mês
+  - Antecipação: taxa extra % e o dinheiro cai tudo de uma vez (padrão 1 dia)
+
+Planos de pagamento (antes chamado "Formas de pagamento"):
+  - Cada plano tem nome, % de entrada e % de desconto (o desconto fica no plano)
+  - Os planos que você já tinha continuam valendo, sem precisar refazer
+
+── 10.15 FASE 1: PLANO E MEIO NO PEDIDO ────────────────────────────────────────
+
+  - No pedido você escolhe o plano (que preenche entrada e desconto como antes) e
+    também o meio previsto da entrada e o meio previsto do saldo
+  - Se o meio for cartão de crédito: número de vezes e se vai antecipar
+  - Plano com 100% de entrada tem só um meio
+  - O meio previsto vai para as parcelas do A Receber e vem já escolhido na hora
+    da baixa (dá para trocar). Pedidos antigos ficam como estão, sem meio previsto
+
+── 10.16 FASE 1: BAIXA COM MEIO, CONTA E CARTÃO ────────────────────────────────
+
+Baixa de recebimento:
+  - Cada parcela marcada tem o seu meio e a sua conta (a conta vem do meio e pode
+    ser trocada na hora). A data é uma só para a baixa
+  - Quando a parcela não tem meio previsto, aparece "Escolha o meio" e é
+    obrigatório escolher
+  - Cartão de crédito: informe as vezes e se antecipa. O sistema calcula o líquido
+    e as datas. O cliente fica quitado na hora (parcela vai para Pago com o valor
+    cheio); o que fica esperando é só o dinheiro cair
+  - Cartão gera um repasse na conta da maquininha em cada data de crédito, e a
+    taxa vira uma conta a pagar já paga (categoria "taxa de cartão"), uma por
+    repasse, na mesma data
+  - Recebimento parcial: o valor de cada parcela pode ser editado para menos. A
+    parcela é dividida em uma parte paga e outra em aberto com o restante (mesmo
+    vencimento e pedido)
+  - Estorno: devolve a parcela e apaga o movimento. Estornar uma parte paga
+    junta o valor de volta na parte em aberto (se ela ainda estiver aberta).
+    Estorno de cartão apaga todos os repasses e as taxas, mesmo os que já caíram,
+    e avisa que muda o saldo de hoje da conta
+  - Baixa feita antes da data do saldo inicial da conta, ou sem conta, é registrada
+    normalmente, mas NÃO entra no saldo. A janela mostra um aviso disso
+
+Pagamentos (A Pagar e comissões):
+  - Pagar também pede o meio e a conta (meios de cartão não aparecem aqui)
+  - Estorno de pagamento: volta a conta para Pendente/Atrasado, registra quem
+    estornou e apaga o movimento. Na comissão, desmarca o pago no pedido
+  - A taxa de cartão e os pagamentos que têm movimento não se excluem pela lixeira
+    (precisam ser estornados). A taxa de cartão só sai estornando o recebimento
+    que a gerou
+
+── 10.17 FASE 1: COBRANÇA PELO WHATSAPP ────────────────────────────────────────
+
+  - Botão "Cobrar" nas parcelas atrasadas ou que vencem hoje (A Receber e Hoje)
+  - Abre o WhatsApp do cliente com a mensagem pronta; quem envia é você
+  - Usa o telefone do cadastro do cliente; sem telefone, avisa
+  - A mensagem é configurável em Preferências, com os campos {cliente}, {empresa},
+    {valor}, {pedido} e {vencimento}
+  - A parcela fica marcada "cobrado hoje" para não cobrar duas vezes no mesmo dia
+
+── 10.18 FASE 1: ABA HOJE ──────────────────────────────────────────────────────
+
+Agora o Financeiro tem 7 abas e a primeira, aberta por padrão, é "Hoje".
+
+  - Lado esquerdo, o que fazer hoje, por urgência: recebimentos atrasados
+    (vermelho), recebimentos que vencem hoje (amarelo), contas a pagar atrasadas,
+    de hoje e dos próximos 7 dias, e o cartão que cai hoje. Vazio: "Tudo em dia"
+  - Botões na própria tarefa: Cobrar e Recebi (para quem pode receber) e Paguei
+    (para quem pode pagar)
+  - "Tenho hoje": total e saldo de cada conta; clicar numa conta abre o Extrato
+    dela. Sem contas configuradas, aparece um convite para configurar
+  - "Próximas semanas": gráfico de 8 semanas a partir do saldo de hoje, somando
+    o que já vai cair do cartão, as parcelas e contas a pagar em aberto e as
+    despesas fixas ainda não lançadas. Atrasados entram na semana atual. Se o
+    dinheiro não fechar, avisa "Semana de DD/MM: falta R$ X"
+  - Os avisos da migração da Fase 0 aparecem no topo de todas as abas
+
+── 10.19 FASE 1: ABA EXTRATO ───────────────────────────────────────────────────
+
+  - Movimentos do mês por conta (entradas em verde, saídas em vermelho), com o
+    saldo no início e no fim do período
+  - Movimentos que ainda não caíram aparecem como "a cair"
+  - Mês futuro mostra "Saldo previsto no fim do mês"
+  - "Transferir entre contas": de, para, valor e data (uma saída numa conta e
+    uma entrada na outra). Não se edita: exclui (com confirmação, apaga os dois
+    lados) e lança de novo
+
+── 10.20 FASE 1: PERMISSÕES NOVAS ──────────────────────────────────────────────
+
+  - Duas permissões novas: Hoje e Extrato
+  - Os papéis que já existiam herdam o mesmo nível que têm na Visão Geral
+  - "Tenho hoje" e "Próximas semanas" e a aba Extrato pedem a permissão Extrato;
+    transferir pede Extrato completo. Recebi/Cobrar pedem Receber completo e
+    Paguei pede Pagar completo
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

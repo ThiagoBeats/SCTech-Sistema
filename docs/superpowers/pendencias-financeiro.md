@@ -41,6 +41,39 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 
 ## Da Fase 1 (branch `feat/financeiro-fase1`)
 
+### Dados e dinheiro
 - [ ] Conta a pagar `taxa_cartao` (gerada na baixa com cartão) ainda pode ser excluída pelo 🗑️ do A Pagar, deixando a saída dela no extrato; deve sair só pelo estorno do recebimento.
 - [ ] Excluir uma parcela em aberto que tem partes pagas (`parcela_origem_id`) deixa as partes sem origem; o estorno delas então só reabre a parte sozinha.
 - [ ] Baixa com cartão numa conta que não aceita movimento (sem conta / data anterior ao saldo inicial) não gera a conta de taxa: a despesa de taxa fica fora do gráfico.
+- [ ] Conta a pagar paga sem movimento ainda pode ser excluída (comissão fica paga no pedido sem trilha); a remoção do movimento de conta a pagar está inline, sem função própria.
+- [ ] Remover uma conta deixa movimentos, contas a receber e a pagar com `conta_id` órfão; as telas devem tolerar conta ausente (ou impedir a remoção).
+- [ ] Contas inativas ainda entram nos saldos de hoje (`saldosHoje`) e nos saldos do Extrato.
+- [ ] Mês antes da abertura da conta mostra o saldo inicial no Extrato.
+- [ ] Transferência aceita data futura; destino padrão da transferência é `contas[1]`.
+- [ ] Valores não convertidos no cartão: `repassesCartao` não força número; "1,5" (vírgula) vira padrão no core e "1,250.50" (formato US) é lido errado.
+- [ ] `dividirParcela` compara o valor pago arredondado com o valor cru da parcela.
+- [ ] Data vazia vira hoje; `baixarContasReceber` não valida por conta própria.
+- [ ] Conta a receber/pagar sem `data_vencimento` cai em "hoje" sem aviso; item com valor 0 marca "inclui atrasados".
+- [ ] Telefone com zero de tronco não é limpo na cobrança; cobrança casa por nome com o primeiro cliente homônimo.
+- [ ] "Cobrado hoje" é marcado mesmo se o navegador bloquear o popup do WhatsApp.
+- [ ] Entrada vazia: a visibilidade do saldo usa 50% e o salvar usa o plano.
+- [ ] Meio apagado reabre como "a definir"; entrada 0% ainda mostra o meio da entrada.
+- [ ] Os padrões do cartão estão duplicados (`CARTAO_PADRAO_CFG` e CaixaCore).
+
+### Telas e textos
+- [ ] Botões e textos ainda dizem "forma de pagamento" onde agora é "plano".
+- [ ] Aviso de repasse com `
+
+` sobrando.
+- [ ] "#undefined" na conta a receber sem pedido.
+- [ ] Hover da conta na tela Hoje invisível no tema escuro; `.hoje-conta` sem acesso por teclado.
+- [ ] Tarefas da tela Hoje aparecem para quem não pode visualizar receber/pagar (só os botões são barrados).
+- [ ] Comentários "na Visão Geral" no código estão desatualizados.
+- [ ] Comissão antiga paga sem conta a pagar não tem botão Estornar.
+
+### Testes que faltam
+- [ ] Cartão: cancelar, débito, antecipar, recebimento parcial com cartão e conta removida.
+- [ ] Estorno de pagamento: sem conta e com permissão negada.
+- [ ] Cobrança: casar por nome, fallback e permissão.
+- [ ] Excluir transferência: permissão negada.
+- [ ] Periodicidade de despesas fixas: teste com data fora do horizonte (o atual pode ser fraco).
