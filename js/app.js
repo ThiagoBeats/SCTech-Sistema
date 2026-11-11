@@ -11289,6 +11289,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (document.getElementById('fin-kpis')) {
         atualizarStatusVencimentos();
+        renderAvisoCopiaFinanceiro();
+        renderAvisoRevisaoFinanceiro();
         const abasVisiveis = Object.entries(FIN_TAB_MODULO).filter(([, modulo]) => temAcesso(modulo, 'visualizar'));
         Object.keys(FIN_TAB_MODULO).forEach(tab => {
             const visivel = abasVisiveis.some(([t]) => t === tab);

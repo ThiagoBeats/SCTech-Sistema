@@ -23,6 +23,10 @@
             <button class="tab-btn fin-tab-btn"        data-tab="extrato"   onclick="mostrarTabFinanceiro('extrato')">📒 Extrato</button>
         </div>
 
+        <!-- Avisos da migracao (copia de seguranca e pedidos para conferir): valem para todas as abas -->
+        <div id="fin-backup"></div>
+        <div id="fin-revisar"></div>
+
         <!-- TAB: HOJE -->
         <div id="fin-hoje" class="fin-panel active">
             <div class="hoje-grid">
@@ -67,12 +71,6 @@
                 <span id="fin-periodo-label" style="font-size:12px;color:#8F8F8F;margin-left:4px"></span>
                 <button class="btn btn-outline btn-sm" onclick="gerarRelatorioFinanceiro()" style="margin-left:auto">📄 Exportar Relatório</button>
             </div>
-
-            <!-- Copia de seguranca da migracao dos dados antigos (baixar/descartar, falta de espaco) -->
-            <div id="fin-backup"></div>
-
-            <!-- Pedidos para conferir depois da migracao dos dados antigos -->
-            <div id="fin-revisar"></div>
 
             <!-- Alertas -->
             <div id="fin-alertas" style="margin-bottom:16px"></div>

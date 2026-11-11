@@ -35,7 +35,6 @@ async function semearDadosAntigos(page) {
 test('abrir o financeiro migra os dados antigos uma vez, com copia de seguranca', async ({ page }) => {
     await semearDadosAntigos(page);
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
     await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
 
     const crs = await lerChave(page, 'sc_cr');
@@ -67,8 +66,7 @@ test('abrir o financeiro migra os dados antigos uma vez, com copia de seguranca'
     // Recarregar nao muda nada.
     const antes = await page.evaluate(() => ['sc_cr', 'sc_cp', 'sc_ped'].map(k => localStorage.getItem(k)));
     await page.reload();
-    await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
-    await expect(page.locator('#fin-kpis')).not.toBeEmpty();
+    await expect(page.locator('#hoje-tarefas')).not.toBeEmpty();
     const depois = await page.evaluate(() => ['sc_cr', 'sc_cp', 'sc_ped'].map(k => localStorage.getItem(k)));
     expect(depois).toEqual(antes);
 });
@@ -76,7 +74,6 @@ test('abrir o financeiro migra os dados antigos uma vez, com copia de seguranca'
 test('aviso de revisao na Visao Geral; marcar como revisado limpa', async ({ page }) => {
     await semearDadosAntigos(page);
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
     const aviso = page.locator('#fin-revisar');
     await expect(aviso).toContainText('Confira estes pedidos');
     await expect(aviso).toContainText('#26501');
@@ -86,8 +83,7 @@ test('aviso de revisao na Visao Geral; marcar como revisado limpa', async ({ pag
     await expect(aviso).toBeEmpty();
     expect(await page.evaluate(() => localStorage.getItem('sc_fin_revisar'))).toBeNull();
     await page.reload();
-    await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
-    await expect(page.locator('#fin-kpis')).not.toBeEmpty();
+    await expect(page.locator('#hoje-tarefas')).not.toBeEmpty();
     await expect(page.locator('#fin-revisar')).toBeEmpty();
 });
 
@@ -102,8 +98,7 @@ test('arquiteto gravado no campo de vendedor vira comissao de arquiteto, uma so'
     await page.goto(BASE + '/login.html');   // na login o checkAuth nao roda: a migracao precisa acertar sozinha
     await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
-    await expect(page.locator('#fin-kpis')).not.toBeEmpty();
+    await expect(page.locator('#hoje-tarefas')).not.toBeEmpty();
     const cps = (await lerChave(page, 'sc_cp')).filter(c => c.categoria === 'comissao');
     expect(cps).toHaveLength(1);
     expect([cps[0].papel_comissao, cps[0].status, cps[0].valor, cps[0].credor_nome]).toEqual(['arquiteto', 'Pago', 100, 'Studio M']);
@@ -119,7 +114,6 @@ test('nova tentativa nao sobrescreve a copia de seguranca que ja existe', async 
     const antiga = JSON.stringify({ criado_em: 1, contas_receber: [{ id: 1 }], contas_pagar: [], pedidos: [] });
     await page.evaluate(b => localStorage.setItem('sc_fin_backup_fase0', b), antiga);
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
     await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
     expect((await lerChave(page, 'sc_cr')).find(c => c.id === 602).status, 'migrou mesmo assim').toBe('Pago');
     expect(await page.evaluate(() => localStorage.getItem('sc_fin_backup_fase0'))).toBe(antiga);
@@ -179,8 +173,7 @@ test('exportar leva a marca da Fase 0, a empresa e as formas; importar esse arqu
     await page.waitForLoadState('load');
     await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
-    await expect(page.locator('#fin-kpis')).not.toBeEmpty();
+    await expect(page.locator('#hoje-tarefas')).not.toBeEmpty();
     expect((await lerChave(page, 'sc_cr')).find(c => c.id === 811).status, 'nao baixa de novo').toBe('Pendente');
     expect(await page.evaluate(() => [localStorage.getItem('sc_fin_backup_fase0'), localStorage.getItem('sc_fin_revisar')])).toEqual([null, null]);
     expect(await lerChave(page, 'sc_empresa')).toEqual(empresa);
@@ -203,7 +196,6 @@ test('valor recebido digitado em pedido sem parcelas fica e vai para revisao', a
         sc_ped: [{ id: 26900, clienteNome: 'Ana', status: 'Orçamento', valor: 1000, valor_recebido: 300, ambientes: [] }] });
     await page.evaluate(() => localStorage.removeItem('sc_fin_migracao'));
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
     await expect(page.locator('#fin-revisar')).toContainText('sem lançamento no Financeiro');
     await expect(page.locator('#fin-revisar')).toContainText('#26900');
     expect((await lerChave(page, 'sc_ped'))[0].valor_recebido).toBe(300);
@@ -220,7 +212,6 @@ test('sem espaco para a copia: nao migra, avisa e oferece baixar a copia e corri
         };
     });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
     const aviso = page.locator('#fin-backup');
     await expect(aviso).toContainText('Não foi possível guardar a cópia de segurança no navegador. Baixe a cópia para continuar.');
     expect(await page.evaluate(() => [localStorage.getItem('sc_fin_migracao'), localStorage.getItem('sc_fin_backup_falhou')])).toEqual([null, '1']);
@@ -232,7 +223,7 @@ test('sem espaco para a copia: nao migra, avisa e oferece baixar a copia e corri
     expect(copia.contas_receber.find(c => c.id === 602).status).toBe('Atrasado');
     expect(copia.fin_fase0, 'a copia e de antes da migracao').toBeUndefined();
     await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
-    await expect(page.locator('#fin-kpis')).not.toBeEmpty();
+    await expect(page.locator('#hoje-tarefas')).not.toBeEmpty();
     expect((await lerChave(page, 'sc_cr')).find(c => c.id === 602).status).toBe('Pago');
     expect(await page.evaluate(() => [localStorage.getItem('sc_fin_backup_falhou'), localStorage.getItem('sc_fin_backup_fase0')])).toEqual([null, null]);
     await expect(page.locator('#fin-backup')).toBeEmpty();
@@ -241,7 +232,6 @@ test('sem espaco para a copia: nao migra, avisa e oferece baixar a copia e corri
 test('com a copia guardada, a Visao Geral oferece baixar e descartar', async ({ page }) => {
     await semearDadosAntigos(page);
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
     const aviso = page.locator('#fin-backup');
     const [dl] = await Promise.all([page.waitForEvent('download'), aviso.locator('button', { hasText: /^Baixar cópia$/ }).click()]);
     const copia = await lerDownload(dl);
@@ -263,14 +253,12 @@ test('erro ao salvar a migracao deixa a marca sem gravar e aparece no aviso', as
         };
     });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
     await expect(page.locator('#fin-backup')).toContainText('Não foi possível salvar');
     expect(await page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBeNull();
     expect((await lerChave(page, 'sc_cr')).find(c => c.id === 602).status, 'volta ao que era').toBe('Atrasado');
     // Com espaco de novo, a proxima abertura migra e o aviso de erro some.
     await page.evaluate(() => sessionStorage.setItem('libera', '1'));
     await page.reload();
-    await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
     await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
     expect((await lerChave(page, 'sc_cr')).find(c => c.id === 602).status).toBe('Pago');
     await expect(page.locator('#fin-backup')).not.toContainText('Não foi possível salvar');

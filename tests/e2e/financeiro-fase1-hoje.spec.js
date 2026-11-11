@@ -128,3 +128,13 @@ test('em 375px de largura tarefas vem primeiro', async ({ page }) => {
     expect(t.y).toBeLessThan(s.y);
     expect(Math.abs(t.x - s.x)).toBeLessThan(5);
 });
+
+test('aviso de pedidos para revisar aparece em Hoje sem clicar em aba', async ({ page }) => {
+    await entrar(page, BASE, { sc_contas_fin: CONTAS });
+    await page.evaluate(() => localStorage.setItem('sc_fin_revisar', JSON.stringify([{ pedido_id: 1, rotulo: '#26501', cliente: 'Ana', motivo: 'valor diferente' }])));
+    await page.goto(BASE + '/financeiro.html');
+    await expect(page.locator('.fin-tab-btn[data-tab="hoje"]')).toHaveClass(/active/);
+    await expect(page.locator('#fin-revisar')).toBeVisible();
+    await expect(page.locator('#fin-revisar')).toContainText('Confira estes pedidos');
+    await expect(page.locator('#fin-revisar')).toContainText('#26501');
+});
