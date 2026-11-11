@@ -42,7 +42,6 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 ## Da Fase 1 (branch `feat/financeiro-fase1`)
 
 ### Dados e dinheiro
-- [ ] Conta a pagar `taxa_cartao` (gerada na baixa com cartão) ainda pode ser excluída pelo 🗑️ do A Pagar, deixando a saída dela no extrato; deve sair só pelo estorno do recebimento.
 - [ ] Excluir uma parcela em aberto que tem partes pagas (`parcela_origem_id`) deixa as partes sem origem; o estorno delas então só reabre a parte sozinha.
 - [ ] Baixa com cartão numa conta que não aceita movimento (sem conta / data anterior ao saldo inicial) não gera a conta de taxa: a despesa de taxa fica fora do gráfico.
 - [ ] Conta a pagar paga sem movimento ainda pode ser excluída (comissão fica paga no pedido sem trilha); a remoção do movimento de conta a pagar está inline, sem função própria.
@@ -59,12 +58,15 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [ ] Entrada vazia: a visibilidade do saldo usa 50% e o salvar usa o plano.
 - [ ] Meio apagado reabre como "a definir"; entrada 0% ainda mostra o meio da entrada.
 - [ ] Os padrões do cartão estão duplicados (`CARTAO_PADRAO_CFG` e CaixaCore).
+- [ ] "Cartão que cai hoje" na tela Hoje mostra o valor bruto (e qualquer entrada numa maquininha); mostrar o líquido ou rotular "bruto".
+- [ ] Excluir uma conta em Preferências não pede confirmação mesmo com movimentos; o saldo some do Hoje/Extrato e a previsão ainda conta os movimentos futuros dela. Pedir confirmação ou bloquear.
+- [ ] Na configuração de meios, um meio de cartão pode apontar para conta que não é maquininha (aí a baixa fica "sem conta"). Restringir o select por tipo.
+- [ ] Visão Geral (gráfico de fluxo e "Recebido") ainda usa a data da baixa e o valor bruto do cartão, diferente de Hoje/Extrato (datas de repasse). Alinhar na Fase 2.
+- [ ] FUNCIONALIDADES: 10.20 não diz que a aba Hoje exige a permissão Hoje; 10.18 não cita o "a cair" por conta.
 
 ### Telas e textos
 - [ ] Botões e textos ainda dizem "forma de pagamento" onde agora é "plano".
-- [ ] Aviso de repasse com `
-
-` sobrando.
+- [ ] Aviso de repasse com quebras de linha (\n\n) sobrando.
 - [ ] "#undefined" na conta a receber sem pedido.
 - [ ] Hover da conta na tela Hoje invisível no tema escuro; `.hoje-conta` sem acesso por teclado.
 - [ ] Tarefas da tela Hoje aparecem para quem não pode visualizar receber/pagar (só os botões são barrados).
