@@ -81,3 +81,126 @@ test('acharContaDuplicadaNota: mesmo CNPJ, valor proximo, em aberto, vinda de PC
     assert.strictEqual(F.acharContaDuplicadaNota(cps, { cnpj: '12345678000190', valor: 1005 }).id, 1);
     assert.strictEqual(F.acharContaDuplicadaNota(cps, { cnpj: '12345678000190', valor: 1100 }), null);
 });
+
+// ── Migracao dos dados antigos (Fase 0) ─────────────────────────────
+const msLocal = (a, m, d) => new Date(a, m - 1, d, 15, 0).getTime();   // 15h locais: a data local e sempre a do dia
+const baseMig = extra => ({ pedidos: [], contas_receber: [], contas_pagar: [], vendedores: [], hoje: '2026-11-11', rotuloPedido: p => '#' + p.id, ...extra });
+const planoVazio = { baixarCR: [], removerCR: [], marcarCRPedidoExcluido: [], criarCP: [], revisar: [] };
+
+test('dataLocalISO converte epoch ms para a data local e aceita data ISO', () => {
+    assert.strictEqual(F.dataLocalISO(msLocal(2026, 10, 5)), '2026-10-05');
+    assert.strictEqual(F.dataLocalISO('2026-10-05'), '2026-10-05');
+    assert.strictEqual(F.dataLocalISO(null), null);
+});
+test('planoMigracaoFase0: pedido com pagamento confirmado e parcelas em aberto baixa as parcelas', () => {
+    const plano = F.planoMigracaoFase0(baseMig({
+        pedidos: [{ id: 1, status: 'Instalado', valor: 1000, valor_recebido: 1000, pagamento_confirmado_em: msLocal(2026, 10, 5), pagamento_confirmado_por: 7, data_instalado: msLocal(2026, 10, 1) },
+                  { id: 2, status: 'Na Costura', valor: 500, valor_recebido: 500 },
+                  { id: 3, status: 'Instalado', valor: 300, pagamento_confirmado_em: msLocal(2026, 10, 5), pagamento_pendente: true }],
+        contas_receber: [{ id: 10, pedido_id: 1, valor: 500, status: 'Pago', data_pagamento: '2026-09-01' }, { id: 11, pedido_id: 1, valor: 500, status: 'Atrasado' },
+                         { id: 20, pedido_id: 2, valor: 500, status: 'Pendente' }, { id: 30, pedido_id: 3, valor: 300, status: 'Pendente' }]
+    }));
+    assert.deepStrictEqual(plano.baixarCR, [
+        { id: 11, data_pagamento: '2026-10-05', baixado_por: 7 },
+        { id: 20, data_pagamento: '2026-11-11', baixado_por: 'migracao' }]);
+    assert.deepStrictEqual(plano.revisar, []);
+});
+test('planoMigracaoFase0: sem data de confirmacao, a baixa usa a data de instalacao', () => {
+    const plano = F.planoMigracaoFase0(baseMig({
+        pedidos: [{ id: 1, status: 'Instalado', valor: 100, valor_recebido: 100, data_instalado: msLocal(2026, 10, 1) }],
+        contas_receber: [{ id: 11, pedido_id: 1, valor: 100, status: 'Pendente' }]
+    }));
+    assert.deepStrictEqual(plano.baixarCR, [{ id: 11, data_pagamento: '2026-10-01', baixado_por: 'migracao' }]);
+});
+test('planoMigracaoFase0: valor recebido parcial que nao bate com o Financeiro vai para revisao', () => {
+    const plano = F.planoMigracaoFase0(baseMig({
+        pedidos: [{ id: 1, status: 'Na Costura', valor: 1000, valor_recebido: 300 },
+                  { id: 2, status: 'Na Costura', valor: 1000, valor_recebido: 500 }],
+        contas_receber: [{ id: 11, pedido_id: 1, valor: 500, status: 'Pendente' }, { id: 12, pedido_id: 1, valor: 500, status: 'Pendente' },
+                         { id: 21, pedido_id: 2, valor: 500, status: 'Pago' }, { id: 22, pedido_id: 2, valor: 500, status: 'Pendente' }]
+    }));
+    assert.deepStrictEqual(plano.revisar, [{ pedido_id: 1, motivo: 'valor recebido digitado no pedido não bate com o Financeiro' }]);
+    assert.deepStrictEqual(plano.baixarCR, []);
+});
+test('planoMigracaoFase0: pedido instalado ganha as contas de comissao; as pagas saem pagas', () => {
+    const plano = F.planoMigracaoFase0(baseMig({
+        pedidos: [{ id: 1, status: 'Instalado', valor: 1000, data_instalado: msLocal(2026, 10, 1),
+                    vendedor_id: 3, comissao_pct: 5, comissao_valor: 50, comissao_paga: true, comissao_data_pgto: msLocal(2026, 10, 20),
+                    arq_id: 4, arq_comissao_pct: 10, arq_comissao_valor: 100 },
+                  { id: 2, status: 'Na Costura', valor: 1000, vendedor_id: 3, comissao_pct: 5, comissao_valor: 50 }],
+        vendedores: [{ id: 3, nome: 'Ana' }, { id: 4, nome: 'Bia' }]
+    }));
+    assert.deepStrictEqual(plano.criarCP.map(c => [c.pedido_id, c.papel_comissao, c.valor, c.categoria, c.status, c.data_vencimento, c.data_pagamento, c.baixado_por || null]), [
+        [1, 'vendedor', 50, 'comissao', 'Pago', '2026-10-01', '2026-10-20', 'migracao'],
+        [1, 'arquiteto', 100, 'comissao', 'Pendente', '2026-10-01', null, null]]);
+    assert.ok(plano.criarCP.every(c => c.id === undefined));
+});
+test('planoMigracaoFase0: comissao paga sem data de pagamento usa a data de instalacao', () => {
+    const plano = F.planoMigracaoFase0(baseMig({
+        pedidos: [{ id: 1, status: 'Instalado', valor: 1000, data_instalado: msLocal(2026, 10, 1), vendedor_id: 3, comissao_valor: 50, comissao_paga: true }],
+        vendedores: [{ id: 3, nome: 'Ana' }]
+    }));
+    assert.deepStrictEqual([plano.criarCP[0].status, plano.criarCP[0].data_pagamento], ['Pago', '2026-10-01']);
+});
+test('planoMigracaoFase0: RT legado vira comissao de arquiteto quando nao ha outra', () => {
+    const plano = F.planoMigracaoFase0(baseMig({
+        pedidos: [{ id: 1, status: 'Instalado', valor: 1234.5, data_instalado: msLocal(2026, 10, 1), arquiteto_nome: 'Carla', rt_pct: 10 },
+                  { id: 2, status: 'Instalado', valor: 1000, arquiteto_nome: 'Carla', rt_pct: 10, rt_gerado: true },
+                  { id: 3, status: 'Instalado', valor: 1000, arquiteto_nome: 'Carla', rt_pct: 10, arq_id: 4, arq_comissao_valor: 80 },
+                  { id: 4, status: 'Instalado', valor: 1000, arquiteto_nome: 'Carla', rt_pct: 10 },
+                  { id: 5, status: 'Na Costura', valor: 1000, arquiteto_nome: 'Carla', rt_pct: 10 },
+                  { id: 6, status: 'Instalado', valor: 1000, arquiteto_nome: 'Carla', rt_pct: 10 }],
+        contas_pagar: [{ id: 90, pedido_id: 4, papel_comissao: 'arquiteto', valor: 100, status: 'Pendente' },
+                       { id: 91, pedido_id: 6, categoria: 'comissao_rt', valor: 100, status: 'Pago' }],
+        vendedores: [{ id: 4, nome: 'Bia' }]
+    }));
+    assert.deepStrictEqual(plano.criarCP.map(c => [c.pedido_id, c.papel_comissao, c.valor, c.credor_nome, c.categoria, c.status, c.data_vencimento]), [
+        [1, 'arquiteto', 123.45, 'Carla', 'comissao', 'Pendente', '2026-10-01'],
+        [3, 'arquiteto', 80, 'Bia', 'comissao', 'Pendente', '2026-11-11']]);
+});
+test('planoMigracaoFase0: conta a receber sem pedido — aberta sai, paga fica marcada', () => {
+    const plano = F.planoMigracaoFase0(baseMig({
+        pedidos: [{ id: 1, status: 'Na Costura', valor: 100 }],
+        contas_receber: [{ id: 11, pedido_id: 1, valor: 100, status: 'Pendente' }, { id: 12, pedido_id: 99, valor: 50, status: 'Atrasado' },
+                         { id: 13, pedido_id: 99, valor: 50, status: 'Pago' }, { id: 14, valor: 70, status: 'Pendente' },
+                         { id: 15, pedido_id: 98, valor: 10, status: 'Pago', pedido_excluido: true }]
+    }));
+    assert.deepStrictEqual(plano.removerCR, [12]);
+    assert.deepStrictEqual(plano.marcarCRPedidoExcluido, [13]);
+});
+test('planoMigracaoFase0: nunca redivide parcelas nem cria custo', () => {
+    const dados = baseMig({
+        pedidos: [{ id: 1, status: 'Instalado', valor: 1000, valor_recebido: 1000, pagamento_confirmado_em: msLocal(2026, 10, 5) }],
+        contas_receber: [{ id: 11, pedido_id: 1, valor: 1000, status: 'Pendente' }]
+    });
+    const antes = JSON.stringify(dados.pedidos) + JSON.stringify(dados.contas_receber);
+    const plano = F.planoMigracaoFase0(dados);
+    assert.strictEqual(JSON.stringify(dados.pedidos) + JSON.stringify(dados.contas_receber), antes);
+    assert.deepStrictEqual(plano.baixarCR.map(b => b.id), [11]);
+    assert.ok(!('custo_snapshot' in dados.pedidos[0]));
+});
+test('aplicar o plano e planejar de novo da vazio', () => {
+    const dados = baseMig({
+        pedidos: [{ id: 1, status: 'Instalado', valor: 1000, valor_recebido: 1000, pagamento_confirmado_em: msLocal(2026, 10, 5),
+                    vendedor_id: 3, comissao_valor: 50, comissao_paga: true, arquiteto_nome: 'Carla', rt_pct: 5 },
+                  { id: 2, status: 'Na Costura', valor: 1000, valor_recebido: 300 }],
+        contas_receber: [{ id: 11, pedido_id: 1, valor: 1000, status: 'Pendente' }, { id: 21, pedido_id: 2, valor: 1000, status: 'Pendente' },
+                         { id: 31, pedido_id: 99, valor: 5, status: 'Pendente' }, { id: 32, pedido_id: 99, valor: 5, status: 'Pago' }],
+        vendedores: [{ id: 3, nome: 'Ana' }]
+    });
+    // Aplica como o app: baixa, remove, marca, cria (com id) e sincroniza o valor recebido dos pedidos tocados.
+    const aplicar = (d, p) => {
+        const c = { ...JSON.parse(JSON.stringify(d)), rotuloPedido: d.rotuloPedido };
+        const tocados = new Set();
+        p.baixarCR.forEach(b => { const cr = c.contas_receber.find(x => x.id === b.id); Object.assign(cr, { status: 'Pago', data_pagamento: b.data_pagamento, baixado_por: b.baixado_por }); tocados.add(cr.pedido_id); });
+        c.contas_receber = c.contas_receber.filter(x => !p.removerCR.includes(x.id));
+        p.marcarCRPedidoExcluido.forEach(id => { c.contas_receber.find(x => x.id === id).pedido_excluido = true; });
+        p.criarCP.forEach((cp, i) => c.contas_pagar.push({ id: 1000 + i, ...cp }));
+        p.revisar.forEach(r => tocados.add(r.pedido_id));
+        tocados.forEach(id => { c.pedidos.find(x => x.id === id).valor_recebido = F.totalRecebido(c.contas_receber, id); });
+        return c;
+    };
+    const plano1 = F.planoMigracaoFase0(dados);
+    assert.ok(plano1.baixarCR.length && plano1.removerCR.length && plano1.marcarCRPedidoExcluido.length && plano1.criarCP.length === 2 && plano1.revisar.length);
+    assert.deepStrictEqual(F.planoMigracaoFase0(aplicar(dados, plano1)), planoVazio);
+});

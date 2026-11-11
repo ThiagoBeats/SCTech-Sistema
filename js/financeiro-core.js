@@ -168,9 +168,91 @@
         }) || null;
     }
 
+    // Data local 'YYYY-MM-DD' de um evento em epoch ms (igual a toLocaleDateString('sv-SE')).
+    // Uma data ja em ISO passa direto; vazio ou invalido da null.
+    function dataLocalISO(v) {
+        if (v == null || v === '') return null;
+        if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
+        const d = new Date(Number(v));
+        if (isNaN(d.getTime())) return null;
+        const p = n => String(n).padStart(2, '0');
+        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+    }
+
+    // Plano da migracao unica dos dados antigos para a Fase 0. So le os dados:
+    // quem aplica e o app. Nunca redivide parcelas nem cria custo do pedido.
+    function planoMigracaoFase0({ pedidos, contas_receber, contas_pagar, vendedores, hoje, rotuloPedido }) {
+        const plano = { baixarCR: [], removerCR: [], marcarCRPedidoExcluido: [], criarCP: [], revisar: [] };
+        const crs = contas_receber || [];
+        const cps = (contas_pagar || []).slice();   // inclui as que este plano cria, para nao duplicar
+        const rotulo = p => (typeof rotuloPedido === 'function' ? rotuloPedido(p) : '#' + p.id);
+        const instalado = s => s === 'Instalado' || s === 'Faturado';   // 'Faturado' e o nome antigo
+
+        (pedidos || []).forEach(ped => {
+            const valor = Number(ped.valor) || 0;
+            const recebidoPed = Number(ped.valor_recebido) || 0;
+            const abertas = _doPedido(crs, ped.id).filter(c => c.status !== 'Pago');
+            // Pagamento confirmado no fluxo antigo = tudo recebido. No fluxo novo a
+            // confirmacao pode ser parcial (pagamento_pendente): essa nao e baixada.
+            const quitado = (ped.pagamento_confirmado_em && !ped.pagamento_pendente) || (valor > 0 && recebidoPed >= valor);
+            if (quitado && abertas.length) {
+                const data = dataLocalISO(ped.pagamento_confirmado_em) || dataLocalISO(ped.data_instalado) || hoje;
+                const por = ped.pagamento_confirmado_por || 'migracao';
+                abertas.forEach(c => plano.baixarCR.push({ id: c.id, data_pagamento: data, baixado_por: por }));
+            } else if (recebidoPed > 0 && recebidoPed < valor && _doPedido(crs, ped.id).length
+                       && Math.abs(arredondar(recebidoPed - totalRecebido(crs, ped.id))) >= 0.01) {
+                plano.revisar.push({ pedido_id: ped.id, motivo: 'valor recebido digitado no pedido não bate com o Financeiro' });
+            }
+
+            if (!instalado(ped.status)) return;
+            const dataInst = dataLocalISO(ped.data_instalado) || hoje;
+            const novas = contasComissaoDoPedido(ped, { vendedores, contasPagar: cps, data: dataInst, rotuloPedido: rotulo(ped) });
+            novas.forEach(cp => {
+                const c = CAMPOS_COMISSAO[cp.papel_comissao];
+                if (ped[c.paga]) {
+                    cp.status = 'Pago';
+                    cp.data_pagamento = dataLocalISO(ped[c.data]) || dataInst;
+                    cp.baixado_por = 'migracao';
+                }
+            });
+            // RT antigo: arquiteto so pelo nome e %, nunca virou conta a pagar.
+            const nomeRT = String(ped.arquiteto_nome || '').trim();
+            const pctRT = Number(ped.rt_pct) || 0;
+            const temArquiteto = ped.arq_id || novas.some(cp => cp.papel_comissao === 'arquiteto')
+                || cps.some(cp => cp.pedido_id == ped.id && (cp.papel_comissao === 'arquiteto' || cp.categoria === 'comissao_rt'));
+            const valorRT = arredondar(valor * pctRT / 100);
+            if (nomeRT && pctRT > 0 && !ped.rt_gerado && !temArquiteto && valorRT > 0) {
+                novas.push({
+                    descricao: `Comissão ${pctRT}% — ${nomeRT} — Ped. ${rotulo(ped)}`,
+                    valor: valorRT,
+                    categoria: 'comissao',
+                    tipo: 'variavel',
+                    status: 'Pendente',
+                    data_vencimento: dataInst,
+                    data_pagamento: null,
+                    credor_nome: nomeRT,
+                    vendedor_id: null,
+                    pedido_id: ped.id,
+                    papel_comissao: 'arquiteto'
+                });
+            }
+            novas.forEach(cp => { cps.push(cp); plano.criarCP.push(cp); });
+        });
+
+        // Conta a receber de pedido que nao existe mais.
+        const idsPedidos = new Set((pedidos || []).map(p => String(p.id)));
+        crs.forEach(c => {
+            if (c.pedido_id == null || c.pedido_id === '' || idsPedidos.has(String(c.pedido_id))) return;
+            if (c.status !== 'Pago') plano.removerCR.push(c.id);
+            else if (!c.pedido_excluido) plano.marcarCRPedidoExcluido.push(c.id);
+        });
+        return plano;
+    }
+
     const api = {
         CAMPOS_COMISSAO, arredondar, somarDias, entradaPctDoNome, planejarParcelas, totalRecebido, saldoEmAberto,
-        custoSnapshotPedido, resultadoPedido, contasComissaoDoPedido, parcelasCompra, acharContaDuplicadaNota
+        custoSnapshotPedido, resultadoPedido, contasComissaoDoPedido, parcelasCompra, acharContaDuplicadaNota,
+        dataLocalISO, planoMigracaoFase0
     };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

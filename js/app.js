@@ -7264,6 +7264,7 @@ function importarDados(event) {
             db.despesas_fixas = dados.despesas_fixas || [];
             db.medicoes       = dados.medicoes       || [];
             syncDB();
+            localStorage.removeItem(CHAVE_FIN_MIGRACAO);   // backup antigo passa pela migracao do Financeiro ao recarregar
             toastReload('Dados importados com sucesso!', 'info');
             window.location.reload();
         } catch { await showAlert('Erro ao ler o arquivo. Certifique-se que é um backup válido do SCTech.', '❌'); }
@@ -10692,6 +10693,13 @@ function atualizarIconeTema() {
 
 // --- INICIALIZAÇÃO ---
 document.addEventListener('DOMContentLoaded', () => {
+    // Pedidos antigos ganham parcelas; depois, a migracao unica da Fase 0.
+    // Um erro aqui nao pode impedir a pagina de abrir.
+    try {
+        _migrarFinanceiroPedidos();
+        _migrarFinanceiroFase0();
+    } catch (e) { console.error('Migração do Financeiro falhou:', e); }
+
     if (!document.getElementById('login-usuario')) {
         checkAuth();
         carregarTema();
@@ -11429,6 +11437,87 @@ function _migrarFinanceiroPedidos() {
         ped.financeiro_gerado = true;
     });
     syncDB();
+}
+
+// Migracao unica dos dados antigos para a Fase 0 (ver FinanceiroCore.planoMigracaoFase0).
+// Antes de mexer em qualquer coisa guarda uma copia em sc_fin_backup_fase0; os
+// pedidos que precisam de conferencia manual ficam em sc_fin_revisar.
+const CHAVE_FIN_MIGRACAO = 'sc_fin_migracao';
+function _migrarFinanceiroFase0() {
+    if (localStorage.getItem(CHAVE_FIN_MIGRACAO) === '1') return;
+    const plano = FinanceiroCore.planoMigracaoFase0({
+        pedidos: db.pedidos, contas_receber: db.contas_receber, contas_pagar: db.contas_pagar,
+        vendedores: db.vendedores, hoje: new Date().toLocaleDateString('sv-SE'),
+        rotuloPedido: p => '#' + formatPedidoId(p.id)
+    });
+    const vazio = Object.values(plano).every(l => !l.length);
+    if (!vazio) {
+        try {
+            localStorage.setItem('sc_fin_backup_fase0', JSON.stringify({
+                criado_em: Date.now(),
+                contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, pedidos: db.pedidos
+            }));
+        } catch (e) {
+            console.warn('Migração do Financeiro adiada: não foi possível guardar a cópia de segurança.', e);
+            return;   // sem copia, nao migra; tenta de novo na proxima carga
+        }
+        const agora = Date.now();
+        const tocados = new Set();
+        // Valor que estava digitado no pedido, antes de sincronizar com o Financeiro.
+        const revisar = plano.revisar.map(r => {
+            const ped = db.pedidos.find(p => p.id == r.pedido_id) || {};
+            return { ...r, rotulo: '#' + formatPedidoId(r.pedido_id), cliente: ped.clienteNome || '',
+                     valor_digitado: Number(ped.valor_recebido) || 0,
+                     valor_financeiro: FinanceiroCore.totalRecebido(db.contas_receber, r.pedido_id) };
+        });
+        plano.baixarCR.forEach(b => {
+            const cr = db.contas_receber.find(x => x.id == b.id);
+            if (!cr || cr.status === 'Pago') return;
+            Object.assign(cr, { status: 'Pago', data_pagamento: b.data_pagamento, baixado_por: b.baixado_por, baixado_em: agora });
+            if (cr.pedido_id) tocados.add(cr.pedido_id);
+        });
+        const remover = new Set(plano.removerCR.map(String));
+        db.contas_receber = db.contas_receber.filter(c => !remover.has(String(c.id)));
+        plano.marcarCRPedidoExcluido.forEach(id => {
+            const cr = db.contas_receber.find(x => x.id == id);
+            if (cr) cr.pedido_excluido = true;
+        });
+        const usados = new Set((db.contas_pagar || []).map(c => c.id));
+        let proximoId = Date.now();
+        plano.criarCP.forEach(cp => {
+            while (usados.has(proximoId)) proximoId++;
+            usados.add(proximoId);
+            db.contas_pagar.push({ id: proximoId, ...cp, ...(cp.status === 'Pago' ? { baixado_em: agora } : {}) });
+        });
+        plano.revisar.forEach(r => tocados.add(r.pedido_id));
+        tocados.forEach(sincronizarRecebidoPedido);
+        syncDB();
+        if (revisar.length) localStorage.setItem('sc_fin_revisar', JSON.stringify(revisar));
+    }
+    localStorage.setItem(CHAVE_FIN_MIGRACAO, '1');
+}
+
+// Aviso na Visao Geral: pedidos que a migracao nao conseguiu acertar sozinha.
+function renderAvisoRevisaoFinanceiro() {
+    const el = document.getElementById('fin-revisar');
+    if (!el) return;
+    let lista = [];
+    try { lista = JSON.parse(localStorage.getItem('sc_fin_revisar') || '[]') || []; } catch (e) { lista = []; }
+    if (!Array.isArray(lista) || !lista.length) { el.innerHTML = ''; return; }
+    const fmt = v => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    el.innerHTML = `<div class="fin-alerta fin-alerta-warning" style="align-items:flex-start">
+        <span style="font-size:18px;flex-shrink:0">🔎</span>
+        <div style="flex:1">
+            <strong>Confira estes pedidos.</strong> Na atualização do Financeiro eles não puderam ser acertados sozinhos. Agora vale o que está no Financeiro; acerte as parcelas se precisar.
+            <ul style="margin:6px 0 8px 18px;padding:0">${lista.map(r => `<li>Pedido ${escapeHtml(String(r.rotulo || '#' + r.pedido_id))}${r.cliente ? ' — ' + escapeHtml(String(r.cliente)) : ''}: ${escapeHtml(String(r.motivo || ''))}${r.valor_digitado != null ? ` (no pedido R$ ${fmt(r.valor_digitado)}, no Financeiro R$ ${fmt(r.valor_financeiro)})` : ''}</li>`).join('')}</ul>
+            <button class="btn btn-outline btn-sm" id="fin-revisar-ok" onclick="marcarRevisaoFinanceiroFeita()">Marcar como revisado</button>
+        </div>
+    </div>`;
+}
+
+function marcarRevisaoFinanceiroFeita() {
+    localStorage.removeItem('sc_fin_revisar');
+    renderAvisoRevisaoFinanceiro();
 }
 
 // Guarda o custo do material no momento da aprovacao: mudar o preco do tecido
@@ -12814,6 +12903,7 @@ function mostrarTabFinanceiro(tab) {
 }
 
 function renderDashboardFinanceiro() {
+    renderAvisoRevisaoFinanceiro();
     if (typeof Chart === 'undefined') return;
     _migrarFinanceiroPedidos();
     atualizarStatusVencimentos();
