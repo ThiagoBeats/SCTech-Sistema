@@ -7264,7 +7264,8 @@ function importarDados(event) {
             db.despesas_fixas = dados.despesas_fixas || [];
             db.medicoes       = dados.medicoes       || [];
             syncDB();
-            localStorage.removeItem(CHAVE_FIN_MIGRACAO);   // backup antigo passa pela migracao do Financeiro ao recarregar
+            // Backup antigo passa pela migracao do Financeiro ao recarregar, com copia e lista novas.
+            ['sc_fin_migracao', 'sc_fin_backup_fase0', 'sc_fin_revisar'].forEach(k => localStorage.removeItem(k));
             toastReload('Dados importados com sucesso!', 'info');
             window.location.reload();
         } catch { await showAlert('Erro ao ler o arquivo. Certifique-se que é um backup válido do SCTech.', '❌'); }
@@ -11445,6 +11446,10 @@ function _migrarFinanceiroPedidos() {
 const CHAVE_FIN_MIGRACAO = 'sc_fin_migracao';
 function _migrarFinanceiroFase0() {
     if (localStorage.getItem(CHAVE_FIN_MIGRACAO) === '1') return;
+    // Acertos antigos do pedido antes de planejar: o arquiteto que estava no campo
+    // de vendedor vai para arq_* (senao a comissao dele nasceria como de vendedor).
+    migrarArquitetoDosPedidos();
+    migrarStatusAguardandoFinanceiro();
     const plano = FinanceiroCore.planoMigracaoFase0({
         pedidos: db.pedidos, contas_receber: db.contas_receber, contas_pagar: db.contas_pagar,
         vendedores: db.vendedores, hoje: new Date().toLocaleDateString('sv-SE'),
@@ -11453,7 +11458,8 @@ function _migrarFinanceiroFase0() {
     const vazio = Object.values(plano).every(l => !l.length);
     if (!vazio) {
         try {
-            localStorage.setItem('sc_fin_backup_fase0', JSON.stringify({
+            // Uma copia so: numa nova tentativa ela ja guarda o estado de antes de tudo.
+            if (localStorage.getItem('sc_fin_backup_fase0') == null) localStorage.setItem('sc_fin_backup_fase0', JSON.stringify({
                 criado_em: Date.now(),
                 contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, pedidos: db.pedidos
             }));
