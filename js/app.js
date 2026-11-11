@@ -8317,8 +8317,10 @@ function renderListaPedidosCompra() {
             <td style="font-size:12px;color:#8F8F8F;white-space:nowrap">${data}</td>
             <td style="text-align:center">${p.itens.length}</td>
             <td>R$ ${total.toFixed(2)}</td>
-            <td><span class="status-tag ${cls}">${p.status}</span></td>
+            <td><span class="status-tag ${cls}">${p.status}</span>${p.status === 'Recebido' && !p.conta_pagar_gerada
+                ? `<div style="font-size:11px;color:#F43927;margin-top:4px">sem conta a pagar</div>` : ''}</td>
             <td>
+                ${p.status === 'Recebido' && !p.conta_pagar_gerada ? `<button class="btn btn-success btn-sm" onclick="gerarContaPagarPCManual(${p.id})" style="margin-right:4px">Gerar conta</button>` : ''}
                 <select onchange="atualizarStatusPC(${p.id},this.value)" style="padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px;margin-right:4px">
                     <option${p.status==='Rascunho'?' selected':''}>Rascunho</option>
                     <option${p.status==='Enviado'?' selected':''}>Enviado</option>
@@ -8396,6 +8398,98 @@ async function atualizarStatusPC(id, status) {
     syncDB();
     toast('Status atualizado!', 'success', 1500);
     renderListaPedidosCompra();
+    // Recebeu a mercadoria: a conta a pagar nasce aqui, uma vez so.
+    if (status === 'Recebido' && !pc.conta_pagar_gerada) await abrirModalContaPagarPC(pc);
+}
+
+// Total do pedido de compra (soma dos subtotais dos itens).
+function _pcTotal(pc) {
+    return FinanceiroCore.arredondar((pc.itens || []).reduce((s, i) => s + (Number(i.subtotal) || 0), 0));
+}
+
+// Modal "Gerar conta a pagar" do pedido de compra recebido: valor, forma
+// (a vista / boleto ou prazo unico / parcelado) e botoes. "Agora nao" so fecha:
+// a lista continua avisando e oferecendo "Gerar conta".
+function abrirModalContaPagarPC(pc) {
+    return new Promise(resolve => {
+        const hoje = new Date().toLocaleDateString('sv-SE');
+        const o = document.createElement('div');
+        o.id = 'pcp-modal';
+        o.className = 'sc-modal-overlay';
+        o.style.display = 'flex';
+        const inp = 'width:100%;padding:7px;border:1px solid #ccc;border-radius:4px;margin-bottom:10px';
+        o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:440px">
+            <h3 style="margin:0 0 4px;font-size:16px">Gerar conta a pagar</h3>
+            <div style="font-size:12px;color:#8F8F8F;margin-bottom:12px">Pedido #${formatPedidoId(pc.id)} — ${escapeHtml(pc.fornecedor_nome || '')}</div>
+            <label style="display:block;font-size:12px;margin-bottom:4px">Valor a pagar (R$)</label>
+            <input type="number" id="pcp-valor" step="0.01" min="0" value="${_pcTotal(pc).toFixed(2)}" style="${inp}">
+            <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px"><input type="radio" name="pcp-modo" value="avista" checked> À vista (hoje)</label>
+            <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px"><input type="radio" name="pcp-modo" value="prazo"> Boleto ou prazo único</label>
+            <div id="pcp-bloco-prazo" style="display:none;margin-left:24px"><label style="display:block;font-size:12px;margin-bottom:4px">Vencimento</label><input type="date" id="pcp-venc" value="${hoje}" style="${inp}"></div>
+            <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px"><input type="radio" name="pcp-modo" value="parcelado"> Parcelado</label>
+            <div id="pcp-bloco-parc" style="display:none;margin-left:24px;gap:10px">
+                <div style="flex:1"><label style="display:block;font-size:12px;margin-bottom:4px">Nº de parcelas</label><input type="number" id="pcp-parcelas" min="2" max="48" value="2" style="${inp}"></div>
+                <div style="flex:1"><label style="display:block;font-size:12px;margin-bottom:4px">A cada (dias)</label><input type="number" id="pcp-intervalo" min="1" value="30" style="${inp}"></div>
+            </div>
+            <div class="sc-modal-btns" style="margin-top:8px"><button class="btn btn-outline" id="pcp-agora">Agora não</button><button class="btn btn-success" id="pcp-ok">Gerar conta a pagar</button></div>
+        </div>`;
+        document.body.appendChild(o);
+        const modo = () => o.querySelector('input[name="pcp-modo"]:checked').value;
+        const mostrar = () => {
+            o.querySelector('#pcp-bloco-prazo').style.display = modo() === 'prazo' ? '' : 'none';
+            o.querySelector('#pcp-bloco-parc').style.display = modo() === 'parcelado' ? 'flex' : 'none';
+        };
+        o.querySelectorAll('input[name="pcp-modo"]').forEach(r => r.addEventListener('change', mostrar));
+        const fechar = () => { document.removeEventListener('keydown', esc); o.remove(); resolve(); };
+        const esc = e => { if (e.key === 'Escape') fechar(); };
+        document.addEventListener('keydown', esc);
+        o.querySelector('#pcp-agora').onclick = fechar;
+        o.querySelector('#pcp-ok').onclick = async () => {
+            const valor = FinanceiroCore.arredondar(parseFloat(o.querySelector('#pcp-valor').value) || 0);
+            const m = modo();
+            const venc = o.querySelector('#pcp-venc').value;
+            const n = parseInt(o.querySelector('#pcp-parcelas').value, 10) || 0;
+            const intervalo = parseInt(o.querySelector('#pcp-intervalo').value, 10) || 30;
+            if (valor <= 0) { await showAlert('Informe o valor a pagar.', '⚠️'); return; }
+            if (m === 'prazo' && !venc) { await showAlert('Informe a data de vencimento.', '⚠️'); return; }
+            if (m === 'parcelado' && n < 2) { await showAlert('Informe 2 ou mais parcelas.', '⚠️'); return; }
+            gerarContaPagarPC(pc, { valor, modo: m, hoje, vencimento: venc, numParcelas: n, intervaloDias: intervalo });
+            fechar();
+        };
+    });
+}
+
+// Cria a(s) conta(s) a pagar do pedido de compra e marca o pedido como gerado.
+function gerarContaPagarPC(pc, opcoes) {
+    if (pc.conta_pagar_gerada) return;
+    const forn = db.fornecedores.find(f => f.id == pc.fornecedor_id);
+    const parcelas = FinanceiroCore.parcelasCompra(opcoes);
+    const categoria = (pc.itens || []).some(i => i.tipo === 'tecido') ? 'tecido' : 'outro';
+    const usados = new Set((db.contas_pagar || []).map(c => c.id));
+    let proximoId = Date.now();
+    const novoId = () => { while (usados.has(proximoId)) proximoId++; usados.add(proximoId); return proximoId; };
+    const rotulo = `Pedido de compra #${formatPedidoId(pc.id)}`;
+    const paiId = parcelas.length > 1 ? novoId() : null;
+    parcelas.forEach(pa => {
+        db.contas_pagar.push({
+            id: novoId(), pedido_id: null, pedido_compra_id: pc.id,
+            tipo: 'variavel', categoria,
+            descricao: parcelas.length > 1 ? `${rotulo} (parcela ${pa.parcela_atual}/${pa.numero_parcelas})` : rotulo,
+            credor_nome: forn?.nome || pc.fornecedor_nome || '',
+            cnpj_fornecedor: forn?.cnpj || null,
+            valor: pa.valor, data_vencimento: pa.data_vencimento, data_pagamento: null, status: 'Pendente',
+            ...(paiId ? { lancamento_pai_id: paiId, parcelado: true, numero_parcelas: pa.numero_parcelas, parcela_atual: pa.parcela_atual } : {})
+        });
+    });
+    pc.conta_pagar_gerada = true;
+    syncDB();
+    toast('Conta a pagar gerada!', 'success', 2000);
+    renderListaPedidosCompra();
+}
+
+async function gerarContaPagarPCManual(id) {
+    const pc = db.pedidos_compra.find(p => p.id == id);
+    if (pc && !pc.conta_pagar_gerada) await abrirModalContaPagarPC(pc);
 }
 
 async function excluirPedidoCompra(id) {
@@ -11984,6 +12078,38 @@ async function adicionarContaPagarManual() {
     let tipoLancamento = 'manual';
     if (ehLinhaDigitavel) tipoLancamento = 'boleto';
     else if (chaveAcesso || numeroDocumento) tipoLancamento = 'nota';
+
+    // Nota/boleto importado do mesmo fornecedor e valor de uma compra ja lancada:
+    // oferece juntar na conta existente em vez de pagar duas vezes.
+    if (tipoLancamento !== 'manual' && !parcelado && !recorrente) {
+        const dup = FinanceiroCore.acharContaDuplicadaNota(db.contas_pagar, { cnpj: cnpjFornecedor, valor });
+        if (dup) {
+            const escolha = await showEscolha(
+                `Já existe uma conta a pagar desta compra (${dup.descricao}, R$ ${Number(dup.valor).toFixed(2)}). Esta nota é a mesma compra?`,
+                '🔗',
+                [{ rotulo: 'Vincular à conta existente', valor: 'vincular', destaque: true }, { rotulo: 'Lançar como nova conta', valor: 'nova' }]);
+            if (!escolha) return;
+            if (escolha === 'vincular') {
+                const grupo = dup.lancamento_pai_id != null
+                    ? db.contas_pagar.filter(x => x.lancamento_pai_id == dup.lancamento_pai_id && x.pedido_compra_id)
+                    : [dup];
+                grupo.forEach(c => {
+                    if (chaveAcesso) c.chave_acesso = chaveAcesso;
+                    if (numeroDocumento) c.numero_documento = numeroDocumento;
+                    if (ehLinhaDigitavel) c.linha_digitavel = docDigits;
+                });
+                if (_anexoPendenteCP) {
+                    const alvo = grupo[0];
+                    alvo.arquivo_anexo_url = _anexoPendenteCP.dataUrl || null;
+                    alvo.arquivo_anexo_nome = _anexoPendenteCP.nome || null;
+                    alvo.arquivo_anexo_tipo = _anexoPendenteCP.tipo || null;
+                }
+                _anexoPendenteCP = null;
+                salvarERecarregar('Nota vinculada à conta existente!');
+                return;
+            }
+        }
+    }
 
     const camposDoc = {
         cnpj_fornecedor: cnpjFornecedor || null,
