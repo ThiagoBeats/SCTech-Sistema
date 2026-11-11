@@ -19,6 +19,7 @@
             <button class="tab-btn fin-tab-btn"        data-tab="pagar"     onclick="mostrarTabFinanceiro('pagar')">📤 A Pagar</button>
             <button class="tab-btn fin-tab-btn"        data-tab="fixas"     onclick="mostrarTabFinanceiro('fixas')">🔁 Despesas Fixas</button>
             <button class="tab-btn fin-tab-btn"        data-tab="dre"       onclick="mostrarTabFinanceiro('dre')">📈 DRE por Pedido</button>
+            <button class="tab-btn fin-tab-btn"        data-tab="extrato"   onclick="mostrarTabFinanceiro('extrato')">📒 Extrato</button>
         </div>
 
         <!-- TAB: VISÃO GERAL -->
@@ -281,6 +282,35 @@
                         <th style="text-align:center">Margem</th>
                     </tr></thead>
                     <tbody id="tb-dre"></tbody>
+                </table>
+            </div>
+        </div>
+        <!-- TAB: EXTRATO -->
+        <div id="fin-extrato" class="fin-panel">
+            <div class="card">
+                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+                    <div class="form-group" style="flex:1;min-width:160px;margin-bottom:0">
+                        <label for="extrato-conta">Conta</label>
+                        <select id="extrato-conta" onchange="renderExtrato({ contaId: this.value })"></select>
+                    </div>
+                    <div class="form-group" style="min-width:150px;margin-bottom:0">
+                        <label for="extrato-mes">Mês</label>
+                        <input type="month" id="extrato-mes" onchange="if (this.value) renderExtrato({ mes: this.value })">
+                    </div>
+                    <button class="btn btn-success" id="extrato-btn-transferir" onclick="abrirModalTransferencia()" style="display:none">⇄ Transferir</button>
+                </div>
+                <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:12px;font-size:14px">
+                    <div><span id="extrato-lbl-inicio" style="color:#888">Saldo no início</span><br><strong id="extrato-saldo-inicio"></strong></div>
+                    <div><span id="extrato-lbl-fim" style="color:#888">Saldo no fim</span><br><strong id="extrato-saldo-fim"></strong></div>
+                </div>
+                <table>
+                    <thead><tr>
+                        <th>Data</th><th>Descrição</th><th>Conta</th>
+                        <th style="text-align:right">Entrou</th>
+                        <th style="text-align:right">Saiu</th>
+                        <th></th>
+                    </tr></thead>
+                    <tbody id="extrato-linhas"></tbody>
                 </table>
             </div>
         </div>

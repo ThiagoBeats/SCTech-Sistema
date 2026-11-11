@@ -13610,7 +13610,153 @@ function mostrarTabFinanceiro(tab) {
     else if (tab === 'pagar')   renderContasPagar();
     else if (tab === 'fixas')   renderDespesasFixas();
     else if (tab === 'dre')     renderDRE();
+    else if (tab === 'extrato') renderExtrato();
     _tabBackBtn('.tab-nav', _prevTabFin, () => mostrarTabFinanceiro(_prevTabFin));
+}
+
+// =============================================
+// FINANCEIRO — EXTRATO E TRANSFERENCIAS
+// =============================================
+
+// Filtro da aba Extrato (conta '' = todas; mes 'YYYY-MM', vazio = mes atual).
+let _extratoFiltro = { contaId: '', mes: '' };
+
+// Abre a aba Extrato ja filtrada numa conta (usado pela tela "Hoje").
+function abrirExtratoDaConta(contaId) {
+    _extratoFiltro = { contaId: contaId == null ? '' : String(contaId), mes: '' };
+    mostrarTabFinanceiro('extrato');
+}
+
+// Saldo no inicio = saldo no dia anterior ao primeiro dia do mes. Saldo no fim =
+// saldo no ultimo dia do mes, ou ate hoje se o mes for o atual (o que ainda vai
+// cair fica na lista com o selo "a cair" e nao entra no saldo do fim).
+function renderExtrato(opts) {
+    if (!document.getElementById('extrato-linhas')) return;
+    if (opts && typeof opts === 'object') {
+        if (opts.contaId !== undefined) _extratoFiltro.contaId = opts.contaId == null ? '' : String(opts.contaId);
+        if (opts.mes !== undefined) _extratoFiltro.mes = opts.mes || '';
+    }
+    const hoje = hojeLocal();
+    const mes = /^\d{4}-\d{2}$/.test(_extratoFiltro.mes) ? _extratoFiltro.mes : hoje.slice(0, 7);
+    const contas = getContasFin();
+    if (_extratoFiltro.contaId !== '' && !_contaFinPorId(_extratoFiltro.contaId)) _extratoFiltro.contaId = '';
+    const selConta = document.getElementById('extrato-conta');
+    selConta.innerHTML = '<option value="">Todas as contas</option>' + contas.map(c =>
+        `<option value="${escapeHtml(String(c.id))}">${escapeHtml(c.nome || '')}</option>`).join('');
+    selConta.value = _extratoFiltro.contaId;
+    document.getElementById('extrato-mes').value = mes;
+    const btn = document.getElementById('extrato-btn-transferir');
+    if (btn) btn.style.display = temAcesso('financeiro.extrato', 'completo') ? '' : 'none';
+
+    const brl = v => 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const [ano, m2] = mes.split('-').map(Number);
+    const primeiro = mes + '-01';
+    const ultimo = mes + '-' + String(new Date(ano, m2, 0).getDate()).padStart(2, '0');
+    const ateFim = ultimo < hoje ? ultimo : hoje;
+    const filtradas = _extratoFiltro.contaId === '' ? contas : contas.filter(c => CaixaCore.mesmoId(c.id, _extratoFiltro.contaId));
+    const movs = Array.isArray(db.movimentos_fin) ? db.movimentos_fin : [];
+    const antes = CaixaCore.somarDias(primeiro, -1);
+    const inicio = CaixaCore.arredondar(filtradas.reduce((s, c) => s + CaixaCore.saldoConta(c, movs, antes), 0));
+    const fim = CaixaCore.arredondar(filtradas.reduce((s, c) => s + CaixaCore.saldoConta(c, movs, ateFim), 0));
+    document.getElementById('extrato-saldo-inicio').textContent = brl(inicio);
+    document.getElementById('extrato-saldo-fim').textContent = brl(fim);
+    document.getElementById('extrato-lbl-fim').textContent = ultimo >= hoje && primeiro <= hoje ? 'Saldo até hoje' : 'Saldo no fim';
+
+    const fmtData = d => d.split('-').reverse().join('/');
+    const linhas = movs.filter(mv => {
+        const c = filtradas.find(x => CaixaCore.mesmoId(x.id, mv.conta_id));
+        return c && mv.data >= primeiro && mv.data <= ultimo && mv.data >= c.data_saldo_inicial;
+    }).sort((x, y) => x.data < y.data ? -1 : x.data > y.data ? 1 : 0);
+    const tb = document.getElementById('extrato-linhas');
+    const podeExcluir = temAcesso('financeiro.extrato', 'completo');
+    if (!linhas.length) {
+        tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;padding:16px">Nenhum movimento neste mês.</td></tr>';
+        return;
+    }
+    tb.innerHTML = linhas.map(mv => {
+        const ent = mv.sentido === 'entrada';
+        const conta = _contaFinPorId(mv.conta_id);
+        const cair = mv.data > hoje ? ' <span style="background:#FEF6D8;color:#8A6A00;font-size:11px;padding:1px 6px;border-radius:8px">a cair</span>' : '';
+        const excluir = mv.origem === 'transferencia' && mv.grupo_id != null && podeExcluir
+            ? `<button class="btn btn-outline btn-sm extrato-excluir" title="Excluir transferência" onclick='excluirTransferencia(${escapeHtml(JSON.stringify(mv.grupo_id))})'>🗑</button>` : '';
+        return `<tr class="extrato-linha ${ent ? 'entrada' : 'saida'}">
+            <td>${fmtData(mv.data)}</td>
+            <td>${escapeHtml(mv.descricao || '')}${cair}</td>
+            <td>${escapeHtml(conta ? conta.nome : '—')}</td>
+            <td style="text-align:right;color:#27AE60">${ent ? brl(mv.valor) : ''}</td>
+            <td style="text-align:right;color:#C0392B">${ent ? '' : brl(mv.valor)}</td>
+            <td style="text-align:right">${excluir}</td></tr>`;
+    }).join('');
+}
+
+// Transferencia entre contas: duas linhas (saida na origem, entrada no destino)
+// ligadas pelo mesmo grupo_id. Nao muda o total, so a distribuicao.
+async function abrirModalTransferencia() {
+    if (!await exigirPermissao('financeiro.extrato', 'completo')) return;
+    document.getElementById('transf-modal')?.remove();
+    const contas = getContasFin().filter(c => c.ativo !== false);
+    const opts = contas.map(c => `<option value="${escapeHtml(String(c.id))}">${escapeHtml(c.nome || '')}</option>`).join('');
+    const campo = 'width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:13px;box-sizing:border-box;margin-bottom:10px';
+    const o = document.createElement('div');
+    o.id = 'transf-modal';
+    o.className = 'sc-modal-overlay';
+    o.style.display = 'flex';
+    o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:420px;width:calc(100% - 32px)">
+        <h3 style="margin:0 0 12px;font-size:16px">Transferir entre contas</h3>
+        <label style="display:block;font-size:12px;margin-bottom:4px" for="transf-de">De</label>
+        <select id="transf-de" style="${campo}">${opts}</select>
+        <label style="display:block;font-size:12px;margin-bottom:4px" for="transf-para">Para</label>
+        <select id="transf-para" style="${campo}">${opts}</select>
+        <label style="display:block;font-size:12px;margin-bottom:4px" for="transf-valor">Valor</label>
+        <input type="text" inputmode="decimal" id="transf-valor" placeholder="0,00" style="${campo}">
+        <label style="display:block;font-size:12px;margin-bottom:4px" for="transf-data">Data</label>
+        <input type="date" id="transf-data" value="${hojeLocal()}" style="${campo}">
+        <div id="transf-erro" style="display:none;color:#C0392B;font-size:12px;margin-bottom:10px"></div>
+        <div class="sc-modal-btns"><button class="btn btn-outline" id="transf-cancel">Cancelar</button><button class="btn btn-success" id="transf-ok">Transferir</button></div>
+    </div>`;
+    document.body.appendChild(o);
+    const para = o.querySelector('#transf-para');
+    if (contas.length > 1) para.value = String(contas[1].id);
+    const erroEl = o.querySelector('#transf-erro');
+    const erro = msg => { erroEl.textContent = msg; erroEl.style.display = msg ? 'block' : 'none'; };
+    const fechar = () => { document.removeEventListener('keydown', esc); o.remove(); };
+    const esc = e => { if (e.key === 'Escape') fechar(); };
+    document.addEventListener('keydown', esc);
+    o.querySelector('#transf-cancel').onclick = fechar;
+    o.querySelector('#transf-ok').onclick = () => {
+        const deId = o.querySelector('#transf-de').value, paraId = para.value;
+        const valor = _numeroBR(o.querySelector('#transf-valor').value, NaN);
+        const data = o.querySelector('#transf-data').value;
+        const de = _contaFinPorId(deId), dest = _contaFinPorId(paraId);
+        if (!de || !dest) return erro('Escolha as duas contas.');
+        if (CaixaCore.mesmoId(de.id, dest.id)) return erro('Escolha contas diferentes para sair e entrar.');
+        if (!(valor > 0)) return erro('Informe um valor maior que zero.');
+        if (!data) return erro('Informe a data.');
+        if (!CaixaCore.contaAceitaMovimento(de, data) || !CaixaCore.contaAceitaMovimento(dest, data))
+            return erro('A data é anterior ao saldo inicial de uma das contas.');
+        if (!Array.isArray(db.movimentos_fin)) db.movimentos_fin = [];
+        const novoId = _novosIdsFin(db.movimentos_fin);
+        const grupo = _novoIdCfgFin(new Set(db.movimentos_fin.map(m => m.grupo_id).filter(g => g != null)));
+        const v = CaixaCore.arredondar(valor);
+        db.movimentos_fin.push(
+            { id: novoId(), conta_id: de.id, data, sentido: 'saida', valor: v, origem: 'transferencia', origem_id: null, grupo_id: grupo, descricao: 'Transferência para ' + (dest.nome || '') },
+            { id: novoId(), conta_id: dest.id, data, sentido: 'entrada', valor: v, origem: 'transferencia', origem_id: null, grupo_id: grupo, descricao: 'Transferência de ' + (de.nome || '') }
+        );
+        syncDB();
+        fechar();
+        renderExtrato();
+    };
+    o.querySelector('#transf-valor').focus();
+}
+
+async function excluirTransferencia(grupoId) {
+    if (!await exigirPermissao('financeiro.extrato', 'completo')) return;
+    const lados = (db.movimentos_fin || []).filter(m => m.origem === 'transferencia' && m.grupo_id != null && String(m.grupo_id) === String(grupoId));
+    if (!lados.length) return;
+    if (!await showConfirm('Excluir esta transferência? Os dois lados saem do extrato e os saldos voltam ao que eram.', '🗑️', 'Excluir')) return;
+    db.movimentos_fin = db.movimentos_fin.filter(m => !lados.includes(m));
+    syncDB();
+    renderExtrato();
 }
 
 function renderDashboardFinanceiro() {
