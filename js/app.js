@@ -14058,17 +14058,47 @@ function renderContasReceber() {
     if (res) res.innerHTML = `<span style="color:#005D3B">✓ Recebido: <strong>R$ ${totRec.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>&nbsp;&nbsp;<span style="color:#F2C924">⏳ Pendente: <strong>R$ ${totPend.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>`;
     if (!lista.length) { tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:#999;padding:24px">Nenhum registro encontrado.</td></tr>'; return; }
     const podeEditar = temAcesso('financeiro.receber', 'completo');
+    const hoje = hojeLocal();
     tb.innerHTML = lista.map(cr => {
         const at=cr.status==='Atrasado', pago=cr.status==='Pago';
+        const cobravel = !pago && cr.data_vencimento <= hoje;
+        const cobrarBtn = cobravel ? `<button class="btn btn-outline btn-sm" onclick="cobrarNoWhatsApp(${cr.id})" title="Cobrar pelo WhatsApp" style="margin-right:4px">💬 Cobrar</button>${cr.ultima_cobranca===hoje?'<span style="font-size:11px;color:#888;margin-right:4px">cobrado hoje</span>':''}` : '';
         return `<tr class="${at?'fin-atrasado':''}">
             <td>${new Date(cr.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR')}</td>
             <td><strong>${escapeHtml(cr.cliente_nome)}</strong></td>
             <td>${escapeHtml(cr.descricao)}</td>
             <td style="text-align:right"><strong>R$ ${cr.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
             <td>${pago?`<span style="color:#005D3B;font-size:12px">✓ ${new Date(cr.data_pagamento+'T12:00:00').toLocaleDateString('pt-BR')}</span>`:`<span class="fin-badge fin-badge-${at?'red':'pending'}">${cr.status}</span>`}</td>
-            <td>${podeEditar ? `${!pago?`<button class="btn btn-sm btn-success" onclick="marcarCRPago(${cr.id})" title="Confirmar recebimento">✓ Recebido</button>`:`<button class="btn btn-outline btn-sm" onclick="estornarCR(${cr.id})" title="Desfazer este recebimento">↩ Estornar</button>`}<button class="btn btn-outline btn-sm btn-danger" onclick="excluirCR(${cr.id})" title="Excluir" style="margin-left:4px">🗑️</button>` : ''}</td>
+            <td>${podeEditar ? `${cobrarBtn}${!pago?`<button class="btn btn-sm btn-success" onclick="marcarCRPago(${cr.id})" title="Confirmar recebimento">✓ Recebido</button>`:`<button class="btn btn-outline btn-sm" onclick="estornarCR(${cr.id})" title="Desfazer este recebimento">↩ Estornar</button>`}<button class="btn btn-outline btn-sm btn-danger" onclick="excluirCR(${cr.id})" title="Excluir" style="margin-left:4px">🗑️</button>` : ''}</td>
         </tr>`;
     }).join('');
+}
+
+// Abre o WhatsApp com a mensagem de cobranca da parcela. Independe do DOM do A Receber.
+async function cobrarNoWhatsApp(crId) {
+    // Checa antes de qualquer await para o window.open continuar valendo como clique do usuario.
+    if (!temAcesso('financeiro.receber', 'completo')) { await exigirPermissao('financeiro.receber', 'completo'); return; }
+    const cr = db.contas_receber.find(c => CaixaCore.mesmoId(c.id, crId));
+    if (!cr) return;
+    const ped = db.pedidos.find(p => CaixaCore.mesmoId(p.id, cr.pedido_id));
+    const nomeCli = (s) => String(s || '').trim().toLowerCase();
+    let cli = ped && ped.clienteId != null ? db.clientes.find(c => CaixaCore.mesmoId(c.id, ped.clienteId)) : null;
+    if (!cli) cli = db.clientes.find(c => nomeCli(c.nome) === nomeCli(cr.cliente_nome));
+    const tel = CaixaCore.normalizarTelefone(cli && cli.tel);
+    if (!tel) { showAlert('Cliente sem telefone no cadastro.'); return; }
+    const emp = getEmpresa();
+    const venc = String(cr.data_vencimento).split('-').reverse().join('/');
+    const msg = CaixaCore.montarMensagem(emp.mensagem_cobranca || CaixaCore.MENSAGEM_COBRANCA_PADRAO, {
+        cliente: cr.cliente_nome,
+        empresa: emp.nome_fantasia || emp.razao_social || 'nossa empresa',
+        valor: 'R$ ' + cr.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+        pedido: '#' + formatPedidoId(cr.pedido_id),
+        vencimento: venc
+    });
+    window.open(CaixaCore.linkWhatsApp(tel, msg), '_blank');
+    cr.ultima_cobranca = hojeLocal();
+    syncDB();
+    renderContasReceber();
 }
 
 function renderContasPagar() {
