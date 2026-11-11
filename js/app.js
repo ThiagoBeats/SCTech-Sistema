@@ -2957,6 +2957,7 @@ async function confirmarPagamentoPedido(id) {
     ped.pagamento_confirmado_por = getUsuarioLogado()?.id || null;
     ped.status = 'Instalado';
     if (!ped.data_instalado) ped.data_instalado = ped.inst_confirmada_em || Date.now();
+    gerarComissoesPedido(ped);
     if (!ped.timeline) ped.timeline = [];
     ped.timeline.push({ status: 'Instalado', data: Date.now(), label: 'Pagamento confirmado → Instalado' });
     syncDB();
@@ -3076,6 +3077,7 @@ async function moverStatus(id, direcao) {
     if (idx === 0) gerarFinanceiroPedido(ped);
     if (novoIdx === 1 && !ped.data_producao)  ped.data_producao  = Date.now();
     if (STATUS_PIPELINE[novoIdx] === 'Instalado' && !ped.data_instalado) ped.data_instalado = Date.now();
+    if (STATUS_PIPELINE[novoIdx] === 'Instalado') gerarComissoesPedido(ped);
     toastReload('Status atualizado!');
     syncDB(); window.location.reload();
 }
@@ -6221,6 +6223,7 @@ Volte o pedido para Orçamento para editar.`, '🔒');
     if (statusAnterior === 'Orçamento' && normalizarStatus(dadosPedido.status) !== 'Orçamento') {
         gerarFinanceiroPedido(dadosPedido);
     }
+    if (normalizarStatus(dadosPedido.status) === 'Instalado') gerarComissoesPedido(dadosPedido);
     syncDB();
     localStorage.removeItem('sc_editando_id');
     toastReload('Pedido salvo!');
@@ -7643,27 +7646,34 @@ function renderHistoricoComissoes() {
 }
 
 // Paga a comissao do papel da aba aberta; a do outro papel no mesmo pedido fica.
+// A comissao e uma conta a pagar: aqui so localizamos a conta e abrimos a baixa.
 async function pagarComissao(pedidoId) {
     const ped = db.pedidos.find(p => p.id == pedidoId);
     if (!ped) return;
-    const c = CAMPOS_COMISSAO[_tipoVend];
-    const v = db.vendedores.find(x => x.id == ped[c.id]);
-    if (!await showConfirm(`Registrar pagamento de comissão R$ ${(ped[c.valor] || 0).toFixed(2)} para ${v?.nome || ped[c.nome] || 'o responsável'}?`, '💰', 'Confirmar', 'Cancelar')) return;
-    ped[c.paga] = true;
-    ped[c.data] = Date.now();
-    salvarERecarregar('Comissão paga!');
+    await _baixarComissoes([ped], 'Pagar comissão');
+}
+
+// Localiza (gerando se faltarem) as contas do papel da aba e abre uma baixa unica.
+async function _baixarComissoes(pedidos, titulo) {
+    const papel = _tipoVend;
+    const itens = [];
+    pedidos.forEach(p => {
+        gerarComissoesPedido(p);
+        const cp = db.contas_pagar.find(x => x.pedido_id == p.id && x.papel_comissao === papel && x.status !== 'Pago');
+        if (cp) itens.push({ id: cp.id, descricao: `#${formatPedidoId(p.id)} — ${cp.credor_nome || ''}`, valor: cp.valor, marcado: true });
+    });
+    if (!itens.length) { await showAlert('Nenhuma comissão pendente para pagar.', 'ℹ️'); return; }
+    const r = await abrirModalBaixa({ titulo, itens, formaPadrao: '' });
+    if (!r || !r.ids.length) return;
+    baixarContasPagar(r.ids, r.data, r.forma);
+    salvarERecarregar(r.ids.length > 1 ? 'Comissões pagas!' : 'Comissão paga!');
 }
 
 async function pagarTodasFiltradas() {
-    const c = CAMPOS_COMISSAO[_tipoVend];
     const filtroVend = document.getElementById('filtro-vend-pendente')?.value || '';
     const pedidos = _comissoesPendentesDoTipo(filtroVend);
     if (!pedidos.length) { await showAlert('Nenhuma comissão pendente para pagar.', 'ℹ️'); return; }
-    const total = pedidos.reduce((s, p) => s + (p[c.valor] || 0), 0);
-    if (!await showConfirm(`Pagar ${pedidos.length} comissão(ões) no total de R$ ${total.toFixed(2)}?`, '💰', 'Confirmar', 'Cancelar')) return;
-    const agora = Date.now();
-    pedidos.forEach(p => { p[c.paga] = true; p[c.data] = agora; });
-    salvarERecarregar('Comissões pagas!');
+    await _baixarComissoes(pedidos, `Pagar ${pedidos.length} comissão(ões)`);
 }
 
 function mostrarTabVendedores(tab) {
@@ -11410,6 +11420,45 @@ function baixarContasReceber(ids, data, forma) {
     peds.forEach(sincronizarRecebidoPedido);
 }
 
+// Comissoes do pedido instalado viram contas a pagar (uma por papel). Idempotente.
+function gerarComissoesPedido(ped) {
+    const dataInst = ped.data_instalado
+        ? new Date(ped.data_instalado).toLocaleDateString('sv-SE')
+        : new Date().toLocaleDateString('sv-SE');
+    const novas = FinanceiroCore.contasComissaoDoPedido(ped, {
+        vendedores: db.vendedores, contasPagar: db.contas_pagar,
+        data: dataInst, rotuloPedido: '#' + formatPedidoId(ped.id)
+    });
+    const usados = new Set((db.contas_pagar || []).map(c => c.id));
+    let proximoId = Date.now();
+    novas.forEach(cp => {
+        while (usados.has(proximoId)) proximoId++;
+        usados.add(proximoId);
+        db.contas_pagar.push({ id: proximoId, ...cp });
+    });
+}
+
+function baixarContasPagar(ids, data, forma) {
+    const usuario = getUsuarioLogado();
+    (ids || []).forEach(id => {
+        const cp = db.contas_pagar.find(x => x.id == id);
+        if (!cp || cp.status === 'Pago') return;
+        cp.status = 'Pago';
+        cp.data_pagamento = data;
+        cp.forma_pagamento = forma;
+        cp.baixado_por = usuario?.id || null;
+        cp.baixado_em = Date.now();
+        if (cp.papel_comissao && cp.pedido_id) {
+            const ped = db.pedidos.find(p => p.id == cp.pedido_id);
+            const c = CAMPOS_COMISSAO[cp.papel_comissao];
+            if (ped && c) {
+                ped[c.paga] = true;
+                ped[c.data] = new Date(data + 'T12:00:00').getTime();
+            }
+        }
+    });
+}
+
 async function marcarCRPago(id) {
     if (!await exigirPermissao('financeiro.receber', 'completo')) return;
     const cr = db.contas_receber.find(x => x.id == id);
@@ -11588,14 +11637,17 @@ function gerarOcorrenciasRecorrentes(dataInicioStr, periodicidade, dataFimStr) {
     return datas;
 }
 
-function marcarCPPago(id) {
-    if (!temAcesso('financeiro.pagar', 'completo')) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
+async function marcarCPPago(id) {
+    if (!await exigirPermissao('financeiro.pagar', 'completo')) return;
     const cp = db.contas_pagar.find(x => x.id == id);
-    if (!cp) return;
-    const dataStr = prompt('Data de pagamento (AAAA-MM-DD):', new Date().toISOString().split('T')[0]);
-    if (!dataStr) return;
-    cp.data_pagamento = dataStr;
-    cp.status = 'Pago';
+    if (!cp || cp.status === 'Pago') return;
+    const r = await abrirModalBaixa({
+        titulo: 'Registrar pagamento',
+        itens: [{ id: cp.id, descricao: cp.descricao, valor: cp.valor, marcado: true }],
+        formaPadrao: cp.forma_pagamento || ''
+    });
+    if (!r || !r.ids.length) return;
+    baixarContasPagar(r.ids, r.data, r.forma);
     salvarERecarregar('Pagamento registrado!');
 }
 
