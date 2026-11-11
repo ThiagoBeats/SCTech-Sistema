@@ -2717,9 +2717,36 @@ async function editarPedido(id) {
     window.location.href = 'pedido.html';
 }
 
+// Tira do Financeiro o que ainda nao foi pago do pedido: recebimentos em
+// aberto e comissoes pendentes. Comissao ja paga fica, marcada para revisar.
+function removerFinanceiroAbertoPedido(pedidoId) {
+    const r = { crRemovidas: 0, comissoesRemovidas: 0, comissoesPagas: 0 };
+    const crAntes = (db.contas_receber || []).length;
+    db.contas_receber = (db.contas_receber || []).filter(cr => cr.pedido_id != pedidoId || cr.status === 'Pago');
+    r.crRemovidas = crAntes - db.contas_receber.length;
+    db.contas_pagar = (db.contas_pagar || []).filter(cp => {
+        if (cp.pedido_id != pedidoId || !cp.papel_comissao) return true;
+        if (cp.status === 'Pago') { cp.pedido_cancelado = true; r.comissoesPagas++; return true; }
+        r.comissoesRemovidas++;
+        return false;
+    });
+    return r;
+}
+
 async function excluirPedido(id) {
     if (!await exigirPermissao('pedidos', 'completo')) return;
-    if (!await showConfirm('Excluir este pedido permanentemente?\nEsta ação não pode ser desfeita.', '🗑️', 'Excluir')) return;
+    if (FinanceiroCore.totalRecebido(db.contas_receber, id) > 0) {
+        await showAlert('Este pedido já tem recebimento registrado e não pode ser excluído.\n\nPrimeiro estorne os recebimentos em Financeiro > A Receber; depois exclua o pedido.', '⚠️');
+        return;
+    }
+    const nCr = (db.contas_receber || []).filter(cr => cr.pedido_id == id).length;
+    const nCp = (db.contas_pagar || []).filter(cp => cp.pedido_id == id && cp.papel_comissao && cp.status !== 'Pago').length;
+    const nContas = nCr + nCp;
+    const aviso = nContas ? `
+
+${nContas} conta(s) deste pedido no Financeiro também serão removidas.` : '';
+    if (!await showConfirm('Excluir este pedido permanentemente?\nEsta ação não pode ser desfeita.' + aviso, '🗑️', 'Excluir')) return;
+    removerFinanceiroAbertoPedido(id);
     db.pedidos = db.pedidos.filter(p => p.id != id);
     salvarERecarregar('Pedido excluído.');
 }
@@ -6287,9 +6314,7 @@ ${abertos.length} lançamento(s) a receber em aberto sairão do Financeiro e ser
 
 Ele sai do painel de produção e fica liberado para edição até ser aprovado de novo.${avisoFin}`, '↩', 'Voltar para Orçamento', 'Cancelar');
     if (!ok) return;
-    if (recebimentos.length) {
-        db.contas_receber = db.contas_receber.filter(cr => cr.pedido_id != ped.id || cr.status === 'Pago');
-    }
+    removerFinanceiroAbertoPedido(ped.id);
     ped.financeiro_gerado = false;
     ped.status = 'Orçamento';
     if (!ped.timeline) ped.timeline = [];
@@ -13129,7 +13154,7 @@ function renderContasPagar() {
             : anexoBtn;
         return `<tr class="${at?'fin-atrasado':''}">
             <td>${new Date(cp.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR')}</td>
-            <td>${escapeHtml(cp.descricao)}${isRT?' <span title="Comissão RT — gerada após quitação total do pedido" style="cursor:help">🏛️</span>':''}${grupoTag?' '+grupoTag:''}</td>
+            <td>${escapeHtml(cp.descricao)}${cp.pedido_cancelado?' <span class="fin-badge fin-badge-red" title="O pedido foi cancelado ou voltou para Orçamento depois desta comissão ser paga">pedido cancelado — revisar</span>':''}${isRT?' <span title="Comissão RT — gerada após quitação total do pedido" style="cursor:help">🏛️</span>':''}${grupoTag?' '+grupoTag:''}</td>
             <td>${escapeHtml(cp.credor_nome||'—')}</td>
             <td style="text-align:right"><strong>R$ ${cp.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
             <td>${tipoTag}</td>
