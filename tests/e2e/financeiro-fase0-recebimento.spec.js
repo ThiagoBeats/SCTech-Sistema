@@ -25,11 +25,11 @@ test('confirmar pagamento lista parcelas e baixa so as marcadas', async ({ page 
     await page.locator('.kanban-btn-pagamento').click();
     const modal = page.locator('#baixa-modal');
     await expect(modal).toBeVisible();
-    const itens = modal.locator('input[type=checkbox]');
+    const itens = modal.locator('.baixa-check');
     await expect(itens).toHaveCount(1);
     await expect(itens.first(), 'saldo vem desmarcado quando ha pagamento pendente').not.toBeChecked();
     await itens.first().check();
-    await modal.locator('#baixa-forma').selectOption('Dinheiro');
+    await modal.locator('.baixa-meio').selectOption('Dinheiro');
     await modal.locator('#baixa-ok').click();
     await expect(page.locator('.kanban-col', { has: page.locator('.kanban-col-header', { hasText: 'Instalado' }) }).locator('.kanban-card')).toHaveCount(1);
     const cr = (await lerChave(page, 'sc_cr')).find(c => c.id === 502);

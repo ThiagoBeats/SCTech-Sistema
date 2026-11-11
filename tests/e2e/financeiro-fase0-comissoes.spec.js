@@ -41,7 +41,7 @@ test('pagar comissao na tela de vendedores baixa a conta', async ({ page }) => {
     const modal = page.locator('#baixa-modal');
     await expect(modal).toBeVisible();
     await modal.locator('#baixa-data').fill('2026-11-05');
-    await modal.locator('#baixa-forma').selectOption('PIX');
+    await modal.locator('.baixa-meio').selectOption('PIX');
     await modal.locator('#baixa-ok').click();
     await expect.poll(async () => ((await lerChave(page, 'sc_cp')) || []).filter(c => c.status === 'Pago').length).toBe(1);
     const cp = (await lerChave(page, 'sc_cp')).find(c => c.papel_comissao === 'vendedor');
@@ -80,9 +80,9 @@ test('pagar todas da pessoa', async ({ page }) => {
     await page.selectOption('#filtro-vend-pendente', '2');
     await page.click('button:has-text("Pagar Todas")');
     const modal = page.locator('#baixa-modal');
-    await expect(modal.locator('input[type=checkbox]')).toHaveCount(2);
+    await expect(modal.locator('.baixa-check')).toHaveCount(2);
     await modal.locator('#baixa-data').fill('2026-11-06');
-    await modal.locator('#baixa-forma').selectOption('Dinheiro');
+    await modal.locator('.baixa-meio').first().selectOption('Dinheiro');
     await modal.locator('#baixa-ok').click();
     await expect.poll(async () => ((await lerChave(page, 'sc_cp')) || []).filter(c => c.status === 'Pago').length).toBe(2);
     const pagas = (await lerChave(page, 'sc_cp')).filter(c => c.status === 'Pago');

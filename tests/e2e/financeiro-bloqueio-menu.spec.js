@@ -138,7 +138,7 @@ test('confirmar pagamento leva para Instalado', async ({ page }) => {
     await page.goto(BASE + '/pcp.html?view=kanban');
     await colunaKanban(page, 'Aguardando Financeiro').locator('.kanban-btn-pagamento').click();
     await expect(page.locator('#baixa-modal')).toBeVisible();
-    await page.locator('#baixa-modal input[type=checkbox]').check();   // com saldo pendente a parcela vem desmarcada
+    await page.locator('#baixa-modal .baixa-check').check();   // com saldo pendente a parcela vem desmarcada
     await page.click('#baixa-ok');
     await expect(colunaKanban(page, 'Instalado')).toContainText('Pedro Alves');
     const p = (await lerPed(page))[0];

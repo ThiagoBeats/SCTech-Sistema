@@ -38,3 +38,9 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [ ] Vincular nota a conta parcelada; parcelas 100/3; soma de grupo na nota duplicada.
 - [ ] Alíquota fora da faixa / inválida.
 - [ ] Ciclo estorno → exportar → importar.
+
+## Da Fase 1 (branch `feat/financeiro-fase1`)
+
+- [ ] Conta a pagar `taxa_cartao` (gerada na baixa com cartão) ainda pode ser excluída pelo 🗑️ do A Pagar, deixando a saída dela no extrato; deve sair só pelo estorno do recebimento.
+- [ ] Excluir uma parcela em aberto que tem partes pagas (`parcela_origem_id`) deixa as partes sem origem; o estorno delas então só reabre a parte sozinha.
+- [ ] Baixa com cartão numa conta que não aceita movimento (sem conta / data anterior ao saldo inicial) não gera a conta de taxa: a despesa de taxa fica fora do gráfico.

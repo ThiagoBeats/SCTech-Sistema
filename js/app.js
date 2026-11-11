@@ -3234,11 +3234,12 @@ async function confirmarPagamentoPedido(id) {
     }
     const r = await abrirModalBaixa({
         titulo: `Confirmar pagamento do pedido #${formatPedidoId(ped.id)}`,
-        itens: abertas.map(c => ({ id: c.id, descricao: c.descricao, valor: c.valor, marcado: c !== desmarcar })),
-        formaPadrao: formaPagamentoDoPedido(ped)
+        itens: abertas.map(c => ({ id: c.id, descricao: c.descricao, valor: c.valor, marcado: c !== desmarcar, meio_previsto: c.meio_previsto || null })),
+        formaPadrao: formaPagamentoDoPedido(ped),
+        permiteParcial: true
     });
     if (!r) return;
-    baixarContasReceber(r.ids, r.data, r.forma);
+    baixarContasReceber(r.data, r.linhas);
     sincronizarRecebidoPedido(ped.id);
     ped.pagamento_pendente = FinanceiroCore.saldoEmAberto(db.contas_receber, ped.id) > 0.01;
     ped.pagamento_confirmado_em = Date.now();
@@ -7973,8 +7974,8 @@ async function _baixarComissoes(pedidos, titulo) {
         if (cp) itens.push({ id: cp.id, descricao: `#${formatPedidoId(p.id)} — ${cp.credor_nome || ''}`, valor: cp.valor, marcado: true });
     });
     if (!itens.length) { await showAlert('Nenhuma comissão pendente para pagar.', 'ℹ️'); return; }
-    const r = await abrirModalBaixa({ titulo, itens, formaPadrao: '' });
-    if (!r || !r.ids.length) return;
+    const r = _baixaPagarAntiga(await abrirModalBaixa({ titulo, itens, permiteCartao: false, permiteParcial: false }));
+    if (!r) return;
     baixarContasPagar(r.ids, r.data, r.forma);
     salvarERecarregar(r.ids.length > 1 ? 'Comissões pagas!' : 'Comissão paga!');
 }
@@ -11980,63 +11981,221 @@ function sincronizarRecebidoPedido(pedidoId) {
     ped.valor_recebido = FinanceiroCore.totalRecebido(db.contas_receber, pedidoId);
 }
 
-// Modal de baixa: lista de parcelas com caixa de marcar, total ao vivo, data e
-// forma. Devolve { ids, data, forma } ou null se o usuario desistir.
-function abrirModalBaixa({ titulo, itens, formaPadrao, comData = true }) {
+// Meios oferecidos na baixa. Sem meios configurados, uma lista simples sem
+// conta (a baixa vale, mas nao gera movimento).
+function _meiosDaBaixa(permiteCartao) {
+    const cartao = t => t === 'cartao_debito' || t === 'cartao_credito';
+    const meios = getMeiosPag();
+    const lista = meios.length
+        ? meios.map(m => ({ chave: String(m.id), id: m.id, nome: m.nome || '', tipo: m.tipo, conta_id: m.conta_id == null ? null : m.conta_id }))
+        : ['Dinheiro', 'PIX', 'Cartão', 'Transferência'].filter(n => permiteCartao || n !== 'Cartão').map(n => ({ chave: 'nome:' + n, id: null, nome: n, tipo: 'outro', conta_id: null }));
+    return permiteCartao ? lista : lista.filter(m => !cartao(m.tipo));
+}
+
+function _contaFinPorId(id) {
+    return id == null || id === '' ? null : (getContasFin().find(c => CaixaCore.mesmoId(c.id, id)) || null);
+}
+
+// Valor digitado na baixa: alem do _numeroBR, "1.000" e "1.000.000" (so
+// ponto de milhar) valem mil e um milhao, e nao 1.
+function _valorDigitadoBaixa(t) {
+    const s = String(t == null ? '' : t).trim();
+    return _numeroBR(/^\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, '') : s, NaN);
+}
+
+const AVISO_CONTA_BAIXA = 'Esta conta ainda não está configurada / data anterior ao saldo inicial — não entra no saldo';
+
+// Modal de baixa: uma linha por parcela (marcar, valor, meio, conta e, no
+// cartao de credito, vezes e antecipar). Data unica. Devolve
+// { data, linhas: [{ id, valor, meio_id, meio_nome, conta_id, cartao }] } ou null.
+function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false, permiteCartao = true, formaPadrao = '' }) {
     return new Promise(resolve => {
         const hoje = hojeLocal();
-        const formas = [...new Set([...getFormasPagamento(), 'Dinheiro', 'PIX', 'Cartão', 'Transferência'])];
-        if (formaPadrao && !formas.includes(formaPadrao)) formas.unshift(formaPadrao);
+        const meios = _meiosDaBaixa(permiteCartao);
+        const contas = getContasFin().filter(c => c.ativo !== false);
+        const semContas = !getContasFin().length;
+        const brl = v => 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const meioInicial = it => {
+            const mp = it.meio_previsto;
+            const porId = mp && meios.find(m => m.id != null && CaixaCore.mesmoId(m.id, mp.meio_id));
+            if (porId) return porId;
+            const nome = String(it.forma_padrao || formaPadrao || '').trim().toLowerCase();
+            return (nome && meios.find(m => m.nome.trim().toLowerCase() === nome)) || meios[0];
+        };
+        const contaDe = m => (m && m.conta_id != null && _contaFinPorId(m.conta_id)) ? String(m.conta_id) : '';
+        const sel = 'width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:13px;box-sizing:border-box';
         const o = document.createElement('div');
         o.id = 'baixa-modal';
         o.className = 'sc-modal-overlay';
         o.style.display = 'flex';
-        o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:460px">
+        o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:560px;width:calc(100% - 32px)">
             <h3 style="margin:0 0 12px;font-size:16px">${escapeHtml(titulo || 'Registrar recebimento')}</h3>
-            <div style="max-height:240px;overflow:auto;margin-bottom:12px">${itens.map(i => `
-                <label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #eee;font-size:13px;cursor:pointer">
-                    <input type="checkbox" data-id="${escapeHtml(String(i.id))}" data-valor="${Number(i.valor) || 0}" ${i.marcado ? 'checked' : ''}>
-                    <span style="flex:1">${escapeHtml(i.descricao || '')}</span>
-                    <strong>R$ ${(Number(i.valor) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
-                </label>`).join('')}</div>
+            ${comData ? `<label style="display:block;font-size:12px;margin-bottom:4px">Data</label><input type="date" id="baixa-data" value="${hoje}" style="${sel};margin-bottom:10px">` : ''}
+            ${semContas ? `<div id="baixa-aviso-geral" style="background:#FEF6D8;color:#8A6A00;font-size:12px;padding:8px;border-radius:4px;margin-bottom:10px">Contas ainda não configuradas (Empresa › Preferências) — esta baixa não entra no saldo.</div>` : ''}
+            <div style="max-height:50vh;overflow:auto;margin-bottom:12px">${itens.map((it, idx) => {
+                const m = meioInicial(it) || {};
+                const mp = it.meio_previsto || {};
+                const vezes = Math.min(12, Math.max(1, Math.floor(Number(mp.vezes) || 1)));
+                return `<div class="baixa-linha" data-idx="${idx}" style="padding:8px 0;border-bottom:1px solid #eee;font-size:13px">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                        <input type="checkbox" class="baixa-check" data-id="${escapeHtml(String(it.id))}" ${it.marcado ? 'checked' : ''}>
+                        <span style="flex:1">${escapeHtml(it.descricao || '')}</span>
+                        <strong>${brl(it.valor)}</strong>
+                    </label>
+                    <div class="baixa-detalhe" style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0 24px">
+                        <input type="text" inputmode="decimal" class="baixa-valor" title="Valor recebido" value="${(Number(it.valor) || 0).toFixed(2).replace('.', ',')}" ${permiteParcial ? '' : 'readonly'} style="${sel};flex:1 1 90px;${permiteParcial ? '' : 'background:#f5f5f5'}">
+                        <select class="baixa-meio" title="Meio" style="${sel};flex:2 1 130px">${meios.map(x => `<option value="${escapeHtml(x.chave)}" ${x === m ? 'selected' : ''}>${escapeHtml(x.nome)}</option>`).join('')}</select>
+                        <select class="baixa-conta" title="Conta" style="${sel};flex:2 1 130px;${semContas ? 'display:none' : ''}"><option value="">— sem conta —</option>${contas.map(c => `<option value="${escapeHtml(String(c.id))}" ${String(c.id) === contaDe(m) ? 'selected' : ''}>${escapeHtml(c.nome || '')}</option>`).join('')}</select>
+                        <div class="baixa-cartao" style="display:none;flex:1 1 100%;gap:10px;align-items:center">
+                            <label style="font-size:12px">Vezes <select class="baixa-vezes" style="padding:4px;border:1px solid #ccc;border-radius:4px">${Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}" ${i + 1 === vezes ? 'selected' : ''}>${i + 1}x</option>`).join('')}</select></label>
+                            <label style="font-size:12px;cursor:pointer"><input type="checkbox" class="baixa-antecipar" ${mp.antecipar ? 'checked' : ''}> Antecipar</label>
+                        </div>
+                        <div class="baixa-aviso" style="display:none;flex:1 1 100%;color:#8A6A00;font-size:12px"></div>
+                        <div class="baixa-erro" style="display:none;flex:1 1 100%;color:#C0392B;font-size:12px"></div>
+                    </div>
+                </div>`;
+            }).join('')}</div>
             <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:12px"><span>Total marcado</span><strong id="baixa-total">R$ 0,00</strong></div>
-            ${comData ? `<label style="display:block;font-size:12px;margin-bottom:4px">Data</label><input type="date" id="baixa-data" value="${hoje}" style="width:100%;margin-bottom:10px;padding:7px;border:1px solid #ccc;border-radius:4px">` : ''}
-            <label style="display:block;font-size:12px;margin-bottom:4px">Forma</label>
-            <select id="baixa-forma" style="width:100%;margin-bottom:16px;padding:7px;border:1px solid #ccc;border-radius:4px">${formas.map(f => `<option value="${escapeHtml(f)}" ${f === formaPadrao ? 'selected' : ''}>${escapeHtml(f)}</option>`).join('')}</select>
             <div class="sc-modal-btns"><button class="btn btn-outline" id="baixa-cancel">Cancelar</button><button class="btn btn-success" id="baixa-ok">Confirmar</button></div>
         </div>`;
         document.body.appendChild(o);
-        const caixas = [...o.querySelectorAll('input[type=checkbox]')];
-        const atualizar = () => {
-            const t = caixas.filter(c => c.checked).reduce((s, c) => s + parseFloat(c.dataset.valor), 0);
-            o.querySelector('#baixa-total').textContent = 'R$ ' + t.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        const linhas = [...o.querySelectorAll('.baixa-linha')];
+        const dataAtual = () => o.querySelector('#baixa-data')?.value || hoje;
+        const meioDa = l => meios.find(x => x.chave === l.querySelector('.baixa-meio').value) || null;
+        // Valor da linha: numero ou NaN; mensagem de erro ou ''.
+        const lerLinha = l => {
+            const it = itens[Number(l.dataset.idx)];
+            const max = CaixaCore.arredondar(Number(it.valor) || 0);
+            const v = CaixaCore.arredondar(_valorDigitadoBaixa(l.querySelector('.baixa-valor').value));
+            let erro = '';
+            if (!(v > 0)) erro = 'Informe um valor maior que zero.';
+            else if (v > max) erro = 'O valor não pode passar de ' + brl(max) + '.';
+            return { it, v, erro };
         };
-        caixas.forEach(c => c.addEventListener('change', atualizar));
+        const atualizarLinha = l => {
+            const marcada = l.querySelector('.baixa-check').checked;
+            l.querySelector('.baixa-detalhe').style.display = marcada ? 'flex' : 'none';
+            const m = meioDa(l);
+            l.querySelector('.baixa-cartao').style.display = m && m.tipo === 'cartao_credito' ? 'flex' : 'none';
+            const conta = _contaFinPorId(l.querySelector('.baixa-conta').value);
+            const aviso = l.querySelector('.baixa-aviso');
+            const mostrar = !semContas && !CaixaCore.contaAceitaMovimento(conta, dataAtual());
+            aviso.textContent = mostrar ? AVISO_CONTA_BAIXA : '';
+            aviso.style.display = mostrar ? 'block' : 'none';
+            const { erro } = lerLinha(l);
+            const e = l.querySelector('.baixa-erro');
+            e.textContent = erro;
+            e.style.display = marcada && erro ? 'block' : 'none';
+        };
+        const atualizar = () => {
+            linhas.forEach(atualizarLinha);
+            const t = linhas.filter(l => l.querySelector('.baixa-check').checked)
+                .reduce((s, l) => { const { v } = lerLinha(l); return s + (v > 0 ? v : 0); }, 0);
+            o.querySelector('#baixa-total').textContent = brl(t);
+        };
+        linhas.forEach(l => {
+            l.querySelector('.baixa-meio').addEventListener('change', () => {
+                l.querySelector('.baixa-conta').value = contaDe(meioDa(l));
+                atualizar();
+            });
+            l.querySelectorAll('.baixa-check,.baixa-conta').forEach(x => x.addEventListener('change', atualizar));
+            l.querySelector('.baixa-valor').addEventListener('input', atualizar);
+        });
+        o.querySelector('#baixa-data')?.addEventListener('change', atualizar);
+        o.querySelector('#baixa-data')?.addEventListener('input', atualizar);
         atualizar();
         const fechar = val => { document.removeEventListener('keydown', esc); o.remove(); resolve(val); };
         const esc = e => { if (e.key === 'Escape') fechar(null); };
         document.addEventListener('keydown', esc);
         o.querySelector('#baixa-cancel').onclick = () => fechar(null);
-        o.querySelector('#baixa-ok').onclick = () => fechar({
-            ids: caixas.filter(c => c.checked).map(c => { const it = itens.find(i => String(i.id) === c.dataset.id); return it ? it.id : c.dataset.id; }),
-            data: o.querySelector('#baixa-data')?.value || hoje,
-            forma: o.querySelector('#baixa-forma').value
-        });
+        o.querySelector('#baixa-ok').onclick = () => {
+            atualizar();
+            const marcadas = linhas.filter(l => l.querySelector('.baixa-check').checked);
+            if (marcadas.some(l => lerLinha(l).erro)) return;
+            fechar({
+                data: dataAtual(),
+                linhas: marcadas.map(l => {
+                    const { it, v } = lerLinha(l);
+                    const m = meioDa(l) || {};
+                    const conta = _contaFinPorId(l.querySelector('.baixa-conta').value);
+                    let cartao = null;
+                    if (m.tipo === 'cartao_debito') cartao = { tipo: 'debito', vezes: 1, antecipar: false };
+                    if (m.tipo === 'cartao_credito') cartao = {
+                        tipo: 'credito',
+                        vezes: Math.min(12, Math.max(1, Number(l.querySelector('.baixa-vezes').value) || 1)),
+                        antecipar: l.querySelector('.baixa-antecipar').checked
+                    };
+                    return { id: it.id, valor: v, meio_id: m.id == null ? null : m.id, meio_nome: m.nome || '', conta_id: conta ? conta.id : null, cartao };
+                })
+            });
+        };
     });
 }
 
-function baixarContasReceber(ids, data, forma) {
+// Adaptador provisorio (ate a baixa de pagamentos ganhar meio e conta): o
+// modal novo devolve linhas; a baixa de contas a pagar ainda recebe ids e forma.
+function _baixaPagarAntiga(r) {
+    if (!r || !r.linhas.length) return null;
+    return { ids: r.linhas.map(l => l.id), data: r.data, forma: r.linhas[0].meio_nome || '' };
+}
+
+function _novosIdsFin(colecao) {
+    const usados = new Set((colecao || []).map(x => x.id));
+    return () => _novoIdCfgFin(usados);
+}
+
+// Baixa de recebimentos, linha a linha. Valor menor que a parcela divide a
+// parcela (a parte paga vira uma conta nova). Gera movimentos so se a conta
+// aceita (existe, ativa e data >= saldo inicial). Cartao: uma entrada bruta
+// por repasse e uma conta a pagar de taxa ja paga com a sua saida.
+function baixarContasReceber(data, linhas) {
     const usuario = getUsuarioLogado();
+    const agora = Date.now();
     const peds = new Set();
-    (ids || []).forEach(id => {
-        const cr = db.contas_receber.find(x => x.id == id);
+    if (!Array.isArray(db.movimentos_fin)) db.movimentos_fin = [];
+    const novoIdCR = _novosIdsFin(db.contas_receber);
+    const novoIdCP = _novosIdsFin(db.contas_pagar);
+    const novoIdMov = _novosIdsFin(db.movimentos_fin);
+    (linhas || []).forEach(linha => {
+        let cr = db.contas_receber.find(x => CaixaCore.mesmoId(x.id, linha.id));
         if (!cr || cr.status === 'Pago') return;
+        const valor = linha.valor == null ? CaixaCore.arredondar(cr.valor) : CaixaCore.arredondar(linha.valor);
+        if (valor < CaixaCore.arredondar(cr.valor)) {
+            const { pago, resto } = CaixaCore.dividirParcela(cr, valor);
+            const parte = { ...cr, id: novoIdCR(), valor: pago, parcela_origem_id: cr.id };
+            ['estornado_por', 'estornado_em', 'ultima_cobranca'].forEach(k => delete parte[k]);
+            cr.valor = resto;
+            db.contas_receber.push(parte);
+            cr = parte;
+        }
+        const meio = linha.meio_id == null ? null : getMeiosPag().find(m => CaixaCore.mesmoId(m.id, linha.meio_id));
+        const conta = _contaFinPorId(linha.conta_id);
         cr.status = 'Pago';
         cr.data_pagamento = data;
-        cr.forma_pagamento = forma;
+        cr.meio_id = meio ? meio.id : null;
+        cr.conta_id = conta ? conta.id : null;
+        cr.cartao = linha.cartao ? { tipo: linha.cartao.tipo, vezes: linha.cartao.vezes || 1, antecipar: !!linha.cartao.antecipar } : null;
+        cr.forma_pagamento = meio ? meio.nome : (linha.meio_nome || null);
         cr.baixado_por = usuario?.id || null;
-        cr.baixado_em = Date.now();
+        cr.baixado_em = agora;
         if (cr.pedido_id) peds.add(cr.pedido_id);
+        if (!CaixaCore.contaAceitaMovimento(conta, data)) return;
+        const grupo = novoIdMov();
+        const desc = cr.descricao || 'Recebimento';
+        const entrada = (d, v, descricao) => db.movimentos_fin.push({ id: novoIdMov(), conta_id: conta.id, data: d, sentido: 'entrada', valor: v, origem: 'cr', origem_id: cr.id, grupo_id: grupo, descricao });
+        if (!cr.cartao) { entrada(data, cr.valor, desc); return; }
+        const repasses = CaixaCore.repassesCartao({ valor: cr.valor, data, conta, tipo: cr.cartao.tipo, vezes: cr.cartao.vezes, antecipar: cr.cartao.antecipar });
+        repasses.forEach((r, i) => {
+            entrada(r.data, r.bruto, repasses.length > 1 ? `${desc} (cartão ${i + 1}/${repasses.length})` : `${desc} (cartão)`);
+            if (!(r.taxa > 0)) return;
+            const cp = {
+                id: novoIdCP(), tipo: 'variavel', categoria: 'taxa_cartao', descricao: 'Taxa de cartão — ' + desc,
+                credor_nome: conta.nome || '', valor: r.taxa, data_vencimento: r.data, data_pagamento: r.data, status: 'Pago',
+                conta_id: conta.id, origem_cr_id: cr.id, baixado_por: usuario?.id || null, baixado_em: agora
+            };
+            db.contas_pagar.push(cp);
+            db.movimentos_fin.push({ id: novoIdMov(), conta_id: conta.id, data: r.data, sentido: 'saida', valor: r.taxa, origem: 'cp', origem_id: cp.id, grupo_id: grupo, descricao: cp.descricao });
+        });
     });
     peds.forEach(id => {
         sincronizarRecebidoPedido(id);
@@ -12044,6 +12203,25 @@ function baixarContasReceber(ids, data, forma) {
         const ped = db.pedidos.find(p => p.id == id);
         if (ped && ped.pagamento_pendente && FinanceiroCore.saldoEmAberto(db.contas_receber, id) <= 0.01) ped.pagamento_pendente = false;
     });
+}
+
+// O que a baixa de um recebimento gerou: entradas dele, contas de taxa de
+// cartao e as saidas delas. `caidos` = entradas com data <= hoje.
+function _movimentosDaBaixaCR(crId) {
+    const hoje = hojeLocal();
+    const taxas = (db.contas_pagar || []).filter(cp => cp.categoria === 'taxa_cartao' && CaixaCore.mesmoId(cp.origem_cr_id, crId));
+    const movs = (db.movimentos_fin || []).filter(m =>
+        (m.origem === 'cr' && CaixaCore.mesmoId(m.origem_id, crId)) ||
+        (m.origem === 'cp' && taxas.some(t => CaixaCore.mesmoId(t.id, m.origem_id))));
+    const caidos = movs.filter(m => m.origem === 'cr' && m.data <= hoje);
+    return { taxas, movs, caidos };
+}
+
+function removerMovimentosDaBaixaCR(crId) {
+    const { taxas, movs, caidos } = _movimentosDaBaixaCR(crId);
+    if (movs.length) db.movimentos_fin = db.movimentos_fin.filter(m => !movs.includes(m));
+    if (taxas.length) db.contas_pagar = db.contas_pagar.filter(cp => !taxas.includes(cp));
+    return { removidos: movs.length, caidos };
 }
 
 // Comissoes do pedido instalado viram contas a pagar (uma por papel). Idempotente.
@@ -12090,11 +12268,12 @@ async function marcarCRPago(id) {
     const ped = db.pedidos.find(p => p.id == cr.pedido_id);
     const r = await abrirModalBaixa({
         titulo: 'Registrar recebimento',
-        itens: [{ id: cr.id, descricao: cr.descricao, valor: cr.valor, marcado: true }],
-        formaPadrao: formaPagamentoDoPedido(ped) || cr.forma_pagamento || ''
+        itens: [{ id: cr.id, descricao: cr.descricao, valor: cr.valor, marcado: true, meio_previsto: cr.meio_previsto || null }],
+        formaPadrao: formaPagamentoDoPedido(ped) || cr.forma_pagamento || '',
+        permiteParcial: true
     });
-    if (!r || !r.ids.length) return;
-    baixarContasReceber(r.ids, r.data, r.forma);
+    if (!r || !r.linhas.length) return;
+    baixarContasReceber(r.data, r.linhas);
     salvarERecarregar('Recebimento registrado!');
 }
 
@@ -12102,15 +12281,38 @@ async function estornarCR(id) {
     if (!await exigirPermissao('financeiro.receber', 'completo')) return;
     const cr = db.contas_receber.find(x => x.id == id);
     if (!cr || cr.status !== 'Pago') return;
-    if (!await showConfirm('Estornar este recebimento? A parcela volta a ficar em aberto.', '↩', 'Estornar', 'Cancelar')) return;
-    const hoje = hojeLocal();
-    cr.status = (cr.data_vencimento && cr.data_vencimento < hoje) ? 'Atrasado' : 'Pendente';
-    cr.data_pagamento = null;
-    cr.forma_pagamento = null;
-    cr.baixado_por = null;
-    cr.baixado_em = null;
-    cr.estornado_por = getUsuarioLogado()?.id || null;
-    cr.estornado_em = Date.now();
+    // Parte paga de uma parcela dividida: volta a se juntar a parte em aberto.
+    const origem = cr.parcela_origem_id != null ? db.contas_receber.find(x => CaixaCore.mesmoId(x.id, cr.parcela_origem_id)) : null;
+    const juntar = !!origem && origem !== cr && origem.status !== 'Pago';
+    let msg = juntar
+        ? 'Estornar este recebimento? O valor volta para a parcela em aberto.'
+        : 'Estornar este recebimento? A parcela volta a ficar em aberto.';
+    const { caidos } = _movimentosDaBaixaCR(cr.id);
+    if (cr.cartao && caidos.length) {
+        const nomes = [...new Set(caidos.map(m => (_contaFinPorId(m.conta_id) || {}).nome).filter(Boolean))];
+        if (nomes.length) msg += `\n\nIsso muda o saldo de hoje da conta ${nomes.join(', ')}.`;
+    }
+    if (!await showConfirm(msg, '↩', 'Estornar', 'Cancelar')) return;
+    removerMovimentosDaBaixaCR(cr.id);
+    const usuarioId = getUsuarioLogado()?.id || null;
+    if (juntar) {
+        origem.valor = CaixaCore.arredondar(Number(origem.valor) + Number(cr.valor));
+        origem.estornado_por = usuarioId;
+        origem.estornado_em = Date.now();
+        db.contas_receber = db.contas_receber.filter(x => x !== cr);
+    } else {
+        const hoje = hojeLocal();
+        cr.status = (cr.data_vencimento && cr.data_vencimento < hoje) ? 'Atrasado' : 'Pendente';
+        cr.data_pagamento = null;
+        cr.forma_pagamento = null;
+        cr.meio_id = null;
+        cr.conta_id = null;
+        cr.cartao = null;
+        cr.baixado_por = null;
+        cr.baixado_em = null;
+        cr.estornado_por = usuarioId;
+        cr.estornado_em = Date.now();
+    }
     if (cr.pedido_id) {
         sincronizarRecebidoPedido(cr.pedido_id);
         // O pedido deixa de estar quitado: a migracao da Fase 0 (por exemplo, ao
@@ -12279,9 +12481,10 @@ async function marcarCPPago(id) {
     const r = await abrirModalBaixa({
         titulo: 'Registrar pagamento',
         itens: [{ id: cp.id, descricao: cp.descricao, valor: cp.valor, marcado: true }],
-        formaPadrao: cp.forma_pagamento || ''
-    });
-    if (!r || !r.ids.length) return;
+        formaPadrao: cp.forma_pagamento || '',
+        permiteCartao: false, permiteParcial: false
+    }).then(_baixaPagarAntiga);
+    if (!r) return;
     baixarContasPagar(r.ids, r.data, r.forma);
     salvarERecarregar('Pagamento registrado!');
 }
@@ -13648,8 +13851,8 @@ function renderDashboardFinanceiro() {
     }
 
     // ── DONUT DESPESAS POR CATEGORIA ─────────────────────────────
-    const CAT_LABELS = { tecido:'Tecido/Mat.', salario:'Salário', comissao_rt:'Comissão RT', aluguel:'Aluguel', conta:'Contas', outro:'Outros', costureira:'Costureira', instalador:'Instalador' };
-    const CAT_CORES  = { tecido:'#9B31C8', salario:'#F2C924', comissao_rt:'#9B31C8', aluguel:'#F43927', conta:'#2D77C1', outro:'#8F8F8F', costureira:'#D70085', instalador:'#FF7F08' };
+    const CAT_LABELS = { taxa_cartao:'Taxa de cartão', tecido:'Tecido/Mat.', salario:'Salário', comissao_rt:'Comissão RT', aluguel:'Aluguel', conta:'Contas', outro:'Outros', costureira:'Costureira', instalador:'Instalador' };
+    const CAT_CORES  = { taxa_cartao:'#5B6B7A', tecido:'#9B31C8', salario:'#F2C924', comissao_rt:'#9B31C8', aluguel:'#F43927', conta:'#2D77C1', outro:'#8F8F8F', costureira:'#D70085', instalador:'#FF7F08' };
     const despCats = {};
     db.contas_pagar.filter(cp=>inRange(cp.data_vencimento)).forEach(cp => { const c=cp.categoria||'outro'; despCats[c]=(despCats[c]||0)+cp.valor; });
     const catKeys   = Object.keys(despCats);
