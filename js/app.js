@@ -2858,7 +2858,7 @@ function statusEntrega(ped) {
 
 function mostrarModalPagamento(ped, callback) {
     const total    = ped.valor || 0;
-    const recebido = ped.valor_recebido || 0;
+    const recebido = FinanceiroCore.totalRecebido(db.contas_receber, ped.id);
     const saldo    = total - recebido;
     const overlay  = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center';
@@ -2912,22 +2912,23 @@ async function confirmarPagamentoPedido(id) {
         await showAlert('Somente o Administrador ou o Financeiro pode confirmar o pagamento e avançar este pedido.', '🚫');
         return;
     }
-    const total = ped.valor || 0, recebido = ped.valor_recebido || 0;
-    const forma = formaPagamentoDoPedido(ped);
-    const msg = `Confirmar o pagamento do pedido #${formatPedidoId(ped.id)}?
-
-`
-        + (forma ? `Forma de pagamento: ${forma}
-` : '')
-        + `Valor total: R$ ${total.toFixed(2)}
-`
-        + (ped.pagamento_pendente ? `Saldo pendente informado na instalação: R$ ${Math.max(0, total - recebido).toFixed(2)}
-` : '')
-        + `
-O pedido vai para "Instalado".`;
-    if (!await showConfirm(msg, '💰', 'Confirmar pagamento', 'Cancelar')) return;
-    ped.valor_recebido = ped.valor;
-    ped.pagamento_pendente = false;
+    const abertas = db.contas_receber.filter(c => c.pedido_id == ped.id && c.status !== 'Pago')
+        .sort((x, y) => (x.data_vencimento || '').localeCompare(y.data_vencimento || ''));
+    // Com pagamento pendente informado na instalacao, a parcela de saldo (ou a
+    // de vencimento mais tardio) comeca desmarcada.
+    let desmarcar = null;
+    if (ped.pagamento_pendente && abertas.length) {
+        desmarcar = abertas.find(c => c.parcela_tipo === 'saldo') || abertas[abertas.length - 1];
+    }
+    const r = await abrirModalBaixa({
+        titulo: `Confirmar pagamento do pedido #${formatPedidoId(ped.id)}`,
+        itens: abertas.map(c => ({ id: c.id, descricao: c.descricao, valor: c.valor, marcado: c !== desmarcar })),
+        formaPadrao: formaPagamentoDoPedido(ped)
+    });
+    if (!r) return;
+    baixarContasReceber(r.ids, r.data, r.forma);
+    sincronizarRecebidoPedido(ped.id);
+    ped.pagamento_pendente = FinanceiroCore.saldoEmAberto(db.contas_receber, ped.id) > 0.01;
     ped.pagamento_confirmado_em = Date.now();
     ped.pagamento_confirmado_por = getUsuarioLogado()?.id || null;
     ped.status = 'Instalado';
@@ -6049,7 +6050,6 @@ function atualizarTotalPedido() {
     const descVal  = Math.round(bruto * descPct / 100 * 100) / 100;
     const total    = bruto - descVal;
     const recEl    = document.getElementById('ped-valor-recebido');
-    if (recEl && parseFloat(recEl.value) > total) { recEl.value = total.toFixed(2); }
     const recebido = parseFloat(document.getElementById('ped-valor-recebido')?.value) || 0;
     const saldo    = Math.max(0, total - recebido);
     const el = id => document.getElementById(id);
@@ -6129,7 +6129,7 @@ Volte o pedido para Orçamento para editar.`, '🔒');
         status:         document.getElementById('ped-status')?.value || 'Orçamento',
         data_entrega:   document.getElementById('ped-entrega')?.value || null,
         observacoes:    document.getElementById('ped-obs')?.value.trim() || '',
-        valor_recebido: parseFloat(document.getElementById('ped-valor-recebido')?.value) || 0,
+        valor_recebido: 0,   // fonte unica: soma das parcelas pagas (sincronizarRecebidoPedido)
         vendedor_id:    vendedor_id_sel,
         vendedor_nome:  vendedor_obj ? vendedor_obj.nome : '',
         comissao_pct,
@@ -6147,6 +6147,7 @@ Volte o pedido para Orçamento para editar.`, '🔒');
         dadosPedido.id = editandoIdPedido;
         if (index >= 0) {
             dadosPedido.data_producao     = db.pedidos[index].data_producao;
+            dadosPedido.valor_recebido    = db.pedidos[index].valor_recebido || 0;
             dadosPedido.data_instalado    = db.pedidos[index].data_instalado;
             dadosPedido.baixa_realizada   = db.pedidos[index].baixa_realizada;
             // Baixas parciais e a timeline sobrevivem a edicao (pedido que
@@ -6407,6 +6408,7 @@ function renderKanban() {
                         </div>
                         ${vendedorLinha}
                         <div class="kanban-card-cliente" style="font-size:13px">${escapeHtml(p.clienteNome||'')}${obsBadge}</div>
+                        ${_badgeSaldoEmAberto(p)}
                         ${_badgeConferencia(p) ? `<div style="margin-top:4px">${_badgeConferencia(p)}</div>` : ''}
                         <div class="kanban-card-actions" style="margin-top:6px">
                             <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})" title="Ver Ordem de Serviço">📋 OS</button>
@@ -6485,6 +6487,13 @@ function _kanbanFinanceiroHTML(p) {
     const pend = p.pagamento_pendente ? `<span class="kanban-pag-pendente" title="Saldo pendente informado na instalação">⏳ Pendente</span>` : '';
     if (!forma && !pend) return '';
     return `<div class="kanban-fin">${forma ? `<span class="kanban-fin-forma" title="Forma de pagamento">💳 ${escapeHtml(forma)}</span>` : ''}${pend}</div>`;
+}
+
+// Pedido Instalado com parcela ainda em aberto.
+function _badgeSaldoEmAberto(p) {
+    if (normalizarStatus(p.status) !== 'Instalado') return '';
+    if (FinanceiroCore.saldoEmAberto(db.contas_receber, p.id) <= 0.01) return '';
+    return `<div class="kanban-fin"><span class="kanban-pag-pendente" title="Ainda há parcela a receber">saldo em aberto</span></div>`;
 }
 
 // So Administrador/Financeiro veem o botao; os demais, o aviso de quem decide.
@@ -6632,7 +6641,7 @@ function _pcpLinhaHTML(p, col, idx) {
         <div class="pcp-linha-cli">
             <span class="pcp-linha-nome">${escapeHtml(p.clienteNome || '')}${obs}${p.baixa_realizada ? '<span class="badge-baixa">✔ Baixa OK</span>' : ''}${_badgeConferencia(p)}</span>
             ${p.amb ? `<span class="pcp-linha-amb">${escapeHtml(p.amb)}</span>` : ''}
-            ${agFin ? _kanbanFinanceiroHTML(p) : ''}
+            ${agFin ? _kanbanFinanceiroHTML(p) : _badgeSaldoEmAberto(p)}
         </div>
         <div class="pcp-linha-entrega">${entrega ? `<span class="${entrega.cls}">${entrega.label}</span>` : ''}</div>
         <div class="pcp-linha-acoes">
@@ -11283,32 +11292,104 @@ function atualizarStatusVencimentos() {
     if (changed) syncDB();
 }
 
-function marcarCRPago(id) {
-    if (!temAcesso('financeiro.receber', 'completo')) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
+// Valor recebido do pedido = soma das parcelas pagas (fonte unica).
+function sincronizarRecebidoPedido(pedidoId) {
+    const ped = db.pedidos.find(p => p.id == pedidoId);
+    if (!ped || !db.contas_receber.some(c => c.pedido_id == pedidoId)) return;   // sem parcelas, mantem o legado
+    ped.valor_recebido = FinanceiroCore.totalRecebido(db.contas_receber, pedidoId);
+}
+
+// Modal de baixa: lista de parcelas com caixa de marcar, total ao vivo, data e
+// forma. Devolve { ids, data, forma } ou null se o usuario desistir.
+function abrirModalBaixa({ titulo, itens, formaPadrao, comData = true }) {
+    return new Promise(resolve => {
+        const hoje = new Date().toLocaleDateString('sv-SE');
+        const formas = [...new Set([...getFormasPagamento(), 'Dinheiro', 'PIX', 'Cartão', 'Transferência'])];
+        if (formaPadrao && !formas.includes(formaPadrao)) formas.unshift(formaPadrao);
+        const o = document.createElement('div');
+        o.id = 'baixa-modal';
+        o.className = 'sc-modal-overlay';
+        o.style.display = 'flex';
+        o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:460px">
+            <h3 style="margin:0 0 12px;font-size:16px">${escapeHtml(titulo || 'Registrar recebimento')}</h3>
+            <div style="max-height:240px;overflow:auto;margin-bottom:12px">${itens.map(i => `
+                <label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #eee;font-size:13px;cursor:pointer">
+                    <input type="checkbox" data-id="${escapeHtml(String(i.id))}" data-valor="${Number(i.valor) || 0}" ${i.marcado ? 'checked' : ''}>
+                    <span style="flex:1">${escapeHtml(i.descricao || '')}</span>
+                    <strong>R$ ${(Number(i.valor) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+                </label>`).join('')}</div>
+            <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:12px"><span>Total marcado</span><strong id="baixa-total">R$ 0,00</strong></div>
+            ${comData ? `<label style="display:block;font-size:12px;margin-bottom:4px">Data</label><input type="date" id="baixa-data" value="${hoje}" style="width:100%;margin-bottom:10px;padding:7px;border:1px solid #ccc;border-radius:4px">` : ''}
+            <label style="display:block;font-size:12px;margin-bottom:4px">Forma</label>
+            <select id="baixa-forma" style="width:100%;margin-bottom:16px;padding:7px;border:1px solid #ccc;border-radius:4px">${formas.map(f => `<option value="${escapeHtml(f)}" ${f === formaPadrao ? 'selected' : ''}>${escapeHtml(f)}</option>`).join('')}</select>
+            <div class="sc-modal-btns"><button class="btn btn-outline" id="baixa-cancel">Cancelar</button><button class="btn btn-success" id="baixa-ok">Confirmar</button></div>
+        </div>`;
+        document.body.appendChild(o);
+        const caixas = [...o.querySelectorAll('input[type=checkbox]')];
+        const atualizar = () => {
+            const t = caixas.filter(c => c.checked).reduce((s, c) => s + parseFloat(c.dataset.valor), 0);
+            o.querySelector('#baixa-total').textContent = 'R$ ' + t.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        };
+        caixas.forEach(c => c.addEventListener('change', atualizar));
+        atualizar();
+        const fechar = val => { document.removeEventListener('keydown', esc); o.remove(); resolve(val); };
+        const esc = e => { if (e.key === 'Escape') fechar(null); };
+        document.addEventListener('keydown', esc);
+        o.querySelector('#baixa-cancel').onclick = () => fechar(null);
+        o.querySelector('#baixa-ok').onclick = () => fechar({
+            ids: caixas.filter(c => c.checked).map(c => { const it = itens.find(i => String(i.id) === c.dataset.id); return it ? it.id : c.dataset.id; }),
+            data: o.querySelector('#baixa-data')?.value || hoje,
+            forma: o.querySelector('#baixa-forma').value
+        });
+    });
+}
+
+function baixarContasReceber(ids, data, forma) {
+    const usuario = getUsuarioLogado();
+    const peds = new Set();
+    (ids || []).forEach(id => {
+        const cr = db.contas_receber.find(x => x.id == id);
+        if (!cr || cr.status === 'Pago') return;
+        cr.status = 'Pago';
+        cr.data_pagamento = data;
+        cr.forma_pagamento = forma;
+        cr.baixado_por = usuario?.id || null;
+        cr.baixado_em = Date.now();
+        if (cr.pedido_id) peds.add(cr.pedido_id);
+    });
+    peds.forEach(sincronizarRecebidoPedido);
+}
+
+async function marcarCRPago(id) {
+    if (!await exigirPermissao('financeiro.receber', 'completo')) return;
     const cr = db.contas_receber.find(x => x.id == id);
     if (!cr) return;
-    const dataStr = prompt('Data de recebimento (AAAA-MM-DD):', new Date().toISOString().split('T')[0]);
-    if (!dataStr) return;
-    cr.data_pagamento = dataStr;
-    cr.status = 'Pago';
-    if (cr.pedido_id) {
-        const ped = db.pedidos.find(p => p.id == cr.pedido_id);
-        const todas = db.contas_receber.filter(x => x.pedido_id === cr.pedido_id);
-        const todasPagas = todas.every(x => x.status === 'Pago' || x.id == id);
-        if (todasPagas && ped && (ped.arquiteto_nome || '').trim() && (ped.rt_pct || 0) > 0 && !ped.rt_gerado) {
-            const rtValor = Math.round(ped.valor * ped.rt_pct / 100 * 100) / 100;
-            db.contas_pagar.push({
-                id: Date.now() + 1,
-                pedido_id: ped.id, tipo: 'variavel', categoria: 'comissao_rt',
-                descricao: `RT ${ped.rt_pct}% — ${ped.arquiteto_nome} — Ped. #${formatPedidoId(ped.id)}`,
-                credor_nome: ped.arquiteto_nome,
-                valor: rtValor,
-                data_vencimento: dataStr, data_pagamento: null, status: 'Pendente'
-            });
-            ped.rt_gerado = true;
-        }
-    }
+    const ped = db.pedidos.find(p => p.id == cr.pedido_id);
+    const r = await abrirModalBaixa({
+        titulo: 'Registrar recebimento',
+        itens: [{ id: cr.id, descricao: cr.descricao, valor: cr.valor, marcado: true }],
+        formaPadrao: formaPagamentoDoPedido(ped) || cr.forma_pagamento || ''
+    });
+    if (!r || !r.ids.length) return;
+    baixarContasReceber(r.ids, r.data, r.forma);
     salvarERecarregar('Recebimento registrado!');
+}
+
+async function estornarCR(id) {
+    if (!await exigirPermissao('financeiro.receber', 'completo')) return;
+    const cr = db.contas_receber.find(x => x.id == id);
+    if (!cr || cr.status !== 'Pago') return;
+    if (!await showConfirm('Estornar este recebimento? A parcela volta a ficar em aberto.', '↩', 'Estornar', 'Cancelar')) return;
+    const hoje = new Date().toLocaleDateString('sv-SE');
+    cr.status = (cr.data_vencimento && cr.data_vencimento < hoje) ? 'Atrasado' : 'Pendente';
+    cr.data_pagamento = null;
+    cr.forma_pagamento = null;
+    cr.baixado_por = null;
+    cr.baixado_em = null;
+    cr.estornado_por = getUsuarioLogado()?.id || null;
+    cr.estornado_em = Date.now();
+    if (cr.pedido_id) sincronizarRecebidoPedido(cr.pedido_id);
+    salvarERecarregar('Recebimento estornado.');
 }
 
 async function excluirCR(id) {
@@ -12901,7 +12982,7 @@ function renderContasReceber() {
             <td>${escapeHtml(cr.descricao)}</td>
             <td style="text-align:right"><strong>R$ ${cr.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
             <td>${pago?`<span style="color:#005D3B;font-size:12px">✓ ${new Date(cr.data_pagamento+'T12:00:00').toLocaleDateString('pt-BR')}</span>`:`<span class="fin-badge fin-badge-${at?'red':'pending'}">${cr.status}</span>`}</td>
-            <td>${podeEditar ? `${!pago?`<button class="btn btn-sm btn-success" onclick="marcarCRPago(${cr.id})" title="Confirmar recebimento">✓ Recebido</button>`:''}<button class="btn btn-outline btn-sm btn-danger" onclick="excluirCR(${cr.id})" title="Excluir" style="margin-left:4px">🗑️</button>` : ''}</td>
+            <td>${podeEditar ? `${!pago?`<button class="btn btn-sm btn-success" onclick="marcarCRPago(${cr.id})" title="Confirmar recebimento">✓ Recebido</button>`:`<button class="btn btn-outline btn-sm" onclick="estornarCR(${cr.id})" title="Desfazer este recebimento">↩ Estornar</button>`}<button class="btn btn-outline btn-sm btn-danger" onclick="excluirCR(${cr.id})" title="Excluir" style="margin-left:4px">🗑️</button>` : ''}</td>
         </tr>`;
     }).join('');
 }
