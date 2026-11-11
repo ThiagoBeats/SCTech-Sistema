@@ -101,7 +101,110 @@
         return { pago, resto: arredondar(cr.valor - pago) };
     }
 
-    const api = { contaAceitaMovimento, saldoConta, saldosHoje, repassesCartao, dividirParcela, arredondar, somarDias };
+    const MENSAGEM_COBRANCA_PADRAO = 'Olá, {cliente}! Aqui é da {empresa}. Passando para lembrar da parcela de {valor} do pedido {pedido}, com vencimento em {vencimento}. Qualquer dúvida, estou à disposição.';
+
+    const aberto = x => x && x.status !== 'Pago';
+    const maxData = (a, b) => (a > b ? a : b);
+
+    // Ocorrencias mensais de uma despesa fixa entre duas datas (dia ajustado ao fim do mes).
+    // Respeita ativo e data_inicio/data_fim; periodicidade diferente de mensal nao e tratada (conta como mensal).
+    function ocorrenciasFixa(df, de, ate) {
+        if (!df || df.ativo === false) return [];
+        const dia = Math.max(1, Math.floor(Number(df.dia_vencimento) || 1));
+        const out = [];
+        let ano = Number(de.slice(0, 4)), mes = Number(de.slice(5, 7));
+        const fimAno = Number(ate.slice(0, 4)), fimMes = Number(ate.slice(5, 7));
+        while (ano < fimAno || (ano === fimAno && mes <= fimMes)) {
+            const ultimo = new Date(ano, mes, 0).getDate();
+            const data = ano + '-' + String(mes).padStart(2, '0') + '-' + String(Math.min(dia, ultimo)).padStart(2, '0');
+            if (data >= de && data <= ate && (!df.data_inicio || data >= df.data_inicio) && (!df.data_fim || data <= df.data_fim)) out.push(data);
+            mes++; if (mes > 12) { mes = 1; ano++; }
+        }
+        return out;
+    }
+
+    function previsaoSemanal({ hoje, saldoHoje, movimentos, contasReceber, contasPagar, despesasFixas, contas, meios, semanas = 8 }) {
+        const lista = [];
+        for (let i = 0; i < semanas; i++) {
+            lista.push({ inicio: somarDias(hoje, 7 * i), fim: somarDias(hoje, 7 * i + 6), entradas: 0, saidas: 0, saldo_final: 0, inclui_atrasados: false });
+        }
+        const limite = lista.length ? lista[lista.length - 1].fim : hoje;
+        const lanca = (data, valor, sentido, atrasado) => {
+            const s = lista.find(w => data >= w.inicio && data <= w.fim);
+            if (!s) return;
+            s[sentido === 'entrada' ? 'entradas' : 'saidas'] += Number(valor) || 0;
+            if (atrasado) s.inclui_atrasados = true;
+        };
+        (movimentos || []).forEach(m => { if (m.data > hoje) lanca(m.data, m.valor, m.sentido, false); });
+        (contasReceber || []).filter(aberto).forEach(cr => {
+            const atrasado = cr.data_vencimento < hoje;
+            const data = maxData(cr.data_vencimento, hoje);
+            const mp = cr.meio_previsto;
+            const meio = mp ? (meios || []).find(x => mesmoId(x.id, mp.meio_id)) : null;
+            if (meio && (meio.tipo === 'cartao_credito' || meio.tipo === 'cartao_debito')) {
+                const conta = (contas || []).find(c => mesmoId(c.id, meio.conta_id));
+                repassesCartao({ valor: Number(cr.valor) || 0, data, conta, tipo: meio.tipo === 'cartao_debito' ? 'debito' : 'credito', vezes: mp.vezes, antecipar: !!mp.antecipar })
+                    .forEach(r => lanca(r.data, r.liquido, 'entrada', atrasado && r.data <= somarDias(hoje, 6)));
+            } else {
+                lanca(data, cr.valor, 'entrada', atrasado);
+            }
+        });
+        (contasPagar || []).filter(aberto).forEach(cp => lanca(maxData(cp.data_vencimento, hoje), cp.valor, 'saida', cp.data_vencimento < hoje));
+        (despesasFixas || []).forEach(df => {
+            ocorrenciasFixa(df, hoje, limite).forEach(data => {
+                const mes = data.slice(0, 7);
+                const gerada = (contasPagar || []).some(cp => cp.tipo === 'fixo' && cp.descricao === df.descricao && String(cp.data_vencimento).slice(0, 7) === mes);
+                if (!gerada) lanca(data, df.valor, 'saida', false);
+            });
+        });
+        let saldo = Number(saldoHoje) || 0;
+        lista.forEach(s => {
+            s.entradas = arredondar(s.entradas);
+            s.saidas = arredondar(s.saidas);
+            saldo = arredondar(saldo + s.entradas - s.saidas);
+            s.saldo_final = saldo;
+        });
+        return lista;
+    }
+
+    function primeiraSemanaNegativa(semanas) {
+        const s = (semanas || []).find(w => w.saldo_final < 0);
+        return s ? { inicio: s.inicio, falta: arredondar(-s.saldo_final) } : null;
+    }
+
+    // `contas` e opcional: sem ele nao ha como saber quais movimentos sao da maquininha (cartaoHoje fica vazio).
+    function tarefasHoje({ hoje, contasReceber, contasPagar, movimentos, contas }) {
+        const rec = (contasReceber || []).filter(aberto);
+        const pag = (contasPagar || []).filter(aberto);
+        const em7 = somarDias(hoje, 7);
+        const maquininhas = (contas || []).filter(c => c.tipo === 'maquininha');
+        return {
+            receberAtrasados: rec.filter(x => x.data_vencimento < hoje),
+            receberHoje: rec.filter(x => x.data_vencimento === hoje),
+            pagarAtrasados: pag.filter(x => x.data_vencimento < hoje),
+            pagarProximos: pag.filter(x => x.data_vencimento >= hoje && x.data_vencimento <= em7),
+            cartaoHoje: (movimentos || []).filter(m => m.sentido === 'entrada' && m.data === hoje && maquininhas.some(c => mesmoId(c.id, m.conta_id)))
+        };
+    }
+
+    function normalizarTelefone(tel) {
+        const d = String(tel == null ? '' : tel).replace(/\D/g, '');
+        if (d.length === 10 || d.length === 11) return '55' + d;
+        if ((d.length === 12 || d.length === 13) && d.startsWith('55')) return d;
+        return null;
+    }
+
+    function montarMensagem(template, dados) {
+        const d = dados || {};
+        return String(template == null ? '' : template).replace(/\{(cliente|empresa|valor|pedido|vencimento)\}/g, (_, k) => (d[k] == null ? '' : String(d[k])));
+    }
+
+    function linkWhatsApp(telefone, mensagem) {
+        if (!telefone) return null;
+        return 'https://wa.me/' + telefone + '?text=' + encodeURIComponent(mensagem || '');
+    }
+
+    const api = { contaAceitaMovimento, saldoConta, saldosHoje, repassesCartao, dividirParcela, arredondar, somarDias, mesmoId, previsaoSemanal, primeiraSemanaNegativa, tarefasHoje, normalizarTelefone, montarMensagem, linkWhatsApp, MENSAGEM_COBRANCA_PADRAO };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.CaixaCore = api;
