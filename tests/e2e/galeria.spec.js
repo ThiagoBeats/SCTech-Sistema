@@ -22,13 +22,12 @@ async function semear(page, fotos) {
     await page.reload();
 }
 
-test('menu mostra Galeria e abre a pagina', async ({ page }) => {
+test('a Galeria saiu do menu lateral (abre dentro do pedido), e a pagina continua abrindo', async ({ page }) => {
     await entrar(page, BASE);
     await page.goto(BASE + '/index.html');
-    const link = page.locator('#main-sidebar a[href="galeria.html"]');
-    await expect(link).toBeVisible();
-    await link.click();
-    await page.waitForURL('**/galeria.html');
+    await expect(page.locator('#main-sidebar a.nav-item', { hasText: 'Pedidos' })).toBeVisible();
+    await expect(page.locator('#main-sidebar a[href="galeria.html"]')).toHaveCount(0);
+    await page.goto(BASE + '/galeria.html');
     await expect(page.locator('.header h2')).toContainText('Galeria');
 });
 
@@ -41,7 +40,6 @@ test('papel Instalacao ve a Galeria', async ({ page }) => {
     await page.goto(BASE + '/galeria.html');
     await expect(page.locator('.header h2')).toContainText('Galeria');
     expect(page.url()).toContain('galeria.html');
-    await expect(page.locator('#main-sidebar a[href="galeria.html"]')).toHaveCount(1);
 });
 
 test('papel salvo antes da Galeria ganha visualizar', async ({ page }) => {

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Novo Pedido - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261110b">
+    <link rel="stylesheet" href="css/style.css?v=20261110c">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
@@ -13,7 +13,10 @@
     <main class="main">
         <div class="header">
             <h2 id="titulo-pagina-pedido">Emissão de Pedido</h2>
-            <a href="index.html" class="btn btn-outline">Cancelar</a>
+            <div class="ped-header-acoes">
+                <button type="button" class="btn btn-outline btn-galeria-pedido" onclick="abrirGaleriaPedido()" title="Mostrar modelos, fotos e simulação ao cliente sem fechar o pedido">🖼️ Galeria</button>
+                <a href="index.html" class="btn btn-outline">Cancelar</a>
+            </div>
         </div>
 
         <!-- SEÇÃO 1: DADOS DO PEDIDO -->
@@ -175,10 +178,19 @@
             </div>
         </div>
     </main>
-    <script src="js/etiquetas-core.js?v=20261110b"></script>
-    <script src="js/etiquetas-render.js?v=20261110b"></script>
-    <script src="js/cortina-desenho.js?v=20261110b"></script>
-    <script src="js/docs-layout-core.js?v=20261110b"></script>
-    <script src="js/app.js?v=20261110b"></script>
+    <!-- Galeria em popup (js/galeria-pedido.js) e simulador por cima dela -->
+    <div id="sim" class="sim" hidden></div>
+    <script src="js/etiquetas-core.js?v=20261110c"></script>
+    <script src="js/etiquetas-render.js?v=20261110c"></script>
+    <script src="js/cortina-desenho.js?v=20261110c"></script>
+    <script src="js/docs-layout-core.js?v=20261110c"></script>
+    <script src="js/galeria-core.js?v=20261110c"></script>
+    <script src="js/galeria-imagens.js?v=20261110c"></script>
+    <script src="js/app.js?v=20261110c"></script>
+    <script src="js/vendor/three.min.js?v=20261110c"></script>
+    <script src="js/galeria-tela.js?v=20261110c"></script>
+    <script src="js/galeria-simulador.js?v=20261110c"></script>
+    <script src="js/galeria-modelos-render.js?v=20261110c"></script>
+    <script src="js/galeria-pedido.js?v=20261110c"></script>
 </body>
 </html>

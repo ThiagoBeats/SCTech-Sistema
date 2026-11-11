@@ -34,6 +34,7 @@ Módulos (telas):
  13. Sobre o Sistema
  16. Expedição (expedicao.html)
  17. Galeria e Simulador (galeria.html)
+ 18. Configurações: Meu Perfil, Preferências, Segurança e Acessos (configuracoes.html)
 
 Elementos globais presentes em todas as telas (exceto Login):
   - Barra lateral de navegação (sidebar) com links para todos os módulos
@@ -1354,8 +1355,10 @@ conferência sempre começa pelo documento.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Para o instalador ou o medidor mostrar ao cliente, na casa dele, fotos reais de
-modelos e uma simulação 3D da cortina ou persiana na parede dele. Item
-"Galeria" no menu, com permissão própria (módulo "Galeria"): já vem liberada
+modelos e uma simulação 3D da cortina ou persiana na parede dele. Desde
+10/11/2026 a galeria abre dentro do pedido (ver seção 18) e saiu do menu
+lateral; a página galeria.html continua funcionando. Permissão própria
+(módulo "Galeria"): já vem liberada
 para visualizar em todos os papéis; o Administrador tem acesso completo.
 
 ── 17.1 GALERIA DE FOTOS ───────────────────────────────────────────────────────
@@ -1428,6 +1431,85 @@ fotos e texturas ficam no IndexedDB do navegador (banco sctech-imagens), todo
 o acesso passando por js/galeria-imagens.js — quando o sistema for para o
 servidor da empresa, só esse arquivo muda. Sem IndexedDB (ex.: janela
 anônima) a tela avisa e o simulador segue com as cores.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 18. CONFIGURAÇÕES, GALERIA NO PEDIDO E AJUSTES (atualização de 10/11/2026)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Expedição e etiquetas:
+  - Na Expedição só entram pedidos em "Pronto p/ Instalação", "Aguardando
+    Financeiro" ou "Instalado". Bipar ou digitar um pedido de outra etapa
+    não mostra o pedido: avisa em que etapa ele está. Um pedido ativo que
+    volta de etapa (mesmo em outra aba) sai do painel.
+  - A impressão de etiquetas fica travada em todo o sistema nas etapas
+    Orçamento, Aguardando Medição Fina, Aguardando Tecido e Na Costura. O
+    ícone 🏷️ continua visível (apagado); o clique explica o motivo. A
+    trava vale também na própria função de impressão
+    (EtiquetasCore.statusPermiteEtiqueta / STATUS_COM_ETIQUETA).
+
+Pedidos (pedidos.html e Página Inicial):
+  - A coluna "Ação" tem só os três pontos (⋮). O menu traz: Aprovar pedido
+    (só em Orçamento), Editar, Gerar proposta, Ver OS, Imprimir etiquetas
+    (travada antes de Pronto), Ver timeline e Excluir. Fecha no clique fora,
+    no Esc e ao rolar a tela.
+
+Barra lateral:
+  - A logo do topo é a logotipo importada em Configurar Empresa (sobre um
+    fundo claro, para aparecer em qualquer logo); sem logo cadastrada,
+    continua a do SCTech com o nome da empresa. O clique na logo abre o
+    mesmo menu de antes, agora com "Meu perfil" e a foto do usuário.
+  - O item "Galeria" saiu do menu: a galeria abre dentro do pedido.
+
+Configurar Empresa › Dados da Empresa:
+  - Razão Social e Nome Fantasia com máscara de maiúsculas (ao digitar, ao
+    vir da consulta de CNPJ e ao salvar).
+
+Fornecedores:
+  - Nova coluna "Total de compras": soma dos pedidos de compra Enviados ou
+    Recebidos daquele fornecedor. Não entram o orçamento genérico ("sem
+    fornecedor definido") nem os Rascunhos. Mostra também quantos pedidos
+    somaram; o tooltip diz quantos rascunhos ficaram de fora.
+
+Configurações (configuracoes.html), agora em sub-abas:
+  - Meu Perfil: nome de exibição, foto de perfil e telefone/WhatsApp, de
+    cada usuário. O nome e a foto aparecem no menu da logo.
+  - Preferências do Sistema: tema claro/escuro (agora do usuário, segue
+    ele em qualquer computador), notificações (Todas / Só as urgentes /
+    Nenhuma — vale para os alertas do painel) e notificações sonoras
+    (bipes da Expedição e som dos avisos), com botão "Testar som".
+  - Segurança: alterar a própria senha (confere a atual; mínimo de 6).
+  - Acessos: Usuários e Papéis, visíveis só para o Administrador.
+  - A tela abre para todos os usuários (perfil e senha são de cada um).
+  - O papel Administrador não pode ser renomeado nem excluído, e o último
+    Administrador ativo não pode perder o papel.
+
+Papéis:
+  - Novo papel "Gerente": nasce com acesso completo a todos os módulos e é
+    personalizável como os outros; não vê Acessos. Entra uma vez nas
+    instalações existentes (excluído, não volta).
+
+Galeria dentro do pedido (pedido.html, js/galeria-pedido.js):
+  - Botão "🖼️ Galeria" no topo do pedido e ícone 🖼️ ao lado de cada
+    "Tipo de Prega". Abre uma janela por cima do pedido, que continua
+    aberto com tudo o que foi digitado.
+  - Abas: Modelos (imagem de cada prega e persiana — a foto real do
+    mostruário ligada ao modelo, quando houver; senão, imagem gerada em 3D),
+    Fotos reais (o mostruário da empresa, com visor em tela cheia) e Simular
+    na parede (o simulador; o "← Galeria" volta para a janela).
+  - Escolher um modelo e "Usar no pedido" aplica a prega no tecido escolhido
+    em "Aplicar em", já com o fator sugerido. O modelo que ficou na
+    simulação também vira a escolha. Pedido aprovado abre a galeria só para
+    mostrar.
+
+Simulador mais realista (js/galeria-modelos-render.js, galeria-simulador.js):
+  - Trama de tecido gerada (linho, voil, blackout), luz lateral com brilho
+    de tecido, sombra no fundo das dobras e sob o trilho, barra com
+    costura, dobras levemente irregulares, trilho e varão com brilho de metal.
+  - A luz da foto (brilho, cor e lado de onde vem) é lida e aplicada na
+    cortina; voil e linho deixam passar a luz da janela; blackout não.
+  - Sombra suave na parede e granulação leve, para a cortina casar com a foto.
+  - Nova escolha "Tecido" (Voil / Linho / Blackout) na aba Cor.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

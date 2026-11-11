@@ -15,6 +15,8 @@ function _expDefinirAtivo(id) {
 }
 
 function _expSom(ok) {
+    // bipe desligado em Configuracoes > Preferencias > Notificacoes sonoras
+    if (typeof somNotificacaoAtivo === 'function' && !somNotificacaoAtivo()) return;
     try {
         const Ctx = window.AudioContext || window.webkitAudioContext;
         if (!Ctx) return;
@@ -41,11 +43,16 @@ function _expPedido(id) {
     return db.pedidos.find(p => p.id == id) || null;
 }
 
+// Na Expedicao so entram pedidos prontos, aguardando financeiro ou instalados.
+function _expPedidoNaExpedicao(ped) {
+    return !!ped && EtiquetasCore.statusPermiteEtiqueta(normalizarStatus(ped.status));
+}
+
 function _expRenderPedido(id, mostrarVolumes) {
     const el = document.getElementById('exp-pedido');
     if (!el) return;
     const ped = _expPedido(id);
-    if (!ped) { el.style.display = 'none'; el.innerHTML = ''; _expPedidoExibido = null; return; }
+    if (!_expPedidoNaExpedicao(ped)) { el.style.display = 'none'; el.innerHTML = ''; _expPedidoExibido = null; return; }
     const cli = db.clientes.find(c => c.id == ped.clienteId) || null;
     const total = ped.volumes || 0;
     const v = EtiquetasCore.valoresEtiquetaPedido(ped, cli, 0, total, '');
@@ -58,9 +65,9 @@ function _expRenderPedido(id, mostrarVolumes) {
         }
     }
     const e = escapeHtml;
-    // Abrir pedido usa a tela do pedido, que exige permissao completa; pedido em Orcamento nao tem etiquetas
+    // Abrir pedido usa a tela do pedido, que exige permissao completa
     const podeAbrir = temAcesso('pedidos', 'completo');
-    const podeEtiquetas = temAcesso('pedidos', 'visualizar') && normalizarStatus(ped.status) !== 'Orçamento';
+    const podeEtiquetas = temAcesso('pedidos', 'visualizar') && podeImprimirEtiquetas(ped);
     const acoes = (podeAbrir ? '<button class="btn btn-outline btn-sm" type="button" id="exp-abrir-pedido">📄 Abrir pedido</button>' : '')
         + '<button class="btn btn-outline btn-sm" type="button" id="exp-ver-os">Ver OS</button>'
         + (podeEtiquetas ? '<button class="btn btn-outline btn-sm" type="button" id="exp-imprimir-etiquetas">🏷️ Imprimir etiquetas</button>' : '');
@@ -126,6 +133,11 @@ function processarLeituraExpedicao(texto) {
             _expResultado('Código não reconhecido.', 'erro', false); break;
         case 'nao_encontrado':
             _expResultado(`Pedido #${r.pedidoId} não encontrado.`, 'erro', false); break;
+        case 'fora_da_expedicao':
+            // nao mostra o pedido; um pedido ativo que voltou de etapa deixa de ser o ativo
+            if (ativo == r.pedidoId) { _expDefinirAtivo(null); _expRenderPedido(null, false); }
+            _expResultado(`Pedido #${r.pedidoId} está em "${rotuloStatus(r.status)}" e ainda não entra na expedição. `
+                + 'Só aparecem pedidos em Pronto p/ Instalação, Aguardando Financeiro ou Instalado.', 'erro', false); break;
         case 'abrir':
             _expDefinirAtivo(r.pedidoId);
             _expRenderPedido(r.pedidoId, true);
@@ -227,11 +239,13 @@ function iniciarExpedicao() {
         if (e.key !== 'sc_ped' && e.key !== 'sc_cli') return;
         _expRecarregar();
         const id = _expAtivoId();
-        if (id != null && _expPedido(id)) _expRenderPedido(id, true);
+        if (id == null) return;
+        if (_expPedidoNaExpedicao(_expPedido(id))) _expRenderPedido(id, true);
+        else { _expDefinirAtivo(null); _expRenderPedido(null, false); }
     });
     // pedido ativo de antes do recarregamento volta ao painel
     const ativo = _expAtivoId();
-    if (ativo != null && _expPedido(ativo)) _expRenderPedido(ativo, true);
+    if (ativo != null && _expPedidoNaExpedicao(_expPedido(ativo))) _expRenderPedido(ativo, true);
     else _expDefinirAtivo(null);
     _expFoco();
 }

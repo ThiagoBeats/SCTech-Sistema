@@ -55,7 +55,7 @@ test('completar o CNPJ preenche os demais campos sozinho', async ({ page }) => {
         email: document.getElementById('emp-email').value
     }));
     expect(v.razao).toBe('CORTINAS SC LTDA');
-    expect(v.fantasia).toBe('SCTech Cortinas');
+    expect(v.fantasia, 'nome fantasia em maiusculas').toBe('SCTECH CORTINAS');
     expect(v.tel).toBe('(47) 99999-1234');
     expect(v.email).toBe('contato@sctech.com.br');
     // a tela tem um campo unico de endereco; a API devolve em partes
@@ -70,7 +70,7 @@ test('nao sobrescreve o que o usuario ja digitou', async ({ page }) => {
     await page.fill('#emp-cnpj', '12345678000195');
     await expect(page.locator('#emp-cnpj-status')).toContainText('preenchidos');
     expect(await page.inputValue('#emp-razao'), 'o que voce digitou manda').toBe('NOME QUE EU ESCOLHI');
-    expect(await page.inputValue('#emp-fantasia'), 'o que estava vazio foi preenchido').toBe('SCTech Cortinas');
+    expect(await page.inputValue('#emp-fantasia'), 'o que estava vazio foi preenchido').toBe('SCTECH CORTINAS');
 });
 
 test('CNPJ incompleto nao consulta nada', async ({ page }) => {

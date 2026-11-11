@@ -26,7 +26,8 @@ test('OS mostra o codigo de barras do pedido', async ({ page }) => {
 
 test('Proposta em Orcamento ja mostra o codigo', async ({ page }) => {
     await abrir(page, '/pedidos.html');
-    await page.locator('tr', { hasText: '26004' }).locator('button[title="Gerar proposta PDF"]').click();
+    await page.locator('tr', { hasText: '26004' }).locator('.btn-kebab').click();
+    await page.locator('#menu-acoes-flutuante .menu-acoes-item', { hasText: 'Gerar proposta' }).click();
     const cod = page.locator('#doc-modal-paper .sc-codigo-doc[data-status="ok"]');
     await expect(cod.locator('svg').first()).toBeVisible({ timeout: 20000 });
     await expect(cod).toContainText('26004');

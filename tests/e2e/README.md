@@ -56,7 +56,7 @@ TESTDIR=<projeto>/tests/e2e \
   npx playwright test --config=repo.config.js
 ```
 
-Esperado: **652 passando**.
+Esperado: **673 passando**.
 
 ## Sessão autenticada é obrigatória
 
@@ -119,5 +119,6 @@ navegar. Ele semeia um usuário com papel 1 (Administrador, que vem de
 
 | `financeiro-bloqueio-menu.spec.js` | O pedido aprovado abrindo só para leitura (campos travados, sem salvar, e o salvar recusado mesmo chamado direto), o "Voltar para Orçamento" liberando a edição e refazendo os recebimentos em aberto, o Instalado sem volta; a etapa "Aguardando Financeiro" (e os pedidos antigos em "Aguardando Pagamento" renomeados); confirmar a instalação levando sempre para Aguardando Financeiro, com a marca "Pendente" quando há saldo; o card dessa etapa com a forma de pagamento e o botão "Confirmar pagamento" (Kanban e Lista), só para Administrador/Financeiro, levando a Instalado; e o alfinete do menu lateral — fixado aberto, solto só com ícones abrindo ao passar o mouse sem empurrar a tela, e a preferência guardada por usuário |
 | `pedido-compra-de-venda.spec.js` | "Importar de pedido" em Pedidos de Compra: só pedidos em aberto (não instalados) numa tabela com colunas (pedido, cliente, vendedor, status, entrega, itens, compras feitas), os filtros por nº/cliente, status, vendedor e entrega com o limpar, clicar (ou Enter) na linha abrindo os itens e o "Trocar pedido" voltando com o filtro mantido, os itens do pedido somados (tecido pelo consumo dos ambientes, materiais e kits pela quantidade) com fornecedor e estoque, o pedido sem itens, marcar/desmarcar e mudar quantidade, um fornecedor só indo direto ao formulário com a observação de origem, fornecedores diferentes oferecendo um pedido por fornecedor ou um genérico (e o cancelar voltando à escolha), a fila e o genérico gravando `pedido_venda_id`, o item já comprado vindo desmarcado e avisado, e o pedido feito à mão depois sem herdar a origem |
+| `configuracoes-galeria-pedido.spec.js` | Configurações em sub-abas (Meu Perfil com nome, telefone e foto aparecendo no menu da logo; Preferências com tema do usuário vencendo o do navegador, notificações "nenhuma" escondendo os alertas e som desligado; Segurança trocando a senha só com a atual certa e a confirmação igual; Acessos com Usuários e Papéis só para o Administrador, nem pelo endereço) e a tela abrindo para quem não tem o módulo; o papel Gerente nascendo completo uma vez só; o Administrador que não se exclui; Razão Social e Nome Fantasia em maiúsculas; a logo da empresa na barra lateral com o menu de sempre; o total de compras do fornecedor só com pedidos enviados/recebidos dele; a coluna Ação com os três pontos; e a Galeria aberta por cima do pedido, sem perder o que foi digitado, aplicando a prega no tecido certo e voltando do simulador com o modelo simulado |
 
-Esperado no total: **652 passando**.
+Esperado no total: **673 passando**.

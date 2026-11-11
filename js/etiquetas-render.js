@@ -152,6 +152,7 @@ async function imprimirEtiquetasDoPedido(pedidoId, somenteVolume) {
     const C = window.EtiquetasCore;
     const ped = db.pedidos.find(p => p.id == pedidoId);
     if (!ped) return false;
+    if (typeof podeImprimirEtiquetas === 'function' && !podeImprimirEtiquetas(ped)) return false;
     const modelo = _etqModeloPedido();
     // etiqueta sem codigo nao serve para a expedicao: nao imprime
     if (!C.modeloTemCodigo(modelo)) {
@@ -187,6 +188,10 @@ async function abrirImpressaoEtiquetas(pedidoId) {
     if (!await exigirPermissao('pedidos', 'visualizar')) return;
     const ped = db.pedidos.find(p => p.id == pedidoId);
     if (!ped) return;
+    if (typeof podeImprimirEtiquetas === 'function' && !podeImprimirEtiquetas(ped)) {
+        await showAlert(msgEtiquetaBloqueada(ped), '🏷️');
+        return;
+    }
     _etqFecharModalVolumes();
     const qtd = ped.volumes || 1;
     const o = document.createElement('div');

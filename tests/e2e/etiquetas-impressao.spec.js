@@ -6,7 +6,7 @@ const MSG = 'Não foi possível carregar o gerador de códigos. Verifique a cone
 const AMB = [{ id: 1, amb: 'Sala', calculado: true, tecidos: [] }];
 const CLI = [{ id: 1, nome: 'Maria Souza', end: 'R. A, 1', tel: '1199' }];
 
-const ped = (extra) => Object.assign({ id: 26001, clienteId: 1, clienteNome: 'Maria Souza', status: 'Na Costura', valor: 100, ambientes: AMB }, extra || {});
+const ped = (extra) => Object.assign({ id: 26001, clienteId: 1, clienteNome: 'Maria Souza', status: 'Pronto p/ Instalação', valor: 100, ambientes: AMB }, extra || {});
 const lerPedido = page => page.evaluate(() => JSON.parse(localStorage.getItem('sc_ped')).find(x => x.id === 26001));
 
 async function abrir(page, pedidos, pagina) {
@@ -69,10 +69,53 @@ test('card mostra a marcacao de conferencia', async ({ page }) => {
     await expect(page.getByText('2/3 conferidos').first()).toBeVisible();
 });
 
-test('pedido em Orcamento nao tem botao de etiqueta', async ({ page }) => {
-    await abrir(page, [ped({ status: 'Orçamento' }), ped({ id: 26002 })], 'pedidos.html');
-    await expect(page.locator('tbody tr', { hasText: '26002' }).locator('button[title="Imprimir etiquetas"]')).toHaveCount(1);
-    await expect(page.locator('tbody tr', { hasText: '26001' }).locator('button[title="Imprimir etiquetas"]')).toHaveCount(0);
+const ANTES_DE_PRONTO = ['Orçamento', 'Medição', 'Aguardando Tecido', 'Na Costura'];
+const PRONTOS = ['Pronto p/ Instalação', 'Aguardando Financeiro', 'Instalado'];
+
+test('no menu de acoes, a etiqueta aparece travada antes de Pronto p/ Instalacao', async ({ page }) => {
+    const pedidos = ANTES_DE_PRONTO.map((status, i) => ped({ id: 26010 + i, status }))
+        .concat(PRONTOS.map((status, i) => ped({ id: 26020 + i, status })));
+    await abrir(page, pedidos, 'pedidos.html');
+    const item = async id => {
+        await page.locator('tbody tr', { hasText: String(id) }).locator('.btn-kebab').click();
+        const it = page.locator('#menu-acoes-flutuante .menu-acoes-item', { hasText: 'Imprimir etiquetas' });
+        await expect(it).toHaveCount(1);
+        return it;
+    };
+    for (let i = 0; i < ANTES_DE_PRONTO.length; i++) {
+        const it = await item(26010 + i);
+        await expect(it, ANTES_DE_PRONTO[i]).toHaveClass(/bloqueado/);
+        await it.dispatchEvent('click');
+        await expect(page.locator('#etq-modal-volumes'), 'nao abre a impressao').toHaveCount(0);
+        await expect(page.locator('.sc-toast').last()).toContainText('Pronto p/ Instalação');
+    }
+    for (let i = 0; i < PRONTOS.length; i++) {
+        const it = await item(26020 + i);
+        await expect(it, PRONTOS[i]).not.toHaveClass(/bloqueado/);
+        await it.click();
+        await expect(page.locator('#etq-modal-volumes')).toBeVisible();
+        await page.click('#etq-btn-cancelar');
+    }
+});
+
+test('no Kanban o botao de etiqueta aparece, mas travado, antes de Pronto', async ({ page }) => {
+    await abrir(page, [ped({ id: 26011, status: 'Na Costura' }), ped({ id: 26012, status: 'Aguardando Tecido' }), ped({ id: 26021 })]);
+    const card = id => page.locator('.kanban-card', { hasText: String(id) });
+    await expect(card(26011).locator('.btn-bloqueado[aria-disabled="true"]')).toHaveCount(1);
+    await expect(card(26012).locator('.btn-bloqueado[aria-disabled="true"]')).toHaveCount(1);
+    // aria-disabled: o Playwright nao clica, mas o usuario clica e recebe o aviso
+    await card(26011).locator('.btn-bloqueado').dispatchEvent('click');
+    await expect(page.locator('.sc-toast').last()).toContainText('Na Costura');
+    await expect(page.locator('#etq-modal-volumes')).toHaveCount(0);
+    await expect(card(26021).locator('button[title="Imprimir etiquetas"]')).toHaveCount(1);
+});
+
+test('chamar a impressao direto num pedido na costura e recusado', async ({ page }) => {
+    await abrir(page, [ped({ status: 'Na Costura' })]);
+    await page.evaluate(() => { abrirImpressaoEtiquetas(26001); });
+    await expect(page.locator('#sc-modal-msg')).toContainText('Pronto p/ Instalação');
+    await expect(page.locator('#etq-modal-volumes')).toHaveCount(0);
+    expect(await page.evaluate(() => imprimirEtiquetasDoPedido(26001))).toBe(false);
 });
 
 test('sem internet nao imprime', async ({ page }) => {

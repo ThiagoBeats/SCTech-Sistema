@@ -355,13 +355,25 @@
         return comeco ? 'pausa' : 'agora';
     }
 
+    // Etapas em que o pedido ja esta pronto: so nelas as etiquetas sao impressas
+    // e o pedido aparece na Expedicao. Antes disso (Orcamento, Medicao fina,
+    // Aguardando Tecido, Na Costura) o volume ainda nao existe.
+    const STATUS_COM_ETIQUETA = ['Pronto p/ Instalação', 'Aguardando Financeiro', 'Instalado'];
+
+    function statusPermiteEtiqueta(status) {
+        return STATUS_COM_ETIQUETA.indexOf(status) >= 0;
+    }
+
     function avaliarLeitura(texto, ativoId, pedidos) {
         const l = lerCodigo(texto, id => (pedidos || []).some(p => p.id == id));
         if (l.tipo === 'invalido') return { tipo: 'invalido' };
         const ped = (pedidos || []).find(p => p.id == l.pedidoId);
         if (!ped) return { tipo: 'nao_encontrado', pedidoId: l.pedidoId };
-        // pedido em Orcamento nao tem etiquetas validas: nunca abre conferencia
-        if (ped.status === 'Orçamento') return { tipo: 'sem_etiquetas', pedidoId: l.pedidoId };
+        // pedido que ainda nao esta pronto nao entra na Expedicao (status
+        // ausente = quem chamou nao informou a etapa; o app sempre informa)
+        if (ped.status !== undefined && !statusPermiteEtiqueta(ped.status)) {
+            return { tipo: 'fora_da_expedicao', pedidoId: l.pedidoId, status: ped.status };
+        }
         if (l.tipo === 'pedido') {
             return ped.volumes == null
                 ? { tipo: 'sem_etiquetas', pedidoId: l.pedidoId }
@@ -421,7 +433,7 @@
         montarCodigoVolume, lerCodigo, FORMATOS_ETIQUETA, CAMPOS_ETIQUETA_PEDIDO, TIPOS_ELEMENTO,
         modeloPadraoPedido, ajustarAoFormato, encaixarNaGrade, avisosLegibilidade, lerConfigEtiquetas, modeloTemCodigo,
         ROTULOS_CAMPO, valoresEtiquetaPedido, pedidoExemplo, htmlEtiqueta,
-        conferenciaVazia, avaliarLeitura, codigoCompleto, marcarVolume, zerarConferencia, alterarVolumes,
+        conferenciaVazia, STATUS_COM_ETIQUETA, statusPermiteEtiqueta, avaliarLeitura, codigoCompleto, marcarVolume, zerarConferencia, alterarVolumes,
         temConferenciaIniciada, marcacaoConferencia
     };
 

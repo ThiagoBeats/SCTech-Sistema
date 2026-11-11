@@ -5,13 +5,21 @@
 // do mesmo canvas. Facilidade de uso manda: foto -> ja aparece a cortina.
 const _sim = {
     pronto: false, gl: false, foto: null, aba: 'modelo', recolhida: false,
-    estado: { produto: 'cortina', prega: 'Wave Botao', persiana: 'rolo', corId: null, trilho: '', abertura: 'central', ate: 'chao', aberto: 0, cantos: null, barra: null },
+    estado: { produto: 'cortina', prega: 'Wave Botao', persiana: 'rolo', corId: null, tecido: 'linho', trilho: '', abertura: 'central', ate: 'chao', aberto: 0, cantos: null, barra: null },
     m: null, cores: [], texturas: {}, layout: null, pendente: false, arrasto: null
 };
 window._sim = _sim;
 
+// O produto e desenhado por galeria-modelos-render.js. A pagina deve carrega-lo
+// depois do three.min.js; se faltar, entra aqui mesmo, ainda durante a leitura
+// da pagina (antes do DOMContentLoaded que abre o simulador).
+if (typeof GaleriaRender === 'undefined' && typeof THREE !== 'undefined' && document.readyState === 'loading') {
+    const atual = document.currentScript && document.currentScript.src;
+    const src = atual ? atual.replace(/galeria-simulador\.js/, 'galeria-modelos-render.js') : 'js/galeria-modelos-render.js';
+    document.write('<script src="' + src + '"><\/script>');
+}
+
 const SIM_RT = 1024;
-const SIM_TOPO_TRILHO = 0.035;
 
 // ---------- montagem da tela ----------
 function _simMontar() {
@@ -138,7 +146,10 @@ function _simRenderGaveta() {
             + (persianas.length ? `<div class="sim-grupo-rotulo">Persianas</div><div class="sim-lista">${persianas.map(k =>
             op('modelo', 'persiana:' + k, G.PERSIANAS[k], !cortina && e.persiana === k, _simIconeModelo('persiana', k))).join('')}</div>` : '');
     } else if (_sim.aba === 'cor') {
-        html = `<div class="sim-lista sim-lista-cores">${_simCoresAtuais().map(c => `<button type="button" class="sim-cor${e.corId === c.id ? ' ativa' : ''}" data-valor="${escapeHtml(c.id)}" aria-pressed="${e.corId === c.id}" title="${escapeHtml(c.nome)}">
+        const tecidos = Object.entries(GaleriaRender.TECIDOS).map(([k, t]) =>
+            op('tecido', k, t.nome, e.tecido === k, `<small class="sim-op-dica">${escapeHtml(t.dica)}</small>`)).join('');
+        html = `<div class="sim-grupo-rotulo">Tecido</div><div class="sim-lista sim-lista-tecidos">${tecidos}</div>
+            <div class="sim-grupo-rotulo">Cor</div><div class="sim-lista sim-lista-cores">${_simCoresAtuais().map(c => `<button type="button" class="sim-cor${e.corId === c.id ? ' ativa' : ''}" data-valor="${escapeHtml(c.id)}" aria-pressed="${e.corId === c.id}" title="${escapeHtml(c.nome)}">
             <span class="sim-cor-amostra" style="background:${c.hex}" data-textura="${escapeHtml(c.texturaId || '')}"></span><span>${escapeHtml(c.nome || c.hex)}</span></button>`).join('')}</div>`;
     } else if (_sim.aba === 'trilho') {
         html = `<div class="sim-lista">${_sim.m.modelos.trilhos.map(t => op('trilho', t, t, e.trilho === t)).join('')}</div>`;
@@ -149,6 +160,7 @@ function _simRenderGaveta() {
     const caixa = document.getElementById('sim-opcoes');
     caixa.innerHTML = html;
     caixa.querySelectorAll('.sim-op').forEach(b => b.onclick = () => _simEscolher(b.dataset.campo, b.dataset.valor));
+    _simImagensModelos(caixa);
     caixa.querySelectorAll('.sim-cor').forEach(b => b.onclick = () => _simEscolher('cor', b.dataset.valor));
     caixa.querySelectorAll('.sim-cor-amostra[data-textura]').forEach(async s => {
         if (!s.dataset.textura) return;
@@ -157,15 +169,29 @@ function _simRenderGaveta() {
     });
 }
 
+// Miniatura do modelo: desenho simples na hora e, assim que pronta, a imagem
+// realista renderizada (GaleriaRender) na cor escolhida.
 function _simIconeModelo(tipo, k) {
-    // miniatura simples: ondas para pregas, faixas para persianas
+    let svg;
     if (tipo === 'prega') {
         const amp = { 'Wave Botao': 5, 'Wave Plus': 4, 'Americana': 3, 'Franzido': 2, 'Macho-Femea': 3, 'Painel': 0 }[k];
         const d = amp ? `M2 ${12} ` + Array.from({ length: 6 }, (_, i) => `Q ${5 + i * 6} ${12 - amp} ${8 + i * 6} 12 T ${14 + i * 6} 12`).slice(0, 3).join(' ') : 'M2 12 H 38';
-        return `<svg class="sim-icone" viewBox="0 0 40 24" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="2"/><line x1="2" y1="4" x2="38" y2="4" stroke="currentColor" stroke-width="2"/></svg>`;
+        svg = `<svg class="sim-icone" viewBox="0 0 40 24" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="2"/><line x1="2" y1="4" x2="38" y2="4" stroke="currentColor" stroke-width="2"/></svg>`;
+    } else {
+        const linhas = { rolo: [8], romana: [9, 14, 19], double: [8, 12, 16, 20] }[k];
+        svg = `<svg class="sim-icone" viewBox="0 0 40 24" aria-hidden="true"><rect x="6" y="3" width="28" height="4" rx="2" fill="currentColor"/>${linhas.map(y => `<line x1="8" y1="${y}" x2="32" y2="${y}" stroke="currentColor" stroke-width="${k === 'double' ? 2.5 : 1.5}"/>`).join('')}</svg>`;
     }
-    const linhas = { rolo: [8], romana: [9, 14, 19], double: [8, 12, 16, 20] }[k];
-    return `<svg class="sim-icone" viewBox="0 0 40 24" aria-hidden="true"><rect x="6" y="3" width="28" height="4" rx="2" fill="currentColor"/>${linhas.map(y => `<line x1="8" y1="${y}" x2="32" y2="${y}" stroke="currentColor" stroke-width="${k === 'double' ? 2.5 : 1.5}"/>`).join('')}</svg>`;
+    return `<span class="sim-op-figura" data-tipo="${tipo}" data-chave="${escapeHtml(k)}">${svg}</span>`;
+}
+
+function _simImagensModelos(caixa) {
+    if (typeof renderizarImagemModelo !== 'function') return;
+    const cor = _simCorAtual();
+    const hex = cor && !cor.foto ? cor.hex : '#e9e3d6';
+    caixa.querySelectorAll('.sim-op-figura').forEach(el => {
+        renderizarImagemModelo({ tipo: el.dataset.tipo, chave: el.dataset.chave, hex, tecido: _sim.estado.tecido, largura: 96, altura: 72 })
+            .then(url => { if (url && el.isConnected) el.innerHTML = `<img class="sim-op-img" src="${url}" alt="">`; });
+    });
 }
 
 function _simEscolher(campo, valor) {
@@ -176,6 +202,7 @@ function _simEscolher(campo, valor) {
         e.aberto = 0;
         _simCorDoModelo();
     } else if (campo === 'cor') e.corId = valor;
+    else if (campo === 'tecido') { if (GaleriaRender.TECIDOS[valor]) e.tecido = valor; }
     else if (campo === 'trilho') e.trilho = valor;
     else if (campo === 'abertura') e.abertura = valor;
     else if (campo === 'ate') e.ate = valor;
@@ -193,7 +220,7 @@ async function _simCarregarFoto(arquivo) {
         c.getContext('2d').drawImage(bm, 0, 0);
         if (bm.close) bm.close();
         const w = c.width, h = c.height;
-        _sim.foto = { w, h, canvas: c, luz: _simLuzMedia(c) };
+        _sim.foto = Object.assign({ w, h, canvas: c }, _simAnalisarLuz(c));
         _sim.estado.cantos = [[w * 0.3, h * 0.25], [w * 0.7, h * 0.25], [w * 0.7, h * 0.6], [w * 0.3, h * 0.6]];
         _sim.estado.aberto = 0;
         _sim.estado.barra = null;
@@ -210,14 +237,26 @@ async function _simCarregarFoto(arquivo) {
     }
 }
 
-// Brilho medio da foto (0..1): a cortina acompanha a luz da sala.
-function _simLuzMedia(c) {
-    const p = document.createElement('canvas'); p.width = 24; p.height = 24;
-    const g = p.getContext('2d'); g.drawImage(c, 0, 0, 24, 24);
-    const d = g.getImageData(0, 0, 24, 24).data;
-    let s = 0;
-    for (let i = 0; i < d.length; i += 4) s += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
-    return s / (d.length / 4) / 255;
+// Luz da foto: brilho medio (0..1), tom da luz (balanco de branco, para a
+// cortina nao ficar "fria" numa sala amarelada) e de que lado vem a luz
+// (-1 esquerda .. 1 direita), comparando as metades da foto.
+function _simAnalisarLuz(c) {
+    const N = 24, p = document.createElement('canvas'); p.width = N; p.height = N;
+    const g = p.getContext('2d'); g.drawImage(c, 0, 0, N, N);
+    const d = g.getImageData(0, 0, N, N).data;
+    let s = 0, r = 0, gr = 0, b = 0, esq = 0, dir = 0;
+    for (let i = 0; i < d.length; i += 4) {
+        const l = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+        s += l; r += d[i]; gr += d[i + 1]; b += d[i + 2];
+        const x = (i / 4) % N;
+        if (x < N / 3) esq += l; else if (x >= N * 2 / 3) dir += l;
+    }
+    const n = d.length / 4, luz = s / n / 255;
+    const m = (r + gr + b) / 3 || 1;
+    const tom = [r / m, gr / m, b / m].map(v => Math.min(1.12, Math.max(0.88, 1 + (v - 1) * 0.5)));
+    const dif = (dir - esq) / ((dir + esq) || 1);
+    const ladoLuz = Math.abs(dif) < 0.04 ? -0.35 : Math.max(-0.75, Math.min(0.75, dif * 4));
+    return { luz, tom, ladoLuz };
 }
 
 // ---------- geometria da tela ----------
@@ -440,19 +479,46 @@ function _simIniciar3D() {
     const geo = new T.BufferGeometry();
     geo.setAttribute('position', new T.BufferAttribute(new Float32Array(12), 3));
     geo.setIndex([0, 1, 2, 0, 2, 3]);
+    // Projecao do produto no quadrilatero da foto, com o acabamento que o faz
+    // parecer fotografado: leve suavizacao (a camera nunca e nitida como o 3D),
+    // luz da foto atravessando o tecido (voil/linho), sombra suave na parede e
+    // granulado fixo, igual ao da foto.
     _sim.quadMat = new T.ShaderMaterial({
-        uniforms: { uHinv: { value: new T.Matrix3() }, uRT: { value: _sim.rt.texture }, uOpacidade: { value: 1 } },
+        uniforms: {
+            uHinv: { value: new T.Matrix3() }, uRT: { value: _sim.rt.texture }, uOpacidade: { value: 1 },
+            uFoto: { value: null }, uFotoRet: { value: new T.Vector4(0, 0, 1, 1) }, uTransm: { value: 0 }, uRaio: { value: 0.01 },
+            uTom: { value: new T.Vector3(1, 1, 1) }, uTexel: { value: 1 / SIM_RT }, uGrao: { value: 0.03 }, uSombra: { value: new T.Vector2(0.012, 0.016) }
+        },
         vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-        // produto + sombra suave na parede (alfa deslocado para baixo e a direita)
-        fragmentShader: `uniform mat3 uHinv; uniform sampler2D uRT; uniform float uOpacidade; varying vec2 vP;
-            float alfa(vec2 uv){ if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 0.0; return texture2D(uRT, vec2(uv.x, 1.0 - uv.y)).a; }
+        fragmentShader: `uniform mat3 uHinv; uniform sampler2D uRT; uniform float uOpacidade;
+            uniform sampler2D uFoto; uniform vec4 uFotoRet; uniform float uTransm; uniform float uRaio; uniform vec3 uTom;
+            uniform float uTexel; uniform float uGrao; uniform vec2 uSombra; varying vec2 vP;
+            vec4 amostra(vec2 uv){ if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec4(0.0); return texture2D(uRT, vec2(uv.x, 1.0 - uv.y)); }
+            float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
             void main(){ vec3 q = uHinv * vec3(vP.x, -vP.y, 1.0); vec2 uv = q.xy / q.z;
-              vec4 c = vec4(0.0);
-              if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) c = texture2D(uRT, vec2(uv.x, 1.0 - uv.y));
-              vec2 o = uv - vec2(0.012, 0.016);
-              float s = 0.0;
-              for (int i = -2; i <= 2; i++) for (int j = -2; j <= 2; j++) s += alfa(o + vec2(float(i), float(j)) * 0.007);
-              float sombra = 0.30 * s / 25.0;
+              vec2 t = vec2(uTexel * 0.9, 0.0);
+              vec4 c = amostra(uv) * 0.52 + (amostra(uv + t) + amostra(uv - t) + amostra(uv + t.yx) + amostra(uv - t.yx)) * 0.12;
+              vec2 o = uv - uSombra;
+              // sombra suave: disco de Poisson girado por pixel (sem degraus na borda;
+              // o que sobra de ruido some no grao da foto)
+              float ang = hash(gl_FragCoord.xy + 17.0) * 6.28318;
+              mat2 rot = mat2(cos(ang), -sin(ang), sin(ang), cos(ang));
+              float s = 0.0, sw = 0.0;
+              for (int i = 0; i < 16; i++) {
+                float fi = float(i), r = sqrt((fi + 0.5) / 16.0), th = fi * 2.39996;
+                float wi = 1.0 - 0.65 * r;
+                s += amostra(o + rot * vec2(cos(th), sin(th)) * r * 0.024).a * wi; sw += wi;
+              }
+              float sombra = 0.30 * s / sw;
+              if (uTransm > 0.0 && c.a > 0.0) {
+                vec2 fp = (vec2(vP.x, -vP.y) - uFotoRet.xy) / uFotoRet.zw;
+                vec3 at = vec3(0.0);
+                for (int i = -2; i <= 2; i++) for (int j = -2; j <= 2; j++) at += texture2D(uFoto, clamp(vec2(fp.x, 1.0 - fp.y) + vec2(float(i), float(j)) * uRaio * 0.5, 0.0, 1.0)).rgb;
+                at /= 25.0;
+                c.rgb = mix(c.rgb, at * uTom * c.a, uTransm * 0.85) + at * uTom * uTransm * 0.12 * c.a;
+              }
+              c.rgb += (hash(floor(gl_FragCoord.xy)) - 0.5) * uGrao * c.a;
+              c.rgb = clamp(c.rgb, 0.0, c.a);
               gl_FragColor = vec4(c.rgb, c.a + (1.0 - c.a) * sombra) * uOpacidade; }`,
         transparent: true, depthTest: false, depthWrite: false, side: T.DoubleSide,
         blending: T.CustomBlending, blendSrc: T.OneFactor, blendDst: T.OneMinusSrcAlphaFactor,
@@ -475,45 +541,6 @@ function _simFotoTextura() {
     _sim.fundo.visible = true;
 }
 
-const SIM_VERT = `varying vec3 vN; varying vec2 vUv; varying float vV; varying float vZ;
-    void main(){ vN = normalize(normalMatrix * normal); vUv = uv; vV = -position.y; vZ = position.z;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
-const SIM_FRAG = `uniform vec3 uCor; uniform sampler2D uMapa; uniform float uUsaMapa; uniform vec2 uRep;
-    uniform vec3 uLuzDir; uniform float uLuz; uniform float uFaixas; uniform float uDesloc; uniform float uAlfaFaixa;
-    uniform float uProf;
-    varying vec3 vN; varying vec2 vUv; varying float vV; varying float vZ;
-    void main(){
-      vec3 n = normalize(vN); if (!gl_FrontFacing) n = -n;
-      float d = dot(n, normalize(uLuzDir));
-      float wrap = clamp((d + 0.6) / 1.6, 0.0, 1.0);
-      float vao = uProf > 0.0 ? clamp(-vZ / uProf, 0.0, 1.0) : 0.0;
-      float sombra = (0.52 + 0.58 * wrap) * (1.0 - 0.28 * vao) * (1.0 - 0.08 * vV);
-      vec3 base = uUsaMapa > 0.5 ? texture2D(uMapa, vUv * uRep).rgb : uCor;
-      float a = 1.0;
-      if (uFaixas > 0.0 && fract(vV * uFaixas + uDesloc) > 0.5) a = uAlfaFaixa;
-      vec3 c = clamp(base * sombra * uLuz, 0.0, 1.0);
-      gl_FragColor = vec4(c * a, a);
-    }`;
-
-function _simMaterial(hex, opcoes) {
-    const T = THREE, o = opcoes || {};
-    const cor = new T.Color(hex);
-    if (o.escurecer) cor.multiplyScalar(o.escurecer);
-    return new T.ShaderMaterial({
-        uniforms: {
-            uCor: { value: cor }, uMapa: { value: o.mapa || null }, uUsaMapa: { value: o.mapa ? 1 : 0 },
-            uRep: { value: new T.Vector2(o.rep || 6, o.rep || 6) }, uLuzDir: { value: new T.Vector3(-0.55, 0.8, 1.0) },
-            uLuz: { value: _sim.foto ? Math.min(1.12, Math.max(0.78, 0.55 + 0.6 * _sim.foto.luz)) : 1 },
-            uFaixas: { value: o.faixas || 0 }, uDesloc: { value: o.desloc || 0 }, uAlfaFaixa: { value: 0.22 },
-            uProf: { value: o.prof || 0 }
-        },
-        vertexShader: SIM_VERT, fragmentShader: SIM_FRAG, side: T.DoubleSide,
-        transparent: !!o.faixas, depthWrite: !o.faixas,
-        blending: T.CustomBlending, blendSrc: T.OneFactor, blendDst: T.OneMinusSrcAlphaFactor,
-        blendSrcAlpha: T.OneFactor, blendDstAlpha: T.OneMinusSrcAlphaFactor
-    });
-}
-
 function _simTexturaCor(cor) {
     if (!cor || !cor.texturaId) return null;
     if (_sim.texturas[cor.texturaId] !== undefined) return _sim.texturas[cor.texturaId];
@@ -529,89 +556,20 @@ function _simTexturaCor(cor) {
     return null;
 }
 
-// Malha em grade: colunas (x, z) x linhas (v); y da cena = -v.
-function _simGrade(xs, zs, v0, v1, linhas, larguraTecido, flare, uIni) {
-    const T = THREE, n = xs.length, pos = [], uv = [], idx = [];
-    for (let j = 0; j <= linhas; j++) {
-        const t = j / linhas, v = v0 + (v1 - v0) * t;
-        for (let i = 0; i < n; i++) {
-            const k = flare ? 0.85 + 0.3 * t : 1;
-            pos.push(xs[i], -v, zs[i] * k);
-            uv.push((uIni || 0) + (i / (n - 1)) * larguraTecido, 1 - v);
-        }
-    }
-    for (let j = 0; j < linhas; j++) for (let i = 0; i < n - 1; i++) {
-        const a = j * n + i, b = a + 1, c = a + n, d = c + 1;
-        idx.push(a, c, b, b, c, d);
-    }
-    const g = new T.BufferGeometry();
-    g.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
-    g.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
-    g.setIndex(idx);
-    g.computeVertexNormals();
-    return g;
+// O produto (cortina/persiana com trama, luz de tecido, trilho de metal) e
+// montado por GaleriaRender (galeria-modelos-render.js), o mesmo das imagens
+// dos modelos.
+function _simCorAtual() {
+    return _simCoresAtuais().find(c => c.id === _sim.estado.corId) || _sim.cores[0];
 }
-
 function _simMontarProduto() {
-    const T = THREE, e = _sim.estado, G = GaleriaCore, cena = _sim.prodCena;
-    cena.children.slice().forEach(o => { cena.remove(o); if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
-    const cor = _simCoresAtuais().find(c => c.id === e.corId) || _sim.cores[0];
-    const mapa = _simTexturaCor(cor);
-    const tecido = op => _simMaterial(cor.hex, Object.assign({ mapa, rep: cor.foto ? 1 : 6 }, op));
-    if (e.produto === 'cortina') {
-        const g = G.geometriaCortina({ prega: e.prega, abertura: e.abertura, aberto: e.aberto, colunas: 140 });
-        const prof = Math.max(0.004, ...g.paineis.flatMap(p => p.z.map(Math.abs)));
-        g.paineis.forEach(p => {
-            const larg = e.abertura === 'central' ? 0.5 : 1;
-            const uIni = e.abertura === 'central' && p.lado === 'direita' ? 0.5 : 0;
-            cena.add(new T.Mesh(_simGrade(p.x, p.z, SIM_TOPO_TRILHO, 1, 24, larg, true, uIni), tecido({ prof })));
-        });
-        const visual = G.visualTrilho(e.trilho);
-        if (visual === 'varao') {
-            const barra = new T.Mesh(new T.CylinderGeometry(0.011, 0.011, 1, 20), _simMaterial('#6f6458'));
-            barra.rotation.z = Math.PI / 2; barra.position.set(0.5, -0.02, 0.05);
-            cena.add(barra);
-            [0.008, 0.992].forEach(x => { const t = new T.Mesh(new T.SphereGeometry(0.02, 20, 12), _simMaterial('#6f6458')); t.position.set(x, -0.02, 0.05); cena.add(t); });
-        } else {
-            const trilho = new T.Mesh(new T.BoxGeometry(1, 0.026, 0.02), _simMaterial('#e9e9e6'));
-            trilho.position.set(0.5, -0.016, 0.06);
-            cena.add(trilho);
-        }
-    } else {
-        const p = G.geometriaPersiana({ tipo: e.persiana, aberto: e.aberto, linhas: 80 });
-        const base = Math.max(0.06, p.baseVisivel);
-        const cols = [0, 0.25, 0.5, 0.75, 1];
-        if (e.persiana === 'romana') {
-            // linhas da romana: a grade e transposta (dobras na horizontal)
-            const pos = [], uv = [], idx = [], n = p.y.length;
-            for (let j = 0; j < n; j++) for (let i = 0; i < cols.length; i++) { pos.push(cols[i], -(0.04 + p.y[j] * 0.96), p.z[j]); uv.push(cols[i], 1 - p.y[j]); }
-            for (let j = 0; j < n - 1; j++) for (let i = 0; i < cols.length - 1; i++) { const a = j * cols.length + i, b = a + 1, c = a + cols.length, d = c + 1; idx.push(a, c, b, b, c, d); }
-            const g = new T.BufferGeometry();
-            g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
-            g.setIndex(idx); g.computeVertexNormals();
-            cena.add(new T.Mesh(g, tecido()));
-        } else if (e.persiana === 'double') {
-            const fundo = new T.Mesh(_simGrade(cols, cols.map(() => 0), 0.04, 0.04 + base * 0.96, 4, 1, false), tecido({ faixas: p.faixas, desloc: 0.5 * (1 - p.alinhamento) }));
-            fundo.position.z = -0.01;
-            const frente = new T.Mesh(_simGrade(cols, cols.map(() => 0), 0.04, 0.04 + base * 0.96, 4, 1, false), tecido({ faixas: p.faixas, desloc: 0 }));
-            fundo.renderOrder = 1; frente.renderOrder = 2;
-            cena.add(fundo, frente);
-        } else {
-            cena.add(new T.Mesh(_simGrade(cols, cols.map(() => 0), 0.04, 0.04 + base * 0.96, 4, 1, false), tecido()));
-        }
-        // rolo e double vision enrolam num tubo; a romana tem um cabecote reto
-        let rolo;
-        if (e.persiana === 'romana') {
-            rolo = new T.Mesh(new T.BoxGeometry(1, 0.04, 0.03), _simMaterial('#e4e2dc'));
-            rolo.position.set(0.5, -0.02, 0.04);
-        } else {
-            rolo = new T.Mesh(new T.CylinderGeometry(0.026, 0.026, 1, 24), _simMaterial(cor.hex, { escurecer: 0.92 }));
-            rolo.rotation.z = Math.PI / 2; rolo.position.set(0.5, -0.026, 0.03);
-        }
-        const barra = new T.Mesh(new T.BoxGeometry(1, 0.014, 0.012), _simMaterial('#dcdcd8'));
-        barra.position.set(0.5, -(0.04 + base * 0.96), 0.02);
-        cena.add(rolo, barra);
-    }
+    const e = _sim.estado, cor = _simCorAtual(), f = _sim.foto;
+    GaleriaRender.montarProduto(_sim.prodCena, {
+        produto: e.produto, prega: e.prega, persiana: e.persiana, abertura: e.abertura, aberto: e.aberto, trilho: e.trilho,
+        hex: cor.hex, mapa: _simTexturaCor(cor), foto: !!cor.foto, tecido: e.tecido, aspecto: _sim.aspecto || 1.4,
+        luz: f ? Math.min(1.12, Math.max(0.78, 0.55 + 0.6 * f.luz)) : 1,
+        luzCor: f ? f.tom : [1, 1, 1], luzDir: [f ? f.ladoLuz : -0.35, 0.75, 1.0]
+    });
 }
 
 function _simAgendar() {
@@ -628,13 +586,15 @@ _sim.renderAgora = function () {
         // fundo em px de tela (y para baixo vira -y)
         _sim.fundo.scale.set(_sim.foto.w * L.s, _sim.foto.h * L.s, 1);
         _sim.fundo.position.set(L.x + _sim.foto.w * L.s / 2, -(L.y + _sim.foto.h * L.s / 2), 0);
+        const area = _simArea().map(_simParaTelaLocal);
+        const largA = Math.hypot(area[1][0] - area[0][0], area[1][1] - area[0][1]) || 1;
+        _sim.aspecto = Math.max(0.3, Math.min(4, Math.hypot(area[3][0] - area[0][0], area[3][1] - area[0][1]) / largA));
         _simMontarProduto();
         r.setRenderTarget(_sim.rt);
         r.setClearColor(0x000000, 0);
         r.clear();
         r.render(_sim.prodCena, _sim.prodCam);
         r.setRenderTarget(null);
-        const area = _simArea().map(_simParaTelaLocal);
         const Hd = GaleriaCore.homografia([[0, 0], [1, 0], [1, 1], [0, 1]], area);
         const M = 0.06;   // folga para a sombra
         const folga = [[-M, -M], [1 + M, -M], [1 + M, 1 + M], [-M, 1 + M]].map(p => GaleriaCore.aplicarHomografia(Hd, p));
@@ -642,7 +602,16 @@ _sim.renderAgora = function () {
         folga.forEach((p, i) => pos.setXYZ(i, p[0], -p[1], 1));
         pos.needsUpdate = true;
         const Hinv = GaleriaCore.homografia(area, [[0, 0], [1, 0], [1, 1], [0, 1]]);
-        _sim.quadMat.uniforms.uHinv.value.set(...Hinv);
+        const U = _sim.quadMat.uniforms, e = _sim.estado, cor = _simCorAtual(), tc = GaleriaRender.tecido(e.tecido);
+        U.uHinv.value.set(...Hinv);
+        U.uFoto.value = _sim.fundo.material.map;
+        U.uFotoRet.value.set(L.x, L.y, _sim.foto.w * L.s, _sim.foto.h * L.s);
+        // persiana rolo/romana nao deixa ver a janela atras como a cortina; double vision ja tem as faixas
+        U.uTransm.value = U.uFoto.value ? tc.transm * (e.produto === 'persiana' ? 0.6 : 1) : 0;
+        U.uRaio.value = Math.max(0.002, tc.raio);
+        U.uTom.value.set(...GaleriaRender.tomTransmitido(cor.hex, !!cor.foto));
+        // sombra para o lado oposto ao da luz da foto
+        U.uSombra.value.set(-(_sim.foto.ladoLuz || -0.35) * 0.03, 0.016);
         // ajustando um canto ou a barra: cortina meio transparente para ver a janela
         _sim.quadMat.uniforms.uOpacidade.value = _sim.arrasto && _sim.arrasto.tipo !== 'abrir' ? 0.5 : 1;
         _sim.quad.visible = true;

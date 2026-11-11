@@ -48,9 +48,9 @@ const MODULOS_PERMISSAO = [
         { key: 'recebiveis',  label: 'Contas a Receber' },
         { key: 'vendedores',  label: 'Por Vendedor' },
     ]},
+    // Meu Perfil, Preferencias e Seguranca sao de cada usuario (sempre liberados);
+    // Acessos (usuarios e papeis) e so do Administrador. Aqui fica o que se libera.
     { key: 'configuracoes', label: 'Configurações',      subs: [
-        { key: 'usuarios', label: 'Usuários' },
-        { key: 'papeis',   label: 'Papéis' },
         { key: 'empresa',  label: 'Configurar Empresa' },
     ]},
 ];
@@ -96,6 +96,9 @@ function papeisPadrao() {
     };
     return [
         { id: 1, nome: 'Administrador', permissoes: base('completo') },
+        // Gerente: acesso completo como ponto de partida, mas personalizavel
+        // (diferente do Administrador, nao gerencia usuarios e papeis)
+        { id: 6, nome: 'Gerente', permissoes: base('completo') },
         { id: 2, nome: 'Financeiro', permissoes: comSubs(base('completo'), {
             pedidos:       'visualizar',
             clientes:      'visualizar',
@@ -189,6 +192,7 @@ function migrarArquitetoDosPedidos() {
     if (mudou) syncDB();
 }
 
+const CHAVE_PAPEL_GERENTE = 'sc_papel_gerente';
 function migrarPermissoesSalvas() {
     let mudou = false;
     (db.papeis || []).forEach(p => {
@@ -208,6 +212,18 @@ function migrarPermissoesSalvas() {
         }
         if (JSON.stringify(p.permissoes) !== antes) mudou = true;
     });
+    // Gerente nasceu depois: entra uma vez (a marca impede que um excluido volte)
+    try {
+        if (Array.isArray(db.papeis) && !localStorage.getItem(CHAVE_PAPEL_GERENTE)) {
+            if (!db.papeis.some(p => String(p.nome).toLowerCase() === 'gerente')) {
+                const novoId = db.papeis.reduce((m, x) => Math.max(m, Number(x.id) || 0), 0) + 1;
+                const pos = db.papeis.findIndex(p => p.nome === 'Administrador');
+                db.papeis.splice(pos >= 0 ? pos + 1 : db.papeis.length, 0, { id: novoId, nome: 'Gerente', permissoes: permTodos('completo') });
+                mudou = true;
+            }
+            localStorage.setItem(CHAVE_PAPEL_GERENTE, '1');
+        }
+    } catch (e) { /* sem armazenamento: tenta de novo na proxima carga */ }
     (db.usuarios || []).forEach(u => {
         if (!u.permissoes_extras) return;
         const novo = {};
@@ -358,11 +374,11 @@ function buildEmpresaHeaderHTML(logoHeight) {
 }
 
 function salvarEmpresaConfigs() {
-    const razao = (document.getElementById('emp-razao')?.value || '').trim();
+    const razao = (document.getElementById('emp-razao')?.value || '').trim().toLocaleUpperCase('pt-BR');
     if (!razao) { showAlert('Informe a Razão Social.', '⚠️'); return; }
     const emp = {
         razao_social:  razao,
-        nome_fantasia: (document.getElementById('emp-fantasia')?.value || '').trim(),
+        nome_fantasia: (document.getElementById('emp-fantasia')?.value || '').trim().toLocaleUpperCase('pt-BR'),
         cnpj:          (document.getElementById('emp-cnpj')?.value     || '').trim(),
         endereco:      (document.getElementById('emp-end')?.value       || '').trim(),
         telefone:      (document.getElementById('emp-tel')?.value       || '').trim(),
@@ -511,8 +527,8 @@ function restaurarFormasPagamento() {
 function carregarEmpresaConfigs() {
     const emp = getEmpresa();
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
-    set('emp-razao',    emp.razao_social);
-    set('emp-fantasia', emp.nome_fantasia);
+    set('emp-razao',    (emp.razao_social || '').toLocaleUpperCase('pt-BR'));
+    set('emp-fantasia', (emp.nome_fantasia || '').toLocaleUpperCase('pt-BR'));
     set('emp-cnpj',     emp.cnpj);
     set('emp-end',      emp.endereco);
     set('emp-tel',      emp.telefone);
@@ -669,12 +685,11 @@ const SIDEBAR_MODULOS = [
     { href: 'expedicao.html',   icon: 'expedicao',    label: 'Expedição',         permModulo: 'expedicao' },
     { href: 'estoque.html',     icon: 'estoque',      label: 'Estoque',           permModulo: 'estoque' },
     { href: 'clientes.html',    icon: 'clientes',     label: 'Clientes',          permModulo: 'clientes' },
-    { href: 'galeria.html',     icon: 'galeria',      label: 'Galeria',           permModulo: 'galeria' },
     { href: 'catalogo.html',    icon: 'catalogo',     label: 'Cadastro/Catálogo', permModulo: 'catalogo' },
     { href: 'vendedores.html',  icon: 'vendedores',   label: 'Vendedores/Arquitetos', permModulo: 'vendedores' },
     { href: 'fornecedores.html', icon: 'fornecedores', label: 'Fornecedores',     permModulo: 'fornecedores' },
     { href: 'financeiro.html',  icon: 'financeiro',   label: 'Financeiro',        permModulo: 'financeiro' },
-    { href: 'configuracoes.html', icon: 'settings',   label: 'Configurações',     permModulo: 'configuracoes' },
+    { href: 'configuracoes.html', icon: 'settings',   label: 'Configurações' },
 ];
 
 // Barra lateral fixada (aberta, empurra a tela) ou solta (so icones; abre
@@ -738,19 +753,28 @@ function renderSidebar() {
     }).join('');
 
     const papelAtual = usuarioAtual ? db.papeis.find(p => p.id === usuarioAtual.papel_id) : null;
+    // Logo e nome da empresa (Configurar Empresa); sem logo cadastrada, a do SCTech
+    const emp = getEmpresa();
+    const nomeEmpresa = emp.nome_fantasia || emp.razao_social || 'SCTech';
+    const logoEmpresa = emp.logo_base64
+        ? `<span class="sidebar-logo-chip"><img src="${emp.logo_base64}" alt="${escapeHtml(nomeEmpresa)}" class="sidebar-logo-img sidebar-logo-empresa"></span>`
+        : `<img src="images/logo.png" alt="SCTech" class="sidebar-logo-img">`;
+    const foto = usuarioAtual && usuarioAtual.foto_base64;
 
     sidebar.innerHTML = `
         <div class="logo-popup-wrap" id="logo-popup-wrap">
-            <div class="logo" onclick="toggleLogoPopup(event)">
-                <img src="images/logo.png" alt="SCTech" class="sidebar-logo-img">
-                <h2>SCTech</h2>
+            <div class="logo" onclick="toggleLogoPopup(event)" title="${escapeHtml(nomeEmpresa)}">
+                ${logoEmpresa}
+                ${emp.logo_base64 ? '' : `<h2 class="sidebar-nome-empresa">${escapeHtml(nomeEmpresa)}</h2>`}
                 <button type="button" class="sidebar-pin" id="sidebar-pin-btn" onclick="alternarSidebarFixada(event)" aria-label="Fixar menu">📌</button>
             </div>
             <div class="logo-popup" id="logo-popup">
                 <div class="logo-popup-header">
-                    <div class="logo-popup-avatar">${navIcon('user', 18)}</div>
+                    <div class="logo-popup-avatar${foto ? ' com-foto' : ''}">${foto ? `<img src="${foto}" alt="">` : navIcon('user', 18)}</div>
                     <div><div class="logo-popup-name" id="popup-user-name">—</div><div class="logo-popup-role">${escapeHtml(papelAtual?.nome || 'Usuário SCTech')}</div></div>
                 </div>
+                <div class="logo-popup-sep"></div>
+                <a href="configuracoes.html" class="logo-popup-item">${navIcon('user', 16)} Meu perfil</a>
                 <div class="logo-popup-sep"></div>
                 <button class="logo-popup-item" onclick="toggleTema()" style="justify-content:space-between">
                     <span style="display:flex;align-items:center;gap:10px"><span id="tema-icone">🌙</span> Tema</span>
@@ -877,6 +901,7 @@ function toast(msg, tipo = 'success', ms = 3000) {
     c.appendChild(t);
     requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('show')));
     setTimeout(() => { t.classList.remove('show'); t.addEventListener('transitionend', () => t.remove(), { once: true }); }, ms);
+    if (tipo === 'warning' || tipo === 'error') tocarSomNotificacao(tipo);
 }
 function toastReload(msg, tipo = 'success') {
     sessionStorage.setItem('sc_pending_toast', JSON.stringify({ msg, tipo }));
@@ -908,7 +933,6 @@ const PAGINA_MODULO = {
     'fornecedores.html':  'fornecedores',
     'financeiro.html':    'financeiro',
     'relatorios.html':    'relatorios',
-    'configuracoes.html': 'configuracoes',
     'empresa.html':       'configuracoes.empresa',
 };
 
@@ -1021,7 +1045,9 @@ async function realizarLogin() {
     if (!usuario || !usuario.ativo) { falhar(); return; }
     const hash = await hashSenha(senhaVal);
     if (hash !== usuario.senha_hash) { falhar(); return; }
-    sessionStorage.setItem('sc_user', JSON.stringify({ id: usuario.id, nome: usuario.nome, email: usuario.email }));
+    sessionStorage.setItem('sc_user', JSON.stringify({ id: usuario.id, nome: nomeExibicao(usuario), email: usuario.email }));
+    const temaUsuario = usuario.preferencias && usuario.preferencias.tema;
+    if (temaUsuario === 'light' || temaUsuario === 'dark') { try { localStorage.setItem('sc_tema', temaUsuario); } catch (e) {} }
     window.location.href = 'index.html';
 }
 
@@ -1030,14 +1056,215 @@ function logout() {
     window.location.replace('login.html');
 }
 
-// --- CONFIGURAÇÕES: USUÁRIOS E PAPÉIS ---
+// --- CONFIGURAÇÕES: MEU PERFIL, PREFERÊNCIAS, SEGURANÇA E ACESSOS ---
+// Perfil, Preferencias e Seguranca sao de cada usuario. Acessos (usuarios e
+// papeis) so o Administrador ve: o Gerente tem acesso completo aos modulos,
+// mas nao decide quem entra no sistema.
+function ehAdministrador(usuario) {
+    usuario = usuario === undefined ? getUsuarioLogado() : usuario;
+    const papel = usuario && db.papeis.find(p => p.id === usuario.papel_id);
+    return !!papel && papel.nome === 'Administrador';
+}
+function nomeExibicao(u) {
+    return (u && (String(u.nome_exibicao || '').trim() || u.nome)) || '';
+}
+const NOTIF_PREFS = ['todas', 'urgentes', 'nenhuma'];
+function prefsUsuario(u) {
+    u = u === undefined ? getUsuarioLogado() : u;
+    const p = (u && u.preferencias) || {};
+    let temaAtual = 'light';
+    try { temaAtual = localStorage.getItem('sc_tema') === 'dark' ? 'dark' : 'light'; } catch (e) {}
+    return {
+        tema: p.tema === 'dark' || p.tema === 'light' ? p.tema : temaAtual,
+        notificacoes: NOTIF_PREFS.includes(p.notificacoes) ? p.notificacoes : 'todas',
+        som: p.som !== false
+    };
+}
+// Grava so o que mudou no proprio usuario: rele sc_usr antes, para nao
+// desfazer o que outra aba gravou nos demais usuarios.
+function _gravarMeuUsuario(alterar) {
+    const eu = getUsuarioLogado();
+    if (!eu) return null;
+    try {
+        const salvos = JSON.parse(localStorage.getItem('sc_usr'));
+        if (Array.isArray(salvos)) db.usuarios = salvos;
+    } catch (e) { /* fica com o que esta em memoria */ }
+    const u = db.usuarios.find(x => x.id === eu.id);
+    if (!u) return null;
+    alterar(u);
+    try { localStorage.setItem('sc_usr', JSON.stringify(db.usuarios)); }
+    catch (e) { toast('Não foi possível salvar (armazenamento cheio). Tente uma foto menor.', 'error', 5000); return null; }
+    return u;
+}
+
+const ABAS_CONFIG = ['perfil', 'preferencias', 'seguranca', 'acessos'];
+let _subAcessosAtual = 'usuarios';
 function mostrarTabConfig(tab) {
-    document.querySelectorAll('.cfg-tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.cfg-panel').forEach(p => p.classList.remove('active'));
-    document.querySelector(`.cfg-tab-btn[data-tab="${tab}"]`)?.classList.add('active');
-    document.getElementById(`cfg-${tab}`)?.classList.add('active');
-    if (tab === 'usuarios') renderConfigUsuarios();
-    else if (tab === 'papeis') renderConfigPapeis();
+    let sub = null;
+    if (tab === 'usuarios' || tab === 'papeis') { sub = tab; tab = 'acessos'; }
+    if (!ABAS_CONFIG.includes(tab)) tab = 'perfil';
+    if (tab === 'acessos' && !ehAdministrador()) tab = 'perfil';
+    document.querySelectorAll('.cfg-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('.cfg-panel').forEach(p => p.classList.toggle('active', p.id === `cfg-${tab}`));
+    if (tab === 'perfil') renderMeuPerfil();
+    else if (tab === 'preferencias') renderPreferenciasSistema();
+    else if (tab === 'seguranca') { const e = document.getElementById('seg-erro'); if (e) e.hidden = true; }
+    if (tab === 'acessos') mostrarSubAcessos(sub || _subAcessosAtual);
+    else if (history.replaceState) history.replaceState(null, '', '#' + tab);
+}
+function mostrarSubAcessos(sub) {
+    if (!ehAdministrador()) return;
+    _subAcessosAtual = sub === 'papeis' ? 'papeis' : 'usuarios';
+    document.querySelectorAll('.cfg-subnav-btn').forEach(b => b.classList.toggle('active', b.dataset.sub === _subAcessosAtual));
+    document.querySelectorAll('.cfg-subpanel').forEach(p => p.classList.toggle('active', p.id === `cfg-${_subAcessosAtual}`));
+    if (_subAcessosAtual === 'usuarios') renderConfigUsuarios(); else renderConfigPapeis();
+    if (history.replaceState) history.replaceState(null, '', '#' + _subAcessosAtual);
+}
+function iniciarConfiguracoes() {
+    const abaAcessos = document.getElementById('cfg-tab-acessos');
+    if (abaAcessos) abaAcessos.hidden = !ehAdministrador();
+    mostrarTabConfig((location.hash || '#perfil').slice(1));
+    // "Meu perfil" no menu da logo, estando ja nesta tela, so troca o #
+    window.addEventListener('hashchange', () => mostrarTabConfig((location.hash || '#perfil').slice(1)));
+}
+
+// Meu Perfil
+let _perfilFoto;   // undefined = nao mexeu; '' = removeu; dataURL = nova
+function _pintarFotoPerfil(foto, nome) {
+    const el = document.getElementById('perfil-foto-preview');
+    if (!el) return;
+    const iniciais = String(nome || '?').trim().split(/\s+/).slice(0, 2).map(p => p[0] || '').join('').toUpperCase() || '?';
+    el.innerHTML = foto ? `<img src="${foto}" alt="Foto de perfil">` : `<span>${escapeHtml(iniciais)}</span>`;
+    const rm = document.getElementById('perfil-foto-remover');
+    if (rm) rm.style.display = foto ? '' : 'none';
+}
+function renderMeuPerfil() {
+    const u = getUsuarioLogado();
+    if (!u) return;
+    _perfilFoto = undefined;
+    const nome = document.getElementById('perfil-nome');
+    if (nome) nome.value = nomeExibicao(u);
+    const tel = document.getElementById('perfil-tel');
+    if (tel) tel.value = u.telefone || '';
+    const email = document.getElementById('perfil-email');
+    if (email) email.textContent = `E-mail de acesso: ${u.email}`;
+    _pintarFotoPerfil(u.foto_base64, nomeExibicao(u));
+}
+function escolherFotoPerfil(input) {
+    const f = input.files && input.files[0];
+    input.value = '';
+    if (!f) return;
+    if (!/^image\//.test(f.type)) { toast('Escolha um arquivo de imagem.', 'warning'); return; }
+    _resizeImageBase64(f, 256).then(b64 => {
+        _perfilFoto = b64;
+        _pintarFotoPerfil(b64, document.getElementById('perfil-nome')?.value);
+    });
+}
+function removerFotoPerfil() {
+    _perfilFoto = '';
+    _pintarFotoPerfil('', document.getElementById('perfil-nome')?.value);
+}
+function mascaraTelefone(el) {
+    const d = el.value.replace(/\D/g, '').slice(0, 11);
+    let v = d;
+    if (d.length > 10) v = `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+    else if (d.length > 6) v = `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+    else if (d.length > 2) v = `(${d.slice(0, 2)}) ${d.slice(2)}`;
+    else if (d.length) v = `(${d}`;
+    el.value = v;
+}
+async function salvarMeuPerfil() {
+    const nome = (document.getElementById('perfil-nome')?.value || '').trim();
+    const tel = (document.getElementById('perfil-tel')?.value || '').trim();
+    if (!nome) { await showAlert('Informe o nome de exibição.', '⚠️'); return; }
+    const digitos = tel.replace(/\D/g, '');
+    if (digitos && (digitos.length < 10 || digitos.length > 11)) { await showAlert('Telefone incompleto: informe DDD e número.', '⚠️'); return; }
+    const u = _gravarMeuUsuario(x => {
+        x.nome_exibicao = nome;
+        x.telefone = tel;
+        if (_perfilFoto !== undefined) x.foto_base64 = _perfilFoto;
+    });
+    if (!u) return;
+    try {
+        const sess = JSON.parse(sessionStorage.getItem('sc_user') || '{}');
+        sess.nome = nomeExibicao(u);
+        sessionStorage.setItem('sc_user', JSON.stringify(sess));
+    } catch (e) {}
+    _perfilFoto = undefined;
+    initPageNavigation();
+    toast('Perfil salvo!', 'success');
+}
+
+// Preferencias do sistema
+function renderPreferenciasSistema() {
+    const p = prefsUsuario();
+    document.querySelectorAll('input[name="pref-tema"]').forEach(r => { r.checked = r.value === p.tema; });
+    document.querySelectorAll('input[name="pref-notif"]').forEach(r => { r.checked = r.value === p.notificacoes; });
+    const som = document.getElementById('pref-som');
+    if (som) som.checked = p.som;
+}
+function salvarPreferenciasSistema() {
+    const tema = document.querySelector('input[name="pref-tema"]:checked')?.value === 'dark' ? 'dark' : 'light';
+    const notif = document.querySelector('input[name="pref-notif"]:checked')?.value;
+    const som = !!document.getElementById('pref-som')?.checked;
+    const u = _gravarMeuUsuario(x => {
+        x.preferencias = Object.assign({}, x.preferencias, {
+            tema, notificacoes: NOTIF_PREFS.includes(notif) ? notif : 'todas', som
+        });
+    });
+    if (!u) return;
+    aplicarTema(tema);
+    toast('Preferências salvas!', 'success');
+}
+
+// Som das notificacoes: tom curto gerado na hora (sem arquivo de audio)
+function somNotificacaoAtivo() {
+    return prefsUsuario().som;
+}
+function tocarSomNotificacao(tipo, forcar) {
+    if (!forcar && !somNotificacaoAtivo()) return;
+    try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        window._scAudio = window._scAudio || new Ctx();
+        const ctx = window._scAudio;
+        const notas = tipo === 'error' ? [330, 247] : tipo === 'warning' ? [523, 440] : [659, 880];
+        notas.forEach((f, i) => {
+            const osc = ctx.createOscillator(), g = ctx.createGain();
+            const t0 = ctx.currentTime + i * 0.11;
+            osc.type = 'sine';
+            osc.frequency.value = f;
+            g.gain.setValueAtTime(0.0001, t0);
+            g.gain.exponentialRampToValueAtTime(0.12, t0 + 0.015);
+            g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+            osc.connect(g); g.connect(ctx.destination);
+            osc.start(t0); osc.stop(t0 + 0.18);
+        });
+    } catch (e) { /* sem audio: segue em silencio */ }
+}
+function testarSomNotificacao() {
+    tocarSomNotificacao('success', true);
+}
+
+// Seguranca: alterar a propria senha
+async function alterarMinhaSenha() {
+    const q = id => document.getElementById(id);
+    const erro = msg => { const e = q('seg-erro'); if (e) { e.textContent = msg; e.hidden = !msg; } };
+    const atual = q('seg-senha-atual')?.value || '';
+    const nova = q('seg-senha-nova')?.value || '';
+    const conf = q('seg-senha-conf')?.value || '';
+    const eu = getUsuarioLogado();
+    if (!eu) return;
+    if (!atual) { erro('Informe a senha atual.'); return; }
+    if (await hashSenha(atual) !== eu.senha_hash) { erro('A senha atual está incorreta.'); return; }
+    if (nova.length < 6) { erro('A nova senha precisa ter pelo menos 6 caracteres.'); return; }
+    if (nova !== conf) { erro('A confirmação não confere com a nova senha.'); return; }
+    if (nova === atual) { erro('A nova senha é igual à atual.'); return; }
+    const hash = await hashSenha(nova);
+    if (!_gravarMeuUsuario(u => { u.senha_hash = hash; })) return;
+    erro('');
+    ['seg-senha-atual', 'seg-senha-nova', 'seg-senha-conf'].forEach(id => { if (q(id)) q(id).value = ''; });
+    toast('Senha alterada!', 'success');
 }
 
 // Lista plana de linhas da matriz: cada módulo seguido de suas sub-abas.
@@ -1262,6 +1489,15 @@ async function salvarUsuario(id) {
     if (editando) {
         const u = db.usuarios.find(x => x.id === id);
         if (!u) return;
+        // ninguem tira o ultimo Administrador ativo: sem ele, ninguem mais gerencia os acessos
+        const ativoDepois = document.getElementById('usr-ativo') ? document.getElementById('usr-ativo').checked : u.ativo;
+        const papelDepois = db.papeis.find(p => p.id === papelId);
+        const continuaAdmin = ativoDepois && papelDepois && papelDepois.nome === 'Administrador';
+        const outrosAdmins = db.usuarios.filter(x => x.id !== u.id && x.ativo && ehAdministrador(x)).length;
+        if (ehAdministrador(u) && u.ativo && !continuaAdmin && !outrosAdmins) {
+            await showAlert('Este é o único Administrador ativo. Defina outro Administrador antes de mudar o papel dele.', '🛡️');
+            return;
+        }
         u.nome = nome; u.email = email; u.papel_id = papelId; u.permissoes_extras = permissoes_extras;
         const ativoEl = document.getElementById('usr-ativo');
         if (ativoEl) u.ativo = ativoEl.checked;
@@ -1476,6 +1712,7 @@ async function salvarPapel(id) {
     if (editando) {
         const papel = db.papeis.find(x => x.id === id);
         if (!papel) return;
+        if (papel.nome === 'Administrador' && nome !== 'Administrador') { await showAlert('O papel Administrador não pode ser renomeado: é ele que gerencia os acessos.', '🛡️'); return; }
         papel.nome = nome; papel.permissoes = permissoes;
         salvarERecarregar('Papel atualizado! Os usuários com este papel (sem permissão personalizada) já refletem a mudança.');
     } else {
@@ -1488,6 +1725,7 @@ async function salvarPapel(id) {
 async function excluirPapel(id) {
     const papel = db.papeis.find(x => x.id === id);
     if (!papel) return;
+    if (papel.nome === 'Administrador') { await showAlert('O papel Administrador não pode ser excluído: é ele que gerencia os acessos.', '🛡️'); return; }
     const usuariosComPapel = db.usuarios.filter(u => u.papel_id === id);
     if (usuariosComPapel.length) {
         await showAlert(`Não é possível excluir "${papel.nome}": ${usuariosComPapel.length} usuário(s) usam este papel (${usuariosComPapel.map(u => u.nome).join(', ')}). Reatribua-os a outro papel antes de excluir.`, '🚫');
@@ -1508,9 +1746,9 @@ function toggleLogoPopup(e) {
         const rect = wrap.getBoundingClientRect();
         popup.style.top  = (rect.bottom + 6) + 'px';
         popup.style.left = rect.left + 'px';
-        const u = JSON.parse(sessionStorage.getItem('sc_user') || '{}');
+        const u = getUsuarioLogado() || JSON.parse(sessionStorage.getItem('sc_user') || '{}');
         const el = document.getElementById('popup-user-name');
-        if (el) el.textContent = u.nome || u.email || '—';
+        if (el) el.textContent = nomeExibicao(u) || u.email || '—';
     }
     popup.classList.toggle('open', opening);
 }
@@ -2983,6 +3221,79 @@ function salvarFiltroVendedorTela() {
     toast('Filtro de vendedor salvo!', 'success', 1800);
 }
 
+// --- MENU DE ACOES (tres pontos) ---
+// Um menu flutuante so, reaproveitado por todas as linhas: abre junto do botao
+// (posicao fixa, para nao ser cortado pela tabela) e fecha no clique fora, no
+// Esc, ao rolar ou ao escolher uma acao.
+function _menuAcoesFechar() {
+    const m = document.getElementById('menu-acoes-flutuante');
+    if (m) m.remove();
+    document.querySelectorAll('.btn-kebab[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+}
+function abrirMenuAcoes(ev, itens) {
+    ev.stopPropagation();
+    const botao = ev.currentTarget;
+    const jaAberto = botao.getAttribute('aria-expanded') === 'true';
+    _menuAcoesFechar();
+    if (jaAberto) return;
+    const menu = document.createElement('div');
+    menu.id = 'menu-acoes-flutuante';
+    menu.className = 'menu-acoes';
+    menu.setAttribute('role', 'menu');
+    itens.filter(Boolean).forEach(it => {
+        if (it.sep) { const d = document.createElement('div'); d.className = 'menu-acoes-sep'; menu.appendChild(d); return; }
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('role', 'menuitem');
+        b.className = 'menu-acoes-item' + (it.perigo ? ' perigo' : '') + (it.bloqueado ? ' bloqueado' : '');
+        if (it.bloqueado) { b.setAttribute('aria-disabled', 'true'); if (it.dica) b.title = it.dica; }
+        b.innerHTML = `<span class="menu-acoes-ico">${it.icone || ''}</span><span>${escapeHtml(it.rotulo)}</span>`;
+        b.addEventListener('click', e => { e.stopPropagation(); _menuAcoesFechar(); it.acao(); });
+        menu.appendChild(b);
+    });
+    document.body.appendChild(menu);
+    botao.setAttribute('aria-expanded', 'true');
+    const r = botao.getBoundingClientRect();
+    const w = menu.offsetWidth, h = menu.offsetHeight;
+    let top = r.bottom + 4;
+    if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 4);
+    menu.style.top = top + 'px';
+    menu.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w)) + 'px';
+    menu.querySelector('.menu-acoes-item:not(.bloqueado)')?.focus({ preventScroll: true });
+    _menuAcoesAbertoEm = performance.now();
+}
+let _menuAcoesAbertoEm = 0;
+// rolagem que chega junto do clique (a tela trazendo o botao para a vista) nao fecha o menu
+function _menuAcoesAoRolar(e) {
+    if (e && e.target && e.target.closest && e.target.closest('#menu-acoes-flutuante')) return;
+    if (performance.now() - _menuAcoesAbertoEm < 250) return;
+    _menuAcoesFechar();
+}
+document.addEventListener('click', e => { if (!e.target.closest('#menu-acoes-flutuante')) _menuAcoesFechar(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') _menuAcoesFechar(); });
+window.addEventListener('scroll', _menuAcoesAoRolar, true);
+window.addEventListener('resize', _menuAcoesFechar);
+
+function abrirMenuAcoesPedido(ev, id) {
+    const p = db.pedidos.find(x => x.id == id);
+    if (!p) return;
+    const status = normalizarStatus(p.status);
+    const podeEditar = temAcesso('pedidos', 'completo');
+    const etiquetaOk = podeImprimirEtiquetas(p);
+    abrirMenuAcoes(ev, [
+        status === 'Orçamento' && podeEditar ? { icone: '✅', rotulo: 'Aprovar pedido', acao: () => aprovarPedido(id) } : null,
+        podeEditar ? { icone: '✏️', rotulo: 'Editar pedido', acao: () => editarPedido(id) } : null,
+        { icone: '📄', rotulo: 'Gerar proposta', acao: () => gerarProposta(id) },
+        { icone: '📋', rotulo: 'Ver Ordem de Serviço', acao: () => abrirOS(id) },
+        etiquetaOk
+            ? { icone: '🏷️', rotulo: 'Imprimir etiquetas', acao: () => abrirImpressaoEtiquetas(id) }
+            : { icone: '🏷️', rotulo: 'Imprimir etiquetas', bloqueado: true, dica: 'Liberado a partir de "Pronto p/ Instalação"', acao: () => toast(msgEtiquetaBloqueada(p), 'warning', 4500) },
+        { icone: '⏱', rotulo: 'Ver timeline', acao: () => verTimeline(id) },
+        podeEditar ? { sep: true } : null,
+        podeEditar ? { icone: '🗑️', rotulo: 'Excluir pedido', perigo: true, acao: () => excluirPedido(id) } : null,
+    ]);
+}
+
 function renderDashboard() {
     if (!temAcesso('pedidos', 'completo')) document.getElementById('btn-novo-pedido')?.style.setProperty('display', 'none');
     renderMetrics();
@@ -3050,8 +3361,6 @@ function renderDashboard() {
     const podeEditarPedidos = temAcesso('pedidos', 'completo');
     const rows = pedidos.map(p => {
         const colorClass = COR_STATUS[p._status] || 'st-orcamento';
-        const btnAprovar = (p._status === 'Orçamento' && podeEditarPedidos)
-            ? `<button class="btn btn-sm btn-aprovar" onclick="aprovarPedido(${p.id})">✅ Aprovar</button>` : '';
         const baixaTag = p.baixa_realizada
             ? `<span class="badge-baixa" title="Baixa de estoque realizada">✔ Baixa</span>` : '';
         const pagto      = statusPagamento(p);
@@ -3075,14 +3384,8 @@ function renderDashboard() {
             <td>${entregaCell}</td>
             <td><span class="status-tag ${colorClass}">${p._status}</span> ${baixaTag} ${_badgeConferencia(p)}</td>
             <td>${escapeHtml(p.vendedor_nome || '—')}</td>
-            <td>
-                <button class="btn btn-outline btn-sm" onclick="gerarProposta(${p.id})" title="Gerar proposta PDF">📄</button>
-                <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})" title="Ver Ordem de Serviço">📋</button>
-                ${p._status !== 'Orçamento' ? _btnEtiquetas(p) : ''}
-                <button class="btn btn-outline btn-sm" onclick="verTimeline(${p.id})" title="Ver timeline do pedido">⏱</button>
-                ${btnAprovar}
-                ${podeEditarPedidos ? `<button class="btn btn-outline btn-sm" onclick="editarPedido(${p.id})" title="Editar pedido">✏️</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirPedido(${p.id})" title="Excluir pedido">🗑️</button>` : ''}
+            <td class="td-acoes">
+                <button type="button" class="btn-kebab" onclick="abrirMenuAcoesPedido(event, ${p.id})" title="Ações do pedido" aria-label="Ações do pedido #${formatPedidoId(p.id)}" aria-haspopup="menu">⋮</button>
             </td>
         </tr>`;
     }).join('');
@@ -3317,8 +3620,9 @@ function renderDashboardAlertas() {
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
     const banners = [];
 
+    // vermelho = atrasado (urgente): a preferencia "so as urgentes" mantem so estes
     const mkBanner = (icon, bg, bord, textClr, titulo, itens) =>
-        `<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:${bg};border:1px solid ${bord};border-radius:8px;padding:10px 16px;font-size:13px">
+        `<div data-urgente="${bg === '#FEF4F2' ? 1 : 0}" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:${bg};border:1px solid ${bord};border-radius:8px;padding:10px 16px;font-size:13px">
             <span style="font-size:17px;flex-shrink:0">${icon}</span>
             <span style="color:${textClr}">${titulo}</span>
             <span>${itens}</span>
@@ -3412,6 +3716,10 @@ function renderDashboardAlertas() {
         }
     }
 
+    const prefNotif = prefsUsuario().notificacoes;
+    if (prefNotif === 'urgentes') banners.splice(0, banners.length, ...banners.filter(b => b.includes('data-urgente="1"')));
+    else if (prefNotif === 'nenhuma') banners.length = 0;
+
     // Contador no cabeçalho do card
     const countEl = document.getElementById('dash-alertas-count');
     if (countEl) {
@@ -3428,8 +3736,8 @@ function renderDashboardAlertas() {
 
     if (!banners.length) {
         el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:32px 0;color:#8F8F8F;font-size:13px;gap:8px">
-            <span style="font-size:32px">✅</span>
-            <span>Nenhum alerta ativo no momento.</span>
+            <span style="font-size:32px">${prefNotif === 'nenhuma' ? '🔕' : '✅'}</span>
+            <span>${prefNotif === 'nenhuma' ? 'Alertas desligados nas suas preferências.' : prefNotif === 'urgentes' ? 'Nenhum alerta urgente no momento.' : 'Nenhum alerta ativo no momento.'}</span>
         </div>`;
         clearInterval(window._dashAlertaScroll);
         return;
@@ -5294,7 +5602,7 @@ function renderAmbientes() {
                 : '';
             return `<div class="tecido-row-compact">
                 <div class="form-group" style="width:118px;flex-shrink:0">
-                    <label>Tipo de Prega</label>
+                    <label>Tipo de Prega${typeof abrirGaleriaPedido === 'function' ? ` <button type="button" class="link-galeria" onclick="abrirGaleriaPedido(${a.id},${tidx})" title="Escolher a prega na Galeria, com o cliente">🖼️</button>` : ''}</label>
                     <select id="t-prega-${a.id}-${tidx}" onchange="onPregaTecido(${a.id},${tidx})">${pregaOpts}</select>
                 </div>
                 <div class="form-group" style="width:64px;flex-shrink:0">
@@ -5904,6 +6212,8 @@ function bloquearPedidoAprovado() {
 
     document.querySelectorAll('.main input, .main select, .main textarea, .main button')
         .forEach(el => { el.disabled = true; });
+    // a Galeria continua abrindo para mostrar os modelos (sem aplicar nada)
+    document.querySelectorAll('.btn-galeria-pedido').forEach(el => { el.disabled = false; });
     const saveBtn = document.querySelector('.btn-success[onclick="salvarPedido()"]');
     if (saveBtn) saveBtn.style.display = 'none';
 
@@ -6281,7 +6591,23 @@ function _pcpListaHTML(grupos, filtroAtivo) {
     }).join('');
 }
 
+// Etiquetas so existem a partir de "Pronto p/ Instalacao" (regra em EtiquetasCore).
+// Antes disso o botao continua visivel, mas travado, dizendo por que.
+function podeImprimirEtiquetas(ped) {
+    const st = normalizarStatus(ped && ped.status);
+    return typeof EtiquetasCore !== 'undefined' ? EtiquetasCore.statusPermiteEtiqueta(st)
+        : ['Pronto p/ Instalação', 'Aguardando Financeiro', 'Instalado'].includes(st);
+}
+function rotuloStatus(status) {
+    return status === 'Medição' ? 'Aguardando Medição Fina' : status;
+}
+function msgEtiquetaBloqueada(ped) {
+    return `As etiquetas só podem ser impressas quando o pedido chega em "Pronto p/ Instalação". Este pedido está em "${rotuloStatus(normalizarStatus(ped && ped.status))}".`;
+}
 function _btnEtiquetas(p) {
+    if (!podeImprimirEtiquetas(p)) {
+        return `<button type="button" class="btn btn-outline btn-sm btn-bloqueado" aria-disabled="true" onclick="toast(msgEtiquetaBloqueada(db.pedidos.find(x => x.id == ${p.id})), 'warning', 4500)" title="Etiquetas liberadas a partir de &quot;Pronto p/ Instalação&quot;">🏷️</button>`;
+    }
     return `<button class="btn btn-outline btn-sm" onclick="abrirImpressaoEtiquetas(${p.id})" title="Imprimir etiquetas">🏷️</button>`;
 }
 function _badgeConferencia(p) {
@@ -7317,6 +7643,15 @@ function mostrarTabVendedores(tab) {
 }
 
 // --- FORNECEDORES ---
+// Mascara de maiusculas: converte enquanto digita sem pular o cursor.
+function mascaraMaiuscula(el) {
+    const ini = el.selectionStart, fim = el.selectionEnd;
+    const novo = el.value.toLocaleUpperCase('pt-BR');
+    if (novo === el.value) return;
+    el.value = novo;
+    if (ini != null && document.activeElement === el) el.setSelectionRange(ini, fim);
+}
+
 function mascaraCPF(el) {
     let v = el.value.replace(/\D/g, '').slice(0, 11);
     if (v.length > 9)      v = v.replace(/^(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4');
@@ -7421,8 +7756,8 @@ async function empresaCnpjMudou(el) {
             const campo = document.getElementById(id);
             if (campo && !campo.value.trim()) campo.value = val;
         };
-        set('emp-razao', razao_social);
-        set('emp-fantasia', est.nome_fantasia || '');
+        set('emp-razao', String(razao_social || '').toLocaleUpperCase('pt-BR'));
+        set('emp-fantasia', String(est.nome_fantasia || '').toLocaleUpperCase('pt-BR'));
         set('emp-end', _empEnderecoCompleto(est));
         if (est.ddd1 && est.telefone1) set('emp-tel', `(${est.ddd1}) ${est.telefone1}`);
         set('emp-email', est.email || '');
@@ -7536,11 +7871,33 @@ async function excluirFornecedor(id) {
     salvarERecarregar('Fornecedor excluído.');
 }
 
+// Total ja comprado de um fornecedor: soma os pedidos de compra feitos para
+// ele de verdade. Fica de fora o orcamento generico (sem fornecedor, id 0) e o
+// Rascunho, que ainda nao foi enviado — so Enviado e Recebido contam.
+const PC_STATUS_COMPRADOS = ['Enviado', 'Recebido'];
+function totalPedidoCompra(pc) {
+    return (pc.itens || []).reduce((s, i) => s + (Number(i.subtotal) || 0), 0);
+}
+function comprasDoFornecedor(fornId) {
+    const id = Number(fornId);
+    if (!id) return { total: 0, qtd: 0, rascunhos: 0 };
+    const doForn = (db.pedidos_compra || []).filter(pc => Number(pc.fornecedor_id) === id);
+    const feitos = doForn.filter(pc => PC_STATUS_COMPRADOS.includes(pc.status));
+    return {
+        total: feitos.reduce((s, pc) => s + totalPedidoCompra(pc), 0),
+        qtd: feitos.length,
+        rascunhos: doForn.length - feitos.length
+    };
+}
+function formatarMoeda(v) {
+    return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
 function renderTabelaFornecedores() {
     const tb = document.getElementById('tb-fornecedores');
     if (!tb) return;
     if (!db.fornecedores.length) {
-        tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;padding:20px;">Nenhum fornecedor cadastrado.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;padding:20px;">Nenhum fornecedor cadastrado.</td></tr>';
         return;
     }
     tb.innerHTML = db.fornecedores.map(f => {
@@ -7549,6 +7906,7 @@ function renderTabelaFornecedores() {
         const vinc = [nMat > 0 ? `${nMat} mat.` : '', nCat > 0 ? `${nCat} tec.` : ''].filter(Boolean).join(' · ') || '—';
         const cidadeUF = [f.cidade, f.estado].filter(Boolean).join(' / ') || '—';
         const nomeFantasia = f.nome_fantasia ? `<br><small style="color:#888;font-size:12px">${escapeHtml(f.nome_fantasia)}</small>` : '';
+        const compras = comprasDoFornecedor(f.id);
         return `<tr>
             <td><strong>${escapeHtml(f.nome)}</strong>${nomeFantasia}</td>
             <td style="font-size:13px">${escapeHtml(f.cnpj || '—')}</td>
@@ -7556,6 +7914,9 @@ function renderTabelaFornecedores() {
             <td style="font-size:13px">${escapeHtml(f.tel || '—')}</td>
             <td style="font-size:13px">${escapeHtml(f.email || '—')}</td>
             <td style="font-size:12px;color:#555">${vinc}</td>
+            <td class="forn-total-compras" title="${compras.qtd} pedido(s) enviado(s) ou recebido(s)${compras.rascunhos ? ` · ${compras.rascunhos} em rascunho não somam` : ''}">
+                <strong>${formatarMoeda(compras.total)}</strong>${compras.qtd ? `<br><small style="color:#888;font-size:11px">${compras.qtd} pedido(s)</small>` : ''}
+            </td>
             <td>
                 <button class="btn btn-outline btn-sm" onclick="criarPCParaFornecedor(${f.id})" title="Novo pedido de compra">🛒</button>
                 <button class="btn btn-outline btn-sm" onclick="editarFornecedor(${f.id})" title="Editar fornecedor">✏️</button>
@@ -10112,16 +10473,27 @@ function mostrarViewPCP(view) {
 }
 
 // --- TEMA CLARO / ESCURO ---
+// O tema e uma preferencia do usuario (Configuracoes > Preferencias); sc_tema
+// guarda a ultima escolha neste navegador para o <head> pintar sem piscar.
+function aplicarTema(tema) {
+    tema = tema === 'dark' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', tema);
+    try { localStorage.setItem('sc_tema', tema); } catch (e) {}
+    atualizarIconeTema();
+}
 function toggleTema() {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const novo = isDark ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', novo);
-    localStorage.setItem('sc_tema', novo);
-    atualizarIconeTema();
+    _gravarMeuUsuario(u => { u.preferencias = Object.assign({}, u.preferencias, { tema: novo }); });
+    aplicarTema(novo);
+    if (document.querySelector('input[name="pref-tema"]')) renderPreferenciasSistema();
 }
 function carregarTema() {
-    const tema = localStorage.getItem('sc_tema') || 'light';
+    const u = getUsuarioLogado();
+    const pref = u && u.preferencias && u.preferencias.tema;
+    const tema = pref === 'dark' || pref === 'light' ? pref : (localStorage.getItem('sc_tema') || 'light');
     document.documentElement.setAttribute('data-theme', tema);
+    if (pref && localStorage.getItem('sc_tema') !== tema) { try { localStorage.setItem('sc_tema', tema); } catch (e) {} }
     atualizarIconeTema();
 }
 function atualizarIconeTema() {
@@ -10140,12 +10512,12 @@ document.addEventListener('DOMContentLoaded', () => {
         renderDashboardsButton();
         renderMenuExtrasEstoque();
         renderBellIndicator();
+        initPageNavigation();
         const popupUserEl = document.getElementById('popup-user-name');
         if (popupUserEl) {
-            const u = JSON.parse(sessionStorage.getItem('sc_user') || '{}');
-            popupUserEl.textContent = u.nome || u.email || '—';
+            const u = getUsuarioLogado() || JSON.parse(sessionStorage.getItem('sc_user') || '{}');
+            popupUserEl.textContent = nomeExibicao(u) || u.email || '—';
         }
-        initPageNavigation();
     }
 
     // Pending toast from previous action
@@ -10330,7 +10702,7 @@ document.addEventListener('DOMContentLoaded', () => {
         mostrarTipoVendedores(url.get('tipo') === 'arquiteto' ? 'arquiteto' : 'vendedor');
     }
 
-    if (document.getElementById('tb-usuarios')) mostrarTabConfig('usuarios');
+    if (document.getElementById('cfg-perfil')) iniciarConfiguracoes();
 
     if (document.getElementById('tb-fornecedores')) {
         const pcFornSel = document.getElementById('pc-fornecedor');

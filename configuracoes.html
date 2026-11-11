@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Configurações - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261110b">
+    <link rel="stylesheet" href="css/style.css?v=20261110c">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
@@ -13,50 +13,150 @@
     <main class="main">
         <div class="header"><h2>Configurações</h2></div>
 
-        <div class="tab-nav">
-            <button class="tab-btn cfg-tab-btn active" data-tab="usuarios" onclick="mostrarTabConfig('usuarios')">👤 Usuários</button>
-            <button class="tab-btn cfg-tab-btn"        data-tab="papeis"   onclick="mostrarTabConfig('papeis')">🛡️ Papéis</button>
+        <div class="tab-nav cfg-tab-nav">
+            <button class="tab-btn cfg-tab-btn active" data-tab="perfil"       onclick="mostrarTabConfig('perfil')">👤 Meu Perfil</button>
+            <button class="tab-btn cfg-tab-btn"        data-tab="preferencias" onclick="mostrarTabConfig('preferencias')">⚙️ Preferências do Sistema</button>
+            <button class="tab-btn cfg-tab-btn"        data-tab="seguranca"    onclick="mostrarTabConfig('seguranca')">🔒 Segurança</button>
+            <button class="tab-btn cfg-tab-btn"        data-tab="acessos"      onclick="mostrarTabConfig('acessos')" id="cfg-tab-acessos" hidden>🛡️ Acessos</button>
         </div>
 
-        <!-- TAB: USUÁRIOS -->
-        <div id="cfg-usuarios" class="cfg-panel active">
-            <div class="card">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+        <!-- TAB: MEU PERFIL -->
+        <div id="cfg-perfil" class="cfg-panel active">
+            <div class="card cfg-card">
+                <h3 class="cfg-titulo">Meu perfil</h3>
+                <p class="cfg-sub">Como você aparece para a equipe no sistema.</p>
+                <div class="cfg-perfil-foto">
+                    <div class="cfg-avatar" id="perfil-foto-preview" aria-hidden="true"></div>
                     <div>
-                        <h3 style="margin:0 0 3px">Usuários do sistema</h3>
-                        <span style="font-size:12px;color:#8F8F8F">Cada usuário tem um papel (perfil de acesso) e pode ter permissões personalizadas por módulo.</span>
+                        <div class="cfg-foto-botoes">
+                            <label class="btn btn-outline btn-sm" for="perfil-foto-input">📷 Escolher foto</label>
+                            <button type="button" class="btn btn-outline btn-sm" id="perfil-foto-remover" onclick="removerFotoPerfil()">✕ Remover</button>
+                        </div>
+                        <div class="cfg-dica">JPG ou PNG. A foto é reduzida automaticamente.</div>
                     </div>
-                    <button class="btn btn-success" onclick="abrirModalUsuario()">+ Novo Usuário</button>
+                    <input type="file" id="perfil-foto-input" accept="image/*" hidden onchange="escolherFotoPerfil(this)">
                 </div>
-                <table>
-                    <thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Status</th><th>Ações</th></tr></thead>
-                    <tbody id="tb-usuarios"></tbody>
-                </table>
+                <div class="grid" style="margin-bottom:0">
+                    <div class="form-group">
+                        <label for="perfil-nome">Nome de exibição</label>
+                        <input type="text" id="perfil-nome" maxlength="60" placeholder="Como quer ser chamado">
+                    </div>
+                    <div class="form-group">
+                        <label for="perfil-tel">Telefone ou WhatsApp</label>
+                        <input type="tel" id="perfil-tel" maxlength="15" placeholder="(00) 00000-0000" oninput="mascaraTelefone(this)">
+                    </div>
+                </div>
+                <div class="cfg-dica" id="perfil-email" style="margin-bottom:14px"></div>
+                <button class="btn btn-success" onclick="salvarMeuPerfil()">Salvar perfil</button>
             </div>
         </div>
 
-        <!-- TAB: PAPÉIS -->
-        <div id="cfg-papeis" class="cfg-panel">
-            <div class="card">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-                    <div>
-                        <h3 style="margin:0 0 3px">Papéis (perfis de acesso)</h3>
-                        <span style="font-size:12px;color:#8F8F8F">Definem o nível de acesso padrão a cada módulo. Um usuário pode sobrescrever o papel individualmente.</span>
+        <!-- TAB: PREFERENCIAS DO SISTEMA -->
+        <div id="cfg-preferencias" class="cfg-panel">
+            <div class="card cfg-card">
+                <h3 class="cfg-titulo">Preferências do sistema</h3>
+                <p class="cfg-sub">Valem só para você, em qualquer computador em que entrar.</p>
+
+                <div class="cfg-pref-bloco">
+                    <div class="cfg-pref-rotulo">Tema</div>
+                    <div class="cfg-segmentos" role="radiogroup" aria-label="Tema">
+                        <label class="cfg-segmento"><input type="radio" name="pref-tema" value="light"> ☀️ Claro</label>
+                        <label class="cfg-segmento"><input type="radio" name="pref-tema" value="dark"> 🌙 Escuro</label>
                     </div>
-                    <button class="btn btn-success" onclick="abrirModalPapel()">+ Novo Papel</button>
                 </div>
-                <table>
-                    <thead><tr><th>Papel</th><th>Usuários</th><th>Ações</th></tr></thead>
-                    <tbody id="tb-papeis"></tbody>
-                </table>
+
+                <div class="cfg-pref-bloco">
+                    <div class="cfg-pref-rotulo">Notificações</div>
+                    <div class="cfg-dica" style="margin-bottom:8px">Os alertas do painel (entregas, medições, instalações, estoque e financeiro).</div>
+                    <div class="cfg-opcoes-lista" role="radiogroup" aria-label="Preferência de notificações">
+                        <label class="cfg-opcao"><input type="radio" name="pref-notif" value="todas"> <span><b>Todas</b><small>Mostra todos os alertas ativos da empresa.</small></span></label>
+                        <label class="cfg-opcao"><input type="radio" name="pref-notif" value="urgentes"> <span><b>Só as urgentes</b><small>Só o que está atrasado.</small></span></label>
+                        <label class="cfg-opcao"><input type="radio" name="pref-notif" value="nenhuma"> <span><b>Nenhuma</b><small>Esconde os alertas do painel.</small></span></label>
+                    </div>
+                </div>
+
+                <div class="cfg-pref-bloco">
+                    <label class="cfg-switch-linha">
+                        <span><span class="cfg-pref-rotulo">Notificações sonoras</span><span class="cfg-dica">Bipes da expedição e o som dos avisos.</span></span>
+                        <input type="checkbox" id="pref-som" class="cfg-switch">
+                    </label>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="testarSomNotificacao()" style="margin-top:8px">🔊 Testar som</button>
+                </div>
+
+                <button class="btn btn-success" onclick="salvarPreferenciasSistema()">Salvar preferências</button>
+            </div>
+        </div>
+
+        <!-- TAB: SEGURANCA -->
+        <div id="cfg-seguranca" class="cfg-panel">
+            <div class="card cfg-card" style="max-width:520px">
+                <h3 class="cfg-titulo">Alterar senha</h3>
+                <p class="cfg-sub">Use pelo menos 6 caracteres.</p>
+                <div class="form-group">
+                    <label for="seg-senha-atual">Senha atual</label>
+                    <input type="password" id="seg-senha-atual" autocomplete="current-password">
+                </div>
+                <div class="form-group">
+                    <label for="seg-senha-nova">Nova senha</label>
+                    <input type="password" id="seg-senha-nova" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label for="seg-senha-conf">Confirmar nova senha</label>
+                    <input type="password" id="seg-senha-conf" autocomplete="new-password"
+                           onkeydown="if(event.key==='Enter') alterarMinhaSenha()">
+                </div>
+                <div id="seg-erro" class="cfg-erro" role="alert" hidden></div>
+                <button class="btn btn-success" onclick="alterarMinhaSenha()">Alterar senha</button>
+            </div>
+        </div>
+
+        <!-- TAB: ACESSOS (so administrador) -->
+        <div id="cfg-acessos" class="cfg-panel">
+            <div class="cfg-subnav" role="tablist">
+                <button type="button" class="cfg-subnav-btn active" data-sub="usuarios" onclick="mostrarSubAcessos('usuarios')">👥 Usuários</button>
+                <button type="button" class="cfg-subnav-btn" data-sub="papeis" onclick="mostrarSubAcessos('papeis')">🛡️ Papéis</button>
+            </div>
+
+            <!-- USUARIOS -->
+            <div id="cfg-usuarios" class="cfg-subpanel active">
+                <div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+                        <div>
+                            <h3 style="margin:0 0 3px">Usuários do sistema</h3>
+                            <span style="font-size:12px;color:#8F8F8F">Cada usuário tem um papel (perfil de acesso) e pode ter permissões personalizadas por módulo.</span>
+                        </div>
+                        <button class="btn btn-success" onclick="abrirModalUsuario()">+ Novo Usuário</button>
+                    </div>
+                    <table>
+                        <thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Status</th><th>Ações</th></tr></thead>
+                        <tbody id="tb-usuarios"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- PAPEIS -->
+            <div id="cfg-papeis" class="cfg-subpanel">
+                <div class="card">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+                        <div>
+                            <h3 style="margin:0 0 3px">Papéis (perfis de acesso)</h3>
+                            <span style="font-size:12px;color:#8F8F8F">Definem o nível de acesso padrão a cada módulo. Um usuário pode sobrescrever o papel individualmente.</span>
+                        </div>
+                        <button class="btn btn-success" onclick="abrirModalPapel()">+ Novo Papel</button>
+                    </div>
+                    <table>
+                        <thead><tr><th>Papel</th><th>Usuários</th><th>Ações</th></tr></thead>
+                        <tbody id="tb-papeis"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </main>
 
-    <script src="js/etiquetas-core.js?v=20261110b"></script>
-    <script src="js/etiquetas-render.js?v=20261110b"></script>
-    <script src="js/cortina-desenho.js?v=20261110b"></script>
-    <script src="js/docs-layout-core.js?v=20261110b"></script>
-    <script src="js/app.js?v=20261110b"></script>
+    <script src="js/etiquetas-core.js?v=20261110c"></script>
+    <script src="js/etiquetas-render.js?v=20261110c"></script>
+    <script src="js/cortina-desenho.js?v=20261110c"></script>
+    <script src="js/docs-layout-core.js?v=20261110c"></script>
+    <script src="js/app.js?v=20261110c"></script>
 </body>
 </html>

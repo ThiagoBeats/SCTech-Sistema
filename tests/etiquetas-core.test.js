@@ -233,11 +233,29 @@ test('modeloTemCodigo exige barras ou QR', () => {
     assert.strictEqual(E.modeloTemCodigo({}), false);
 });
 
-test('avaliarLeitura nao abre conferencia de pedido em Orcamento', () => {
-    const lista = [ped({ id: 26005, status: 'Orçamento' })];
-    assert.deepStrictEqual(E.avaliarLeitura('26005', null, lista), { tipo: 'sem_etiquetas', pedidoId: 26005 });
-    assert.deepStrictEqual(E.avaliarLeitura('260050103', null, lista), { tipo: 'sem_etiquetas', pedidoId: 26005 });
-    assert.deepStrictEqual(E.avaliarLeitura('260050103', 26005, lista), { tipo: 'sem_etiquetas', pedidoId: 26005 });
+test('avaliarLeitura deixa fora da expedicao o pedido que ainda nao esta pronto', () => {
+    ['Orçamento', 'Medição', 'Aguardando Tecido', 'Na Costura'].forEach((status, i) => {
+        const id = 26005 + i;
+        const lista = [ped({ id, status })];
+        const esperado = { tipo: 'fora_da_expedicao', pedidoId: id, status };
+        assert.deepStrictEqual(E.avaliarLeitura(String(id), null, lista), esperado);
+        assert.deepStrictEqual(E.avaliarLeitura(id + '0103', null, lista), esperado);
+        assert.deepStrictEqual(E.avaliarLeitura(id + '0103', id, lista), esperado);
+    });
+});
+
+test('avaliarLeitura aceita os pedidos prontos, aguardando financeiro e instalados', () => {
+    ['Pronto p/ Instalação', 'Aguardando Financeiro', 'Instalado'].forEach(status => {
+        const lista = [ped({ status })];
+        assert.deepStrictEqual(E.avaliarLeitura('26001', null, lista), { tipo: 'abrir', pedidoId: 26001 });
+    });
+});
+
+test('statusPermiteEtiqueta so libera as tres etapas finais', () => {
+    assert.deepStrictEqual(E.STATUS_COM_ETIQUETA, ['Pronto p/ Instalação', 'Aguardando Financeiro', 'Instalado']);
+    ['Orçamento', 'Medição', 'Aguardando Tecido', 'Na Costura', '', undefined].forEach(s =>
+        assert.strictEqual(E.statusPermiteEtiqueta(s), false, String(s)));
+    E.STATUS_COM_ETIQUETA.forEach(s => assert.strictEqual(E.statusPermiteEtiqueta(s), true, s));
 });
 
 test('htmlEtiqueta escreve o codigo embaixo das barras, uma vez so', () => {

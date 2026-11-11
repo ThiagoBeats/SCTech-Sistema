@@ -231,11 +231,52 @@ test('pedido sem etiquetas: imprimir pela Expedicao ja inicia a conferencia', as
     await expect(page.locator('#exp-resultado')).toContainText('Volume 1/2 conferido.');
 });
 
-test('pedido em Orcamento mostra so Abrir pedido', async ({ page }) => {
-    await abrirComImpressao(page);
-    await ler(page, '26004');
-    await expect(page.locator('#exp-abrir-pedido')).toBeVisible();
-    await expect(page.locator('#exp-imprimir-etiquetas')).toHaveCount(0);
+test('pedido antes de Pronto p/ Instalacao nao aparece na expedicao', async ({ page }) => {
+    const antes = ['Orçamento', 'Medição', 'Aguardando Tecido', 'Na Costura'];
+    await entrar(page, BASE, {
+        sc_ped: antes.map((status, i) => ({ id: 26010 + i, clienteId: 1, clienteNome: 'Maria', status, valor: 100, ambientes: AMB, volumes: 2 })),
+        sc_cli: SEED.sc_cli
+    });
+    await page.goto(BASE + '/expedicao.html');
+    await page.waitForSelector('#exp-leitura');
+    for (let i = 0; i < antes.length; i++) {
+        await ler(page, String(26010 + i));
+        await expect(page.locator('#exp-resultado')).toContainText(`Pedido #${26010 + i} está em`);
+        await expect(page.locator('#exp-resultado')).toHaveClass(/erro/);
+        await expect(page.locator('#exp-pedido'), antes[i]).toBeHidden();
+        await ler(page, `${26010 + i}0102`);
+        await expect(page.locator('#exp-pedido')).toBeHidden();
+    }
+    await expect(page.locator('#exp-resultado')).toContainText('Na Costura');
+});
+
+test('pedidos prontos, aguardando financeiro e instalados aparecem na expedicao', async ({ page }) => {
+    const prontos = ['Pronto p/ Instalação', 'Aguardando Financeiro', 'Instalado'];
+    await entrar(page, BASE, {
+        sc_ped: prontos.map((status, i) => ({ id: 26020 + i, clienteId: 1, clienteNome: 'Maria', status, valor: 100, ambientes: AMB, volumes: 2 })),
+        sc_cli: SEED.sc_cli
+    });
+    await page.goto(BASE + '/expedicao.html');
+    await page.waitForSelector('#exp-leitura');
+    for (let i = 0; i < prontos.length; i++) {
+        await ler(page, String(26020 + i));
+        await expect(page.locator('#exp-pedido'), prontos[i]).toBeVisible();
+        await expect(page.locator('#exp-imprimir-etiquetas')).toBeVisible();
+    }
+});
+
+test('pedido ativo que volta de etapa em outra aba sai do painel', async ({ page, context }) => {
+    await abrir(page);
+    await ler(page, '26001');
+    await expect(page.locator('#exp-pedido')).toBeVisible();
+    const outra = await context.newPage();
+    await outra.goto(BASE + '/index.html');
+    await outra.evaluate(() => {
+        const ped = JSON.parse(localStorage.getItem('sc_ped'));
+        ped.find(p => p.id === 26001).status = 'Na Costura';
+        localStorage.setItem('sc_ped', JSON.stringify(ped));
+    });
+    await expect(page.locator('#exp-pedido')).toBeHidden();
 });
 
 test('cancelar a impressao devolve a leitura ao campo', async ({ page }) => {
