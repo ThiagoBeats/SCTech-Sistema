@@ -231,10 +231,17 @@ Avanço de status com comportamentos automáticos:
     (verifica disponibilidade; exibe lista de tecidos a baixar com confirmação)
   - Na Costura → Pronto p/ Instalação: verifica saldo de materiais/acessórios;
     se insuficiente, bloqueia e informa; se suficiente, pede confirmação e dá baixa
-  - Pronto p/ Instalação ou Aguardando Financeiro → Instalado: no card do
-    pedido, o botão "Confirmar pagamento" abre a baixa das parcelas (seção 10.8)
-    e o pedido segue para Instalado; ao instalar, as comissões do vendedor e do
-    arquiteto viram contas no A Pagar (seção 10.9)
+  - Pronto p/ Instalação → Aguardando Financeiro: abre o modal "Confirmar
+    Entrega", que pergunta se o cliente pagou tudo. Nas duas respostas o pedido
+    vai para Aguardando Financeiro; "Não, há saldo pendente" só marca o pedido
+    com pagamento pendente.
+  - Aguardando Financeiro → Instalado: no card do pedido, o botão "Confirmar
+    pagamento" abre a baixa das parcelas (seção 10.8) e o pedido segue para
+    Instalado. O botão só aparece para quem tem acesso completo a Financeiro ›
+    A Receber (Administrador e Financeiro); os demais veem "Aguardando
+    confirmação do financeiro".
+  - Ao chegar em Instalado, as comissões do vendedor e do arquiteto viram contas
+    no A Pagar (seção 10.9)
 
 Confirmar pagamento (ao instalar):
   - Mostra as parcelas em aberto do pedido, cada uma com uma caixa de seleção
@@ -868,10 +875,11 @@ Há uma só forma de registrar que o cliente pagou: dar baixa na parcela.
   - A forma de pagamento é só registrada por enquanto; não movimenta saldo de
     caixa ou banco
 
-Confirmar pagamento (pedido Aguardando Financeiro, Pronto p/ Instalação):
+Confirmar pagamento (pedido em Aguardando Financeiro; só Administrador e Financeiro,
+ou quem tem acesso completo ao A Receber):
   - Mostra a lista de parcelas em aberto do pedido, todas marcadas
-  - Se o instalador avisou que o cliente ficou devendo, a parcela do saldo vem
-    desmarcada
+  - Se na entrega ("Confirmar Entrega") foi respondido "Não, há saldo pendente",
+    a parcela do saldo vem desmarcada
   - Só as parcelas marcadas são baixadas
   - Dá para deixar o saldo em aberto: o pedido vai para Instalado com o aviso
     "saldo em aberto", e o saldo continua no A Receber (vira Atrasado depois do
@@ -887,7 +895,12 @@ Excluir pedido:
     e as comissões ainda não pagas (com confirmação)
   - Se houver qualquer recebimento: a exclusão é bloqueada e o sistema explica
     que é preciso estornar os recebimentos antes
-  - Voltar o pedido para Orçamento segue a mesma regra
+
+Voltar o pedido para Orçamento:
+  - É permitido mesmo com valor recebido
+  - Saem só as parcelas em aberto e as comissões pendentes; as parcelas já pagas
+    ficam no Financeiro
+  - Ao aprovar de novo, só o valor que ainda falta é cobrado
 
 ── 10.9 COMISSÕES NO A PAGAR ───────────────────────────────────────────────────
 
