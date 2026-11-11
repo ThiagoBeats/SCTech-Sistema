@@ -8412,6 +8412,7 @@ function _pcTotal(pc) {
 // a lista continua avisando e oferecendo "Gerar conta".
 function abrirModalContaPagarPC(pc) {
     return new Promise(resolve => {
+        if (document.getElementById('pcp-modal')) { resolve(); return; }
         const hoje = new Date().toLocaleDateString('sv-SE');
         const o = document.createElement('div');
         o.id = 'pcp-modal';
@@ -8431,6 +8432,7 @@ function abrirModalContaPagarPC(pc) {
                 <div style="flex:1"><label style="display:block;font-size:12px;margin-bottom:4px">Nº de parcelas</label><input type="number" id="pcp-parcelas" min="2" max="48" value="2" style="${inp}"></div>
                 <div style="flex:1"><label style="display:block;font-size:12px;margin-bottom:4px">A cada (dias)</label><input type="number" id="pcp-intervalo" min="1" value="30" style="${inp}"></div>
             </div>
+            <div id="pcp-erro" style="display:none;color:#F43927;font-size:12px;margin-bottom:8px"></div>
             <div class="sc-modal-btns" style="margin-top:8px"><button class="btn btn-outline" id="pcp-agora">Agora não</button><button class="btn btn-success" id="pcp-ok">Gerar conta a pagar</button></div>
         </div>`;
         document.body.appendChild(o);
@@ -8441,18 +8443,26 @@ function abrirModalContaPagarPC(pc) {
         };
         o.querySelectorAll('input[name="pcp-modo"]').forEach(r => r.addEventListener('change', mostrar));
         const fechar = () => { document.removeEventListener('keydown', esc); o.remove(); resolve(); };
-        const esc = e => { if (e.key === 'Escape') fechar(); };
+        // Escape com um alerta/confirmacao aberto fecha so o alerta, nao este modal.
+        const esc = e => {
+            const alerta = document.getElementById('sc-modal-overlay');
+            if (e.key === 'Escape' && !(alerta && alerta.style.display !== 'none')) fechar();
+        };
         document.addEventListener('keydown', esc);
+        const erroEl = o.querySelector('#pcp-erro');
+        const erro = msg => { erroEl.textContent = msg; erroEl.style.display = ''; };
         o.querySelector('#pcp-agora').onclick = fechar;
-        o.querySelector('#pcp-ok').onclick = async () => {
+        o.querySelector('#pcp-ok').onclick = () => {
+            erroEl.style.display = 'none';
+            if (!temAcesso('financeiro.pagar', 'completo')) { erro('Você não tem permissão para gerar contas a pagar. O pedido fica marcado como "sem conta a pagar" para o financeiro gerar depois.'); return; }
             const valor = FinanceiroCore.arredondar(parseFloat(o.querySelector('#pcp-valor').value) || 0);
             const m = modo();
             const venc = o.querySelector('#pcp-venc').value;
             const n = parseInt(o.querySelector('#pcp-parcelas').value, 10) || 0;
             const intervalo = parseInt(o.querySelector('#pcp-intervalo').value, 10) || 30;
-            if (valor <= 0) { await showAlert('Informe o valor a pagar.', '⚠️'); return; }
-            if (m === 'prazo' && !venc) { await showAlert('Informe a data de vencimento.', '⚠️'); return; }
-            if (m === 'parcelado' && n < 2) { await showAlert('Informe 2 ou mais parcelas.', '⚠️'); return; }
+            if (valor <= 0) { erro('Informe o valor a pagar.'); return; }
+            if (m === 'prazo' && !venc) { erro('Informe a data de vencimento.'); return; }
+            if (m === 'parcelado' && n < 2) { erro('Informe 2 ou mais parcelas.'); return; }
             gerarContaPagarPC(pc, { valor, modo: m, hoje, vencimento: venc, numParcelas: n, intervaloDias: intervalo });
             fechar();
         };
@@ -8489,7 +8499,9 @@ function gerarContaPagarPC(pc, opcoes) {
 
 async function gerarContaPagarPCManual(id) {
     const pc = db.pedidos_compra.find(p => p.id == id);
-    if (pc && !pc.conta_pagar_gerada) await abrirModalContaPagarPC(pc);
+    if (!pc || pc.conta_pagar_gerada) return;
+    if (!await exigirPermissao('financeiro.pagar', 'completo')) return;
+    await abrirModalContaPagarPC(pc);
 }
 
 async function excluirPedidoCompra(id) {

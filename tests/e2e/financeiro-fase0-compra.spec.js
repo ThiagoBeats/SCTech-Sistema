@@ -106,3 +106,30 @@ test('importar nota do mesmo fornecedor oferece vincular', async ({ page }) => {
     expect(cps[0].chave_acesso).toBe('35' + '1'.repeat(42));
     expect(cps[0].arquivo_anexo_nome).toBe('nf.pdf');
 });
+
+test('valor zerado mostra aviso dentro do modal e nao cria conta', async ({ page }) => {
+    await abrir(page, [pc()]);
+    await receber(page);
+    await page.locator('#pcp-valor').fill('0');
+    await page.locator('#pcp-ok').click();
+    await expect(page.locator('#pcp-erro')).toContainText('Informe o valor');
+    await expect(page.locator('#pcp-modal')).toBeVisible();
+    expect(await lerChave(page, 'sc_cp')).toHaveLength(0);
+});
+
+test('sem permissao de contas a pagar: nao cria conta e o PC fica sem conta a pagar', async ({ page }) => {
+    await abrir(page, [pc()]);
+    await page.evaluate(() => {
+        const u = JSON.parse(localStorage.getItem('sc_usr'));
+        u[0].permissoes_extras = { 'financeiro.pagar': { nivel: 'visualizar', acoes_restritas: [] } };
+        localStorage.setItem('sc_usr', JSON.stringify(u));
+    });
+    await page.reload();
+    await receber(page);
+    await page.locator('#pcp-ok').click();
+    await expect(page.locator('#pcp-erro')).toContainText('permissão');
+    await page.locator('#pcp-agora').click();
+    expect(await lerChave(page, 'sc_cp')).toHaveLength(0);
+    expect((await lerChave(page, 'sc_pc'))[0].status).toBe('Recebido');
+    await expect(page.locator('#tb-pedidos-compra')).toContainText('sem conta a pagar');
+});
