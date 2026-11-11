@@ -64,7 +64,7 @@
 **Produces:**
 - `menuAcoesHtml(acoes: Array<{ icone, rotulo, onclick: string, perigo?: boolean, oculto?: boolean }>) -> string` — botão `.btn-acoes` "⋮" (`aria-label="Ações"`) + lista `.menu-acoes` escondida; `oculto` some; perigosas no fim com classe de perigo.
 - Handler global (uma vez): clique no ⋮ abre o seu menu e fecha os outros; clique fora/Escape/escolher ação fecha; menu posicionado para não sair da tela (abre para cima perto do fim da página).
-- Fornecedores: menu com as ações de hoje + "📜 Histórico de pedidos" chamando `abrirHistoricoFornecedor(id)` (implementado na Task 4 — aqui pode existir como stub que mostra "em breve"? **Não:** declare a ação somente na Task 4; nesta task, só as ações atuais). Remover a coluna "Total de compras" e o cálculo dela.
+- Fornecedores: menu só com as ações de hoje ("📜 Histórico de pedidos" entra na Task 4). Remover a coluna "Total de compras" e o cálculo dela.
 - Vendedores/Arquitetos: colunas "Situação" (badge atual) e "Ações" (⋮) separadas.
 
 - [ ] **Step 1: Write the failing e2e**: `'fornecedores: ⋮ abre as acoes de hoje e nao ha coluna Total de compras'`; `'clientes: ⋮ com editar e excluir funcionando'`; `'vendedores: colunas Situacao e Acoes separadas, ⋮ funciona'`; `'abrir um menu fecha o outro, Escape e clique fora fecham'`; `'excluir pelo menu pede confirmacao como antes'`.
