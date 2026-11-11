@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Configurar Empresa - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261110c">
+    <link rel="stylesheet" href="css/style.css?v=20261112a">
     <style>
         .logo-upload-area {
             border: 2px dashed var(--border);
@@ -102,6 +102,23 @@
                 </div>
             </div>
 
+            <div class="grid" style="margin-bottom:0">
+                <div class="form-group">
+                    <label>Regime Tributário</label>
+                    <select id="emp-regime">
+                        <option value="">Não informado</option>
+                        <option value="MEI">MEI</option>
+                        <option value="Simples Nacional">Simples Nacional</option>
+                        <option value="Lucro Presumido">Lucro Presumido</option>
+                        <option value="Lucro Real">Lucro Real</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>% de imposto estimado</label>
+                    <input type="text" inputmode="decimal" id="emp-aliquota" placeholder="0">
+                </div>
+            </div>
+
             <div style="margin-top:8px;display:flex;gap:10px;align-items:center">
                 <button class="btn btn-success" onclick="salvarEmpresaConfigs()">💾 Salvar Configurações</button>
                 <span style="font-size:12px;color:#8F8F8F">As informações serão aplicadas imediatamente em todos os documentos gerados.</span>
@@ -117,17 +134,58 @@
         <!-- ══════════════ ABA: PREFERENCIAS ══════════════ -->
         <div id="tab-emp-preferencias" class="tab-panel emp-tab-panel">
         <div class="card" style="max-width:860px" id="emp-formas-pag-card">
-            <h3 style="margin-bottom:6px;color:var(--primary)">💳 Formas de Pagamento</h3>
+            <h3 style="margin-bottom:6px;color:var(--primary)">📋 Planos de pagamento</h3>
             <p style="font-size:12px;color:#8F8F8F;margin-bottom:14px">
-                Opções que aparecem no campo "Forma de Pagamento" ao emitir um pedido.
+                Planos que aparecem no campo "Forma de Pagamento" ao emitir um pedido (ex.: 50% entrada + 50% na instalação).
                 A primeira da lista já vem marcada nos pedidos novos. Use as setas para mudar a ordem.
-                O <strong>% desc.</strong> é o desconto que o pedido recebe ao escolher a forma; ele pode ser alterado no pedido.
+                O <strong>% desc.</strong> é o desconto que o pedido recebe ao escolher a forma. A <strong>% entrada</strong> é a parte cobrada ao aprovar; o resto vence na entrega. Os dois podem ser alterados no pedido.
             </p>
             <div id="emp-formas-pag" class="formas-pag-lista"></div>
             <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px" onclick="adicionarFormaPagamento()">+ Adicionar forma de pagamento</button>
             <div style="display:flex;gap:10px;margin-top:14px;align-items:center">
                 <button class="btn btn-success" onclick="salvarFormasPagamento()">💾 Salvar Formas de Pagamento</button>
                 <button class="btn btn-outline" onclick="restaurarFormasPagamento()">↩ Restaurar Padrão</button>
+            </div>
+        </div>
+
+        <div class="card" style="max-width:860px" id="emp-contas-card">
+            <h3 style="margin-bottom:6px;color:var(--primary)">🏦 Contas</h3>
+            <p style="font-size:12px;color:#8F8F8F;margin-bottom:14px">
+                Onde o dinheiro da empresa fica: o caixa (dinheiro vivo), os bancos e as maquininhas de cartão.
+                Informe quanto havia em cada uma e em que dia. Na maquininha, ajuste as taxas e os dias que o cartão leva para cair.
+            </p>
+            <div id="emp-contas"></div>
+            <button type="button" class="btn btn-outline btn-sm" style="margin-top:4px" onclick="adicionarContaCfg()">+ Adicionar conta</button>
+            <div style="display:flex;gap:10px;margin-top:14px;align-items:center">
+                <button class="btn btn-success" onclick="salvarContasCfg()">💾 Salvar contas</button>
+            </div>
+        </div>
+
+        <div class="card" style="max-width:860px" id="emp-meios-card">
+            <h3 style="margin-bottom:6px;color:var(--primary)">💳 Meios de pagamento</h3>
+            <p style="font-size:12px;color:#8F8F8F;margin-bottom:14px">
+                Como o cliente paga (dinheiro, PIX, cartão...). Cada meio cai em uma conta; o cartão cai na maquininha.
+                Os meios padrão são criados quando você salva as contas pela primeira vez.
+            </p>
+            <div id="emp-meios"></div>
+            <button type="button" class="btn btn-outline btn-sm" style="margin-top:4px" onclick="adicionarMeioCfg()">+ Adicionar meio</button>
+            <div style="display:flex;gap:10px;margin-top:14px;align-items:center">
+                <button class="btn btn-success" onclick="salvarMeiosCfg()">💾 Salvar meios</button>
+            </div>
+        </div>
+
+        <div class="card" style="max-width:860px" id="emp-msg-card">
+            <h3 style="margin-bottom:6px;color:var(--primary)">💬 Mensagem de cobrança</h3>
+            <p style="font-size:12px;color:#8F8F8F;margin-bottom:14px">
+                Texto enviado ao cliente pelo WhatsApp quando uma parcela está para vencer ou atrasada.
+                Use <strong>{cliente}</strong>, <strong>{empresa}</strong>, <strong>{valor}</strong>, <strong>{pedido}</strong> e <strong>{vencimento}</strong>; eles são trocados pelos dados da parcela.
+            </p>
+            <div class="form-group">
+                <textarea id="emp-msg-cobranca" rows="4" aria-label="Mensagem de cobrança"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center">
+                <button class="btn btn-success" onclick="salvarMensagemCobranca()">💾 Salvar mensagem</button>
+                <button class="btn btn-outline" onclick="restaurarMensagemCobranca()">↩ Restaurar padrão</button>
             </div>
         </div>
 
@@ -181,16 +239,18 @@
         </div>
 
     </main>
-    <script src="js/etiquetas-core.js?v=20261110c"></script>
-    <script src="js/etiquetas-render.js?v=20261110c"></script>
-    <script src="js/cortina-desenho.js?v=20261110c"></script>
-    <script src="js/docs-layout-core.js?v=20261110c"></script>
-    <script src="js/galeria-core.js?v=20261110c"></script>
-    <script src="js/galeria-imagens.js?v=20261110c"></script>
-    <script src="js/app.js?v=20261110c"></script>
-    <script src="js/etiquetas-editor.js?v=20261110c"></script>
-    <script src="js/docs-layout-editor.js?v=20261110c"></script>
-    <script src="js/galeria-mostruario.js?v=20261110c"></script>
+    <script src="js/etiquetas-core.js?v=20261112a"></script>
+    <script src="js/etiquetas-render.js?v=20261112a"></script>
+    <script src="js/cortina-desenho.js?v=20261112a"></script>
+    <script src="js/docs-layout-core.js?v=20261112a"></script>
+    <script src="js/galeria-core.js?v=20261112a"></script>
+    <script src="js/galeria-imagens.js?v=20261112a"></script>
+    <script src="js/financeiro-core.js?v=20261112a"></script>
+    <script src="js/caixa-core.js?v=20261112a"></script>
+    <script src="js/app.js?v=20261112a"></script>
+    <script src="js/etiquetas-editor.js?v=20261112a"></script>
+    <script src="js/docs-layout-editor.js?v=20261112a"></script>
+    <script src="js/galeria-mostruario.js?v=20261112a"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             carregarEmpresaConfigs();
@@ -198,6 +258,8 @@
             renderEmpresaAlertasCfg();
             renderEmpresaDashCardsCfg();
             renderFormasPagamentoCfg();
+            renderContasCfg();
+            renderMeiosCfg();
             iniciarEditorEtiquetas();
             iniciarEditorLayouts();
             iniciarEditorMostruario();

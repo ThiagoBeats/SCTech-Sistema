@@ -187,9 +187,9 @@ test('o DRE continua lendo os pedidos antigos fechados por margem global', async
     await entrar(page, BASE);
     await page.goto(BASE + '/index.html');
     // o campo some da tela, mas o dado antigo segue valendo no DRE
-    const fonte = await page.evaluate(() => fetch('js/app.js').then(r => r.text()));
+    const fonte = await page.evaluate(() => fetch('js/financeiro-core.js').then(r => r.text()));
     expect(fonte, 'pedido fechado com margem global guarda o proprio custo')
-        .toContain("p.tipo_precificacao === 'pedido'");
+        .toContain("ped.tipo_precificacao === 'pedido' && ped.custo_mat != null");
 });
 
 // --- Agenda de Medicoes ----------------------------------------------------

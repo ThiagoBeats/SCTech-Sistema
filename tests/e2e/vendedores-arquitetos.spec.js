@@ -25,8 +25,12 @@ async function abrir(page, url, extras) {
 }
 
 async function confirmarModal(page) {
-    const ok = page.locator('#sc-modal-ok');
+    // Pagar comissao abre o modal de baixa (data/forma); as demais confirmacoes usam #sc-modal-ok.
+    const ok = page.locator('#baixa-ok, #sc-modal-ok').first();
     await ok.waitFor({ timeout: 5000 });
+    // A baixa exige escolher o meio de cada linha.
+    const meios = page.locator('#baixa-modal .baixa-meio');
+    for (let i = 0, n = await meios.count(); i < n; i++) await meios.nth(i).selectOption({ index: 1 });
     await ok.click();
     await page.waitForTimeout(400);
 }

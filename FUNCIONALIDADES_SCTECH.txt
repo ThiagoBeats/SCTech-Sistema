@@ -95,7 +95,7 @@ Tipo "Medições para hoje":
   - Pode ser desativado nas preferências de alertas
 
 Tipo "Instalações atrasadas":
-  - Lista pedidos nos status "Pronto p/ Instalação" ou "Aguardando Pagamento"
+  - Lista pedidos nos status "Pronto p/ Instalação" ou "Aguardando Financeiro"
     com data de entrega vencida
   - Exibe: número do pedido, cliente, data prevista; link para edição
   - Pode ser desativado nas preferências de alertas
@@ -216,7 +216,7 @@ Filtros do kanban:
 
 Colunas do kanban (uma por status):
   - Orçamento → Medição → Aguardando Tecido → Na Costura →
-    Pronto p/ Instalação → Aguardando Pagamento → Instalado
+    Pronto p/ Instalação → Aguardando Financeiro → Instalado
 
 Cada card no kanban exibe:
   - Número do pedido, cliente, ambiente, valor
@@ -226,23 +226,32 @@ Cada card no kanban exibe:
 
 Avanço de status com comportamentos automáticos:
   - Orçamento → Medição: gera lançamentos em Contas a Receber automaticamente
+    (entrada + saldo, conforme a forma de pagamento — ver seção 10.7)
   - Aguardando Tecido → Na Costura: realiza baixa automática de tecidos no estoque
     (verifica disponibilidade; exibe lista de tecidos a baixar com confirmação)
   - Na Costura → Pronto p/ Instalação: verifica saldo de materiais/acessórios;
     se insuficiente, bloqueia e informa; se suficiente, pede confirmação e dá baixa
-  - Pronto p/ Instalação ou Aguardando Pagamento → Instalado: exibe modal de
-    pagamento; usuário informa se foi pago integralmente ou se aguarda pagamento;
-    se pago, registra data de instalação, marca valor recebido e fecha o pedido
+  - Pronto p/ Instalação → Aguardando Financeiro: abre o modal "Confirmar
+    Entrega", que pergunta se o cliente pagou tudo. Nas duas respostas o pedido
+    vai para Aguardando Financeiro; "Não, há saldo pendente" só marca o pedido
+    com pagamento pendente.
+  - Aguardando Financeiro → Instalado: no card do pedido, o botão "Confirmar
+    pagamento" abre a baixa das parcelas (seção 10.8) e o pedido segue para
+    Instalado. O botão só aparece para quem tem acesso completo a Financeiro ›
+    A Receber (Administrador e Financeiro); os demais veem "Aguardando
+    confirmação do financeiro".
+  - Ao chegar em Instalado, as comissões do vendedor e do arquiteto viram contas
+    no A Pagar (seção 10.9)
 
-Modal de pagamento (ao instalar):
-  - Exibe: valor total, já recebido, saldo a receber
-  - Opções: "Pago — Instalar agora" ou "Aguardando pagamento"
-  - Se pago: gera comissão de RT (retorno técnico para arquiteto) automaticamente
-    se houver percentual configurado e ainda não gerado
+Confirmar pagamento (ao instalar):
+  - Mostra as parcelas em aberto do pedido, cada uma com uma caixa de seleção
+  - Pede a data (padrão hoje) e a forma de pagamento
+  - Dá baixa só nas parcelas marcadas; se alguma ficar de fora, o pedido vai
+    para Instalado mesmo assim, com o aviso "saldo em aberto" no card
 
 ── 3.2 ABA: AGENDA DE INSTALAÇÕES ─────────────────────────────────────────────
 
-Lista todos os pedidos com status "Pronto p/ Instalação" ou "Aguardando Pagamento"
+Lista todos os pedidos com status "Pronto p/ Instalação" ou "Aguardando Financeiro"
 Agrupamento por faixas de tempo:
   - ⚠ Atrasado: data de entrega já passou
   - 📅 Esta semana: dentro dos próximos 7 dias
@@ -631,7 +640,15 @@ Formulário:
  10. FINANCEIRO (financeiro.html)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-5 abas: Visão Geral | A Receber | A Pagar | Despesas Fixas | DRE por Pedido
+7 abas: Hoje | Visão Geral | A Receber | A Pagar | Despesas Fixas | DRE por Pedido | Extrato
+(Hoje e Extrato são da Fase 1, seções 10.14 a 10.20)
+
+Como o dinheiro é controlado (resumo, detalhes nas seções 10.7 a 10.13):
+  - Tudo o que o cliente pagou fica nas parcelas do A Receber. O "Valor recebido"
+    do pedido é a soma dessas parcelas pagas (não se digita mais).
+  - Toda comissão vira uma conta no A Pagar quando o pedido é instalado.
+  - O DRE por pedido usa o custo real do material guardado na aprovação.
+  - Pedido de compra recebido pode gerar a conta a pagar com um clique.
 
 ── 10.1 ABA: VISÃO GERAL (DASHBOARD FINANCEIRO) ────────────────────────────────
 
@@ -727,6 +744,10 @@ Gráfico 7 — Donut Despesas por Categoria (período ativo):
   - Total em R$ exibido no centro do donut
   - Se sem despesas no período: exibe mensagem "Sem despesas no período"
 
+Aviso "para revisar" (aparece só quando há algo):
+  - Depois da correção dos dados antigos (seção 10.13), pedidos com valor
+    recebido que não bate com as parcelas aparecem aqui para conferência manual.
+
 Tabela — Próximos Recebimentos:
   - Contas a receber com status ≠ Pago; até 10 registros
   - Colunas: Vencimento | Cliente | Descrição | Valor | Status
@@ -750,9 +771,13 @@ Filtros:
 Tabela de contas a receber:
   - Colunas: Vencimento | Cliente | Descrição | Valor | Status | Ações
   - Status com badge colorido (amarelo=pendente, vermelho=atrasado, verde=pago)
-  - Ação "Marcar como Pago": solicita data de recebimento (default: hoje);
-    atualiza status e data_pagamento; gera comissão RT se aplicável
+  - Ação "✓ Recebido": abre uma janela pedindo data (padrão hoje) e forma de
+    pagamento; a baixa guarda a data, a forma e quem deu baixa
+  - Ação "Estornar": desfaz a baixa (a parcela volta a Pendente ou Atrasado) e
+    registra quem estornou; é o caminho para corrigir um recebimento errado
   - Ação "Remover": confirmação antes de excluir o lançamento
+  - A baixa aqui e o "Confirmar pagamento" do pedido são a mesma coisa: o valor
+    recebido do pedido se atualiza sozinho nos dois casos
   - Atualização automática de status: contas com vencimento passado
     são marcadas como "Atrasado" automaticamente ao carregar a tela
 
@@ -777,8 +802,10 @@ Filtros da lista:
 
 Tabela de contas a pagar:
   - Colunas: Vencimento | Descrição | Credor | Valor | Tipo | Status | Ações
-  - Ação "Marcar como Pago": solicita data de pagamento (default: hoje)
+  - Ação "✓ Pagar": solicita data de pagamento (default: hoje) e forma
   - Ação "Remover": com confirmação
+  - Contas de comissão aparecem aqui com a categoria "Comissão" (seção 10.9)
+  - Contas vindas de pedido de compra ficam vinculadas a ele (seção 10.11)
 
 ── 10.4 ABA: DESPESAS FIXAS ────────────────────────────────────────────────────
 
@@ -800,10 +827,9 @@ Filtro por cliente (text, tempo real)
 
 Tabela de DRE por pedido:
   - Uma linha por pedido instalado
-  - Colunas: Pedido | Cliente | Receita | Mat./Acess. | M.O. | RT | Lucro Líq. | Margem
+  - Colunas: Pedido | Cliente | Receita | Custo material | Outras despesas |
+    Resultado | Margem (ver regras em 10.10)
   - Margem colorida: verde ≥30% | amarelo ≥15% | vermelho <15%
-  - Nota explicativa: "Receita vs. custos por pedido. Custos de material e mão de
-    obra vêm do pedido; comissão RT é gerada automaticamente após quitação."
 
 Exportação de Relatório (botão na barra de período):
   - PDF com todos os dados do período:
@@ -817,14 +843,262 @@ Exportação de Relatório (botão na barra de período):
     → Tabela de próximos pagamentos
     → Rodapé com data/hora de geração
 
-Geração automática de lançamentos financeiros:
-  - Ao aprovar um pedido (Orçamento → qualquer outro status): cria contas a receber
-    com base no plano de pagamento escolhido no pedido
-  - Planos suportados: À vista | 50%+50% | 30%+70% | 40%+60%
-  - Cada parcela recebe: valor proporcional, data de vencimento, descrição,
-    vínculo com o pedido, cliente
-  - Migração automática: ao abrir o módulo financeiro, pedidos que nunca geraram
-    lançamentos (dados anteriores à implementação) são retroativamente processados
+── 10.7 ENTRADA + SALDO (GERAÇÃO DAS CONTAS A RECEBER) ─────────────────────────
+
+Ao aprovar um pedido (Orçamento → qualquer outro status) o sistema cria as
+contas a receber automaticamente:
+  - Entrada: uma parte do valor, com vencimento na data da aprovação
+  - Saldo: o restante, com vencimento na data de entrega do pedido
+  - A soma das parcelas sempre fecha com o valor do pedido (a diferença de
+    centavos fica no saldo)
+
+De onde vem o percentual de entrada:
+  - Cada forma de pagamento (Empresa › Preferências) tem seu "% de entrada",
+    ao lado do % de desconto. Formas novas começam com 50%.
+  - Ao escolher a forma de pagamento no pedido, o % de entrada do pedido é
+    preenchido sozinho e pode ser editado ali antes de aprovar.
+  - Com 100% de entrada, o pedido gera uma parcela única (à vista).
+  - Cada parcela guarda cliente, pedido, vencimento e descrição.
+
+O que não muda:
+  - Vale só para pedidos aprovados a partir desta versão. Pedidos que já tinham
+    parcelas (inclusive os antigos 50/50, 30/70, 40/60 e os de parcela única)
+    continuam exatamente como estavam.
+
+── 10.8 BAIXA DE RECEBIMENTO ───────────────────────────────────────────────────
+
+Há uma só forma de registrar que o cliente pagou: dar baixa na parcela.
+  - "✓ Recebido" no A Receber ou "Confirmar pagamento" no card do pedido
+  - Cada baixa guarda a data, a forma de pagamento e quem (usuário logado) deu
+    a baixa — nem sempre é a mesma pessoa
+  - Estorno desfaz a baixa e registra quem estornou
+  - Exige acesso completo ao A Receber (permissão "financeiro.receber")
+  - A forma de pagamento é só registrada por enquanto; não movimenta saldo de
+    caixa ou banco
+
+Confirmar pagamento (pedido em Aguardando Financeiro; só Administrador e Financeiro,
+ou quem tem acesso completo ao A Receber):
+  - Mostra a lista de parcelas em aberto do pedido, todas marcadas
+  - Se na entrega ("Confirmar Entrega") foi respondido "Não, há saldo pendente",
+    a parcela do saldo vem desmarcada
+  - Só as parcelas marcadas são baixadas
+  - Dá para deixar o saldo em aberto: o pedido vai para Instalado com o aviso
+    "saldo em aberto", e o saldo continua no A Receber (vira Atrasado depois do
+    vencimento)
+
+Valor recebido no pedido:
+  - O campo "Valor recebido" do formulário do pedido agora é somente leitura:
+    mostra a soma das parcelas pagas
+  - A tela inicial, os relatórios e o Financeiro usam esse mesmo valor
+
+Excluir pedido:
+  - Se não houver nada recebido: exclui o pedido, as contas a receber em aberto
+    e as comissões ainda não pagas (com confirmação)
+  - Se houver qualquer recebimento: a exclusão é bloqueada e o sistema explica
+    que é preciso estornar os recebimentos antes
+
+Voltar o pedido para Orçamento:
+  - É permitido mesmo com valor recebido
+  - Saem só as parcelas em aberto e as comissões pendentes; as parcelas já pagas
+    ficam no Financeiro
+  - Ao aprovar de novo, só o valor que ainda falta é cobrado
+
+── 10.9 COMISSÕES NO A PAGAR ───────────────────────────────────────────────────
+
+  - Ao chegar em Instalado, o pedido gera uma conta a pagar para o vendedor e
+    outra para o arquiteto (se houver e se o percentual for maior que zero)
+  - Categoria "Comissão", credor = nome do cadastro, vencimento = data da
+    instalação, vinculada ao pedido
+  - A comissão é gerada na instalação, mesmo que o cliente ainda deva o saldo
+  - Pagar comissão (tela de Vendedores ou aba A Pagar) é a mesma ação e pede
+    data e forma de pagamento
+  - Pagar pedido a pedido (padrão) ou várias de uma vez: escolhe-se a pessoa,
+    marcam-se as comissões pendentes e todas são pagas com a mesma data e forma
+    (cada conta fica paga individualmente)
+  - Se o pedido voltar para Orçamento ou for excluído: comissões pendentes são
+    removidas; as já pagas ficam e ganham o aviso "pedido cancelado — revisar"
+  - As comissões entram no fluxo de caixa e no DRE por pedido
+
+── 10.10 DRE POR PEDIDO: COMO O RESULTADO É CALCULADO ──────────────────────────
+
+  - Receita = material + acessórios + mão de obra − desconto (o valor do pedido).
+    Mão de obra é receita de serviço, não custo.
+  - Custo do material: na aprovação o sistema guarda o custo de cada tecido e
+    acessório (preço de custo do cadastro naquele momento × quantidade). Se o
+    pedido voltar para Orçamento e for aprovado de novo, o custo é refeito.
+  - Item sem preço de custo cadastrado aparece como "custo não informado" (não
+    é tratado como zero em silêncio)
+  - Pedidos antigos sem custo guardado: se o pedido tinha custo próprio
+    (fechado por margem do pedido), esse custo é usado; senão usa-se o preço de
+    custo atual do cadastro e a linha mostra "custo estimado"
+  - Outras despesas = todas as contas a pagar vinculadas ao pedido (costureira,
+    instalador, comissões e outros, como frete), menos as de categoria
+    Tecido/Material
+  - Contas de tecido ou de pedido de compra vinculadas ao pedido não entram no
+    resultado (o material já está no custo guardado; evita contar duas vezes).
+    Elas continuam no A Pagar e no fluxo de caixa.
+  - Resultado = receita − custo do material − outras despesas; a margem é o
+    resultado dividido pela receita
+  - Salário fixo de costureira ou instalador (Despesas Fixas) não entra no
+    resultado do pedido
+
+── 10.11 PEDIDO DE COMPRA RECEBIDO → CONTA A PAGAR ─────────────────────────────
+
+Ao marcar um pedido de compra como Recebido abre "Gerar conta a pagar?":
+  - Valor = total do pedido de compra (editável)
+  - À vista: vence hoje
+  - Boleto/prazo único: informa o vencimento
+  - Parcelado: número de parcelas e intervalo em dias (30/60/90…)
+  - "Agora não": o pedido de compra fica com o aviso "sem conta a pagar" na
+    lista, e dá para gerar depois
+  - A conta fica vinculada ao pedido de compra; credor = fornecedor
+  - Exige acesso completo ao A Pagar (permissão "financeiro.pagar"); sem ela o
+    modal não deixa gerar a conta
+
+Nota fiscal já lançada:
+  - Ao importar uma nota (XML/PDF), se já houver conta de pedido de compra do
+    mesmo fornecedor, com valor parecido e em aberto, o sistema avisa e oferece
+    vincular a nota à conta existente (preenche chave de acesso, número e anexo)
+    em vez de criar uma duplicada
+
+── 10.12 REGIME TRIBUTÁRIO ─────────────────────────────────────────────────────
+
+  - No cadastro da empresa (Configurar Empresa): regime tributário (MEI, Simples
+    Nacional, Lucro Presumido, Lucro Real) e alíquota estimada em %
+  - Por enquanto os dados só são guardados; nenhum imposto é calculado
+
+── 10.13 CORREÇÃO ÚNICA DOS DADOS ANTIGOS ──────────────────────────────────────
+
+Na primeira vez que o sistema abre depois da atualização, ele corrige os dados
+antigos uma única vez:
+  - Antes de mexer, guarda uma cópia de segurança no navegador
+    (sc_fin_backup_fase0); a cópia não é sobrescrita
+  - Pedido já pago por inteiro (valor recebido igual ao valor ou pagamento
+    confirmado) tem as parcelas em aberto baixadas, com a data da confirmação
+    e "migração" como autor quando não se sabe quem foi
+  - Pedido com valor recebido parcial que não bate com as parcelas não é
+    inventado: aparece no aviso "para revisar" na Visão Geral
+  - Pedidos já instalados ganham as contas de comissão que faltavam (pagas se a
+    comissão já estava paga, pendentes se não)
+  - Contas a receber de pedido que não existe mais: em aberto são removidas;
+    pagas ficam, marcadas "pedido excluído"
+  - Parcelas existentes não são redivididas em entrada + saldo
+  - O custo do material não é criado para trás: pedidos antigos mostram "custo
+    estimado" no DRE
+
+
+── 10.14 FASE 1: CONTAS, MEIOS DE PAGAMENTO E MAQUININHA ───────────────────────
+
+Onde se configura: Configurar Empresa › Preferências.
+
+Contas (Caixa, Banco, Maquininha):
+  - Você cadastra quantas quiser de cada tipo (ex.: 2 bancos, 2 maquininhas)
+  - Cada conta tem nome, tipo, saldo inicial e a data desse saldo. Isso é feito
+    uma vez só: o saldo inicial já representa tudo o que aconteceu antes
+  - Saldo de hoje = saldo inicial + entradas − saídas com data até hoje
+  - O dinheiro do cartão que ainda não caiu ("a cair") NÃO entra no saldo de
+    hoje. No dia em que a data chega, ele passa a contar sozinho
+
+Meios de pagamento:
+  - Lista própria: dinheiro, PIX, transferência, boleto, cartão de débito,
+    cartão de crédito ou outro
+  - Cada meio leva a uma conta (cartão: leva a uma maquininha)
+  - Já vem pronto: Dinheiro → Caixa; PIX, Transferência e Boleto → Banco;
+    Cartão de débito e de crédito → Maquininha
+
+Maquininha (taxas e prazos), para cada maquininha:
+  - Débito: taxa % e em quantos dias o dinheiro cai (padrão 1 dia)
+  - Crédito à vista: taxa % e dias (padrão 30)
+  - Crédito parcelado: taxa % e uma parcela caindo a cada 30 dias, mês a mês
+  - Antecipação: taxa extra % e o dinheiro cai tudo de uma vez (padrão 1 dia)
+
+Planos de pagamento (antes chamado "Formas de pagamento"):
+  - Cada plano tem nome, % de entrada e % de desconto (o desconto fica no plano)
+  - Os planos que você já tinha continuam valendo, sem precisar refazer
+
+── 10.15 FASE 1: PLANO E MEIO NO PEDIDO ────────────────────────────────────────
+
+  - No pedido você escolhe o plano (que preenche entrada e desconto como antes) e
+    também o meio previsto da entrada e o meio previsto do saldo
+  - Se o meio for cartão de crédito: número de vezes e se vai antecipar
+  - Plano com 100% de entrada tem só um meio
+  - O meio previsto vai para as parcelas do A Receber e vem já escolhido na hora
+    da baixa (dá para trocar). Pedidos antigos ficam como estão, sem meio previsto
+
+── 10.16 FASE 1: BAIXA COM MEIO, CONTA E CARTÃO ────────────────────────────────
+
+Baixa de recebimento:
+  - Cada parcela marcada tem o seu meio e a sua conta (a conta vem do meio e pode
+    ser trocada na hora). A data é uma só para a baixa
+  - Quando a parcela não tem meio previsto, aparece "Escolha o meio" e é
+    obrigatório escolher
+  - Cartão de crédito: informe as vezes e se antecipa. O sistema calcula o líquido
+    e as datas. O cliente fica quitado na hora (parcela vai para Pago com o valor
+    cheio); o que fica esperando é só o dinheiro cair
+  - Cartão gera um repasse na conta da maquininha em cada data de crédito, e a
+    taxa vira uma conta a pagar já paga (categoria "taxa de cartão"), uma por
+    repasse, na mesma data
+  - Recebimento parcial: o valor de cada parcela pode ser editado para menos. A
+    parcela é dividida em uma parte paga e outra em aberto com o restante (mesmo
+    vencimento e pedido)
+  - Estorno: devolve a parcela e apaga o movimento. Estornar uma parte paga
+    junta o valor de volta na parte em aberto (se ela ainda estiver aberta).
+    Estorno de cartão apaga todos os repasses e as taxas, mesmo os que já caíram,
+    e avisa que muda o saldo de hoje da conta
+  - Baixa feita antes da data do saldo inicial da conta, ou sem conta, é registrada
+    normalmente, mas NÃO entra no saldo. A janela mostra um aviso disso
+
+Pagamentos (A Pagar e comissões):
+  - Pagar também pede o meio e a conta (meios de cartão não aparecem aqui)
+  - Estorno de pagamento: volta a conta para Pendente/Atrasado, registra quem
+    estornou e apaga o movimento. Na comissão, desmarca o pago no pedido
+  - A taxa de cartão e os pagamentos que têm movimento não se excluem pela lixeira
+    (precisam ser estornados). A taxa de cartão só sai estornando o recebimento
+    que a gerou
+
+── 10.17 FASE 1: COBRANÇA PELO WHATSAPP ────────────────────────────────────────
+
+  - Botão "Cobrar" nas parcelas atrasadas ou que vencem hoje (A Receber e Hoje)
+  - Abre o WhatsApp do cliente com a mensagem pronta; quem envia é você
+  - Usa o telefone do cadastro do cliente; sem telefone, avisa
+  - A mensagem é configurável em Preferências, com os campos {cliente}, {empresa},
+    {valor}, {pedido} e {vencimento}
+  - A parcela fica marcada "cobrado hoje" para não cobrar duas vezes no mesmo dia
+
+── 10.18 FASE 1: ABA HOJE ──────────────────────────────────────────────────────
+
+Agora o Financeiro tem 7 abas e a primeira, aberta por padrão, é "Hoje".
+
+  - Lado esquerdo, o que fazer hoje, por urgência: recebimentos atrasados
+    (vermelho), recebimentos que vencem hoje (amarelo), contas a pagar atrasadas,
+    de hoje e dos próximos 7 dias, e o cartão que cai hoje. Vazio: "Tudo em dia"
+  - Botões na própria tarefa: Cobrar e Recebi (para quem pode receber) e Paguei
+    (para quem pode pagar)
+  - "Tenho hoje": total e saldo de cada conta; clicar numa conta abre o Extrato
+    dela. Sem contas configuradas, aparece um convite para configurar
+  - "Próximas semanas": gráfico de 8 semanas a partir do saldo de hoje, somando
+    o que já vai cair do cartão, as parcelas e contas a pagar em aberto e as
+    despesas fixas ainda não lançadas. Atrasados entram na semana atual. Se o
+    dinheiro não fechar, avisa "Semana de DD/MM: falta R$ X"
+  - Os avisos da migração da Fase 0 aparecem no topo de todas as abas
+
+── 10.19 FASE 1: ABA EXTRATO ───────────────────────────────────────────────────
+
+  - Movimentos do mês por conta (entradas em verde, saídas em vermelho), com o
+    saldo no início e no fim do período
+  - Movimentos que ainda não caíram aparecem como "a cair"
+  - Mês futuro mostra "Saldo previsto no fim do mês"
+  - "Transferir entre contas": de, para, valor e data (uma saída numa conta e
+    uma entrada na outra). Não se edita: exclui (com confirmação, apaga os dois
+    lados) e lança de novo
+
+── 10.20 FASE 1: PERMISSÕES NOVAS ──────────────────────────────────────────────
+
+  - Duas permissões novas: Hoje e Extrato
+  - Os papéis que já existiam herdam o mesmo nível que têm na Visão Geral
+  - "Tenho hoje" e "Próximas semanas" e a aba Extrato pedem a permissão Extrato;
+    transferir pede Extrato completo. Recebi/Cobrar pedem Receber completo e
+    Paguei pede Pagar completo
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -844,7 +1118,7 @@ Cliente:
 
 Status do pedido (select):
   Orçamento | Medição | Aguardando Tecido | Na Costura |
-  Pronto p/ Instalação | Aguardando Pagamento | Instalado
+  Pronto p/ Instalação | Aguardando Financeiro | Instalado
 
 Data de Entrega (date, opcional)
 Observações (textarea, opcional)

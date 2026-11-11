@@ -132,11 +132,14 @@ test('card em Aguardando Financeiro mostra forma de pagamento, Pendente e o bota
 });
 
 test('confirmar pagamento leva para Instalado', async ({ page }) => {
-    await entrar(page, BASE, { sc_cli: CLI, sc_ped: [pedBase(26001, 'Aguardando Financeiro', { pagamento_pendente: true })] });
+    await entrar(page, BASE, { sc_cli: CLI,
+        sc_ped: [pedBase(26001, 'Aguardando Financeiro', { pagamento_pendente: true, financeiro_gerado: true })],
+        sc_cr: [{ id: 701, pedido_id: 26001, cliente_nome: 'Pedro Alves', descricao: 'Pagamento (Pix)', valor: 1000, data_vencimento: '2099-12-01', data_pagamento: null, status: 'Pendente', parcela_tipo: 'unica' }] });
     await page.goto(BASE + '/pcp.html?view=kanban');
     await colunaKanban(page, 'Aguardando Financeiro').locator('.kanban-btn-pagamento').click();
-    await expect(page.locator('#sc-modal-ok')).toBeVisible();
-    await confirmarModal(page);
+    await expect(page.locator('#baixa-modal')).toBeVisible();
+    await page.locator('#baixa-modal .baixa-check').check();   // com saldo pendente a parcela vem desmarcada
+    await page.click('#baixa-ok');
     await expect(colunaKanban(page, 'Instalado')).toContainText('Pedro Alves');
     const p = (await lerPed(page))[0];
     expect(p.status).toBe('Instalado');

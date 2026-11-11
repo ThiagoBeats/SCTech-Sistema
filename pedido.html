@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Novo Pedido - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261110c">
+    <link rel="stylesheet" href="css/style.css?v=20261112a">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
@@ -134,11 +134,31 @@
             <h3 style="color: var(--primary); margin-bottom: 20px;">4. Forma de Pagamento</h3>
             <div class="grid">
                 <div class="form-group">
-                    <label for="ped-forma-pagamento">Forma de Pagamento</label>
+                    <label for="ped-forma-pagamento">Plano</label>
                     <select id="ped-forma-pagamento" onchange="aplicarDescontoDaFormaPagamento()"></select>
                 </div>
+                <div class="form-group">
+                    <label for="ped-entrada-pct">% de entrada</label>
+                    <input type="number" id="ped-entrada-pct" oninput="atualizarMeiosPedido()" min="0" max="100" step="1" value="50" title="Parte do valor cobrada ao aprovar; o resto vence na entrega">
+                </div>
+                <div class="form-group" id="ped-grupo-entrada">
+                    <label for="ped-meio-entrada" id="ped-rot-meio-entrada">Meio da entrada</label>
+                    <select id="ped-meio-entrada" onchange="atualizarMeiosPedido()"></select>
+                    <div id="ped-cartao-entrada" style="display:none;margin-top:6px;font-size:12px;gap:10px;align-items:center">
+                        <label>Vezes <select id="ped-vezes-entrada"><option value="1">1x</option><option value="2">2x</option><option value="3">3x</option><option value="4">4x</option><option value="5">5x</option><option value="6">6x</option><option value="7">7x</option><option value="8">8x</option><option value="9">9x</option><option value="10">10x</option><option value="11">11x</option><option value="12">12x</option></select></label>
+                        <label style="cursor:pointer"><input type="checkbox" id="ped-antecipar-entrada"> Antecipar</label>
+                    </div>
+                </div>
+                <div class="form-group" id="ped-grupo-saldo">
+                    <label for="ped-meio-saldo" id="ped-rot-meio-saldo">Meio do saldo</label>
+                    <select id="ped-meio-saldo" onchange="atualizarMeiosPedido()"></select>
+                    <div id="ped-cartao-saldo" style="display:none;margin-top:6px;font-size:12px;gap:10px;align-items:center">
+                        <label>Vezes <select id="ped-vezes-saldo"><option value="1">1x</option><option value="2">2x</option><option value="3">3x</option><option value="4">4x</option><option value="5">5x</option><option value="6">6x</option><option value="7">7x</option><option value="8">8x</option><option value="9">9x</option><option value="10">10x</option><option value="11">11x</option><option value="12">12x</option></select></label>
+                        <label style="cursor:pointer"><input type="checkbox" id="ped-antecipar-saldo"> Antecipar</label>
+                    </div>
+                </div>
             </div>
-            <p style="font-size:12px;color:#888;margin-top:4px">O valor do pedido é lançado no módulo <a href="financeiro.html" style="color:var(--primary)">Financeiro</a> como uma conta a receber ao aprovar o pedido (status ≠ Orçamento). As opções desta lista são definidas em <a href="empresa.html" style="color:var(--primary)">Configurações › Empresa</a>. As comissões do vendedor e do arquiteto saem dos cadastros deles.</p>
+            <p style="font-size:12px;color:#888;margin-top:4px">O valor do pedido é lançado no módulo <a href="financeiro.html" style="color:var(--primary)">Financeiro</a> como entrada (vence na aprovação) e saldo (vence na entrega) ao aprovar o pedido (status ≠ Orçamento). As opções desta lista são definidas em <a href="empresa.html" style="color:var(--primary)">Configurações › Empresa</a>. As comissões do vendedor e do arquiteto saem dos cadastros deles.</p>
         </div>
 
         <!-- SEÇÃO 5: RESUMO E SALVAR -->
@@ -167,7 +187,7 @@
                 </div>
                 <div class="recebido-box">
                     <label style="display:block;font-size:11px;font-weight:700;color:#0F6B0D;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">Valor Recebido (R$)</label>
-                    <input type="number" id="ped-valor-recebido" value="0" step="0.01" min="0" oninput="atualizarTotalPedido()" style="width:160px;padding:8px 10px;border:1px solid #8FD98D;border-radius:4px;text-align:right;font-size:14px;background:#fff">
+                    <input type="number" id="ped-valor-recebido" value="0" step="0.01" min="0" readonly title="Soma das parcelas já recebidas (Financeiro)" style="width:160px;padding:8px 10px;border:1px solid #8FD98D;border-radius:4px;text-align:right;font-size:14px;background:#fff">
                     <div style="margin-top:6px;font-size:14px;color:#005D3B;font-weight:700">Saldo: R$ <span id="ped-saldo">0.00</span></div>
                 </div>
                 <div class="valor-final-box">
@@ -180,17 +200,19 @@
     </main>
     <!-- Galeria em popup (js/galeria-pedido.js) e simulador por cima dela -->
     <div id="sim" class="sim" hidden></div>
-    <script src="js/etiquetas-core.js?v=20261110c"></script>
-    <script src="js/etiquetas-render.js?v=20261110c"></script>
-    <script src="js/cortina-desenho.js?v=20261110c"></script>
-    <script src="js/docs-layout-core.js?v=20261110c"></script>
-    <script src="js/galeria-core.js?v=20261110c"></script>
-    <script src="js/galeria-imagens.js?v=20261110c"></script>
-    <script src="js/app.js?v=20261110c"></script>
-    <script src="js/vendor/three.min.js?v=20261110c"></script>
-    <script src="js/galeria-tela.js?v=20261110c"></script>
-    <script src="js/galeria-simulador.js?v=20261110c"></script>
-    <script src="js/galeria-modelos-render.js?v=20261110c"></script>
-    <script src="js/galeria-pedido.js?v=20261110c"></script>
+    <script src="js/etiquetas-core.js?v=20261112a"></script>
+    <script src="js/etiquetas-render.js?v=20261112a"></script>
+    <script src="js/cortina-desenho.js?v=20261112a"></script>
+    <script src="js/docs-layout-core.js?v=20261112a"></script>
+    <script src="js/galeria-core.js?v=20261112a"></script>
+    <script src="js/galeria-imagens.js?v=20261112a"></script>
+    <script src="js/financeiro-core.js?v=20261112a"></script>
+    <script src="js/caixa-core.js?v=20261112a"></script>
+    <script src="js/app.js?v=20261112a"></script>
+    <script src="js/vendor/three.min.js?v=20261112a"></script>
+    <script src="js/galeria-tela.js?v=20261112a"></script>
+    <script src="js/galeria-simulador.js?v=20261112a"></script>
+    <script src="js/galeria-modelos-render.js?v=20261112a"></script>
+    <script src="js/galeria-pedido.js?v=20261112a"></script>
 </body>
 </html>
