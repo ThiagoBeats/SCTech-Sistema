@@ -8354,6 +8354,7 @@ function renderTabelaFornecedores() {
             <td style="font-size:12px;color:#555">${vinc}</td>
             <td class="td-acoes">${menuAcoesHtml([
                 { icone: '🛒', rotulo: 'Novo pedido de compra', onclick: `criarPCParaFornecedor(${f.id})` },
+                { icone: '📜', rotulo: 'Histórico de pedidos', onclick: `abrirHistoricoFornecedor(${f.id})`, oculto: !temAcesso('fornecedores', 'visualizar') },
                 { icone: '✏️', rotulo: 'Editar fornecedor', onclick: `editarFornecedor(${f.id})` },
                 { icone: '🗑️', rotulo: 'Excluir fornecedor', onclick: `excluirFornecedor(${f.id})`, perigo: true }
             ])}</td>
@@ -8756,6 +8757,8 @@ async function atualizarStatusPC(id, status) {
         return;
     }
     pc.status = status;
+    if (status === 'Enviado') pc.data_envio = hojeLocal();
+    else if (status === 'Rascunho') pc.data_envio = null;
     syncDB();
     toast('Status atualizado!', 'success', 1500);
     renderListaPedidosCompra();
@@ -8869,6 +8872,135 @@ async function excluirPedidoCompra(id) {
     if (!await showConfirm('Excluir este pedido de compra?', '🗑️', 'Excluir', 'Cancelar')) return;
     db.pedidos_compra = db.pedidos_compra.filter(p => p.id != id);
     salvarERecarregar('Pedido excluído.');
+}
+
+// --- HISTORICO DE PEDIDOS DO FORNECEDOR ---
+const _HIST_CDN_SHEETJS = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+let _histSheetJsPronto = null;
+let _histFornId = null;
+
+async function _histGarantirSheetJs() {
+    if (window.XLSX) return;
+    if (!_histSheetJsPronto) {
+        _histSheetJsPronto = new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = _HIST_CDN_SHEETJS;
+            s.onload = resolve;
+            s.onerror = () => { _histSheetJsPronto = null; reject(new Error('Não foi possível carregar o gerador de planilhas — verifique sua conexão.')); };
+            document.head.appendChild(s);
+        });
+    }
+    await _histSheetJsPronto;
+}
+
+function _histMoeda(v) { return 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function _histData(iso) { const [a, m, d] = String(iso || '').split('-'); return d ? `${d}/${m}/${a}` : ''; }
+
+function _histFiltro() {
+    return {
+        de: document.getElementById('hist-forn-de')?.value || '',
+        ate: document.getElementById('hist-forn-ate')?.value || ''
+    };
+}
+function _histDados(filtro) {
+    return CarrinhoCore.historicoFornecedor(db.pedidos_compra, _histFornId, filtro || _histFiltro());
+}
+
+function abrirHistoricoFornecedor(fornecedorId) {
+    if (!temAcesso('fornecedores', 'visualizar')) return;
+    const forn = db.fornecedores.find(f => f.id == fornecedorId);
+    if (!forn || document.getElementById('hist-forn-modal')) return;
+    _histFornId = forn.id;
+    const o = document.createElement('div');
+    o.id = 'hist-forn-modal';
+    o.className = 'sc-modal-overlay';
+    o.style.display = 'flex';
+    const inp = 'padding:6px;border:1px solid #ccc;border-radius:4px';
+    o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:640px;width:95%">
+        <h3 style="margin:0 0 10px;font-size:16px">Histórico de pedidos — ${escapeHtml(forn.nome)}</h3>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
+            <label style="font-size:12px">De<br><input type="date" id="hist-forn-de" style="${inp}" oninput="_histRender()"></label>
+            <label style="font-size:12px">Até<br><input type="date" id="hist-forn-ate" style="${inp}" oninput="_histRender()"></label>
+        </div>
+        <div style="max-height:50vh;overflow:auto;border:1px solid #eee;border-radius:4px">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead><tr style="text-align:left;background:#f6f6f6"><th style="padding:6px">Nº</th><th>Data de envio</th><th>Situação</th><th style="text-align:right;padding-right:8px">Valor</th></tr></thead>
+                <tbody id="hist-forn-corpo"></tbody>
+            </table>
+        </div>
+        <div id="hist-forn-total" style="text-align:right;font-weight:bold;margin:10px 0"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+            <button type="button" class="btn btn-outline btn-sm" onclick="exportarHistoricoExcel()">📊 Excel</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="exportarHistoricoPDF()">📄 PDF</button>
+            <button type="button" class="btn btn-sm" onclick="fecharHistoricoFornecedor()">Fechar</button>
+        </div>
+    </div>`;
+    o.addEventListener('click', e => { if (e.target === o) fecharHistoricoFornecedor(); });
+    document.body.appendChild(o);
+    _histRender();
+}
+
+function fecharHistoricoFornecedor() { document.getElementById('hist-forn-modal')?.remove(); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharHistoricoFornecedor(); });
+
+function _histRender() {
+    const corpo = document.getElementById('hist-forn-corpo');
+    if (!corpo) return;
+    const { linhas, total } = _histDados();
+    corpo.innerHTML = linhas.length ? linhas.map(l => `<tr style="cursor:pointer;border-top:1px solid #eee" onclick="_histAbrirPedido(${l.id})" title="Abrir o pedido">
+            <td style="padding:6px">#${formatPedidoId(l.id)}</td><td>${_histData(l.data_envio)}</td><td>${escapeHtml(l.status)}</td>
+            <td style="text-align:right;padding-right:8px">${_histMoeda(l.valor)}</td></tr>`).join('')
+        : '<tr><td colspan="4" style="text-align:center;color:#999;padding:16px">Nenhum pedido enviado neste período.</td></tr>';
+    document.getElementById('hist-forn-total').textContent = 'Total: ' + _histMoeda(total);
+}
+
+function _histAbrirPedido(id) {
+    fecharHistoricoFornecedor();
+    abrirPedidoCompra(id);
+}
+
+function _histNomeArquivo(forn, filtro) {
+    const nome = String(forn.nome || 'fornecedor').trim().replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '_');
+    return `historico_${nome}_${filtro.de || 'todos'}_${filtro.ate || 'todos'}.xlsx`;
+}
+
+async function exportarHistoricoExcel() {
+    const forn = db.fornecedores.find(f => f.id == _histFornId);
+    if (!forn) return;
+    const filtro = _histFiltro();
+    const { linhas, total } = _histDados(filtro);
+    try { await _histGarantirSheetJs(); } catch (e) { await showAlert(e.message, '⚠️'); return; }
+    const aoa = [['Nº', 'Data de envio', 'Situação', 'Valor']]
+        .concat(linhas.map(l => [l.id, _histData(l.data_envio), l.status, l.valor]))
+        .concat([['Total', '', '', total]]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Histórico');
+    XLSX.writeFile(wb, _histNomeArquivo(forn, filtro));
+}
+
+function exportarHistoricoPDF() {
+    const forn = db.fornecedores.find(f => f.id == _histFornId);
+    if (!forn) return;
+    const filtro = _histFiltro();
+    const { linhas, total } = _histDados(filtro);
+    const periodo = (!filtro.de && !filtro.ate) ? 'Todo o período'
+        : `${filtro.de ? _histData(filtro.de) : 'início'} a ${filtro.ate ? _histData(filtro.ate) : 'hoje'}`;
+    const td = 'padding:6px 8px;border-bottom:1px solid #ddd';
+    const corpo = linhas.map(l => `<tr><td style="${td}">#${formatPedidoId(l.id)}</td><td style="${td}">${_histData(l.data_envio)}</td><td style="${td}">${escapeHtml(l.status)}</td><td style="${td};text-align:right">${_histMoeda(l.valor)}</td></tr>`).join('')
+        || `<tr><td colspan="4" style="${td};text-align:center;color:#999">Nenhum pedido no período.</td></tr>`;
+    const html = `<div style="padding:24px">
+        <div class="doc-cab">${buildEmpresaHeaderHTML(52)}</div>
+        <h2 style="margin:16px 0 4px">Histórico de pedidos de compra</h2>
+        <div style="font-size:13px;margin-bottom:2px"><strong>Fornecedor:</strong> ${escapeHtml(forn.nome)}</div>
+        <div style="font-size:13px;margin-bottom:12px"><strong>Período:</strong> ${escapeHtml(periodo)}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr style="text-align:left;background:#f0f0f0"><th style="${td}">Nº</th><th style="${td}">Data de envio</th><th style="${td}">Situação</th><th style="${td};text-align:right">Valor</th></tr></thead>
+            <tbody>${corpo}</tbody>
+        </table>
+        <div style="text-align:right;font-weight:bold;font-size:15px;margin-top:12px">Total: ${_histMoeda(total)}</div>
+    </div>`;
+    fecharHistoricoFornecedor();
+    abrirDocModal(html, 'Histórico de pedidos — ' + forn.nome);
 }
 
 function abrirPedidoCompra(id) {

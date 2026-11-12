@@ -15,7 +15,7 @@ test('fornecedores: ⋮ abre as acoes de hoje e nao ha coluna Total de compras',
     await expect(linha.locator('td').last().locator('button')).toHaveCount(1);
     await linha.locator('button[aria-label="Ações"]').click();
     await expect(linha.locator('button[aria-label="Ações"]')).toHaveAttribute('aria-expanded', 'true');
-    await expect(itens(page)).toHaveText([/Novo pedido de compra$/, /Editar fornecedor$/, /Excluir fornecedor$/]);
+    await expect(itens(page)).toHaveText([/Novo pedido de compra$/, /Histórico de pedidos$/, /Editar fornecedor$/, /Excluir fornecedor$/]);
     await itens(page).filter({ hasText: 'Editar fornecedor' }).click();
     await expect(page.locator(MENU)).toHaveCount(0);
     await expect(page.locator('#forn-nome')).toHaveValue('Tecidos Alfa');
