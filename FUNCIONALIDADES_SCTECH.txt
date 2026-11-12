@@ -33,7 +33,7 @@ Módulos (telas):
  12. Configurar Empresa
  13. Sobre o Sistema
  16. Expedição (expedicao.html)
- 17. Galeria e Simulador (galeria.html)
+ 17. Galeria e Simulador (galeria.html) — simulador desligado
  18. Configurações: Meu Perfil, Preferências, Segurança e Acessos (configuracoes.html)
 
 Elementos globais presentes em todas as telas (exceto Login):
@@ -332,6 +332,7 @@ Formulário — Registrar Entrada de Rolo:
 Tabela de Rolos em Estoque:
   - Colunas: Referência | Metragem Inicial | Disponível | Ocupação (%) | Data Entrada
   - Linha expandível por rolo: botão de baixa manual (quantidade + confirmação)
+  - Coluna Ações em cada tecido: botão "🛒 Adicionar ao carrinho" (seção 9.4)
   - Rolos esgotados: opacidade reduzida + badge "ESGOTADO"
   - Ação por rolo: registrar baixa manual com quantidade e confirmação
 
@@ -352,7 +353,10 @@ Formulário — Registrar Entrada de Material:
 
 Tabela de Materiais em Estoque:
   - Colunas: Material | Referência | Unidade | Preço Venda | Estoque Atual | Fornecedor
-  - Ação por linha: registrar ajuste (entrada +/saída -) com quantidade e confirmação
+  - Ações por linha: botão "🛒 Adicionar ao carrinho" (ver seção 9.4) e menu ⋮
+    com "± Ajustar estoque" (entrada +/saída - com quantidade e confirmação).
+    O ajuste saiu do botão solto, mas continua existindo dentro do ⋮
+    (é o único jeito de corrigir o estoque para baixo)
 
 ── 4.3 ABA: KITS ───────────────────────────────────────────────────────────────
 
@@ -443,7 +447,8 @@ Busca em tempo real:
 
 Tabela de clientes:
   - Colunas: Nome | Telefone | E-mail | CPF | Endereço | Ações
-  - Ações: Editar (carrega dados no formulário acima) | Excluir (com confirmação)
+  - Ações: menu ⋮ com "✏️ Editar" (carrega dados no formulário acima) e
+    "🗑️ Excluir" (com confirmação, em vermelho, por último)
 
 Integração com outros módulos:
   - Endereço do cliente é sugerido como placeholder no campo de endereço
@@ -477,7 +482,7 @@ Formulário de cadastro/edição:
 Tabela do catálogo de tecidos:
   - Colunas: Tecido (foto em miniatura + nome) | Referência | Preço (R$/m) |
     Largura do Rolo | Estoque Mínimo | Em Estoque | Fornecedor | Ações
-  - Ações: Editar | Excluir (com confirmação)
+  - Ações: menu ⋮ com Editar | Adicionar ao carrinho | Excluir (com confirmação)
   - Tecidos sem estoque ou abaixo do mínimo: indicação visual
 
 ── 6.2 ABA: MATERIAIS E ACESSÓRIOS ─────────────────────────────────────────────
@@ -500,7 +505,18 @@ Tabela de materiais:
     Fornecedor | Ações
   - Ordenação clicável em: Material, Preço, Estoque
     (▲ ascendente / ▼ descendente / ⇅ sem ordem)
-  - Ações: Editar | Excluir (com confirmação)
+  - Ações: menu ⋮ com Editar | Adicionar ao carrinho | Excluir (com confirmação)
+
+Menu de ações (⋮) e carrinho no Catálogo:
+  - As três abas (Tecidos, Materiais e Acessórios, Kits) usam o menu ⋮ na
+    coluna Ações, com as mesmas ações de antes e nomes por extenso. Clicar fora,
+    Esc ou escolher uma ação fecha o menu; só um fica aberto por vez.
+  - "🛒 Adicionar ao carrinho" substitui o antigo "Criar pedido de compra" por
+    item (e o "Pedir Tecido" da janela de detalhes do tecido).
+  - Seleção de vários itens: o botão agora adiciona todos os selecionados aos
+    carrinhos dos seus fornecedores. Abre uma janela com a lista e a quantidade
+    de cada item (itens sem fornecedor pedem o fornecedor ali mesmo); ao
+    confirmar mostra "N itens adicionados em M carrinhos".
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -555,8 +571,9 @@ Formulário de cadastro/edição:
   - Botão "Salvar Vendedor"
 
 Tabela de vendedores:
-  - Colunas: Nome | Comissão (%) | Telefone | Total de Pedidos | Ações
-  - Ações: Editar | Excluir
+  - Colunas: Nome | Comissão (%) | Telefone | Total de Pedidos | Situação | Ações
+  - Situação e Ações agora são duas colunas separadas (vale também para
+    Arquitetos); Ações em menu ⋮ com Editar | Excluir e as demais ações da linha
 
 ── 8.2 ABA: COMISSÕES PENDENTES ────────────────────────────────────────────────
 
@@ -608,8 +625,30 @@ Formulário de cadastro/edição:
 
 Tabela de fornecedores:
   - Colunas: Razão Social / Nome Fantasia | CNPJ | Cidade/UF |
-    Telefone | E-mail | Vínculos (qtd de tecidos/materiais) | Ações
-  - Ações: Editar | Excluir (com confirmação)
+    Telefone | E-mail | Vínculos (qtd de tecidos/materiais) | 🛒 | Ações
+  - A coluna "Total de compras" foi retirada (no lugar dela, o histórico abaixo)
+  - 🛒 fica visível na linha: mostra quantos itens há no carrinho do fornecedor
+    (sem itens: ícone discreto, sem número) e o selo "novo" quando entra item
+    novo; o selo some ao abrir o carrinho. Clicar abre o carrinho (seção 9.4)
+  - Ações: menu ⋮ com "✏️ Editar" | "📜 Histórico de pedidos" | "🗑️ Excluir"
+    (com confirmação)
+  - Não dá para excluir fornecedor com carrinho aberto: aparece "Este
+    fornecedor tem um carrinho aberto com N itens. Feche ou esvazie o carrinho
+    antes."
+
+── 9.1.1 HISTÓRICO DE PEDIDOS DO FORNECEDOR ────────────────────────────────────
+
+Aberto em Fornecedores › ⋮ › Histórico de pedidos (janela com o nome do
+fornecedor):
+  - Lista os pedidos de compra desse fornecedor já enviados (Enviado ou
+    Recebido), do mais recente para o mais antigo. Rascunhos e carrinhos
+    abertos não entram.
+  - Colunas: Nº do pedido | Data de envio | Situação | Valor
+  - Pedidos antigos sem data de envio usam a data de criação
+  - Filtro de período (de / até) pela data de envio; o total no rodapé
+    acompanha o filtro
+  - Clicar num pedido abre o PDF dele
+  - Exportar o que está filtrado em Excel (.xlsx) ou PDF
 
 ── 9.2 ABA: PEDIDOS DE COMPRA ──────────────────────────────────────────────────
 
@@ -620,6 +659,8 @@ Filtros:
 Tabela de pedidos de compra:
   - Colunas: ID | Fornecedor | Data | Qtd. Itens | Valor Estimado |
     Status | Ações (ver, mudar status, excluir)
+  - A data de envio é gravada quando o pedido vira "Enviado" (por qualquer
+    caminho, inclusive ao fechar o carrinho); se voltar para Rascunho, é apagada
 
 ── 9.3 ABA: NOVO PEDIDO DE COMPRA ──────────────────────────────────────────────
 
@@ -634,6 +675,31 @@ Formulário:
   - Tabela dinâmica de itens adicionados ao pedido (com ação de remover cada um)
   - Observações gerais (textarea)
   - Botão "Salvar Pedido de Compra"
+  - Continua existindo para quem quiser montar um pedido direto, sem carrinho
+
+── 9.4 CARRINHO DE COMPRAS POR FORNECEDOR ──────────────────────────────────────
+
+Como adicionar:
+  - "🛒 Adicionar ao carrinho" em Gestão de Estoque (materiais e tecidos) e no
+    Catálogo. Abre uma janela com o nome do item, o fornecedor, a quantidade na
+    unidade do item (tecido em metros) e o botão Adicionar. Precisa de acesso
+    completo a Estoque.
+  - Item sem fornecedor: a janela pede para escolher um; a escolha fica gravada
+    no cadastro do item
+  - Cada fornecedor tem um carrinho aberto. Adicionar o mesmo item de novo soma
+    a quantidade. O preço é o custo do cadastro no momento (sem custo aparece
+    "sem preço")
+  - Carrinho aberto não aparece em Pedidos de Compra, nem no histórico, nem em
+    totais
+
+Na janela do carrinho (ícone 🛒 em Fornecedores):
+  - Itens com quantidade editável, preço, subtotal e total
+  - ✕ tira um item; "Esvaziar" limpa o carrinho (com confirmação)
+  - "Fechar e enviar ao fornecedor": cria o pedido de compra já como Enviado
+    (com data de envio de hoje), abre o PDF para mandar ao fornecedor e deixa o
+    carrinho vazio. Carrinho vazio não pode ser fechado.
+  - O pedido segue o fluxo normal (marcar Recebido gera a conta a pagar)
+  - Ver, editar e fechar o carrinho exigem acesso a Fornecedores
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1635,6 +1701,13 @@ lateral; a página galeria.html continua funcionando. Permissão própria
 (módulo "Galeria"): já vem liberada
 para visualizar em todos os papéis; o Administrador tem acesso completo.
 
+ATENÇÃO (13/11/2026): o simulador está DESLIGADO por enquanto (fica para o
+futuro). Somem o botão "Simular na parede do cliente", o "📐 Simular" das fotos,
+o endereço galeria.html#simular (abre a galeria normal) e a configuração do
+simulador em Configurar Empresa. A galeria de fotos e o mostruário continuam
+normais. O código do simulador não foi apagado; as descrições da seção 17.2
+abaixo valem para quando for religado.
+
 ── 17.1 GALERIA DE FOTOS ───────────────────────────────────────────────────────
 
   - Fotos reais cadastradas pela empresa (até 60), separadas em grupos:
@@ -1740,10 +1813,8 @@ Configurar Empresa › Dados da Empresa:
     vir da consulta de CNPJ e ao salvar).
 
 Fornecedores:
-  - Nova coluna "Total de compras": soma dos pedidos de compra Enviados ou
-    Recebidos daquele fornecedor. Não entram o orçamento genérico ("sem
-    fornecedor definido") nem os Rascunhos. Mostra também quantos pedidos
-    somaram; o tooltip diz quantos rascunhos ficaram de fora.
+  - A coluna "Total de compras" criada em 10/11/2026 foi retirada em 13/11/2026:
+    a soma agora fica no Histórico de pedidos do fornecedor (seção 9.1.1).
 
 Configurações (configuracoes.html), agora em sub-abas:
   - Meu Perfil: nome de exibição, foto de perfil e telefone/WhatsApp, de
@@ -1752,7 +1823,8 @@ Configurações (configuracoes.html), agora em sub-abas:
     ele em qualquer computador), notificações (Todas / Só as urgentes /
     Nenhuma — vale para os alertas do painel) e notificações sonoras
     (bipes da Expedição e som dos avisos), com botão "Testar som".
-  - Segurança: alterar a própria senha (confere a atual; mínimo de 6).
+  - Segurança: alterar a própria senha (confere a atual; mínimo de 6). Cada
+    campo de senha tem um 👁️ para mostrar/esconder o que foi digitado.
   - Acessos: Usuários e Papéis, visíveis só para o Administrador.
   - A tela abre para todos os usuários (perfil e senha são de cada um).
   - O papel Administrador não pode ser renomeado nem excluído, e o último
