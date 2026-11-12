@@ -111,7 +111,8 @@ test('o kit de montagem pode ser editado: itens, contagem e marca de fixacao', a
     await entrar(page, BASE, { sc_mat: MAT, sc_kits: [{ id: 950, referencia: 'FIX-001', nome: 'Trilho Suíço Simples', fixacao: true, itens: [] }] });
     await page.goto(BASE + '/estoque.html');
     await page.click('button[data-tab="kits"]');
-    await page.click('#tb-kits button[title="Editar kit"]');
+    await page.click('#tb-kits button[aria-label="Ações"]');
+    await page.click('#menu-acoes-flutuante .menu-acoes-item:has-text("Editar kit")');
     await expect(page.locator('#kit-form-titulo')).toHaveText('Editar Kit');
     await expect(page.locator('#kit-ref')).toHaveValue('FIX-001');
     await expect(page.locator('#kit-fixacao')).toBeChecked();
@@ -132,7 +133,9 @@ test('o kit pronto nao ganha botao de editar', async ({ page }) => {
     await entrar(page, BASE, { sc_kits: [{ id: 960, tipo: 'pronto', referencia: '5501', nome: 'KIT PRONTO', preco: 10, itens: [] }] });
     await page.goto(BASE + '/estoque.html');
     await page.click('button[data-tab="kits"]');
-    await expect(page.locator('#tb-kits button[title="Editar kit"]')).toHaveCount(0);
+    await page.click('#tb-kits button[aria-label="Ações"]');
+    await expect(page.locator('#menu-acoes-flutuante .menu-acoes-item', { hasText: 'Excluir kit' })).toHaveCount(1);
+    await expect(page.locator('#menu-acoes-flutuante .menu-acoes-item', { hasText: 'Editar kit' })).toHaveCount(0);
 });
 
 // ─── Pedido ─────────────────────────────────────────────────────────────

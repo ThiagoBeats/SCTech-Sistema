@@ -84,7 +84,8 @@ function _galPedRender() {
     const leitura = _galPedSomenteLeitura();
     const nomeEscolha = _galPed.escolha && G.PREGAS[_galPed.escolha] ? G.PREGAS[_galPed.escolha] : '';
     const opcAlvo = alvos.map((a, i) => `<option value="${i}"${_galPed.alvo && a.ambId == _galPed.alvo.ambId && a.tidx == _galPed.alvo.tidx ? ' selected' : ''}>${escapeHtml(a.rotulo)}</option>`).join('');
-    const abas = [['modelos', '🧵 Modelos'], ['fotos', '🖼️ Fotos reais'], ['simular', '📐 Simular na parede']];
+    const abas = [['modelos', '🧵 Modelos'], ['fotos', '🖼️ Fotos reais']];
+    if (G.SIMULADOR_ATIVO) abas.push(['simular', '📐 Simular na parede']);
     o.innerHTML = `
         <div class="galped-caixa">
             <div class="galped-topo">
@@ -148,7 +149,7 @@ function _galPedRenderModelos() {
             <div class="galped-modelo-img" data-tipo="${tipo}" data-chave="${escapeHtml(chave)}"><span class="galped-carregando"></span></div>
             <div class="galped-modelo-rodape">
                 <span class="galped-modelo-nome">${escapeHtml(nome)}</span>
-                <button type="button" class="galped-modelo-sim" data-tipo="${tipo}" data-chave="${escapeHtml(chave)}" title="Simular este modelo na parede do cliente">📐 Simular</button>
+                ${G.SIMULADOR_ATIVO ? `<button type="button" class="galped-modelo-sim" data-tipo="${tipo}" data-chave="${escapeHtml(chave)}" title="Simular este modelo na parede do cliente">📐 Simular</button>` : ''}
             </div>
         </div>`;
     corpo.innerHTML = `
@@ -247,7 +248,7 @@ function _galPedVisor(i) {
 }
 document.addEventListener('click', e => {
     const a = e.target.closest && e.target.closest('.gal-visor a.gal-simular');
-    if (!a || !document.getElementById('galped')) return;
+    if (!a || !document.getElementById('galped') || !GaleriaCore.SIMULADOR_ATIVO) return;
     e.preventDefault();
     const i = (a.getAttribute('href') || '').indexOf('?');
     const p = new URLSearchParams(i >= 0 ? a.getAttribute('href').slice(i + 1) : '');
@@ -265,6 +266,7 @@ document.addEventListener('keydown', e => {
 
 // Simulador por cima da galeria; o "← Galeria" dele volta para ca.
 function _galPedAbrirSimulador(pre) {
+    if (!GaleriaCore.SIMULADOR_ATIVO) return;
     if (typeof abrirSimulador !== 'function') { toast('O simulador não está disponível nesta tela.', 'warning'); return; }
     if (_galPed.escolha && !pre.prega && !pre.persiana) pre = Object.assign({ prega: _galPed.escolha }, pre);
     abrirSimulador(pre);

@@ -44,7 +44,7 @@ test('as tres tabelas do Estoque tem cabecalho clicavel em cada coluna', async (
     const cols = (sel) => page.$$eval(sel + ' thead th', ths => ths.map(t => t.dataset.col || ''));
 
     expect(await cols('#tabela-est-tecidos')).toEqual(
-        ['referencia', 'nome', 'unidade', 'largura', 'estoque', 'minimo', 'preco', 'fornecedor', 'rolos']);
+        ['referencia', 'nome', 'unidade', 'largura', 'estoque', 'minimo', 'preco', 'fornecedor', 'rolos', '']); // Acoes so tem o 🛒
 
     await page.click('.tab-btn:has-text("Materiais")');
     expect(await cols('#tabela-est-materiais')).toEqual(

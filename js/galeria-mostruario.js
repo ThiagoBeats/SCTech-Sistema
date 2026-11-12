@@ -57,20 +57,20 @@ async function _gmRender() {
                 </div>
             </div>
             ${cheio ? `<p class="gm-dica gm-limite">Limite de ${G.LIMITE_FOTOS} fotos atingido. Remova alguma para enviar outra.</p>` : ''}
-            <p class="gm-dica">Fotos de cortinas e persianas instaladas. Ligue a foto a um modelo para o botão "Simular na parede do cliente" já abrir com ele.</p>
+            <p class="gm-dica">Fotos de cortinas e persianas instaladas${G.SIMULADOR_ATIVO ? '. Ligue a foto a um modelo para o botão "Simular na parede do cliente" já abrir com ele' : ''}.</p>
             <div class="gm-fotos">${m.fotos.map(f => `
                 <div class="gm-foto" data-id="${escapeHtml(f.id)}">
                     <div class="gm-foto-img">${urls[f.imagemId] ? `<img src="${urls[f.imagemId]}" alt="">` : '<span>sem imagem</span>'}</div>
                     <div class="gm-foto-campos">
                         <select class="gm-foto-grupo" aria-label="Grupo"${dis(_gm.podeEditar)}>${grupos(f.grupo)}</select>
                         <input class="gm-foto-legenda" placeholder="Legenda (opcional)" value="${escapeHtml(f.legenda)}" maxlength="80"${dis(_gm.podeEditar)}>
-                        <label class="gm-foto-liga-rotulo">Simular com <select class="gm-foto-liga"${dis(_gm.podeEditar)}>${_gmOpcoesLiga(liga(f))}</select></label>
+                        ${G.SIMULADOR_ATIVO ? `<label class="gm-foto-liga-rotulo">Simular com <select class="gm-foto-liga"${dis(_gm.podeEditar)}>${_gmOpcoesLiga(liga(f))}</select></label>` : ''}
                     </div>
                     <button type="button" class="gm-foto-remover" title="Remover foto" aria-label="Remover foto"${dis(_gm.podeEditar)}>🗑</button>
                 </div>`).join('') || '<p class="gm-vazio">Nenhuma foto ainda.</p>'}
             </div>
         </section>
-        <section class="gm-secao">
+        ${G.SIMULADOR_ATIVO ? `<section class="gm-secao">
             <h4>Cores e tecidos</h4>
             <p class="gm-dica">As opções da aba "Cor" do simulador. A foto do tecido é opcional; sem ela, vale a cor.${m.cores.length ? '' : ' Enquanto não houver nenhuma, o simulador usa 6 cores neutras.'}</p>
             <div class="gm-nova-cor">
@@ -95,7 +95,7 @@ async function _gmRender() {
                 <div><strong>Persianas</strong>${Object.entries(G.PERSIANAS).map(([k, nm]) => caixa('persiana', k, nm, m.modelos.persianas)).join('')}</div>
                 <div><strong>Trilhos e varões</strong>${nomesTrilhosMostruario().map(t => caixa('trilho', t, t, m.modelos.trilhos)).join('')}</div>
             </div>
-        </section>`;
+        </section>` : ''}`;
     _gmLigar(raiz);
 }
 
@@ -106,14 +106,16 @@ function _gmLigar(raiz) {
         const f = () => _gm.m.fotos.find(x => x.id === el.dataset.id);
         el.querySelector('.gm-foto-grupo').addEventListener('change', e => { f().grupo = e.target.value; _gmGravar(); });
         el.querySelector('.gm-foto-legenda').addEventListener('change', e => { f().legenda = e.target.value.trim(); _gmGravar(); });
-        el.querySelector('.gm-foto-liga').addEventListener('change', e => {
+        const ligaSel = el.querySelector('.gm-foto-liga');
+        if (ligaSel) ligaSel.addEventListener('change', e => {
             const v = e.target.value, i = v.indexOf(':');
             f().liga = v ? { tipo: v.slice(0, i), valor: v.slice(i + 1) } : null;
             _gmGravar();
         });
         el.querySelector('.gm-foto-remover').addEventListener('click', () => _gmRemoverFoto(el.dataset.id));
     });
-    raiz.querySelector('#gm-cor-adicionar').addEventListener('click', _gmAdicionarCor);
+    const addCor = raiz.querySelector('#gm-cor-adicionar');
+    if (addCor) addCor.addEventListener('click', _gmAdicionarCor);
     raiz.querySelectorAll('.gm-cor-remover').forEach(b => b.addEventListener('click', () => _gmRemoverCor(b.closest('.gm-cor').dataset.id)));
     raiz.querySelectorAll('.gm-modelo').forEach(c => c.addEventListener('change', () => {
         const tipo = c.dataset.tipo, sel = `.gm-modelo[data-tipo="${tipo}"]`;

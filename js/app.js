@@ -268,6 +268,7 @@ let db = {
     vendedores:  JSON.parse(localStorage.getItem('sc_vend')) || [],
     fornecedores:    JSON.parse(localStorage.getItem('sc_forn')) || [],
     pedidos_compra:  JSON.parse(localStorage.getItem('sc_pc'))   || [],
+    carrinhos:       JSON.parse(localStorage.getItem('sc_carrinhos')) || [],
     contas_receber:  JSON.parse(localStorage.getItem('sc_cr'))   || [],
     contas_pagar:    JSON.parse(localStorage.getItem('sc_cp'))   || [],
     despesas_fixas:  JSON.parse(localStorage.getItem('sc_df'))   || [],
@@ -355,6 +356,7 @@ function syncDB() {
     localStorage.setItem('sc_vend', JSON.stringify(db.vendedores));
     localStorage.setItem('sc_forn', JSON.stringify(db.fornecedores));
     localStorage.setItem('sc_pc',   JSON.stringify(db.pedidos_compra));
+    localStorage.setItem('sc_carrinhos', JSON.stringify(db.carrinhos));
     localStorage.setItem('sc_cr',   JSON.stringify(db.contas_receber));
     localStorage.setItem('sc_cp',   JSON.stringify(db.contas_pagar));
     localStorage.setItem('sc_df',   JSON.stringify(db.despesas_fixas));
@@ -1581,6 +1583,16 @@ function testarSomNotificacao() {
     tocarSomNotificacao('success', true);
 }
 
+// Olho dos campos de senha (Configuracoes > Seguranca): alterna password/text.
+function alternarVerSenha(botao) {
+    const campo = document.getElementById(botao.dataset.alvo);
+    if (!campo) return;
+    const mostrar = campo.type === 'password';
+    campo.type = mostrar ? 'text' : 'password';
+    botao.setAttribute('aria-pressed', String(mostrar));
+    botao.title = mostrar ? 'Esconder a senha' : 'Mostrar a senha';
+}
+
 // Seguranca: alterar a propria senha
 async function alterarMinhaSenha() {
     const q = id => document.getElementById(id);
@@ -2238,11 +2250,11 @@ function renderTabelaClientes(lista) {
             <td>${escapeHtml(c.email||'—')}</td>
             <td>${escapeHtml(c.cpf||'—')}</td>
             <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(c.end||'')}">${escapeHtml(c.end||'—')}</td>
-            <td>
-                ${nPed > 0 ? `<button class="btn btn-outline btn-sm" onclick="mostrarPedidosCliente(${c.id})" title="Ver pedidos">📋 ${nPed}</button>` : ''}
-                ${podeEditar ? `<button class="btn btn-outline btn-sm" onclick="editarCliente(${c.id})">✏️</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirCliente(${c.id})">🗑️</button>` : ''}
-            </td>
+            <td class="td-acoes">${menuAcoesHtml([
+                { icone: '📋', rotulo: `Ver pedidos (${nPed})`, onclick: `mostrarPedidosCliente(${c.id})`, oculto: !(nPed > 0) },
+                { icone: '✏️', rotulo: 'Editar cliente', onclick: `editarCliente(${c.id})`, oculto: !podeEditar },
+                { icone: '🗑️', rotulo: 'Excluir cliente', onclick: `excluirCliente(${c.id})`, perigo: true, oculto: !podeEditar }
+            ])}</td>
         </tr>`;
     }).join('');
 }
@@ -2447,7 +2459,7 @@ function verDetalhesTecido(id) {
         </div>
         <div style="display:flex;gap:8px;padding:12px 20px;border-top:1px solid var(--border);justify-content:flex-end">
             <button class="btn btn-outline btn-sm" onclick="editarCatalogo(${c.id});this.closest('.modal-overlay').remove()">✏️ Editar</button>
-            <button class="btn btn-outline btn-sm" onclick="pedirTecido(${c.id})">🛒 Pedir Tecido</button>
+            ${podeAdicionarAoCarrinho() ? `<button class="btn btn-outline btn-sm" onclick="this.closest('.modal-overlay').remove();abrirAdicionarAoCarrinho('tecido',${c.id})">🛒 Adicionar ao carrinho</button>` : ''}
         </div>
     </div>`;
     document.body.appendChild(overlay);
@@ -2708,11 +2720,11 @@ function renderCatalogoTecidos() {
             <td class="col-num">${textoMinimo(c, 'm')}</td>
             <td class="col-num">R$ ${(c.preco || 0).toFixed(2)}</td>
             <td class="col-forn" title="${escapeHtml(c.fornecedor_nome || '')}">${escapeHtml(c.fornecedor_nome || '—')}</td>
-            <td class="col-acoes">
-                <button class="btn btn-outline btn-sm" onclick="editarCatalogo(${c.id})" title="Editar">✏️</button>
-                <button class="btn btn-outline btn-sm" onclick="pedirTecido(${c.id})" title="Criar pedido de compra">🛒</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirCatalogo(${c.id})" title="Remover do catálogo">🗑️</button>
-            </td>
+            <td class="col-acoes">${menuAcoesHtml([
+                { icone: '✏️', rotulo: 'Editar', onclick: `editarCatalogo(${c.id})` },
+                { icone: '🛒', rotulo: 'Adicionar ao carrinho', onclick: `abrirAdicionarAoCarrinho('tecido',${c.id})`, oculto: !podeAdicionarAoCarrinho() },
+                { icone: '🗑️', rotulo: 'Remover do catálogo', onclick: `excluirCatalogo(${c.id})`, perigo: true }
+            ])}</td>
         </tr>`;
     }).join('') || `<tr><td colspan="9" style="text-align:center;color:#999;padding:20px;">${db.catalogo.length ? 'Nenhum tecido com esses filtros.' : 'Catálogo vazio.'}</td></tr>`;
 
@@ -2747,6 +2759,8 @@ function atualizarBarraSelecao(tipo) {
 
     const barra = document.getElementById(`sel-${pre}-barra`);
     if (barra) barra.style.display = n ? '' : 'none';
+    // adicionar ao carrinho exige Estoque completo
+    if (barra && !podeAdicionarAoCarrinho()) barra.querySelector('.btn-sel-carrinho')?.remove();
 
     // Quantos marcados o filtro atual esconde. Sem esse aviso o usuario
     // excluiria ou pediria itens que nao estao na tela.
@@ -2808,30 +2822,9 @@ async function _excluirMateriaisSelecionados(ids) {
     salvarERecarregar(`${nomes.length} material(is) removido(s).`);
 }
 
-// ─── Pedido de compra a partir da seleção ───────────────────────────────
-
-// Converte um item do cadastro em linha de pedido de compra. Os campos de
-// fornecedor so servem para agrupar aqui; salvarPedidoCompra os descarta.
-function itemParaPedido(tipo, id) {
-    if (tipo === 'tecido') {
-        const c = db.catalogo.find(x => x.id == id);
-        if (!c) return null;
-        const preco_unit = ultimoPrecoTecido(c.id);
-        return {
-            tipo: 'tecido', item_id: c.id, item_nome: c.nome, referencia: c.referencia || '',
-            unidade: 'm', preco_unit, quantidade: 1, subtotal: preco_unit,
-            fornecedor_id: c.fornecedor_id || null, fornecedor_nome: c.fornecedor_nome || ''
-        };
-    }
-    const m = db.materiais.find(x => x.id == id);
-    if (!m) return null;
-    const preco = m.preco || 0;
-    return {
-        tipo: 'material', item_id: m.id, item_nome: m.nome, referencia: m.referencia || '',
-        unidade: m.unidade, preco_unit: preco, quantidade: 1, subtotal: preco,
-        fornecedor_id: m.fornecedor_id || null, fornecedor_nome: m.fornecedor_nome || ''
-    };
-}
+// ─── Pedido de compra com escolha por fornecedor ────────────────────────
+// Usado por "Importar de pedido" (pedido de venda → compra). A seleção do
+// catálogo passou a ir para o carrinho (adicionarSelecaoAoCarrinho).
 
 function agruparPorFornecedor(itens) {
     const mapa = new Map();
@@ -2892,7 +2885,6 @@ async function iniciarPedidoDeCompra(itens, opts) {
     const resumo = grupos.map(g => `• ${g.fornecedor_nome}: ${g.itens.length} item(ns)`).join('\n');
     const todas = [
         { rotulo: 'Um pedido para cada fornecedor', valor: 'separados', destaque: true },
-        { rotulo: 'Tudo para um fornecedor só (você escolhe)', valor: 'um' },
         { rotulo: 'Pedido genérico, sem fornecedor (orçamento)', valor: 'generico' }
     ];
     const escolha = await showEscolha(
@@ -2903,14 +2895,8 @@ async function iniciarPedidoDeCompra(itens, opts) {
     );
     if (!escolha) { localStorage.removeItem('sc_pc_origem'); return false; }
     if (escolha === 'separados')     criarFilaDePedidos(grupos);
-    else if (escolha === 'um')       enviarParaFormularioPC(itens, '');
     else                             enviarParaFormularioPC(itens, 0);
     return true;
-}
-
-function pedidoDaSelecao(tipo) {
-    const itens = [...catSelecao[tipo]].map(id => itemParaPedido(tipo, id)).filter(Boolean);
-    iniciarPedidoDeCompra(itens);
 }
 
 function editarCatalogo(id) {
@@ -3597,9 +3583,9 @@ function _menuAcoesFechar() {
     if (m) m.remove();
     document.querySelectorAll('.btn-kebab[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
 }
-function abrirMenuAcoes(ev, itens) {
+function abrirMenuAcoes(ev, itens, botaoAlvo) {
     ev.stopPropagation();
-    const botao = ev.currentTarget;
+    const botao = botaoAlvo || ev.currentTarget;
     const jaAberto = botao.getAttribute('aria-expanded') === 'true';
     _menuAcoesFechar();
     if (jaAberto) return;
@@ -3636,10 +3622,39 @@ function _menuAcoesAoRolar(e) {
     if (performance.now() - _menuAcoesAbertoEm < 250) return;
     _menuAcoesFechar();
 }
-document.addEventListener('click', e => { if (!e.target.closest('#menu-acoes-flutuante')) _menuAcoesFechar(); });
+document.addEventListener('click', e => { if (!e.target.closest('#menu-acoes-flutuante, .btn-acoes')) _menuAcoesFechar(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') _menuAcoesFechar(); });
 window.addEventListener('scroll', _menuAcoesAoRolar, true);
 window.addEventListener('resize', _menuAcoesFechar);
+
+// Botao ⋮ para linhas de tabela montadas em template (HTML). Cada acao traz o
+// onclick como string, igual ao botao que ela substitui; "oculto" a tira do menu.
+// As perigosas vao para o fim, separadas. Um unico listener global (abaixo) abre
+// o menu, entao as linhas podem ser re-renderizadas a vontade.
+function menuAcoesHtml(acoes) {
+    const lista = (acoes || []).filter(a => a && !a.oculto);
+    if (!lista.length) return '';
+    const ordenadas = lista.filter(a => !a.perigo).concat(lista.filter(a => a.perigo));
+    const dados = ordenadas.map(a => ({ icone: a.icone || '', rotulo: a.rotulo, onclick: a.onclick, perigo: !!a.perigo }));
+    return `<button type="button" class="btn-kebab btn-acoes" aria-label="Ações" aria-haspopup="menu" aria-expanded="false" title="Ações" data-acoes="${escapeHtml(JSON.stringify(dados))}">⋮</button>`;
+}
+document.addEventListener('click', e => {
+    const botao = e.target.closest && e.target.closest('.btn-acoes');
+    if (!botao) return;
+    let dados;
+    try { dados = JSON.parse(botao.dataset.acoes || '[]'); } catch (_) { return; }
+    const itens = [];
+    dados.forEach((a, i) => {
+        if (a.perigo && i > 0 && !dados[i - 1].perigo) itens.push({ sep: true });
+        // roda a string como o onclick inline do botao antigo (escopo global)
+        itens.push({ icone: a.icone, rotulo: a.rotulo, perigo: a.perigo, acao: () => {
+            const b = document.createElement('button');
+            b.setAttribute('onclick', a.onclick);
+            b.click();
+        } });
+    });
+    abrirMenuAcoes(e, itens, botao);
+});
 
 function abrirMenuAcoesPedido(ev, id) {
     const p = db.pedidos.find(x => x.id == id);
@@ -4929,6 +4944,10 @@ function alternarAlertasTecido() {
 function renderEstoque() {
     const tb = document.getElementById('tb-estoque');
     if (!tb) return;
+    // a coluna Acoes so tem o botao do carrinho (exige Estoque completo): sem ele, some inteira
+    const comAcoes = podeAdicionarAoCarrinho();
+    const thAcoes = document.getElementById('th-estoque-acoes');
+    if (thAcoes) thAcoes.style.display = comAcoes ? '' : 'none';
 
     const alertBox = document.getElementById('alertas-ponto-pedido');
     if (alertBox) {
@@ -4982,10 +5001,11 @@ function renderEstoque() {
             <td class="col-num">${tec.preco > 0 ? 'R$ ' + tec.preco.toFixed(2) : '—'}</td>
             <td class="col-forn" title="${escapeHtml(tec.fornecedor_nome || '')}">${escapeHtml(tec.fornecedor_nome || '—')}</td>
             <td class="col-acoes">${rolos.length ? `${rolos.length} rolo(s) ${aberto ? '▲' : '▼'}` : '<span style="color:#999">sem rolo</span>'}</td>
+            ${comAcoes ? `<td class="col-acoes">${botaoAdicionarAoCarrinho('tecido', tec.id)}</td>` : ''}
         </tr>`;
 
         if (!aberto || !rolos.length) return;
-        html += `<tr class="est-tec-rolos"><td colspan="9"><table class="est-rolos-tabela">
+        html += `<tr class="est-tec-rolos"><td colspan="${comAcoes ? 10 : 9}"><table class="est-rolos-tabela">
             <thead><tr><th>Código</th><th>Metragem inicial</th><th>Disponível</th><th>Ocupação</th><th>Entrada</th><th>Ações</th></tr></thead>
             <tbody>` + rolos.map(r => {
             const pct = r.metragem_inicial > 0 ? Math.round((r.metragem_atual / r.metragem_inicial) * 100) : 0;
@@ -5013,7 +5033,7 @@ function renderEstoque() {
             </tr>`}`;
         }).join('') + `</tbody></table></td></tr>`;
     });
-    tb.innerHTML = html || '<tr><td colspan="9" style="text-align:center;color:#999;padding:24px;">Nenhum tecido cadastrado. <a href="catalogo.html">Cadastre em Catálogo</a>.</td></tr>';
+    tb.innerHTML = html || `<tr><td colspan="${comAcoes ? 10 : 9}" style="text-align:center;color:#999;padding:24px;">Nenhum tecido cadastrado. <a href="catalogo.html">Cadastre em Catálogo</a>.</td></tr>`;
 }
 
 // --- MATERIAIS (acessórios, ferragens, trilhos, etc.) ---
@@ -5190,12 +5210,12 @@ function renderMateriais() {
                 : `<strong>${(m.estoque_atual || 0).toFixed(2)}</strong>`}</td>
             <td class="col-num">R$ ${(m.preco || 0).toFixed(2)}</td>
             <td class="col-forn" title="${escapeHtml(m.fornecedor_nome || '')}">${escapeHtml(m.fornecedor_nome || '—')}</td>
-            <td class="col-acoes">
-                <button class="btn btn-outline btn-sm" onclick="editarMaterial(${m.id})" title="Editar">✏️</button>
-                <button class="btn btn-outline btn-sm" onclick="mostrarAjusteForm(${m.id})" title="Ajustar estoque">±</button>
-                <button class="btn btn-outline btn-sm" onclick="pedirMaterial(${m.id})" title="Criar pedido de compra">🛒</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirMaterial(${m.id})" title="Excluir material">🗑️</button>
-            </td>
+            <td class="col-acoes">${menuAcoesHtml([
+                { icone: '✏️', rotulo: 'Editar', onclick: `editarMaterial(${m.id})` },
+                { icone: '±', rotulo: 'Ajustar estoque', onclick: `mostrarAjusteForm(${m.id})` },
+                { icone: '🛒', rotulo: 'Adicionar ao carrinho', onclick: `abrirAdicionarAoCarrinho('material',${m.id})`, oculto: !podeAdicionarAoCarrinho() },
+                { icone: '🗑️', rotulo: 'Excluir material', onclick: `excluirMaterial(${m.id})`, perigo: true }
+            ])}</td>
         </tr>
         <tr id="ajuste-${m.id}" class="ajuste-form" style="display:none">
             <td colspan="8" class="baixa-form-cell">
@@ -5607,12 +5627,6 @@ function renderKits() {
             : ehKitFixacao(k)
                 ? '<span class="kit-selo kit-selo-fixacao">fixação</span>'
                 : '<span class="kit-selo kit-selo-montagem">montagem</span>';
-        const editar = !pronto && document.getElementById('kit-ref')
-            ? `<button class="btn btn-outline btn-sm" onclick="editarKit(${k.id})" title="Editar kit">✏️</button>`
-            : '';
-        const ajustar = pronto && !temEstoqueInfinito(k)
-            ? `<button class="btn btn-outline btn-sm" onclick="mostrarAjusteForm('kit-${k.id}')" title="Ajustar estoque">± Ajustar</button>`
-            : '';
         const colunas = comUnidade ? 8 : 7;
         const linhaAjuste = pronto && !temEstoqueInfinito(k) ? `
         <tr id="ajuste-kit-${k.id}" class="ajuste-form" style="display:none">
@@ -5633,8 +5647,11 @@ function renderKits() {
             <td class="col-num">${pronto ? 'R$ ' + (k.preco || 0).toFixed(2) : '—'}</td>
             <td class="col-num">${saldo}</td>
             <td class="col-nome" title="${escapeHtml((k.itens || []).map(i => i.nome + ': ' + textoQtdItemKit(i)).join(' · '))}">${composicao}</td>
-            <td class="col-acoes">${ajustar}${editar}
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirKit(${k.id})">🗑️</button></td>
+            <td class="col-acoes">${menuAcoesHtml([
+                { icone: '±', rotulo: 'Ajustar estoque', onclick: `mostrarAjusteForm('kit-${k.id}')`, oculto: !(pronto && !temEstoqueInfinito(k)) },
+                { icone: '✏️', rotulo: 'Editar kit', onclick: `editarKit(${k.id})`, oculto: pronto || !document.getElementById('kit-ref') },
+                { icone: '🗑️', rotulo: 'Excluir kit', onclick: `excluirKit(${k.id})`, perigo: true }
+            ])}</td>
         </tr>${linhaAjuste}`;
     }).join('');
 }
@@ -7541,7 +7558,7 @@ function _dadosExportacao(marcaFase0) {
         clientes: db.clientes, catalogo: db.catalogo, pedidos: db.pedidos,
         estoque: db.estoque, materiais: db.materiais, kits: db.kits,
         movimentos: db.movimentos, vendedores: db.vendedores,
-        fornecedores: db.fornecedores, pedidos_compra: db.pedidos_compra,
+        fornecedores: db.fornecedores, pedidos_compra: db.pedidos_compra, carrinhos: db.carrinhos,
         contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, despesas_fixas: db.despesas_fixas,
         contas_fin: db.contas_fin, meios_pag: db.meios_pag, movimentos_fin: db.movimentos_fin,
         medicoes: db.medicoes,
@@ -7581,6 +7598,7 @@ function importarDados(event) {
             db.vendedores    = dados.vendedores    || [];
             db.fornecedores  = dados.fornecedores  || [];
             db.pedidos_compra = dados.pedidos_compra || [];
+            db.carrinhos      = Array.isArray(dados.carrinhos) ? dados.carrinhos : [];
             db.contas_receber = dados.contas_receber || [];
             db.contas_pagar   = dados.contas_pagar   || [];
             db.despesas_fixas = dados.despesas_fixas || [];
@@ -7924,7 +7942,7 @@ function renderTabelaVendedores() {
     const c = CAMPOS_COMISSAO[_tipoVend];
     const lista = vendedoresDoTipo(_tipoVend);
     if (!lista.length) {
-        tb.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#999;padding:20px;">Nenhum ${TIPOS_VENDEDOR[_tipoVend].um.toLowerCase()} cadastrado.</td></tr>`;
+        tb.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#999;padding:20px;">Nenhum ${TIPOS_VENDEDOR[_tipoVend].um.toLowerCase()} cadastrado.</td></tr>`;
         return;
     }
     tb.innerHTML = lista.map(v => {
@@ -7937,11 +7955,11 @@ function renderTabelaVendedores() {
             <td style="text-align:center">${v.comissao_pct || 0}%</td>
             <td>${escapeHtml(v.tel || '—')}</td>
             <td style="text-align:center">${pedidos.length}</td>
-            <td>
-                ${pendente > 0.01 ? `<span class="badge-comissao-pendente">R$ ${pendente.toFixed(2)} pendente</span>` : '<span class="badge-comissao-paga">Em dia</span>'}
-                <button class="btn btn-outline btn-sm" onclick="editarVendedor(${v.id})" style="margin-left:6px" title="Editar">✏️</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirVendedor(${v.id})" title="Excluir">🗑️</button>
-            </td>
+            <td>${pendente > 0.01 ? `<span class="badge-comissao-pendente">R$ ${pendente.toFixed(2)} pendente</span>` : '<span class="badge-comissao-paga">Em dia</span>'}</td>
+            <td class="td-acoes">${menuAcoesHtml([
+                { icone: '✏️', rotulo: 'Editar', onclick: `editarVendedor(${v.id})` },
+                { icone: '🗑️', rotulo: 'Excluir', onclick: `excluirVendedor(${v.id})`, perigo: true }
+            ])}</td>
         </tr>`;
     }).join('');
 }
@@ -8283,38 +8301,182 @@ async function excluirFornecedor(id) {
         await showAlert(`Não é possível excluir: ${escapeHtml(f.nome)} está vinculado a ${matUsando.length} material(is) e ${catUsando.length} tecido(s).`, '🚫');
         return;
     }
+    const car = _carrinhoDe(id);
+    if (car && CarrinhoCore.contarItens(car) > 0) {
+        await showAlert(`Este fornecedor tem um carrinho aberto com ${CarrinhoCore.contarItens(car)} itens. Feche ou esvazie o carrinho antes.`, '🚫');
+        return;
+    }
     if (!await showConfirm(`Excluir o fornecedor "${f.nome}"?`, '🗑️', 'Excluir', 'Cancelar')) return;
     db.fornecedores = db.fornecedores.filter(x => x.id != id);
+    db.carrinhos = db.carrinhos.filter(c => c.fornecedor_id != id);
     salvarERecarregar('Fornecedor excluído.');
 }
 
-// Total ja comprado de um fornecedor: soma os pedidos de compra feitos para
-// ele de verdade. Fica de fora o orcamento generico (sem fornecedor, id 0) e o
-// Rascunho, que ainda nao foi enviado — so Enviado e Recebido contam.
-const PC_STATUS_COMPRADOS = ['Enviado', 'Recebido'];
-function totalPedidoCompra(pc) {
-    return (pc.itens || []).reduce((s, i) => s + (Number(i.subtotal) || 0), 0);
+// --- CARRINHO POR FORNECEDOR (ver, editar, fechar) ---
+function _carrinhoDe(fornecedorId) {
+    return db.carrinhos.find(c => c.fornecedor_id == fornecedorId) || null;
 }
-function comprasDoFornecedor(fornId) {
-    const id = Number(fornId);
-    if (!id) return { total: 0, qtd: 0, rascunhos: 0 };
-    const doForn = (db.pedidos_compra || []).filter(pc => Number(pc.fornecedor_id) === id);
-    const feitos = doForn.filter(pc => PC_STATUS_COMPRADOS.includes(pc.status));
-    return {
-        total: feitos.reduce((s, pc) => s + totalPedidoCompra(pc), 0),
-        qtd: feitos.length,
-        rascunhos: doForn.length - feitos.length
-    };
+
+function _carrinhoBotaoHtml(fornecedorId) {
+    const car = _carrinhoDe(fornecedorId);
+    const n = CarrinhoCore.contarItens(car);
+    const novo = car && car.novo && n > 0 ? '<span class="carrinho-selo-novo">novo</span>' : '';
+    const num = n > 0 ? `<span class="carrinho-contagem">${n}</span>` : '';
+    return `<button type="button" class="btn-carrinho${n > 0 ? ' cheio' : ''}" title="Carrinho de compras" aria-label="Carrinho de compras" onclick="abrirCarrinho(${fornecedorId})">🛒${num}${novo}</button>`;
 }
-function formatarMoeda(v) {
-    return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+let _carFornId = null;
+let _carFechando = false;
+
+function _carPodeEditar() { return temAcesso('fornecedores', 'completo'); }
+
+function abrirCarrinho(fornecedorId) {
+    if (!temAcesso('fornecedores', 'visualizar')) return;
+    const forn = db.fornecedores.find(f => f.id == fornecedorId);
+    if (!forn || document.getElementById('carrinho-modal')) return;
+    _carFornId = forn.id;
+    const car = _carrinhoDe(forn.id);
+    if (car && car.novo) {
+        car.novo = false;
+        syncDB();
+        renderTabelaFornecedores();
+    }
+    const o = document.createElement('div');
+    o.id = 'carrinho-modal';
+    o.className = 'sc-modal-overlay';
+    o.style.display = 'flex';
+    o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:720px;width:95%">
+        <h3 style="margin:0 0 10px;font-size:16px">🛒 Carrinho — ${escapeHtml(forn.nome)}</h3>
+        <div id="carrinho-corpo"></div>
+    </div>`;
+    o.addEventListener('click', e => { if (e.target === o) _carFecharJanela(); });
+    document.body.appendChild(o);
+    _carRender();
+}
+
+function _carFecharJanela() {
+    document.getElementById('carrinho-modal')?.remove();
+    _carFornId = null;
+}
+document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    // o Escape do aviso/confirmacao aberto por cima nao fecha o carrinho junto
+    const aviso = document.getElementById('sc-modal-overlay');
+    if (aviso && aviso.style.display === 'flex') return;
+    _carFecharJanela();
+});
+
+function _carRender() {
+    const corpo = document.getElementById('carrinho-corpo');
+    if (!corpo) return;
+    const car = _carrinhoDe(_carFornId) || { itens: [] };
+    const edita = _carPodeEditar();
+    const vazio = !CarrinhoCore.contarItens(car);
+    const th = 'padding:6px';
+    const fmtQ = q => String(q).replace('.', ',');
+    const linhas = car.itens.map(i => {
+        const sem = !(Number(i.preco_unit) > 0);
+        const chave = `'${i.tipo}',${Number(i.item_id)}`;
+        const qtd = edita
+            ? `<input type="text" inputmode="decimal" class="car-qtd" value="${fmtQ(i.quantidade)}" style="width:70px;padding:4px;border:1px solid #ccc;border-radius:4px;text-align:right" onchange="_carAlterarQtd(${chave},this.value)"> ${escapeHtml(i.unidade || '')}`
+            : `${fmtQ(i.quantidade)} ${escapeHtml(i.unidade || '')}`;
+        return `<tr style="border-top:1px solid #eee">
+            <td style="${th}"><strong>${escapeHtml(i.item_nome)}</strong>${i.referencia ? `<br><small style="color:#888">${escapeHtml(i.referencia)}</small>` : ''}</td>
+            <td style="white-space:nowrap">${qtd}</td>
+            <td style="text-align:right">${sem ? '<span style="color:#B3160A">sem preço</span>' : _histMoeda(i.preco_unit)}</td>
+            <td style="text-align:right">${sem ? '—' : _histMoeda(i.subtotal)}</td>
+            <td style="text-align:center">${edita ? `<button type="button" class="car-remover btn btn-outline btn-sm" title="Tirar do carrinho" aria-label="Tirar do carrinho" onclick="_carRemover(${chave})">✕</button>` : ''}</td>
+        </tr>`;
+    }).join('') || `<tr><td colspan="5" style="text-align:center;color:#999;padding:16px">O carrinho está vazio.</td></tr>`;
+    corpo.innerHTML = `<div style="max-height:50vh;overflow:auto;border:1px solid #eee;border-radius:4px">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead><tr style="text-align:left;background:#f6f6f6"><th style="${th}">Item</th><th>Quantidade</th><th style="text-align:right">Preço</th><th style="text-align:right">Subtotal</th><th></th></tr></thead>
+                <tbody>${linhas}</tbody>
+            </table>
+        </div>
+        <div class="car-total" style="text-align:right;font-weight:bold;margin:10px 0">Total: ${_histMoeda(CarrinhoCore.totalCarrinho(car))}</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+            ${edita ? `<button type="button" class="btn btn-outline btn-sm" onclick="esvaziarCarrinho(${_carFornId})"${vazio ? ' disabled' : ''}>Esvaziar</button>` : ''}
+            <button type="button" class="btn btn-outline btn-sm" onclick="_carFecharJanela()">Voltar</button>
+            ${edita ? `<button type="button" class="btn btn-success btn-sm" id="car-fechar-btn" onclick="fecharCarrinho(${_carFornId})"${vazio ? ' disabled' : ''}>Fechar e enviar ao fornecedor</button>` : ''}
+        </div>`;
+}
+
+function _carSalvar(carNovo) {
+    const i = db.carrinhos.findIndex(c => c.fornecedor_id == carNovo.fornecedor_id);
+    carNovo.atualizado_em = Date.now();
+    if (i >= 0) db.carrinhos[i] = carNovo; else db.carrinhos.push(carNovo);
+    syncDB();
+    renderTabelaFornecedores();
+    _carRender();
+}
+
+function _carAlterarQtd(tipo, itemId, texto) {
+    if (!_carPodeEditar()) return;
+    const car = _carrinhoDe(_carFornId);
+    if (!car) return;
+    const q = _valorDigitadoBaixa(texto, NaN);
+    if (!isFinite(q)) { _carRender(); return; }
+    _carSalvar(CarrinhoCore.alterarQuantidade(car, tipo, itemId, q));
+}
+
+function _carRemover(tipo, itemId) {
+    if (!_carPodeEditar()) return;
+    const car = _carrinhoDe(_carFornId);
+    if (!car) return;
+    _carSalvar(CarrinhoCore.removerItem(car, tipo, itemId));
+}
+
+async function esvaziarCarrinho(fornecedorId) {
+    if (!_carPodeEditar()) return;
+    const car = _carrinhoDe(fornecedorId);
+    if (!car || !CarrinhoCore.contarItens(car)) return;
+    if (!await showConfirm('Esvaziar o carrinho? Todos os itens serão removidos.', '🗑️', 'Esvaziar', 'Cancelar')) return;
+    db.carrinhos = db.carrinhos.filter(c => c.fornecedor_id != fornecedorId);
+    syncDB();
+    _carFecharJanela();
+    renderTabelaFornecedores();
+}
+
+async function fecharCarrinho(fornecedorId) {
+    if (!_carPodeEditar() || _carFechando) return;
+    const car = _carrinhoDe(fornecedorId);
+    const forn = db.fornecedores.find(f => f.id == fornecedorId);
+    if (!car || !forn || !CarrinhoCore.contarItens(car)) return;
+    _carFechando = true;
+    const btn = document.getElementById('car-fechar-btn');
+    if (btn) btn.disabled = true;
+    try {
+        const ok = await showConfirm(`Fechar o carrinho de ${forn.nome} e gerar o pedido de compra de ${_histMoeda(CarrinhoCore.totalCarrinho(car))}?`, '📨', 'Fechar e enviar', 'Cancelar');
+        if (!ok) { if (btn) btn.disabled = false; return; }
+        const atual = _carrinhoDe(fornecedorId);
+        if (!atual || !CarrinhoCore.contarItens(atual)) return;
+        const pc = {
+            id: gerarNumeroPedidoCompra(),
+            data_criacao: Date.now(),
+            status: 'Enviado',
+            data_envio: hojeLocal(),
+            fornecedor_id: forn.id,
+            fornecedor_nome: forn.nome,
+            itens: atual.itens.map(i => ({ ...i })),
+            observacoes: ''
+        };
+        db.pedidos_compra.push(pc);
+        db.carrinhos = db.carrinhos.filter(c => c.fornecedor_id != fornecedorId);
+        syncDB();
+        _carFecharJanela();
+        renderTabelaFornecedores();
+        abrirPedidoCompra(pc.id);
+    } finally {
+        _carFechando = false;
+    }
 }
 
 function renderTabelaFornecedores() {
     const tb = document.getElementById('tb-fornecedores');
     if (!tb) return;
     if (!db.fornecedores.length) {
-        tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#999;padding:20px;">Nenhum fornecedor cadastrado.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:20px;">Nenhum fornecedor cadastrado.</td></tr>';
         return;
     }
     tb.innerHTML = db.fornecedores.map(f => {
@@ -8323,7 +8485,6 @@ function renderTabelaFornecedores() {
         const vinc = [nMat > 0 ? `${nMat} mat.` : '', nCat > 0 ? `${nCat} tec.` : ''].filter(Boolean).join(' · ') || '—';
         const cidadeUF = [f.cidade, f.estado].filter(Boolean).join(' / ') || '—';
         const nomeFantasia = f.nome_fantasia ? `<br><small style="color:#888;font-size:12px">${escapeHtml(f.nome_fantasia)}</small>` : '';
-        const compras = comprasDoFornecedor(f.id);
         return `<tr>
             <td><strong>${escapeHtml(f.nome)}</strong>${nomeFantasia}</td>
             <td style="font-size:13px">${escapeHtml(f.cnpj || '—')}</td>
@@ -8331,14 +8492,12 @@ function renderTabelaFornecedores() {
             <td style="font-size:13px">${escapeHtml(f.tel || '—')}</td>
             <td style="font-size:13px">${escapeHtml(f.email || '—')}</td>
             <td style="font-size:12px;color:#555">${vinc}</td>
-            <td class="forn-total-compras" title="${compras.qtd} pedido(s) enviado(s) ou recebido(s)${compras.rascunhos ? ` · ${compras.rascunhos} em rascunho não somam` : ''}">
-                <strong>${formatarMoeda(compras.total)}</strong>${compras.qtd ? `<br><small style="color:#888;font-size:11px">${compras.qtd} pedido(s)</small>` : ''}
-            </td>
-            <td>
-                <button class="btn btn-outline btn-sm" onclick="criarPCParaFornecedor(${f.id})" title="Novo pedido de compra">🛒</button>
-                <button class="btn btn-outline btn-sm" onclick="editarFornecedor(${f.id})" title="Editar fornecedor">✏️</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirFornecedor(${f.id})" title="Excluir fornecedor">🗑️</button>
-            </td>
+            <td class="td-acoes">${_carrinhoBotaoHtml(f.id)}${menuAcoesHtml([
+                { icone: '🛒', rotulo: 'Novo pedido de compra', onclick: `criarPCParaFornecedor(${f.id})` },
+                { icone: '📜', rotulo: 'Histórico de pedidos', onclick: `abrirHistoricoFornecedor(${f.id})`, oculto: !temAcesso('fornecedores', 'visualizar') },
+                { icone: '✏️', rotulo: 'Editar fornecedor', onclick: `editarFornecedor(${f.id})` },
+                { icone: '🗑️', rotulo: 'Excluir fornecedor', onclick: `excluirFornecedor(${f.id})`, perigo: true }
+            ])}</td>
         </tr>`;
     }).join('');
 }
@@ -8738,6 +8897,8 @@ async function atualizarStatusPC(id, status) {
         return;
     }
     pc.status = status;
+    if (status === 'Enviado') pc.data_envio = hojeLocal();
+    else if (status === 'Rascunho') pc.data_envio = null;
     syncDB();
     toast('Status atualizado!', 'success', 1500);
     renderListaPedidosCompra();
@@ -8853,6 +9014,141 @@ async function excluirPedidoCompra(id) {
     salvarERecarregar('Pedido excluído.');
 }
 
+// --- HISTORICO DE PEDIDOS DO FORNECEDOR ---
+const _HIST_CDN_SHEETJS = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+let _histSheetJsPronto = null;
+let _histFornId = null;
+
+async function _histGarantirSheetJs() {
+    if (window.XLSX) return;
+    if (!_histSheetJsPronto) {
+        _histSheetJsPronto = new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = _HIST_CDN_SHEETJS;
+            s.onload = resolve;
+            s.onerror = () => { _histSheetJsPronto = null; reject(new Error('Não foi possível carregar o gerador de planilhas — verifique sua conexão.')); };
+            document.head.appendChild(s);
+        });
+    }
+    await _histSheetJsPronto;
+}
+
+function _histMoeda(v) { return 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function _histData(iso) { const [a, m, d] = String(iso || '').split('-'); return d ? `${d}/${m}/${a}` : ''; }
+
+function _histFiltro() {
+    return {
+        de: document.getElementById('hist-forn-de')?.value || '',
+        ate: document.getElementById('hist-forn-ate')?.value || ''
+    };
+}
+function _histDados(filtro) {
+    return CarrinhoCore.historicoFornecedor(db.pedidos_compra, _histFornId, filtro || _histFiltro());
+}
+
+function abrirHistoricoFornecedor(fornecedorId) {
+    if (!temAcesso('fornecedores', 'visualizar')) return;
+    const forn = db.fornecedores.find(f => f.id == fornecedorId);
+    if (!forn || document.getElementById('hist-forn-modal')) return;
+    _histFornId = forn.id;
+    const o = document.createElement('div');
+    o.id = 'hist-forn-modal';
+    o.className = 'sc-modal-overlay';
+    o.style.display = 'flex';
+    const inp = 'padding:6px;border:1px solid #ccc;border-radius:4px';
+    o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:640px;width:95%">
+        <h3 style="margin:0 0 10px;font-size:16px">Histórico de pedidos — ${escapeHtml(forn.nome)}</h3>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
+            <label style="font-size:12px">De<br><input type="date" id="hist-forn-de" style="${inp}" oninput="_histRender()"></label>
+            <label style="font-size:12px">Até<br><input type="date" id="hist-forn-ate" style="${inp}" oninput="_histRender()"></label>
+        </div>
+        <div style="max-height:50vh;overflow:auto;border:1px solid #eee;border-radius:4px">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead><tr style="text-align:left;background:#f6f6f6"><th style="padding:6px">Nº</th><th>Data de envio</th><th>Situação</th><th style="text-align:right;padding-right:8px">Valor</th></tr></thead>
+                <tbody id="hist-forn-corpo"></tbody>
+            </table>
+        </div>
+        <div id="hist-forn-total" style="text-align:right;font-weight:bold;margin:10px 0"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+            <button type="button" class="btn btn-outline btn-sm" onclick="exportarHistoricoExcel()">📊 Excel</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="exportarHistoricoPDF()">📄 PDF</button>
+            <button type="button" class="btn btn-sm" onclick="fecharHistoricoFornecedor()">Fechar</button>
+        </div>
+    </div>`;
+    o.addEventListener('click', e => { if (e.target === o) fecharHistoricoFornecedor(); });
+    document.body.appendChild(o);
+    _histRender();
+}
+
+function fecharHistoricoFornecedor() { document.getElementById('hist-forn-modal')?.remove(); }
+document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    // o Escape do aviso/confirmacao aberto por cima nao fecha o historico junto
+    const aviso = document.getElementById('sc-modal-overlay');
+    if (aviso && aviso.style.display === 'flex') return;
+    fecharHistoricoFornecedor();
+});
+
+function _histRender() {
+    const corpo = document.getElementById('hist-forn-corpo');
+    if (!corpo) return;
+    const { linhas, total } = _histDados();
+    corpo.innerHTML = linhas.length ? linhas.map(l => `<tr style="cursor:pointer;border-top:1px solid #eee" onclick="_histAbrirPedido(${l.id})" title="Abrir o pedido">
+            <td style="padding:6px">#${formatPedidoId(l.id)}</td><td>${_histData(l.data_envio)}</td><td>${escapeHtml(l.status)}</td>
+            <td style="text-align:right;padding-right:8px">${_histMoeda(l.valor)}</td></tr>`).join('')
+        : '<tr><td colspan="4" style="text-align:center;color:#999;padding:16px">Nenhum pedido enviado neste período.</td></tr>';
+    document.getElementById('hist-forn-total').textContent = 'Total: ' + _histMoeda(total);
+}
+
+function _histAbrirPedido(id) {
+    fecharHistoricoFornecedor();
+    abrirPedidoCompra(id);
+}
+
+function _histNomeArquivo(forn, filtro) {
+    const nome = String(forn.nome || 'fornecedor').trim().replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '_');
+    return `historico_${nome}_${filtro.de || 'todos'}_${filtro.ate || 'todos'}.xlsx`;
+}
+
+async function exportarHistoricoExcel() {
+    const forn = db.fornecedores.find(f => f.id == _histFornId);
+    if (!forn) return;
+    const filtro = _histFiltro();
+    const { linhas, total } = _histDados(filtro);
+    try { await _histGarantirSheetJs(); } catch (e) { await showAlert(e.message, '⚠️'); return; }
+    const aoa = [['Nº', 'Data de envio', 'Situação', 'Valor']]
+        .concat(linhas.map(l => [l.id, _histData(l.data_envio), l.status, l.valor]))
+        .concat([['Total', '', '', total]]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Histórico');
+    XLSX.writeFile(wb, _histNomeArquivo(forn, filtro));
+}
+
+function exportarHistoricoPDF() {
+    const forn = db.fornecedores.find(f => f.id == _histFornId);
+    if (!forn) return;
+    const filtro = _histFiltro();
+    const { linhas, total } = _histDados(filtro);
+    const periodo = (!filtro.de && !filtro.ate) ? 'Todo o período'
+        : `${filtro.de ? _histData(filtro.de) : 'início'} a ${filtro.ate ? _histData(filtro.ate) : 'hoje'}`;
+    const td = 'padding:6px 8px;border-bottom:1px solid #ddd';
+    const corpo = linhas.map(l => `<tr><td style="${td}">#${formatPedidoId(l.id)}</td><td style="${td}">${_histData(l.data_envio)}</td><td style="${td}">${escapeHtml(l.status)}</td><td style="${td};text-align:right">${_histMoeda(l.valor)}</td></tr>`).join('')
+        || `<tr><td colspan="4" style="${td};text-align:center;color:#999">Nenhum pedido no período.</td></tr>`;
+    const html = `<div style="padding:24px">
+        <div class="doc-cab">${buildEmpresaHeaderHTML(52)}</div>
+        <h2 style="margin:16px 0 4px">Histórico de pedidos de compra</h2>
+        <div style="font-size:13px;margin-bottom:2px"><strong>Fornecedor:</strong> ${escapeHtml(forn.nome)}</div>
+        <div style="font-size:13px;margin-bottom:12px"><strong>Período:</strong> ${escapeHtml(periodo)}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr style="text-align:left;background:#f0f0f0"><th style="${td}">Nº</th><th style="${td}">Data de envio</th><th style="${td}">Situação</th><th style="${td};text-align:right">Valor</th></tr></thead>
+            <tbody>${corpo}</tbody>
+        </table>
+        <div style="text-align:right;font-weight:bold;font-size:15px;margin-top:12px">Total: ${_histMoeda(total)}</div>
+    </div>`;
+    fecharHistoricoFornecedor();
+    abrirDocModal(html, 'Histórico de pedidos — ' + forn.nome);
+}
+
 function abrirPedidoCompra(id) {
     abrirDocModal(gerarHTMLPedidoCompra(id), 'Pedido de Compra');
 }
@@ -8915,19 +9211,148 @@ function criarPCParaFornecedor(fornId) {
     if (pcFornSel) pcFornSel.value = fornId;
 }
 
-// Com itens marcados no catálogo, qualquer carrinho leva a seleção inteira.
-// Sem nada marcado, leva só o item clicado. Nas telas sem seleção (estoque)
-// o conjunto está sempre vazio, então o comportamento é o de sempre.
-function pedirMaterial(materialId) {
-    if (catSelecao.material.size) { pedidoDaSelecao('material'); return; }
-    const item = itemParaPedido('material', materialId);
-    if (item) iniciarPedidoDeCompra([item]);
+// ─── Carrinho de compras: adicionar itens ────────────────────────────────
+// Exige acesso completo ao Estoque. O item vai para o carrinho do fornecedor
+// do cadastro; sem fornecedor, a janela pergunta e a escolha fica gravada no
+// cadastro (para nao perguntar de novo). Quantidade na unidade do item.
+
+function podeAdicionarAoCarrinho() { return temAcesso('estoque', 'completo'); }
+
+function botaoAdicionarAoCarrinho(tipo, id) {
+    if (!podeAdicionarAoCarrinho()) return '';
+    return `<button type="button" class="btn btn-outline btn-sm" onclick="event.stopPropagation();abrirAdicionarAoCarrinho('${tipo}',${Number(id)})" title="Adicionar ao carrinho" aria-label="Adicionar ao carrinho">🛒</button>`;
 }
 
-function pedirTecido(tecidoId) {
-    if (catSelecao.tecido.size) { pedidoDaSelecao('tecido'); return; }
-    const item = itemParaPedido('tecido', tecidoId);
-    if (item) iniciarPedidoDeCompra([item]);
+function _cadastroDoCarrinho(tipo, id) {
+    return (tipo === 'tecido' ? db.catalogo : db.materiais).find(x => x.id == id) || null;
+}
+function _unidadeNoCarrinho(tipo, cad) { return tipo === 'tecido' ? 'm' : (cad.unidade || 'un'); }
+
+// "1,5", "2" e "1.000" (milhar) valem — a mesma leitura dos valores digitados
+// na baixa. Vazio, zero, negativo ou texto: NaN.
+function _quantidadeCarrinho(texto) {
+    const q = _valorDigitadoBaixa(texto);
+    return Number.isFinite(q) && q > 0 ? q : NaN;
+}
+
+function abrirAdicionarAoCarrinho(tipo, id) {
+    return _abrirModalCarrinho(tipo, [id], false);
+}
+
+function adicionarSelecaoAoCarrinho(tipo) {
+    return _abrirModalCarrinho(tipo, [...catSelecao[tipo]], true);
+}
+
+let _carAdd = null; // { tipo, cads, daSelecao, resolve } da janela aberta
+
+function _abrirModalCarrinho(tipo, ids, daSelecao) {
+    return new Promise(resolve => {
+        if (!podeAdicionarAoCarrinho() || document.getElementById('carrinho-add-modal')) { resolve(); return; }
+        const cads = ids.map(id => _cadastroDoCarrinho(tipo, id)).filter(Boolean);
+        if (!cads.length) { resolve(); return; }
+        _carAdd = { tipo, cads, daSelecao, resolve };
+
+        const opcoesForn = db.fornecedores.slice()
+            .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'))
+            .map(f => `<option value="${escapeHtml(String(f.id))}">${escapeHtml(f.nome || '')}</option>`).join('');
+        const inp = 'padding:6px 8px;border:1px solid #ccc;border-radius:4px';
+        const linhas = cads.map((c, i) => {
+            const forn = _pcFornecedorDoCadastro(c);
+            const fornHtml = forn.fornecedor_id
+                ? `<span style="font-size:14px">${escapeHtml(forn.fornecedor_nome)}</span>`
+                : `<select class="car-add-forn" style="${inp};max-width:100%"><option value="">Escolha o fornecedor…</option>${opcoesForn}</select>`;
+            return `<div class="car-add-linha" data-i="${i}" style="padding:10px 0;${i ? 'border-top:1px solid #eee' : ''}">
+                <div style="font-weight:600">${c.referencia ? `<span style="color:#8F8F8F;font-weight:400">${escapeHtml(c.referencia)}</span> ` : ''}${escapeHtml(c.nome)}</div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-top:6px">
+                    <label style="font-size:12px;flex:1 1 180px">Fornecedor<br>${fornHtml}</label>
+                    <label style="font-size:12px">Quantidade<br><input type="text" inputmode="decimal" autocomplete="off" class="car-add-qtd" style="${inp};width:110px"> <span class="car-add-un">${escapeHtml(_unidadeNoCarrinho(tipo, c))}</span></label>
+                </div>
+                <div class="car-add-erro" style="color:#C62828;font-size:12px;margin-top:4px"></div>
+            </div>`;
+        }).join('');
+
+        const o = document.createElement('div');
+        o.id = 'carrinho-add-modal';
+        o.className = 'sc-modal-overlay';
+        o.style.display = 'flex';
+        o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:520px;width:95%">
+            <h3 style="margin:0 0 6px;font-size:16px">🛒 Adicionar ao carrinho${cads.length > 1 ? ` — ${cads.length} itens` : ''}</h3>
+            <div style="max-height:60vh;overflow:auto">${linhas}</div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+                <button type="button" class="btn btn-outline btn-sm" onclick="_fecharModalCarrinho()">Cancelar</button>
+                <button type="button" class="btn btn-sm" onclick="_confirmarModalCarrinho()">Adicionar</button>
+            </div>
+        </div>`;
+        o.addEventListener('click', e => { if (e.target === o) _fecharModalCarrinho(); });
+        o.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('.car-add-qtd')) _confirmarModalCarrinho(); });
+        document.body.appendChild(o);
+        o.querySelector('.car-add-qtd')?.focus();
+    });
+}
+
+function _fecharModalCarrinho() {
+    document.getElementById('carrinho-add-modal')?.remove();
+    const pendente = _carAdd;
+    _carAdd = null;
+    if (pendente) pendente.resolve();
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && _carAdd) _fecharModalCarrinho(); });
+
+function _confirmarModalCarrinho() {
+    const o = document.getElementById('carrinho-add-modal');
+    if (!o || !_carAdd) return;
+    const { tipo, cads, daSelecao } = _carAdd;
+    let primeiroErro = null;
+    const lidos = cads.map((c, i) => {
+        const linha = o.querySelector(`.car-add-linha[data-i="${i}"]`);
+        const campoQtd = linha.querySelector('.car-add-qtd');
+        const sel = linha.querySelector('.car-add-forn');
+        const erros = [];
+        const quantidade = _quantidadeCarrinho(campoQtd.value);
+        if (Number.isNaN(quantidade)) erros.push('Informe a quantidade (maior que zero).');
+        const forn = sel
+            ? db.fornecedores.find(f => String(f.id) === sel.value) || null
+            : db.fornecedores.find(f => f.id == c.fornecedor_id) || null;
+        if (!forn) erros.push(db.fornecedores.length ? 'Escolha o fornecedor.' : 'Nenhum fornecedor cadastrado — cadastre em Fornecedores.');
+        linha.querySelector('.car-add-erro').textContent = erros.join(' ');
+        if (erros.length && !primeiroErro) primeiroErro = Number.isNaN(quantidade) ? campoQtd : sel;
+        return { c, quantidade, forn, gravarForn: !!sel };
+    });
+    if (primeiroErro) { primeiroErro.focus?.(); return; }
+
+    let carrinhos = db.carrinhos;
+    let mudouCadastro = false;
+    lidos.forEach(({ c, quantidade, forn, gravarForn }) => {
+        if (gravarForn) { c.fornecedor_id = forn.id; c.fornecedor_nome = forn.nome || ''; mudouCadastro = true; }
+        carrinhos = CarrinhoCore.adicionarAoCarrinho(carrinhos, {
+            fornecedor_id: forn.id,
+            item: {
+                tipo, item_id: c.id, item_nome: c.nome, referencia: c.referencia || '',
+                unidade: _unidadeNoCarrinho(tipo, c), quantidade, preco_unit: Number(c.preco_custo) || 0
+            }
+        });
+    });
+    db.carrinhos = carrinhos;
+    syncDB();
+
+    const nForn = new Set(lidos.map(l => String(l.forn.id))).size;
+    const msg = lidos.length === 1
+        ? `Adicionado ao carrinho de ${lidos[0].forn.nome}`
+        : `${lidos.length} itens adicionados em ${nForn} ${nForn === 1 ? 'carrinho' : 'carrinhos'}`;
+    _fecharModalCarrinho();
+    if (daSelecao) catSelecao[tipo].clear();
+    if (daSelecao || mudouCadastro) _rerenderTabelasDoCarrinho(tipo);
+    toast(msg);
+}
+
+function _rerenderTabelasDoCarrinho(tipo) {
+    if (tipo === 'tecido') {
+        renderCatalogoTecidos();
+        renderEstoque();
+    } else {
+        renderMateriais();
+        if (document.getElementById('tb-estoque-mat')) renderEstoqueMateriais();
+    }
 }
 
 // ─── Pedido de compra a partir de um pedido de venda ─────────────────────
@@ -11694,10 +12119,9 @@ function renderEstoqueMateriais() {
                 : `<strong>${(m.estoque_atual||0).toFixed(2)}</strong>`}</td>
             <td class="col-num" style="color:#005D3B;font-weight:600">${m.preco > 0 ? 'R$ '+m.preco.toFixed(2) : '—'}</td>
             <td class="col-forn" title="${escapeHtml(m.fornecedor_nome||'')}">${escapeHtml(m.fornecedor_nome||'—')}</td>
-            <td class="col-acoes">
-                <button class="btn btn-outline btn-sm" onclick="mostrarAjusteForm(${m.id})" title="Ajustar estoque">±</button>
-                <button class="btn btn-outline btn-sm" onclick="pedirMaterial(${m.id})" title="Criar pedido de compra">🛒</button>
-            </td>
+            <td class="col-acoes">${botaoAdicionarAoCarrinho('material', m.id)}${menuAcoesHtml([
+                { icone: '±', rotulo: 'Ajustar estoque', onclick: `mostrarAjusteForm(${m.id})` }
+            ])}</td>
         </tr>
         <tr id="ajuste-${m.id}" class="ajuste-form" style="display:none">
             <td colspan="7" class="baixa-form-cell">

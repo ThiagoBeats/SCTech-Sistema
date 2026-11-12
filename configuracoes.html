@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Configurações - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261112a">
+    <link rel="stylesheet" href="css/style.css?v=20261113a">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
@@ -94,16 +94,25 @@
                 <p class="cfg-sub">Use pelo menos 6 caracteres.</p>
                 <div class="form-group">
                     <label for="seg-senha-atual">Senha atual</label>
-                    <input type="password" id="seg-senha-atual" autocomplete="current-password">
+                    <div class="campo-senha">
+                        <input type="password" id="seg-senha-atual" autocomplete="current-password">
+                        <button type="button" class="btn-ver-senha" data-alvo="seg-senha-atual" aria-pressed="false" aria-label="Mostrar senha atual" title="Mostrar a senha" onclick="alternarVerSenha(this)">👁️</button>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="seg-senha-nova">Nova senha</label>
-                    <input type="password" id="seg-senha-nova" autocomplete="new-password">
+                    <div class="campo-senha">
+                        <input type="password" id="seg-senha-nova" autocomplete="new-password">
+                        <button type="button" class="btn-ver-senha" data-alvo="seg-senha-nova" aria-pressed="false" aria-label="Mostrar nova senha" title="Mostrar a senha" onclick="alternarVerSenha(this)">👁️</button>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="seg-senha-conf">Confirmar nova senha</label>
-                    <input type="password" id="seg-senha-conf" autocomplete="new-password"
+                    <div class="campo-senha">
+                        <input type="password" id="seg-senha-conf" autocomplete="new-password"
                            onkeydown="if(event.key==='Enter') alterarMinhaSenha()">
+                        <button type="button" class="btn-ver-senha" data-alvo="seg-senha-conf" aria-pressed="false" aria-label="Mostrar confirmação da senha" title="Mostrar a senha" onclick="alternarVerSenha(this)">👁️</button>
+                    </div>
                 </div>
                 <div id="seg-erro" class="cfg-erro" role="alert" hidden></div>
                 <button class="btn btn-success" onclick="alterarMinhaSenha()">Alterar senha</button>
@@ -153,12 +162,13 @@
         </div>
     </main>
 
-    <script src="js/etiquetas-core.js?v=20261112a"></script>
-    <script src="js/etiquetas-render.js?v=20261112a"></script>
-    <script src="js/cortina-desenho.js?v=20261112a"></script>
-    <script src="js/docs-layout-core.js?v=20261112a"></script>
-    <script src="js/financeiro-core.js?v=20261112a"></script>
-    <script src="js/caixa-core.js?v=20261112a"></script>
-    <script src="js/app.js?v=20261112a"></script>
+    <script src="js/etiquetas-core.js?v=20261113a"></script>
+    <script src="js/etiquetas-render.js?v=20261113a"></script>
+    <script src="js/cortina-desenho.js?v=20261113a"></script>
+    <script src="js/docs-layout-core.js?v=20261113a"></script>
+    <script src="js/financeiro-core.js?v=20261113a"></script>
+    <script src="js/caixa-core.js?v=20261113a"></script>
+    <script src="js/carrinho-core.js?v=20261113a"></script>
+    <script src="js/app.js?v=20261113a"></script>
 </body>
 </html>

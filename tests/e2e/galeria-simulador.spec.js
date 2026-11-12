@@ -4,6 +4,9 @@ const { test, expect } = require('@playwright/test');
 const { entrar } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
+
+// Simulador desligado por GaleriaCore.SIMULADOR_ATIVO = false; o codigo fica, os testes voltam ao religar.
+test.skip(true, 'simulador desligado');
 const BEGE = [217, 207, 194];
 
 async function abrirSim(page, hash, viewport) {

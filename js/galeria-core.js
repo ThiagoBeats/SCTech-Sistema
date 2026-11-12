@@ -270,8 +270,12 @@
         return { w: Math.round(w * k), h: Math.round(h * k) };
     }
 
+    // Chave central do simulador: desligado, nenhum acesso a ele aparece (galeria,
+    // #simular, galeria do pedido, Empresa). O codigo fica; para religar, troque aqui.
+    const SIMULADOR_ATIVO = false;
+
     const api = {
-        PREGAS, PERSIANAS, ABERTURAS, NOMES_ABERTURA, GRUPOS, LIMITE_FOTOS, MAX_FOTO, MAX_TEXTURA, CORES_INICIAIS,
+        SIMULADOR_ATIVO, PREGAS, PERSIANAS, ABERTURAS, NOMES_ABERTURA, GRUPOS, LIMITE_FOTOS, MAX_FOTO, MAX_TEXTURA, CORES_INICIAIS,
         visualTrilho, padraoMostruario, lerMostruario, coresDisponiveis,
         homografia, aplicarHomografia, ordenarCantos, prenderCantos, quadValido, areaProduto,
         geometriaCortina, geometriaPersiana, dimensaoReduzida

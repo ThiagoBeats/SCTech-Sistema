@@ -28,8 +28,9 @@ test('aba existe e abre por #galeria', async ({ page }) => {
     await abrir(page);
     await expect(page.locator('.tab-btn[data-tab="galeria"]')).toHaveClass(/active/);
     await expect(page.locator('#gm-editor')).toContainText('Fotos da galeria');
-    await expect(page.locator('#gm-editor')).toContainText('Cores e tecidos');
-    await expect(page.locator('#gm-editor')).toContainText('Modelos que aparecem');
+    // com o simulador desligado, as secoes de cores e de modelos (so dele) ficam escondidas
+    await expect(page.locator('#gm-editor')).not.toContainText('Cores e tecidos');
+    await expect(page.locator('#gm-editor')).not.toContainText('Modelos que aparecem');
 });
 
 test('enviar foto grava no IndexedDB e no mostruario; grupo, legenda e ligacao', async ({ page }) => {
@@ -47,9 +48,9 @@ test('enviar foto grava no IndexedDB e no mostruario; grupo, legenda e ligacao',
     await f.locator('.gm-foto-grupo').selectOption('pregas');
     await f.locator('.gm-foto-legenda').fill('Wave na sala');
     await f.locator('.gm-foto-legenda').blur();
-    await f.locator('.gm-foto-liga').selectOption('prega:Wave Botao');
+    await expect(f.locator('.gm-foto-liga')).toHaveCount(0); // ligar a modelo: so com o simulador
     m = await salvo(page);
-    expect(m.fotos[0]).toMatchObject({ grupo: 'pregas', legenda: 'Wave na sala', liga: { tipo: 'prega', valor: 'Wave Botao' } });
+    expect(m.fotos[0]).toMatchObject({ grupo: 'pregas', legenda: 'Wave na sala' });
 });
 
 test('remover foto apaga do IndexedDB depois de confirmar', async ({ page }) => {
@@ -73,6 +74,7 @@ test('limite de 60 fotos', async ({ page }) => {
 });
 
 test('adicionar cor com textura reduzida e remover', async ({ page }) => {
+    test.skip(true, 'simulador desligado'); // cores e modelos so existem para o simulador
     await abrir(page);
     await page.locator('#gm-cor-nome').fill('Linho cru');
     await page.locator('#gm-cor-hex').fill('#c8b48a');
@@ -89,12 +91,14 @@ test('adicionar cor com textura reduzida e remover', async ({ page }) => {
 });
 
 test('cor sem nome nao entra', async ({ page }) => {
+    test.skip(true, 'simulador desligado'); // cores e modelos so existem para o simulador
     await abrir(page);
     await page.locator('#gm-cor-adicionar').click();
     await expect(page.locator('.gm-cor')).toHaveCount(0);
 });
 
 test('desligar uma prega tira do mostruario', async ({ page }) => {
+    test.skip(true, 'simulador desligado'); // cores e modelos so existem para o simulador
     await abrir(page);
     await page.locator('.gm-modelo[data-tipo="prega"][value="Franzido"]').uncheck();
     await page.locator('.gm-modelo[data-tipo="persiana"][value="double"]').uncheck();
@@ -118,8 +122,9 @@ test('sem acesso completo a empresa, so ve', async ({ page }) => {
     await page.goto(BASE + '/empresa.html#galeria');
     await expect(page.locator('#gm-editor .gm-secao').first()).toBeVisible();
     await expect(page.locator('#gm-fotos-input')).toBeDisabled();
-    await expect(page.locator('#gm-cor-adicionar')).toBeDisabled();
-    await expect(page.locator('.gm-modelo').first()).toBeDisabled();
+    // cores e modelos (so do simulador) nao aparecem com ele desligado
+    await expect(page.locator('#gm-cor-adicionar')).toHaveCount(0);
+    await expect(page.locator('.gm-modelo')).toHaveCount(0);
 });
 
 test('sem IndexedDB avisa e nao deixa enviar fotos', async ({ page }) => {

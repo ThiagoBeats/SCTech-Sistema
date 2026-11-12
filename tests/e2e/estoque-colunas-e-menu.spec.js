@@ -148,7 +148,7 @@ test('Estoque e Catalogo tem as mesmas colunas, na mesma ordem', async ({ page }
     const catKit = semAcao(await cabecalhos(page, '#tabela-kits'));
 
     await semear(page, 'estoque.html');
-    const estTec = (await cabecalhos(page, '#tabela-est-tecidos')).filter(x => x !== 'Rolos' && x !== 'Unidade');
+    const estTec = semAcao(await cabecalhos(page, '#tabela-est-tecidos')).filter(x => x !== 'Rolos' && x !== 'Unidade');
     await page.click('.tab-btn:has-text("Materiais")');
     const estMat = semAcao((await cabecalhos(page, '#tabela-est-materiais')));
     await page.click('.tab-btn:has-text("Kits")');
