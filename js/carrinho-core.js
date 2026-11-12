@@ -23,7 +23,7 @@
     }
 
     function linhaCom(l, quantidade, precoUnit) {
-        const q = Number(quantidade) || 0;
+        const q = Math.round((Number(quantidade) || 0) * 1000) / 1000;
         const p = precoUnit == null ? l.preco_unit : precoUnit;
         return Object.assign({}, l, { quantidade: q, preco_unit: p, subtotal: arredondar(q * (Number(p) || 0)) });
     }

@@ -4944,6 +4944,10 @@ function alternarAlertasTecido() {
 function renderEstoque() {
     const tb = document.getElementById('tb-estoque');
     if (!tb) return;
+    // a coluna Acoes so tem o botao do carrinho (exige Estoque completo): sem ele, some inteira
+    const comAcoes = podeAdicionarAoCarrinho();
+    const thAcoes = document.getElementById('th-estoque-acoes');
+    if (thAcoes) thAcoes.style.display = comAcoes ? '' : 'none';
 
     const alertBox = document.getElementById('alertas-ponto-pedido');
     if (alertBox) {
@@ -4997,11 +5001,11 @@ function renderEstoque() {
             <td class="col-num">${tec.preco > 0 ? 'R$ ' + tec.preco.toFixed(2) : '—'}</td>
             <td class="col-forn" title="${escapeHtml(tec.fornecedor_nome || '')}">${escapeHtml(tec.fornecedor_nome || '—')}</td>
             <td class="col-acoes">${rolos.length ? `${rolos.length} rolo(s) ${aberto ? '▲' : '▼'}` : '<span style="color:#999">sem rolo</span>'}</td>
-            <td class="col-acoes">${botaoAdicionarAoCarrinho('tecido', tec.id)}</td>
+            ${comAcoes ? `<td class="col-acoes">${botaoAdicionarAoCarrinho('tecido', tec.id)}</td>` : ''}
         </tr>`;
 
         if (!aberto || !rolos.length) return;
-        html += `<tr class="est-tec-rolos"><td colspan="10"><table class="est-rolos-tabela">
+        html += `<tr class="est-tec-rolos"><td colspan="${comAcoes ? 10 : 9}"><table class="est-rolos-tabela">
             <thead><tr><th>Código</th><th>Metragem inicial</th><th>Disponível</th><th>Ocupação</th><th>Entrada</th><th>Ações</th></tr></thead>
             <tbody>` + rolos.map(r => {
             const pct = r.metragem_inicial > 0 ? Math.round((r.metragem_atual / r.metragem_inicial) * 100) : 0;
@@ -5029,7 +5033,7 @@ function renderEstoque() {
             </tr>`}`;
         }).join('') + `</tbody></table></td></tr>`;
     });
-    tb.innerHTML = html || '<tr><td colspan="10" style="text-align:center;color:#999;padding:24px;">Nenhum tecido cadastrado. <a href="catalogo.html">Cadastre em Catálogo</a>.</td></tr>';
+    tb.innerHTML = html || `<tr><td colspan="${comAcoes ? 10 : 9}" style="text-align:center;color:#999;padding:24px;">Nenhum tecido cadastrado. <a href="catalogo.html">Cadastre em Catálogo</a>.</td></tr>`;
 }
 
 // --- MATERIAIS (acessórios, ferragens, trilhos, etc.) ---
@@ -9077,7 +9081,13 @@ function abrirHistoricoFornecedor(fornecedorId) {
 }
 
 function fecharHistoricoFornecedor() { document.getElementById('hist-forn-modal')?.remove(); }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharHistoricoFornecedor(); });
+document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    // o Escape do aviso/confirmacao aberto por cima nao fecha o historico junto
+    const aviso = document.getElementById('sc-modal-overlay');
+    if (aviso && aviso.style.display === 'flex') return;
+    fecharHistoricoFornecedor();
+});
 
 function _histRender() {
     const corpo = document.getElementById('hist-forn-corpo');

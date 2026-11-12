@@ -200,3 +200,42 @@ test('catalogo e detalhes do tecido: 🛒 Adicionar ao carrinho', async ({ page 
     await expect(page.locator('.modal-overlay'), 'sem janela empilhada').toHaveCount(0);
     await expect(page.locator(MODAL)).toContainText('LINHO BELGA');
 });
+
+test('somar 2,2 e 1,1 da 3,3 no carrinho e sem ruido no PDF do pedido', async ({ page }) => {
+    await abrir(page, 'estoque.html');
+    await adicionarNoEstoqueTecido(page, 'LINHO BELGA', '2,2');
+    await expect(page.locator(MODAL)).toHaveCount(0);
+    await adicionarNoEstoqueTecido(page, 'LINHO BELGA', '1,1');
+    await expect(page.locator(MODAL)).toHaveCount(0);
+    expect((await carrinhos(page))[0].itens[0].quantidade).toBe(3.3);
+    await page.goto(BASE + '/fornecedores.html');
+    await page.locator('#tb-fornecedores tr', { hasText: 'RC Tecidos' }).locator('.btn-carrinho').click();
+    await expect(page.locator('#carrinho-modal .car-qtd')).toHaveValue('3,3');
+    await page.locator('#carrinho-modal button:has-text("Fechar e enviar ao fornecedor")').click();
+    await page.click('#sc-modal-ok');
+    const papel = page.locator('#doc-modal-paper');
+    await expect(papel).toContainText('LINHO BELGA');
+    // o PDF do pedido usa ponto decimal (como nos precos); o que importa e nao ter ruido
+    await expect(papel).toContainText(/(^|[^0-9.])3[.]3([^0-9]|$)/);
+    await expect(papel).not.toContainText('3.30000');
+});
+
+test('sem estoque completo a coluna Acoes do Estoque de tecidos some inteira', async ({ page }) => {
+    await abrir(page, 'estoque.html', { sc_usr: [{
+        id: 1, nome: 'Teste', email: 'teste@sctech.local', papel_id: 1, ativo: true, senha_hash: '',
+        permissoes_extras: { estoque: { nivel: 'visualizar', acoes_restritas: [] } }
+    }] });
+    await expect(page.locator('.est-tec-linha')).toHaveCount(4);
+    await expect(page.locator('#th-estoque-acoes')).toBeHidden();
+    const cabecalhos = await page.locator('table:has(#tb-estoque) thead th:visible').count();
+    const celulas = await page.locator('.est-tec-linha').first().locator('td:visible').count();
+    expect(celulas).toBe(cabecalhos);
+});
+
+test('com estoque completo a coluna Acoes continua alinhada', async ({ page }) => {
+    await abrir(page, 'estoque.html');
+    const cabecalhos = await page.locator('table:has(#tb-estoque) thead th:visible').count();
+    const celulas = await page.locator('.est-tec-linha').first().locator('td:visible').count();
+    expect(celulas).toBe(cabecalhos);
+    await expect(page.locator('#th-estoque-acoes')).toBeVisible();
+});

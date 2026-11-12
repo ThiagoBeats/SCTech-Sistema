@@ -82,3 +82,10 @@ test('ids string e numero', () => {
     const h = C.historicoFornecedor([{ id: 1, fornecedor_id: '3', status: 'Enviado', data_envio: '2026-11-01', itens: [{ subtotal: 5 }] }], 3, {});
     assert.strictEqual(h.linhas.length, 1);
 });
+
+test('somar quantidades decimais nao deixa ruido de ponto flutuante', () => {
+    const a = C.adicionarAoCarrinho([], { fornecedor_id: 1, item: item(1, 10, { quantidade: 2.2 }) });
+    const b = C.adicionarAoCarrinho(a, { fornecedor_id: 1, item: item(1, 10, { quantidade: 1.1 }) });
+    assert.strictEqual(b[0].itens[0].quantidade, 3.3);
+    assert.strictEqual(C.alterarQuantidade(b[0], 'material', 5, 0.1 + 0.2).itens[0].quantidade, 0.3);
+});

@@ -96,3 +96,15 @@ test('exportar PDF abre o documento com o total', async ({ page }) => {
     await expect(paper).toContainText('Total');
     await expect(paper).toContainText('390,50');
 });
+
+test('Escape com aviso aberto fecha so o aviso, nao o historico', async ({ page }) => {
+    await abrirHist(page);
+    await page.evaluate(() => { showAlert('Aviso de teste', '⚠️'); });
+    await expect(page.locator('#sc-modal-overlay')).toBeVisible();
+    await page.keyboard.press('Escape');
+    // o proprio aviso fecha com o Escape; o historico por baixo continua aberto
+    await expect(page.locator('#sc-modal-overlay')).toBeHidden();
+    await expect(page.locator('#hist-forn-modal')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#hist-forn-modal')).toHaveCount(0);
+});
