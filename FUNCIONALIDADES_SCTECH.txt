@@ -369,14 +369,18 @@ Formulário de criação de kit:
     metro) + botão "+ Adicionar Item". Por metro = quantidade × largura da
     parede, arredondada para cima
   - Preview em tabela dos itens adicionados ao draft (contagem editável)
-  - Botão "Salvar Kit"; o ✏️ da tabela abre o kit de montagem para edição
+  - Botão "Salvar Kit"; "✏️ Editar kit" (menu ⋮ da tabela) abre o kit de
+    montagem para edição
   - Kits padrão: os 7 tipos de instalação (Trilho Suíço Simples/Duplo/Duplo
     Com Espaço/Triplo, Trilho Motorizador, Varão Alumínio Comum, Varão
     Suíço/Wave) nascem uma vez como kits de fixação vazios (FIX-001…);
     excluídos não voltam
 
 Tabela de Kits Cadastrados:
-  - Colunas: Nome | Composição (lista de itens) | Ações (editar, excluir)
+  - Colunas: Nome | Composição (lista de itens) | Ações
+  - Ações: menu ⋮ com "± Ajustar estoque" (só kit pronto com estoque
+    controlado), "✏️ Editar kit" (só kit de montagem, e só na Gestão de
+    Estoque: no Catálogo não aparece) e "🗑️ Excluir kit" (em vermelho)
   - Kits são aplicáveis diretamente no formulário de pedido
 
 ── 4.4 ABA: HISTÓRICO ──────────────────────────────────────────────────────────
@@ -447,8 +451,9 @@ Busca em tempo real:
 
 Tabela de clientes:
   - Colunas: Nome | Telefone | E-mail | CPF | Endereço | Ações
-  - Ações: menu ⋮ com "✏️ Editar" (carrega dados no formulário acima) e
-    "🗑️ Excluir" (com confirmação, em vermelho, por último)
+  - Ações: menu ⋮ com "📋 Ver pedidos (N)" (só aparece se o cliente tem
+    pedidos), "✏️ Editar" (carrega dados no formulário acima) e "🗑️ Excluir"
+    (com confirmação, em vermelho, por último)
 
 Integração com outros módulos:
   - Endereço do cliente é sugerido como placeholder no campo de endereço
@@ -509,7 +514,9 @@ Tabela de materiais:
 
 Menu de ações (⋮) e carrinho no Catálogo:
   - As três abas (Tecidos, Materiais e Acessórios, Kits) usam o menu ⋮ na
-    coluna Ações, com as mesmas ações de antes e nomes por extenso. Clicar fora,
+    coluna Ações, com as mesmas ações de antes e nomes por extenso. Em Kits, o
+    "✏️ Editar kit" (kit de montagem) só aparece na Gestão de Estoque, não no
+    Catálogo. Clicar fora,
     Esc ou escolher uma ação fecha o menu; só um fica aberto por vez.
   - "🛒 Adicionar ao carrinho" substitui o antigo "Criar pedido de compra" por
     item (e o "Pedir Tecido" da janela de detalhes do tecido).
@@ -571,9 +578,9 @@ Formulário de cadastro/edição:
   - Botão "Salvar Vendedor"
 
 Tabela de vendedores:
-  - Colunas: Nome | Comissão (%) | Telefone | Total de Pedidos | Situação | Ações
+  - Colunas: Nome | Comissão (%) | Telefone | Pedidos | Situação | Ações
   - Situação e Ações agora são duas colunas separadas (vale também para
-    Arquitetos); Ações em menu ⋮ com Editar | Excluir e as demais ações da linha
+    Arquitetos); Ações em menu ⋮ com "✏️ Editar" e "🗑️ Excluir" (em vermelho)
 
 ── 8.2 ABA: COMISSÕES PENDENTES ────────────────────────────────────────────────
 
@@ -625,13 +632,14 @@ Formulário de cadastro/edição:
 
 Tabela de fornecedores:
   - Colunas: Razão Social / Nome Fantasia | CNPJ | Cidade/UF |
-    Telefone | E-mail | Vínculos (qtd de tecidos/materiais) | 🛒 | Ações
+    Telefone | E-mail | Vínculos (qtd de tecidos/materiais) | Ações
   - A coluna "Total de compras" foi retirada (no lugar dela, o histórico abaixo)
-  - 🛒 fica visível na linha: mostra quantos itens há no carrinho do fornecedor
+  - Na célula Ações, antes do ⋮, fica o botão 🛒 (fora do menu, não é coluna
+    separada): mostra quantos itens há no carrinho do fornecedor
     (sem itens: ícone discreto, sem número) e o selo "novo" quando entra item
     novo; o selo some ao abrir o carrinho. Clicar abre o carrinho (seção 9.4)
-  - Ações: menu ⋮ com "✏️ Editar" | "📜 Histórico de pedidos" | "🗑️ Excluir"
-    (com confirmação)
+  - Ações: menu ⋮ com "🛒 Novo pedido de compra" | "📜 Histórico de pedidos" |
+    "✏️ Editar fornecedor" | "🗑️ Excluir fornecedor" (com confirmação)
   - Não dá para excluir fornecedor com carrinho aberto: aparece "Este
     fornecedor tem um carrinho aberto com N itens. Feche ou esvazie o carrinho
     antes."
@@ -699,7 +707,9 @@ Na janela do carrinho (ícone 🛒 em Fornecedores):
     (com data de envio de hoje), abre o PDF para mandar ao fornecedor e deixa o
     carrinho vazio. Carrinho vazio não pode ser fechado.
   - O pedido segue o fluxo normal (marcar Recebido gera a conta a pagar)
-  - Ver, editar e fechar o carrinho exigem acesso a Fornecedores
+  - Ver o carrinho e o histórico de pedidos exigem Fornecedores (visualizar);
+    editar quantidade, tirar item, esvaziar e fechar exigem Fornecedores
+    (completo); adicionar ao carrinho exige Estoque (completo)
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1702,7 +1712,9 @@ lateral; a página galeria.html continua funcionando. Permissão própria
 para visualizar em todos os papéis; o Administrador tem acesso completo.
 
 ATENÇÃO (13/11/2026): o simulador está DESLIGADO por enquanto (fica para o
-futuro). Somem o botão "Simular na parede do cliente", o "📐 Simular" das fotos,
+futuro) em TODA esta seção 17 e na seção 18: tudo o que citar simulador,
+"Simular", "Simular com" ou "Simular na parede" abaixo está desligado por
+enquanto (chave SIMULADOR_ATIVO = false em js/galeria-core.js). Somem o botão "Simular na parede do cliente", o "📐 Simular" das fotos,
 o endereço galeria.html#simular (abre a galeria normal) e a configuração do
 simulador em Configurar Empresa. A galeria de fotos e o mostruário continuam
 normais. O código do simulador não foi apagado; as descrições da seção 17.2
@@ -1714,12 +1726,12 @@ abaixo valem para quando for religado.
     Pregas, Trilhos e varões, Rolô, Romana e Double Vision
   - Tocar numa foto abre o visor em tela cheia: passar com o dedo (ou setas
     ‹ › / teclado ← →), Esc ou ✕ fecha
-  - Foto ligada a um modelo mostra "📐 Simular": abre o simulador já com
+  - Foto ligada a um modelo mostra "📐 Simular" (desligado por enquanto): abre o simulador já com
     aquele modelo (ex.: galeria.html#simular?prega=Wave%20Botao)
   - Sem fotos: convite para montar o mostruário (quem pode) e atalho para o
-    simulador, que já funciona com 6 cores neutras
+    simulador (desligado por enquanto; some também esse atalho)
 
-── 17.2 SIMULADOR (galeria.html#simular) ───────────────────────────────────────
+── 17.2 SIMULADOR (galeria.html#simular) — DESLIGADO POR ENQUANTO ──────────────
 
 Passos do instalador:
   1. "📷 Tirar foto" (câmera traseira) ou "🖼️ Escolher foto" da parede
@@ -1736,7 +1748,7 @@ Passos do instalador:
   - Segurando um canto (ou a barra): a cortina fica 50% transparente e
     aparece uma lupa com mira acima do dedo, com a foto ampliada no ponto
   - ▶ Animar: a cortina abre e fecha uma vez na tela, sem baixar nada
-  - Foto da galeria ligada a um modelo ("Simular com" no mostruário) vira
+  - Foto da galeria ligada a um modelo ("Simular com" no mostruário; desligado por enquanto) vira
     tecido: ao escolher esse modelo, a cortina já usa a foto, esticada uma
     vez sobre a cortina inteira com as dobras por cima; ela aparece também
     na aba Cor, com a legenda. Outro modelo sem foto volta a uma cor
@@ -1764,7 +1776,8 @@ Salvar e enviar:
 ── 17.3 MOSTRUÁRIO (Configurar Empresa → aba "🖼️ Galeria e Mostruário") ───────
 
   - Fotos da galeria: "Enviar para" escolhe o grupo; várias de uma vez; cada
-    foto tem grupo, legenda e "Simular com" (prega, persiana ou trilho);
+    foto tem grupo, legenda e "Simular com" (prega, persiana ou trilho; o "Simular com" e a
+    configuração do simulador estão desligados por enquanto);
     remover pede confirmação; contador n/60 e aviso no limite
   - Cores e tecidos: nome, cor e foto do tecido opcional (vira textura no
     simulador, reduzida a 512 px)
@@ -1842,13 +1855,14 @@ Galeria dentro do pedido (pedido.html, js/galeria-pedido.js):
   - Abas: Modelos (imagem de cada prega e persiana — a foto real do
     mostruário ligada ao modelo, quando houver; senão, imagem gerada em 3D),
     Fotos reais (o mostruário da empresa, com visor em tela cheia) e Simular
-    na parede (o simulador; o "← Galeria" volta para a janela).
+    na parede (o simulador; desligado por enquanto: a aba só aparece quando o
+    simulador for religado; o "← Galeria" volta para a janela).
   - Escolher um modelo e "Usar no pedido" aplica a prega no tecido escolhido
     em "Aplicar em", já com o fator sugerido. O modelo que ficou na
     simulação também vira a escolha. Pedido aprovado abre a galeria só para
     mostrar.
 
-Simulador mais realista (js/galeria-modelos-render.js, galeria-simulador.js):
+Simulador mais realista (js/galeria-modelos-render.js, galeria-simulador.js) — desligado por enquanto:
   - Trama de tecido gerada (linho, voil, blackout), luz lateral com brilho
     de tecido, sombra no fundo das dobras e sob o trilho, barra com
     costura, dobras levemente irregulares, trilho e varão com brilho de metal.
