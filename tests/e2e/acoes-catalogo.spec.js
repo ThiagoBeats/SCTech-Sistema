@@ -42,16 +42,28 @@ test('materiais: ⋮ com editar, ajustar estoque, carrinho e excluir', async ({ 
     await expect(page.locator('#ajuste-11')).toBeVisible();
 });
 
-test('kits: ⋮ com editar (montagem) e excluir; kit pronto com ajustar', async ({ page }) => {
+test('kits: ⋮ do catalogo sem editar (o formulario de kit fica no Estoque); kit pronto com ajustar', async ({ page }) => {
     await abrir(page, 'cat-kits');
     const montado = page.locator('#tb-kits tr', { hasText: 'KIT MONTADO' });
     await expect(montado.locator('td.col-acoes button')).toHaveCount(1);
     await montado.locator('button[aria-label="Ações"]').click();
-    await expect(itens(page)).toHaveText([/Editar kit$/, /Excluir kit$/]);
+    await expect(itens(page)).toHaveText([/Excluir kit$/]);
     await page.keyboard.press('Escape');
     const pronto = page.locator('#tb-kits tr', { hasText: 'KIT PRONTO' });
     await pronto.locator('button[aria-label="Ações"]').click();
     await expect(itens(page)).toHaveText([/Ajustar estoque$/, /Excluir kit$/]);
     await itens(page).filter({ hasText: 'Ajustar estoque' }).click();
     await expect(page.locator('#ajuste-kit-32')).toBeVisible();
+});
+
+test('kits: no Estoque o ⋮ do kit de montagem oferece editar, e funciona', async ({ page }) => {
+    await abrir(page);
+    await page.goto(BASE + '/estoque.html');
+    await page.click('.tab-btn[data-tab="kits"]');
+    const montado = page.locator('#tb-kits tr', { hasText: 'KIT MONTADO' });
+    await montado.locator('button[aria-label="Ações"]').click();
+    await expect(itens(page)).toHaveText([/Editar kit$/, /Excluir kit$/]);
+    await itens(page).filter({ hasText: 'Editar kit' }).click();
+    await expect(page.locator('#kit-ref')).toHaveValue('K1');
+    await expect(page.locator('#kit-form-titulo')).toHaveText('Editar Kit');
 });

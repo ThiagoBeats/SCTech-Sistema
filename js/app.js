@@ -2885,7 +2885,6 @@ async function iniciarPedidoDeCompra(itens, opts) {
     const resumo = grupos.map(g => `• ${g.fornecedor_nome}: ${g.itens.length} item(ns)`).join('\n');
     const todas = [
         { rotulo: 'Um pedido para cada fornecedor', valor: 'separados', destaque: true },
-        { rotulo: 'Tudo para um fornecedor só (você escolhe)', valor: 'um' },
         { rotulo: 'Pedido genérico, sem fornecedor (orçamento)', valor: 'generico' }
     ];
     const escolha = await showEscolha(
@@ -2896,7 +2895,6 @@ async function iniciarPedidoDeCompra(itens, opts) {
     );
     if (!escolha) { localStorage.removeItem('sc_pc_origem'); return false; }
     if (escolha === 'separados')     criarFilaDePedidos(grupos);
-    else if (escolha === 'um')       enviarParaFormularioPC(itens, '');
     else                             enviarParaFormularioPC(itens, 0);
     return true;
 }
@@ -5647,7 +5645,7 @@ function renderKits() {
             <td class="col-nome" title="${escapeHtml((k.itens || []).map(i => i.nome + ': ' + textoQtdItemKit(i)).join(' · '))}">${composicao}</td>
             <td class="col-acoes">${menuAcoesHtml([
                 { icone: '±', rotulo: 'Ajustar estoque', onclick: `mostrarAjusteForm('kit-${k.id}')`, oculto: !(pronto && !temEstoqueInfinito(k)) },
-                { icone: '✏️', rotulo: 'Editar kit', onclick: `editarKit(${k.id})`, oculto: pronto },
+                { icone: '✏️', rotulo: 'Editar kit', onclick: `editarKit(${k.id})`, oculto: pronto || !document.getElementById('kit-ref') },
                 { icone: '🗑️', rotulo: 'Excluir kit', onclick: `excluirKit(${k.id})`, perigo: true }
             ])}</td>
         </tr>${linhaAjuste}`;

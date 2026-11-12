@@ -450,7 +450,8 @@ async function iniciarPC(page, ids) {
                 fornecedor_id: c.fornecedor_id || null, fornecedor_nome: c.fornecedor_nome || ''
             };
         });
-        iniciarPedidoDeCompra(itens);   // sem await: pode trocar de pagina
+        // as mesmas opcoes do chamador real (gerarCompraDoPedidoVenda); sem await: pode trocar de pagina
+        iniciarPedidoDeCompra(itens, { opcoes: ['separados', 'generico'] });
     }, ids || [3, 2, 1, 4]);
 }
 
@@ -479,7 +480,11 @@ test('fornecedores diferentes abrem a escolha, com o resumo por fornecedor', asy
     await expect(msg).toContainText('Trilhos Brasil: 1 item(ns)');
     await expect(msg).toContainText('Sem fornecedor: 1 item(ns)');
 
-    await expect(page.locator('#sc-modal-btns button')).toHaveCount(4);   // 3 saídas + cancelar
+    const botoes = page.locator('#sc-modal-btns button');
+    await expect(botoes).toHaveCount(3);   // 2 saídas + cancelar
+    await expect(botoes.nth(0)).toHaveText('Um pedido para cada fornecedor');
+    await expect(botoes.nth(1)).toContainText('Pedido genérico');
+    await expect(page.locator('#sc-modal-btns button:has-text("Tudo para um fornecedor")')).toHaveCount(0);
 });
 
 test('o cancelar da escolha nao cria pedido nenhum', async ({ page }) => {
