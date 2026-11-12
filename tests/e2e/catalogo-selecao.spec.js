@@ -37,6 +37,7 @@ async function abrirCatalogo(page, extras) {
         localStorage.removeItem('sc_pc_prefill');
         localStorage.removeItem('sc_pc_prefill_forn');
         localStorage.removeItem('sc_pc_fila');
+        localStorage.setItem('sc_carrinhos', JSON.stringify([]));
     }, { forn: FORN, cat: TECIDOS, mat: MATERIAIS, ...(extras || {}) });
     await page.reload();
     await expect(page.locator('#tb-catalogo tr')).toHaveCount(4);
@@ -335,26 +336,127 @@ test('mensagem curta nao ganha barra de rolagem', async ({ page }) => {
     expect(rola).toBe(false);
 });
 
-// ─── Pedido de compra a partir da seleção ───────────────────────────────
+// ─── Carrinho a partir da seleção ───────────────────────────────────────
+// A seleção não monta mais o formulário de pedido de compra: cada item vai
+// para o carrinho do seu fornecedor (agrupado por fornecedor).
 
-test('sem nada marcado, o carrinho da linha leva so aquele item', async ({ page }) => {
+const MODAL = '#carrinho-add-modal';
+const carrinhos = page => page.evaluate(() => JSON.parse(localStorage.getItem('sc_carrinhos') || '[]'));
+const nomesNoCarrinho = (c, fornId) => (c.find(x => x.fornecedor_id === fornId) || { itens: [] }).itens.map(i => i.item_nome).sort();
+
+async function preencherQuantidades(page, qtd) {
+    const campos = page.locator(MODAL + ' .car-add-qtd');
+    for (let i = 0; i < await campos.count(); i++) await campos.nth(i).fill(qtd);
+}
+
+test('sem nada marcado, o ⋮ da linha adiciona so aquele item', async ({ page }) => {
     await abrirCatalogo(page);
     await page.locator('#tb-catalogo tr', { hasText: 'LINHO BELGA' })
         .locator('button[aria-label="Ações"]').click();
-    await page.locator('#menu-acoes-flutuante .menu-acoes-item', { hasText: 'Criar pedido de compra' }).click();
-    await page.waitForURL(/fornecedores\.html/);
+    await page.locator('#menu-acoes-flutuante .menu-acoes-item', { hasText: 'Adicionar ao carrinho' }).click();
+    await expect(page.locator(MODAL + ' .car-add-linha')).toHaveCount(1);
+    await preencherQuantidades(page, '2');
+    await page.click(MODAL + ' button:has-text("Adicionar")');
+    await expect(page.locator(MODAL)).toHaveCount(0);
 
-    const r = await page.evaluate(() => ({ itens: pcDraftItens, forn: document.getElementById('pc-fornecedor').value }));
-    expect(r.itens.length).toBe(1);
-    expect(r.itens[0].item_nome).toBe('LINHO BELGA');
-    expect(r.forn, 'o fornecedor do tecido ja vem escolhido').toBe('7');
+    const c = await carrinhos(page);
+    expect(c.length).toBe(1);
+    expect(nomesNoCarrinho(c, 7)).toEqual(['LINHO BELGA']);
+    expect(page.url(), 'fica no catalogo').toContain('catalogo.html');
 });
 
-test('marcados do mesmo fornecedor vao direto para o formulario', async ({ page }) => {
+test('marcados do mesmo fornecedor vao para o mesmo carrinho', async ({ page }) => {
     await abrirCatalogo(page);
     await page.selectOption('#f-tec-forn', '7');
     await page.check('#chk-tec-todos');
-    await page.click('#sel-tec-barra button:has-text("Pedido de compra")');
+    await page.click('#sel-tec-barra button:has-text("Adicionar ao carrinho")');
+    await expect(page.locator(MODAL + ' .car-add-linha')).toHaveCount(2);
+    await preencherQuantidades(page, '1');
+    await page.click(MODAL + ' button:has-text("Adicionar")');
+    await expect(page.locator('.sc-toast').last()).toHaveText('2 itens adicionados em 1 carrinho');
+
+    const c = await carrinhos(page);
+    expect(c.length).toBe(1);
+    expect(nomesNoCarrinho(c, 7)).toEqual(['LINHO BELGA', 'TRICÔ HERA']);
+});
+
+test('fornecedores diferentes: um carrinho por fornecedor, com o resumo', async ({ page }) => {
+    await abrirCatalogo(page);
+    await page.check('#chk-tec-todos');
+    await page.click('#sel-tec-barra button:has-text("Adicionar ao carrinho")');
+    await expect(page.locator(MODAL + ' .car-add-linha')).toHaveCount(4);
+    await preencherQuantidades(page, '3');
+    // o sem fornecedor pede o fornecedor na mesma janela
+    await page.locator(MODAL + ' .car-add-linha', { hasText: 'VOIL CRISTAL' }).locator('select.car-add-forn').selectOption('7');
+    await page.click(MODAL + ' button:has-text("Adicionar")');
+    await expect(page.locator('.sc-toast').last()).toHaveText('4 itens adicionados em 2 carrinhos');
+    await expect(page.locator('#sel-tec-barra')).toBeHidden();
+
+    const c = await carrinhos(page);
+    expect(c.length).toBe(2);
+    expect(nomesNoCarrinho(c, 7)).toEqual(['LINHO BELGA', 'TRICÔ HERA', 'VOIL CRISTAL']);
+    expect(nomesNoCarrinho(c, 9)).toEqual(['BLACKOUT SP']);
+    expect(c.every(x => x.itens.every(i => i.quantidade === 3 && i.unidade === 'm'))).toBe(true);
+    await expect(page.locator('#tb-catalogo tr', { hasText: 'VOIL CRISTAL' }).locator('td.col-forn')).toHaveText('RC Tecidos');
+});
+
+test('o cancelar da janela nao adiciona nada e mantem a selecao', async ({ page }) => {
+    await abrirCatalogo(page);
+    await page.check('#chk-tec-todos');
+    await page.click('#sel-tec-barra button:has-text("Adicionar ao carrinho")');
+    await page.click(MODAL + ' button:has-text("Cancelar")');
+    await expect(page.locator(MODAL)).toHaveCount(0);
+    expect(await carrinhos(page)).toEqual([]);
+    await expect(page.locator('#sel-tec-qtd')).toHaveText('4 marcado(s)');
+});
+
+test('marcados de materiais tambem vao para o carrinho, cada um com a sua unidade', async ({ page }) => {
+    await abrirCatalogo(page);
+    await irParaMateriais(page);
+    await page.selectOption('#f-mat-forn', '9');
+    await page.check('#chk-mat-todos');
+    await page.click('#sel-mat-barra button:has-text("Adicionar ao carrinho")');
+    await preencherQuantidades(page, '1,5');
+    await page.click(MODAL + ' button:has-text("Adicionar")');
+    await expect(page.locator(MODAL)).toHaveCount(0);
+
+    const c = await carrinhos(page);
+    expect(nomesNoCarrinho(c, 9)).toEqual(['PONTEIRA', 'TRILHO SUÍÇO']);
+    expect(c[0].itens.map(i => i.unidade).sort(), 'cada material leva a propria unidade').toEqual(['m', 'un']);
+    expect(c[0].itens.every(i => i.quantidade === 1.5)).toBe(true);
+});
+
+test('com itens marcados, o ⋮ de uma linha leva so aquela linha', async ({ page }) => {
+    await abrirCatalogo(page);
+    await page.selectOption('#f-tec-forn', '7');
+    await page.check('#chk-tec-todos');
+    await page.locator('#tb-catalogo tr').nth(0).locator('button[aria-label="Ações"]').click();
+    await page.locator('#menu-acoes-flutuante .menu-acoes-item', { hasText: 'Adicionar ao carrinho' }).click();
+    await expect(page.locator(MODAL + ' .car-add-linha')).toHaveCount(1);
+});
+
+// ─── Pedido de compra com escolha por fornecedor ────────────────────────
+// A escolha (um pedido por fornecedor / genérico) continua no "Importar de
+// pedido" de venda. Aqui ela é chamada direto, com os tecidos do catálogo na
+// ordem da tabela (por nome): BLACKOUT SP, LINHO BELGA, TRICÔ HERA, VOIL.
+
+async function iniciarPC(page, ids) {
+    await page.evaluate(ids => {
+        const itens = ids.map(id => {
+            const c = db.catalogo.find(x => x.id === id);
+            return {
+                tipo: 'tecido', item_id: c.id, item_nome: c.nome, referencia: c.referencia || '',
+                unidade: 'm', preco_unit: 0, quantidade: 1, subtotal: 0,
+                fornecedor_id: c.fornecedor_id || null, fornecedor_nome: c.fornecedor_nome || ''
+            };
+        });
+        iniciarPedidoDeCompra(itens);   // sem await: pode trocar de pagina
+    }, ids || [3, 2, 1, 4]);
+}
+
+test('itens do mesmo fornecedor vao direto para o formulario', async ({ page }) => {
+    await abrirCatalogo(page);
+    await iniciarPC(page, [2, 1]);
     await page.waitForURL(/fornecedores\.html/);
 
     const r = await page.evaluate(() => ({
@@ -369,8 +471,7 @@ test('marcados do mesmo fornecedor vao direto para o formulario', async ({ page 
 
 test('fornecedores diferentes abrem a escolha, com o resumo por fornecedor', async ({ page }) => {
     await abrirCatalogo(page);
-    await page.check('#chk-tec-todos');
-    await page.click('#sel-tec-barra button:has-text("Pedido de compra")');
+    await iniciarPC(page);
 
     const msg = page.locator('#sc-modal-msg');
     await expect(msg).toContainText('3 fornecedores diferentes');
@@ -383,8 +484,7 @@ test('fornecedores diferentes abrem a escolha, com o resumo por fornecedor', asy
 
 test('o cancelar da escolha nao cria pedido nenhum', async ({ page }) => {
     await abrirCatalogo(page);
-    await page.check('#chk-tec-todos');
-    await page.click('#sel-tec-barra button:has-text("Pedido de compra")');
+    await iniciarPC(page);
     await page.click('#sc-modal-btns button:has-text("Cancelar")');
 
     await expect(page.locator('#sc-modal-overlay')).toBeHidden();
@@ -392,22 +492,9 @@ test('o cancelar da escolha nao cria pedido nenhum', async ({ page }) => {
     expect(await page.evaluate(() => localStorage.getItem('sc_pc_fila'))).toBeNull();
 });
 
-test('"tudo para um fornecedor" leva os itens e deixa o select em aberto', async ({ page }) => {
-    await abrirCatalogo(page);
-    await page.check('#chk-tec-todos');
-    await page.click('#sel-tec-barra button:has-text("Pedido de compra")');
-    await page.click('#sc-modal-btns button:has-text("Tudo para um fornecedor")');
-    await page.waitForURL(/fornecedores\.html/);
-
-    const r = await page.evaluate(() => ({ n: pcDraftItens.length, forn: document.getElementById('pc-fornecedor').value }));
-    expect(r.n).toBe(4);
-    expect(r.forn, 'o usuario e que escolhe').toBe('');
-});
-
 test('pedido generico salva sem fornecedor e imprime a linha em branco', async ({ page }) => {
     await abrirCatalogo(page);
-    await page.check('#chk-tec-todos');
-    await page.click('#sel-tec-barra button:has-text("Pedido de compra")');
+    await iniciarPC(page);
     await page.click('#sc-modal-btns button:has-text("Pedido genérico")');
     await page.waitForURL(/fornecedores\.html/);
 
@@ -432,13 +519,11 @@ test('"um pedido para cada" cria os pedidos em sequencia', async ({ page }) => {
     page.on('pageerror', e => erros.push('pageerror: ' + e.message));
 
     await abrirCatalogo(page);
-    await page.check('#chk-tec-todos');
-    await page.click('#sel-tec-barra button:has-text("Pedido de compra")');
+    await iniciarPC(page);
     await page.click('#sc-modal-btns button:has-text("Um pedido para cada")');
     await page.waitForURL(/fornecedores\.html/);
 
-    // Os grupos saem na ordem em que cada fornecedor aparece na tabela, que
-    // nasce ordenada por nome: BLACKOUT SP (Trilhos) vem primeiro.
+    // Os grupos saem na ordem em que cada fornecedor aparece: BLACKOUT SP (Trilhos) primeiro.
     await expect(page.locator('#pc-fila-banner')).toContainText('Pedido 1 de 3');
     await expect(page.locator('#pc-fila-banner')).toContainText('Trilhos Brasil');
     expect(await page.evaluate(() => pcDraftItens.length)).toBe(1);
@@ -472,8 +557,7 @@ test('"um pedido para cada" cria os pedidos em sequencia', async ({ page }) => {
 
 test('da para desistir do que falta na fila sem perder o que ja foi salvo', async ({ page }) => {
     await abrirCatalogo(page);
-    await page.check('#chk-tec-todos');
-    await page.click('#sel-tec-barra button:has-text("Pedido de compra")');
+    await iniciarPC(page);
     await page.click('#sc-modal-btns button:has-text("Um pedido para cada")');
     await page.waitForURL(/fornecedores\.html/);
 
@@ -487,35 +571,4 @@ test('da para desistir do que falta na fila sem perder o que ja foi salvo', asyn
     await page.waitForFunction(() => localStorage.getItem('sc_pc_fila') === null);
     expect(await page.evaluate(() => db.pedidos_compra.length), 'o que ja foi salvo fica').toBe(1);
     await expect(page.locator('#pc-fila-banner')).toBeHidden();
-});
-
-test('marcados de materiais tambem viram pedido', async ({ page }) => {
-    await abrirCatalogo(page);
-    await irParaMateriais(page);
-    await page.selectOption('#f-mat-forn', '9');
-    await page.check('#chk-mat-todos');
-    await page.click('#sel-mat-barra button:has-text("Pedido de compra")');
-    await page.waitForURL(/fornecedores\.html/);
-
-    const r = await page.evaluate(() => ({
-        nomes: pcDraftItens.map(i => i.item_nome).sort(),
-        unidades: pcDraftItens.map(i => i.unidade).sort(),
-        forn: document.getElementById('pc-fornecedor').value
-    }));
-    expect(r.nomes).toEqual(['PONTEIRA', 'TRILHO SUÍÇO']);
-    expect(r.unidades, 'cada material leva a propria unidade').toEqual(['m', 'un']);
-    expect(r.forn).toBe('9');
-});
-
-test('com itens marcados, o carrinho de uma linha leva a selecao inteira', async ({ page }) => {
-    await abrirCatalogo(page);
-    await page.selectOption('#f-tec-forn', '7');
-    await page.check('#chk-tec-todos');
-
-    // clica no carrinho da linha, nao no da barra
-    await page.locator('#tb-catalogo tr').nth(0).locator('button[aria-label="Ações"]').click();
-    await page.locator('#menu-acoes-flutuante .menu-acoes-item', { hasText: 'Criar pedido de compra' }).click();
-    await page.waitForURL(/fornecedores\.html/);
-
-    expect(await page.evaluate(() => pcDraftItens.length)).toBe(2);
 });

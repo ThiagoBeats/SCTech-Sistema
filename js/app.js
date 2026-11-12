@@ -268,6 +268,7 @@ let db = {
     vendedores:  JSON.parse(localStorage.getItem('sc_vend')) || [],
     fornecedores:    JSON.parse(localStorage.getItem('sc_forn')) || [],
     pedidos_compra:  JSON.parse(localStorage.getItem('sc_pc'))   || [],
+    carrinhos:       JSON.parse(localStorage.getItem('sc_carrinhos')) || [],
     contas_receber:  JSON.parse(localStorage.getItem('sc_cr'))   || [],
     contas_pagar:    JSON.parse(localStorage.getItem('sc_cp'))   || [],
     despesas_fixas:  JSON.parse(localStorage.getItem('sc_df'))   || [],
@@ -355,6 +356,7 @@ function syncDB() {
     localStorage.setItem('sc_vend', JSON.stringify(db.vendedores));
     localStorage.setItem('sc_forn', JSON.stringify(db.fornecedores));
     localStorage.setItem('sc_pc',   JSON.stringify(db.pedidos_compra));
+    localStorage.setItem('sc_carrinhos', JSON.stringify(db.carrinhos));
     localStorage.setItem('sc_cr',   JSON.stringify(db.contas_receber));
     localStorage.setItem('sc_cp',   JSON.stringify(db.contas_pagar));
     localStorage.setItem('sc_df',   JSON.stringify(db.despesas_fixas));
@@ -2457,7 +2459,7 @@ function verDetalhesTecido(id) {
         </div>
         <div style="display:flex;gap:8px;padding:12px 20px;border-top:1px solid var(--border);justify-content:flex-end">
             <button class="btn btn-outline btn-sm" onclick="editarCatalogo(${c.id});this.closest('.modal-overlay').remove()">✏️ Editar</button>
-            <button class="btn btn-outline btn-sm" onclick="pedirTecido(${c.id})">🛒 Pedir Tecido</button>
+            ${podeAdicionarAoCarrinho() ? `<button class="btn btn-outline btn-sm" onclick="this.closest('.modal-overlay').remove();abrirAdicionarAoCarrinho('tecido',${c.id})">🛒 Adicionar ao carrinho</button>` : ''}
         </div>
     </div>`;
     document.body.appendChild(overlay);
@@ -2720,7 +2722,7 @@ function renderCatalogoTecidos() {
             <td class="col-forn" title="${escapeHtml(c.fornecedor_nome || '')}">${escapeHtml(c.fornecedor_nome || '—')}</td>
             <td class="col-acoes">${menuAcoesHtml([
                 { icone: '✏️', rotulo: 'Editar', onclick: `editarCatalogo(${c.id})` },
-                { icone: '🛒', rotulo: 'Criar pedido de compra', onclick: `pedirTecido(${c.id})` },
+                { icone: '🛒', rotulo: 'Adicionar ao carrinho', onclick: `abrirAdicionarAoCarrinho('tecido',${c.id})`, oculto: !podeAdicionarAoCarrinho() },
                 { icone: '🗑️', rotulo: 'Remover do catálogo', onclick: `excluirCatalogo(${c.id})`, perigo: true }
             ])}</td>
         </tr>`;
@@ -2757,6 +2759,8 @@ function atualizarBarraSelecao(tipo) {
 
     const barra = document.getElementById(`sel-${pre}-barra`);
     if (barra) barra.style.display = n ? '' : 'none';
+    // adicionar ao carrinho exige Estoque completo
+    if (barra && !podeAdicionarAoCarrinho()) barra.querySelector('.btn-sel-carrinho')?.remove();
 
     // Quantos marcados o filtro atual esconde. Sem esse aviso o usuario
     // excluiria ou pediria itens que nao estao na tela.
@@ -2818,30 +2822,9 @@ async function _excluirMateriaisSelecionados(ids) {
     salvarERecarregar(`${nomes.length} material(is) removido(s).`);
 }
 
-// ─── Pedido de compra a partir da seleção ───────────────────────────────
-
-// Converte um item do cadastro em linha de pedido de compra. Os campos de
-// fornecedor so servem para agrupar aqui; salvarPedidoCompra os descarta.
-function itemParaPedido(tipo, id) {
-    if (tipo === 'tecido') {
-        const c = db.catalogo.find(x => x.id == id);
-        if (!c) return null;
-        const preco_unit = ultimoPrecoTecido(c.id);
-        return {
-            tipo: 'tecido', item_id: c.id, item_nome: c.nome, referencia: c.referencia || '',
-            unidade: 'm', preco_unit, quantidade: 1, subtotal: preco_unit,
-            fornecedor_id: c.fornecedor_id || null, fornecedor_nome: c.fornecedor_nome || ''
-        };
-    }
-    const m = db.materiais.find(x => x.id == id);
-    if (!m) return null;
-    const preco = m.preco || 0;
-    return {
-        tipo: 'material', item_id: m.id, item_nome: m.nome, referencia: m.referencia || '',
-        unidade: m.unidade, preco_unit: preco, quantidade: 1, subtotal: preco,
-        fornecedor_id: m.fornecedor_id || null, fornecedor_nome: m.fornecedor_nome || ''
-    };
-}
+// ─── Pedido de compra com escolha por fornecedor ────────────────────────
+// Usado por "Importar de pedido" (pedido de venda → compra). A seleção do
+// catálogo passou a ir para o carrinho (adicionarSelecaoAoCarrinho).
 
 function agruparPorFornecedor(itens) {
     const mapa = new Map();
@@ -2916,11 +2899,6 @@ async function iniciarPedidoDeCompra(itens, opts) {
     else if (escolha === 'um')       enviarParaFormularioPC(itens, '');
     else                             enviarParaFormularioPC(itens, 0);
     return true;
-}
-
-function pedidoDaSelecao(tipo) {
-    const itens = [...catSelecao[tipo]].map(id => itemParaPedido(tipo, id)).filter(Boolean);
-    iniciarPedidoDeCompra(itens);
 }
 
 function editarCatalogo(id) {
@@ -5021,10 +4999,11 @@ function renderEstoque() {
             <td class="col-num">${tec.preco > 0 ? 'R$ ' + tec.preco.toFixed(2) : '—'}</td>
             <td class="col-forn" title="${escapeHtml(tec.fornecedor_nome || '')}">${escapeHtml(tec.fornecedor_nome || '—')}</td>
             <td class="col-acoes">${rolos.length ? `${rolos.length} rolo(s) ${aberto ? '▲' : '▼'}` : '<span style="color:#999">sem rolo</span>'}</td>
+            <td class="col-acoes">${botaoAdicionarAoCarrinho('tecido', tec.id)}</td>
         </tr>`;
 
         if (!aberto || !rolos.length) return;
-        html += `<tr class="est-tec-rolos"><td colspan="9"><table class="est-rolos-tabela">
+        html += `<tr class="est-tec-rolos"><td colspan="10"><table class="est-rolos-tabela">
             <thead><tr><th>Código</th><th>Metragem inicial</th><th>Disponível</th><th>Ocupação</th><th>Entrada</th><th>Ações</th></tr></thead>
             <tbody>` + rolos.map(r => {
             const pct = r.metragem_inicial > 0 ? Math.round((r.metragem_atual / r.metragem_inicial) * 100) : 0;
@@ -5052,7 +5031,7 @@ function renderEstoque() {
             </tr>`}`;
         }).join('') + `</tbody></table></td></tr>`;
     });
-    tb.innerHTML = html || '<tr><td colspan="9" style="text-align:center;color:#999;padding:24px;">Nenhum tecido cadastrado. <a href="catalogo.html">Cadastre em Catálogo</a>.</td></tr>';
+    tb.innerHTML = html || '<tr><td colspan="10" style="text-align:center;color:#999;padding:24px;">Nenhum tecido cadastrado. <a href="catalogo.html">Cadastre em Catálogo</a>.</td></tr>';
 }
 
 // --- MATERIAIS (acessórios, ferragens, trilhos, etc.) ---
@@ -5232,7 +5211,7 @@ function renderMateriais() {
             <td class="col-acoes">${menuAcoesHtml([
                 { icone: '✏️', rotulo: 'Editar', onclick: `editarMaterial(${m.id})` },
                 { icone: '±', rotulo: 'Ajustar estoque', onclick: `mostrarAjusteForm(${m.id})` },
-                { icone: '🛒', rotulo: 'Criar pedido de compra', onclick: `pedirMaterial(${m.id})` },
+                { icone: '🛒', rotulo: 'Adicionar ao carrinho', onclick: `abrirAdicionarAoCarrinho('material',${m.id})`, oculto: !podeAdicionarAoCarrinho() },
                 { icone: '🗑️', rotulo: 'Excluir material', onclick: `excluirMaterial(${m.id})`, perigo: true }
             ])}</td>
         </tr>
@@ -5631,7 +5610,6 @@ function renderKits() {
     // A lista do Estoque tem uma coluna de unidade a mais que a do Catálogo,
     // pedida para o módulo de estoque. A tabela diz qual das duas é.
     const comUnidade = !!tb.closest('table')?.dataset.comUnidade;
-    const noCatalogo = !comUnidade; // a tabela do Catalogo (sem coluna de unidade) usa o ⋮; a do Estoque segue com botoes
     pintarCabecalhoOrdenacao('#tabela-kits', kitSortState);
     tb.innerHTML = ordenarLista(db.kits, kitSortState, valorOrdenacaoKit).map(k => {
         const pronto = ehKitPronto(k);
@@ -5647,12 +5625,6 @@ function renderKits() {
             : ehKitFixacao(k)
                 ? '<span class="kit-selo kit-selo-fixacao">fixação</span>'
                 : '<span class="kit-selo kit-selo-montagem">montagem</span>';
-        const editar = !pronto && document.getElementById('kit-ref')
-            ? `<button class="btn btn-outline btn-sm" onclick="editarKit(${k.id})" title="Editar kit">✏️</button>`
-            : '';
-        const ajustar = pronto && !temEstoqueInfinito(k)
-            ? `<button class="btn btn-outline btn-sm" onclick="mostrarAjusteForm('kit-${k.id}')" title="Ajustar estoque">± Ajustar</button>`
-            : '';
         const colunas = comUnidade ? 8 : 7;
         const linhaAjuste = pronto && !temEstoqueInfinito(k) ? `
         <tr id="ajuste-kit-${k.id}" class="ajuste-form" style="display:none">
@@ -5673,12 +5645,11 @@ function renderKits() {
             <td class="col-num">${pronto ? 'R$ ' + (k.preco || 0).toFixed(2) : '—'}</td>
             <td class="col-num">${saldo}</td>
             <td class="col-nome" title="${escapeHtml((k.itens || []).map(i => i.nome + ': ' + textoQtdItemKit(i)).join(' · '))}">${composicao}</td>
-            <td class="col-acoes">${noCatalogo ? menuAcoesHtml([
+            <td class="col-acoes">${menuAcoesHtml([
                 { icone: '±', rotulo: 'Ajustar estoque', onclick: `mostrarAjusteForm('kit-${k.id}')`, oculto: !(pronto && !temEstoqueInfinito(k)) },
                 { icone: '✏️', rotulo: 'Editar kit', onclick: `editarKit(${k.id})`, oculto: pronto },
                 { icone: '🗑️', rotulo: 'Excluir kit', onclick: `excluirKit(${k.id})`, perigo: true }
-            ]) : `${ajustar}${editar}
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirKit(${k.id})">🗑️</button>`}</td>
+            ])}</td>
         </tr>${linhaAjuste}`;
     }).join('');
 }
@@ -7585,7 +7556,7 @@ function _dadosExportacao(marcaFase0) {
         clientes: db.clientes, catalogo: db.catalogo, pedidos: db.pedidos,
         estoque: db.estoque, materiais: db.materiais, kits: db.kits,
         movimentos: db.movimentos, vendedores: db.vendedores,
-        fornecedores: db.fornecedores, pedidos_compra: db.pedidos_compra,
+        fornecedores: db.fornecedores, pedidos_compra: db.pedidos_compra, carrinhos: db.carrinhos,
         contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, despesas_fixas: db.despesas_fixas,
         contas_fin: db.contas_fin, meios_pag: db.meios_pag, movimentos_fin: db.movimentos_fin,
         medicoes: db.medicoes,
@@ -7625,6 +7596,7 @@ function importarDados(event) {
             db.vendedores    = dados.vendedores    || [];
             db.fornecedores  = dados.fornecedores  || [];
             db.pedidos_compra = dados.pedidos_compra || [];
+            db.carrinhos      = Array.isArray(dados.carrinhos) ? dados.carrinhos : [];
             db.contas_receber = dados.contas_receber || [];
             db.contas_pagar   = dados.contas_pagar   || [];
             db.despesas_fixas = dados.despesas_fixas || [];
@@ -9065,19 +9037,148 @@ function criarPCParaFornecedor(fornId) {
     if (pcFornSel) pcFornSel.value = fornId;
 }
 
-// Com itens marcados no catálogo, qualquer carrinho leva a seleção inteira.
-// Sem nada marcado, leva só o item clicado. Nas telas sem seleção (estoque)
-// o conjunto está sempre vazio, então o comportamento é o de sempre.
-function pedirMaterial(materialId) {
-    if (catSelecao.material.size) { pedidoDaSelecao('material'); return; }
-    const item = itemParaPedido('material', materialId);
-    if (item) iniciarPedidoDeCompra([item]);
+// ─── Carrinho de compras: adicionar itens ────────────────────────────────
+// Exige acesso completo ao Estoque. O item vai para o carrinho do fornecedor
+// do cadastro; sem fornecedor, a janela pergunta e a escolha fica gravada no
+// cadastro (para nao perguntar de novo). Quantidade na unidade do item.
+
+function podeAdicionarAoCarrinho() { return temAcesso('estoque', 'completo'); }
+
+function botaoAdicionarAoCarrinho(tipo, id) {
+    if (!podeAdicionarAoCarrinho()) return '';
+    return `<button type="button" class="btn btn-outline btn-sm" onclick="event.stopPropagation();abrirAdicionarAoCarrinho('${tipo}',${Number(id)})" title="Adicionar ao carrinho" aria-label="Adicionar ao carrinho">🛒</button>`;
 }
 
-function pedirTecido(tecidoId) {
-    if (catSelecao.tecido.size) { pedidoDaSelecao('tecido'); return; }
-    const item = itemParaPedido('tecido', tecidoId);
-    if (item) iniciarPedidoDeCompra([item]);
+function _cadastroDoCarrinho(tipo, id) {
+    return (tipo === 'tecido' ? db.catalogo : db.materiais).find(x => x.id == id) || null;
+}
+function _unidadeNoCarrinho(tipo, cad) { return tipo === 'tecido' ? 'm' : (cad.unidade || 'un'); }
+
+// "1,5", "2" e "1.000" (milhar) valem — a mesma leitura dos valores digitados
+// na baixa. Vazio, zero, negativo ou texto: NaN.
+function _quantidadeCarrinho(texto) {
+    const q = _valorDigitadoBaixa(texto);
+    return Number.isFinite(q) && q > 0 ? q : NaN;
+}
+
+function abrirAdicionarAoCarrinho(tipo, id) {
+    return _abrirModalCarrinho(tipo, [id], false);
+}
+
+function adicionarSelecaoAoCarrinho(tipo) {
+    return _abrirModalCarrinho(tipo, [...catSelecao[tipo]], true);
+}
+
+let _carAdd = null; // { tipo, cads, daSelecao, resolve } da janela aberta
+
+function _abrirModalCarrinho(tipo, ids, daSelecao) {
+    return new Promise(resolve => {
+        if (!podeAdicionarAoCarrinho() || document.getElementById('carrinho-add-modal')) { resolve(); return; }
+        const cads = ids.map(id => _cadastroDoCarrinho(tipo, id)).filter(Boolean);
+        if (!cads.length) { resolve(); return; }
+        _carAdd = { tipo, cads, daSelecao, resolve };
+
+        const opcoesForn = db.fornecedores.slice()
+            .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'))
+            .map(f => `<option value="${escapeHtml(String(f.id))}">${escapeHtml(f.nome || '')}</option>`).join('');
+        const inp = 'padding:6px 8px;border:1px solid #ccc;border-radius:4px';
+        const linhas = cads.map((c, i) => {
+            const forn = _pcFornecedorDoCadastro(c);
+            const fornHtml = forn.fornecedor_id
+                ? `<span style="font-size:14px">${escapeHtml(forn.fornecedor_nome)}</span>`
+                : `<select class="car-add-forn" style="${inp};max-width:100%"><option value="">Escolha o fornecedor…</option>${opcoesForn}</select>`;
+            return `<div class="car-add-linha" data-i="${i}" style="padding:10px 0;${i ? 'border-top:1px solid #eee' : ''}">
+                <div style="font-weight:600">${c.referencia ? `<span style="color:#8F8F8F;font-weight:400">${escapeHtml(c.referencia)}</span> ` : ''}${escapeHtml(c.nome)}</div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-top:6px">
+                    <label style="font-size:12px;flex:1 1 180px">Fornecedor<br>${fornHtml}</label>
+                    <label style="font-size:12px">Quantidade<br><input type="text" inputmode="decimal" autocomplete="off" class="car-add-qtd" style="${inp};width:110px"> <span class="car-add-un">${escapeHtml(_unidadeNoCarrinho(tipo, c))}</span></label>
+                </div>
+                <div class="car-add-erro" style="color:#C62828;font-size:12px;margin-top:4px"></div>
+            </div>`;
+        }).join('');
+
+        const o = document.createElement('div');
+        o.id = 'carrinho-add-modal';
+        o.className = 'sc-modal-overlay';
+        o.style.display = 'flex';
+        o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:520px;width:95%">
+            <h3 style="margin:0 0 6px;font-size:16px">🛒 Adicionar ao carrinho${cads.length > 1 ? ` — ${cads.length} itens` : ''}</h3>
+            <div style="max-height:60vh;overflow:auto">${linhas}</div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+                <button type="button" class="btn btn-outline btn-sm" onclick="_fecharModalCarrinho()">Cancelar</button>
+                <button type="button" class="btn btn-sm" onclick="_confirmarModalCarrinho()">Adicionar</button>
+            </div>
+        </div>`;
+        o.addEventListener('click', e => { if (e.target === o) _fecharModalCarrinho(); });
+        o.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('.car-add-qtd')) _confirmarModalCarrinho(); });
+        document.body.appendChild(o);
+        o.querySelector('.car-add-qtd')?.focus();
+    });
+}
+
+function _fecharModalCarrinho() {
+    document.getElementById('carrinho-add-modal')?.remove();
+    const pendente = _carAdd;
+    _carAdd = null;
+    if (pendente) pendente.resolve();
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && _carAdd) _fecharModalCarrinho(); });
+
+function _confirmarModalCarrinho() {
+    const o = document.getElementById('carrinho-add-modal');
+    if (!o || !_carAdd) return;
+    const { tipo, cads, daSelecao } = _carAdd;
+    let primeiroErro = null;
+    const lidos = cads.map((c, i) => {
+        const linha = o.querySelector(`.car-add-linha[data-i="${i}"]`);
+        const campoQtd = linha.querySelector('.car-add-qtd');
+        const sel = linha.querySelector('.car-add-forn');
+        const erros = [];
+        const quantidade = _quantidadeCarrinho(campoQtd.value);
+        if (Number.isNaN(quantidade)) erros.push('Informe a quantidade (maior que zero).');
+        const forn = sel
+            ? db.fornecedores.find(f => String(f.id) === sel.value) || null
+            : db.fornecedores.find(f => f.id == c.fornecedor_id) || null;
+        if (!forn) erros.push(db.fornecedores.length ? 'Escolha o fornecedor.' : 'Nenhum fornecedor cadastrado — cadastre em Fornecedores.');
+        linha.querySelector('.car-add-erro').textContent = erros.join(' ');
+        if (erros.length && !primeiroErro) primeiroErro = Number.isNaN(quantidade) ? campoQtd : sel;
+        return { c, quantidade, forn, gravarForn: !!sel };
+    });
+    if (primeiroErro) { primeiroErro.focus?.(); return; }
+
+    let carrinhos = db.carrinhos;
+    let mudouCadastro = false;
+    lidos.forEach(({ c, quantidade, forn, gravarForn }) => {
+        if (gravarForn) { c.fornecedor_id = forn.id; c.fornecedor_nome = forn.nome || ''; mudouCadastro = true; }
+        carrinhos = CarrinhoCore.adicionarAoCarrinho(carrinhos, {
+            fornecedor_id: forn.id,
+            item: {
+                tipo, item_id: c.id, item_nome: c.nome, referencia: c.referencia || '',
+                unidade: _unidadeNoCarrinho(tipo, c), quantidade, preco_unit: Number(c.preco_custo) || 0
+            }
+        });
+    });
+    db.carrinhos = carrinhos;
+    syncDB();
+
+    const nForn = new Set(lidos.map(l => String(l.forn.id))).size;
+    const msg = lidos.length === 1
+        ? `Adicionado ao carrinho de ${lidos[0].forn.nome}`
+        : `${lidos.length} itens adicionados em ${nForn} ${nForn === 1 ? 'carrinho' : 'carrinhos'}`;
+    _fecharModalCarrinho();
+    if (daSelecao) catSelecao[tipo].clear();
+    if (daSelecao || mudouCadastro) _rerenderTabelasDoCarrinho(tipo);
+    toast(msg);
+}
+
+function _rerenderTabelasDoCarrinho(tipo) {
+    if (tipo === 'tecido') {
+        renderCatalogoTecidos();
+        renderEstoque();
+    } else {
+        renderMateriais();
+        if (document.getElementById('tb-estoque-mat')) renderEstoqueMateriais();
+    }
 }
 
 // ─── Pedido de compra a partir de um pedido de venda ─────────────────────
@@ -11844,10 +11945,9 @@ function renderEstoqueMateriais() {
                 : `<strong>${(m.estoque_atual||0).toFixed(2)}</strong>`}</td>
             <td class="col-num" style="color:#005D3B;font-weight:600">${m.preco > 0 ? 'R$ '+m.preco.toFixed(2) : '—'}</td>
             <td class="col-forn" title="${escapeHtml(m.fornecedor_nome||'')}">${escapeHtml(m.fornecedor_nome||'—')}</td>
-            <td class="col-acoes">
-                <button class="btn btn-outline btn-sm" onclick="mostrarAjusteForm(${m.id})" title="Ajustar estoque">±</button>
-                <button class="btn btn-outline btn-sm" onclick="pedirMaterial(${m.id})" title="Criar pedido de compra">🛒</button>
-            </td>
+            <td class="col-acoes">${botaoAdicionarAoCarrinho('material', m.id)}${menuAcoesHtml([
+                { icone: '±', rotulo: 'Ajustar estoque', onclick: `mostrarAjusteForm(${m.id})` }
+            ])}</td>
         </tr>
         <tr id="ajuste-${m.id}" class="ajuste-form" style="display:none">
             <td colspan="7" class="baixa-form-cell">

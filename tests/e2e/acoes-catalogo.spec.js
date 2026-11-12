@@ -21,23 +21,23 @@ async function abrir(page, aba) {
     if (aba) await page.click(`button[data-tab="${aba}"]`);
 }
 
-test('tecidos: ⋮ com editar, pedido de compra e remover', async ({ page }) => {
+test('tecidos: ⋮ com editar, adicionar ao carrinho e remover', async ({ page }) => {
     await abrir(page);
     const linha = page.locator('#tb-catalogo tr', { hasText: 'TRICO HERA' });
     await expect(linha.locator('td.col-acoes button')).toHaveCount(1);
     await linha.locator('button[aria-label="Ações"]').click();
-    await expect(itens(page)).toHaveText([/Editar$/, /Criar pedido de compra$/, /Remover do catálogo$/]);
+    await expect(itens(page)).toHaveText([/Editar$/, /Adicionar ao carrinho$/, /Remover do catálogo$/]);
     await itens(page).filter({ hasText: 'Editar' }).click();
     await expect(page.locator(MENU)).toHaveCount(0);
     await expect(page.locator('#cat-nome')).toHaveValue('TRICO HERA');
 });
 
-test('materiais: ⋮ com editar, ajustar estoque, pedido e excluir', async ({ page }) => {
+test('materiais: ⋮ com editar, ajustar estoque, carrinho e excluir', async ({ page }) => {
     await abrir(page, 'cat-materiais');
     const linha = page.locator('#tb-materiais tr', { hasText: 'TRILHO SUICO' });
     await expect(linha.locator('td.col-acoes button')).toHaveCount(1);
     await linha.locator('button[aria-label="Ações"]').click();
-    await expect(itens(page)).toHaveText([/Editar$/, /Ajustar estoque$/, /Criar pedido de compra$/, /Excluir material$/]);
+    await expect(itens(page)).toHaveText([/Editar$/, /Ajustar estoque$/, /Adicionar ao carrinho$/, /Excluir material$/]);
     await itens(page).filter({ hasText: 'Ajustar estoque' }).click();
     await expect(page.locator('#ajuste-11')).toBeVisible();
 });

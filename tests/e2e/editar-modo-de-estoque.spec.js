@@ -28,8 +28,12 @@ async function semear(page) {
     await page.reload();
 }
 
-const editarTecido = (page, nome) =>
-    page.locator('#tabela-tecidos tbody tr', { hasText: nome }).locator('button:has-text("✏️")').click();
+// A acao Editar fica no menu ⋮ da linha.
+async function editarNoMenu(page, tabela, nome) {
+    await page.locator(tabela + ' tbody tr', { hasText: nome }).locator('button[aria-label="Ações"]').click();
+    await page.locator('#menu-acoes-flutuante .menu-acoes-item', { hasText: 'Editar' }).click();
+}
+const editarTecido = (page, nome) => editarNoMenu(page, '#tabela-tecidos', nome);
 
 async function fecharAviso(page) {
     const ok = page.locator('#sc-modal-ok');
@@ -138,7 +142,7 @@ test('editar sem mexer no cartao preserva o modo do item', async ({ page }) => {
 test('material infinito tambem volta a ser controlado, zerando a quantidade', async ({ page }) => {
     await semear(page);
     await page.click('button[data-tab="cat-materiais"]');
-    await page.locator('#tabela-materiais tbody tr', { hasText: 'TRILHO INF' }).locator('button:has-text("✏️")').click();
+    await editarNoMenu(page, '#tabela-materiais', 'TRILHO INF');
     expect(await page.evaluate(() =>
         document.querySelector('input[name="mat-cfg-estoque"]:checked')?.value)).toBe('infinito');
 
