@@ -4,6 +4,8 @@
 const _gal = { fotos: [], indice: -1 };
 
 function iniciarGaleria() {
+    const topo = document.querySelector('a.gal-simular-topo');
+    if (topo) { if (GaleriaCore.SIMULADOR_ATIVO) topo.hidden = false; else topo.remove(); }
     window.addEventListener('hashchange', _galRota);
     document.addEventListener('keydown', _galTecla);
     _galRota();
@@ -11,7 +13,7 @@ function iniciarGaleria() {
 
 function _galRota() {
     const h = location.hash || '';
-    if (h.startsWith('#simular') && typeof abrirSimulador === 'function') {
+    if (GaleriaCore.SIMULADOR_ATIVO && h.startsWith('#simular') && typeof abrirSimulador === 'function') {
         abrirSimulador(_galPreSelecao(h));
         return;
     }
@@ -51,9 +53,9 @@ async function renderGaleria() {
             <h3>Nenhuma foto na galeria ainda</h3>
             <p>${disp ? 'As fotos de modelos reais que a empresa cadastrar aparecem aqui, separadas por tipo.'
                       : 'Este navegador não permite guardar fotos (pode ser uma janela anônima).'}
-               O simulador já funciona com as cores iniciais.</p>
+               ${GaleriaCore.SIMULADOR_ATIVO ? 'O simulador já funciona com as cores iniciais.' : ''}</p>
             <div class="gal-vazio-acoes">
-                <a href="galeria.html#simular" class="btn btn-success">📐 Simular na parede do cliente</a>
+                ${GaleriaCore.SIMULADOR_ATIVO ? '<a href="galeria.html#simular" class="btn btn-success">📐 Simular na parede do cliente</a>' : ''}
                 ${podeMontar ? '<a href="empresa.html#galeria" class="btn btn-outline">Montar o mostruário</a>' : ''}
             </div>
         </div>`;
@@ -68,7 +70,7 @@ async function renderGaleria() {
                 <div class="gal-foto" data-id="${escapeHtml(f.id)}" tabindex="0" role="button" aria-label="${escapeHtml(f.legenda || g.nome)}">
                     <img src="${f.url}" alt="" loading="lazy">
                     ${f.legenda ? `<span class="gal-legenda">${escapeHtml(f.legenda)}</span>` : ''}
-                    ${f.liga ? `<a class="gal-simular" href="${linkSimularFoto(f.liga)}" title="Simular na parede do cliente">📐 Simular</a>` : ''}
+                    ${f.liga && GaleriaCore.SIMULADOR_ATIVO ? `<a class="gal-simular" href="${linkSimularFoto(f.liga)}" title="Simular na parede do cliente">📐 Simular</a>` : ''}
                 </div>`).join('')}
             </div>
         </section>`;
@@ -118,7 +120,7 @@ function _galMostrar() {
     v.querySelector('.gal-visor-img').src = f.url;
     v.querySelector('.gal-visor-legenda').textContent = f.legenda || '';
     v.querySelector('.gal-visor-conta').textContent = `${_gal.indice + 1} / ${_gal.fotos.length}`;
-    v.querySelector('.gal-visor-acao').innerHTML = f.liga
+    v.querySelector('.gal-visor-acao').innerHTML = f.liga && GaleriaCore.SIMULADOR_ATIVO
         ? `<a class="btn btn-success btn-sm gal-simular" href="${linkSimularFoto(f.liga)}">📐 Simular na parede do cliente</a>` : '';
     const varias = _gal.fotos.length > 1;
     v.querySelector('.gal-visor-ant').hidden = !varias;

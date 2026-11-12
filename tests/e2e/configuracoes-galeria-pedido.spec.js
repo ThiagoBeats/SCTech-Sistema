@@ -235,6 +235,7 @@ test('o icone ao lado de Tipo de Prega abre a Galeria ja apontando para aquele t
 });
 
 test('o simulador abre dentro do pedido e o "← Galeria" volta para a galeria com o modelo simulado', async ({ page }) => {
+    test.skip(true, 'simulador desligado');
     await entrar(page, BASE);
     await page.goto(BASE + '/pedido.html');
     await page.click('.btn-galeria-pedido');

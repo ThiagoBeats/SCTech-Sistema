@@ -61,7 +61,7 @@ test('sem fotos mostra convite para montar o mostruario', async ({ page }) => {
     await page.goto(BASE + '/galeria.html');
     await expect(page.locator('#gal-conteudo')).toContainText('Nenhuma foto na galeria');
     await expect(page.locator('#gal-conteudo a[href="empresa.html#galeria"]')).toBeVisible();
-    await expect(page.locator('a.gal-simular-topo')).toBeVisible();
+    await expect(page.locator('a.gal-simular-topo')).toHaveCount(0); // simulador desligado
 });
 
 test('fotos agrupadas e visor em tela cheia', async ({ page }) => {
@@ -92,6 +92,7 @@ test('fotos agrupadas e visor em tela cheia', async ({ page }) => {
 });
 
 test('foto ligada a uma prega leva ao simulador com ela', async ({ page }) => {
+    test.skip(true, 'simulador desligado');
     await entrar(page, BASE);
     await semear(page, [{ id: 'f1', grupo: 'pregas', legenda: 'Wave', liga: { tipo: 'prega', valor: 'Wave Botao' } },
                         { id: 'f2', grupo: 'pregas', legenda: 'Sem ligação' }]);

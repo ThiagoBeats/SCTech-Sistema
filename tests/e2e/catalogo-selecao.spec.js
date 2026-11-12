@@ -340,7 +340,8 @@ test('mensagem curta nao ganha barra de rolagem', async ({ page }) => {
 test('sem nada marcado, o carrinho da linha leva so aquele item', async ({ page }) => {
     await abrirCatalogo(page);
     await page.locator('#tb-catalogo tr', { hasText: 'LINHO BELGA' })
-        .locator('button[title="Criar pedido de compra"]').click();
+        .locator('button[aria-label="Ações"]').click();
+    await page.locator('#menu-acoes-flutuante .menu-acoes-item', { hasText: 'Criar pedido de compra' }).click();
     await page.waitForURL(/fornecedores\.html/);
 
     const r = await page.evaluate(() => ({ itens: pcDraftItens, forn: document.getElementById('pc-fornecedor').value }));
@@ -512,7 +513,8 @@ test('com itens marcados, o carrinho de uma linha leva a selecao inteira', async
     await page.check('#chk-tec-todos');
 
     // clica no carrinho da linha, nao no da barra
-    await page.locator('#tb-catalogo tr').nth(0).locator('button[title="Criar pedido de compra"]').click();
+    await page.locator('#tb-catalogo tr').nth(0).locator('button[aria-label="Ações"]').click();
+    await page.locator('#menu-acoes-flutuante .menu-acoes-item', { hasText: 'Criar pedido de compra' }).click();
     await page.waitForURL(/fornecedores\.html/);
 
     expect(await page.evaluate(() => pcDraftItens.length)).toBe(2);

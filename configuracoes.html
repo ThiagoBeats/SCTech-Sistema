@@ -94,16 +94,25 @@
                 <p class="cfg-sub">Use pelo menos 6 caracteres.</p>
                 <div class="form-group">
                     <label for="seg-senha-atual">Senha atual</label>
-                    <input type="password" id="seg-senha-atual" autocomplete="current-password">
+                    <div class="campo-senha">
+                        <input type="password" id="seg-senha-atual" autocomplete="current-password">
+                        <button type="button" class="btn-ver-senha" data-alvo="seg-senha-atual" aria-pressed="false" aria-label="Mostrar senha atual" title="Mostrar a senha" onclick="alternarVerSenha(this)">👁️</button>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="seg-senha-nova">Nova senha</label>
-                    <input type="password" id="seg-senha-nova" autocomplete="new-password">
+                    <div class="campo-senha">
+                        <input type="password" id="seg-senha-nova" autocomplete="new-password">
+                        <button type="button" class="btn-ver-senha" data-alvo="seg-senha-nova" aria-pressed="false" aria-label="Mostrar nova senha" title="Mostrar a senha" onclick="alternarVerSenha(this)">👁️</button>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="seg-senha-conf">Confirmar nova senha</label>
-                    <input type="password" id="seg-senha-conf" autocomplete="new-password"
+                    <div class="campo-senha">
+                        <input type="password" id="seg-senha-conf" autocomplete="new-password"
                            onkeydown="if(event.key==='Enter') alterarMinhaSenha()">
+                        <button type="button" class="btn-ver-senha" data-alvo="seg-senha-conf" aria-pressed="false" aria-label="Mostrar confirmação da senha" title="Mostrar a senha" onclick="alternarVerSenha(this)">👁️</button>
+                    </div>
                 </div>
                 <div id="seg-erro" class="cfg-erro" role="alert" hidden></div>
                 <button class="btn btn-success" onclick="alterarMinhaSenha()">Alterar senha</button>

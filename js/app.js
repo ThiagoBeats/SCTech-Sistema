@@ -1581,6 +1581,16 @@ function testarSomNotificacao() {
     tocarSomNotificacao('success', true);
 }
 
+// Olho dos campos de senha (Configuracoes > Seguranca): alterna password/text.
+function alternarVerSenha(botao) {
+    const campo = document.getElementById(botao.dataset.alvo);
+    if (!campo) return;
+    const mostrar = campo.type === 'password';
+    campo.type = mostrar ? 'text' : 'password';
+    botao.setAttribute('aria-pressed', String(mostrar));
+    botao.title = mostrar ? 'Esconder a senha' : 'Mostrar a senha';
+}
+
 // Seguranca: alterar a propria senha
 async function alterarMinhaSenha() {
     const q = id => document.getElementById(id);
@@ -2708,11 +2718,11 @@ function renderCatalogoTecidos() {
             <td class="col-num">${textoMinimo(c, 'm')}</td>
             <td class="col-num">R$ ${(c.preco || 0).toFixed(2)}</td>
             <td class="col-forn" title="${escapeHtml(c.fornecedor_nome || '')}">${escapeHtml(c.fornecedor_nome || '—')}</td>
-            <td class="col-acoes">
-                <button class="btn btn-outline btn-sm" onclick="editarCatalogo(${c.id})" title="Editar">✏️</button>
-                <button class="btn btn-outline btn-sm" onclick="pedirTecido(${c.id})" title="Criar pedido de compra">🛒</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirCatalogo(${c.id})" title="Remover do catálogo">🗑️</button>
-            </td>
+            <td class="col-acoes">${menuAcoesHtml([
+                { icone: '✏️', rotulo: 'Editar', onclick: `editarCatalogo(${c.id})` },
+                { icone: '🛒', rotulo: 'Criar pedido de compra', onclick: `pedirTecido(${c.id})` },
+                { icone: '🗑️', rotulo: 'Remover do catálogo', onclick: `excluirCatalogo(${c.id})`, perigo: true }
+            ])}</td>
         </tr>`;
     }).join('') || `<tr><td colspan="9" style="text-align:center;color:#999;padding:20px;">${db.catalogo.length ? 'Nenhum tecido com esses filtros.' : 'Catálogo vazio.'}</td></tr>`;
 
@@ -5219,12 +5229,12 @@ function renderMateriais() {
                 : `<strong>${(m.estoque_atual || 0).toFixed(2)}</strong>`}</td>
             <td class="col-num">R$ ${(m.preco || 0).toFixed(2)}</td>
             <td class="col-forn" title="${escapeHtml(m.fornecedor_nome || '')}">${escapeHtml(m.fornecedor_nome || '—')}</td>
-            <td class="col-acoes">
-                <button class="btn btn-outline btn-sm" onclick="editarMaterial(${m.id})" title="Editar">✏️</button>
-                <button class="btn btn-outline btn-sm" onclick="mostrarAjusteForm(${m.id})" title="Ajustar estoque">±</button>
-                <button class="btn btn-outline btn-sm" onclick="pedirMaterial(${m.id})" title="Criar pedido de compra">🛒</button>
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirMaterial(${m.id})" title="Excluir material">🗑️</button>
-            </td>
+            <td class="col-acoes">${menuAcoesHtml([
+                { icone: '✏️', rotulo: 'Editar', onclick: `editarMaterial(${m.id})` },
+                { icone: '±', rotulo: 'Ajustar estoque', onclick: `mostrarAjusteForm(${m.id})` },
+                { icone: '🛒', rotulo: 'Criar pedido de compra', onclick: `pedirMaterial(${m.id})` },
+                { icone: '🗑️', rotulo: 'Excluir material', onclick: `excluirMaterial(${m.id})`, perigo: true }
+            ])}</td>
         </tr>
         <tr id="ajuste-${m.id}" class="ajuste-form" style="display:none">
             <td colspan="8" class="baixa-form-cell">
@@ -5621,6 +5631,7 @@ function renderKits() {
     // A lista do Estoque tem uma coluna de unidade a mais que a do Catálogo,
     // pedida para o módulo de estoque. A tabela diz qual das duas é.
     const comUnidade = !!tb.closest('table')?.dataset.comUnidade;
+    const noCatalogo = !comUnidade; // a tabela do Catalogo (sem coluna de unidade) usa o ⋮; a do Estoque segue com botoes
     pintarCabecalhoOrdenacao('#tabela-kits', kitSortState);
     tb.innerHTML = ordenarLista(db.kits, kitSortState, valorOrdenacaoKit).map(k => {
         const pronto = ehKitPronto(k);
@@ -5662,8 +5673,12 @@ function renderKits() {
             <td class="col-num">${pronto ? 'R$ ' + (k.preco || 0).toFixed(2) : '—'}</td>
             <td class="col-num">${saldo}</td>
             <td class="col-nome" title="${escapeHtml((k.itens || []).map(i => i.nome + ': ' + textoQtdItemKit(i)).join(' · '))}">${composicao}</td>
-            <td class="col-acoes">${ajustar}${editar}
-                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirKit(${k.id})">🗑️</button></td>
+            <td class="col-acoes">${noCatalogo ? menuAcoesHtml([
+                { icone: '±', rotulo: 'Ajustar estoque', onclick: `mostrarAjusteForm('kit-${k.id}')`, oculto: !(pronto && !temEstoqueInfinito(k)) },
+                { icone: '✏️', rotulo: 'Editar kit', onclick: `editarKit(${k.id})`, oculto: pronto },
+                { icone: '🗑️', rotulo: 'Excluir kit', onclick: `excluirKit(${k.id})`, perigo: true }
+            ]) : `${ajustar}${editar}
+                <button class="btn btn-outline btn-sm btn-danger" onclick="excluirKit(${k.id})">🗑️</button>`}</td>
         </tr>${linhaAjuste}`;
     }).join('');
 }

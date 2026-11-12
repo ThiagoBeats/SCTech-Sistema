@@ -5,6 +5,9 @@ const { entrar } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 
+// Simulador desligado por GaleriaCore.SIMULADOR_ATIVO = false; o codigo fica, os testes voltam ao religar.
+test.skip(true, 'simulador desligado');
+
 async function abrirComFoto(page) {
     await entrar(page, BASE);
     await page.goto(BASE + '/galeria.html#simular');
