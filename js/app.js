@@ -8297,9 +8297,175 @@ async function excluirFornecedor(id) {
         await showAlert(`Não é possível excluir: ${escapeHtml(f.nome)} está vinculado a ${matUsando.length} material(is) e ${catUsando.length} tecido(s).`, '🚫');
         return;
     }
+    const car = _carrinhoDe(id);
+    if (car && CarrinhoCore.contarItens(car) > 0) {
+        await showAlert(`Este fornecedor tem um carrinho aberto com ${CarrinhoCore.contarItens(car)} itens. Feche ou esvazie o carrinho antes.`, '🚫');
+        return;
+    }
     if (!await showConfirm(`Excluir o fornecedor "${f.nome}"?`, '🗑️', 'Excluir', 'Cancelar')) return;
     db.fornecedores = db.fornecedores.filter(x => x.id != id);
+    db.carrinhos = db.carrinhos.filter(c => c.fornecedor_id != id);
     salvarERecarregar('Fornecedor excluído.');
+}
+
+// --- CARRINHO POR FORNECEDOR (ver, editar, fechar) ---
+function _carrinhoDe(fornecedorId) {
+    return db.carrinhos.find(c => c.fornecedor_id == fornecedorId) || null;
+}
+
+function _carrinhoBotaoHtml(fornecedorId) {
+    const car = _carrinhoDe(fornecedorId);
+    const n = CarrinhoCore.contarItens(car);
+    const novo = car && car.novo && n > 0 ? '<span class="carrinho-selo-novo">novo</span>' : '';
+    const num = n > 0 ? `<span class="carrinho-contagem">${n}</span>` : '';
+    return `<button type="button" class="btn-carrinho${n > 0 ? ' cheio' : ''}" title="Carrinho de compras" aria-label="Carrinho de compras" onclick="abrirCarrinho(${fornecedorId})">🛒${num}${novo}</button>`;
+}
+
+let _carFornId = null;
+let _carFechando = false;
+
+function _carPodeEditar() { return temAcesso('fornecedores', 'completo'); }
+
+function abrirCarrinho(fornecedorId) {
+    if (!temAcesso('fornecedores', 'visualizar')) return;
+    const forn = db.fornecedores.find(f => f.id == fornecedorId);
+    if (!forn || document.getElementById('carrinho-modal')) return;
+    _carFornId = forn.id;
+    const car = _carrinhoDe(forn.id);
+    if (car && car.novo) {
+        car.novo = false;
+        syncDB();
+        renderTabelaFornecedores();
+    }
+    const o = document.createElement('div');
+    o.id = 'carrinho-modal';
+    o.className = 'sc-modal-overlay';
+    o.style.display = 'flex';
+    o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:720px;width:95%">
+        <h3 style="margin:0 0 10px;font-size:16px">🛒 Carrinho — ${escapeHtml(forn.nome)}</h3>
+        <div id="carrinho-corpo"></div>
+    </div>`;
+    o.addEventListener('click', e => { if (e.target === o) _carFecharJanela(); });
+    document.body.appendChild(o);
+    _carRender();
+}
+
+function _carFecharJanela() {
+    document.getElementById('carrinho-modal')?.remove();
+    _carFornId = null;
+}
+document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    // o Escape do aviso/confirmacao aberto por cima nao fecha o carrinho junto
+    const aviso = document.getElementById('sc-modal-overlay');
+    if (aviso && aviso.style.display === 'flex') return;
+    _carFecharJanela();
+});
+
+function _carRender() {
+    const corpo = document.getElementById('carrinho-corpo');
+    if (!corpo) return;
+    const car = _carrinhoDe(_carFornId) || { itens: [] };
+    const edita = _carPodeEditar();
+    const vazio = !CarrinhoCore.contarItens(car);
+    const th = 'padding:6px';
+    const fmtQ = q => String(q).replace('.', ',');
+    const linhas = car.itens.map(i => {
+        const sem = !(Number(i.preco_unit) > 0);
+        const chave = `'${i.tipo}',${Number(i.item_id)}`;
+        const qtd = edita
+            ? `<input type="text" inputmode="decimal" class="car-qtd" value="${fmtQ(i.quantidade)}" style="width:70px;padding:4px;border:1px solid #ccc;border-radius:4px;text-align:right" onchange="_carAlterarQtd(${chave},this.value)"> ${escapeHtml(i.unidade || '')}`
+            : `${fmtQ(i.quantidade)} ${escapeHtml(i.unidade || '')}`;
+        return `<tr style="border-top:1px solid #eee">
+            <td style="${th}"><strong>${escapeHtml(i.item_nome)}</strong>${i.referencia ? `<br><small style="color:#888">${escapeHtml(i.referencia)}</small>` : ''}</td>
+            <td style="white-space:nowrap">${qtd}</td>
+            <td style="text-align:right">${sem ? '<span style="color:#B3160A">sem preço</span>' : _histMoeda(i.preco_unit)}</td>
+            <td style="text-align:right">${sem ? '—' : _histMoeda(i.subtotal)}</td>
+            <td style="text-align:center">${edita ? `<button type="button" class="car-remover btn btn-outline btn-sm" title="Tirar do carrinho" aria-label="Tirar do carrinho" onclick="_carRemover(${chave})">✕</button>` : ''}</td>
+        </tr>`;
+    }).join('') || `<tr><td colspan="5" style="text-align:center;color:#999;padding:16px">O carrinho está vazio.</td></tr>`;
+    corpo.innerHTML = `<div style="max-height:50vh;overflow:auto;border:1px solid #eee;border-radius:4px">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead><tr style="text-align:left;background:#f6f6f6"><th style="${th}">Item</th><th>Quantidade</th><th style="text-align:right">Preço</th><th style="text-align:right">Subtotal</th><th></th></tr></thead>
+                <tbody>${linhas}</tbody>
+            </table>
+        </div>
+        <div class="car-total" style="text-align:right;font-weight:bold;margin:10px 0">Total: ${_histMoeda(CarrinhoCore.totalCarrinho(car))}</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+            ${edita ? `<button type="button" class="btn btn-outline btn-sm" onclick="esvaziarCarrinho(${_carFornId})"${vazio ? ' disabled' : ''}>Esvaziar</button>` : ''}
+            <button type="button" class="btn btn-outline btn-sm" onclick="_carFecharJanela()">Voltar</button>
+            ${edita ? `<button type="button" class="btn btn-success btn-sm" id="car-fechar-btn" onclick="fecharCarrinho(${_carFornId})"${vazio ? ' disabled' : ''}>Fechar e enviar ao fornecedor</button>` : ''}
+        </div>`;
+}
+
+function _carSalvar(carNovo) {
+    const i = db.carrinhos.findIndex(c => c.fornecedor_id == carNovo.fornecedor_id);
+    carNovo.atualizado_em = Date.now();
+    if (i >= 0) db.carrinhos[i] = carNovo; else db.carrinhos.push(carNovo);
+    syncDB();
+    renderTabelaFornecedores();
+    _carRender();
+}
+
+function _carAlterarQtd(tipo, itemId, texto) {
+    if (!_carPodeEditar()) return;
+    const car = _carrinhoDe(_carFornId);
+    if (!car) return;
+    const q = _valorDigitadoBaixa(texto, NaN);
+    if (!isFinite(q)) { _carRender(); return; }
+    _carSalvar(CarrinhoCore.alterarQuantidade(car, tipo, itemId, q));
+}
+
+function _carRemover(tipo, itemId) {
+    if (!_carPodeEditar()) return;
+    const car = _carrinhoDe(_carFornId);
+    if (!car) return;
+    _carSalvar(CarrinhoCore.removerItem(car, tipo, itemId));
+}
+
+async function esvaziarCarrinho(fornecedorId) {
+    if (!_carPodeEditar()) return;
+    const car = _carrinhoDe(fornecedorId);
+    if (!car || !CarrinhoCore.contarItens(car)) return;
+    if (!await showConfirm('Esvaziar o carrinho? Todos os itens serão removidos.', '🗑️', 'Esvaziar', 'Cancelar')) return;
+    db.carrinhos = db.carrinhos.filter(c => c.fornecedor_id != fornecedorId);
+    syncDB();
+    _carFecharJanela();
+    renderTabelaFornecedores();
+}
+
+async function fecharCarrinho(fornecedorId) {
+    if (!_carPodeEditar() || _carFechando) return;
+    const car = _carrinhoDe(fornecedorId);
+    const forn = db.fornecedores.find(f => f.id == fornecedorId);
+    if (!car || !forn || !CarrinhoCore.contarItens(car)) return;
+    _carFechando = true;
+    const btn = document.getElementById('car-fechar-btn');
+    if (btn) btn.disabled = true;
+    try {
+        const ok = await showConfirm(`Fechar o carrinho de ${forn.nome} e gerar o pedido de compra de ${_histMoeda(CarrinhoCore.totalCarrinho(car))}?`, '📨', 'Fechar e enviar', 'Cancelar');
+        if (!ok) { if (btn) btn.disabled = false; return; }
+        const atual = _carrinhoDe(fornecedorId);
+        if (!atual || !CarrinhoCore.contarItens(atual)) return;
+        const pc = {
+            id: gerarNumeroPedidoCompra(),
+            data_criacao: Date.now(),
+            status: 'Enviado',
+            data_envio: hojeLocal(),
+            fornecedor_id: forn.id,
+            fornecedor_nome: forn.nome,
+            itens: atual.itens.map(i => ({ ...i })),
+            observacoes: ''
+        };
+        db.pedidos_compra.push(pc);
+        db.carrinhos = db.carrinhos.filter(c => c.fornecedor_id != fornecedorId);
+        syncDB();
+        _carFecharJanela();
+        renderTabelaFornecedores();
+        abrirPedidoCompra(pc.id);
+    } finally {
+        _carFechando = false;
+    }
 }
 
 function renderTabelaFornecedores() {
@@ -8322,7 +8488,7 @@ function renderTabelaFornecedores() {
             <td style="font-size:13px">${escapeHtml(f.tel || '—')}</td>
             <td style="font-size:13px">${escapeHtml(f.email || '—')}</td>
             <td style="font-size:12px;color:#555">${vinc}</td>
-            <td class="td-acoes">${menuAcoesHtml([
+            <td class="td-acoes">${_carrinhoBotaoHtml(f.id)}${menuAcoesHtml([
                 { icone: '🛒', rotulo: 'Novo pedido de compra', onclick: `criarPCParaFornecedor(${f.id})` },
                 { icone: '📜', rotulo: 'Histórico de pedidos', onclick: `abrirHistoricoFornecedor(${f.id})`, oculto: !temAcesso('fornecedores', 'visualizar') },
                 { icone: '✏️', rotulo: 'Editar fornecedor', onclick: `editarFornecedor(${f.id})` },
