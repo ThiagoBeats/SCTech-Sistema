@@ -18,7 +18,9 @@ Pendências pequenas fora do Financeiro, para revisar quando o usuário pedir.
 - [ ] Quantidade "1.000" é lida como mil; definir regra de separador.
 - [ ] Tabela de 7 colunas usa colspan 6 na linha vazia (já existia antes).
 - [ ] Filtro do histórico se perde ao abrir o PDF de um pedido.
-- [ ] Guard do kit de referência removido no editar do kit.
+- [ ] Mesmo item adicionado de novo mantém a unidade gravada na primeira vez; se a unidade do cadastro mudar entre os dois, as quantidades somam com o rótulo antigo.
+- [ ] Fechar carrinho abre o PDF simples, não a janela de compartilhar (WhatsApp).
+- [ ] Carrinho só com itens sem preço gera pedido de R$ 0.
 - [ ] Comentários de cabeçalho da galeria ainda citam o simulador.
 - [ ] Loader do SheetJS duplicado (app.js e importador-ui.js); unificar.
 - [ ] Comentário sobre escapar onclick no `menuAcoesHtml`.
