@@ -185,22 +185,26 @@ test('Total Recebido avisa o que ainda vai cair no periodo', async ({ page }) =>
     await expect(kpi(page, 'Total Recebido')).toContainText(`inclui R$ 2.000,00 a cair até ${ddmm(d2)}`);
 });
 
-test('Resultado do mes atual avisa entradas a cair', async ({ page }) => {
-    const mesAt = mesMais(0);
-    test.skip(HOJE === ultimoDia(mesAt), 'ultimo dia do mes: nada pode cair depois de hoje no mes');
-    const amanha = somarDias(HOJE, 1);
-    await entrar(page, BASE, {
-        sc_contas_fin: CONTAS,
-        sc_cr: [crPago(1, 2000, HOJE)],
-        sc_mov_fin: [HOJE, amanha].map((d, i) => mov(1 + i, 10, d, 'entrada', 1000, 'cr', 1, 'Pedido 1 (cartão)'))
+test.describe('relogio fixo no dia 10', () => {
+    test.use({ timezoneId: 'America/Sao_Paulo' });
+    test('Resultado do mes atual avisa entradas a cair', async ({ page }) => {
+        const mesAt = mesMais(0);
+        const hoje = dia(mesAt, 10), amanha = dia(mesAt, 11);
+        await page.clock.install({ time: new Date(hoje + 'T12:00:00-03:00') });
+        await entrar(page, BASE, {
+            sc_contas_fin: CONTAS,
+            sc_cr: [crPago(1, 2000, hoje)],
+            sc_mov_fin: [hoje, amanha].map((d, i) => mov(1 + i, 10, d, 'entrada', 1000, 'cr', 1, 'Pedido 1 (cartão)'))
+        });
+        await page.goto(BASE + '/financeiro.html');
+        await page.locator('.fin-tab-btn[data-tab="resultado"]').click();
+        await expect(page.locator('#res-mes')).toHaveValue(mesAt);
+        await expect(page.locator('#res-entradas')).toHaveText('R$ 2.000,00');
+        await expect(page.locator('#res-entradas-a-cair')).toHaveText(`inclui R$ 1.000,00 a cair até ${ddmm(amanha)}`);
+        await page.fill('#res-mes', M);
+        await page.locator('#res-mes').dispatchEvent('change');
+        await expect(page.locator('#res-entradas-a-cair')).toBeHidden();
     });
-    await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="resultado"]').click();
-    await expect(page.locator('#res-entradas')).toHaveText('R$ 2.000,00');
-    await expect(page.locator('#res-entradas-a-cair')).toHaveText(`inclui R$ 1.000,00 a cair até ${ddmm(amanha)}`);
-    await page.fill('#res-mes', M);
-    await page.locator('#res-mes').dispatchEvent('change');
-    await expect(page.locator('#res-entradas-a-cair')).toBeHidden();
 });
 
 test('Lucro (Caixa) explica o imposto e marca quando e estimado', async ({ page }) => {

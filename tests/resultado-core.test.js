@@ -313,7 +313,31 @@ test('periodo parcial: guia paga no periodo com referencia fora dele conta pela 
     assert.strictEqual(m.imposto.valor, 160);
     assert.strictEqual(m.saidas, rm.saidas);
     assert.deepStrictEqual(m.imposto.pagas, []);
-    // Mes inteiro + pedaco: a guia de referencia 2026-10 paga no pedaco (20/11) nao conta de novo.
+    // Mes inteiro + pedaco: a guia de setembro paga em 20/10 conta pelo pagamento (o periodo tem pedaco);
+    // a de referencia 2026-10 paga no pedaco (20/11) nao conta de novo.
     const mp = R.resultadoDoPeriodo({ de: '2026-10-01', ate: '2026-11-25', ...base });
-    assert.strictEqual(mp.imposto.valor, 160);
+    assert.strictEqual(mp.imposto.valor, 160 + 120);
+    assert.deepStrictEqual(mp.imposto.porMes, { '2026-10': 160 });
+    assert.deepStrictEqual(mp.imposto.pagas.map(i => i.cp_id), [7]);
+});
+
+test('guia paga de referencia 2026-09 (120, paga em 20/10) nos formatos de periodo', () => {
+    const guia = { id: 7, categoria: 'imposto', valor: 120, status: 'Pago', mes_referencia: '2026-09', data_vencimento: '2026-10-20', data_pagamento: '2026-10-20' };
+    const base = { contasReceber: [], contasPagar: [guia], movimentos: [], aliquota: 0 };
+    const imp = (de, ate) => R.resultadoDoPeriodo({ de, ate, ...base }).imposto;
+    assert.strictEqual(imp('2026-10-01', '2026-10-31').valor, 0);       // so meses inteiros: so a referencia
+    assert.strictEqual(imp('2026-09-10', '2026-10-31').valor, 120);     // pedaco de setembro: pelo pagamento
+    assert.strictEqual(imp('2026-10-10', '2026-11-08').valor, 120);
+    const set = imp('2026-09-01', '2026-10-31');                        // setembro inteiro: uma vez, pela referencia
+    assert.strictEqual(set.valor, 120);
+    assert.deepStrictEqual(set.porMes, { '2026-09': 120, '2026-10': 0 });
+    assert.deepStrictEqual(set.pagas, []);
+    const out = imp('2026-10-01', '2026-11-25');                        // pelo pagamento + referencia de outubro a parte
+    assert.strictEqual(out.valor, 120);
+    assert.deepStrictEqual(out.pagas.map(i => i.cp_id), [7]);
+    assert.deepStrictEqual(out.porMes, { '2026-10': 0 });
+    // Com o imposto de outubro estimado (aliquota 6, faturamento 1000): 60 a parte, mais os 120 pelo pagamento.
+    const comFat = R.resultadoDoPeriodo({ de: '2026-10-01', ate: '2026-11-25', contasReceber: [{ id: 1, valor: 1000, status: 'Pago', data_pagamento: '2026-10-05' }], contasPagar: [guia], movimentos: [], aliquota: 6 });
+    assert.strictEqual(comFat.imposto.valor, 180);
+    assert.deepStrictEqual(comFat.imposto.porMes, { '2026-10': 60 });
 });
