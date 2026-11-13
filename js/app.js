@@ -14120,7 +14120,269 @@ function mostrarTabFinanceiro(tab) {
     else if (tab === 'dre')     renderDRE();
     else if (tab === 'extrato') renderExtrato();
     else if (tab === 'hoje')    renderHoje();
+    else if (tab === 'resultado') renderResultadoMes(_resMesAtual);
     _tabBackBtn('.tab-nav', _prevTabFin, () => mostrarTabFinanceiro(_prevTabFin));
+}
+
+// =============================================
+// FINANCEIRO — RESULTADO DO MES
+// =============================================
+
+const _resBrl = v => 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+let _resMesAtual = '';
+
+function _resLerLS(chave) {
+    try { const o = JSON.parse(localStorage.getItem(chave) || '{}'); return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {}; } catch (e) { return {}; }
+}
+
+function _resUltimoDia(mes) {
+    return mes + '-' + String(new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0).getDate()).padStart(2, '0');
+}
+
+// Pedidos aprovados nos ultimos 90 dias, no formato da margem por pedido (so usado sem historico).
+function _resPedidosFallback() {
+    const corte = Date.now() - 90 * 86400000;
+    const cad = { catalogo: db.catalogo, materiais: db.materiais, kits: db.kits };
+    const out = [];
+    (db.pedidos || []).forEach(p => {
+        if (normalizarStatus(p.status) === 'Orçamento') return;
+        const tl = (p.timeline || []).filter(t => t && t.status !== 'Orçamento' && typeof t.data === 'number').map(t => t.data);
+        const quando = tl.length ? Math.min(...tl) : (typeof p.data_producao === 'number' ? p.data_producao : (typeof p.data_criacao === 'number' ? p.data_criacao : (typeof p.id === 'number' && p.id > 1e11 ? p.id : 0)));
+        if (!(quando >= corte)) return;
+        const r = FinanceiroCore.resultadoPedido({ ...p, ambientes: normalizarAmbientes(p) }, db.contas_pagar, cad);
+        out.push({ receita: r.receita, custo_material: r.custo_material, custos_vinculados: r.custos_vinculados, comissoes: r.comissoes });
+    });
+    return out;
+}
+
+// Tudo o que a tela e o PDF mostram, para um mes.
+function _resDados(mes) {
+    const emp = getEmpresa();
+    const aliquota = emp.aliquota_estimada;
+    const base = { contasReceber: db.contas_receber, contasPagar: db.contas_pagar, movimentos: db.movimentos_fin, aliquota };
+    const r = ResultadoCore.resultadoDoMes({ mes, ...base });
+    const meta = ResultadoCore.metaDoMes(mes, { padrao: emp.meta_faturamento_padrao, ajustes: _resLerLS('sc_fin_metas') });
+    const fixas = ResultadoCore.despesasFixasDoMes({ mes, contasPagar: db.contas_pagar, despesasFixas: db.despesas_fixas });
+    const dadosPorMes = m => ResultadoCore.resultadoDoMes({ mes: m, ...base });
+    let margem = ResultadoCore.margemContribuicao({ mesAtual: mes, dadosPorMes, pedidosFallback: [], aliquota });
+    if (margem.base === null) margem = ResultadoCore.margemContribuicao({ mesAtual: mes, dadosPorMes, pedidosFallback: _resPedidosFallback(), aliquota });
+    const equilibrio = ResultadoCore.pontoEquilibrio(fixas, margem.pct);
+    const limites = Object.assign({}, emp.orcamento_padrao || {}, (_resLerLS('sc_fin_orcamento_mes')[mes]) || {});
+    const orcamento = ResultadoCore.statusOrcamento({ limites, gastos: r.porGrupo });
+    return { r, meta, fixas, margem, equilibrio, orcamento, aliquota };
+}
+
+// Entradas e saidas ainda previstas ate o ultimo dia do mes (hoje em diante), pelo mesmo motor da previsao
+// semanal. Entradas, saidas e despesas fixas passam filtradas ate o fim do mes; os repasses de cartao sao
+// calculados a parte para nao contar o que cai depois do fim do mes.
+function _resPrevisto(mes) {
+    const hoje = hojeLocal();
+    const fim = _resUltimoDia(mes);
+    const meios = getMeiosPag();
+    const contas = getContasFin();
+    const meioCartao = cr => { const mp = cr.meio_previsto; const m = mp ? meios.find(x => CaixaCore.mesmoId(x.id, mp.meio_id)) : null; return (m && (m.tipo === 'cartao_credito' || m.tipo === 'cartao_debito')) ? m : null; };
+    const abertos = (db.contas_receber || []).filter(c => c && c.status !== 'Pago');
+    const comum = abertos.filter(c => !meioCartao(c) && c.data_vencimento <= fim);
+    let cartao = 0;
+    abertos.filter(meioCartao).forEach(cr => {
+        const m = meioCartao(cr);
+        const data = cr.data_vencimento > hoje ? cr.data_vencimento : hoje;
+        const conta = contas.find(c => CaixaCore.mesmoId(c.id, m.conta_id));
+        CaixaCore.repassesCartao({ valor: Number(cr.valor) || 0, data, conta, tipo: m.tipo === 'cartao_debito' ? 'debito' : 'credito', vezes: cr.meio_previsto.vezes, antecipar: !!cr.meio_previsto.antecipar })
+            .forEach(x => { if (x.data <= fim) cartao += x.liquido; });
+    });
+    const dias = Math.round((new Date(fim + 'T00:00:00') - new Date(hoje + 'T00:00:00')) / 86400000) + 1;
+    const semanas = CaixaCore.previsaoSemanal({
+        hoje, saldoHoje: 0,
+        movimentos: (db.movimentos_fin || []).filter(m => m.data <= fim),
+        contasReceber: comum,
+        contasPagar: (db.contas_pagar || []).filter(c => c && c.data_vencimento <= fim),
+        despesasFixas: (db.despesas_fixas || []).map(df => ({ ...df, data_fim: (df.data_fim && df.data_fim < fim) ? df.data_fim : fim })),
+        contas, meios, semanas: Math.max(1, Math.ceil(dias / 7))
+    });
+    const entradas = CaixaCore.arredondar(semanas.reduce((s, w) => s + w.entradas, 0) + cartao);
+    const saidas = CaixaCore.arredondar(semanas.reduce((s, w) => s + w.saidas, 0));
+    return { entradas, saidas };
+}
+
+function renderResultadoMes(mes) {
+    const painel = document.getElementById('fin-resultado');
+    if (!painel || typeof ResultadoCore === 'undefined') return;
+    const hoje = hojeLocal();
+    if (!/^\d{4}-\d{2}$/.test(mes || '')) mes = _resMesAtual || hoje.slice(0, 7);
+    _resMesAtual = mes;
+    const inp = document.getElementById('res-mes');
+    if (inp && inp.value !== mes) inp.value = mes;
+    const podeEditar = temAcesso('financeiro.resultado', 'completo');
+    const d = _resDados(mes);
+    const r = d.r;
+    const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+
+    set('res-entradas', _resBrl(r.entradas));
+    set('res-saidas', _resBrl(r.saidas));
+    set('res-saldo', _resBrl(r.resultado));
+    document.getElementById('res-saldo').className = r.resultado < 0 ? 'res-neg' : 'res-pos';
+
+    // Meta
+    const elMeta = document.getElementById('res-meta');
+    let txtMeta = `Faturamento líquido ${_resBrl(r.faturamento)}`;
+    if (d.meta > 0) {
+        const falta = CaixaCore.arredondar(d.meta - r.faturamento);
+        txtMeta += ` · meta ${_resBrl(d.meta)} — ` + (falta <= 0 ? 'bateu a meta' : `faltou ${_resBrl(falta)}`);
+    } else txtMeta += ' · sem meta definida';
+    elMeta.innerHTML = `<span>${escapeHtml(txtMeta)}</span>` + (podeEditar ? ' <button class="fin-meta-edit-btn" id="res-meta-edit" onclick="ajustarMetaMes(_resMesAtual)" title="Ajustar a meta deste mês">✏️</button>' : '');
+
+    // Saidas por grupo
+    document.getElementById('res-grupos').innerHTML = ResultadoCore.GRUPOS.map(g => {
+        const est = g.id === 'imposto' && r.imposto.estimado ? ' <small style="color:#888">(estimado)</small>' : '';
+        return `<tr data-grupo="${g.id}"><td>${escapeHtml(g.rotulo)}${est}</td><td style="text-align:right">${_resBrl(r.porGrupo[g.id])}</td></tr>`;
+    }).join('');
+    const elAv = document.getElementById('res-imposto-aviso');
+    let avImp = '';
+    if (r.imposto.estimado) avImp = r.imposto.semAliquota ? 'Informe a alíquota em Empresa para estimar o imposto' : `guia ainda não lançada — estimativa ${_resBrl(r.imposto.valor)}`;
+    elAv.textContent = avImp;
+    elAv.style.display = avImp ? '' : 'none';
+
+    // Ponto de equilibrio
+    const frase = document.getElementById('res-equilibrio-frase');
+    const linha = document.getElementById('res-equilibrio-linha');
+    const aviso = document.getElementById('res-equilibrio-aviso');
+    aviso.style.display = 'none';
+    linha.textContent = '';
+    if (d.equilibrio.valor != null) {
+        frase.textContent = `Para pagar as contas do mês você precisa faturar ${_resBrl(d.equilibrio.valor)}.`;
+        linha.textContent = `empate ${_resBrl(d.equilibrio.valor)}` + (d.meta > 0 ? ` · meta ${_resBrl(d.meta)}` : '') + ` · faturado ${_resBrl(r.faturamento)}`;
+        if (d.margem.base === 'pedidos' || d.margem.meses.length < 3) { aviso.textContent = 'estimativa — poucos meses de histórico'; aviso.style.display = ''; }
+    } else if (d.equilibrio.motivo === 'margem_negativa') {
+        frase.textContent = 'Com a margem atual não há ponto de equilíbrio — os custos variáveis passam do faturamento.';
+    } else {
+        frase.textContent = 'Ainda não há histórico para calcular o ponto de equilíbrio.';
+    }
+
+    // Orcamento
+    const pctTxt = o => String(o.pct).replace('.', ',') + '%';
+    document.getElementById('res-orcamento').innerHTML = d.orcamento.map(o => {
+        const sit = o.faixa === 'estourou' ? `estourou ${_resBrl(-o.falta)}` : (o.faixa === 'perto' ? `perto do limite (${pctTxt(o)})` : `dentro do limite (${pctTxt(o)})`);
+        return `<tr data-orc="${o.grupo}"><td>${escapeHtml(o.rotulo)}</td><td style="text-align:right">${_resBrl(o.limite)}</td><td style="text-align:right">${_resBrl(o.gasto)}</td><td class="res-faixa-${o.faixa}">${escapeHtml(sit)}</td><td>${podeEditar ? `<button class="res-ed" onclick="ajustarOrcamentoMes(_resMesAtual, '${o.grupo}')" title="Ajustar o limite só deste mês">✏️</button>` : ''}</td></tr>`;
+    }).join('');
+    document.getElementById('res-orcamento-vazio').style.display = d.orcamento.length ? 'none' : '';
+
+    // Mes aberto
+    const aberto = document.getElementById('res-aberto');
+    if (mes === hoje.slice(0, 7)) {
+        const prev = _resPrevisto(mes);
+        const ateHoje = ResultadoCore.resultadoDoMes({ mes, contasReceber: db.contas_receber, contasPagar: db.contas_pagar, movimentos: db.movimentos_fin, aliquota: d.aliquota, ateData: hoje }).resultado;
+        set('res-ate-hoje', _resBrl(ateHoje));
+        set('res-previsto', _resBrl(CaixaCore.arredondar(ateHoje + prev.entradas - prev.saidas)));
+        aberto.style.display = '';
+    } else aberto.style.display = 'none';
+}
+
+// Janelinha de ajuste de um valor (meta ou limite do mes). Vazio remove o ajuste.
+function _resAbrirAjuste({ titulo, dica, atual, aoSalvar }) {
+    document.getElementById('res-ajuste-modal')?.remove();
+    const o = document.createElement('div');
+    o.id = 'res-ajuste-modal';
+    o.className = 'sc-modal-overlay';
+    o.style.display = 'flex';
+    o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:380px;width:92%">
+        <h3 style="margin:0 0 10px;font-size:16px">${escapeHtml(titulo)}</h3>
+        <div class="form-group"><label for="res-ajuste-valor">Valor (R$)</label>
+            <input type="text" inputmode="decimal" id="res-ajuste-valor" value="${atual > 0 ? escapeHtml(String(atual).replace('.', ',')) : ''}" placeholder="ex: 30.000">
+            <small style="color:#888">${escapeHtml(dica)}</small></div>
+        <div id="res-ajuste-erro" style="color:#F43927;font-size:13px;min-height:16px"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+            <button class="btn btn-outline" id="res-ajuste-cancelar">Cancelar</button>
+            <button class="btn btn-primary" id="res-ajuste-ok">Salvar</button></div></div>`;
+    const fechar = () => o.remove();
+    o.addEventListener('click', e => { if (e.target === o) fechar(); });
+    o.querySelector('#res-ajuste-cancelar').onclick = fechar;
+    const salvar = () => {
+        const t = o.querySelector('#res-ajuste-valor').value.trim();
+        let v = 0;
+        if (t) {
+            v = _valorDigitadoBaixa(t);
+            if (Number.isNaN(v) || v < 0) { o.querySelector('#res-ajuste-erro').textContent = 'Informe só números (ex: 30.000 ou 30.000,50).'; return; }
+            v = CaixaCore.arredondar(v);
+        }
+        aoSalvar(v);
+        fechar();
+    };
+    o.querySelector('#res-ajuste-ok').onclick = salvar;
+    o.querySelector('#res-ajuste-valor').addEventListener('keydown', e => { if (e.key === 'Enter') salvar(); });
+    document.body.appendChild(o);
+    o.querySelector('#res-ajuste-valor').focus();
+}
+document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    const aviso = document.getElementById('sc-modal-overlay');
+    if (aviso && aviso.style.display === 'flex') return;
+    document.getElementById('res-ajuste-modal')?.remove();
+});
+
+function ajustarMetaMes(mes) {
+    if (!temAcesso('financeiro.resultado', 'completo')) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
+    const atual = _resLerLS('sc_fin_metas')[mes] || 0;
+    _resAbrirAjuste({
+        titulo: 'Meta de faturamento deste mês', dica: 'Vale só para este mês. Vazio volta à meta padrão da Empresa.', atual,
+        aoSalvar: v => {
+            const metas = _resLerLS('sc_fin_metas');
+            if (v > 0) metas[mes] = v; else delete metas[mes];
+            localStorage.setItem('sc_fin_metas', JSON.stringify(metas));
+            _finMetas = metas;
+            renderResultadoMes(mes);
+        }
+    });
+}
+
+function ajustarOrcamentoMes(mes, grupo) {
+    if (!temAcesso('financeiro.resultado', 'completo')) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
+    const g = ResultadoCore.GRUPOS.find(x => x.id === grupo);
+    if (!g) return;
+    const atual = ((_resLerLS('sc_fin_orcamento_mes')[mes]) || {})[grupo] || 0;
+    _resAbrirAjuste({
+        titulo: `Limite de ${g.rotulo} neste mês`, dica: 'Vale só para este mês. Vazio volta ao limite padrão da Empresa.', atual,
+        aoSalvar: v => {
+            const todos = _resLerLS('sc_fin_orcamento_mes');
+            const mm = Object.assign({}, todos[mes] || {});
+            if (v > 0) mm[grupo] = v; else delete mm[grupo];
+            if (Object.keys(mm).length) todos[mes] = mm; else delete todos[mes];
+            localStorage.setItem('sc_fin_orcamento_mes', JSON.stringify(todos));
+            renderResultadoMes(mes);
+        }
+    });
+}
+
+function exportarResultadoPDF(mes) {
+    if (!/^\d{4}-\d{2}$/.test(mes || '')) mes = _resMesAtual || hojeLocal().slice(0, 7);
+    const d = _resDados(mes);
+    const r = d.r;
+    const rotuloMes = mes.slice(5, 7) + '/' + mes.slice(0, 4);
+    const td = 'padding:6px 8px;border-bottom:1px solid #ddd';
+    const grupos = ResultadoCore.GRUPOS.map(g => `<tr><td style="${td}">${escapeHtml(g.rotulo)}${g.id === 'imposto' && r.imposto.estimado ? ' (estimado)' : ''}</td><td style="${td};text-align:right">${_resBrl(r.porGrupo[g.id])}</td></tr>`).join('');
+    let meta = `Faturamento líquido ${_resBrl(r.faturamento)}`;
+    if (d.meta > 0) { const f = CaixaCore.arredondar(d.meta - r.faturamento); meta += ` · meta ${_resBrl(d.meta)} — ` + (f <= 0 ? 'bateu a meta' : `faltou ${_resBrl(f)}`); }
+    let imp = '';
+    if (r.imposto.estimado) imp = r.imposto.semAliquota ? 'Informe a alíquota em Empresa para estimar o imposto' : `guia ainda não lançada — estimativa ${_resBrl(r.imposto.valor)}`;
+    let eq = '';
+    if (d.equilibrio.valor != null) eq = `Para pagar as contas do mês você precisa faturar ${_resBrl(d.equilibrio.valor)}.`;
+    else if (d.equilibrio.motivo === 'margem_negativa') eq = 'Com a margem atual não há ponto de equilíbrio — os custos variáveis passam do faturamento.';
+    const orc = d.orcamento.map(o => `<tr><td style="${td}">${escapeHtml(o.rotulo)}</td><td style="${td};text-align:right">${_resBrl(o.limite)}</td><td style="${td};text-align:right">${_resBrl(o.gasto)}</td><td style="${td}">${o.faixa === 'estourou' ? 'estourou ' + _resBrl(-o.falta) : (o.faixa === 'perto' ? 'perto do limite' : 'dentro do limite')}</td></tr>`).join('');
+    const html = `<div style="padding:24px;color:#242424">
+        <div class="doc-cab">${buildEmpresaHeaderHTML(52)}</div>
+        <h2 style="margin:16px 0 4px">Resultado do mês — ${escapeHtml(rotuloMes)}</h2>
+        <div style="display:flex;gap:32px;margin:12px 0;font-size:14px">
+            <div>Entradas<br><strong style="font-size:18px">${_resBrl(r.entradas)}</strong></div>
+            <div>Saídas<br><strong style="font-size:18px">${_resBrl(r.saidas)}</strong></div>
+            <div>Resultado<br><strong style="font-size:18px;color:${r.resultado < 0 ? '#F43927' : '#005D3B'}">${_resBrl(r.resultado)}</strong></div>
+        </div>
+        <div style="font-size:13px;margin-bottom:12px">${escapeHtml(meta)}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left;background:#f0f0f0"><th style="${td}">Saídas por grupo</th><th style="${td};text-align:right">Valor</th></tr></thead><tbody>${grupos}</tbody></table>
+        ${imp ? `<div style="font-size:12px;color:#B26A00;margin-top:6px">${escapeHtml(imp)}</div>` : ''}
+        ${eq ? `<div style="font-size:14px;font-weight:600;margin-top:14px">${escapeHtml(eq)}</div>` : ''}
+        ${orc ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:14px"><thead><tr style="text-align:left;background:#f0f0f0"><th style="${td}">Orçamento</th><th style="${td};text-align:right">Limite</th><th style="${td};text-align:right">Gasto</th><th style="${td}">Situação</th></tr></thead><tbody>${orc}</tbody></table>` : ''}
+    </div>`;
+    abrirDocModal(html, 'Resultado do mês — ' + rotuloMes);
 }
 
 // =============================================
