@@ -1200,7 +1200,8 @@ Nova aba (8ª) que mostra se o mês fechou no azul. Escolha o mês no campo "Mê
     contas, contam pela data do pagamento
   - Saídas por grupo: Fornecedores e materiais, Costureira e instalador,
     Comissões, Taxas de cartão, Despesas fixas, Imposto e Outros. Contam pela
-    data em que a conta foi paga
+    data em que a conta foi paga. Logo abaixo, a tela lembra: "Imposto contado
+    pelo mês de referência da guia (não pela data de pagamento)."
   - Imposto: conta pelo mês de referência da guia (o mês a que ela se refere),
     não pela data do pagamento. Se há guia lançada para o mês, vale o valor
     dela (paga ou em aberto). Se não há, o sistema estima pela alíquota da
@@ -1212,8 +1213,13 @@ Nova aba (8ª) que mostra se o mês fechou no azul. Escolha o mês no campo "Mê
     "faltou R$ X". Sem meta: "sem meta definida"
   - Ponto de equilíbrio: "Para pagar as contas do mês você precisa faturar
     R$ X". É as despesas fixas do mês dividida pela margem de contribuição.
+    As despesas fixas do mês contam pelo vencimento e incluem aluguel,
+    salário e contas mesmo lançados avulsos (sem ser despesa fixa), cada conta
+    uma vez só. Sem nenhuma despesa fixa no mês, aparece "Cadastre as despesas
+    fixas para calcular o ponto de equilíbrio" (em vez de R$ 0,00).
     A margem é o que sobra de cada R$ 1 faturado depois de fornecedores,
-    costureira/instalador, comissões e imposto, tirada da média dos 3 meses
+    costureira/instalador, comissões e imposto, tirada da média ponderada
+    (pelo faturamento) dos 3 meses
     fechados mais recentes com faturamento (olha até 12 meses para trás). Sem
     histórico, usa os pedidos e a alíquota. Com menos de 3 meses de histórico,
     aparece o aviso "estimativa — poucos meses de histórico". Se os custos
@@ -1227,10 +1233,13 @@ Nova aba (8ª) que mostra se o mês fechou no azul. Escolha o mês no campo "Mê
   - Mês em andamento (só o mês atual): "Até hoje" é o resultado já realizado
     e "Previsto até o fim do mês" soma o que ainda deve entrar e sair (contas
     a receber e a pagar, cartão que cai, despesas fixas). Se há atrasados
-    nessa conta, aparece "inclui atrasados". A previsão não projeta o imposto
-    estimado do resto do mês
-  - Entradas do mês atual avisam "inclui R$ X a cair até dd/mm" quando há
-    cartão que ainda não caiu
+    nessa conta, aparece "inclui atrasados". Guias de imposto ficam fora da
+    previsão (contam pelo mês de referência, então a guia do mês anterior que
+    vence agora não entra). Se o mês não tem guia lançada e há alíquota, a
+    previsão desconta o imposto estimado: alíquota × faturamento previsto do
+    mês (faturamento até hoje + entradas previstas − taxas previstas)
+  - Entradas avisam "inclui R$ X a cair até dd/mm" quando há cartão que ainda
+    não caiu (no mês atual ou num mês futuro)
   - Botão 📄 PDF: gera o relatório do mês (entradas, saídas, resultado, meta,
     saídas por grupo, ponto de equilíbrio, orçamento e mês em andamento)
 
@@ -1256,7 +1265,9 @@ Nova aba (8ª) que mostra se o mês fechou no azul. Escolha o mês no campo "Mê
     R$ X a cair até dd/mm". "A receber" e "A pagar" continuam contando só até
     hoje
   - O card "Lucro (Caixa)" mostra "recebido − saídas (imposto pela
-    referência)", com "(imposto estimado)" quando não há guia lançada
+    referência)", com "(imposto estimado)" quando não há guia lançada e
+    "· sem o imposto de meses incompletos" quando o período pega só um pedaço
+    de um mês e o imposto desse mês ficou de fora
   - Imposto em períodos que pegam só um pedaço do mês (7 dias, 30 dias,
     personalizado): o imposto pela referência entra só nos meses inteiros do
     período. Guia paga de um mês que não está inteiro no período conta pela

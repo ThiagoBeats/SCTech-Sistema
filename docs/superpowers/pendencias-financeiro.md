@@ -88,10 +88,11 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [ ] "Este mês" na Visão Geral vale o mês inteiro para recebido/saídas (inclui cartão a cair até o último dia), como o Resultado do mês e o Extrato; "A receber"/"A pagar" continuam até hoje.
 - [ ] Saldo Previsto da Visão Geral mistura janelas: recebido/pago no mês inteiro contra a receber/a pagar só até hoje.
 - [ ] O imposto do mês aparece no último dia do gráfico combo da Visão Geral.
-- [ ] O "Previsto até o fim do mês" (Resultado do mês) não projeta o imposto estimado do resto do mês.
 - [ ] Imposto parcelado mantém o deslocamento do mês de referência da primeira guia (pode não ser o desejado em todos os casos).
 - [ ] O imposto por referência (Resultado do mês, Visão Geral) pode diferir do caixa do Extrato, que mostra a data do pagamento.
 - [ ] O histórico de 12 meses da margem é recalculado a cada render do Resultado do mês.
+- [ ] Despesas fixas antigas sem data de início contam em meses anteriores à criação (ponto de equilíbrio de meses passados pode ficar maior).
+- [ ] Recebimento com data futura sem movimento some de 'Até hoje' e do 'Previsto' (ligado à pendência de data futura na baixa).
 
 ### Telas e textos
 - [ ] A opção "Imposto" está duplicada em dois lugares no código (formulário do A Pagar e despesas fixas).
