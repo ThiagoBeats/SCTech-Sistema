@@ -103,3 +103,8 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 ### Testes que faltam
 - [ ] Escape e empilhamento das janelas de ajuste (meta/limite) com outras janelas abertas.
 - [ ] O Chart.js vem do CDN e é instável nos testes (considerar cópia local ou espera mais robusta).
+
+### Da revisão final da Fase 2
+- [ ] Previsto até o fim do mês: a taxa de repasses de cartão já baixados e ainda a cair não é tirada do faturamento previsto, então o imposto estimado fica um pouco maior (ex.: taxa de R$ 30 a 6% → R$ 1,80).
+- [ ] Ponto de equilíbrio: despesa fixa antiga (sem periodicidade) + a mesma despesa lançada à mão como conta avulsa no mesmo mês contam duas vezes.
+- [ ] Previsto até o fim do mês: transferências futuras entre contas entram no faturamento previsto e aumentam o imposto estimado.
