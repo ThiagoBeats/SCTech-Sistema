@@ -160,11 +160,33 @@
             pagas.push({ data: cp.data_pagamento, valor: num(cp.valor), cp_id: cp.id });
             impostoTotal += num(cp.valor);
         });
-        const imposto = { valor: arredondar(impostoTotal), estimado, porMes, pagas };
+        // Imposto de mes incompleto que ficou de fora (nem pela referencia, nem pela guia paga no periodo).
+        let foraIncompleto = false;
+        if (ok) {
+            for (let mes = mesDe(de); mes <= mesDe(ate) && !foraIncompleto; mes = somarMeses(mes, 1)) {
+                if (Object.prototype.hasOwnProperty.call(porMes, mes)) continue;
+                const devido = resultadoDoMes({ mes, contasReceber, contasPagar, movimentos, aliquota }).imposto.valor;
+                const contado = pagas.reduce((s, i) => s + (referenciaGuia((contasPagar || []).find(cp => cp && mesmoId(cp.id, i.cp_id)) || {}) === mes ? i.valor : 0), 0);
+                if (arredondar(devido - contado) > 0) foraIncompleto = true;
+            }
+        }
+        const imposto = { valor: arredondar(impostoTotal), estimado, porMes, pagas, foraIncompleto };
         const taxas = sai.porGrupo.taxas;
         const porGrupo = Object.assign({}, sai.porGrupo, { imposto: imposto.valor });
         const saidas = arredondar(sai.total + imposto.valor);
         return { entradas, taxas, faturamento: arredondar(entradas - taxas), saidas, porGrupo, imposto, resultado: arredondar(entradas - saidas), itensEntrada: itensE, itensSaida: itensS };
+    }
+
+    // Previsto ate o fim do mes: resultado ate hoje + entradas previstas - saidas previstas (sem guias de
+    // imposto, que contam pela referencia) com o imposto do mes refeito sobre o faturamento previsto
+    // (faturamento ate hoje + entradas previstas - taxas previstas). Com guia de referencia no mes o imposto
+    // e o da guia (ja no ate hoje); sem guia, aliquota x faturamento previsto.
+    function previstoDoMes({ mes, ateHoje, entradasPrevistas, saidasPrevistas, taxasPrevistas, contasPagar, aliquota }) {
+        const a = ateHoje || {};
+        const faturamento = arredondar(num(a.faturamento) + num(entradasPrevistas) - num(taxasPrevistas));
+        const imposto = impostoDoMes({ mes, contasPagar, faturamento, aliquota });
+        const semImposto = num(a.resultado) + num(a.imposto && a.imposto.valor);
+        return { valor: arredondar(semImposto + num(entradasPrevistas) - num(saidasPrevistas) - imposto.valor), faturamento, imposto };
     }
 
     // Ajuste do mes (> 0) vence; senao o padrao; senao 0.
@@ -186,14 +208,15 @@
         return data;
     }
 
-    // Despesas fixas do mes (por vencimento): CPs tipo 'fixo' vencendo no mes (pagas ou nao)
-    // + DFs antigas (sem periodicidade), ativas, ainda nao geradas naquele mes.
+    // Despesas fixas do mes (por vencimento): CPs tipo 'fixo' ou do grupo Despesas fixas (aluguel, salario,
+    // conta, mesmo lancadas avulsas) vencendo no mes (pagas ou nao), cada CP uma vez + DFs antigas (sem periodicidade), ativas, ainda nao geradas naquele mes.
     // Guia de imposto lancada como fixa fica de fora: o imposto ja entra na margem (custo variavel).
     function despesasFixasDoMes({ mes, contasPagar, despesasFixas }) {
         const cps = contasPagar || [];
         let total = 0;
         cps.forEach(cp => {
-            if (cp && cp.tipo === 'fixo' && cp.categoria !== 'imposto' && mesDe(cp.data_vencimento) === mes) total += num(cp.valor);
+            if (!cp || cp.categoria === 'imposto' || mesDe(cp.data_vencimento) !== mes) return;
+            if (cp.tipo === 'fixo' || grupoDaCategoria(cp.categoria) === 'fixas') total += num(cp.valor);
         });
         (despesasFixas || []).forEach(df => {
             if (!df || df.periodicidade || df.ativo === false || df.categoria === 'imposto') return;
@@ -235,6 +258,7 @@
     }
 
     function pontoEquilibrio(despesasFixas, margemPct) {
+        if (!(num(despesasFixas) > 0)) return { valor: null, motivo: 'sem_fixas' };
         if (margemPct == null || margemPct === '' || !Number.isFinite(Number(margemPct))) return { valor: null, motivo: 'sem_margem' };
         const pct = Number(margemPct);
         if (pct <= 0) return { valor: null, motivo: 'margem_negativa' };
@@ -258,7 +282,7 @@
         return out;
     }
 
-    const api = { GRUPOS, grupoDaCategoria, entradasDoMes, saidasDoMes, impostoDoMes, resultadoDoMes, resultadoDoPeriodo, metaDoMes, despesasFixasDoMes, margemContribuicao, pontoEquilibrio, statusOrcamento, somarMeses, referenciaGuia };
+    const api = { GRUPOS, grupoDaCategoria, entradasDoMes, saidasDoMes, impostoDoMes, resultadoDoMes, resultadoDoPeriodo, metaDoMes, despesasFixasDoMes, margemContribuicao, pontoEquilibrio, statusOrcamento, previstoDoMes, somarMeses, referenciaGuia };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ResultadoCore = api;

@@ -215,3 +215,51 @@ test('limite so deste mes para grupo sem padrao, zero desliga e vazio remove', a
     await expect(o('fornecedores')).toHaveCount(1);
     expect((await ler(page, 'sc_fin_orcamento_mes'))[M]).toEqual({ servicos: 1000 });
 });
+
+// --- Revisao final (relogio fixo em 10/11/2026) ---
+test.describe('relogio fixo em 10/11/2026', () => {
+    test.use({ timezoneId: 'America/Sao_Paulo' });
+    const fixar = page => page.clock.install({ time: new Date('2026-11-10T12:00:00-03:00') });
+    async function abrirEm(page, dados, mes) {
+        await fixar(page);
+        await entrar(page, BASE, dados);
+        await page.goto(BASE + '/financeiro.html');
+        await page.locator('.fin-tab-btn[data-tab="resultado"]').click();
+        if (mes) { await page.fill('#res-mes', mes); await page.locator('#res-mes').dispatchEvent('change'); }
+    }
+
+    test('previsto: guia de outubro vencendo em novembro nao conta em novembro e o imposto estimado e projetado', async ({ page }) => {
+        const cr1 = { ...crPago(1, '2026-11', 1000), data_pagamento: '2026-11-05' };
+        const cr2 = { id: 2, pedido_id: 1, cliente_nome: 'Cli', descricao: 'Pedido', valor: 2000, data_vencimento: '2026-11-25', data_pagamento: null, status: 'Pendente', parcela_tipo: 'saldo' };
+        const guiaOut = { id: 3, descricao: 'DAS outubro', valor: 500, categoria: 'imposto', tipo: 'variavel', mes_referencia: '2026-10', data_vencimento: '2026-11-20', data_pagamento: null, status: 'Pendente' };
+        await abrirEm(page, { sc_cr: [cr1, cr2], sc_cp: [guiaOut], sc_empresa: { aliquota_estimada: 6 } });
+        await expect(page.locator('#res-mes')).toHaveValue('2026-11');
+        await expect(page.locator('#res-ate-hoje')).toHaveText('R$ 940,00');            // 1000 - 6%
+        // faturamento previsto 1000 + 2000 = 3000, imposto 6% = 180; a guia de outubro fica de fora
+        await expect(page.locator('#res-previsto')).toHaveText('R$ 2.820,00');
+        await page.click('#res-pdf');
+        await expect(page.locator('#doc-modal-paper')).toContainText('Previsto até o fim do mês: R$ 2.820,00');
+    });
+
+    test('ponto de equilibrio: aluguel avulso conta como fixa; sem fixas pede o cadastro (tela e PDF)', async ({ page }) => {
+        const cr = [crPago(1, '2026-10', 10000), crPago(2, '2026-09', 10000)];
+        const base = [cpPago(1, '2026-10', 'tecido', 3000), cpPago(10, '2026-09', 'tecido', 4000)];
+        await abrirEm(page, { sc_cr: cr, sc_cp: [...base, cpPago(4, '2026-10', 'aluguel', 1500, 'variavel')] }, '2026-10');
+        await expect(page.locator('#res-equilibrio-frase')).toHaveText('Para pagar as contas do mês você precisa faturar R$ 2.500,00.');
+
+        await abrirEm(page, { sc_cr: cr, sc_cp: base }, '2026-10');
+        await expect(page.locator('#res-equilibrio-frase')).toHaveText('Cadastre as despesas fixas para calcular o ponto de equilíbrio');
+        await expect(page.locator('#res-equilibrio-linha')).toBeEmpty();
+        await page.click('#res-pdf');
+        const doc = page.locator('#doc-modal-paper');
+        await expect(doc).toContainText('Cadastre as despesas fixas para calcular o ponto de equilíbrio');
+        await expect(doc).not.toContainText('R$ 0,00 ·');
+    });
+
+    test('saidas por grupo explicam a regra do imposto (tela e PDF)', async ({ page }) => {
+        await abrirEm(page, { sc_cr: [crPago(1, '2026-10', 1000)], sc_cp: [] }, '2026-10');
+        await expect(page.locator('#res-imposto-regra')).toHaveText('Imposto contado pelo mês de referência da guia (não pela data de pagamento).');
+        await page.click('#res-pdf');
+        await expect(page.locator('#doc-modal-paper')).toContainText('Imposto contado pelo mês de referência da guia (não pela data de pagamento).');
+    });
+});

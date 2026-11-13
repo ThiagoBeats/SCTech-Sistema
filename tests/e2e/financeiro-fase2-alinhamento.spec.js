@@ -205,6 +205,42 @@ test.describe('relogio fixo no dia 10', () => {
         await page.locator('#res-mes').dispatchEvent('change');
         await expect(page.locator('#res-entradas-a-cair')).toBeHidden();
     });
+
+    test('Resultado de mes futuro tambem avisa entradas a cair', async ({ page }) => {
+        await page.clock.install({ time: new Date('2026-11-10T12:00:00-03:00') });
+        await entrar(page, BASE, {
+            sc_contas_fin: CONTAS,
+            sc_cr: [crPago(1, 2000, '2026-11-10')],
+            sc_mov_fin: ['2026-11-10', '2026-12-05'].map((d, i) => mov(1 + i, 10, d, 'entrada', 1000, 'cr', 1, 'Pedido 1 (cartão)'))
+        });
+        await page.goto(BASE + '/financeiro.html');
+        await page.locator('.fin-tab-btn[data-tab="resultado"]').click();
+        await page.fill('#res-mes', '2026-12');
+        await page.locator('#res-mes').dispatchEvent('change');
+        await expect(page.locator('#res-entradas')).toHaveText('R$ 1.000,00');
+        await expect(page.locator('#res-entradas-a-cair')).toHaveText('inclui R$ 1.000,00 a cair até 05/12');
+        await page.fill('#res-mes', '2026-10');
+        await page.locator('#res-mes').dispatchEvent('change');
+        await expect(page.locator('#res-entradas-a-cair')).toBeHidden();
+    });
+
+    test('Lucro (Caixa) em 30 dias avisa o imposto de meses incompletos', async ({ page }) => {
+        await page.clock.install({ time: new Date('2026-11-10T12:00:00-03:00') });
+        // 30 dias = 12/10 a 10/11: outubro e novembro incompletos; outubro tem faturamento e aliquota.
+        await entrar(page, BASE, { sc_empresa: { aliquota_estimada: 6 }, sc_cr: [crPago(1, 1000, '2026-10-20')], sc_cp: [], sc_mov_fin: [] });
+        await page.goto(BASE + '/financeiro.html');
+        await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
+        await page.click('.fin-periodo-btn[data-p="30d"]');
+        await expect(kpi(page, 'Lucro')).toContainText('R$ 1.000,00');
+        await expect(kpi(page, 'Lucro')).toContainText('recebido − saídas (imposto pela referência) · sem o imposto de meses incompletos');
+        // Mes inteiro (outubro): o imposto entra, sem o aviso.
+        await page.click('.fin-periodo-btn[data-p="custom"]');
+        await page.fill('#fin-custom-ini', '2026-10-01');
+        await page.fill('#fin-custom-fim', '2026-10-31');
+        await page.click('#fin-custom-range button');
+        await expect(kpi(page, 'Lucro')).toContainText('R$ 940,00');
+        await expect(kpi(page, 'Lucro')).not.toContainText('meses incompletos');
+    });
 });
 
 test('Lucro (Caixa) explica o imposto e marca quando e estimado', async ({ page }) => {

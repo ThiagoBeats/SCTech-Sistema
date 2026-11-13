@@ -13952,7 +13952,8 @@ function dinheiroDoPeriodoFin() {
     const pedPagos = new Set();
     res.itensEntrada.forEach(i => { const cr = crPorId.get(String(i.cr_id)); if (cr && cr.pedido_id) pedPagos.add(cr.pedido_id); });
     const aCair = textoACairFin(res.itensEntrada);
-    const lucroSub = 'recebido − saídas (imposto pela referência)' + (res.imposto.estimado ? ' (imposto estimado)' : '');
+    const lucroSub = 'recebido − saídas (imposto pela referência)' + (res.imposto.estimado ? ' (imposto estimado)' : '')
+        + (res.imposto.foraIncompleto ? ' · sem o imposto de meses incompletos' : '');
     const impostoJaContado = cp => cp.categoria === 'imposto' && Object.prototype.hasOwnProperty.call(res.imposto.porMes, ResultadoCore.referenciaGuia(cp));
     return { res, ate, recebido: res.entradas, totalPago: res.saidas, lucro: res.resultado, pedPagos, ticketMedio: pedPagos.size ? res.entradas / pedPagos.size : 0, impostoJaContado, aCair, lucroSub };
 }
@@ -14214,7 +14215,8 @@ function _resDados(mes) {
 
 // Entradas e saidas ainda previstas ate o ultimo dia do mes (hoje em diante), pelo mesmo motor da previsao
 // semanal. Entradas, saidas e despesas fixas passam filtradas ate o fim do mes; os repasses de cartao sao
-// calculados a parte para nao contar o que cai depois do fim do mes.
+// calculados a parte para nao contar o que cai depois do fim do mes. Guias de imposto (e despesas fixas
+// antigas de imposto) ficam de fora: o imposto conta pela referencia e e refeito em ResultadoCore.previstoDoMes.
 function _resPrevisto(mes) {
     const hoje = hojeLocal();
     const fim = _resUltimoDia(mes);
@@ -14223,8 +14225,10 @@ function _resPrevisto(mes) {
     const meioCartao = cr => { const mp = cr.meio_previsto; const m = mp ? meios.find(x => CaixaCore.mesmoId(x.id, mp.meio_id)) : null; return (m && (m.tipo === 'cartao_credito' || m.tipo === 'cartao_debito')) ? m : null; };
     const abertos = (db.contas_receber || []).filter(c => c && c.status !== 'Pago');
     const comum = abertos.filter(c => !meioCartao(c) && c.data_vencimento <= fim);
-    // A guia de imposto com referencia neste mes ja esta no resultado (imposto lancado): fora da previsao.
-    const cps = (db.contas_pagar || []).filter(c => c && c.data_vencimento <= fim && !(c.categoria === 'imposto' && ResultadoCore.referenciaGuia(c) === mes && c.status !== 'Pago'));
+    // Guia de imposto, de qualquer referencia, fica fora da previsao: a deste mes ja esta no resultado e a do
+    // mes anterior (vencendo agora) e daquele mes.
+    const cps = (db.contas_pagar || []).filter(c => c && c.data_vencimento <= fim && c.categoria !== 'imposto');
+    const cpImposto = new Set((db.contas_pagar || []).filter(c => c && c.categoria === 'imposto').map(c => String(c.id)));
     const atrasados = comum.some(c => c.data_vencimento < hoje) || abertos.filter(meioCartao).some(c => c.data_vencimento < hoje)
         || cps.some(c => c.status !== 'Pago' && c.data_vencimento < hoje);
     let cartao = 0;
@@ -14238,15 +14242,17 @@ function _resPrevisto(mes) {
     const dias = Math.round((new Date(fim + 'T00:00:00') - new Date(hoje + 'T00:00:00')) / 86400000) + 1;
     const semanas = CaixaCore.previsaoSemanal({
         hoje, saldoHoje: 0,
-        movimentos: (db.movimentos_fin || []).filter(m => m.data <= fim),
+        movimentos: (db.movimentos_fin || []).filter(m => m.data <= fim && !(m.origem === 'cp' && cpImposto.has(String(m.origem_id)))),
         contasReceber: comum,
         contasPagar: cps,
-        despesasFixas: (db.despesas_fixas || []).map(df => ({ ...df, data_fim: (df.data_fim && df.data_fim < fim) ? df.data_fim : fim })),
+        despesasFixas: (db.despesas_fixas || []).filter(df => df && df.categoria !== 'imposto').map(df => ({ ...df, data_fim: (df.data_fim && df.data_fim < fim) ? df.data_fim : fim })),
         contas, meios, semanas: Math.max(1, Math.ceil(dias / 7))
     });
     const entradas = CaixaCore.arredondar(semanas.reduce((s, w) => s + w.entradas, 0) + cartao);
     const saidas = CaixaCore.arredondar(semanas.reduce((s, w) => s + w.saidas, 0));
-    return { entradas, saidas, atrasados };
+    // Taxas de cartao ainda previstas (CPs em aberto): saem do faturamento previsto.
+    const taxas = CaixaCore.arredondar(cps.filter(c => c.status !== 'Pago' && c.categoria === 'taxa_cartao').reduce((s, c) => s + (Number(c.valor) || 0), 0));
+    return { entradas, saidas, taxas, atrasados };
 }
 
 // Frase, linha e aviso do ponto de equilibrio (tela e PDF).
@@ -14259,6 +14265,7 @@ function _resTextosEquilibrio(d) {
             aviso: (d.margem.base === 'pedidos' || d.margem.meses.length < 3) ? 'estimativa — poucos meses de histórico' : ''
         };
     }
+    if (d.equilibrio.motivo === 'sem_fixas') return { frase: 'Cadastre as despesas fixas para calcular o ponto de equilíbrio', linha: '', aviso: '' };
     if (d.equilibrio.motivo === 'margem_negativa') return { frase: 'Com a margem atual não há ponto de equilíbrio — os custos variáveis passam do faturamento.', linha: '', aviso: '' };
     return { frase: 'Ainda não há histórico para calcular o ponto de equilíbrio.', linha: '', aviso: '' };
 }
@@ -14268,8 +14275,9 @@ function _resAndamento(mes, d) {
     if (mes !== hojeLocal().slice(0, 7)) return null;
     const hoje = hojeLocal();
     const prev = _resPrevisto(mes);
-    const ateHoje = resultadoFinanceiroDoMes(mes, hoje).resultado;
-    return { ateHoje, previsto: CaixaCore.arredondar(ateHoje + prev.entradas - prev.saidas), atrasados: prev.atrasados };
+    const rHoje = resultadoFinanceiroDoMes(mes, hoje);
+    const previsto = ResultadoCore.previstoDoMes({ mes, ateHoje: rHoje, entradasPrevistas: prev.entradas, saidasPrevistas: prev.saidas, taxasPrevistas: prev.taxas, contasPagar: db.contas_pagar, aliquota: d.aliquota });
+    return { ateHoje: rHoje.resultado, previsto: previsto.valor, atrasados: prev.atrasados };
 }
 
 function _resPctTxt(o) { return String(o.pct).replace('.', ',') + '%'; }
@@ -14293,7 +14301,7 @@ function renderResultadoMes(mes) {
     set('res-entradas', _resBrl(r.entradas));
     const elACair = document.getElementById('res-entradas-a-cair');
     if (elACair) {
-        const txt = mes === hoje.slice(0, 7) ? textoACairFin(ResultadoCore.entradasDoMes({ mes, ...dadosFinanceirosBase() }).itens) : '';
+        const txt = textoACairFin(ResultadoCore.entradasDoMes({ mes, ...dadosFinanceirosBase() }).itens);
         elACair.textContent = txt;
         elACair.style.display = txt ? '' : 'none';
     }
@@ -14453,6 +14461,7 @@ function exportarResultadoPDF(mes) {
         </div>
         <div style="font-size:13px;margin-bottom:12px">${escapeHtml(meta)}</div>
         <table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left;background:#f0f0f0"><th style="${td}">Saídas por grupo</th><th style="${td};text-align:right">Valor</th></tr></thead><tbody>${grupos}</tbody></table>
+        <div style="font-size:12px;color:#666;margin-top:4px">Imposto contado pelo mês de referência da guia (não pela data de pagamento).</div>
         ${imp ? `<div style="font-size:12px;color:#B26A00;margin-top:6px">${escapeHtml(imp)}</div>` : ''}
         <div style="font-size:14px;font-weight:600;margin-top:14px">${escapeHtml(eq.frase)}</div>
         ${eq.linha ? `<div style="font-size:13px;margin-top:4px">${escapeHtml(eq.linha)}</div>` : ''}

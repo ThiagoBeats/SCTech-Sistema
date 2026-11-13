@@ -341,3 +341,62 @@ test('guia paga de referencia 2026-09 (120, paga em 20/10) nos formatos de perio
     assert.strictEqual(comFat.imposto.valor, 180);
     assert.deepStrictEqual(comFat.imposto.porMes, { '2026-10': 60 });
 });
+
+// --- Revisao final ---
+test('despesas fixas: aluguel/salario/conta avulsos (tipo variavel) contam pelo vencimento, sem dobrar', () => {
+    const contasPagar = [
+        { id: 1, tipo: 'variavel', categoria: 'aluguel', descricao: 'Aluguel avulso', valor: 1800, status: 'Pendente', data_vencimento: '2026-11-05' },
+        { id: 2, tipo: 'fixo', categoria: 'conta', descricao: 'Luz', valor: 300, status: 'Pago', data_vencimento: '2026-11-10', data_pagamento: '2026-11-10' },
+        { id: 3, categoria: 'salario', descricao: 'Salario', valor: 2500, status: 'Pago', data_vencimento: '2026-11-30', data_pagamento: '2026-12-01' },
+        { id: 4, tipo: 'variavel', categoria: 'tecido', descricao: 'Tecido', valor: 700, status: 'Pago', data_vencimento: '2026-11-05', data_pagamento: '2026-11-05' },
+        { id: 5, tipo: 'variavel', categoria: 'aluguel', descricao: 'Aluguel de outubro', valor: 1800, status: 'Pago', data_vencimento: '2026-10-05', data_pagamento: '2026-11-02' },
+        { id: 6, tipo: 'fixo', categoria: 'imposto', descricao: 'DAS', valor: 400, status: 'Pendente', data_vencimento: '2026-11-20', mes_referencia: '2026-10' }
+    ];
+    assert.strictEqual(R.despesasFixasDoMes({ mes: '2026-11', contasPagar, despesasFixas: [] }), 1800 + 300 + 2500);
+    assert.strictEqual(R.despesasFixasDoMes({ mes: '2026-10', contasPagar, despesasFixas: [] }), 1800);
+});
+
+test('ponto de equilibrio sem despesas fixas: motivo sem_fixas (nao R$ 0,00)', () => {
+    assert.deepStrictEqual(R.pontoEquilibrio(0, 30), { valor: null, motivo: 'sem_fixas' });
+    assert.deepStrictEqual(R.pontoEquilibrio('', 30), { valor: null, motivo: 'sem_fixas' });
+    assert.deepStrictEqual(R.pontoEquilibrio(0, null), { valor: null, motivo: 'sem_fixas' });
+});
+
+test('previsto do mes: sem guia de referencia no mes desconta a aliquota do faturamento previsto', () => {
+    const base = { contasReceber: [{ id: 1, valor: 1000, status: 'Pago', data_pagamento: '2026-11-05' }], movimentos: [], aliquota: 6 };
+    // Guia de outubro em aberto vencendo em novembro: e de outubro, nao conta em novembro.
+    const guiaOut = { id: 1, categoria: 'imposto', valor: 500, status: 'Pendente', mes_referencia: '2026-10', data_vencimento: '2026-11-20' };
+    const ateHoje = R.resultadoDoMes({ mes: '2026-11', contasPagar: [guiaOut], ateData: '2026-11-10', ...base });
+    assert.strictEqual(ateHoje.resultado, 940);       // 1000 - 6% estimado
+    const p = R.previstoDoMes({ mes: '2026-11', ateHoje, entradasPrevistas: 2000, saidasPrevistas: 300, taxasPrevistas: 100, contasPagar: [guiaOut], aliquota: 6 });
+    // faturamento previsto = 1000 + 2000 - 100 = 2900; imposto 6% = 174
+    assert.strictEqual(p.faturamento, 2900);
+    assert.strictEqual(p.imposto.valor, 174);
+    assert.strictEqual(p.imposto.estimado, true);
+    assert.strictEqual(p.valor, 1000 + 2000 - 300 - 174);
+    // Com guia de novembro lancada: o imposto e o da guia (ja no ate hoje), sem estimativa.
+    const guiaNov = { id: 2, categoria: 'imposto', valor: 90, status: 'Pendente', mes_referencia: '2026-11', data_vencimento: '2026-12-20' };
+    const ateHoje2 = R.resultadoDoMes({ mes: '2026-11', contasPagar: [guiaOut, guiaNov], ateData: '2026-11-10', ...base });
+    const p2 = R.previstoDoMes({ mes: '2026-11', ateHoje: ateHoje2, entradasPrevistas: 2000, saidasPrevistas: 300, taxasPrevistas: 100, contasPagar: [guiaOut, guiaNov], aliquota: 6 });
+    assert.strictEqual(p2.valor, 1000 - 90 + 2000 - 300);
+    // Sem aliquota e sem guia: nada a descontar.
+    const ateHoje3 = R.resultadoDoMes({ mes: '2026-11', contasPagar: [], ateData: '2026-11-10', ...base, aliquota: 0 });
+    assert.strictEqual(R.previstoDoMes({ mes: '2026-11', ateHoje: ateHoje3, entradasPrevistas: 2000, saidasPrevistas: 300, taxasPrevistas: 0, contasPagar: [], aliquota: 0 }).valor, 2700);
+});
+
+test('periodo: marca quando o imposto de mes incompleto ficou de fora', () => {
+    const cr = [{ id: 1, valor: 1000, status: 'Pago', data_pagamento: '2026-10-15' }];
+    const base = { contasReceber: cr, movimentos: [], aliquota: 6 };
+    // 30 dias sem mes inteiro, outubro com faturamento e aliquota: estimativa de outubro fica de fora.
+    assert.strictEqual(R.resultadoDoPeriodo({ de: '2026-10-10', ate: '2026-11-08', contasPagar: [], ...base }).imposto.foraIncompleto, true);
+    // Mes inteiro: nada fica de fora.
+    assert.strictEqual(R.resultadoDoPeriodo({ de: '2026-10-01', ate: '2026-10-31', contasPagar: [], ...base }).imposto.foraIncompleto, false);
+    // Sem aliquota e sem guia: nao ha imposto a perder.
+    assert.strictEqual(R.resultadoDoPeriodo({ de: '2026-10-10', ate: '2026-11-08', contasPagar: [], ...base, aliquota: 0 }).imposto.foraIncompleto, false);
+    // Guia de outubro paga dentro do periodo (conta pelo pagamento): nada de outubro fica de fora.
+    const guia = { id: 9, categoria: 'imposto', valor: 60, status: 'Pago', mes_referencia: '2026-10', data_vencimento: '2026-11-05', data_pagamento: '2026-11-05' };
+    assert.strictEqual(R.resultadoDoPeriodo({ de: '2026-10-10', ate: '2026-11-08', contasPagar: [guia], ...base, aliquota: 0 }).imposto.foraIncompleto, false);
+    // Guia de outubro em aberto: fica de fora.
+    const aberta = { ...guia, status: 'Pendente', data_pagamento: null };
+    assert.strictEqual(R.resultadoDoPeriodo({ de: '2026-10-10', ate: '2026-11-08', contasPagar: [aberta], ...base, aliquota: 0 }).imposto.foraIncompleto, true);
+});
