@@ -79,3 +79,32 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [ ] Cobrança: casar por nome, fallback e permissão.
 - [ ] Excluir transferência: permissão negada.
 - [ ] Periodicidade de despesas fixas: teste com data fora do horizonte (o atual pode ser fraco).
+
+## Da Fase 2 (branch `feat/financeiro-fase2`)
+
+### Dados e dinheiro
+- [ ] Recebimento antigo sem movimento (de antes das contas) conta no Resultado do mês e na Visão Geral, mas não aparece no Extrato (não passou por conta nenhuma).
+- [ ] Visão Geral com período que pega só um pedaço do mês (7 dias, 30 dias, personalizado) não leva o imposto daquele mês; o imposto (pela referência) entra só nos meses inteiros do período.
+- [ ] "Este mês" na Visão Geral vale o mês inteiro para recebido/saídas (inclui cartão a cair até o último dia), como o Resultado do mês e o Extrato; "A receber"/"A pagar" continuam até hoje.
+- [ ] Saldo Previsto da Visão Geral mistura janelas: recebido/pago no mês inteiro contra a receber/a pagar só até hoje.
+- [ ] O imposto do mês aparece no último dia do gráfico combo da Visão Geral.
+- [ ] Imposto parcelado mantém o deslocamento do mês de referência da primeira guia (pode não ser o desejado em todos os casos).
+- [ ] O imposto por referência (Resultado do mês, Visão Geral) pode diferir do caixa do Extrato, que mostra a data do pagamento.
+- [ ] O histórico de 12 meses da margem é recalculado a cada render do Resultado do mês.
+- [ ] Despesas fixas antigas sem data de início contam em meses anteriores à criação (ponto de equilíbrio de meses passados pode ficar maior).
+- [ ] Recebimento com data futura sem movimento some de 'Até hoje' e do 'Previsto' (ligado à pendência de data futura na baixa).
+
+### Telas e textos
+- [ ] A opção "Imposto" está duplicada em dois lugares no código (formulário do A Pagar e despesas fixas).
+- [ ] O campo de valor das parcelas (`cpm-valor`) ainda é `type=number` e não aceita "1.250,50".
+- [ ] Na Visão Geral, a meta padrão não aparece como sugestão (sem placeholder) no campo de ajuste do mês.
+- [ ] O seletor "+ Limite só neste mês" fica visível mesmo sem nenhum orçamento definido.
+
+### Testes que faltam
+- [ ] Escape e empilhamento das janelas de ajuste (meta/limite) com outras janelas abertas.
+- [ ] O Chart.js vem do CDN e é instável nos testes (considerar cópia local ou espera mais robusta).
+
+### Da revisão final da Fase 2
+- [ ] Previsto até o fim do mês: a taxa de repasses de cartão já baixados e ainda a cair não é tirada do faturamento previsto, então o imposto estimado fica um pouco maior (ex.: taxa de R$ 30 a 6% → R$ 1,80).
+- [ ] Ponto de equilíbrio: despesa fixa antiga (sem periodicidade) + a mesma despesa lançada à mão como conta avulsa no mesmo mês contam duas vezes.
+- [ ] Previsto até o fim do mês: transferências futuras entre contas entram no faturamento previsto e aumentam o imposto estimado.

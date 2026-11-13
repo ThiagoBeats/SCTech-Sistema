@@ -29,3 +29,7 @@ Pendências pequenas fora do Financeiro, para revisar quando o usuário pedir.
 - [ ] Menu ⋮: posição (flip) perto da borda e tema escuro.
 - [ ] Teste "não contém Simular" está amplo demais; restringir.
 - [ ] Seletor solto no teste do ver senha.
+
+## Do tema e da busca no estoque (2026-11-13)
+- [ ] Tema escuro: outras telas e janelas ainda têm cores claras fixas no estilo da linha (como o Balanço tinha); revisar tela a tela.
+- [ ] Balanço: dois itens com o mesmo nome (ex.: um tecido e um material) — o nome puxa o código do primeiro que achar.

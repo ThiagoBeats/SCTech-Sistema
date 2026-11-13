@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Financeiro - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261113a">
+    <link rel="stylesheet" href="css/style.css?v=20261115a">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
@@ -16,6 +16,7 @@
         <div class="tab-nav">
             <button class="tab-btn fin-tab-btn active" data-tab="hoje"      onclick="mostrarTabFinanceiro('hoje')">☀️ Hoje</button>
             <button class="tab-btn fin-tab-btn"        data-tab="dashboard" onclick="mostrarTabFinanceiro('dashboard')">📊 Visão Geral</button>
+            <button class="tab-btn fin-tab-btn"        data-tab="resultado" onclick="mostrarTabFinanceiro('resultado')">📅 Resultado do mês</button>
             <button class="tab-btn fin-tab-btn"        data-tab="receber"   onclick="mostrarTabFinanceiro('receber')">📥 A Receber</button>
             <button class="tab-btn fin-tab-btn"        data-tab="pagar"     onclick="mostrarTabFinanceiro('pagar')">📤 A Pagar</button>
             <button class="tab-btn fin-tab-btn"        data-tab="fixas"     onclick="mostrarTabFinanceiro('fixas')">🔁 Despesas Fixas</button>
@@ -71,6 +72,7 @@
                 <span id="fin-periodo-label" style="font-size:12px;color:#8F8F8F;margin-left:4px"></span>
                 <button class="btn btn-outline btn-sm" onclick="gerarRelatorioFinanceiro()" style="margin-left:auto">📄 Exportar Relatório</button>
             </div>
+            <p id="fin-legenda-regra" style="font-size:12px;color:#8F8F8F;margin:-6px 0 12px">Recebido, saídas, meta e gráficos contam pela data em que o dinheiro entra (ou sai) — a mesma regra do Resultado do mês. Transferências entre contas não contam.</p>
 
             <!-- Alertas -->
             <div id="fin-alertas" style="margin-bottom:16px"></div>
@@ -167,6 +169,57 @@
             <div class="rgrid-2">
                 <div class="card" id="fin-card-receber"></div>
                 <div class="card" id="fin-card-pagar"></div>
+            </div>
+        </div>
+
+        <!-- TAB: RESULTADO DO MES -->
+        <div id="fin-resultado" class="fin-panel">
+            <div class="card">
+                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+                    <div class="form-group" style="min-width:150px;margin-bottom:0">
+                        <label for="res-mes">Mês</label>
+                        <input type="month" id="res-mes" onchange="if (this.value) renderResultadoMes(this.value)">
+                    </div>
+                    <button class="btn btn-outline" id="res-pdf" onclick="exportarResultadoPDF(document.getElementById('res-mes').value)">📄 PDF</button>
+                </div>
+            </div>
+            <div class="card" id="res-resultado">
+                <h3 class="res-titulo">Resultado</h3>
+                <div class="res-kpis">
+                    <div><span>Entradas</span><strong id="res-entradas"></strong><small id="res-entradas-a-cair" class="fin-a-cair" style="display:none"></small></div>
+                    <div><span>Saídas</span><strong id="res-saidas"></strong></div>
+                    <div><span>Resultado</span><strong id="res-saldo"></strong></div>
+                </div>
+                <div id="res-meta" class="res-meta"></div>
+            </div>
+            <div class="card">
+                <h3 class="res-titulo">Saídas por grupo</h3>
+                <table><thead><tr><th>Grupo</th><th style="text-align:right">Valor</th></tr></thead><tbody id="res-grupos"></tbody></table>
+                <div id="res-imposto-regra" class="res-linha">Imposto contado pelo mês de referência da guia (não pela data de pagamento).</div>
+                <div id="res-imposto-aviso" class="res-aviso" style="display:none"></div>
+            </div>
+            <div class="card" id="res-equilibrio">
+                <h3 class="res-titulo">Ponto de equilíbrio</h3>
+                <div id="res-equilibrio-frase" class="res-frase"></div>
+                <div id="res-equilibrio-linha" class="res-linha"></div>
+                <div id="res-equilibrio-aviso" class="res-aviso" style="display:none"></div>
+            </div>
+            <div class="card" id="res-orcamento-card">
+                <h3 class="res-titulo">Orçamento do mês</h3>
+                <table><thead><tr><th>Grupo</th><th style="text-align:right">Limite</th><th style="text-align:right">Gasto</th><th style="text-align:right">Falta</th><th style="text-align:right">% usado</th><th>Situação</th><th></th></tr></thead><tbody id="res-orcamento"></tbody></table>
+                <div id="res-orc-add" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+                    <select id="res-orc-grupo"></select>
+                    <button class="btn btn-outline btn-sm" id="res-orc-add-btn" onclick="ajustarOrcamentoMes(_resMesAtual, document.getElementById('res-orc-grupo').value)">+ Limite só neste mês</button>
+                </div>
+                <p id="res-orcamento-vazio" style="color:#888;margin:0;display:none">Sem orçamento definido. Defina em Empresa → Preferências.</p>
+            </div>
+            <div class="card" id="res-aberto" style="display:none">
+                <h3 class="res-titulo">Mês em andamento</h3>
+                <div class="res-kpis">
+                    <div><span>Até hoje</span><strong id="res-ate-hoje"></strong></div>
+                    <div><span>Previsto até o fim do mês</span><strong id="res-previsto"></strong></div>
+                </div>
+                <small id="res-aberto-legenda" style="color:#888"></small>
             </div>
         </div>
 
@@ -268,6 +321,7 @@
                             <option value="aluguel">Aluguel</option>
                             <option value="salario">Salário</option>
                             <option value="conta">Conta (luz, internet…)</option>
+                            <option value="imposto">Imposto</option>
                             <option value="outro">Outro</option>
                         </select>
                     </div>
@@ -340,13 +394,14 @@
         </div>
     </main>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <script src="js/etiquetas-core.js?v=20261113a"></script>
-    <script src="js/etiquetas-render.js?v=20261113a"></script>
-    <script src="js/cortina-desenho.js?v=20261113a"></script>
-    <script src="js/docs-layout-core.js?v=20261113a"></script>
-    <script src="js/financeiro-core.js?v=20261113a"></script>
-    <script src="js/caixa-core.js?v=20261113a"></script>
-    <script src="js/carrinho-core.js?v=20261113a"></script>
-    <script src="js/app.js?v=20261113a"></script>
+    <script src="js/etiquetas-core.js?v=20261115a"></script>
+    <script src="js/etiquetas-render.js?v=20261115a"></script>
+    <script src="js/cortina-desenho.js?v=20261115a"></script>
+    <script src="js/docs-layout-core.js?v=20261115a"></script>
+    <script src="js/financeiro-core.js?v=20261115a"></script>
+    <script src="js/caixa-core.js?v=20261115a"></script>
+    <script src="js/carrinho-core.js?v=20261115a"></script>
+    <script src="js/resultado-core.js?v=20261115a"></script>
+    <script src="js/app.js?v=20261115a"></script>
 </body>
 </html>
