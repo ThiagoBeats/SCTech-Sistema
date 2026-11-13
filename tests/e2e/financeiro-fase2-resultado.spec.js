@@ -150,3 +150,68 @@ test('sem permissao a aba nao aparece', async ({ page }) => {
     await expect(page.locator('.fin-tab-btn[data-tab="resultado"]')).toBeHidden();
     await expect(page.locator('.fin-tab-btn[data-tab="dashboard"]')).toBeVisible();
 });
+
+test('PDF traz linha de empate, aviso de estimativa e mes em andamento', async ({ page }) => {
+    await abrir(page, { sc_cr: [...CR_M, crPago(2, M1, 10000)], sc_cp: [...CP_M, cpPago(10, M1, 'tecido', 4000)], sc_empresa: { meta_faturamento_padrao: 9000 } });
+    await page.click('#res-pdf');
+    const doc = page.locator('#doc-modal-paper');
+    await expect(doc).toContainText('empate R$ 2.500,00 · meta R$ 9.000,00 · faturado R$ 9.800,00');
+    await expect(doc).toContainText('estimativa — poucos meses de histórico');
+    await expect(doc).not.toContainText('Mês em andamento');
+    await page.evaluate(() => { document.getElementById('doc-modal-overlay').remove(); });
+    await page.fill('#res-mes', mesMais(0));
+    await page.locator('#res-mes').dispatchEvent('change');
+    await page.click('#res-pdf');
+    await expect(page.locator('#doc-modal-paper')).toContainText('Mês em andamento');
+    await expect(page.locator('#doc-modal-paper')).toContainText('Previsto até o fim do mês');
+});
+
+test('previsto: legenda de atrasados e guia de imposto nao conta duas vezes', async ({ page }) => {
+    const mesAt = mesMais(0);
+    const cr1 = { ...crPago(1, mesAt, 2000), data_pagamento: HOJE };
+    const atrasada = { id: 2, pedido_id: 1, cliente_nome: 'Cli', descricao: 'Pedido', valor: 500, data_vencimento: dia(M, 5), data_pagamento: null, status: 'Pendente', parcela_tipo: 'saldo' };
+    const guia = { id: 3, descricao: 'DAS', valor: 400, categoria: 'imposto', tipo: 'variavel', mes_referencia: mesAt, data_vencimento: HOJE, data_pagamento: null, status: 'Pendente' };
+    await entrar(page, BASE, { sc_cr: [cr1], sc_cp: [guia] });
+    await page.goto(BASE + '/financeiro.html');
+    await page.locator('.fin-tab-btn[data-tab="resultado"]').click();
+    await expect(page.locator('#res-ate-hoje')).toHaveText('R$ 1.600,00');
+    await expect(page.locator('#res-previsto')).toHaveText('R$ 1.600,00');
+    await expect(page.locator('#res-aberto-legenda')).toBeEmpty();
+    await entrar(page, BASE, { sc_cr: [cr1, atrasada], sc_cp: [guia] });
+    await page.goto(BASE + '/financeiro.html');
+    await page.locator('.fin-tab-btn[data-tab="resultado"]').click();
+    await expect(page.locator('#res-previsto')).toHaveText('R$ 2.100,00');
+    await expect(page.locator('#res-aberto-legenda')).toHaveText('inclui atrasados');
+});
+
+test('orcamento mostra falta e % usado', async ({ page }) => {
+    await abrir(page, { sc_cr: CR_M, sc_cp: CP_M, sc_empresa: { orcamento_padrao: { fornecedores: 3200, fixas: 1000 } } });
+    await expect(page.locator('#res-orcamento thead, #res-orcamento-card thead')).toContainText('Falta');
+    await expect(page.locator('#res-orcamento-card thead')).toContainText('% usado');
+    await expect(page.locator('#res-orcamento tr[data-orc="fornecedores"]')).toContainText('R$ 200,00');
+    await expect(page.locator('#res-orcamento tr[data-orc="fornecedores"]')).toContainText('93,75%');
+    await expect(page.locator('#res-orcamento tr[data-orc="fixas"]')).toContainText('150%');
+});
+
+test('limite so deste mes para grupo sem padrao, zero desliga e vazio remove', async ({ page }) => {
+    await abrir(page, { sc_cr: CR_M, sc_cp: CP_M, sc_empresa: { orcamento_padrao: { fornecedores: 3200 } } });
+    const o = g => page.locator(`#res-orcamento tr[data-orc="${g}"]`);
+    await expect(o('servicos')).toHaveCount(0);
+    await page.selectOption('#res-orc-grupo', 'servicos');
+    await page.click('#res-orc-add-btn');
+    await page.fill('#res-ajuste-valor', '1.000');
+    await page.click('#res-ajuste-ok');
+    await expect(o('servicos')).toContainText('perto do limite');
+    await o('fornecedores').locator('button').click();
+    await page.fill('#res-ajuste-valor', '0');
+    await page.click('#res-ajuste-ok');
+    await expect(o('fornecedores')).toHaveCount(0);
+    expect((await ler(page, 'sc_fin_orcamento_mes'))[M]).toEqual({ servicos: 1000, fornecedores: 0 });
+    await page.selectOption('#res-orc-grupo', 'fornecedores');
+    await page.click('#res-orc-add-btn');
+    await expect(page.locator('#res-ajuste-valor')).toHaveValue('0');
+    await page.fill('#res-ajuste-valor', '');
+    await page.click('#res-ajuste-ok');
+    await expect(o('fornecedores')).toHaveCount(1);
+    expect((await ler(page, 'sc_fin_orcamento_mes'))[M]).toEqual({ servicos: 1000 });
+});

@@ -14183,6 +14183,10 @@ function _resPrevisto(mes) {
     const meioCartao = cr => { const mp = cr.meio_previsto; const m = mp ? meios.find(x => CaixaCore.mesmoId(x.id, mp.meio_id)) : null; return (m && (m.tipo === 'cartao_credito' || m.tipo === 'cartao_debito')) ? m : null; };
     const abertos = (db.contas_receber || []).filter(c => c && c.status !== 'Pago');
     const comum = abertos.filter(c => !meioCartao(c) && c.data_vencimento <= fim);
+    // A guia de imposto com referencia neste mes ja esta no resultado (imposto lancado): fora da previsao.
+    const cps = (db.contas_pagar || []).filter(c => c && c.data_vencimento <= fim && !(c.categoria === 'imposto' && ResultadoCore.referenciaGuia(c) === mes && c.status !== 'Pago'));
+    const atrasados = comum.some(c => c.data_vencimento < hoje) || abertos.filter(meioCartao).some(c => c.data_vencimento < hoje)
+        || cps.some(c => c.status !== 'Pago' && c.data_vencimento < hoje);
     let cartao = 0;
     abertos.filter(meioCartao).forEach(cr => {
         const m = meioCartao(cr);
@@ -14196,13 +14200,41 @@ function _resPrevisto(mes) {
         hoje, saldoHoje: 0,
         movimentos: (db.movimentos_fin || []).filter(m => m.data <= fim),
         contasReceber: comum,
-        contasPagar: (db.contas_pagar || []).filter(c => c && c.data_vencimento <= fim),
+        contasPagar: cps,
         despesasFixas: (db.despesas_fixas || []).map(df => ({ ...df, data_fim: (df.data_fim && df.data_fim < fim) ? df.data_fim : fim })),
         contas, meios, semanas: Math.max(1, Math.ceil(dias / 7))
     });
     const entradas = CaixaCore.arredondar(semanas.reduce((s, w) => s + w.entradas, 0) + cartao);
     const saidas = CaixaCore.arredondar(semanas.reduce((s, w) => s + w.saidas, 0));
-    return { entradas, saidas };
+    return { entradas, saidas, atrasados };
+}
+
+// Frase, linha e aviso do ponto de equilibrio (tela e PDF).
+function _resTextosEquilibrio(d) {
+    const r = d.r;
+    if (d.equilibrio.valor != null) {
+        return {
+            frase: `Para pagar as contas do mês você precisa faturar ${_resBrl(d.equilibrio.valor)}.`,
+            linha: `empate ${_resBrl(d.equilibrio.valor)}` + (d.meta > 0 ? ` · meta ${_resBrl(d.meta)}` : '') + ` · faturado ${_resBrl(r.faturamento)}`,
+            aviso: (d.margem.base === 'pedidos' || d.margem.meses.length < 3) ? 'estimativa — poucos meses de histórico' : ''
+        };
+    }
+    if (d.equilibrio.motivo === 'margem_negativa') return { frase: 'Com a margem atual não há ponto de equilíbrio — os custos variáveis passam do faturamento.', linha: '', aviso: '' };
+    return { frase: 'Ainda não há histórico para calcular o ponto de equilíbrio.', linha: '', aviso: '' };
+}
+
+// Mes em andamento: resultado ate hoje e previsto ate o fim do mes (so para o mes atual).
+function _resAndamento(mes, d) {
+    if (mes !== hojeLocal().slice(0, 7)) return null;
+    const hoje = hojeLocal();
+    const prev = _resPrevisto(mes);
+    const ateHoje = ResultadoCore.resultadoDoMes({ mes, contasReceber: db.contas_receber, contasPagar: db.contas_pagar, movimentos: db.movimentos_fin, aliquota: d.aliquota, ateData: hoje }).resultado;
+    return { ateHoje, previsto: CaixaCore.arredondar(ateHoje + prev.entradas - prev.saidas), atrasados: prev.atrasados };
+}
+
+function _resPctTxt(o) { return String(o.pct).replace('.', ',') + '%'; }
+function _resSituacao(o) {
+    return o.faixa === 'estourou' ? `estourou ${_resBrl(-o.falta)}` : (o.faixa === 'perto' ? 'perto do limite' : 'dentro do limite');
 }
 
 function renderResultadoMes(mes) {
@@ -14249,31 +14281,28 @@ function renderResultadoMes(mes) {
     const aviso = document.getElementById('res-equilibrio-aviso');
     aviso.style.display = 'none';
     linha.textContent = '';
-    if (d.equilibrio.valor != null) {
-        frase.textContent = `Para pagar as contas do mês você precisa faturar ${_resBrl(d.equilibrio.valor)}.`;
-        linha.textContent = `empate ${_resBrl(d.equilibrio.valor)}` + (d.meta > 0 ? ` · meta ${_resBrl(d.meta)}` : '') + ` · faturado ${_resBrl(r.faturamento)}`;
-        if (d.margem.base === 'pedidos' || d.margem.meses.length < 3) { aviso.textContent = 'estimativa — poucos meses de histórico'; aviso.style.display = ''; }
-    } else if (d.equilibrio.motivo === 'margem_negativa') {
-        frase.textContent = 'Com a margem atual não há ponto de equilíbrio — os custos variáveis passam do faturamento.';
-    } else {
-        frase.textContent = 'Ainda não há histórico para calcular o ponto de equilíbrio.';
-    }
+    const eq = _resTextosEquilibrio(d);
+    frase.textContent = eq.frase;
+    linha.textContent = eq.linha;
+    if (eq.aviso) { aviso.textContent = eq.aviso; aviso.style.display = ''; }
 
     // Orcamento
-    const pctTxt = o => String(o.pct).replace('.', ',') + '%';
     document.getElementById('res-orcamento').innerHTML = d.orcamento.map(o => {
-        const sit = o.faixa === 'estourou' ? `estourou ${_resBrl(-o.falta)}` : (o.faixa === 'perto' ? `perto do limite (${pctTxt(o)})` : `dentro do limite (${pctTxt(o)})`);
-        return `<tr data-orc="${o.grupo}"><td>${escapeHtml(o.rotulo)}</td><td style="text-align:right">${_resBrl(o.limite)}</td><td style="text-align:right">${_resBrl(o.gasto)}</td><td class="res-faixa-${o.faixa}">${escapeHtml(sit)}</td><td>${podeEditar ? `<button class="res-ed" onclick="ajustarOrcamentoMes(_resMesAtual, '${o.grupo}')" title="Ajustar o limite só deste mês">✏️</button>` : ''}</td></tr>`;
+        return `<tr data-orc="${o.grupo}"><td>${escapeHtml(o.rotulo)}</td><td style="text-align:right">${_resBrl(o.limite)}</td><td style="text-align:right">${_resBrl(o.gasto)}</td><td style="text-align:right">${_resBrl(Math.max(0, o.falta))}</td><td style="text-align:right">${_resPctTxt(o)}</td><td class="res-faixa-${o.faixa}">${escapeHtml(_resSituacao(o))}</td><td>${podeEditar ? `<button class="res-ed" onclick="ajustarOrcamentoMes(_resMesAtual, '${o.grupo}')" title="Ajustar o limite só deste mês">✏️</button>` : ''}</td></tr>`;
     }).join('');
     document.getElementById('res-orcamento-vazio').style.display = d.orcamento.length ? 'none' : '';
+    const addBox = document.getElementById('res-orc-add');
+    addBox.style.display = podeEditar ? 'flex' : 'none';
+    const selGrupo = document.getElementById('res-orc-grupo');
+    if (selGrupo && !selGrupo.options.length) selGrupo.innerHTML = ResultadoCore.GRUPOS.map(g => `<option value="${g.id}">${escapeHtml(g.rotulo)}</option>`).join('');
 
     // Mes aberto
     const aberto = document.getElementById('res-aberto');
-    if (mes === hoje.slice(0, 7)) {
-        const prev = _resPrevisto(mes);
-        const ateHoje = ResultadoCore.resultadoDoMes({ mes, contasReceber: db.contas_receber, contasPagar: db.contas_pagar, movimentos: db.movimentos_fin, aliquota: d.aliquota, ateData: hoje }).resultado;
-        set('res-ate-hoje', _resBrl(ateHoje));
-        set('res-previsto', _resBrl(CaixaCore.arredondar(ateHoje + prev.entradas - prev.saidas)));
+    const and = _resAndamento(mes, d);
+    if (and) {
+        set('res-ate-hoje', _resBrl(and.ateHoje));
+        set('res-previsto', _resBrl(and.previsto));
+        set('res-aberto-legenda', and.atrasados ? 'inclui atrasados' : '');
         aberto.style.display = '';
     } else aberto.style.display = 'none';
 }
@@ -14288,7 +14317,7 @@ function _resAbrirAjuste({ titulo, dica, atual, aoSalvar }) {
     o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:380px;width:92%">
         <h3 style="margin:0 0 10px;font-size:16px">${escapeHtml(titulo)}</h3>
         <div class="form-group"><label for="res-ajuste-valor">Valor (R$)</label>
-            <input type="text" inputmode="decimal" id="res-ajuste-valor" value="${atual > 0 ? escapeHtml(String(atual).replace('.', ',')) : ''}" placeholder="ex: 30.000">
+            <input type="text" inputmode="decimal" id="res-ajuste-valor" value="${atual != null ? escapeHtml(String(atual).replace('.', ',')) : ''}" placeholder="ex: 30.000">
             <small style="color:#888">${escapeHtml(dica)}</small></div>
         <div id="res-ajuste-erro" style="color:#F43927;font-size:13px;min-height:16px"></div>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
@@ -14299,7 +14328,7 @@ function _resAbrirAjuste({ titulo, dica, atual, aoSalvar }) {
     o.querySelector('#res-ajuste-cancelar').onclick = fechar;
     const salvar = () => {
         const t = o.querySelector('#res-ajuste-valor').value.trim();
-        let v = 0;
+        let v = null;
         if (t) {
             v = _valorDigitadoBaixa(t);
             if (Number.isNaN(v) || v < 0) { o.querySelector('#res-ajuste-erro').textContent = 'Informe só números (ex: 30.000 ou 30.000,50).'; return; }
@@ -14322,12 +14351,12 @@ document.addEventListener('keydown', e => {
 
 function ajustarMetaMes(mes) {
     if (!temAcesso('financeiro.resultado', 'completo')) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
-    const atual = _resLerLS('sc_fin_metas')[mes] || 0;
+    const atual = _resLerLS('sc_fin_metas')[mes] > 0 ? _resLerLS('sc_fin_metas')[mes] : null;
     _resAbrirAjuste({
         titulo: 'Meta de faturamento deste mês', dica: 'Vale só para este mês. Vazio volta à meta padrão da Empresa.', atual,
         aoSalvar: v => {
             const metas = _resLerLS('sc_fin_metas');
-            if (v > 0) metas[mes] = v; else delete metas[mes];
+            if (v != null && v > 0) metas[mes] = v; else delete metas[mes];
             localStorage.setItem('sc_fin_metas', JSON.stringify(metas));
             _finMetas = metas;
             renderResultadoMes(mes);
@@ -14339,13 +14368,14 @@ function ajustarOrcamentoMes(mes, grupo) {
     if (!temAcesso('financeiro.resultado', 'completo')) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
     const g = ResultadoCore.GRUPOS.find(x => x.id === grupo);
     if (!g) return;
-    const atual = ((_resLerLS('sc_fin_orcamento_mes')[mes]) || {})[grupo] || 0;
+    const ov = (_resLerLS('sc_fin_orcamento_mes')[mes]) || {};
+    const atual = Object.prototype.hasOwnProperty.call(ov, grupo) ? Number(ov[grupo]) : null;
     _resAbrirAjuste({
-        titulo: `Limite de ${g.rotulo} neste mês`, dica: 'Vale só para este mês. Vazio volta ao limite padrão da Empresa.', atual,
+        titulo: `Limite de ${g.rotulo} neste mês`, dica: 'Vale só para este mês. Vazio volta ao limite padrão da Empresa; 0 tira o limite deste mês.', atual,
         aoSalvar: v => {
             const todos = _resLerLS('sc_fin_orcamento_mes');
             const mm = Object.assign({}, todos[mes] || {});
-            if (v > 0) mm[grupo] = v; else delete mm[grupo];
+            if (v != null) mm[grupo] = v; else delete mm[grupo];
             if (Object.keys(mm).length) todos[mes] = mm; else delete todos[mes];
             localStorage.setItem('sc_fin_orcamento_mes', JSON.stringify(todos));
             renderResultadoMes(mes);
@@ -14364,10 +14394,9 @@ function exportarResultadoPDF(mes) {
     if (d.meta > 0) { const f = CaixaCore.arredondar(d.meta - r.faturamento); meta += ` · meta ${_resBrl(d.meta)} — ` + (f <= 0 ? 'bateu a meta' : `faltou ${_resBrl(f)}`); }
     let imp = '';
     if (r.imposto.estimado) imp = r.imposto.semAliquota ? 'Informe a alíquota em Empresa para estimar o imposto' : `guia ainda não lançada — estimativa ${_resBrl(r.imposto.valor)}`;
-    let eq = '';
-    if (d.equilibrio.valor != null) eq = `Para pagar as contas do mês você precisa faturar ${_resBrl(d.equilibrio.valor)}.`;
-    else if (d.equilibrio.motivo === 'margem_negativa') eq = 'Com a margem atual não há ponto de equilíbrio — os custos variáveis passam do faturamento.';
-    const orc = d.orcamento.map(o => `<tr><td style="${td}">${escapeHtml(o.rotulo)}</td><td style="${td};text-align:right">${_resBrl(o.limite)}</td><td style="${td};text-align:right">${_resBrl(o.gasto)}</td><td style="${td}">${o.faixa === 'estourou' ? 'estourou ' + _resBrl(-o.falta) : (o.faixa === 'perto' ? 'perto do limite' : 'dentro do limite')}</td></tr>`).join('');
+    const eq = _resTextosEquilibrio(d);
+    const orc = d.orcamento.map(o => `<tr><td style="${td}">${escapeHtml(o.rotulo)}</td><td style="${td};text-align:right">${_resBrl(o.limite)}</td><td style="${td};text-align:right">${_resBrl(o.gasto)}</td><td style="${td};text-align:right">${_resBrl(Math.max(0, o.falta))}</td><td style="${td};text-align:right">${_resPctTxt(o)}</td><td style="${td}">${escapeHtml(_resSituacao(o))}</td></tr>`).join('');
+    const and = _resAndamento(mes, d);
     const html = `<div style="padding:24px;color:#242424">
         <div class="doc-cab">${buildEmpresaHeaderHTML(52)}</div>
         <h2 style="margin:16px 0 4px">Resultado do mês — ${escapeHtml(rotuloMes)}</h2>
@@ -14379,8 +14408,11 @@ function exportarResultadoPDF(mes) {
         <div style="font-size:13px;margin-bottom:12px">${escapeHtml(meta)}</div>
         <table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left;background:#f0f0f0"><th style="${td}">Saídas por grupo</th><th style="${td};text-align:right">Valor</th></tr></thead><tbody>${grupos}</tbody></table>
         ${imp ? `<div style="font-size:12px;color:#B26A00;margin-top:6px">${escapeHtml(imp)}</div>` : ''}
-        ${eq ? `<div style="font-size:14px;font-weight:600;margin-top:14px">${escapeHtml(eq)}</div>` : ''}
-        ${orc ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:14px"><thead><tr style="text-align:left;background:#f0f0f0"><th style="${td}">Orçamento</th><th style="${td};text-align:right">Limite</th><th style="${td};text-align:right">Gasto</th><th style="${td}">Situação</th></tr></thead><tbody>${orc}</tbody></table>` : ''}
+        <div style="font-size:14px;font-weight:600;margin-top:14px">${escapeHtml(eq.frase)}</div>
+        ${eq.linha ? `<div style="font-size:13px;margin-top:4px">${escapeHtml(eq.linha)}</div>` : ''}
+        ${eq.aviso ? `<div style="font-size:12px;color:#B26A00;margin-top:4px">${escapeHtml(eq.aviso)}</div>` : ''}
+        ${orc ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:14px"><thead><tr style="text-align:left;background:#f0f0f0"><th style="${td}">Orçamento</th><th style="${td};text-align:right">Limite</th><th style="${td};text-align:right">Gasto</th><th style="${td};text-align:right">Falta</th><th style="${td};text-align:right">% usado</th><th style="${td}">Situação</th></tr></thead><tbody>${orc}</tbody></table>` : ''}
+        ${and ? `<div style="margin-top:14px;font-size:14px"><strong>Mês em andamento</strong><br>Até hoje: ${_resBrl(and.ateHoje)} · Previsto até o fim do mês: ${_resBrl(and.previsto)}${and.atrasados ? ' (inclui atrasados)' : ''}</div>` : ''}
     </div>`;
     abrirDocModal(html, 'Resultado do mês — ' + rotuloMes);
 }

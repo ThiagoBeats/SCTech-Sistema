@@ -204,7 +204,11 @@
             </div>
             <div class="card" id="res-orcamento-card">
                 <h3 class="res-titulo">Orçamento do mês</h3>
-                <table><thead><tr><th>Grupo</th><th style="text-align:right">Limite</th><th style="text-align:right">Gasto</th><th>Situação</th><th></th></tr></thead><tbody id="res-orcamento"></tbody></table>
+                <table><thead><tr><th>Grupo</th><th style="text-align:right">Limite</th><th style="text-align:right">Gasto</th><th style="text-align:right">Falta</th><th style="text-align:right">% usado</th><th>Situação</th><th></th></tr></thead><tbody id="res-orcamento"></tbody></table>
+                <div id="res-orc-add" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+                    <select id="res-orc-grupo"></select>
+                    <button class="btn btn-outline btn-sm" id="res-orc-add-btn" onclick="ajustarOrcamentoMes(_resMesAtual, document.getElementById('res-orc-grupo').value)">+ Limite só neste mês</button>
+                </div>
                 <p id="res-orcamento-vazio" style="color:#888;margin:0;display:none">Sem orçamento definido. Defina em Empresa → Preferências.</p>
             </div>
             <div class="card" id="res-aberto" style="display:none">
@@ -213,6 +217,7 @@
                     <div><span>Até hoje</span><strong id="res-ate-hoje"></strong></div>
                     <div><span>Previsto até o fim do mês</span><strong id="res-previsto"></strong></div>
                 </div>
+                <small id="res-aberto-legenda" style="color:#888"></small>
             </div>
         </div>
 
