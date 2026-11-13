@@ -90,6 +90,11 @@ test('sem aliquota e sem guia: semAliquota', () => {
         { valor: 0, estimado: true, lancado: 0, semAliquota: true });
 });
 
+test('imposto estimado nunca negativo', () => {
+    assert.deepStrictEqual(R.impostoDoMes({ mes: '2026-11', contasPagar: [], faturamento: -500, aliquota: 6 }),
+        { valor: 0, estimado: true, lancado: 0 });
+});
+
 test('resultado = entradas - saidas (com imposto); faturamento = entradas - taxas', () => {
     const contasReceber = [{ id: 1, valor: 10000, status: 'Pago', data_pagamento: '2026-10-10', data_vencimento: '2026-10-10' }];
     const pago = (id, categoria, valor, data) => ({ id, tipo: 'variavel', categoria, descricao: categoria, valor, status: 'Pago', data_vencimento: data, data_pagamento: data });
@@ -161,13 +166,23 @@ test('margem pula mes sem faturamento e usa 3 fechados', () => {
     const vazio = { faturamento: 0, porGrupo: {}, imposto: { valor: 0 } };
     const chamados = [];
     const m = R.margemContribuicao({ mesAtual: '2026-11', dadosPorMes: mes => { chamados.push(mes); return dados[mes] || vazio; }, aliquota: 6 });
-    assert.deepStrictEqual(m, { pct: 53.33, base: 'historico', meses: ['2026-10', '2026-08', '2026-07'] });
+    assert.deepStrictEqual(m, { pct: 47.14, base: 'historico', meses: ['2026-10', '2026-08', '2026-07'] });
     assert.ok(!chamados.includes('2026-11'), 'mes atual nao e fechado');
     // Ate 12 meses para tras: nada alem disso
     const longe = R.margemContribuicao({ mesAtual: '2026-11', dadosPorMes: mes => (mes === '2025-10' ? dados['2026-10'] : vazio), aliquota: 6 });
     assert.deepStrictEqual(longe, { pct: null, base: null, meses: [] });
     const doze = R.margemContribuicao({ mesAtual: '2026-11', dadosPorMes: mes => (mes === '2025-11' ? dados['2026-10'] : vazio), aliquota: 6 });
     assert.deepStrictEqual(doze, { pct: 50, base: 'historico', meses: ['2025-11'] });
+});
+
+test('margem ponderada pelo faturamento: 1000 a 50% e 9000 a 10% = 14%', () => {
+    const dados = {
+        '2026-10': { faturamento: 1000, porGrupo: { fornecedores: 500 }, imposto: { valor: 0 } },
+        '2026-09': { faturamento: 9000, porGrupo: { fornecedores: 8100 }, imposto: { valor: 0 } }
+    };
+    const vazio = { faturamento: 0, porGrupo: {}, imposto: { valor: 0 } };
+    assert.deepStrictEqual(R.margemContribuicao({ mesAtual: '2026-11', dadosPorMes: mes => dados[mes] || vazio, aliquota: 0 }),
+        { pct: 14, base: 'historico', meses: ['2026-10', '2026-09'] });
 });
 
 test('sem historico usa pedidos e marca base pedidos', () => {
@@ -178,7 +193,7 @@ test('sem historico usa pedidos e marca base pedidos', () => {
         { receita: 0, custo_material: 10, custos_vinculados: 0, comissoes: 0 }         // ignorado
     ];
     const m = R.margemContribuicao({ mesAtual: '2026-11', dadosPorMes: () => vazio, pedidosFallback, aliquota: 6 });
-    assert.deepStrictEqual(m, { pct: 46.5, base: 'pedidos', meses: [] });
+    assert.deepStrictEqual(m, { pct: 45.67, base: 'pedidos', meses: [] });
     assert.deepStrictEqual(R.margemContribuicao({ mesAtual: '2026-11', dadosPorMes: () => vazio, pedidosFallback: [], aliquota: 6 }),
         { pct: null, base: null, meses: [] });
 });
@@ -202,6 +217,12 @@ test('orcamento: faixas ok, perto (80%), estourou (>100%), grupo sem limite fica
     assert.strictEqual(f.falta, -250.5);
     assert.strictEqual(f.pct, 125.05);
     assert.strictEqual(s.find(x => x.grupo === 'fornecedores').falta, 200.01);
+    assert.strictEqual(s.find(x => x.grupo === 'fornecedores').pct, 79.99); // ok nunca mostra 80
+    const pouco = R.statusOrcamento({ limites: { outros: 10000 }, gastos: { outros: 10000.01 } })[0];
+    assert.deepStrictEqual([pouco.pct, pouco.faixa, pouco.falta], [100.01, 'estourou', -0.01]);
+    // Fronteiras em centavos (sem erro de ponto flutuante)
+    const fr = R.statusOrcamento({ limites: { fornecedores: 7, servicos: 1.2, comissoes: 0.3 }, gastos: { fornecedores: 5.6, servicos: 1.5, comissoes: 0.3 } });
+    assert.deepStrictEqual(fr.map(x => [x.grupo, x.pct, x.faixa]), [['fornecedores', 80, 'perto'], ['servicos', 125, 'estourou'], ['comissoes', 100, 'perto']]);
     const sem = R.statusOrcamento({ limites: { imposto: 500 }, gastos: {} });
     assert.deepStrictEqual(sem.map(x => [x.grupo, x.gasto, x.falta, x.pct, x.faixa]), [['imposto', 0, 500, 0, 'ok']]);
 });

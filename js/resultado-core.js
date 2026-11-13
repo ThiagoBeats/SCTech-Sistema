@@ -92,7 +92,7 @@
         }
         const aliq = num(aliquota);
         if (!(aliq > 0)) return { valor: 0, estimado: true, lancado: 0, semAliquota: true };
-        return { valor: arredondar(num(faturamento) * aliq / 100), estimado: true, lancado: 0 };
+        return { valor: Math.max(0, arredondar(num(faturamento) * aliq / 100)), estimado: true, lancado: 0 };
     }
 
     function resultadoDoMes({ mes, contasReceber, contasPagar, movimentos, aliquota, ateData }) {
@@ -143,13 +143,12 @@
         return arredondar(total);
     }
 
-    const media = lista => lista.reduce((s, x) => s + x, 0) / lista.length;
-
-    // Margem de contribuicao em % (0-100). Historico: 3 meses fechados mais recentes com faturamento > 0,
-    // ate 12 para tras. Sem historico: media das margens dos pedidos menos a aliquota.
+    // Margem de contribuicao em % (0-100), PONDERADA: soma das contribuicoes / soma do faturamento.
+    // Historico: 3 meses fechados mais recentes com faturamento > 0, ate 12 para tras.
+    // Sem historico: pedidos, soma(receita - custos) / soma(receita), menos a aliquota.
     function margemContribuicao({ mesAtual, dadosPorMes, pedidosFallback, aliquota }) {
         const meses = [];
-        const margens = [];
+        let somaContrib = 0, somaFat = 0;
         for (let i = 1; i <= 12 && meses.length < 3; i++) {
             const mes = somarMeses(mesAtual, -i);
             const r = dadosPorMes(mes) || {};
@@ -157,14 +156,19 @@
             if (!(fat > 0)) continue;
             const g = r.porGrupo || {};
             const imposto = num(r.imposto && r.imposto.valor);
-            margens.push((fat - num(g.fornecedores) - num(g.servicos) - num(g.comissoes) - imposto) / fat);
+            somaContrib += fat - num(g.fornecedores) - num(g.servicos) - num(g.comissoes) - imposto;
+            somaFat += fat;
             meses.push(mes);
         }
-        if (margens.length) return { pct: arredondar(media(margens) * 100), base: 'historico', meses };
+        if (meses.length) return { pct: arredondar(somaContrib / somaFat * 100), base: 'historico', meses };
         const pedidos = (pedidosFallback || []).filter(p => p && num(p.receita) > 0);
         if (pedidos.length) {
-            const m = media(pedidos.map(p => (num(p.receita) - num(p.custo_material) - num(p.custos_vinculados) - num(p.comissoes)) / num(p.receita)));
-            return { pct: arredondar(m * 100 - num(aliquota)), base: 'pedidos', meses: [] };
+            let contrib = 0, receita = 0;
+            pedidos.forEach(p => {
+                contrib += num(p.receita) - num(p.custo_material) - num(p.custos_vinculados) - num(p.comissoes);
+                receita += num(p.receita);
+            });
+            return { pct: arredondar(contrib / receita * 100 - num(aliquota)), base: 'pedidos', meses: [] };
         }
         return { pct: null, base: null, meses: [] };
     }
@@ -177,15 +181,18 @@
     }
 
     // Orcamento por grupo (ordem de GRUPOS); so grupos com limite > 0. perto >= 80%, estourou > 100%.
+    // Faixa e pct calculados em centavos inteiros para nao errar a fronteira por ponto flutuante.
     function statusOrcamento({ limites, gastos } = {}) {
         const out = [];
         GRUPOS.forEach(g => {
             const limite = arredondar(num(limites && limites[g.id]));
             if (!(limite > 0)) return;
             const gasto = arredondar(num(gastos && gastos[g.id]));
-            const razao = gasto / limite;
-            const faixa = razao > 1 ? 'estourou' : (razao >= 0.8 ? 'perto' : 'ok');
-            out.push({ grupo: g.id, rotulo: g.rotulo, limite, gasto, falta: arredondar(limite - gasto), pct: arredondar(razao * 100), faixa });
+            const gc = Math.round(gasto * 100), lc = Math.round(limite * 100);
+            const faixa = gc > lc ? 'estourou' : (gc * 5 >= lc * 4 ? 'perto' : 'ok');
+            // pct em 2 casas sem cruzar a fronteira da faixa: abaixo do limite trunca, acima arredonda para cima.
+            const pct = (gc > lc ? Math.ceil(gc * 10000 / lc) : Math.floor(gc * 10000 / lc)) / 100;
+            out.push({ grupo: g.id, rotulo: g.rotulo, limite, gasto, falta: arredondar((lc - gc) / 100), pct, faixa });
         });
         return out;
     }
