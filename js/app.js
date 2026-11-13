@@ -13931,6 +13931,16 @@ function getFinPeriodo() {
     return { ini: _finDataIni, fim: _finDataFim, label: `${dIni} – ${dFim}` };
 }
 
+// "inclui R$ X a cair até dd/mm" para entradas com data depois de hoje (cartao a cair); '' se nao houver.
+function textoACairFin(itensEntrada) {
+    const hoje = hojeLocal();
+    const futuros = (itensEntrada || []).filter(i => i.data > hoje);
+    if (!futuros.length) return '';
+    const total = CaixaCore.arredondar(futuros.reduce((s, i) => s + i.valor, 0));
+    const ultima = futuros.reduce((m, i) => i.data > m ? i.data : m, '');
+    return `inclui ${_resBrl(total)} a cair até ${ultima.slice(8, 10)}/${ultima.slice(5, 7)}`;
+}
+
 // Dinheiro que entrou/saiu no periodo da Visao Geral, pela mesma regra do Resultado do mes
 // (pela data em que o dinheiro entra; imposto pela referencia, so de meses inteiros).
 // "Este mes" vale o mes inteiro (inclui o cartao a cair), como o Resultado do mes e o Extrato.
@@ -13941,8 +13951,10 @@ function dinheiroDoPeriodoFin() {
     const crPorId = new Map((db.contas_receber || []).map(cr => [String(cr.id), cr]));
     const pedPagos = new Set();
     res.itensEntrada.forEach(i => { const cr = crPorId.get(String(i.cr_id)); if (cr && cr.pedido_id) pedPagos.add(cr.pedido_id); });
+    const aCair = textoACairFin(res.itensEntrada);
+    const lucroSub = 'recebido − saídas (imposto pela referência)' + (res.imposto.estimado ? ' (imposto estimado)' : '');
     const impostoJaContado = cp => cp.categoria === 'imposto' && Object.prototype.hasOwnProperty.call(res.imposto.porMes, ResultadoCore.referenciaGuia(cp));
-    return { res, ate, recebido: res.entradas, totalPago: res.saidas, lucro: res.resultado, pedPagos, ticketMedio: pedPagos.size ? res.entradas / pedPagos.size : 0, impostoJaContado };
+    return { res, ate, recebido: res.entradas, totalPago: res.saidas, lucro: res.resultado, pedPagos, ticketMedio: pedPagos.size ? res.entradas / pedPagos.size : 0, impostoJaContado, aCair, lucroSub };
 }
 
 function setFinPeriodo(tipo) {
@@ -14006,7 +14018,7 @@ function gerarHTMLRelatorioFinanceiro(layout, opcoes) {
     const fmtDate = s => s ? new Date(s+'T12:00:00').toLocaleDateString('pt-BR') : '—';
 
     // Recebido/pago pela mesma regra do Resultado do mes (pela data em que o dinheiro entra).
-    const { recebido, totalPago, lucro, pedPagos, ticketMedio, impostoJaContado } = dinheiroDoPeriodoFin();
+    const { recebido, totalPago, lucro, pedPagos, ticketMedio, impostoJaContado, aCair, lucroSub } = dinheiroDoPeriodoFin();
     const aReceber  = db.contas_receber.filter(cr=>cr.status!=='Pago'&&inRange(cr.data_vencimento)).reduce((s,cr)=>s+cr.valor,0);
     const aPagar    = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&inRange(cp.data_vencimento)).reduce((s,cp)=>s+cp.valor,0);
     // Guia de imposto em aberto ja contada nas saidas (imposto pela referencia) nao entra duas vezes no saldo.
@@ -14080,11 +14092,11 @@ function gerarHTMLRelatorioFinanceiro(layout, opcoes) {
     </div>`,
         indicadores: `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
-        ${kpiBox('Total Recebido', 'R$ '+fmt(recebido), label, '#005D3B')}
+        ${kpiBox('Total Recebido', 'R$ '+fmt(recebido), escapeHtml(label) + (aCair ? ' · ' + escapeHtml(aCair) : ''), '#005D3B')}
         ${kpiBox('A Receber', 'R$ '+fmt(aReceber), 'vence no período', '#2D77C1')}
         ${kpiBox('A Pagar', 'R$ '+fmt(aPagar), 'vence no período', '#F2C924')}
         ${kpiBox('Saldo Previsto', 'R$ '+fmt(saldoPrev), 'receb.+a receber−despesas', saldoPrev>=0?'#17E8FF':'#F43927')}
-        ${kpiBox('Lucro (Caixa)', 'R$ '+fmt(lucro), 'recebido − saídas pagas', lucro>=0?'#159912':'#F43927')}
+        ${kpiBox('Lucro (Caixa)', 'R$ '+fmt(lucro), escapeHtml(lucroSub), lucro>=0?'#159912':'#F43927')}
         ${kpiBox('Ticket Médio', ticketMedio>0?'R$ '+fmt(ticketMedio):'—', pedPagos.size+' pedido(s)', '#9B31C8')}
     </div>`,
         graficos: `
@@ -14279,6 +14291,12 @@ function renderResultadoMes(mes) {
     const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
 
     set('res-entradas', _resBrl(r.entradas));
+    const elACair = document.getElementById('res-entradas-a-cair');
+    if (elACair) {
+        const txt = mes === hoje.slice(0, 7) ? textoACairFin(ResultadoCore.entradasDoMes({ mes, ...dadosFinanceirosBase() }).itens) : '';
+        elACair.textContent = txt;
+        elACair.style.display = txt ? '' : 'none';
+    }
     set('res-saidas', _resBrl(r.saidas));
     set('res-saldo', _resBrl(r.resultado));
     document.getElementById('res-saldo').className = r.resultado < 0 ? 'res-neg' : 'res-pos';
@@ -14709,7 +14727,7 @@ function renderDashboardFinanceiro() {
 
     // ── KPIs ──────────────────────────────────────────────────────
     // Recebido/pago pela mesma regra do Resultado do mes (pela data em que o dinheiro entra).
-    const { res: resPer, ate: atePer, recebido, totalPago, lucro, pedPagos, ticketMedio, impostoJaContado } = dinheiroDoPeriodoFin();
+    const { res: resPer, ate: atePer, recebido, totalPago, lucro, pedPagos, ticketMedio, impostoJaContado, aCair, lucroSub } = dinheiroDoPeriodoFin();
     const aReceber  = db.contas_receber.filter(cr=>cr.status!=='Pago'&&inRange(cr.data_vencimento)).reduce((s,cr)=>s+cr.valor,0);
     const aPagar    = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&inRange(cp.data_vencimento)).reduce((s,cp)=>s+cp.valor,0);
     // Guia de imposto em aberto ja contada nas saidas (imposto pela referencia) nao entra duas vezes no saldo.
@@ -14753,8 +14771,8 @@ function renderDashboardFinanceiro() {
         const taxaConv     = totalPeds > 0 ? pConvertidos/totalPeds*100 : 0;
 
         kpis2El.innerHTML =
-            kpiBox('Total Recebido', 'R$ '+fmt(recebido), escapeHtml(label), 'neutral') +
-            kpiBox('Lucro (Caixa)', 'R$ '+fmt(lucro), 'recebido − saídas pagas', lucro>=0?'green':'red') +
+            kpiBox('Total Recebido', 'R$ '+fmt(recebido), escapeHtml(label) + (aCair ? `<br><span class="fin-a-cair">${escapeHtml(aCair)}</span>` : ''), 'neutral') +
+            kpiBox('Lucro (Caixa)', 'R$ '+fmt(lucro), escapeHtml(lucroSub), lucro>=0?'green':'red') +
             kpiBox('Ticket Médio', ticketMedio>0?'R$ '+fmt(ticketMedio):'—', `${pedPagos.size} pedido(s) com recebimento`, 'neutral') +
             kpiBox('PMR', pmr > 0 ? pmr+' dias' : '—', pmrN ? `${pmrN} pedidos concluídos` : 'Sem dados', 'neutral') +
             kpiBox('Margem Líquida', (margemPct>=0?'':'-')+Math.abs(margemPct).toFixed(1)+'%', escapeHtml(label), 'neutral') +
@@ -14996,13 +15014,15 @@ function renderDashboardFinanceiro() {
     }
 
     // ── GRÁFICO COMBO ─────────────────────────────────────────────
-    // Mesmos itens do periodo (pela data do dinheiro); o imposto de cada mes inteiro entra no ultimo dia dele.
+    // Mesmos itens do periodo (pela data do dinheiro); o imposto de cada mes inteiro entra no ultimo dia dele
+    // e a guia paga num pedaco de mes, na data do pagamento.
     const buckets  = _finGerarBuckets(ini, atePer);
     const naFaixa  = (b, d) => d >= b.ini && d <= b.fim;
     const r2 = v => Math.round(v * 100) / 100;
     const entradas = buckets.map(b=>r2(resPer.itensEntrada.filter(i=>naFaixa(b, i.data)).reduce((s,i)=>s+i.valor,0)));
     const saidas   = buckets.map(b=>r2(resPer.itensSaida.filter(i=>naFaixa(b, i.data)).reduce((s,i)=>s+i.valor,0)
-        + Object.entries(resPer.imposto.porMes).filter(([m])=>naFaixa(b, _resUltimoDia(m))).reduce((s,[,v])=>s+v,0)));
+        + Object.entries(resPer.imposto.porMes).filter(([m])=>naFaixa(b, _resUltimoDia(m))).reduce((s,[,v])=>s+v,0)
+        + resPer.imposto.pagas.filter(i=>naFaixa(b, i.data)).reduce((s,i)=>s+i.valor,0)));
     let _acc = 0;
     const saldos = entradas.map((e, i) => { _acc += e - saidas[i]; return _acc; });
     const ctxCombo = document.getElementById('chart-fin-combo');

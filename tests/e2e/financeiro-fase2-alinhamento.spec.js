@@ -163,3 +163,56 @@ test('Hoje mostra orcamento estourado so com permissao', async ({ page }) => {
     await expect(page.locator('#hoje-tarefas')).toContainText('Tudo em dia');
     await expect(aviso).toHaveCount(0);
 });
+
+// --- Fix round 1 ---
+const somarDias = (dataISO, n) => { const d = new Date(dataISO + 'T12:00:00'); d.setDate(d.getDate() + n); return iso(d); };
+const ddmm = d => d.slice(8, 10) + '/' + d.slice(5, 7);
+
+test('Total Recebido avisa o que ainda vai cair no periodo', async ({ page }) => {
+    const d1 = somarDias(HOJE, 5), d2 = somarDias(HOJE, 12);
+    await entrar(page, BASE, {
+        sc_contas_fin: CONTAS,
+        sc_cr: [crPago(1, 3000, HOJE)],
+        sc_mov_fin: [HOJE, d1, d2].map((d, i) => mov(1 + i, 10, d, 'entrada', 1000, 'cr', 1, 'Pedido 1 (cartão)'))
+    });
+    await page.goto(BASE + '/financeiro.html');
+    await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
+    await page.click('.fin-periodo-btn[data-p="custom"]');
+    await page.fill('#fin-custom-ini', HOJE);
+    await page.fill('#fin-custom-fim', somarDias(HOJE, 20));
+    await page.click('#fin-custom-range button');
+    await expect(kpi(page, 'Total Recebido')).toContainText('R$ 3.000,00');
+    await expect(kpi(page, 'Total Recebido')).toContainText(`inclui R$ 2.000,00 a cair até ${ddmm(d2)}`);
+});
+
+test('Resultado do mes atual avisa entradas a cair', async ({ page }) => {
+    const mesAt = mesMais(0);
+    test.skip(HOJE === ultimoDia(mesAt), 'ultimo dia do mes: nada pode cair depois de hoje no mes');
+    const amanha = somarDias(HOJE, 1);
+    await entrar(page, BASE, {
+        sc_contas_fin: CONTAS,
+        sc_cr: [crPago(1, 2000, HOJE)],
+        sc_mov_fin: [HOJE, amanha].map((d, i) => mov(1 + i, 10, d, 'entrada', 1000, 'cr', 1, 'Pedido 1 (cartão)'))
+    });
+    await page.goto(BASE + '/financeiro.html');
+    await page.locator('.fin-tab-btn[data-tab="resultado"]').click();
+    await expect(page.locator('#res-entradas')).toHaveText('R$ 2.000,00');
+    await expect(page.locator('#res-entradas-a-cair')).toHaveText(`inclui R$ 1.000,00 a cair até ${ddmm(amanha)}`);
+    await page.fill('#res-mes', M);
+    await page.locator('#res-mes').dispatchEvent('change');
+    await expect(page.locator('#res-entradas-a-cair')).toBeHidden();
+});
+
+test('Lucro (Caixa) explica o imposto e marca quando e estimado', async ({ page }) => {
+    await entrar(page, BASE, SEED_M);
+    await page.goto(BASE + '/financeiro.html');
+    await visaoGeralDoMes(page, M);
+    await expect(kpi(page, 'Lucro')).toContainText('recebido − saídas (imposto pela referência)');
+    await expect(kpi(page, 'Lucro')).not.toContainText('(imposto estimado)');
+
+    await entrar(page, BASE, { sc_empresa: { aliquota_estimada: 6 }, sc_cr: [crPago(1, 1000, dia(M, 10))], sc_cp: [], sc_mov_fin: [] });
+    await page.goto(BASE + '/financeiro.html');
+    await visaoGeralDoMes(page, M);
+    await expect(kpi(page, 'Lucro')).toContainText('R$ 940,00');
+    await expect(kpi(page, 'Lucro')).toContainText('recebido − saídas (imposto pela referência) (imposto estimado)');
+});

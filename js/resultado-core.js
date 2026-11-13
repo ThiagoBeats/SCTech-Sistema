@@ -131,7 +131,8 @@
 
     // Periodo qualquer [de, ate] ('YYYY-MM-DD'), pelas mesmas regras do mes: entradas pela data em que o
     // dinheiro entra, saidas pagas no periodo. Imposto (pela referencia) so dos meses inteiros dentro do
-    // periodo — um pedaco de mes nao leva o imposto do mes. Devolve tambem os itens (para graficos).
+    // periodo. Nos pedacos de mes, a guia PAGA conta pela data de pagamento, se a referencia dela nao for um
+    // mes inteiro do periodo (nunca conta duas vezes). Devolve tambem os itens (para graficos).
     function resultadoDoPeriodo({ de, ate, contasReceber, contasPagar, movimentos, aliquota }) {
         const dentro = d => !!d && String(d) >= de && String(d) <= ate;
         const ok = !!de && !!ate && de <= ate;
@@ -150,7 +151,15 @@
                 if (imp.estimado && imp.valor > 0) estimado = true;
             }
         }
-        const imposto = { valor: arredondar(impostoTotal), estimado, porMes };
+        const pagas = [];
+        (ok ? (contasPagar || []) : []).forEach(cp => {
+            if (!cp || cp.categoria !== 'imposto' || cp.status !== 'Pago' || !dentro(cp.data_pagamento)) return;
+            if (Object.prototype.hasOwnProperty.call(porMes, mesDe(cp.data_pagamento))) return;  // pagamento num mes inteiro: vale a referencia
+            if (Object.prototype.hasOwnProperty.call(porMes, referenciaGuia(cp))) return;        // ja contada pela referencia
+            pagas.push({ data: cp.data_pagamento, valor: num(cp.valor), cp_id: cp.id });
+            impostoTotal += num(cp.valor);
+        });
+        const imposto = { valor: arredondar(impostoTotal), estimado, porMes, pagas };
         const taxas = sai.porGrupo.taxas;
         const porGrupo = Object.assign({}, sai.porGrupo, { imposto: imposto.valor });
         const saidas = arredondar(sai.total + imposto.valor);

@@ -265,14 +265,14 @@ test('periodo de um mes inteiro = resultado do mes', () => {
     assert.strictEqual(p.imposto.estimado, false);
 });
 
-test('periodo parcial: pela data do dinheiro, sem transferencia e sem imposto do mes incompleto', () => {
+test('periodo parcial: pela data do dinheiro, sem transferencia; guia paga no pedaco conta pelo pagamento', () => {
     const p = R.resultadoDoPeriodo({ de: '2026-10-10', ate: '2026-11-10', ...P_BASE });
     assert.strictEqual(p.entradas, 3000); // CR 2 (15/10) + repasse 05/11
     assert.strictEqual(p.taxas, 30);
     assert.strictEqual(p.porGrupo.fornecedores, 800);
-    assert.strictEqual(p.porGrupo.imposto, 0);
-    assert.strictEqual(p.saidas, 830);
-    assert.strictEqual(p.resultado, 2170);
+    assert.strictEqual(p.porGrupo.imposto, 150); // guia de 2026-10 paga em 25/10; outubro nao e inteiro no periodo
+    assert.strictEqual(p.saidas, 980);
+    assert.strictEqual(p.resultado, 2020);
     assert.deepStrictEqual(p.imposto.porMes, {});
     assert.deepStrictEqual(p.itensEntrada.map(i => [i.data, i.valor, i.cr_id]), [['2026-11-05', 1000, 1], ['2026-10-15', 2000, 2]]);
     assert.deepStrictEqual(p.itensSaida.map(i => [i.data, i.valor, i.grupo]), [['2026-11-05', 30, 'taxas'], ['2026-10-18', 800, 'fornecedores']]);
@@ -289,4 +289,31 @@ test('periodo com um mes inteiro e um pedaco: imposto (estimado) so do mes intei
     const vazio = R.resultadoDoPeriodo({ de: '2026-10-11', ate: '2026-10-10', ...P_BASE });
     assert.strictEqual(vazio.entradas, 0);
     assert.strictEqual(vazio.saidas, 0);
+});
+
+test('periodo parcial: guia paga no periodo com referencia fora dele conta pela data de pagamento', () => {
+    const cps = [
+        ...P_CP.filter(cp => cp.categoria !== 'imposto'),
+        { id: 7, categoria: 'imposto', valor: 120, status: 'Pago', mes_referencia: '2026-09', data_vencimento: '2026-10-20', data_pagamento: '2026-10-20' },
+        { id: 8, categoria: 'imposto', valor: 90, status: 'Pendente', mes_referencia: '2026-10', data_vencimento: '2026-11-07', data_pagamento: null },
+        { id: 9, categoria: 'imposto', valor: 70, status: 'Pago', mes_referencia: '2026-10', data_vencimento: '2026-11-20', data_pagamento: '2026-11-20' }
+    ];
+    const base = { contasReceber: P_CR, contasPagar: cps, movimentos: P_MOV, aliquota: 6 };
+    // 30 dias sem mes inteiro: so a guia paga dentro do periodo (a em aberto e a paga depois ficam de fora).
+    const p = R.resultadoDoPeriodo({ de: '2026-10-10', ate: '2026-11-08', ...base });
+    assert.strictEqual(p.imposto.valor, 120);
+    assert.strictEqual(p.imposto.estimado, false);
+    assert.deepStrictEqual(p.imposto.porMes, {});
+    assert.deepStrictEqual(p.imposto.pagas, [{ data: '2026-10-20', valor: 120, cp_id: 7 }]);
+    assert.strictEqual(p.porGrupo.imposto, 120);
+    assert.strictEqual(p.saidas, 830 + 120);
+    // Mes inteiro: continua pela referencia (guias de 2026-10 = 160), a guia de setembro paga em outubro nao entra.
+    const m = R.resultadoDoPeriodo({ de: '2026-10-01', ate: '2026-10-31', ...base });
+    const rm = R.resultadoDoMes({ mes: '2026-10', ...base });
+    assert.strictEqual(m.imposto.valor, 160);
+    assert.strictEqual(m.saidas, rm.saidas);
+    assert.deepStrictEqual(m.imposto.pagas, []);
+    // Mes inteiro + pedaco: a guia de referencia 2026-10 paga no pedaco (20/11) nao conta de novo.
+    const mp = R.resultadoDoPeriodo({ de: '2026-10-01', ate: '2026-11-25', ...base });
+    assert.strictEqual(mp.imposto.valor, 160);
 });

@@ -2435,6 +2435,8 @@ html[data-theme="dark"] .hoje-orcamento-linha { background: rgba(244,57,39,0.14)
 .res-kpis { display: flex; gap: 28px; flex-wrap: wrap; }
 .res-kpis span { display: block; font-size: 12px; color: #888; }
 .res-kpis strong { font-size: 20px; }
+.fin-a-cair { display: block; font-size: 11px; color: #8A6A00; margin-top: 2px; }
+html[data-theme="dark"] .fin-a-cair { color: #F7DE86; }
 .res-pos { color: #005D3B; }
 .res-neg { color: #F43927; }
 .res-meta, .res-linha { margin-top: 10px; font-size: 14px; }
