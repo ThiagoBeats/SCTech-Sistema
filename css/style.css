@@ -2396,6 +2396,8 @@ body.galped-aberta { overflow: hidden; }
 .hoje-grupo.hoje-amarelo { border-left-color: #F2C924; }
 .hoje-grupo.hoje-cinza { border-left-color: var(--muted); }
 .hoje-grupo.hoje-info { border-left-color: #3B82F6; }
+.hoje-orcamento-linha { background: #FEF4F2; color: #B3160A; border-left: 4px solid var(--danger); border-radius: 6px; padding: 8px 12px; margin-bottom: 10px; font-size: 13px; font-weight: 600; }
+html[data-theme="dark"] .hoje-orcamento-linha { background: rgba(244,57,39,0.14); color: #F79B90; }
 .hoje-item { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .hoje-item:last-child { border-bottom: 0; }
 .hoje-item-desc { flex: 1; min-width: 140px; }

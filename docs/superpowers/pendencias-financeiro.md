@@ -79,3 +79,10 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [ ] Cobrança: casar por nome, fallback e permissão.
 - [ ] Excluir transferência: permissão negada.
 - [ ] Periodicidade de despesas fixas: teste com data fora do horizonte (o atual pode ser fraco).
+
+## Da Fase 2 (branch `feat/financeiro-fase2`)
+
+### Dados e dinheiro
+- [ ] Recebimento antigo sem movimento (de antes das contas) conta no Resultado do mês e na Visão Geral, mas não aparece no Extrato (não passou por conta nenhuma).
+- [ ] Visão Geral com período que pega só um pedaço do mês (7 dias, 30 dias, personalizado) não leva o imposto daquele mês; o imposto (pela referência) entra só nos meses inteiros do período.
+- [ ] "Este mês" na Visão Geral vale o mês inteiro para recebido/saídas (inclui cartão a cair até o último dia), como o Resultado do mês e o Extrato; "A receber"/"A pagar" continuam até hoje.

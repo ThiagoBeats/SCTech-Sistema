@@ -50,8 +50,9 @@ test('conta de imposto tem mes de referencia preenchido com o mes anterior ao ve
 });
 
 test('categoria Imposto aparece no grafico de despesas com rotulo', async ({ page }) => {
+    // Fase 2: o grafico conta o imposto pela referencia (guia do mes, paga ou em aberto).
     const hoje = iso(new Date());
-    await entrar(page, BASE, { sc_cp: [{ id: 1, tipo: 'variavel', categoria: 'imposto', descricao: 'DAS', valor: 300, data_vencimento: hoje, data_pagamento: null, status: 'Pendente' }] });
+    await entrar(page, BASE, { sc_cp: [{ id: 1, tipo: 'variavel', categoria: 'imposto', descricao: 'DAS', valor: 300, mes_referencia: hoje.slice(0, 7), data_vencimento: hoje, data_pagamento: null, status: 'Pendente' }] });
     await page.goto(BASE + '/financeiro.html');
     await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
     await expect.poll(() => page.evaluate(() => { const c = Chart.getChart('chart-fin-desp'); return c ? c.data.labels : null; })).toEqual(['Imposto']);

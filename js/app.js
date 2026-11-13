@@ -13931,6 +13931,20 @@ function getFinPeriodo() {
     return { ini: _finDataIni, fim: _finDataFim, label: `${dIni} – ${dFim}` };
 }
 
+// Dinheiro que entrou/saiu no periodo da Visao Geral, pela mesma regra do Resultado do mes
+// (pela data em que o dinheiro entra; imposto pela referencia, so de meses inteiros).
+// "Este mes" vale o mes inteiro (inclui o cartao a cair), como o Resultado do mes e o Extrato.
+function dinheiroDoPeriodoFin() {
+    const { ini, fim } = getFinPeriodo();
+    const ate = _finPeriodo === 'mes' ? _resUltimoDia(ini.slice(0, 7)) : fim;
+    const res = ResultadoCore.resultadoDoPeriodo({ de: ini, ate, ...dadosFinanceirosBase() });
+    const crPorId = new Map((db.contas_receber || []).map(cr => [String(cr.id), cr]));
+    const pedPagos = new Set();
+    res.itensEntrada.forEach(i => { const cr = crPorId.get(String(i.cr_id)); if (cr && cr.pedido_id) pedPagos.add(cr.pedido_id); });
+    const impostoJaContado = cp => cp.categoria === 'imposto' && Object.prototype.hasOwnProperty.call(res.imposto.porMes, ResultadoCore.referenciaGuia(cp));
+    return { res, ate, recebido: res.entradas, totalPago: res.saidas, lucro: res.resultado, pedPagos, ticketMedio: pedPagos.size ? res.entradas / pedPagos.size : 0, impostoJaContado };
+}
+
 function setFinPeriodo(tipo) {
     _finPeriodo = tipo;
     document.querySelectorAll('.fin-periodo-btn').forEach(b => b.classList.toggle('active', b.dataset.p === tipo));
@@ -13952,8 +13966,8 @@ function salvarMetaMes() {
     const hoje = new Date();
     const key = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
     const val = parseFloat(document.getElementById('fin-meta-valor')?.value) || 0;
-    if (!val) { showAlert('Informe o valor da meta.', '⚠️'); return; }
-    _finMetas[key] = val;
+    // 0 ou vazio = sem ajuste neste mes (vale a meta padrao da empresa).
+    if (val > 0) _finMetas[key] = val; else delete _finMetas[key];
     localStorage.setItem('sc_fin_metas', JSON.stringify(_finMetas));
     renderDashboardFinanceiro();
 }
@@ -13991,14 +14005,13 @@ function gerarHTMLRelatorioFinanceiro(layout, opcoes) {
     const fmt = v => (v||0).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
     const fmtDate = s => s ? new Date(s+'T12:00:00').toLocaleDateString('pt-BR') : '—';
 
-    const recebido  = db.contas_receber.filter(cr=>cr.status==='Pago'&&inRange(cr.data_pagamento)).reduce((s,cr)=>s+cr.valor,0);
+    // Recebido/pago pela mesma regra do Resultado do mes (pela data em que o dinheiro entra).
+    const { recebido, totalPago, lucro, pedPagos, ticketMedio, impostoJaContado } = dinheiroDoPeriodoFin();
     const aReceber  = db.contas_receber.filter(cr=>cr.status!=='Pago'&&inRange(cr.data_vencimento)).reduce((s,cr)=>s+cr.valor,0);
-    const totalPago = db.contas_pagar.filter(cp=>cp.status==='Pago'&&inRange(cp.data_pagamento)).reduce((s,cp)=>s+cp.valor,0);
     const aPagar    = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&inRange(cp.data_vencimento)).reduce((s,cp)=>s+cp.valor,0);
-    const saldoPrev = (recebido+aReceber)-(totalPago+aPagar);
-    const lucro     = recebido-totalPago;
-    const pedPagos  = new Set(db.contas_receber.filter(cr=>cr.status==='Pago'&&inRange(cr.data_pagamento)&&cr.pedido_id).map(cr=>cr.pedido_id));
-    const ticketMedio = pedPagos.size ? recebido/pedPagos.size : 0;
+    // Guia de imposto em aberto ja contada nas saidas (imposto pela referencia) nao entra duas vezes no saldo.
+    const aPagarDup = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&inRange(cp.data_vencimento)&&impostoJaContado(cp)).reduce((s,cp)=>s+cp.valor,0);
+    const saldoPrev = (recebido+aReceber)-(totalPago+aPagar-aPagarDup);
 
     const kpiBox = (lbl, val, sub, cor) =>
         `<div style="background:${cor};border-radius:8px;padding:14px 16px;color:white">
@@ -14155,20 +14168,35 @@ function _resPedidosFallback() {
     return out;
 }
 
+// Dados de entrada do ResultadoCore (os mesmos para Resultado do mes, Visao Geral e Hoje).
+function dadosFinanceirosBase() {
+    return { contasReceber: db.contas_receber, contasPagar: db.contas_pagar, movimentos: db.movimentos_fin, aliquota: getEmpresa().aliquota_estimada };
+}
+function resultadoFinanceiroDoMes(mes, ateData) {
+    return ResultadoCore.resultadoDoMes({ mes, ...dadosFinanceirosBase(), ateData });
+}
+// Meta do mes: ajuste do mes (sc_fin_metas, > 0) ou o padrao da empresa.
+function metaFinanceiraDoMes(mes) {
+    return ResultadoCore.metaDoMes(mes, { padrao: getEmpresa().meta_faturamento_padrao, ajustes: _resLerLS('sc_fin_metas') });
+}
+// Orcamento do mes: limites padrao + ajuste do mes (sc_fin_orcamento_mes) contra o gasto por grupo.
+function orcamentoFinanceiroDoMes(mes, porGrupo) {
+    const limites = Object.assign({}, getEmpresa().orcamento_padrao || {}, (_resLerLS('sc_fin_orcamento_mes')[mes]) || {});
+    return ResultadoCore.statusOrcamento({ limites, gastos: porGrupo });
+}
+
 // Tudo o que a tela e o PDF mostram, para um mes.
 function _resDados(mes) {
-    const emp = getEmpresa();
-    const aliquota = emp.aliquota_estimada;
-    const base = { contasReceber: db.contas_receber, contasPagar: db.contas_pagar, movimentos: db.movimentos_fin, aliquota };
+    const base = dadosFinanceirosBase();
+    const aliquota = base.aliquota;
     const r = ResultadoCore.resultadoDoMes({ mes, ...base });
-    const meta = ResultadoCore.metaDoMes(mes, { padrao: emp.meta_faturamento_padrao, ajustes: _resLerLS('sc_fin_metas') });
+    const meta = metaFinanceiraDoMes(mes);
     const fixas = ResultadoCore.despesasFixasDoMes({ mes, contasPagar: db.contas_pagar, despesasFixas: db.despesas_fixas });
     const dadosPorMes = m => ResultadoCore.resultadoDoMes({ mes: m, ...base });
     let margem = ResultadoCore.margemContribuicao({ mesAtual: mes, dadosPorMes, pedidosFallback: [], aliquota });
     if (margem.base === null) margem = ResultadoCore.margemContribuicao({ mesAtual: mes, dadosPorMes, pedidosFallback: _resPedidosFallback(), aliquota });
     const equilibrio = ResultadoCore.pontoEquilibrio(fixas, margem.pct);
-    const limites = Object.assign({}, emp.orcamento_padrao || {}, (_resLerLS('sc_fin_orcamento_mes')[mes]) || {});
-    const orcamento = ResultadoCore.statusOrcamento({ limites, gastos: r.porGrupo });
+    const orcamento = orcamentoFinanceiroDoMes(mes, r.porGrupo);
     return { r, meta, fixas, margem, equilibrio, orcamento, aliquota };
 }
 
@@ -14228,7 +14256,7 @@ function _resAndamento(mes, d) {
     if (mes !== hojeLocal().slice(0, 7)) return null;
     const hoje = hojeLocal();
     const prev = _resPrevisto(mes);
-    const ateHoje = ResultadoCore.resultadoDoMes({ mes, contasReceber: db.contas_receber, contasPagar: db.contas_pagar, movimentos: db.movimentos_fin, aliquota: d.aliquota, ateData: hoje }).resultado;
+    const ateHoje = resultadoFinanceiroDoMes(mes, hoje).resultado;
     return { ateHoje, previsto: CaixaCore.arredondar(ateHoje + prev.entradas - prev.saidas), atrasados: prev.atrasados };
 }
 
@@ -14460,7 +14488,15 @@ function renderHoje() {
         + grupo('pagar-atrasados', 'A pagar — atrasados', 'vermelho', t.pagarAtrasados, linhaCP)
         + grupo('pagar-proximos', 'A pagar nos próximos 7 dias', 'cinza', t.pagarProximos, linhaCP)
         + grupo('cartao-hoje', 'Cartão que cai hoje', 'info', t.cartaoHoje, linhaCartao);
-    elT.innerHTML = html || '<p style="color:#888;margin:0">Tudo em dia 👍</p>';
+    // Orcamento estourado no mes atual (mesma regra do Resultado do mes), so para quem ve o Resultado.
+    let avisoOrc = '';
+    if (typeof ResultadoCore !== 'undefined' && temAcesso('financeiro.resultado', 'visualizar')) {
+        const mesAt = hoje.slice(0, 7);
+        const estourados = orcamentoFinanceiroDoMes(mesAt, resultadoFinanceiroDoMes(mesAt).porGrupo).filter(o => o.faixa === 'estourou');
+        if (estourados.length) avisoOrc = `<div id="hoje-orcamento">${estourados.map(o =>
+            `<div class="hoje-orcamento-linha" data-grupo="${escapeHtml(o.grupo)}">Orçamento de ${escapeHtml(o.rotulo)} estourado: ${brl(-o.falta)} acima</div>`).join('')}</div>`;
+    }
+    elT.innerHTML = avisoOrc + (html || '<p style="color:#888;margin:0">Tudo em dia 👍</p>');
 
     // Lado direito: so com permissao de ver o Extrato.
     const lado = document.getElementById('hoje-lado');
@@ -14672,14 +14708,13 @@ function renderDashboardFinanceiro() {
     if (periodoLabelEl) periodoLabelEl.textContent = label;
 
     // ── KPIs ──────────────────────────────────────────────────────
-    const recebido  = db.contas_receber.filter(cr=>cr.status==='Pago'&&inRange(cr.data_pagamento)).reduce((s,cr)=>s+cr.valor,0);
+    // Recebido/pago pela mesma regra do Resultado do mes (pela data em que o dinheiro entra).
+    const { res: resPer, ate: atePer, recebido, totalPago, lucro, pedPagos, ticketMedio, impostoJaContado } = dinheiroDoPeriodoFin();
     const aReceber  = db.contas_receber.filter(cr=>cr.status!=='Pago'&&inRange(cr.data_vencimento)).reduce((s,cr)=>s+cr.valor,0);
-    const totalPago = db.contas_pagar.filter(cp=>cp.status==='Pago'&&inRange(cp.data_pagamento)).reduce((s,cp)=>s+cp.valor,0);
     const aPagar    = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&inRange(cp.data_vencimento)).reduce((s,cp)=>s+cp.valor,0);
-    const saldoPrev = (recebido+aReceber)-(totalPago+aPagar);
-    const lucro     = recebido-totalPago;
-    const pedPagos  = new Set(db.contas_receber.filter(cr=>cr.status==='Pago'&&inRange(cr.data_pagamento)&&cr.pedido_id).map(cr=>cr.pedido_id));
-    const ticketMedio = pedPagos.size ? recebido/pedPagos.size : 0;
+    // Guia de imposto em aberto ja contada nas saidas (imposto pela referencia) nao entra duas vezes no saldo.
+    const aPagarDup = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&inRange(cp.data_vencimento)&&impostoJaContado(cp)).reduce((s,cp)=>s+cp.valor,0);
+    const saldoPrev = (recebido+aReceber)-(totalPago+aPagar-aPagarDup);
 
     // ── 4 CARDS PRINCIPAIS ──────────────────────────────────────────
     // Só Saldo Previsto e Inadimplência usam cor de fundo com significado;
@@ -14786,15 +14821,15 @@ function renderDashboardFinanceiro() {
         const mesAtStr = `${hoje2.getFullYear()}-${String(hoje2.getMonth()+1).padStart(2,'0')}`;
         const mesAntD  = new Date(hoje2.getFullYear(), hoje2.getMonth()-1, 1);
         const mesAntStr = `${mesAntD.getFullYear()}-${String(mesAntD.getMonth()+1).padStart(2,'0')}`;
-        const fatAt = db.contas_receber.filter(cr=>cr.status==='Pago'&&(cr.data_pagamento||'').startsWith(mesAtStr)).reduce((s,cr)=>s+cr.valor,0);
-        const fatAnt= db.contas_receber.filter(cr=>cr.status==='Pago'&&(cr.data_pagamento||'').startsWith(mesAntStr)).reduce((s,cr)=>s+cr.valor,0);
+        const fatAt = resultadoFinanceiroDoMes(mesAtStr).faturamento;
+        const fatAnt= resultadoFinanceiroDoMes(mesAntStr).faturamento;
         if (alertaAtivo('fin_tendencia') && fatAnt>0) {
             const pct = ((fatAt-fatAnt)/fatAnt*100).toFixed(1);
             alertas.push(mkA(fatAt>=fatAnt?'success':'warning', fatAt>=fatAnt?'📈':'📉',
                 `Faturamento deste mês <strong>${fatAt>=fatAnt?'+':''}${pct}%</strong> vs. mês anterior (R$ ${fmt(fatAt)} × R$ ${fmt(fatAnt)})`));
         }
 
-        const metaMes = _finMetas[mesAtStr]||0;
+        const metaMes = metaFinanceiraDoMes(mesAtStr);
         if (alertaAtivo('fin_meta') && metaMes>0) {
             const pctMeta = (fatAt/metaMes*100).toFixed(1);
             if (fatAt>=metaMes)
@@ -14823,17 +14858,18 @@ function renderDashboardFinanceiro() {
     // ── META ──────────────────────────────────────────────────────
     const hoje3 = new Date();
     const mesKey = `${hoje3.getFullYear()}-${String(hoje3.getMonth()+1).padStart(2,'0')}`;
-    const metaValor  = _finMetas[mesKey]||0;
-    const fatMesAt   = db.contas_receber.filter(cr=>cr.status==='Pago'&&(cr.data_pagamento||'').startsWith(mesKey)).reduce((s,cr)=>s+cr.valor,0);
+    // Meta = ajuste do mes ou padrao da empresa; comparada com o faturamento liquido (como no Resultado do mes).
+    const metaValor  = metaFinanceiraDoMes(mesKey);
+    const fatMesAt   = resultadoFinanceiroDoMes(mesKey).faturamento;
     const metaInputEl = document.getElementById('fin-meta-valor');
-    if (metaInputEl && !metaInputEl._userEditing) metaInputEl.value = metaValor||'';
+    if (metaInputEl && !metaInputEl._userEditing) metaInputEl.value = Number(_finMetas[mesKey]) > 0 ? _finMetas[mesKey] : '';
     const nomeMes = hoje3.toLocaleString('pt-BR',{month:'long',year:'numeric'});
     const labelMetaEl = document.getElementById('fin-meta-mes-label');
     if (labelMetaEl) labelMetaEl.textContent = nomeMes.charAt(0).toUpperCase()+nomeMes.slice(1);
     const progressEl = document.getElementById('fin-meta-progress');
     if (progressEl) {
         if (!metaValor) {
-            progressEl.innerHTML = '<p style="color:#8F8F8F;font-size:13px;text-align:center;padding:8px 0">Defina uma meta acima para acompanhar seu progresso.</p>';
+            progressEl.innerHTML = '<p style="color:#8F8F8F;font-size:13px;text-align:center;padding:8px 0">Defina uma meta acima (ou a meta padrão em Empresa) para acompanhar seu progresso.</p>';
         } else {
             const pctRaw = Math.min(100, fatMesAt/metaValor*100);
             const pctStr = pctRaw.toFixed(1);
@@ -14862,8 +14898,9 @@ function renderDashboardFinanceiro() {
         const d = new Date(_hj12.getFullYear(), _hj12.getMonth()-i, 1);
         const ms = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
         evolLabels.push(d.toLocaleString('pt-BR',{month:'short'})+'/'+String(d.getFullYear()).slice(2));
-        evolRec12.push(db.contas_receber.filter(cr=>cr.status==='Pago'&&(cr.data_pagamento||'').startsWith(ms)).reduce((s,cr)=>s+cr.valor,0));
-        evolPag12.push(db.contas_pagar.filter(cp=>cp.status==='Pago'&&(cp.data_pagamento||'').startsWith(ms)).reduce((s,cp)=>s+cp.valor,0));
+        const rm = resultadoFinanceiroDoMes(ms);
+        evolRec12.push(rm.entradas);
+        evolPag12.push(rm.saidas);
     }
     const ctxEvol = document.getElementById('chart-fin-evolucao');
     if (ctxEvol) {
@@ -14872,7 +14909,7 @@ function renderDashboardFinanceiro() {
             data:{ labels:evolLabels, datasets:[
                 {type:'bar',  label:'Entradas', data:evolRec12, backgroundColor:'#8FD98Dcc', borderColor:'#159912', borderWidth:1, borderRadius:3, yAxisID:'y'},
                 {type:'bar',  label:'Saídas',   data:evolPag12, backgroundColor:'#F79B90cc', borderColor:'#F43927', borderWidth:1, borderRadius:3, yAxisID:'y'},
-                {type:'line', label:'Resultado', data:evolRec12.map((e,i)=>e-evolPag12[i]), borderColor:'#005D3B', backgroundColor:'rgba(0,93,59,0.06)', borderWidth:2, pointRadius:3, fill:true, tension:0.35, yAxisID:'y'}
+                {type:'line', label:'Resultado', data:evolRec12.map((e,i)=>Math.round((e-evolPag12[i])*100)/100), borderColor:'#005D3B', backgroundColor:'rgba(0,93,59,0.06)', borderWidth:2, pointRadius:3, fill:true, tension:0.35, yAxisID:'y'}
             ]},
             options:{ responsive:true, maintainAspectRatio:false,
                 plugins:{ legend:{ position:'top', labels:{ font:{size:11}, boxWidth:10, padding:8 }}},
@@ -14959,9 +14996,13 @@ function renderDashboardFinanceiro() {
     }
 
     // ── GRÁFICO COMBO ─────────────────────────────────────────────
-    const buckets  = _finGerarBuckets(ini, fim);
-    const entradas = buckets.map(b=>db.contas_receber.filter(cr=>cr.status==='Pago'&&cr.data_pagamento>=b.ini&&cr.data_pagamento<=b.fim).reduce((s,cr)=>s+cr.valor,0));
-    const saidas   = buckets.map(b=>db.contas_pagar.filter(cp=>cp.status==='Pago'&&cp.data_pagamento>=b.ini&&cp.data_pagamento<=b.fim).reduce((s,cp)=>s+cp.valor,0));
+    // Mesmos itens do periodo (pela data do dinheiro); o imposto de cada mes inteiro entra no ultimo dia dele.
+    const buckets  = _finGerarBuckets(ini, atePer);
+    const naFaixa  = (b, d) => d >= b.ini && d <= b.fim;
+    const r2 = v => Math.round(v * 100) / 100;
+    const entradas = buckets.map(b=>r2(resPer.itensEntrada.filter(i=>naFaixa(b, i.data)).reduce((s,i)=>s+i.valor,0)));
+    const saidas   = buckets.map(b=>r2(resPer.itensSaida.filter(i=>naFaixa(b, i.data)).reduce((s,i)=>s+i.valor,0)
+        + Object.entries(resPer.imposto.porMes).filter(([m])=>naFaixa(b, _resUltimoDia(m))).reduce((s,[,v])=>s+v,0)));
     let _acc = 0;
     const saldos = entradas.map((e, i) => { _acc += e - saidas[i]; return _acc; });
     const ctxCombo = document.getElementById('chart-fin-combo');
@@ -14984,7 +15025,7 @@ function renderDashboardFinanceiro() {
     }
 
     // ── DONUT RECEBIMENTOS ────────────────────────────────────────
-    const recPago = db.contas_receber.filter(cr=>cr.status==='Pago'&&inRange(cr.data_pagamento)).reduce((s,cr)=>s+cr.valor,0);
+    const recPago = recebido;
     const recPend = db.contas_receber.filter(cr=>cr.status==='Pendente'&&inRange(cr.data_vencimento)).reduce((s,cr)=>s+cr.valor,0);
     const recAtr  = db.contas_receber.filter(cr=>cr.status==='Atrasado').reduce((s,cr)=>s+cr.valor,0);
     const totalRec = recPago + recPend + recAtr;
@@ -15000,10 +15041,11 @@ function renderDashboardFinanceiro() {
     }
 
     // ── DONUT DESPESAS POR CATEGORIA ─────────────────────────────
-    const CAT_LABELS = { taxa_cartao:'Taxa de cartão', tecido:'Tecido/Mat.', salario:'Salário', comissao_rt:'Comissão RT', aluguel:'Aluguel', conta:'Contas', outro:'Outros', costureira:'Costureira', instalador:'Instalador', imposto:'Imposto' };
-    const CAT_CORES  = { taxa_cartao:'#5B6B7A', tecido:'#9B31C8', salario:'#F2C924', comissao_rt:'#9B31C8', aluguel:'#F43927', conta:'#2D77C1', outro:'#8F8F8F', costureira:'#D70085', instalador:'#FF7F08', imposto:'#0F8B8D' };
+    // Saidas pagas no periodo pelos grupos do Resultado do mes (inclui taxa de cartao e imposto pela referencia).
+    const CAT_LABELS = {}; ResultadoCore.GRUPOS.forEach(g => { CAT_LABELS[g.id] = g.rotulo; });
+    const CAT_CORES  = { fornecedores:'#9B31C8', servicos:'#D70085', comissoes:'#FF7F08', taxas:'#5B6B7A', fixas:'#F43927', imposto:'#0F8B8D', outros:'#8F8F8F' };
     const despCats = {};
-    db.contas_pagar.filter(cp=>inRange(cp.data_vencimento)).forEach(cp => { const c=cp.categoria||'outro'; despCats[c]=(despCats[c]||0)+cp.valor; });
+    ResultadoCore.GRUPOS.forEach(g => { if (resPer.porGrupo[g.id] > 0) despCats[g.id] = resPer.porGrupo[g.id]; });
     const catKeys   = Object.keys(despCats);
     const totalDesp = catKeys.reduce((s,k)=>s+despCats[k], 0);
     const ctxDesp   = document.getElementById('chart-fin-desp');

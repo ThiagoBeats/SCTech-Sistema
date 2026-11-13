@@ -226,3 +226,67 @@ test('orcamento: faixas ok, perto (80%), estourou (>100%), grupo sem limite fica
     const sem = R.statusOrcamento({ limites: { imposto: 500 }, gastos: {} });
     assert.deepStrictEqual(sem.map(x => [x.grupo, x.gasto, x.falta, x.pct, x.faixa]), [['imposto', 0, 500, 0, 'ok']]);
 });
+
+// --- Periodo arbitrario (Visao Geral) ---
+const P_CR = [
+    { id: 1, valor: 3000, status: 'Pago', data_pagamento: '2026-10-05', data_vencimento: '2026-10-05', pedido_id: 50 }, // cartao 3x
+    { id: 2, valor: 2000, status: 'Pago', data_pagamento: '2026-10-15', data_vencimento: '2026-10-15', pedido_id: 51 }, // sem movimento
+    { id: 3, valor: 500, status: 'Pago', data_pagamento: '2026-09-30', data_vencimento: '2026-09-30', pedido_id: 52 }
+];
+const P_MOV = [
+    { id: 1, conta_id: 1, data: '2026-10-05', sentido: 'entrada', valor: 1000, origem: 'cr', origem_id: 1 },
+    { id: 2, conta_id: 1, data: '2026-11-05', sentido: 'entrada', valor: 1000, origem: 'cr', origem_id: 1 },
+    { id: 3, conta_id: 1, data: '2026-12-05', sentido: 'entrada', valor: 1000, origem: 'cr', origem_id: 1 },
+    { id: 4, conta_id: 1, data: '2026-10-01', sentido: 'entrada', valor: 500, origem: 'cr', origem_id: 3 },
+    { id: 5, conta_id: 1, data: '2026-10-12', sentido: 'entrada', valor: 400, origem: 'transferencia', origem_id: null, grupo_id: 't' },
+    { id: 6, conta_id: 2, data: '2026-10-12', sentido: 'saida', valor: 400, origem: 'transferencia', origem_id: null, grupo_id: 't' }
+];
+const P_CP = [
+    { id: 1, categoria: 'taxa_cartao', valor: 30, status: 'Pago', data_vencimento: '2026-10-05', data_pagamento: '2026-10-05' },
+    { id: 2, categoria: 'taxa_cartao', valor: 30, status: 'Pago', data_vencimento: '2026-11-05', data_pagamento: '2026-11-05' },
+    { id: 3, categoria: 'tecido', valor: 800, status: 'Pago', data_vencimento: '2026-10-18', data_pagamento: '2026-10-18' },
+    { id: 4, categoria: 'tecido', valor: 999, status: 'Pendente', data_vencimento: '2026-10-20', data_pagamento: null },
+    { id: 5, categoria: 'imposto', valor: 150, status: 'Pago', mes_referencia: '2026-10', data_vencimento: '2026-10-25', data_pagamento: '2026-10-25' }
+];
+const P_BASE = { contasReceber: P_CR, contasPagar: P_CP, movimentos: P_MOV, aliquota: 6 };
+
+test('periodo de um mes inteiro = resultado do mes', () => {
+    const p = R.resultadoDoPeriodo({ de: '2026-10-01', ate: '2026-10-31', ...P_BASE });
+    const m = R.resultadoDoMes({ mes: '2026-10', ...P_BASE });
+    assert.strictEqual(p.entradas, 3500);
+    assert.strictEqual(p.entradas, m.entradas);
+    assert.strictEqual(p.saidas, m.saidas);
+    assert.strictEqual(p.saidas, 980);
+    assert.strictEqual(p.faturamento, m.faturamento);
+    assert.strictEqual(p.resultado, m.resultado);
+    assert.deepStrictEqual(p.porGrupo, m.porGrupo);
+    assert.deepStrictEqual(p.imposto.porMes, { '2026-10': 150 });
+    assert.strictEqual(p.imposto.valor, 150);
+    assert.strictEqual(p.imposto.estimado, false);
+});
+
+test('periodo parcial: pela data do dinheiro, sem transferencia e sem imposto do mes incompleto', () => {
+    const p = R.resultadoDoPeriodo({ de: '2026-10-10', ate: '2026-11-10', ...P_BASE });
+    assert.strictEqual(p.entradas, 3000); // CR 2 (15/10) + repasse 05/11
+    assert.strictEqual(p.taxas, 30);
+    assert.strictEqual(p.porGrupo.fornecedores, 800);
+    assert.strictEqual(p.porGrupo.imposto, 0);
+    assert.strictEqual(p.saidas, 830);
+    assert.strictEqual(p.resultado, 2170);
+    assert.deepStrictEqual(p.imposto.porMes, {});
+    assert.deepStrictEqual(p.itensEntrada.map(i => [i.data, i.valor, i.cr_id]), [['2026-11-05', 1000, 1], ['2026-10-15', 2000, 2]]);
+    assert.deepStrictEqual(p.itensSaida.map(i => [i.data, i.valor, i.grupo]), [['2026-11-05', 30, 'taxas'], ['2026-10-18', 800, 'fornecedores']]);
+});
+
+test('periodo com um mes inteiro e um pedaco: imposto (estimado) so do mes inteiro', () => {
+    const cps = P_CP.filter(cp => cp.categoria !== 'imposto');
+    const p = R.resultadoDoPeriodo({ de: '2026-09-15', ate: '2026-10-31', contasReceber: P_CR, contasPagar: cps, movimentos: P_MOV, aliquota: 6 });
+    // outubro: 3500 - 30 de taxa = 3470 de faturamento, 6% = 208,20 (estimado)
+    assert.deepStrictEqual(p.imposto.porMes, { '2026-10': 208.2 });
+    assert.strictEqual(p.imposto.estimado, true);
+    assert.strictEqual(p.porGrupo.imposto, 208.2);
+    assert.strictEqual(p.saidas, 1038.2);
+    const vazio = R.resultadoDoPeriodo({ de: '2026-10-11', ate: '2026-10-10', ...P_BASE });
+    assert.strictEqual(vazio.entradas, 0);
+    assert.strictEqual(vazio.saidas, 0);
+});

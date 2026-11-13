@@ -48,32 +48,53 @@
 
     // Entradas: para cada CR paga, os movimentos de entrada origem 'cr' dela (cada um na sua data);
     // sem movimento, a propria parcela pela data_pagamento. Transferencias e CRs nao pagas nao contam.
-    function entradasDoMes({ mes, contasReceber, movimentos, ateData }) {
+    // `dentro(data)` diz se a data entra (mes, mes ate hoje ou periodo).
+    function itensEntrada(dentro, contasReceber, movimentos) {
         const itens = [];
-        const movs = (movimentos || []).filter(m => m && m.origem === 'cr' && m.sentido !== 'saida');
+        const porCr = new Map();
+        (movimentos || []).forEach(m => {
+            if (!m || m.origem !== 'cr' || m.sentido === 'saida' || m.origem_id == null) return;
+            const k = String(m.origem_id);
+            if (!porCr.has(k)) porCr.set(k, []);
+            porCr.get(k).push(m);
+        });
         (contasReceber || []).filter(cr => cr && cr.status === 'Pago').forEach(cr => {
-            const dela = movs.filter(m => mesmoId(m.origem_id, cr.id));
-            if (dela.length) {
-                dela.forEach(m => { if (noMes(m.data, mes, ateData)) itens.push({ data: m.data, valor: num(m.valor), cr_id: cr.id }); });
-            } else if (noMes(cr.data_pagamento, mes, ateData)) {
+            const dela = cr.id == null ? null : porCr.get(String(cr.id));
+            if (dela && dela.length) {
+                dela.forEach(m => { if (dentro(m.data)) itens.push({ data: m.data, valor: num(m.valor), cr_id: cr.id }); });
+            } else if (dentro(cr.data_pagamento)) {
                 itens.push({ data: cr.data_pagamento, valor: num(cr.valor), cr_id: cr.id });
             }
         });
+        return itens;
+    }
+
+    function entradasDoMes({ mes, contasReceber, movimentos, ateData }) {
+        const itens = itensEntrada(d => noMes(d, mes, ateData), contasReceber, movimentos);
         return { total: arredondar(itens.reduce((s, i) => s + i.valor, 0)), itens };
     }
 
-    // Saidas de caixa: CPs pagas com data_pagamento no mes, exceto imposto (vem de impostoDoMes).
-    function saidasDoMes({ mes, contasPagar, ateData }) {
-        const porGrupo = gruposZerados();
+    // Saidas de caixa: CPs pagas com data_pagamento aceita por `dentro`, exceto imposto (vem de impostoDoMes).
+    function itensSaida(dentro, contasPagar) {
+        const itens = [];
         (contasPagar || []).forEach(cp => {
             if (!cp || cp.status !== 'Pago' || cp.categoria === 'imposto') return;
-            if (!noMes(cp.data_pagamento, mes, ateData)) return;
-            const g = grupoDaCategoria(cp.categoria);
-            porGrupo[g] += num(cp.valor);
+            if (!dentro(cp.data_pagamento)) return;
+            itens.push({ data: cp.data_pagamento, valor: num(cp.valor), grupo: grupoDaCategoria(cp.categoria), cp_id: cp.id });
         });
+        return itens;
+    }
+
+    function somarPorGrupo(itens) {
+        const porGrupo = gruposZerados();
+        itens.forEach(i => { porGrupo[i.grupo] += i.valor; });
         let total = 0;
         Object.keys(porGrupo).forEach(g => { porGrupo[g] = arredondar(porGrupo[g]); total += porGrupo[g]; });
         return { total: arredondar(total), porGrupo };
+    }
+
+    function saidasDoMes({ mes, contasPagar, ateData }) {
+        return somarPorGrupo(itensSaida(d => noMes(d, mes, ateData), contasPagar));
     }
 
     // Mes de referencia da guia; guia sem o campo usa o mes anterior ao vencimento (mesmo padrao do formulario).
@@ -104,6 +125,36 @@
         const porGrupo = Object.assign({}, sai.porGrupo, { imposto: imposto.valor });
         const saidas = arredondar(sai.total + imposto.valor);
         return { entradas, taxas, faturamento, saidas, porGrupo, imposto, resultado: arredondar(entradas - saidas) };
+    }
+
+    const ultimoDia = mes => mes + '-' + String(new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0).getDate()).padStart(2, '0');
+
+    // Periodo qualquer [de, ate] ('YYYY-MM-DD'), pelas mesmas regras do mes: entradas pela data em que o
+    // dinheiro entra, saidas pagas no periodo. Imposto (pela referencia) so dos meses inteiros dentro do
+    // periodo — um pedaco de mes nao leva o imposto do mes. Devolve tambem os itens (para graficos).
+    function resultadoDoPeriodo({ de, ate, contasReceber, contasPagar, movimentos, aliquota }) {
+        const dentro = d => !!d && String(d) >= de && String(d) <= ate;
+        const ok = !!de && !!ate && de <= ate;
+        const itensE = ok ? itensEntrada(dentro, contasReceber, movimentos) : [];
+        const itensS = ok ? itensSaida(dentro, contasPagar) : [];
+        const entradas = arredondar(itensE.reduce((s, i) => s + i.valor, 0));
+        const sai = somarPorGrupo(itensS);
+        const porMes = {};
+        let impostoTotal = 0, estimado = false;
+        if (ok) {
+            for (let mes = mesDe(de); mes <= mesDe(ate); mes = somarMeses(mes, 1)) {
+                if (de > mes + '-01' || ate < ultimoDia(mes)) continue;
+                const imp = resultadoDoMes({ mes, contasReceber, contasPagar, movimentos, aliquota }).imposto;
+                porMes[mes] = imp.valor;
+                impostoTotal += imp.valor;
+                if (imp.estimado && imp.valor > 0) estimado = true;
+            }
+        }
+        const imposto = { valor: arredondar(impostoTotal), estimado, porMes };
+        const taxas = sai.porGrupo.taxas;
+        const porGrupo = Object.assign({}, sai.porGrupo, { imposto: imposto.valor });
+        const saidas = arredondar(sai.total + imposto.valor);
+        return { entradas, taxas, faturamento: arredondar(entradas - taxas), saidas, porGrupo, imposto, resultado: arredondar(entradas - saidas), itensEntrada: itensE, itensSaida: itensS };
     }
 
     // Ajuste do mes (> 0) vence; senao o padrao; senao 0.
@@ -197,7 +248,7 @@
         return out;
     }
 
-    const api = { GRUPOS, grupoDaCategoria, entradasDoMes, saidasDoMes, impostoDoMes, resultadoDoMes, metaDoMes, despesasFixasDoMes, margemContribuicao, pontoEquilibrio, statusOrcamento, somarMeses, referenciaGuia };
+    const api = { GRUPOS, grupoDaCategoria, entradasDoMes, saidasDoMes, impostoDoMes, resultadoDoMes, resultadoDoPeriodo, metaDoMes, despesasFixasDoMes, margemContribuicao, pontoEquilibrio, statusOrcamento, somarMeses, referenciaGuia };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ResultadoCore = api;
