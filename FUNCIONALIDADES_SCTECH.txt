@@ -716,8 +716,8 @@ Na janela do carrinho (ícone 🛒 em Fornecedores):
  10. FINANCEIRO (financeiro.html)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-7 abas: Hoje | Visão Geral | A Receber | A Pagar | Despesas Fixas | DRE por Pedido | Extrato
-(Hoje e Extrato são da Fase 1, seções 10.14 a 10.20)
+8 abas: Hoje | Visão Geral | A Receber | A Pagar | Despesas Fixas | DRE por Pedido | Extrato | Resultado do mês
+(Hoje e Extrato são da Fase 1, seções 10.14 a 10.20; Resultado do mês é da Fase 2, seções 10.21 a 10.25)
 
 Como o dinheiro é controlado (resumo, detalhes nas seções 10.7 a 10.13):
   - Tudo o que o cliente pagou fica nas parcelas do A Receber. O "Valor recebido"
@@ -780,6 +780,7 @@ Meta de Faturamento:
   - Cores: verde ≥100% / verde-médio ≥70% / âmbar ≥40% / vermelho <40%
   - Texto: valor faturado × meta + faltam R$ X para a meta
   - Meta armazenada por mês (chave: YYYY-MM)
+  - Desde a Fase 2 existe também a meta padrão da Empresa (ver 10.21)
 
 Gráfico 1 — Evolução Mensal 12 Meses (combo):
   - Barras: Entradas (verde) e Saídas (vermelho) por mês
@@ -1175,6 +1176,104 @@ Agora o Financeiro tem 7 abas e a primeira, aberta por padrão, é "Hoje".
   - "Tenho hoje" e "Próximas semanas" e a aba Extrato pedem a permissão Extrato;
     transferir pede Extrato completo. Recebi/Cobrar pedem Receber completo e
     Paguei pede Pagar completo
+
+── 10.21 FASE 2: META DE FATURAMENTO E ORÇAMENTO ───────────────────────────────
+
+  - Meta padrão: em Empresa (Preferências), campo "Meta de faturamento mensal
+    (padrão)". Vale para todos os meses. Vazio ou 0 = sem meta
+  - Ajuste do mês: na Visão Geral (card "Meta de Faturamento") ou na aba
+    Resultado do mês (botão ✏️). Vale só para aquele mês e vence a meta padrão.
+    Salvar vazio ou 0 apaga o ajuste e o mês volta à meta padrão
+  - A meta é comparada com o faturamento líquido do mês (o que entrou menos as
+    taxas de cartão), a mesma conta do Resultado do mês
+  - Orçamento padrão: em Empresa, um limite mensal por grupo de saída (campo
+    vazio = sem limite). Valores aceitam vírgula e ponto (30.000 ou 30.000,50)
+  - Cada limite pode ser ajustado só para um mês na aba Resultado do mês.
+    No ajuste do limite, vazio volta ao padrão e 0 tira o limite daquele mês
+
+── 10.22 FASE 2: ABA "📅 RESULTADO DO MÊS" ─────────────────────────────────────
+
+Nova aba (8ª) que mostra se o mês fechou no azul. Escolha o mês no campo "Mês".
+
+  - Entradas: contam pela data em que o dinheiro entra. Cartão parcelado entra
+    mês a mês, conforme cada parcela cai. Recebimentos antigos, de antes das
+    contas, contam pela data do pagamento
+  - Saídas por grupo: Fornecedores e materiais, Costureira e instalador,
+    Comissões, Taxas de cartão, Despesas fixas, Imposto e Outros. Contam pela
+    data em que a conta foi paga
+  - Imposto: conta pelo mês de referência da guia (o mês a que ela se refere),
+    não pela data do pagamento. Se há guia lançada para o mês, vale o valor
+    dela (paga ou em aberto). Se não há, o sistema estima pela alíquota da
+    Empresa sobre o faturamento líquido e mostra "guia ainda não lançada —
+    estimativa R$ X". Sem alíquota, avisa "Informe a alíquota em Empresa para
+    estimar o imposto"
+  - Resultado = entradas − saídas (saídas já incluem o imposto)
+  - Meta: mostra o faturamento líquido, a meta do mês e "bateu a meta" ou
+    "faltou R$ X". Sem meta: "sem meta definida"
+  - Ponto de equilíbrio: "Para pagar as contas do mês você precisa faturar
+    R$ X". É as despesas fixas do mês dividida pela margem de contribuição.
+    A margem é o que sobra de cada R$ 1 faturado depois de fornecedores,
+    costureira/instalador, comissões e imposto, tirada da média dos 3 meses
+    fechados mais recentes com faturamento (olha até 12 meses para trás). Sem
+    histórico, usa os pedidos e a alíquota. Com menos de 3 meses de histórico,
+    aparece o aviso "estimativa — poucos meses de histórico". Se os custos
+    passam do faturamento, diz que não há ponto de equilíbrio; sem dados, diz
+    que ainda não há histórico
+  - Orçamento por grupo: tabela com limite, gasto, quanto falta, percentual e
+    a situação. Faixas: "dentro do limite" (até 79%), "perto do limite" (de
+    80% a 100%) e "estourou R$ X" (acima de 100%). Só aparecem grupos com
+    limite. Quem tem permissão completa ajusta o limite só do mês (✏️ ou o
+    seletor "+ Limite só neste mês")
+  - Mês em andamento (só o mês atual): "Até hoje" é o resultado já realizado
+    e "Previsto até o fim do mês" soma o que ainda deve entrar e sair (contas
+    a receber e a pagar, cartão que cai, despesas fixas). Se há atrasados
+    nessa conta, aparece "inclui atrasados". A previsão não projeta o imposto
+    estimado do resto do mês
+  - Entradas do mês atual avisam "inclui R$ X a cair até dd/mm" quando há
+    cartão que ainda não caiu
+  - Botão 📄 PDF: gera o relatório do mês (entradas, saídas, resultado, meta,
+    saídas por grupo, ponto de equilíbrio, orçamento e mês em andamento)
+
+── 10.23 FASE 2: IMPOSTO NO A PAGAR ────────────────────────────────────────────
+
+  - Nova categoria "Imposto" ao lançar uma conta a pagar (e nas despesas
+    fixas)
+  - Ao escolher Imposto aparece o campo "Mês de referência" (mês a que a guia
+    se refere). Vem preenchido com o mês anterior ao vencimento e pode ser
+    editado. Em conta parcelada ou recorrente, cada guia mantém a mesma
+    distância entre vencimento e referência da primeira
+  - Guia antiga sem o campo usa o mês anterior ao vencimento
+  - Guia de imposto lançada como despesa fixa não entra duas vezes: o imposto
+    já está no resultado pela referência
+
+── 10.24 FASE 2: VISÃO GERAL PELA MESMA REGRA ──────────────────────────────────
+
+  - Recebido, saídas, lucro, ticket médio, meta e gráficos da Visão Geral agora
+    seguem a mesma regra do Resultado do mês (data em que o dinheiro entra ou
+    sai; cartão pelo repasse). Uma legenda no alto lembra disso
+  - "Este mês" vale o mês inteiro, inclusive o cartão que ainda vai cair até o
+    último dia. Quando há valor futuro, o card Total Recebido avisa "inclui
+    R$ X a cair até dd/mm". "A receber" e "A pagar" continuam contando só até
+    hoje
+  - O card "Lucro (Caixa)" mostra "recebido − saídas (imposto pela
+    referência)", com "(imposto estimado)" quando não há guia lançada
+  - Imposto em períodos que pegam só um pedaço do mês (7 dias, 30 dias,
+    personalizado): o imposto pela referência entra só nos meses inteiros do
+    período. Guia paga de um mês que não está inteiro no período conta pela
+    data do pagamento, se estiver dentro do período, e nunca é contada duas
+    vezes. No Saldo Previsto, guia em aberto já contada nas saídas não entra
+    de novo
+  - A meta do mês atual usa o ajuste do mês ou a meta padrão da Empresa
+
+── 10.25 FASE 2: AVISO NA TELA HOJE E PERMISSÃO ────────────────────────────────
+
+  - Aba Hoje: se algum grupo do orçamento do mês atual estourou, aparece no
+    topo da lista "Orçamento de [grupo] estourado: R$ X acima". Só aparece
+    para quem pode ver o Resultado do mês
+  - Permissão nova: "Resultado do mês" (aba Resultado do mês, aviso do
+    orçamento no Hoje). Visualizar permite ver; completo permite ajustar meta e
+    limites do mês. Os papéis que já existiam herdam o mesmo nível que têm na
+    Visão Geral
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

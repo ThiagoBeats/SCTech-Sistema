@@ -86,3 +86,19 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [ ] Recebimento antigo sem movimento (de antes das contas) conta no Resultado do mês e na Visão Geral, mas não aparece no Extrato (não passou por conta nenhuma).
 - [ ] Visão Geral com período que pega só um pedaço do mês (7 dias, 30 dias, personalizado) não leva o imposto daquele mês; o imposto (pela referência) entra só nos meses inteiros do período.
 - [ ] "Este mês" na Visão Geral vale o mês inteiro para recebido/saídas (inclui cartão a cair até o último dia), como o Resultado do mês e o Extrato; "A receber"/"A pagar" continuam até hoje.
+- [ ] Saldo Previsto da Visão Geral mistura janelas: recebido/pago no mês inteiro contra a receber/a pagar só até hoje.
+- [ ] O imposto do mês aparece no último dia do gráfico combo da Visão Geral.
+- [ ] O "Previsto até o fim do mês" (Resultado do mês) não projeta o imposto estimado do resto do mês.
+- [ ] Imposto parcelado mantém o deslocamento do mês de referência da primeira guia (pode não ser o desejado em todos os casos).
+- [ ] O imposto por referência (Resultado do mês, Visão Geral) pode diferir do caixa do Extrato, que mostra a data do pagamento.
+- [ ] O histórico de 12 meses da margem é recalculado a cada render do Resultado do mês.
+
+### Telas e textos
+- [ ] A opção "Imposto" está duplicada em dois lugares no código (formulário do A Pagar e despesas fixas).
+- [ ] O campo de valor das parcelas (`cpm-valor`) ainda é `type=number` e não aceita "1.250,50".
+- [ ] Na Visão Geral, a meta padrão não aparece como sugestão (sem placeholder) no campo de ajuste do mês.
+- [ ] O seletor "+ Limite só neste mês" fica visível mesmo sem nenhum orçamento definido.
+
+### Testes que faltam
+- [ ] Escape e empilhamento das janelas de ajuste (meta/limite) com outras janelas abertas.
+- [ ] O Chart.js vem do CDN e é instável nos testes (considerar cópia local ou espera mais robusta).
