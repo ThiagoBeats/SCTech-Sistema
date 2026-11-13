@@ -38,9 +38,9 @@ Módulos (telas):
 
 Elementos globais presentes em todas as telas (exceto Login):
   - Barra lateral de navegação (sidebar) com links para todos os módulos
-  - Popup de perfil (clique no logo): nome do usuário logado, toggle de tema,
-    links para "Sobre" e "Configurar Empresa", botão de Logout
-  - Toggle de tema claro/escuro persistido em localStorage
+  - Popup de perfil (clique no logo): nome do usuário logado, links para
+    "Sobre" e "Configurar Empresa", botão de Logout
+  - Tema claro/escuro: escolhido em Configurações › Preferências do Sistema
   - Ícone de página (favicon): logo SCTech
   - Indicador de alertas desabilitados: ícone 🔕 no cabeçalho, visível apenas
     quando há algum tipo de alerta desativado nas preferências; clique navega
@@ -308,6 +308,15 @@ Lista de medições agendadas:
 
 7 abas: Tecidos | Materiais | Kits | Histórico | Consulta | Estoque Futuro | Backup
 
+Balanço de Estoque (botão no topo da tela):
+  - Filtros na ordem Código e depois Nome, com sugestões. Digitar o código
+    exato de um item preenche o nome sozinho (e vice-versa); o item já
+    aparece filtrado abaixo. Apagar o campo apaga o que foi preenchido sozinho.
+  - O campo Código também acha o rolo pelo código do rolo.
+  - Tabelas e PDF com Código antes do Nome. A coluna Código mostra o código
+    do item; o código do rolo aparece em letra menor embaixo do nome.
+  - Itens com estoque infinito não entram no balanço (não há o que contar).
+
 ── 4.1 ABA: TECIDOS ────────────────────────────────────────────────────────────
 
 Painel de alertas de ponto de pedido (topo):
@@ -330,6 +339,9 @@ Formulário — Registrar Entrada de Rolo:
     no catálogo
 
 Tabela de Rolos em Estoque:
+  - Campo "🔍 Buscar por código ou descrição" logo acima da lista (abaixo do
+    registro): filtra enquanto digita; sem resultado mostra "Nenhum item
+    encontrado para a busca."
   - Colunas: Referência | Metragem Inicial | Disponível | Ocupação (%) | Data Entrada
   - Linha expandível por rolo: botão de baixa manual (quantidade + confirmação)
   - Coluna Ações em cada tecido: botão "🛒 Adicionar ao carrinho" (seção 9.4)
@@ -352,6 +364,9 @@ Formulário — Registrar Entrada de Material:
   - Botão "Registrar Entrada": confirma, persiste, registra movimento
 
 Tabela de Materiais em Estoque:
+  - Campo "🔍 Buscar por código ou descrição" logo acima da lista (abaixo do
+    registro): filtra enquanto digita; sem resultado mostra "Nenhum item
+    encontrado para a busca."
   - Colunas: Material | Referência | Unidade | Preço Venda | Estoque Atual | Fornecedor
   - Ações por linha: botão "🛒 Adicionar ao carrinho" (ver seção 9.4) e menu ⋮
     com "± Ajustar estoque" (entrada +/saída - com quantidade e confirmação).
@@ -377,6 +392,9 @@ Formulário de criação de kit:
     excluídos não voltam
 
 Tabela de Kits Cadastrados:
+  - Campo "🔍 Buscar por código ou descrição" logo acima da lista (abaixo do
+    cadastro; procura no código, no nome e na descrição do kit): filtra enquanto digita; sem resultado mostra "Nenhum item
+    encontrado para a busca."
   - Colunas: Nome | Composição (lista de itens) | Ações
   - Ações: menu ⋮ com "± Ajustar estoque" (só kit pronto com estoque
     controlado), "✏️ Editar kit" (só kit de montagem, e só na Gestão de
@@ -1987,10 +2005,10 @@ Simulador mais realista (js/galeria-modelos-render.js, galeria-simulador.js) —
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Tema Claro / Escuro:
-  - Toggle no popup de perfil da sidebar (disponível em todas as telas)
-  - Ícone animado: 🌙 (tema escuro) / ☀️ (tema claro)
-  - Switch visual (pill toggle)
-  - Persiste em localStorage (chave: sc_tema)
+  - Escolhido em Configurações › Preferências do Sistema › Tema (☀️ Claro /
+    🌙 Escuro). Muda na hora ao selecionar e já fica gravado no usuário, sem
+    precisar clicar em "Salvar preferências". Saiu do popup da logo.
+  - Persiste no usuário e em localStorage (chave: sc_tema)
   - Anti-flash: tema aplicado antes do carregamento do CSS em todas as telas
 
 Persistência de Dados:

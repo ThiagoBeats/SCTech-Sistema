@@ -1085,19 +1085,6 @@ html[data-theme="dark"] .fin-periodo-btn { border-color: #282A2E; color: #9EA3AC
 html[data-theme="dark"] .fin-periodo-btn:hover { background: #141518; color: var(--secondary); border-color: var(--secondary); }
 html[data-theme="dark"] .fin-periodo-btn.active { background: var(--secondary); color: #1E2022; border-color: var(--secondary); }
 
-/* ── TOGGLE SWITCH DE TEMA ───────────────────────────────────── */
-.tema-switch {
-    display: inline-block; width: 32px; height: 18px;
-    background: #E0E0E0; border-radius: 9px; position: relative;
-    transition: background .2s; flex-shrink: 0; pointer-events: none;
-}
-.tema-switch::after {
-    content: ''; position: absolute; top: 2px; left: 2px;
-    width: 14px; height: 14px; background: white; border-radius: 50%;
-    transition: left .2s;
-}
-.tema-switch.active { background: var(--primary); }
-.tema-switch.active::after { left: 16px; }
 
 /* ── RESPONSIVIDADE GERAL (notebook, tablet, celular) ────────────────
    Regra geral: nunca cortar conteúdo — em vez disso, quebrar linha ou
@@ -2446,3 +2433,18 @@ html[data-theme="dark"] .fin-a-cair { color: #F7DE86; }
 .res-faixa-perto { color: #B26A00; font-weight: 600; }
 .res-faixa-estourou { color: #F43927; font-weight: 600; }
 .res-ed { background: none; border: none; cursor: pointer; padding: 2px 6px; }
+
+/* ── BUSCA DA GESTÃO DE ESTOQUE (Tecidos, Materiais, Kits) ───────── */
+.est-busca { margin-bottom: 12px; }
+.est-busca input {
+    width: 100%; max-width: 420px; padding: 9px 14px;
+    border: 1px solid var(--border); border-radius: var(--radius-input);
+    background: var(--white); color: var(--dark); font-size: var(--fs-texto-sm); outline: none;
+}
+.est-busca input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(0, 93, 59, 0.12); }
+
+/* Balanço de Estoque no tema escuro (o modal tem cores fixas no estilo da linha) */
+html[data-theme="dark"] #balanco-overlay .balanco-caixa { background: #141518 !important; border-color: #282A2E !important; }
+html[data-theme="dark"] #balanco-overlay th { background: #141518 !important; color: #FEFFFF !important; border-color: #282A2E !important; }
+html[data-theme="dark"] #balanco-overlay tr[data-esgotado="1"] { background: transparent !important; }
+html[data-theme="dark"] #balanco-overlay td input { background: #141518; color: #F5F6F8; border-color: #282A2E !important; }

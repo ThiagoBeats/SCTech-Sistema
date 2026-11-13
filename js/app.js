@@ -1152,11 +1152,6 @@ function renderSidebar() {
                 <div class="logo-popup-sep"></div>
                 <a href="configuracoes.html" class="logo-popup-item">${navIcon('user', 16)} Meu perfil</a>
                 <div class="logo-popup-sep"></div>
-                <button class="logo-popup-item" onclick="toggleTema()" style="justify-content:space-between">
-                    <span style="display:flex;align-items:center;gap:10px"><span id="tema-icone">🌙</span> Tema</span>
-                    <span class="tema-switch" id="tema-switch"></span>
-                </button>
-                <div class="logo-popup-sep"></div>
                 <a href="sobre.html" class="logo-popup-item">${navIcon('info', 16)} Sobre o Sistema</a>
                 ${temAcesso('configuracoes.empresa', 'visualizar')
                     ? `<a href="empresa.html" class="logo-popup-item">${navIcon('settings', 16)} Configurar Empresa</a>`
@@ -4277,17 +4272,23 @@ function abrirBalanco() {
     if (existing) existing.remove();
 
     // --- Montar linhas de tecidos (ativos e esgotados separados) ---
+    // Item sem controle de estoque (estoque infinito) nao se conta: o "rolo"
+    // dele e' so um saldo de fachada. A coluna Codigo mostra o codigo do
+    // tecido; o codigo do rolo vai em letra miuda embaixo do nome.
     let rowsTecidos = '';
-    const rolosEsgotados = db.estoque.filter(r => !(r.metragem_atual > 0));
-    db.estoque.forEach(r => {
+    const rolosDoBalanco = db.estoque.filter(r => !_ehSaldoDeFachada(r) && !tecidoTemEstoqueInfinito(r.tecido_id));
+    const rolosEsgotados = rolosDoBalanco.filter(r => !(r.metragem_atual > 0));
+    rolosDoBalanco.forEach(r => {
         const esgotado = !(r.metragem_atual > 0);
-        const cat  = db.catalogo.find(c => c.id === r.tecido_id);
+        const cat  = db.catalogo.find(c => c.id == r.tecido_id);
         const nome = cat ? cat.nome : '—';
+        const cod  = (cat && cat.referencia) || '';
         const sys  = (r.metragem_atual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const rowStyle = esgotado ? 'opacity:.5;background:#FAFAFA' : '';
-        rowsTecidos += `<tr data-balanco-nome="${nome.toLowerCase()}" data-balanco-ref="${(r.lote||'').toLowerCase()}" data-esgotado="${esgotado ? '1' : '0'}" style="${rowStyle}">
-            <td>${nome}${esgotado ? ' <span style="font-size:10px;background:#E0E0E0;color:#8F8F8F;padding:1px 5px;border-radius:4px;font-weight:600">ESGOTADO</span>' : ''}</td>
-            <td>${r.lote || '—'}</td>
+        rowsTecidos += `<tr data-balanco-nome="${escapeHtml(nome.toLowerCase())}" data-balanco-ref="${escapeHtml(cod.toLowerCase())}" data-balanco-rolo-cod="${escapeHtml((r.lote||'').toLowerCase())}"
+            data-pdf-cod="${escapeHtml(cod || '—')}" data-pdf-nome="${escapeHtml(nome)}" data-pdf-rolo="${escapeHtml(r.lote || '')}" data-esgotado="${esgotado ? '1' : '0'}" style="${rowStyle}">
+            <td>${escapeHtml(cod || '—')}</td>
+            <td>${escapeHtml(nome)}${esgotado ? ' <span style="font-size:10px;background:#E0E0E0;color:#8F8F8F;padding:1px 5px;border-radius:4px;font-weight:600">ESGOTADO</span>' : ''}${r.lote ? `<div style="font-size:11px;color:#8F8F8F">Rolo: ${escapeHtml(r.lote)}</div>` : ''}</td>
             <td style="text-align:right;color:${esgotado ? '#8F8F8F' : 'inherit'}">${sys} m</td>
             <td><input type="number" min="0" step="0.01" placeholder="—"
                 data-balanco-rolo="${r.id}"
@@ -4301,11 +4302,11 @@ function abrirBalanco() {
 
     // --- Montar linhas de materiais ---
     let rowsMats = '';
-    db.materiais.forEach(m => {
+    db.materiais.filter(m => !temEstoqueInfinito(m)).forEach(m => {
         const sys = (m.estoque_atual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        rowsMats += `<tr data-balanco-nome="${m.nome.toLowerCase()}" data-balanco-ref="${(m.referencia||'').toLowerCase()}">
-            <td>${m.referencia || '—'}</td>
-            <td>${m.nome}</td>
+        rowsMats += `<tr data-balanco-nome="${escapeHtml(m.nome.toLowerCase())}" data-balanco-ref="${escapeHtml((m.referencia||'').toLowerCase())}">
+            <td>${escapeHtml(m.referencia || '—')}</td>
+            <td>${escapeHtml(m.nome)}</td>
             <td style="text-align:center">${m.unidade || 'un'}</td>
             <td style="text-align:right">${sys}</td>
             <td><input type="number" min="0" step="0.01" placeholder="—"
@@ -4343,20 +4344,22 @@ function abrirBalanco() {
                 </p>
 
                 <!-- Filtros -->
-                <div style="display:flex;gap:10px;margin-bottom:${rolosEsgotados.length ? '8px' : '20px'};padding:12px 14px;background:#FAFAFA;border:1px solid #E0E0E0;border-radius:8px;flex-wrap:wrap">
-                    <div style="flex:1;min-width:150px">
-                        <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Nome</label>
-                        <input id="balanco-filter-nome" type="text" placeholder="Filtrar por nome..." style="${inpStyle}" oninput="_filtrarBalanco()">
-                    </div>
+                <div class="balanco-caixa" style="display:flex;gap:10px;margin-bottom:${rolosEsgotados.length ? '8px' : '20px'};padding:12px 14px;background:#FAFAFA;border:1px solid #E0E0E0;border-radius:8px;flex-wrap:wrap">
                     <div style="flex:1;min-width:150px">
                         <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Código</label>
-                        <input id="balanco-filter-ref" type="text" placeholder="Filtrar por código do tecido ou do rolo..." style="${inpStyle}" oninput="_filtrarBalanco()">
+                        <input id="balanco-filter-ref" type="text" list="balanco-lista-cod" autocomplete="off" placeholder="Código do item ou do rolo..." style="${inpStyle}" oninput="_balancoDigitou('cod')">
                     </div>
+                    <div style="flex:2;min-width:180px">
+                        <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Nome</label>
+                        <input id="balanco-filter-nome" type="text" list="balanco-lista-nome" autocomplete="off" placeholder="Nome do item..." style="${inpStyle}" oninput="_balancoDigitou('nome')">
+                    </div>
+                    <datalist id="balanco-lista-cod">${_itensDoBalanco().filter(i => i.cod).map(i => `<option value="${escapeHtml(i.cod)}">${escapeHtml(i.nome)}</option>`).join('')}</datalist>
+                    <datalist id="balanco-lista-nome">${_itensDoBalanco().map(i => `<option value="${escapeHtml(i.nome)}">${escapeHtml(i.cod)}</option>`).join('')}</datalist>
                     <div style="display:flex;align-items:flex-end;gap:8px">
                         <button class="btn btn-outline btn-sm" onclick="_limparFiltrosBalanco()" style="white-space:nowrap">✕ Limpar</button>
                     </div>
                 </div>
-                ${rolosEsgotados.length ? `<div style="margin-bottom:16px;padding:8px 12px;background:#FAFAFA;border:1px solid #E0E0E0;border-radius:6px;display:flex;align-items:center;gap:10px;font-size:12px;color:#8F8F8F">
+                ${rolosEsgotados.length ? `<div class="balanco-caixa" style="margin-bottom:16px;padding:8px 12px;background:#FAFAFA;border:1px solid #E0E0E0;border-radius:6px;display:flex;align-items:center;gap:10px;font-size:12px;color:#8F8F8F">
                     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
                         <input type="checkbox" id="balanco-show-esgotados" onchange="_filtrarBalanco()" style="width:14px;height:14px;cursor:pointer">
                         Mostrar <strong style="color:var(--dark)">${rolosEsgotados.length} rolo(s) esgotado(s)</strong> (metragem = 0 no sistema)
@@ -4367,8 +4370,8 @@ function abrirBalanco() {
                 <div style="overflow-x:auto;margin-bottom:24px">
                     <table style="width:100%;border-collapse:collapse;font-size:13px">
                         <thead><tr>
-                            <th style="${thStyle}">Tecido</th>
                             <th style="${thStyle}">Código</th>
+                            <th style="${thStyle}">Tecido</th>
                             <th style="${thStyle};text-align:right">Sist. (m)</th>
                             <th style="${thStyle};text-align:right;width:130px">Contado (m)</th>
                             <th style="${thStyle};text-align:right;width:100px">Diferença</th>
@@ -4381,8 +4384,8 @@ function abrirBalanco() {
                 <div style="overflow-x:auto">
                     <table style="width:100%;border-collapse:collapse;font-size:13px">
                         <thead><tr>
-                            <th style="${thStyle}">Material</th>
                             <th style="${thStyle}">Código</th>
+                            <th style="${thStyle}">Material</th>
                             <th style="${thStyle};text-align:center">Un.</th>
                             <th style="${thStyle};text-align:right">Sist.</th>
                             <th style="${thStyle};text-align:right;width:130px">Contado</th>
@@ -4399,6 +4402,36 @@ function abrirBalanco() {
     if (rolosEsgotados.length) _filtrarBalanco();
 }
 
+// Itens que entram no balanco (com controle de estoque), para as sugestoes
+// e para o preenchimento automatico Codigo <-> Nome.
+function _itensDoBalanco() {
+    const itens = [];
+    db.catalogo.filter(c => !temEstoqueInfinito(c)).forEach(c => itens.push({ cod: c.referencia || '', nome: c.nome || '' }));
+    db.materiais.filter(m => !temEstoqueInfinito(m)).forEach(m => itens.push({ cod: m.referencia || '', nome: m.nome || '' }));
+    return itens;
+}
+
+// Digitou o codigo exato de um item: o nome vem sozinho (e vice-versa). Se o
+// campo de origem deixa de bater, o que foi preenchido sozinho e' apagado.
+function _balancoDigitou(campo) {
+    const cod  = document.getElementById('balanco-filter-ref');
+    const nome = document.getElementById('balanco-filter-nome');
+    if (!cod || !nome) return;
+    const fonte = campo === 'cod' ? cod : nome;
+    const alvo  = campo === 'cod' ? nome : cod;
+    const v = fonte.value.trim().toLowerCase();
+    const item = v && _itensDoBalanco().find(i => (campo === 'cod' ? i.cod : i.nome).trim().toLowerCase() === v);
+    delete fonte.dataset.auto;
+    if (item) {
+        alvo.value = campo === 'cod' ? item.nome : item.cod;
+        alvo.dataset.auto = '1';
+    } else if (alvo.dataset.auto === '1') {
+        alvo.value = '';
+        delete alvo.dataset.auto;
+    }
+    _filtrarBalanco();
+}
+
 function _filtrarBalanco() {
     const nome         = (document.getElementById('balanco-filter-nome')?.value || '').toLowerCase().trim();
     const ref          = (document.getElementById('balanco-filter-ref')?.value  || '').toLowerCase().trim();
@@ -4406,9 +4439,10 @@ function _filtrarBalanco() {
     document.querySelectorAll('#balanco-tbody-tecidos tr[data-balanco-nome], #balanco-tbody-mats tr[data-balanco-nome]').forEach(tr => {
         const trNome     = tr.dataset.balancoNome || '';
         const trRef      = tr.dataset.balancoRef  || '';
+        const trRolo     = tr.dataset.balancoRoloCod || '';
         const isEsgotado = tr.dataset.esgotado === '1';
         const passaNome  = !nome || trNome.includes(nome);
-        const passaRef   = !ref  || trRef.includes(ref);
+        const passaRef   = !ref  || trRef.includes(ref) || trRolo.includes(ref);
         const passaEsg   = !isEsgotado || mostrarEsg;
         tr.style.display = passaNome && passaRef && passaEsg ? '' : 'none';
     });
@@ -4417,8 +4451,8 @@ function _filtrarBalanco() {
 function _limparFiltrosBalanco() {
     const n = document.getElementById('balanco-filter-nome');
     const r = document.getElementById('balanco-filter-ref');
-    if (n) n.value = '';
-    if (r) r.value = '';
+    if (n) { n.value = ''; delete n.dataset.auto; }
+    if (r) { r.value = ''; delete r.dataset.auto; }
     _filtrarBalanco();
 }
 
@@ -4482,9 +4516,10 @@ async function exportarBalancoPDF() {
     visibleTec.forEach(tr => {
         const cells    = tr.querySelectorAll('td');
         const esgotado = tr.dataset.esgotado === '1';
-        const nomeCell = cells[0]?.textContent?.replace(/ESGOTADO/g, '').trim() || '—';
+        const rolo     = tr.dataset.pdfRolo ? `<div style="font-size:10px;color:#8F8F8F">Rolo: ${escapeHtml(tr.dataset.pdfRolo)}</div>` : '';
+        const nomeCell = escapeHtml(tr.dataset.pdfNome || '—') + (esgotado ? ' (esgotado)' : '') + rolo;
         const extra    = esgotado ? 'color:#8F8F8F;font-style:italic' : '';
-        rowsTec += `<tr style="${trStyle}">${td(nomeCell + (esgotado ? ' (esgotado)' : ''), extra)}${td(cells[1]?.textContent||'—', extra)}${td(cells[2]?.textContent||'—', 'text-align:right;'+extra)}${tdBlank('120px')}${tdBlank('100px')}</tr>`;
+        rowsTec += `<tr style="${trStyle}">${td(escapeHtml(tr.dataset.pdfCod || '—'), extra)}${td(nomeCell, extra)}${td(cells[2]?.textContent||'—', 'text-align:right;'+extra)}${tdBlank('120px')}${tdBlank('100px')}</tr>`;
     });
 
     let rowsMat = '';
@@ -4533,13 +4568,13 @@ async function exportarBalancoPDF() {
 
     <h3>Tecidos / Rolos</h3>
     <table>
-        <thead><tr>${th('Tecido')}${th('Código')}${th('Qtd. Sistema','text-align:right')}${th('Qtd. Contada','text-align:right;width:130px')}${th('Diferença','text-align:right;width:110px')}</tr></thead>
+        <thead><tr>${th('Código')}${th('Tecido')}${th('Qtd. Sistema','text-align:right')}${th('Qtd. Contada','text-align:right;width:130px')}${th('Diferença','text-align:right;width:110px')}</tr></thead>
         <tbody>${rowsTec || `<tr><td colspan="5" style="padding:14px;color:#aaa;text-align:center">${filtroAtivo ? 'Nenhum tecido corresponde ao filtro' : 'Nenhum rolo em estoque'}</td></tr>`}</tbody>
     </table>
 
     <h3>Materiais e Acessórios</h3>
     <table>
-        <thead><tr>${th('Material')}${th('Código')}${th('Un.','text-align:center;width:60px')}${th('Qtd. Sistema','text-align:right')}${th('Qtd. Contada','text-align:right;width:130px')}${th('Diferença','text-align:right;width:110px')}</tr></thead>
+        <thead><tr>${th('Código')}${th('Material')}${th('Un.','text-align:center;width:60px')}${th('Qtd. Sistema','text-align:right')}${th('Qtd. Contada','text-align:right;width:130px')}${th('Diferença','text-align:right;width:110px')}</tr></thead>
         <tbody>${rowsMat || `<tr><td colspan="6" style="padding:14px;color:#aaa;text-align:center">${filtroAtivo ? 'Nenhum material corresponde ao filtro' : 'Nenhum material em estoque'}</td></tr>`}</tbody>
     </table>
 
@@ -4980,6 +5015,22 @@ function alternarAlertasTecido() {
 }
 
 // --- ESTOQUE DE TECIDO: renderização ---
+// Busca da Gestao de Estoque (Tecidos, Materiais, Kits): um campo so, que
+// procura no codigo e na descricao. Sem o campo na pagina (ex.: Catalogo),
+// nada e' filtrado.
+function textoBuscaEstoque(inputId) {
+    const el = document.getElementById(inputId);
+    return el ? el.value.trim().toLowerCase() : '';
+}
+function passaBuscaEstoque(item, busca) {
+    if (!busca) return true;
+    return [item.referencia, item.nome, item.descricao]
+        .some(t => String(t || '').toLowerCase().includes(busca));
+}
+function linhaNadaEncontrado(colunas) {
+    return `<tr><td colspan="${colunas}" style="text-align:center;color:#999;padding:24px;">Nenhum item encontrado para a busca.</td></tr>`;
+}
+
 function renderEstoque() {
     const tb = document.getElementById('tb-estoque');
     if (!tb) return;
@@ -5021,7 +5072,8 @@ function renderEstoque() {
     // Remover — aparecem ao clicar na linha, como na Consulta de Estoque.
     let html = '';
     pintarCabecalhoOrdenacao('#tabela-est-tecidos', catSortState);
-    ordenarLista(db.catalogo, catSortState, valorOrdenacaoTecido).forEach(tec => {
+    const buscaTec = textoBuscaEstoque('busca-est-tecidos');
+    ordenarLista(db.catalogo, catSortState, valorOrdenacaoTecido).filter(tec => passaBuscaEstoque(tec, buscaTec)).forEach(tec => {
         const rolos = db.estoque.filter(r => r.tecido_id == tec.id);
         const infinito = temEstoqueInfinito(tec);
         const totalDisp = rolos.reduce((s, r) => s + r.metragem_atual, 0);
@@ -5072,6 +5124,7 @@ function renderEstoque() {
             </tr>`}`;
         }).join('') + `</tbody></table></td></tr>`;
     });
+    if (!html && buscaTec && db.catalogo.length) { tb.innerHTML = linhaNadaEncontrado(comAcoes ? 10 : 9); return; }
     tb.innerHTML = html || `<tr><td colspan="${comAcoes ? 10 : 9}" style="text-align:center;color:#999;padding:24px;">Nenhum tecido cadastrado. <a href="catalogo.html">Cadastre em Catálogo</a>.</td></tr>`;
 }
 
@@ -5652,7 +5705,10 @@ function renderKits() {
     // pedida para o módulo de estoque. A tabela diz qual das duas é.
     const comUnidade = !!tb.closest('table')?.dataset.comUnidade;
     pintarCabecalhoOrdenacao('#tabela-kits', kitSortState);
-    tb.innerHTML = ordenarLista(db.kits, kitSortState, valorOrdenacaoKit).map(k => {
+    const buscaKit = textoBuscaEstoque('busca-est-kits');
+    const kits = ordenarLista(db.kits, kitSortState, valorOrdenacaoKit).filter(k => passaBuscaEstoque(k, buscaKit));
+    if (!kits.length) { tb.innerHTML = linhaNadaEncontrado(comUnidade ? 8 : 7); return; }
+    tb.innerHTML = kits.map(k => {
         const pronto = ehKitPronto(k);
         const saldo = temEstoqueInfinito(k) ? '<strong title="Estoque infinito">∞</strong>'
             : (pronto ? `<strong>${(k.estoque_atual || 0).toFixed(0)}</strong> un` : '—');
@@ -11477,12 +11533,12 @@ function aplicarTema(tema) {
     try { localStorage.setItem('sc_tema', tema); } catch (e) {}
     atualizarIconeTema();
 }
-function toggleTema() {
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const novo = isDark ? 'light' : 'dark';
-    _gravarMeuUsuario(u => { u.preferencias = Object.assign({}, u.preferencias, { tema: novo }); });
-    aplicarTema(novo);
-    if (document.querySelector('input[name="pref-tema"]')) renderPreferenciasSistema();
+// Configuracoes > Preferencias > Tema: escolher ja aplica e ja grava, sem
+// esperar o "Salvar preferências" (que continua valendo para o resto).
+function escolherTema(tema) {
+    tema = tema === 'dark' ? 'dark' : 'light';
+    _gravarMeuUsuario(u => { u.preferencias = Object.assign({}, u.preferencias, { tema }); });
+    aplicarTema(tema);
 }
 function carregarTema() {
     const u = getUsuarioLogado();
@@ -11492,12 +11548,10 @@ function carregarTema() {
     if (pref && localStorage.getItem('sc_tema') !== tema) { try { localStorage.setItem('sc_tema', tema); } catch (e) {} }
     atualizarIconeTema();
 }
+// Mantem o seletor de Configuracoes > Preferencias marcado no tema em uso.
 function atualizarIconeTema() {
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const ic = document.getElementById('tema-icone');
-    const sw = document.getElementById('tema-switch');
-    if (ic) ic.textContent = isDark ? '☀️' : '🌙';
-    if (sw) sw.classList.toggle('active', isDark);
+    const tema = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    document.querySelectorAll('input[name="pref-tema"]').forEach(r => { r.checked = r.value === tema; });
 }
 
 // --- INICIALIZAÇÃO ---
@@ -12153,8 +12207,10 @@ function renderEstoqueMateriais() {
         tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;padding:24px">Nenhum material cadastrado. <a href="catalogo.html">Cadastre em Catálogo</a>.</td></tr>';
         return;
     }
-    const lista = ordenarLista(db.materiais, matSortState, valorOrdenacaoMaterial);
+    const buscaMat = textoBuscaEstoque('busca-est-materiais');
+    const lista = ordenarLista(db.materiais, matSortState, valorOrdenacaoMaterial).filter(m => passaBuscaEstoque(m, buscaMat));
     pintarCabecalhoOrdenacao('#tabela-est-materiais', matSortState);
+    if (!lista.length) { tb.innerHTML = linhaNadaEncontrado(7); return; }
     tb.innerHTML = lista.map(m => {
         const abaixoMin = !temEstoqueInfinito(m) && m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque;
         const cor = abaixoMin ? '#F43927' : '#005D3B';
