@@ -44,6 +44,7 @@ const MODULOS_PERMISSAO = [
         { key: 'dre',       label: 'DRE por Pedido' },
         { key: 'hoje',      label: 'Hoje' },
         { key: 'extrato',   label: 'Extrato' },
+        { key: 'resultado', label: 'Resultado do mês' },
     ]},
     { key: 'relatorios',    label: 'Relatórios',         subs: [
         { key: 'faturamento', label: 'Faturamento Mensal' },
@@ -118,6 +119,7 @@ function papeisPadrao() {
             'financeiro.dre':      'sem_acesso',
             'financeiro.hoje':     'sem_acesso',
             'financeiro.extrato':  'sem_acesso',
+            'financeiro.resultado':'sem_acesso',
             producao:              'visualizar',
             catalogo:              'visualizar',
             galeria:               'visualizar',
@@ -219,7 +221,7 @@ function migrarPermissoesSalvas() {
         // seguir o nivel da Visao Geral (sem acesso se nao houver).
         if (p.permissoes && typeof p.permissoes === 'object') {
             const base = p.permissoes['financeiro.dashboard'] || p.permissoes.financeiro;
-            ['financeiro.hoje', 'financeiro.extrato'].forEach(k => {
+            ['financeiro.hoje', 'financeiro.extrato', 'financeiro.resultado'].forEach(k => {
                 if (!p.permissoes[k]) p.permissoes[k] = { nivel: (base && base.nivel) || 'sem_acesso', acoes_restritas: [] };
             });
         }
@@ -245,7 +247,7 @@ function migrarPermissoesSalvas() {
         });
         if (novo.financeiro) {
             const base = novo['financeiro.dashboard'] || novo.financeiro;
-            ['financeiro.hoje', 'financeiro.extrato'].forEach(k => {
+            ['financeiro.hoje', 'financeiro.extrato', 'financeiro.resultado'].forEach(k => {
                 if (!novo[k]) novo[k] = { nivel: base.nivel || 'sem_acesso', acoes_restritas: [] };
             });
         }
@@ -853,6 +855,41 @@ function salvarMensagemCobranca() {
     toast('Mensagem de cobrança salva!', 'success');
 }
 
+// Meta de faturamento padrao e orcamento mensal padrao (por grupo de saida), em
+// Preferencias. Salva por merge em sc_empresa; vazio = sem meta/sem limite.
+function renderOrcamentoCfg(emp) {
+    const box = document.getElementById('emp-orcamento-campos');
+    if (!box || typeof ResultadoCore === 'undefined') return;
+    const orc = (emp && emp.orcamento_padrao) || {};
+    box.innerHTML = ResultadoCore.GRUPOS.map(g => `
+        <div class="form-group">
+            <label for="orc-${g.id}">${escapeHtml(g.rotulo)}</label>
+            <input type="text" inputmode="decimal" id="orc-${g.id}" placeholder="sem limite" value="${orc[g.id] ? escapeHtml(String(orc[g.id])) : ''}">
+        </div>`).join('');
+}
+
+async function salvarMetaOrcamento() {
+    const lerValor = id => {
+        const t = (document.getElementById(id)?.value || '').trim();
+        if (!t) return 0;
+        const v = _valorDigitadoBaixa(t);
+        return (Number.isNaN(v) || v < 0) ? NaN : CaixaCore.arredondar(v);
+    };
+    const meta = lerValor('emp-meta-padrao');
+    const orc = {};
+    let invalido = Number.isNaN(meta);
+    ResultadoCore.GRUPOS.forEach(g => {
+        const v = lerValor('orc-' + g.id);
+        if (Number.isNaN(v)) invalido = true;
+        else if (v > 0) orc[g.id] = v;
+    });
+    if (invalido) { await showAlert('Informe só números (ex: 30.000 ou 30.000,50) na meta e no orçamento.', '⚠️'); return; }
+    const emp = { ...getEmpresa(), orcamento_padrao: orc };
+    if (meta > 0) emp.meta_faturamento_padrao = meta; else delete emp.meta_faturamento_padrao;
+    localStorage.setItem('sc_empresa', JSON.stringify(emp));
+    toast('Meta e orçamento salvos!', 'success');
+}
+
 function restaurarMensagemCobranca() {
     const el = document.getElementById('emp-msg-cobranca');
     if (el) el.value = CaixaCore.MENSAGEM_COBRANCA_PADRAO;
@@ -870,6 +907,8 @@ function carregarEmpresaConfigs() {
     set('emp-site',     emp.site);
     set('emp-regime',   emp.regime_tributario);
     set('emp-aliquota', emp.aliquota_estimada);
+    set('emp-meta-padrao', emp.meta_faturamento_padrao);
+    renderOrcamentoCfg(emp);
     set('emp-msg-cobranca', emp.mensagem_cobranca || (typeof CaixaCore !== 'undefined' ? CaixaCore.MENSAGEM_COBRANCA_PADRAO : ''));
     if (emp.logo_base64) {
         const preview = document.getElementById('emp-logo-preview');
@@ -1254,7 +1293,7 @@ function salvarERecarregar(msg = 'Salvo com sucesso!') {
 // não guardar a senha em texto puro; quando o sistema migrar para um banco de
 // dados/backend real, a autenticação deve ser refeita lá (hash forte no
 // servidor, verificação em cada rota) e este arquivo deixa de ser a fonte da verdade.
-const FIN_TAB_MODULO = { dashboard: 'financeiro.dashboard', receber: 'financeiro.receber', pagar: 'financeiro.pagar', fixas: 'financeiro.fixas', dre: 'financeiro.dre', hoje: 'financeiro.hoje', extrato: 'financeiro.extrato' };
+const FIN_TAB_MODULO = { dashboard: 'financeiro.dashboard', receber: 'financeiro.receber', pagar: 'financeiro.pagar', fixas: 'financeiro.fixas', dre: 'financeiro.dre', hoje: 'financeiro.hoje', extrato: 'financeiro.extrato', resultado: 'financeiro.resultado' };
 
 const PAGINA_MODULO = {
     'index.html':         'inicio',
@@ -7552,6 +7591,9 @@ function renderProposta() {
 // --- BACKUP / EXPORTAR ---
 // Dados do backup. fin_fase0: 1 diz que o arquivo ja passou pela migracao do
 // Financeiro (Fase 0); importar um arquivo sem a marca migra de novo.
+function _lerObjetoLS(chave) {
+    try { const o = JSON.parse(localStorage.getItem(chave) || '{}'); return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {}; } catch (e) { return {}; }
+}
 function _dadosExportacao(marcaFase0) {
     const dados = {
         versao: '1.0', exportado_em: new Date().toISOString(),
@@ -7562,6 +7604,7 @@ function _dadosExportacao(marcaFase0) {
         contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, despesas_fixas: db.despesas_fixas,
         contas_fin: db.contas_fin, meios_pag: db.meios_pag, movimentos_fin: db.movimentos_fin,
         medicoes: db.medicoes,
+        fin_metas: _lerObjetoLS('sc_fin_metas'), fin_orcamento_mes: _lerObjetoLS('sc_fin_orcamento_mes'),
         empresa: getEmpresa(), formas_pag: getFormasPagamentoCfg()
     };
     if (marcaFase0) dados.fin_fase0 = 1;
@@ -7607,6 +7650,11 @@ function importarDados(event) {
             db.meios_pag      = dados.meios_pag      || [];
             db.movimentos_fin = dados.movimentos_fin || [];
             syncDB();
+            // Ajustes por mes do Resultado: backup antigo (sem eles) volta ao padrao vazio.
+            ['fin_metas', 'fin_orcamento_mes'].forEach(k => {
+                const o = dados[k];
+                localStorage.setItem('sc_' + k, JSON.stringify(o && typeof o === 'object' && !Array.isArray(o) ? o : {}));
+            });
             // Backup antigo (sem empresa/formas) mantem as atuais.
             if (dados.empresa && typeof dados.empresa === 'object') localStorage.setItem('sc_empresa', JSON.stringify(dados.empresa));
             if (Array.isArray(dados.formas_pag) && dados.formas_pag.length) localStorage.setItem('sc_formas_pag', JSON.stringify(dados.formas_pag));
@@ -13077,7 +13125,8 @@ async function gerarContasPagarDoMes() {
                 tipo: 'fixo', categoria: df.categoria,
                 descricao: df.descricao, credor_nome: '',
                 valor: df.valor, data_vencimento: vencStr,
-                data_pagamento: null, status: 'Pendente'
+                data_pagamento: null, status: 'Pendente',
+                ...(df.categoria === 'imposto' ? { mes_referencia: _mesRefImposto(vencStr) } : {})
             });
             geradas++;
         }
@@ -13134,7 +13183,7 @@ function abrirModalContaPagar(modo, manterAnexoPendente) {
                 </div>
                 <div class="form-group">
                     <label>Vencimento <span style="color:#F43927">*</span></label>
-                    <input type="date" id="cpm-vencimento">
+                    <input type="date" id="cpm-vencimento" oninput="atualizarMesRefImposto()">
                 </div>
                 <div class="form-group" style="grid-column:span 2">
                     <label>Nº da Nota ou Linha Digitável do Boleto <span class="info-tag">opcional</span></label>
@@ -13178,7 +13227,7 @@ function abrirModalContaPagar(modo, manterAnexoPendente) {
             <div class="grid">
                 <div class="form-group">
                     <label>Categoria</label>
-                    <select id="cpm-categoria">
+                    <select id="cpm-categoria" onchange="atualizarMesRefImposto(true)">
                         <option value="tecido">Tecido / Material</option>
                         <option value="instalador">Instalador</option>
                         <option value="costureira">Costureira</option>
@@ -13186,8 +13235,13 @@ function abrirModalContaPagar(modo, manterAnexoPendente) {
                         <option value="salario">Salário</option>
                         <option value="conta">Conta (luz, internet…)</option>
                         <option value="comissao_rt">Comissão RT</option>
+                        <option value="imposto">Imposto</option>
                         <option value="outro">Outro</option>
                     </select>
+                </div>
+                <div class="form-group" id="cpm-mes-ref-grupo" style="display:none">
+                    <label>Mês de referência <span class="info-tag">mês a que a guia se refere</span></label>
+                    <input type="month" id="cpm-mes-ref" oninput="this.dataset.editado = '1'">
                 </div>
                 <div class="form-group">
                     <label>Vincular a Pedido</label>
@@ -13206,6 +13260,23 @@ function abrirModalContaPagar(modo, manterAnexoPendente) {
     if (pedSel) pedSel.innerHTML = '<option value="">— Sem vínculo de pedido —</option>' +
         db.pedidos.filter(p => normalizarStatus(p.status) !== 'Orçamento')
         .map(p => `<option value="${p.id}">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome || '')}</option>`).join('');
+}
+
+// Guia de imposto: mes de referencia = mes anterior ao vencimento (YYYY-MM).
+function _mesRefImposto(vencimento) {
+    return /^\d{4}-\d{2}/.test(vencimento || '') ? ResultadoCore.somarMeses(String(vencimento).slice(0, 7), -1) : '';
+}
+// Mostra o campo so para Imposto e o recalcula pelo vencimento, salvo se o usuario o editou.
+function atualizarMesRefImposto(mudouCategoria) {
+    const grupo = document.getElementById('cpm-mes-ref-grupo'), campo = document.getElementById('cpm-mes-ref');
+    if (!grupo || !campo) return;
+    const imposto = document.getElementById('cpm-categoria')?.value === 'imposto';
+    grupo.style.display = imposto ? '' : 'none';
+    if (!imposto) { campo.value = ''; delete campo.dataset.editado; return; }
+    if (campo.dataset.editado !== '1' || !campo.value) {
+        campo.value = _mesRefImposto(document.getElementById('cpm-vencimento')?.value);
+        if (!campo.value) delete campo.dataset.editado;
+    }
 }
 
 function onToggleRecorrenteCP() {
@@ -13300,6 +13371,7 @@ async function adicionarContaPagarManual() {
     const valor       = parseFloat(document.getElementById('cpm-valor')?.value) || 0;
     const vencimento  = document.getElementById('cpm-vencimento')?.value;
     const categoria   = document.getElementById('cpm-categoria')?.value || 'outro';
+    const mesRefDigitado = document.getElementById('cpm-mes-ref')?.value || '';
     const pedidoId    = document.getElementById('cpm-pedido')?.value || '';
     const docRaw      = document.getElementById('cpm-doc')?.value.trim() || '';
     const docDigits   = docRaw.replace(/\D/g, '');
@@ -13356,6 +13428,15 @@ async function adicionarContaPagarManual() {
         }
     }
 
+    // Imposto: mes de referencia de cada guia. Parcelas e recorrencias mantem o
+    // mesmo deslocamento (em meses) entre vencimento e referencia da primeira.
+    const mesRefPadrao = _mesRefImposto(vencimento);
+    const mesRefBase = categoria === 'imposto' ? (mesRefDigitado || mesRefPadrao) : '';
+    const mesRefDe = venc => {
+        if (categoria !== 'imposto') return {};
+        const [a, b] = [mesRefBase, mesRefPadrao].map(m => Number(m.slice(0, 4)) * 12 + Number(m.slice(5, 7)));
+        return { mes_referencia: ResultadoCore.somarMeses(_mesRefImposto(venc), a - b) };
+    };
     const camposDoc = {
         cnpj_fornecedor: cnpjFornecedor || null,
         linha_digitavel: ehLinhaDigitavel ? docDigits : null,
@@ -13383,7 +13464,7 @@ async function adicionarContaPagarManual() {
                 credor_nome: credor, valor: valorFinal, data_vencimento: dataLocal(venc.getTime()),
                 data_pagamento: null, status: 'Pendente',
                 lancamento_pai_id: paiId, parcelado: true, numero_parcelas: numParcelas, parcela_atual: i + 1,
-                ...camposDoc
+                ...mesRefDe(dataLocal(venc.getTime())), ...camposDoc
             });
         }
         salvarERecarregar(`${numParcelas} parcelas lançadas!`);
@@ -13404,7 +13485,7 @@ async function adicionarContaPagarManual() {
                 tipo: 'fixo', categoria, descricao, credor_nome: credor,
                 valor, data_vencimento: venc, data_pagamento: null, status: 'Pendente',
                 lancamento_pai_id: dfId, recorrente: true, periodicidade,
-                ...camposDoc
+                ...mesRefDe(venc), ...camposDoc
             });
         });
         salvarERecarregar(`Despesa recorrente cadastrada — ${ocorrencias.length} lançamento(s) gerado(s)!`);
@@ -13415,7 +13496,7 @@ async function adicionarContaPagarManual() {
         id: Date.now(), pedido_id: pedidoId ? parseInt(pedidoId) : null,
         tipo: 'variavel', categoria, descricao, credor_nome: credor,
         valor, data_vencimento: vencimento, data_pagamento: null, status: 'Pendente',
-        ...camposDoc
+        ...mesRefDe(vencimento), ...camposDoc
     });
     salvarERecarregar('Conta a pagar registrada!');
 }
@@ -14625,8 +14706,8 @@ function renderDashboardFinanceiro() {
     }
 
     // ── DONUT DESPESAS POR CATEGORIA ─────────────────────────────
-    const CAT_LABELS = { taxa_cartao:'Taxa de cartão', tecido:'Tecido/Mat.', salario:'Salário', comissao_rt:'Comissão RT', aluguel:'Aluguel', conta:'Contas', outro:'Outros', costureira:'Costureira', instalador:'Instalador' };
-    const CAT_CORES  = { taxa_cartao:'#5B6B7A', tecido:'#9B31C8', salario:'#F2C924', comissao_rt:'#9B31C8', aluguel:'#F43927', conta:'#2D77C1', outro:'#8F8F8F', costureira:'#D70085', instalador:'#FF7F08' };
+    const CAT_LABELS = { taxa_cartao:'Taxa de cartão', tecido:'Tecido/Mat.', salario:'Salário', comissao_rt:'Comissão RT', aluguel:'Aluguel', conta:'Contas', outro:'Outros', costureira:'Costureira', instalador:'Instalador', imposto:'Imposto' };
+    const CAT_CORES  = { taxa_cartao:'#5B6B7A', tecido:'#9B31C8', salario:'#F2C924', comissao_rt:'#9B31C8', aluguel:'#F43927', conta:'#2D77C1', outro:'#8F8F8F', costureira:'#D70085', instalador:'#FF7F08', imposto:'#0F8B8D' };
     const despCats = {};
     db.contas_pagar.filter(cp=>inRange(cp.data_vencimento)).forEach(cp => { const c=cp.categoria||'outro'; despCats[c]=(despCats[c]||0)+cp.valor; });
     const catKeys   = Object.keys(despCats);
