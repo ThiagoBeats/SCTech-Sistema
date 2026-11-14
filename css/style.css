@@ -848,6 +848,9 @@ body.login-page {
 .doc-modal-btn { padding: 6px 14px; border: none; border-radius: 5px; font-size: 13px; font-weight: 600; cursor: pointer; background: #242424; color: #fff; }
 .doc-modal-btn:hover { background: #5A5A5A; }
 .doc-modal-btn-close { background: #8F8F8F; }
+.doc-modal-btn-compartilhar { background: #005D3B; }
+.doc-modal-btn-compartilhar:hover { background: #00744A; }
+.doc-modal-btn:disabled { opacity: .7; cursor: wait; }
 .doc-modal-btn-close:hover { background: #5A5A5A; }
 
 @media print {

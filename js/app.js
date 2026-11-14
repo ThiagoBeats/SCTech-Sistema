@@ -7319,7 +7319,9 @@ function abrirPropostaModal(pedidoId) {
         Validade: <input type="number" id="proposta-dias-modal" value="15" min="1" max="365"
             style="width:56px;padding:4px 6px;border-radius:4px;border:none;font-size:13px;text-align:center"
             onchange="atualizarPropostaModal(${pedidoId}, this.value)"> dias
-    </label>`;
+    </label>
+    <button class="doc-modal-btn doc-modal-btn-compartilhar" id="btn-compartilhar-proposta" onclick="compartilharProposta(this)">📤 Compartilhar</button>
+    <button class="doc-modal-btn doc-modal-btn-compartilhar" id="btn-email-proposta" onclick="enviarPropostaPorEmail(this)">✉️ E-mail</button>`;
     abrirDocModal(gerarHTMLProposta(pedidoId, 15), 'Proposta Comercial', extra);
 }
 
