@@ -6,90 +6,6 @@ Gerado em: 02/06/2026
 Escopo: Somente funcionalidades implementadas e operacionais
 ================================================================================
 
-── 10.26 FASE 3: FECHAMENTO DO MÊS ─────────────────────────────────────────────
-
-  - Onde fica: aba "Resultado do mês". Num mês anterior ao atual e ainda não
-    fechado aparece o botão "🔒 Fechar [mês]". O mês atual não pode ser fechado
-  - Quem pode: ver o fechamento = permissão "Resultado do mês" visualizar;
-    fechar e refazer = "Resultado do mês" completo
-  - O passo a passo tem 3 passos:
-      1) Conferir o dinheiro: uma linha por conta ativa (banco, caixa,
-         maquininha) que já existia no mês, com o saldo esperado no último dia
-         e um campo "saldo no extrato". Se houver diferença, escolher
-         "Lançar ajuste" (pede um motivo; cria um lançamento no Extrato na
-         data do último dia do mês) ou "Deixar anotado" (só registra a
-         diferença). Campo em branco = conta não conferida
-      2) O que ficou pendente: contas a pagar e a receber do mês ainda em
-         aberto e guia de imposto não lançada, cada uma com atalho para
-         resolver (Abrir A Pagar / Abrir A Receber). Não impede fechar
-      3) Resumo do mês: entradas, saídas, imposto, resultado e meta; comparação
-         com o mês anterior; 3 maiores grupos de gasto; orçamentos estourados;
-         até 4 sugestões para o próximo mês; campo "Anotações"
-  - O ajuste corrige só o saldo da conta. Ele NÃO muda o resultado do mês (não
-    é receita nem despesa)
-  - Se a diferença for uma conta esquecida, o certo é lançar no A Pagar / A
-    Receber em vez de ajustar
-  - "🔒 Fechar" guarda uma foto do mês e abre o documento do fechamento, com o
-    botão 📤 Enviar (para mandar ao contador)
-  - Mês fechado mostra "🔒 Fechado em dd/mm/aaaa por [nome]" e os botões "Ver
-    fechamento" (mostra sempre a foto) e "Refazer fechamento"
-  - Refazer fechamento pede confirmação, apaga a foto e os ajustes lançados por
-    aquele fechamento, e reabre o passo a passo
-  - Aviso "mudou depois do fechamento": se o resultado do mês, as entradas, as
-    saídas, o imposto ou o saldo de uma conta conferida mudarem, aparece um
-    aviso amarelo com "era R$ X, agora R$ Y" e o botão para refazer. Só
-    lançamentos com data dentro do mês fechado disparam o aviso; pagar ou
-    receber uma conta antiga depois não muda o mês fechado
-  - Fechamentos entram no backup e na importação
-
-── 10.27 FASE 3: LEMBRETE NA TELA HOJE ─────────────────────────────────────────
-
-  - Do dia 1 até o mês anterior ser fechado, a aba Hoje mostra "Feche o mês de
-    [mês anterior]". Só vale para o mês imediatamente anterior e só se houver
-    alguma conta financeira cadastrada. Clicar leva ao passo a passo (quem não
-    tem permissão completa não vê o botão)
-  - Se o mês anterior já está fechado e mudou depois, aparece uma linha com
-    "⚠ [Mês] mudou depois do fechamento"
-
-── 10.28 FASE 3: ABA "🧮 SIMULAR COMPRA" ───────────────────────────────────────
-
-  - Nova aba do Financeiro, depois de "Resultado do mês". Responde: essa compra
-    cabe no caixa? E compensa?
-  - O que preencher: descrição, valor total, forma (À vista, Parcelado em N
-    vezes de 2 a 48, ou Entrada + parcelas), data da compra (padrão hoje), data
-    da 1ª parcela (padrão 30 dias depois), e, se quiser, "Quanto essa compra
-    traz por mês?" (ganho ou economia). Para lançar: categoria e credor
-  - Usa a mesma previsão de 8 semanas da tela Hoje, com e sem a compra, e mostra
-    uma tabela semana a semana (saldo sem a compra e com a compra; negativo em
-    vermelho). Nada é gravado ao simular
-  - Veredito:
-      🟢 Cabe: nenhuma semana negativa, o menor saldo respeita a folga e a
-         parcela não passa do que sobra por mês
-      🟡 Cabe, mas aperta: não fica negativo, mas o menor saldo fica abaixo da
-         folga, ou a parcela é maior do que sobra em média por mês
-      🔴 Não cabe agora: alguma semana fica negativa. Mostra a semana e o valor
-  - Folga = metade das despesas fixas do mês atual
-  - Parcelas além das 8 semanas são comparadas com o resultado médio mensal
-    (média dos 3 meses mais recentes antes do atual que tiveram movimento).
-    Sem histórico, o simulador não opina sobre isso
-  - Melhor data: quando não cabe, procura a primeira semana das 8 em que a
-    compra caberia ("Comprando a partir de dd/mm, cabe"). Se nenhuma serve,
-    sugere parcelar em mais vezes ou dar uma entrada menor
-  - Se informou o ganho mensal: "Se paga em N meses" (valor total ÷ ganho)
-  - Botão "Lançar no A Pagar" (pede confirmação): à vista vira 1 conta; a
-    entrada vira uma conta avulsa e as parcelas viram contas "[descrição]
-    (parcela i/N)", todas pendentes, com a categoria e o credor informados. A
-    mesma simulação não é lançada duas vezes por duplo clique. Botão "Limpar"
-    zera o resultado
-
-── 10.29 FASE 3: PERMISSÕES ────────────────────────────────────────────────────
-
-  - "Resultado do mês": visualizar = ver o fechamento e o aviso de mudança;
-    completo = fechar e refazer o fechamento
-  - "Simulador de compra" (nova): visualizar = simular; completo = Lançar no A
-    Pagar. Quem não tinha essa permissão herda o mesmo nível que tem na Visão
-    Geral
-
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                          ESTRUTURA GERAL DO SISTEMA
@@ -1403,6 +1319,92 @@ Nova aba (8ª) que mostra se o mês fechou no azul. Escolha o mês no campo "Mê
     orçamento no Hoje). Visualizar permite ver; completo permite ajustar meta e
     limites do mês. Os papéis que já existiam herdam o mesmo nível que têm na
     Visão Geral
+
+
+── 10.26 FASE 3: FECHAMENTO DO MÊS ─────────────────────────────────────────────
+
+  - Onde fica: aba "Resultado do mês". Num mês anterior ao atual e ainda não
+    fechado aparece o botão "🔒 Fechar [mês]". O mês atual não pode ser fechado
+  - Quem pode: ver o fechamento = permissão "Resultado do mês" visualizar;
+    fechar e refazer = "Resultado do mês" completo
+  - O passo a passo tem 3 passos:
+      1) Conferir o dinheiro: uma linha por conta ativa (banco, caixa,
+         maquininha) que já existia no mês, com o saldo esperado no último dia
+         e um campo "saldo no extrato". Se houver diferença, escolher
+         "Lançar ajuste" (pede um motivo; cria um lançamento no Extrato na
+         data do último dia do mês) ou "Deixar anotado" (só registra a
+         diferença). Campo em branco = conta não conferida
+      2) O que ficou pendente: contas a pagar e a receber do mês ainda em
+         aberto e guia de imposto não lançada, cada uma com atalho para
+         resolver (Abrir A Pagar / Abrir A Receber). Não impede fechar
+      3) Resumo do mês: entradas, saídas, imposto, resultado e meta; comparação
+         com o mês anterior; 3 maiores grupos de gasto; orçamentos estourados;
+         até 4 sugestões para o próximo mês; campo "Anotações"
+  - O ajuste corrige só o saldo da conta. Ele NÃO muda o resultado do mês (não
+    é receita nem despesa)
+  - Se a diferença for uma conta esquecida, o certo é lançar no A Pagar / A
+    Receber em vez de ajustar
+  - "🔒 Fechar" guarda uma foto do mês e abre o documento do fechamento, com o
+    botão 📤 Enviar (para mandar ao contador)
+  - Mês fechado mostra "🔒 Fechado em dd/mm/aaaa por [nome]" e os botões "Ver
+    fechamento" (mostra sempre a foto) e "Refazer fechamento"
+  - Refazer fechamento pede confirmação, apaga a foto e os ajustes lançados por
+    aquele fechamento, e reabre o passo a passo
+  - Aviso "mudou depois do fechamento": se o resultado do mês, as entradas, as
+    saídas, o imposto ou o saldo de uma conta conferida mudarem, aparece um
+    aviso amarelo com "era R$ X, agora R$ Y" e o botão para refazer. Só
+    lançamentos com data dentro do mês fechado disparam o aviso; pagar ou
+    receber uma conta antiga depois não muda o mês fechado
+  - Fechamentos entram no backup e na importação
+
+── 10.27 FASE 3: LEMBRETE NA TELA HOJE ─────────────────────────────────────────
+
+  - Do dia 1 até o mês anterior ser fechado, a aba Hoje mostra "Feche o mês de
+    [mês anterior]". Só vale para o mês imediatamente anterior e só se houver
+    alguma conta financeira cadastrada. "Fechar agora" abre o passo a passo;
+    quem só pode ver é levado à aba Resultado do mês, sem o passo a passo
+  - Se o mês anterior já está fechado e mudou depois, aparece uma linha com
+    "⚠ [Mês] mudou depois do fechamento"
+
+── 10.28 FASE 3: ABA "🧮 SIMULAR COMPRA" ───────────────────────────────────────
+
+  - Nova aba do Financeiro, depois de "Resultado do mês". Responde: essa compra
+    cabe no caixa? E compensa?
+  - O que preencher: descrição, valor total, forma (À vista, Parcelado em N
+    vezes de 2 a 48, ou Entrada + parcelas), data da compra (padrão hoje), data
+    da 1ª parcela (padrão 30 dias depois), e, se quiser, "Quanto essa compra
+    traz por mês?" (ganho ou economia). Para lançar: categoria e credor
+  - Usa a mesma previsão de 8 semanas da tela Hoje, com e sem a compra, e mostra
+    uma tabela semana a semana (saldo sem a compra e com a compra; negativo em
+    vermelho). Nada é gravado ao simular
+  - Veredito:
+      🟢 Cabe: nenhuma semana negativa, o menor saldo respeita a folga e a
+         parcela não passa do que sobra por mês
+      🟡 Cabe, mas aperta: não fica negativo, mas o menor saldo fica abaixo da
+         folga, ou a parcela é maior do que sobra em média por mês
+      🔴 Não cabe agora: alguma semana fica negativa. Mostra a semana e o valor
+  - Folga = metade das despesas fixas do mês atual
+  - Parcelas além das 8 semanas são comparadas com o resultado médio mensal
+    (média dos 3 meses mais recentes antes do atual que tiveram movimento).
+    Sem histórico, aparece "Sem histórico para comparar a parcela com o que
+    sobra por mês." e a cor do veredito não muda por isso
+  - Melhor data: quando não cabe, procura a primeira semana das 8 em que a
+    compra caberia ("Comprando a partir de dd/mm, cabe"). Se nenhuma serve,
+    sugere parcelar em mais vezes ou dar uma entrada menor
+  - Se informou o ganho mensal: "Se paga em N meses" (valor total ÷ ganho)
+  - Botão "Lançar no A Pagar" (pede confirmação): à vista vira 1 conta; a
+    entrada vira uma conta avulsa e as parcelas viram contas "[descrição]
+    (parcela i/N)", todas pendentes, com a categoria e o credor informados. A
+    mesma simulação não é lançada duas vezes por duplo clique. Botão "Limpar"
+    zera o resultado
+
+── 10.29 FASE 3: PERMISSÕES ────────────────────────────────────────────────────
+
+  - "Resultado do mês": visualizar = ver o fechamento e o aviso de mudança;
+    completo = fechar e refazer o fechamento
+  - "Simulador de compra" (nova): visualizar = simular; completo = Lançar no A
+    Pagar. Quem não tinha essa permissão herda o mesmo nível que tem na Visão
+    Geral
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
