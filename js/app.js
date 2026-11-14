@@ -14254,6 +14254,7 @@ function mostrarTabFinanceiro(tab) {
     else if (tab === 'extrato') renderExtrato();
     else if (tab === 'hoje')    renderHoje();
     else if (tab === 'resultado') renderResultadoMes(_resMesAtual);
+    else if (tab === 'simulador') renderSimulador();
     _tabBackBtn('.tab-nav', _prevTabFin, () => mostrarTabFinanceiro(_prevTabFin));
 }
 
@@ -14993,6 +14994,196 @@ function renderHoje() {
             },
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => brl(ctx.parsed.y) } } } }
         });
+    }
+}
+
+// =============================================
+// FINANCEIRO — SIMULAR COMPRA
+// =============================================
+
+// Ultima simulacao valida (o que "Lancar no A Pagar" grava). null = nada para lancar.
+let _simUltima = null;
+let _simLancando = false;
+const _SIM_VAZIO = 'Preencha a compra e clique em Simular para ver se cabe no caixa das próximas 8 semanas.';
+
+function _simForma() {
+    const r = document.querySelector('input[name="sim-forma"]:checked');
+    return r ? r.value : 'avista';
+}
+
+function simAtualizarForma() {
+    const forma = _simForma();
+    const mostra = (id, sim) => { const el = document.getElementById(id); if (el) el.style.display = sim ? '' : 'none'; };
+    mostra('sim-parcelas-grupo', forma !== 'avista');
+    mostra('sim-primeira-grupo', forma !== 'avista');
+    mostra('sim-entrada-grupo', forma === 'entrada');
+}
+
+function _simSomarDias(data, dias) {
+    return dataLocal(new Date(Number(data.slice(0, 4)), Number(data.slice(5, 7)) - 1, Number(data.slice(8, 10)) + dias).getTime());
+}
+
+function renderSimulador() {
+    if (!document.getElementById('fin-simulador')) return;
+    const hoje = hojeLocal();
+    const data = document.getElementById('sim-data');
+    const primeira = document.getElementById('sim-primeira');
+    if (data && !data.value) data.value = hoje;
+    if (primeira && !primeira.value) primeira.value = _simSomarDias(data && data.value ? data.value : hoje, 30);
+    simAtualizarForma();
+    if (!temAcesso('financeiro.simulador', 'completo')) document.getElementById('sim-lancar')?.remove();
+}
+
+// As 8 semanas da tela Hoje (mesma chamada), com pagamentos extras como contas a pagar em aberto.
+function _simPrevisao(pagamentosExtras) {
+    const hoje = hojeLocal();
+    const contas = getContasFin().filter(c => c.ativo !== false);
+    const movs = Array.isArray(db.movimentos_fin) ? db.movimentos_fin : [];
+    const sd = CaixaCore.saldosHoje(contas, movs, hoje);
+    const extras = pagamentosExtras && pagamentosExtras.length ? SimuladorCore.pagamentosComoContas(pagamentosExtras) : [];
+    return CaixaCore.previsaoSemanal({ hoje, saldoHoje: sd.total, movimentos: movs, contasReceber: db.contas_receber, contasPagar: (db.contas_pagar || []).concat(extras), despesasFixas: db.despesas_fixas, contas, meios: getMeiosPag(), semanas: 8 });
+}
+
+// Media do resultado dos 3 meses mais recentes antes do atual que tiveram movimento (ate 12 para tras).
+function _simResultadoMedio(mesAtual) {
+    const resultados = [];
+    for (let i = 1; i <= 12 && resultados.length < 3; i++) {
+        const r = resultadoFinanceiroDoMes(ResultadoCore.somarMeses(mesAtual, -i));
+        if (r.entradas !== 0 || r.saidas !== 0) resultados.push(r.resultado);
+    }
+    return SimuladorCore.resultadoMedio(resultados);
+}
+
+function _simMostrarErro(msg) {
+    const e = document.getElementById('sim-erro');
+    if (e) { e.textContent = msg || ''; e.style.display = msg ? '' : 'none'; }
+}
+
+function _simSaidaVazia(texto) {
+    const saida = document.getElementById('sim-resultado');
+    if (saida) saida.innerHTML = `<p class="sim-vazio">${escapeHtml(texto)}</p>`;
+}
+
+const _simEhAvulsa = p => p.rotulo === 'À vista' || p.rotulo === 'Entrada';
+
+function simularCompra() {
+    const saida = document.getElementById('sim-resultado');
+    if (!saida) return;
+    _simUltima = null;
+    const val = id => (document.getElementById(id)?.value || '').trim();
+    const ddmm = d => d.slice(8, 10) + '/' + d.slice(5, 7);
+    const ehData = d => /^\d{4}-\d{2}-\d{2}$/.test(d);
+    const descricao = val('sim-desc');
+    const forma = _simForma();
+    const dataCompra = val('sim-data');
+    const dataPrimeira = val('sim-primeira');
+    const valorTotal = _valorDigitadoBaixa(val('sim-valor'), NaN);
+    let erro = '';
+    if (!descricao) erro = 'Informe a descrição da compra.';
+    else if (!['avista', 'parcelado', 'entrada'].includes(forma)) erro = 'Escolha a forma de pagamento.';
+    else if (!ehData(dataCompra)) erro = 'Informe a data da compra.';
+    else if (forma !== 'avista' && !ehData(dataPrimeira)) erro = 'Informe a data da 1ª parcela.';
+    let r = null;
+    if (!erro) {
+        r = SimuladorCore.pagamentosDaCompra({
+            valor: valorTotal, forma,
+            parcelas: val('sim-parcelas') === '' ? NaN : Number(val('sim-parcelas')),
+            entrada: _valorDigitadoBaixa(val('sim-entrada'), NaN),
+            dataCompra, dataPrimeira
+        });
+        if (!r.ok) erro = r.erro;
+    }
+    if (erro) {
+        _simMostrarErro(erro);
+        _simSaidaVazia('Corrija o formulário e clique em Simular.');
+        return;
+    }
+    _simMostrarErro('');
+    const pagamentos = r.pagamentos;
+    const hoje = hojeLocal();
+    const semanasSem = _simPrevisao([]);
+    const semanasCom = _simPrevisao(pagamentos);
+    const fim = semanasCom.length ? semanasCom[semanasCom.length - 1].fim : hoje;
+    const ganho = _valorDigitadoBaixa(val('sim-ganho'), NaN);
+    const parcelas = pagamentos.filter(p => !_simEhAvulsa(p));
+    const v = SimuladorCore.veredito({
+        semanasSem, semanasCom,
+        folga: ResultadoCore.despesasFixasDoMes({ mes: hoje.slice(0, 7), contasPagar: db.contas_pagar, despesasFixas: db.despesas_fixas }) / 2,
+        parcelaMensal: parcelas.length ? parcelas[0].valor : pagamentos[0].valor,
+        temParcelaAlem: pagamentos.some(p => p.data > fim),
+        resultadoMedio: _simResultadoMedio(hoje.slice(0, 7)),
+        ganhoMensal: ganho > 0 ? ganho : 0,
+        valorTotal
+    });
+    const frases = v.frases.slice();
+    if (v.cor === 'vermelho') {
+        const quando = SimuladorCore.melhorData({ hoje, pagamentos, prever: _simPrevisao });
+        const frase = quando ? 'Comprando a partir de ' + ddmm(quando) + ', cabe.' : 'Nas próximas 8 semanas não cabe — tente parcelar em mais vezes ou dar uma entrada menor.';
+        const iPay = frases.findIndex(f => f.startsWith('Se paga em'));
+        if (iPay >= 0) frases.splice(iPay, 0, frase); else frases.push(frase);
+    }
+    _simUltima = { descricao, forma, pagamentos, qtdParcelas: parcelas.length, categoria: val('sim-categoria') || 'outro', credor: val('sim-credor') };
+    const celula = x => `<td class="sim-num${x < 0 ? ' res-neg' : ''}">${escapeHtml(_resBrl(x))}</td>`;
+    const linhas = semanasCom.map((s, i) => `<tr><td>${ddmm(s.inicio)} a ${ddmm(s.fim)}</td>${celula(semanasSem[i].saldo_final)}${celula(s.saldo_final)}</tr>`).join('');
+    const pode = temAcesso('financeiro.simulador', 'completo');
+    saida.innerHTML = `<div class="sim-veredito sim-${v.cor}">
+            <h3 id="sim-titulo" class="sim-titulo sim-${v.cor}">${escapeHtml(v.titulo)}</h3>
+            <ul id="sim-frases" class="sim-frases">${frases.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>
+        </div>
+        <div class="sim-tabela-wrap"><table class="sim-tabela">
+            <thead><tr><th>Semana</th><th class="sim-num">Saldo sem a compra</th><th class="sim-num">Saldo com a compra</th></tr></thead>
+            <tbody>${linhas}</tbody>
+        </table></div>
+        ${pode ? '<div class="sim-botoes"><button class="btn btn-success" id="sim-lancar" onclick="lancarSimulacaoNoPagar()">Lançar no A Pagar</button></div>' : ''}`;
+}
+
+function limparSimulador() {
+    _simUltima = null;
+    ['sim-desc', 'sim-valor', 'sim-parcelas', 'sim-entrada', 'sim-ganho', 'sim-credor', 'sim-data', 'sim-primeira'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const cat = document.getElementById('sim-categoria'); if (cat) cat.value = 'outro';
+    const av = document.querySelector('input[name="sim-forma"][value="avista"]'); if (av) av.checked = true;
+    _simMostrarErro('');
+    _simSaidaVazia(_SIM_VAZIO);
+    renderSimulador();
+}
+
+// Cria as contas a pagar como o parcelado do A Pagar: entrada/a vista avulsa, parcelas agrupadas.
+async function lancarSimulacaoNoPagar() {
+    if (!temAcesso('financeiro.simulador', 'completo')) return;
+    if (_simLancando || !_simUltima) return;
+    const sim = _simUltima;
+    const btn = document.getElementById('sim-lancar');
+    _simLancando = true;
+    if (btn) btn.disabled = true;
+    try {
+        const n = sim.qtdParcelas;
+        const msg = sim.forma === 'avista' ? 'Lançar 1 conta no A Pagar?'
+            : sim.forma === 'parcelado' ? `Lançar ${n} parcelas no A Pagar?`
+            : `Lançar 1 entrada + ${n} parcelas no A Pagar?`;
+        if (!(await showConfirm(msg, '🧮', 'Lançar')) || _simUltima !== sim) return;
+        const paiId = Date.now();
+        const base = { pedido_id: null, tipo: 'variavel', categoria: sim.categoria, credor_nome: sim.credor, data_pagamento: null, status: 'Pendente' };
+        const mesRefDe = venc => (sim.categoria === 'imposto' ? { mes_referencia: _mesRefImposto(venc) } : {});
+        let i = 0;
+        sim.pagamentos.forEach(p => {
+            if (_simEhAvulsa(p)) {
+                // Avulsa: id depois das parcelas, para nunca coincidir com o lancamento_pai_id.
+                db.contas_pagar.push({ id: paiId + n + 1, ...base, descricao: sim.descricao, valor: p.valor, data_vencimento: p.data, ...mesRefDe(p.data) });
+            } else {
+                i++;
+                db.contas_pagar.push({
+                    id: paiId + i, ...base, descricao: `${sim.descricao} (parcela ${i}/${n})`, valor: p.valor, data_vencimento: p.data,
+                    lancamento_pai_id: paiId, parcelado: true, numero_parcelas: n, parcela_atual: i, ...mesRefDe(p.data)
+                });
+            }
+        });
+        _simUltima = null;
+        syncDB();
+        toast('Compra lançada no A Pagar.');
+        _simSaidaVazia('Compra lançada. Preencha outra compra e clique em Simular.');
+    } finally {
+        _simLancando = false;
+        if (btn && btn.isConnected) btn.disabled = false;
     }
 }
 

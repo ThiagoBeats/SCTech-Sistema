@@ -17,6 +17,7 @@
             <button class="tab-btn fin-tab-btn active" data-tab="hoje"      onclick="mostrarTabFinanceiro('hoje')">☀️ Hoje</button>
             <button class="tab-btn fin-tab-btn"        data-tab="dashboard" onclick="mostrarTabFinanceiro('dashboard')">📊 Visão Geral</button>
             <button class="tab-btn fin-tab-btn"        data-tab="resultado" onclick="mostrarTabFinanceiro('resultado')">📅 Resultado do mês</button>
+            <button class="tab-btn fin-tab-btn"        data-tab="simulador" onclick="mostrarTabFinanceiro('simulador')">🧮 Simular compra</button>
             <button class="tab-btn fin-tab-btn"        data-tab="receber"   onclick="mostrarTabFinanceiro('receber')">📥 A Receber</button>
             <button class="tab-btn fin-tab-btn"        data-tab="pagar"     onclick="mostrarTabFinanceiro('pagar')">📤 A Pagar</button>
             <button class="tab-btn fin-tab-btn"        data-tab="fixas"     onclick="mostrarTabFinanceiro('fixas')">🔁 Despesas Fixas</button>
@@ -221,6 +222,83 @@
                     <div><span>Previsto até o fim do mês</span><strong id="res-previsto"></strong></div>
                 </div>
                 <small id="res-aberto-legenda" style="color:#888"></small>
+            </div>
+        </div>
+
+        <!-- TAB: SIMULAR COMPRA -->
+        <div id="fin-simulador" class="fin-panel">
+            <div class="sim-grid">
+                <div class="card sim-form">
+                    <h3 class="res-titulo">Vale a pena comprar?</h3>
+                    <div class="form-group">
+                        <label for="sim-desc">Descrição</label>
+                        <input type="text" id="sim-desc" placeholder="Ex: Máquina de costura">
+                    </div>
+                    <div class="form-group">
+                        <label for="sim-valor">Valor total (R$)</label>
+                        <input type="text" id="sim-valor" inputmode="decimal" placeholder="0,00">
+                    </div>
+                    <div class="form-group">
+                        <label>Forma de pagamento</label>
+                        <div class="sim-formas">
+                            <label><input type="radio" name="sim-forma" value="avista" checked onchange="simAtualizarForma()"> À vista</label>
+                            <label><input type="radio" name="sim-forma" value="parcelado" onchange="simAtualizarForma()"> Parcelado</label>
+                            <label><input type="radio" name="sim-forma" value="entrada" onchange="simAtualizarForma()"> Entrada + parcelas</label>
+                        </div>
+                    </div>
+                    <div class="sim-linha">
+                        <div class="form-group" id="sim-entrada-grupo" style="display:none">
+                            <label for="sim-entrada">Entrada (R$)</label>
+                            <input type="text" id="sim-entrada" inputmode="decimal" placeholder="0,00">
+                        </div>
+                        <div class="form-group" id="sim-parcelas-grupo" style="display:none">
+                            <label for="sim-parcelas">Parcelas (2 a 48)</label>
+                            <input type="number" id="sim-parcelas" min="2" max="48" step="1" placeholder="Ex: 10">
+                        </div>
+                    </div>
+                    <div class="sim-linha">
+                        <div class="form-group">
+                            <label for="sim-data">Data da compra</label>
+                            <input type="date" id="sim-data">
+                        </div>
+                        <div class="form-group" id="sim-primeira-grupo" style="display:none">
+                            <label for="sim-primeira">Data da 1ª parcela</label>
+                            <input type="date" id="sim-primeira">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="sim-ganho">Quanto essa compra traz por mês? <span class="info-tag">opcional — ganho ou economia</span></label>
+                        <input type="text" id="sim-ganho" inputmode="decimal" placeholder="0,00">
+                    </div>
+                    <div class="sim-linha">
+                        <div class="form-group">
+                            <label for="sim-categoria">Categoria (para lançar)</label>
+                            <select id="sim-categoria">
+                                <option value="tecido">Tecido / Material</option>
+                                <option value="instalador">Instalador</option>
+                                <option value="costureira">Costureira</option>
+                                <option value="aluguel">Aluguel</option>
+                                <option value="salario">Salário</option>
+                                <option value="conta">Conta (luz, internet…)</option>
+                                <option value="comissao_rt">Comissão RT</option>
+                                <option value="imposto">Imposto</option>
+                                <option value="outro" selected>Outro</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="sim-credor">Credor <span class="info-tag">opcional</span></label>
+                            <input type="text" id="sim-credor" placeholder="Ex: Loja X">
+                        </div>
+                    </div>
+                    <div id="sim-erro" class="sim-erro" style="display:none"></div>
+                    <div class="sim-botoes">
+                        <button class="btn btn-primary" onclick="simularCompra()">Simular</button>
+                        <button class="btn btn-outline" onclick="limparSimulador()">Limpar</button>
+                    </div>
+                </div>
+                <div class="card sim-saida" id="sim-resultado">
+                    <p class="sim-vazio">Preencha a compra e clique em Simular para ver se cabe no caixa das próximas 8 semanas.</p>
+                </div>
             </div>
         </div>
 

@@ -2589,3 +2589,29 @@ html[data-sidebar="collapsed"] .sidebar:not(:hover) .nav-selo {
 #tb-pedidos-compra tr.pc-destaque td { background: rgba(242, 201, 36, 0.22); transition: background .6s; }
 .header .btn-abrir-carrinhos { margin-left: auto; margin-right: 6px; }
 .header .btn-abrir-carrinhos ~ * { margin-left: 0 !important; }
+
+/* Financeiro — Simular compra */
+.sim-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 16px; align-items: start; }
+.sim-grid .card { margin-bottom: 16px; }
+.sim-formas { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.sim-formas label { display: flex; align-items: center; gap: 6px; font-size: var(--fs-texto-sm); color: var(--dark); cursor: pointer; margin: 0; }
+.sim-linha { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0 12px; }
+.sim-botoes { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.sim-erro { color: var(--danger); font-size: var(--fs-texto-sm); font-weight: 600; margin-top: 4px; }
+.sim-vazio { color: var(--muted); margin: 0; }
+.sim-veredito { border-radius: var(--radius-input); padding: 12px 14px; margin-bottom: 14px; border: 1px solid var(--border); }
+.sim-veredito.sim-verde { background: rgba(21, 153, 18, 0.10); border-color: rgba(21, 153, 18, 0.45); }
+.sim-veredito.sim-amarelo { background: rgba(242, 201, 36, 0.16); border-color: rgba(242, 201, 36, 0.6); }
+.sim-veredito.sim-vermelho { background: rgba(244, 57, 39, 0.10); border-color: rgba(244, 57, 39, 0.45); }
+.sim-titulo { margin: 0 0 6px; font-size: var(--fs-secao); font-weight: 800; }
+.sim-titulo.sim-verde { color: var(--success); }
+.sim-titulo.sim-amarelo { color: var(--kpi-orange); }
+.sim-titulo.sim-vermelho { color: var(--danger); }
+.sim-frases { margin: 0; padding-left: 18px; font-size: var(--fs-texto); color: var(--dark); }
+.sim-frases li + li { margin-top: 4px; }
+.sim-tabela-wrap { overflow-x: auto; }
+.sim-tabela { width: 100%; }
+.sim-tabela .sim-num { text-align: right; white-space: nowrap; }
+@media (max-width: 768px) {
+    .sim-grid { grid-template-columns: 1fr; }
+}
