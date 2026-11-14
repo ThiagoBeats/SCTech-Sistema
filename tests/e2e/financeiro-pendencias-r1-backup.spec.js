@@ -24,8 +24,9 @@ test('syncDB sem espaco: avisa uma vez, nao quebra', async ({ page }) => {
     expect(r).toEqual([false, false, false]);
     await expect(page.locator('#sc-modal-msg')).toHaveText(MSG);
     await page.locator('#sc-modal-ok').click();
-    await page.evaluate(() => syncDB());
-    await expect(page.locator('#sc-modal-overlay, .sc-modal-overlay').first()).toBeHidden();
+    await expect(page.locator('#sc-modal-overlay')).toBeHidden();
+    expect(await page.evaluate(() => syncDB())).toBe(false);
+    await expect(page.locator('#sc-modal-overlay'), 'segundo erro nao reabre o aviso').toBeHidden();
 });
 
 test('importar com navegador cheio: limpa as chaves da Fase 0 antes e nao some em silencio', async ({ page }) => {
