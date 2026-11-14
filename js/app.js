@@ -45,6 +45,7 @@ const MODULOS_PERMISSAO = [
         { key: 'hoje',      label: 'Hoje' },
         { key: 'extrato',   label: 'Extrato' },
         { key: 'resultado', label: 'Resultado do mês' },
+        { key: 'simulador', label: 'Simular compra' },
     ]},
     { key: 'relatorios',    label: 'Relatórios',         subs: [
         { key: 'faturamento', label: 'Faturamento Mensal' },
@@ -120,6 +121,7 @@ function papeisPadrao() {
             'financeiro.hoje':     'sem_acesso',
             'financeiro.extrato':  'sem_acesso',
             'financeiro.resultado':'sem_acesso',
+            'financeiro.simulador':'sem_acesso',
             producao:              'visualizar',
             catalogo:              'visualizar',
             galeria:               'visualizar',
@@ -221,7 +223,7 @@ function migrarPermissoesSalvas() {
         // seguir o nivel da Visao Geral (sem acesso se nao houver).
         if (p.permissoes && typeof p.permissoes === 'object') {
             const base = p.permissoes['financeiro.dashboard'] || p.permissoes.financeiro;
-            ['financeiro.hoje', 'financeiro.extrato', 'financeiro.resultado'].forEach(k => {
+            ['financeiro.hoje', 'financeiro.extrato', 'financeiro.resultado', 'financeiro.simulador'].forEach(k => {
                 if (!p.permissoes[k]) p.permissoes[k] = { nivel: (base && base.nivel) || 'sem_acesso', acoes_restritas: [] };
             });
         }
@@ -247,7 +249,7 @@ function migrarPermissoesSalvas() {
         });
         if (novo.financeiro) {
             const base = novo['financeiro.dashboard'] || novo.financeiro;
-            ['financeiro.hoje', 'financeiro.extrato', 'financeiro.resultado'].forEach(k => {
+            ['financeiro.hoje', 'financeiro.extrato', 'financeiro.resultado', 'financeiro.simulador'].forEach(k => {
                 if (!novo[k]) novo[k] = { nivel: base.nivel || 'sem_acesso', acoes_restritas: [] };
             });
         }
@@ -277,6 +279,7 @@ let db = {
     contas_fin:      JSON.parse(localStorage.getItem('sc_contas_fin')) || [],
     meios_pag:       JSON.parse(localStorage.getItem('sc_meios_pag'))  || [],
     movimentos_fin:  JSON.parse(localStorage.getItem('sc_mov_fin'))    || [],
+    fechamentos_fin: JSON.parse(localStorage.getItem('sc_fin_fech'))   || [],
     medicoes:        JSON.parse(localStorage.getItem('sc_med'))  || [],
     papeis:          JSON.parse(localStorage.getItem('sc_pap'))  || papeisPadrao(),
     usuarios:        JSON.parse(localStorage.getItem('sc_usr'))  || [],
@@ -365,6 +368,7 @@ function syncDB() {
     localStorage.setItem('sc_contas_fin', JSON.stringify(db.contas_fin));
     localStorage.setItem('sc_meios_pag',  JSON.stringify(db.meios_pag));
     localStorage.setItem('sc_mov_fin',    JSON.stringify(db.movimentos_fin));
+    localStorage.setItem('sc_fin_fech',   JSON.stringify(db.fechamentos_fin));
     localStorage.setItem('sc_med',  JSON.stringify(db.medicoes));
     localStorage.setItem('sc_pap',  JSON.stringify(db.papeis));
     localStorage.setItem('sc_usr',  JSON.stringify(db.usuarios));
@@ -1289,7 +1293,7 @@ function salvarERecarregar(msg = 'Salvo com sucesso!') {
 // não guardar a senha em texto puro; quando o sistema migrar para um banco de
 // dados/backend real, a autenticação deve ser refeita lá (hash forte no
 // servidor, verificação em cada rota) e este arquivo deixa de ser a fonte da verdade.
-const FIN_TAB_MODULO = { dashboard: 'financeiro.dashboard', receber: 'financeiro.receber', pagar: 'financeiro.pagar', fixas: 'financeiro.fixas', dre: 'financeiro.dre', hoje: 'financeiro.hoje', extrato: 'financeiro.extrato', resultado: 'financeiro.resultado' };
+const FIN_TAB_MODULO = { dashboard: 'financeiro.dashboard', receber: 'financeiro.receber', pagar: 'financeiro.pagar', fixas: 'financeiro.fixas', dre: 'financeiro.dre', hoje: 'financeiro.hoje', extrato: 'financeiro.extrato', resultado: 'financeiro.resultado', simulador: 'financeiro.simulador' };
 
 const PAGINA_MODULO = {
     'index.html':         'inicio',
@@ -7659,7 +7663,7 @@ function _dadosExportacao(marcaFase0) {
         movimentos: db.movimentos, vendedores: db.vendedores,
         fornecedores: db.fornecedores, pedidos_compra: db.pedidos_compra, carrinhos: db.carrinhos,
         contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, despesas_fixas: db.despesas_fixas,
-        contas_fin: db.contas_fin, meios_pag: db.meios_pag, movimentos_fin: db.movimentos_fin,
+        contas_fin: db.contas_fin, meios_pag: db.meios_pag, movimentos_fin: db.movimentos_fin, fechamentos_fin: db.fechamentos_fin,
         medicoes: db.medicoes,
         fin_metas: _lerObjetoLS('sc_fin_metas'), fin_orcamento_mes: _lerObjetoLS('sc_fin_orcamento_mes'),
         empresa: getEmpresa(), formas_pag: getFormasPagamentoCfg()
@@ -7706,6 +7710,7 @@ function importarDados(event) {
             db.contas_fin     = dados.contas_fin     || [];
             db.meios_pag      = dados.meios_pag      || [];
             db.movimentos_fin = dados.movimentos_fin || [];
+            db.fechamentos_fin = Array.isArray(dados.fechamentos_fin) ? dados.fechamentos_fin : [];
             syncDB();
             // Ajustes por mes do Resultado: backup antigo (sem eles) volta ao padrao vazio.
             ['fin_metas', 'fin_orcamento_mes'].forEach(k => {
