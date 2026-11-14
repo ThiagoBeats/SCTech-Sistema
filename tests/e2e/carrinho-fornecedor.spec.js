@@ -195,6 +195,65 @@ test('compartilhar com sucesso pergunta se marca como Enviado', async ({ page })
     expect((await lerChave(page, 'sc_pc'))[0].status, 'Agora nao mantem Rascunho').toBe('Rascunho');
 });
 
+const PC_RASCUNHO = { sc_carrinhos: [], sc_pc: [{ id: 26100, fornecedor_id: 7, fornecedor_nome: 'RC Tecidos', status: 'Rascunho', data_criacao: Date.now(), data_envio: null, itens: [], observacoes: '' }] };
+const PERGUNTA_FECHAR = 'O pedido #26100 foi realmente enviado ao fornecedor?';
+
+test('usou o Enviar e fechou o pedido: pergunta se foi enviado e Sim marca Enviado', async ({ page }) => {
+    await page.addInitScript(() => { navigator.canShare = undefined; navigator.share = undefined; });
+    await abrir(page, PC_RASCUNHO);
+    await page.goto(BASE + '/fornecedores.html?tab=pedidos');
+    await page.locator('#tb-pedidos-compra tr[data-pc-id="26100"] .pc-enviar-btn').click();
+    const dl = page.waitForEvent('download', { timeout: 45000 });
+    await page.locator('#menu-enviar-doc [data-acao="compartilhar"]').click();
+    await dl;
+    // fecha a ajuda sem "Ja enviei" e depois fecha o pedido
+    await page.locator('#compartilhar-alternativa .modal-close').click();
+    await page.locator('#doc-modal-overlay .doc-modal-btn-close').click();
+    await expect(page.locator('#sc-modal-msg')).toContainText(PERGUNTA_FECHAR);
+    await page.click('#sc-modal-ok');
+    await expect.poll(async () => (await lerChave(page, 'sc_pc'))[0].status).toBe('Enviado');
+    expect((await lerChave(page, 'sc_pc'))[0].data_envio).toBe(hojeLocal());
+});
+
+test('usou o 📤 Enviar dentro do PDF e respondeu Não: continua Rascunho', async ({ page }) => {
+    await abrir(page, PC_RASCUNHO);
+    await page.goto(BASE + '/fornecedores.html?tab=pedidos');
+    await page.locator('#tb-pedidos-compra tr[data-pc-id="26100"] button:has-text("PDF")').click();
+    await page.locator('#btn-enviar-doc').click();
+    await expect(page.locator('#menu-enviar-doc')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.locator('#doc-modal-overlay .doc-modal-btn-close').click();
+    await expect(page.locator('#sc-modal-msg')).toContainText(PERGUNTA_FECHAR);
+    await page.click('#sc-modal-cancel');
+    await page.waitForTimeout(200);
+    expect((await lerChave(page, 'sc_pc'))[0].status).toBe('Rascunho');
+});
+
+test('so abrir o pedido para olhar nao pergunta ao fechar', async ({ page }) => {
+    await abrir(page, PC_RASCUNHO);
+    await page.goto(BASE + '/fornecedores.html?tab=pedidos');
+    await page.locator('#tb-pedidos-compra tr[data-pc-id="26100"] button:has-text("PDF")').click();
+    await page.locator('#doc-modal-overlay .doc-modal-btn-close').click();
+    await page.waitForTimeout(300);
+    await expect(page.locator('#sc-modal-msg')).not.toBeVisible();
+    expect((await lerChave(page, 'sc_pc'))[0].status).toBe('Rascunho');
+});
+
+test('ja respondeu depois de compartilhar: fechar nao pergunta de novo', async ({ page }) => {
+    await page.addInitScript(() => { navigator.canShare = () => true; navigator.share = async () => {}; });
+    await abrir(page, PC_RASCUNHO);
+    await page.goto(BASE + '/fornecedores.html?tab=pedidos');
+    await page.locator('#tb-pedidos-compra tr[data-pc-id="26100"] .pc-enviar-btn').click();
+    await page.locator('#menu-enviar-doc [data-acao="compartilhar"]').click();
+    await expect(page.locator('#sc-modal-msg')).toContainText('Marcar o pedido #26100 como Enviado?', { timeout: 45000 });
+    await page.click('#sc-modal-cancel');
+    await expect(page.locator('#sc-modal-msg')).not.toBeVisible();
+    await page.locator('#doc-modal-overlay .doc-modal-btn-close').click();
+    await page.waitForTimeout(300);
+    await expect(page.locator('#sc-modal-msg')).not.toBeVisible();
+    expect((await lerChave(page, 'sc_pc'))[0].status).toBe('Rascunho');
+});
+
 test('pedido fechado aparece no historico e na lista de pedidos de compra', async ({ page }) => {
     await abrir(page);
     await abrirCarrinhoDe(page, 'RC Tecidos');

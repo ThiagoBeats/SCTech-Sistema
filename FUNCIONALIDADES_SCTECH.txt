@@ -691,6 +691,11 @@ Tabela de pedidos de compra:
     documentos"). Depois de compartilhar, o sistema pergunta "Marcar o pedido
     #N como Enviado?"; nas janelas de ajuda (PDF baixado / e-mail) há o botão
     "✔ Já enviei — marcar como Enviado". "Agora não" mantém em Rascunho.
+  - Se o botão Enviar foi usado (o 📨 da lista ou o 📤 Enviar dentro do
+    pedido) e essa pergunta ainda não foi respondida, ao fechar a janela do
+    pedido aparece "O pedido #N foi realmente enviado ao fornecedor?":
+    "Sim, foi enviado" muda para Enviado; "Não" mantém em Rascunho. Só abrir
+    o pedido para olhar não pergunta nada.
   - A data de envio é gravada quando o pedido vira "Enviado" (por qualquer
     caminho); se voltar para Rascunho, é apagada
 

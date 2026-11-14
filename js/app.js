@@ -7302,12 +7302,15 @@ function abrirDocModal(htmlContent, titulo, extraToolbar, envio) {
 }
 
 function fecharDocModal() {
+    // Usou o Enviar e nao respondeu se enviou: pergunta depois de fechar.
+    const envio = typeof _envioDocAtual !== 'undefined' ? _envioDocAtual : null;
     const overlay = document.getElementById('doc-modal-overlay');
     if (overlay) overlay.classList.remove('active');
     document.body.style.overflow = '';
     _docModalAtual = null;
     if (typeof fecharMenuEnviar === 'function') fecharMenuEnviar(true);
     if (typeof definirEnvioDoc === 'function') definirEnvioDoc(null);
+    if (envio && envio.usouEnviar && !envio.enviadoTratado && envio.aoFecharDepoisDeEnviar) envio.aoFecharDepoisDeEnviar();
 }
 
 async function imprimirDocModal() {
@@ -9011,6 +9014,14 @@ async function marcarPedidoCompraEnviado(id) {
     const pc = db.pedidos_compra.find(p => p.id == id);
     if (!pc || pc.status !== 'Rascunho') return;
     if (!await showConfirm(`Marcar o pedido #${formatPedidoId(pc.id)} como Enviado?`, '📨', 'Marcar como Enviado', 'Agora não')) return;
+    await atualizarStatusPC(pc.id, 'Enviado');
+}
+
+// Ao fechar o pedido depois de usar o Enviar: confirma se foi mesmo enviado.
+async function perguntarPedidoCompraEnviado(id) {
+    const pc = db.pedidos_compra.find(p => p.id == id);
+    if (!pc || pc.status !== 'Rascunho') return;
+    if (!await showConfirm(`O pedido #${formatPedidoId(pc.id)} foi realmente enviado ao fornecedor?`, '📨', 'Sim, foi enviado', 'Não')) return;
     await atualizarStatusPC(pc.id, 'Enviado');
 }
 
