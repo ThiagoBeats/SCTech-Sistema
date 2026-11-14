@@ -171,3 +171,37 @@ test('previsao: CR/CP pagos ficam fora e ids misturados string/numero casam o me
     assert.strictEqual(s[0].saidas, 0);
     assert.strictEqual(s[4].entradas, 97);
 });
+
+// ---- Pendencias R1, tarefa 3: contas inativas, sem vencimento, valor zero, mes antes da abertura ----
+test('saldosHoje ignora conta inativa no total e na lista', () => {
+    const a = { id: 1, nome: 'A', tipo: 'banco', saldo_inicial: 100, data_saldo_inicial: '2026-01-01' };
+    const b = { id: 2, nome: 'B', tipo: 'banco', saldo_inicial: 50, data_saldo_inicial: '2026-01-01', ativo: false };
+    const s = C.saldosHoje([a, b], [{ conta_id: 2, data: '2026-11-20', sentido: 'entrada', valor: 10 }], '2026-11-12');
+    assert.strictEqual(s.total, 100);
+    assert.deepStrictEqual(s.contas.map(c => c.id), [1]);
+});
+test('previsao: movimento futuro de conta inativa fica fora', () => {
+    const ativa = { id: 1, tipo: 'banco', saldo_inicial: 0, data_saldo_inicial: '2026-01-01' };
+    const inativa = { id: 2, tipo: 'banco', saldo_inicial: 0, data_saldo_inicial: '2026-01-01', ativo: false };
+    const s = C.previsaoSemanal(Object.assign({}, base, { contas: [ativa, inativa], meios: [], movimentos: [
+        { conta_id: 1, data: '2026-11-15', sentido: 'entrada', valor: 10 }, { conta_id: 2, data: '2026-11-15', sentido: 'entrada', valor: 999 }] }));
+    assert.strictEqual(s[0].entradas, 10);
+});
+test('previsao: sem vencimento nao entra nem marca atrasado; valor 0 nao marca atrasado', () => {
+    const s = C.previsaoSemanal(Object.assign({}, base, {
+        contasReceber: [{ id: 1, valor: 300, status: 'Pendente' }, { id: 2, valor: 0, data_vencimento: '2026-11-01', status: 'Atrasado' }],
+        contasPagar: [{ id: 3, valor: 80, data_vencimento: '', status: 'Pendente' }]
+    }));
+    assert.strictEqual(s[0].entradas, 0);
+    assert.strictEqual(s[0].saidas, 0);
+    assert.strictEqual(s[0].inclui_atrasados, false);
+});
+test('tarefasHoje: sem vencimento nao e atrasado nem de hoje', () => {
+    const t = C.tarefasHoje({ hoje: '2026-11-12', contasReceber: [{ id: 1, valor: 5, status: 'Pendente' }], contasPagar: [{ id: 2, valor: 5, status: 'Pendente', data_vencimento: '' }] });
+    assert.strictEqual(t.receberAtrasados.length + t.receberHoje.length + t.pagarAtrasados.length + t.pagarProximos.length, 0);
+});
+test('saldoContaAte: antes da abertura da conta vale 0', () => {
+    const c = { id: 1, tipo: 'banco', saldo_inicial: 500, data_saldo_inicial: '2026-11-10' };
+    assert.strictEqual(C.saldoContaAte(c, [], '2026-11-09'), 0);
+    assert.strictEqual(C.saldoContaAte(c, [], '2026-11-10'), 500);
+});

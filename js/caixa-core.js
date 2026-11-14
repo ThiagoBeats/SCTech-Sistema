@@ -47,9 +47,16 @@
         return arredondar(saldo);
     }
 
+    // Saldo num dia; antes da abertura da conta (data do saldo inicial) a conta ainda nao existia: 0.
+    function saldoContaAte(conta, movimentos, ateData) {
+        if (ateData < conta.data_saldo_inicial) return 0;
+        return saldoConta(conta, movimentos, ateData);
+    }
+
+    // Conta desativada (ativo === false) nao entra no saldo de hoje nem no total.
     function saldosHoje(contas, movimentos, hoje) {
         let total = 0;
-        const lista = (contas || []).map(c => {
+        const lista = (contas || []).filter(c => c.ativo !== false).map(c => {
             const saldo = saldoConta(c, movimentos, hoje);
             let aCair = 0;
             (movimentos || []).forEach(m => {
@@ -123,6 +130,8 @@
         return out;
     }
 
+    const dataValida = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
+
     function previsaoSemanal({ hoje, saldoHoje, movimentos, contasReceber, contasPagar, despesasFixas, contas, meios, semanas = 8 }) {
         const lista = [];
         for (let i = 0; i < semanas; i++) {
@@ -133,10 +142,12 @@
             const s = lista.find(w => data >= w.inicio && data <= w.fim);
             if (!s) return;
             s[sentido === 'entrada' ? 'entradas' : 'saidas'] += Number(valor) || 0;
-            if (atrasado) s.inclui_atrasados = true;
+            if (atrasado && Number(valor) > 0) s.inclui_atrasados = true;
         };
-        (movimentos || []).forEach(m => { if (m.data > hoje) lanca(m.data, m.valor, m.sentido, false); });
-        (contasReceber || []).filter(aberto).forEach(cr => {
+        const inativa = id => (contas || []).some(c => mesmoId(c.id, id) && c.ativo === false);
+        (movimentos || []).forEach(m => { if (m.data > hoje && !inativa(m.conta_id)) lanca(m.data, m.valor, m.sentido, false); });
+        // Sem data de vencimento nao ha como prever: fica fora (a tela mostra "sem vencimento").
+        (contasReceber || []).filter(cr => aberto(cr) && dataValida(cr.data_vencimento)).forEach(cr => {
             const atrasado = cr.data_vencimento < hoje;
             const data = maxData(cr.data_vencimento, hoje);
             const mp = cr.meio_previsto;
@@ -149,7 +160,7 @@
                 lanca(data, cr.valor, 'entrada', atrasado);
             }
         });
-        (contasPagar || []).filter(aberto).forEach(cp => lanca(maxData(cp.data_vencimento, hoje), cp.valor, 'saida', cp.data_vencimento < hoje));
+        (contasPagar || []).filter(cp => aberto(cp) && dataValida(cp.data_vencimento)).forEach(cp => lanca(maxData(cp.data_vencimento, hoje), cp.valor, 'saida', cp.data_vencimento < hoje));
         // Com periodicidade, as ocorrencias ja viram CP pre-gerados; so as antigas (sem periodicidade) sao projetadas por mes.
         (despesasFixas || []).filter(df => !df.periodicidade).forEach(df => {
             ocorrenciasFixa(df, hoje.slice(0, 8) + '01', limite).forEach(data => {
@@ -175,10 +186,11 @@
 
     // `contas` e opcional: sem ele nao ha como saber quais movimentos sao da maquininha (cartaoHoje fica vazio).
     function tarefasHoje({ hoje, contasReceber, contasPagar, movimentos, contas }) {
-        const rec = (contasReceber || []).filter(aberto);
-        const pag = (contasPagar || []).filter(aberto);
+        // Sem vencimento valido: nao e atrasada nem de hoje (a tela mostra "sem vencimento").
+        const rec = (contasReceber || []).filter(x => aberto(x) && dataValida(x.data_vencimento));
+        const pag = (contasPagar || []).filter(x => aberto(x) && dataValida(x.data_vencimento));
         const em7 = somarDias(hoje, 7);
-        const maquininhas = (contas || []).filter(c => c.tipo === 'maquininha');
+        const maquininhas = (contas || []).filter(c => c.tipo === 'maquininha' && c.ativo !== false);
         return {
             receberAtrasados: rec.filter(x => x.data_vencimento < hoje),
             receberHoje: rec.filter(x => x.data_vencimento === hoje),
@@ -205,7 +217,7 @@
         return 'https://wa.me/' + telefone + '?text=' + encodeURIComponent(mensagem || '');
     }
 
-    const api = { contaAceitaMovimento, saldoConta, saldosHoje, repassesCartao, dividirParcela, arredondar, somarDias, mesmoId, previsaoSemanal, primeiraSemanaNegativa, tarefasHoje, normalizarTelefone, montarMensagem, linkWhatsApp, MENSAGEM_COBRANCA_PADRAO };
+    const api = { contaAceitaMovimento, saldoConta, saldoContaAte, saldosHoje, repassesCartao, dividirParcela, arredondar, somarDias, mesmoId, previsaoSemanal, primeiraSemanaNegativa, tarefasHoje, normalizarTelefone, montarMensagem, linkWhatsApp, MENSAGEM_COBRANCA_PADRAO };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.CaixaCore = api;

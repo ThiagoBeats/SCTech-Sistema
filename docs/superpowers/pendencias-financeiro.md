@@ -28,7 +28,7 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [ ] Descrição "Entrada (X%)" fica desatualizada na reaprovação com entrada paga em parte.
 - [ ] Alíquota: 0 recarrega como campo vazio; "6,5" recarrega como "6.5".
 - [ ] "Entrada de 30%" no nome da forma não é reconhecido (vira 50%, editável).
-- [ ] Data futura aceita na baixa; desmarcar o único item da janela de baixa fecha sem aviso.
+- [ ] Data futura aceita na baixa; desmarcar o único item da janela de baixa fecha sem aviso. **Parte da data feita:** baixa de recebimento/pagamento e transferência recusam data depois de hoje ("A data não pode ser depois de hoje."). A parte "desmarcar o único item" continua pendente.
 - [ ] Cor `#B26A00` fixa no selo do DRE (usar variável de CSS).
 
 ### Testes que faltam
@@ -42,24 +42,24 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 ## Da Fase 1 (branch `feat/financeiro-fase1`)
 
 ### Dados e dinheiro
-- [ ] Excluir uma parcela em aberto que tem partes pagas (`parcela_origem_id`) deixa as partes sem origem; o estorno delas então só reabre a parte sozinha.
+- [x] Excluir uma parcela em aberto que tem partes pagas (`parcela_origem_id`) deixa as partes sem origem; o estorno delas então só reabre a parte sozinha. **Feito:** excluir parcela com partes pagas é bloqueado ("Esta parcela tem partes pagas. Estorne as partes antes de excluir.").
 - [ ] Baixa com cartão numa conta que não aceita movimento (sem conta / data anterior ao saldo inicial) não gera a conta de taxa: a despesa de taxa fica fora do gráfico.
-- [ ] Conta a pagar paga sem movimento ainda pode ser excluída (comissão fica paga no pedido sem trilha); a remoção do movimento de conta a pagar está inline, sem função própria.
-- [ ] Remover uma conta deixa movimentos, contas a receber e a pagar com `conta_id` órfão; as telas devem tolerar conta ausente (ou impedir a remoção).
-- [ ] Contas inativas ainda entram nos saldos de hoje (`saldosHoje`) e nos saldos do Extrato.
-- [ ] Mês antes da abertura da conta mostra o saldo inicial no Extrato.
-- [ ] Transferência aceita data futura; destino padrão da transferência é `contas[1]`.
+- [x] Conta a pagar paga sem movimento ainda pode ser excluída (comissão fica paga no pedido sem trilha); a remoção do movimento de conta a pagar está inline, sem função própria. **Feito:** conta paga não se exclui (estornar antes); remoção do movimento virou `removerMovimentosDaBaixaCP`.
+- [x] Remover uma conta deixa movimentos, contas a receber e a pagar com `conta_id` órfão; as telas devem tolerar conta ausente (ou impedir a remoção). **Feito:** conta com movimentos não é excluída: oferece Desativar (com Reativar); sem movimentos, pede confirmação.
+- [x] Contas inativas ainda entram nos saldos de hoje (`saldosHoje`) e nos saldos do Extrato. **Feito:** `saldosHoje`, Extrato e previsão ignoram contas desativadas; o histórico continua no Extrato.
+- [x] Mês antes da abertura da conta mostra o saldo inicial no Extrato. **Feito:** mostra 0 e "Conta aberta em dd/mm/aaaa".
+- [x] Transferência aceita data futura; destino padrão da transferência é `contas[1]`. **Feito:** data depois de hoje é recusada; destino começa vazio, é obrigatório e diferente da origem.
 - [ ] Valores não convertidos no cartão: `repassesCartao` não força número; "1,5" (vírgula) vira padrão no core e "1,250.50" (formato US) é lido errado.
 - [ ] `dividirParcela` compara o valor pago arredondado com o valor cru da parcela.
-- [ ] Data vazia vira hoje; `baixarContasReceber` não valida por conta própria.
-- [ ] Conta a receber/pagar sem `data_vencimento` cai em "hoje" sem aviso; item com valor 0 marca "inclui atrasados".
+- [x] Data vazia vira hoje; `baixarContasReceber` não valida por conta própria. **Feito:** a baixa recusa data vazia/futura e `baixarContasReceber`/`baixarContasPagar` validam data e valor por conta própria (devolvem `{ ok, erro }`).
+- [x] Conta a receber/pagar sem `data_vencimento` cai em "hoje" sem aviso; item com valor 0 marca "inclui atrasados". **Feito:** mostra "sem vencimento", fica fora de Hoje e da previsão e não é atrasada; valor 0 não marca "inclui atrasados".
 - [ ] Telefone com zero de tronco não é limpo na cobrança; cobrança casa por nome com o primeiro cliente homônimo.
 - [ ] "Cobrado hoje" é marcado mesmo se o navegador bloquear o popup do WhatsApp.
 - [ ] Entrada vazia: a visibilidade do saldo usa 50% e o salvar usa o plano.
 - [ ] Meio apagado reabre como "a definir"; entrada 0% ainda mostra o meio da entrada.
 - [ ] Os padrões do cartão estão duplicados (`CARTAO_PADRAO_CFG` e CaixaCore).
 - [ ] "Cartão que cai hoje" na tela Hoje mostra o valor bruto (e qualquer entrada numa maquininha); mostrar o líquido ou rotular "bruto".
-- [ ] Excluir uma conta em Preferências não pede confirmação mesmo com movimentos; o saldo some do Hoje/Extrato e a previsão ainda conta os movimentos futuros dela. Pedir confirmação ou bloquear.
+- [x] Excluir uma conta em Preferências não pede confirmação mesmo com movimentos; o saldo some do Hoje/Extrato e a previsão ainda conta os movimentos futuros dela. Pedir confirmação ou bloquear. **Feito:** bloqueia com movimentos (Desativar) e confirma sem movimentos; desativada sai da previsão.
 - [ ] Na configuração de meios, um meio de cartão pode apontar para conta que não é maquininha (aí a baixa fica "sem conta"). Restringir o select por tipo.
 - [ ] Visão Geral (gráfico de fluxo e "Recebido") ainda usa a data da baixa e o valor bruto do cartão, diferente de Hoje/Extrato (datas de repasse). Alinhar na Fase 2.
 - [ ] FUNCIONALIDADES: 10.20 não diz que a aba Hoje exige a permissão Hoje; 10.18 não cita o "a cair" por conta.
@@ -92,7 +92,7 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [ ] O imposto por referência (Resultado do mês, Visão Geral) pode diferir do caixa do Extrato, que mostra a data do pagamento.
 - [ ] O histórico de 12 meses da margem é recalculado a cada render do Resultado do mês.
 - [ ] Despesas fixas antigas sem data de início contam em meses anteriores à criação (ponto de equilíbrio de meses passados pode ficar maior).
-- [ ] Recebimento com data futura sem movimento some de 'Até hoje' e do 'Previsto' (ligado à pendência de data futura na baixa).
+- [x] Recebimento com data futura sem movimento some de 'Até hoje' e do 'Previsto' (ligado à pendência de data futura na baixa). **Feito:** conferido e testado: com a data bloqueada não nasce mais; os antigos contam em "Até hoje" quando a data chega.
 
 ### Telas e textos
 - [ ] A opção "Imposto" está duplicada em dois lugares no código (formulário do A Pagar e despesas fixas).

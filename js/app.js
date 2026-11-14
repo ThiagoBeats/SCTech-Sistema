@@ -758,6 +758,8 @@ function renderContasCfg() {
                         oninput="_contasRascunho[${i}].data = this.value"></div>
                 <button type="button" class="btn btn-outline btn-sm btn-danger" onclick="removerContaCfg(${i})" title="Remover conta">✕</button>
             </div>
+            ${c.ativo === false ? `<div class="conta-desativada" style="margin-top:8px;font-size:12px;color:var(--muted)">Conta desativada: não entra nos saldos nem na previsão (o histórico continua no Extrato).
+                <button type="button" class="btn btn-outline btn-sm" onclick="reativarContaCfg(${i})">Reativar</button></div>` : ''}
             ${c.tipo === 'maquininha' ? `
             <div class="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:8px">
                 ${CARTAO_CAMPOS_CFG.map(([k, l]) => `
@@ -785,8 +787,35 @@ function mudarTipoContaCfg(i, tipo) {
     renderContasCfg();
 }
 
-function removerContaCfg(i) {
-    _contasRascunho.splice(i, 1);
+// A conta tem historico: algum movimento ou alguma conta a receber/pagar aponta para ela.
+function _contaTemMovimentos(id) {
+    if (id == null) return false;
+    const usa = x => CaixaCore.mesmoId(x.conta_id, id);
+    return (db.movimentos_fin || []).some(usa) || (db.contas_receber || []).some(usa) || (db.contas_pagar || []).some(usa);
+}
+
+// Conta com movimentos nao se exclui: oferece desativar (sai dos saldos e da previsao; o historico fica).
+async function removerContaCfg(i) {
+    const c = _contasRascunho[i];
+    if (!c) return;
+    if (_contaTemMovimentos(c.id)) {
+        if (await showConfirm('Esta conta tem movimentos e não pode ser excluída. Você pode desativá-la: ela sai dos saldos e da previsão, e o histórico continua no Extrato.', '⚠️', 'Desativar', 'Cancelar')) {
+            c.ativo = false;
+            renderContasCfg();
+        }
+        return;
+    }
+    if (c.id != null || (c.nome || '').trim()) {
+        if (!await showConfirm('Excluir a conta ' + (c.nome || '').trim() + '?', '🗑️', 'Excluir', 'Cancelar')) return;
+    }
+    const k = _contasRascunho.indexOf(c);
+    if (k >= 0) _contasRascunho.splice(k, 1);
+    renderContasCfg();
+}
+
+function reativarContaCfg(i) {
+    if (!_contasRascunho[i]) return;
+    _contasRascunho[i].ativo = true;
     renderContasCfg();
 }
 
@@ -3341,7 +3370,8 @@ async function confirmarPagamentoPedido(id) {
         permiteParcial: true
     });
     if (!r) return;
-    baixarContasReceber(r.data, r.linhas);
+    const baixa = baixarContasReceber(r.data, r.linhas);
+    if (!baixa.ok) { await showAlert(baixa.erro, '⚠️'); return; }
     // Sem parcela nenhuma o valor recebido digitado no pedido nao tem de onde
     // ser recalculado: fica como esta (sincronizar zeraria).
     if ((db.contas_receber || []).some(c => c.pedido_id == ped.id)) sincronizarRecebidoPedido(ped.id);
@@ -8230,7 +8260,8 @@ async function _baixarComissoes(pedidos, titulo) {
     if (!itens.length) { await showAlert('Nenhuma comissão pendente para pagar.', 'ℹ️'); return; }
     const r = await abrirModalBaixa({ titulo, itens, permiteCartao: false, permiteParcial: false });
     if (!r || !r.linhas.length) return;
-    baixarContasPagar(r.data, r.linhas);
+    const baixa = baixarContasPagar(r.data, r.linhas);
+    if (!baixa.ok) { await showAlert(baixa.erro, '⚠️'); return; }
     salvarERecarregar(r.linhas.length > 1 ? 'Comissões pagas!' : 'Comissão paga!');
 }
 
@@ -12734,11 +12765,16 @@ async function avisarPagoAMais(r) {
     await showAlert(`O cliente já pagou ${brl(r.pago)}, mais que o novo valor do pedido (${brl(r.valor)}). Devolva ${brl(r.pago - r.valor)} ou ajuste o pedido.`, '⚠️');
 }
 
+// Vencimento para a tela; conta sem data mostra "sem vencimento" (nunca conta como atrasada).
+function _fmtVenc(d) {
+    return d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : 'sem vencimento';
+}
+
 function atualizarStatusVencimentos() {
     const hoje = hojeLocal();
     let changed = false;
     [...db.contas_receber, ...db.contas_pagar].forEach(item => {
-        if (item.status === 'Pendente' && item.data_vencimento < hoje) {
+        if (item.status === 'Pendente' && item.data_vencimento && item.data_vencimento < hoje) {
             item.status = 'Atrasado';
             changed = true;
         }
@@ -12814,7 +12850,7 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
         o.style.display = 'flex';
         o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:560px;width:calc(100% - 32px)">
             <h3 style="margin:0 0 12px;font-size:16px">${escapeHtml(titulo || 'Registrar recebimento')}</h3>
-            ${comData ? `<label style="display:block;font-size:12px;margin-bottom:4px">Data</label><input type="date" id="baixa-data" value="${hoje}" style="${sel};margin-bottom:10px">` : ''}
+            ${comData ? `<label style="display:block;font-size:12px;margin-bottom:4px">Data</label><input type="date" id="baixa-data" value="${hoje}" max="${hoje}" style="${sel};margin-bottom:10px"><div id="baixa-erro-data" style="display:none;color:#C0392B;font-size:12px;margin:-6px 0 10px"></div>` : ''}
             ${semContas ? `<div id="baixa-aviso-geral" style="background:#FEF6D8;color:#8A6A00;font-size:12px;padding:8px;border-radius:4px;margin-bottom:10px">Contas ainda não configuradas (Empresa › Preferências) — esta baixa não entra no saldo.</div>` : ''}
             <div style="max-height:50vh;overflow:auto;margin-bottom:12px">${itens.map((it, idx) => {
                 const m = meioInicial(it) || {};
@@ -12846,6 +12882,8 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
         const linhas = [...o.querySelectorAll('.baixa-linha')];
         let tentou = false;
         const dataAtual = () => o.querySelector('#baixa-data')?.value || hoje;
+        // Data vazia ou depois de hoje nao vale (a baixa registra o que ja aconteceu).
+        const erroDaData = () => comData ? _erroDataBaixa(o.querySelector('#baixa-data')?.value || '') : '';
         const meioDa = l => meios.find(x => x.chave === l.querySelector('.baixa-meio').value) || null;
         // Valor da linha: numero ou NaN; mensagem de erro ou ''.
         const lerLinha = l => {
@@ -12874,6 +12912,8 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
             e.style.display = marcada && erro ? 'block' : 'none';
         };
         const atualizar = () => {
+            const ed = o.querySelector('#baixa-erro-data');
+            if (ed) { const m = erroDaData(); ed.textContent = m; ed.style.display = m ? 'block' : 'none'; }
             linhas.forEach(atualizarLinha);
             const t = linhas.filter(l => l.querySelector('.baixa-check').checked)
                 .reduce((s, l) => { const { v } = lerLinha(l); return s + (v > 0 ? v : 0); }, 0);
@@ -12898,6 +12938,7 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
         o.querySelector('#baixa-ok').onclick = () => {
             tentou = true;
             atualizar();
+            if (erroDaData()) return;
             const marcadas = linhas.filter(l => l.querySelector('.baixa-check').checked);
             if (marcadas.some(l => lerLinha(l).erro || !meioDa(l))) return;
             fechar({
@@ -12929,7 +12970,24 @@ function _novosIdsFin(colecao) {
 // parcela (a parte paga vira uma conta nova). Gera movimentos so se a conta
 // aceita (existe, ativa e data >= saldo inicial). Cartao: uma entrada bruta
 // por repasse e uma conta a pagar de taxa ja paga com a sua saida.
+function _erroDataBaixa(data) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(data == null ? '' : data))) return 'Informe a data.';
+    if (data > hojeLocal()) return 'A data não pode ser depois de hoje.';
+    return '';
+}
+
+// Valida data e valores antes de mexer em qualquer coisa. Devolve { ok, erro }.
 function baixarContasReceber(data, linhas) {
+    const erroData = _erroDataBaixa(data);
+    if (erroData) return { ok: false, erro: erroData };
+    for (const linha of (linhas || [])) {
+        const cr = db.contas_receber.find(x => CaixaCore.mesmoId(x.id, linha.id));
+        if (!cr || cr.status === 'Pago' || linha.valor == null) continue;
+        const v = CaixaCore.arredondar(linha.valor);
+        const max = CaixaCore.arredondar(cr.valor);
+        if (!(v > 0)) return { ok: false, erro: 'Informe um valor maior que zero.' };
+        if (v > max) return { ok: false, erro: 'O valor não pode passar de R$ ' + max.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '.' };
+    }
     const usuario = getUsuarioLogado();
     const agora = Date.now();
     const peds = new Set();
@@ -12984,6 +13042,7 @@ function baixarContasReceber(data, linhas) {
         const ped = db.pedidos.find(p => p.id == id);
         if (ped && ped.pagamento_pendente && FinanceiroCore.saldoEmAberto(db.contas_receber, id) <= 0.01) ped.pagamento_pendente = false;
     });
+    return { ok: true };
 }
 
 // O que a baixa de um recebimento gerou: entradas dele, contas de taxa de
@@ -13029,6 +13088,8 @@ function gerarComissoesPedido(ped) {
 // Baixa de pagamentos, linha a linha: grava meio e conta e gera uma saida se a
 // conta aceita. A comissao so e marcada como paga aqui (Fase 0).
 function baixarContasPagar(data, linhas) {
+    const erroData = _erroDataBaixa(data);
+    if (erroData) return { ok: false, erro: erroData };
     const usuario = getUsuarioLogado();
     if (!Array.isArray(db.movimentos_fin)) db.movimentos_fin = [];
     const novoIdMov = _novosIdsFin(db.movimentos_fin);
@@ -13055,6 +13116,14 @@ function baixarContasPagar(data, linhas) {
         if (!CaixaCore.contaAceitaMovimento(conta, data)) return;
         db.movimentos_fin.push({ id: novoIdMov(), conta_id: conta.id, data, sentido: 'saida', valor: CaixaCore.arredondar(cp.valor), origem: 'cp', origem_id: cp.id, grupo_id: null, descricao: cp.descricao || 'Pagamento' });
     });
+    return { ok: true };
+}
+
+// Tira os movimentos da baixa de uma conta a pagar (o estorno usa). Devolve quantos saíram.
+function removerMovimentosDaBaixaCP(cpId) {
+    const antes = (db.movimentos_fin || []).length;
+    db.movimentos_fin = (db.movimentos_fin || []).filter(m => !(m.origem === 'cp' && CaixaCore.mesmoId(m.origem_id, cpId)));
+    return antes - db.movimentos_fin.length;
 }
 
 // Desfaz o pagamento de uma conta a pagar (a taxa de cartao sai pelo estorno
@@ -13065,7 +13134,7 @@ async function estornarCP(id) {
     if (!cp || cp.status !== 'Pago') return;
     if (cp.categoria === 'taxa_cartao') { await showAlert('A taxa do cartão sai pelo estorno do recebimento.', 'ℹ️'); return; }
     if (!await showConfirm('Estornar este pagamento? A conta volta a ficar em aberto.', '↩', 'Estornar', 'Cancelar')) return;
-    db.movimentos_fin = (db.movimentos_fin || []).filter(m => !(m.origem === 'cp' && CaixaCore.mesmoId(m.origem_id, cp.id)));
+    removerMovimentosDaBaixaCP(cp.id);
     const hoje = hojeLocal();
     cp.status = (cp.data_vencimento && cp.data_vencimento < hoje) ? 'Atrasado' : 'Pendente';
     ['data_pagamento', 'forma_pagamento', 'meio_id', 'conta_id', 'baixado_por', 'baixado_em'].forEach(k => { cp[k] = null; });
@@ -13079,12 +13148,12 @@ async function estornarCP(id) {
     salvarERecarregar('Pagamento estornado.');
 }
 
-// Mesma regra do excluirCR: pago com movimento so sai pelo estorno; taxa de
+// Mesma regra do excluirCR: conta paga so sai pelo estorno; taxa de
 // cartao nunca sai por aqui. Devolve true se bloqueou.
 async function _bloqueiaExclusaoCP(cps) {
     if (cps.some(cp => cp.categoria === 'taxa_cartao')) { await showAlert('A taxa do cartão sai pelo estorno do recebimento.', 'ℹ️'); return true; }
-    if (cps.some(cp => cp.status === 'Pago' && (db.movimentos_fin || []).some(m => m.origem === 'cp' && CaixaCore.mesmoId(m.origem_id, cp.id)))) {
-        await showAlert('Estorne o pagamento antes de excluir.', '⚠️'); return true;
+    if (cps.some(cp => cp.status === 'Pago')) {
+        await showAlert('Esta conta já foi paga. Estorne o pagamento antes de excluir.', '⚠️'); return true;
     }
     return false;
 }
@@ -13101,7 +13170,8 @@ async function marcarCRPago(id) {
         permiteParcial: true
     });
     if (!r || !r.linhas.length) return;
-    baixarContasReceber(r.data, r.linhas);
+    const baixa = baixarContasReceber(r.data, r.linhas);
+    if (!baixa.ok) { await showAlert(baixa.erro, '⚠️'); return; }
     salvarERecarregar('Recebimento registrado!');
 }
 
@@ -13157,6 +13227,10 @@ async function excluirCR(id) {
     if (!cr) return;
     // Recebimento so sai pelo estorno (que registra quem desfez e quando).
     if (cr.status === 'Pago') { await showAlert('Estorne o recebimento antes de excluir.', '⚠️'); return; }
+    // Parcela em aberto que ja teve partes pagas: as partes perderiam a origem.
+    if (db.contas_receber.some(x => x !== cr && x.status === 'Pago' && CaixaCore.mesmoId(x.parcela_origem_id, cr.id))) {
+        await showAlert('Esta parcela tem partes pagas. Estorne as partes antes de excluir.', '⚠️'); return;
+    }
     if (!await showConfirm('Remover este lançamento a receber?', '🗑️', 'Remover', 'Cancelar')) return;
     db.contas_receber = db.contas_receber.filter(x => x.id != id);
     if (cr.pedido_id) sincronizarRecebidoPedido(cr.pedido_id);
@@ -13313,7 +13387,8 @@ async function marcarCPPago(id) {
         permiteCartao: false, permiteParcial: false
     });
     if (!r || !r.linhas.length) return;
-    baixarContasPagar(r.data, r.linhas);
+    const baixa = baixarContasPagar(r.data, r.linhas);
+    if (!baixa.ok) { await showAlert(baixa.erro, '⚠️'); return; }
     salvarERecarregar('Pagamento registrado!');
 }
 
@@ -14279,8 +14354,8 @@ function gerarHTMLRelatorioFinanceiro(layout, opcoes) {
             ${sub?`<div style="font-size:10px;opacity:.7;margin-top:2px">${sub}</div>`:''}
          </div>`;
 
-    const proxRec = db.contas_receber.filter(cr=>cr.status!=='Pago').sort((a,b)=>a.data_vencimento.localeCompare(b.data_vencimento)).slice(0,10);
-    const proxPag = db.contas_pagar.filter(cp=>cp.status!=='Pago').sort((a,b)=>a.data_vencimento.localeCompare(b.data_vencimento)).slice(0,10);
+    const proxRec = db.contas_receber.filter(cr=>cr.status!=='Pago').sort((a,b)=>(a.data_vencimento||'9999').localeCompare(b.data_vencimento||'9999')).slice(0,10);
+    const proxPag = db.contas_pagar.filter(cp=>cp.status!=='Pago').sort((a,b)=>(a.data_vencimento||'9999').localeCompare(b.data_vencimento||'9999')).slice(0,10);
 
     const comboImg = document.getElementById('chart-fin-combo')?.toDataURL?.('image/png') || null;
     const recImg   = document.getElementById('chart-fin-rec')?.toDataURL?.('image/png') || null;
@@ -15144,7 +15219,7 @@ function renderHoje() {
     elS.innerHTML = `<div class="hoje-total">Total <span id="hoje-total">${brl(sd.total)}</span></div>` + sd.contas.map(c =>
         `<div class="hoje-conta" onclick='abrirExtratoDaConta(${jid(c.id)})'><span>${escapeHtml(c.nome || '')}${c.a_cair > 0 ? `<small>${brl(c.a_cair)} a cair</small>` : ''}</span><strong>${brl(c.saldo)}</strong></div>`).join('');
 
-    const semanas = CaixaCore.previsaoSemanal({ hoje, saldoHoje: sd.total, movimentos: movs, contasReceber: db.contas_receber, contasPagar: db.contas_pagar, despesasFixas: db.despesas_fixas, contas, meios: getMeiosPag(), semanas: 8 });
+    const semanas = CaixaCore.previsaoSemanal({ hoje, saldoHoje: sd.total, movimentos: movs, contasReceber: db.contas_receber, contasPagar: db.contas_pagar, despesasFixas: db.despesas_fixas, contas: todasContas, meios: getMeiosPag(), semanas: 8 });
     const neg = CaixaCore.primeiraSemanaNegativa(semanas);
     document.getElementById('hoje-previsao-aviso').textContent = neg ? `Semana de ${ddmm(neg.inicio)}: falta ${brl(neg.falta)}` : '';
     document.getElementById('hoje-previsao-legenda').textContent = semanas.some(s => s.inclui_atrasados) ? '* inclui atrasados' : '';
@@ -15240,7 +15315,7 @@ function _simPrevisao(pagamentosExtras) {
     const movs = Array.isArray(db.movimentos_fin) ? db.movimentos_fin : [];
     const sd = CaixaCore.saldosHoje(contas, movs, hoje);
     const extras = pagamentosExtras && pagamentosExtras.length ? SimuladorCore.pagamentosComoContas(pagamentosExtras) : [];
-    return CaixaCore.previsaoSemanal({ hoje, saldoHoje: sd.total, movimentos: movs, contasReceber: db.contas_receber, contasPagar: (db.contas_pagar || []).concat(extras), despesasFixas: db.despesas_fixas, contas, meios: getMeiosPag(), semanas: 8 });
+    return CaixaCore.previsaoSemanal({ hoje, saldoHoje: sd.total, movimentos: movs, contasReceber: db.contas_receber, contasPagar: (db.contas_pagar || []).concat(extras), despesasFixas: db.despesas_fixas, contas: getContasFin(), meios: getMeiosPag(), semanas: 8 });
 }
 
 // Media do resultado dos 3 meses mais recentes antes do atual que tiveram movimento (ate 12 para tras).
@@ -15426,7 +15501,7 @@ function renderExtrato(opts) {
     if (_extratoFiltro.contaId !== '' && !_contaFinPorId(_extratoFiltro.contaId)) _extratoFiltro.contaId = '';
     const selConta = document.getElementById('extrato-conta');
     selConta.innerHTML = '<option value="">Todas as contas</option>' + contas.map(c =>
-        `<option value="${escapeHtml(String(c.id))}">${escapeHtml(c.nome || '')}</option>`).join('');
+        `<option value="${escapeHtml(String(c.id))}">${escapeHtml(c.nome || '')}${c.ativo === false ? ' (desativada)' : ''}</option>`).join('');
     selConta.value = _extratoFiltro.contaId;
     document.getElementById('extrato-mes').value = mes;
     const btn = document.getElementById('extrato-btn-transferir');
@@ -15437,19 +15512,36 @@ function renderExtrato(opts) {
     const primeiro = mes + '-01';
     const ultimo = mes + '-' + String(new Date(ano, m2, 0).getDate()).padStart(2, '0');
     const mesFuturo = primeiro > hoje;
+    const fmtDataAb = d => String(d).split('-').reverse().join('/');
     const ateFim = (mesFuturo || ultimo < hoje) ? ultimo : hoje;
-    const filtradas = _extratoFiltro.contaId === '' ? contas : contas.filter(c => CaixaCore.mesmoId(c.id, _extratoFiltro.contaId));
+    // Saldos: "Todas" soma so as contas ativas; escolhendo uma conta (mesmo desativada) mostra o dela.
+    // A lista de movimentos de "Todas" mantem o historico das desativadas.
+    const escolhida = _extratoFiltro.contaId !== '';
+    const filtradas = escolhida ? contas.filter(c => CaixaCore.mesmoId(c.id, _extratoFiltro.contaId)) : contas.filter(c => c.ativo !== false);
+    const doExtrato = escolhida ? filtradas : contas;
     const movs = Array.isArray(db.movimentos_fin) ? db.movimentos_fin : [];
     const antes = CaixaCore.somarDias(primeiro, -1);
-    const inicio = CaixaCore.arredondar(filtradas.reduce((s, c) => s + CaixaCore.saldoConta(c, movs, antes), 0));
-    const fim = CaixaCore.arredondar(filtradas.reduce((s, c) => s + CaixaCore.saldoConta(c, movs, ateFim), 0));
+    // Conta ainda nao aberta no periodo: saldo 0 (e um aviso), em vez do saldo inicial.
+    const naoAberta = c => !!c.data_saldo_inicial && c.data_saldo_inicial > ateFim;
+    const inicio = CaixaCore.arredondar(filtradas.reduce((s, c) => s + (naoAberta(c) ? 0 : CaixaCore.saldoConta(c, movs, antes)), 0));
+    const fim = CaixaCore.arredondar(filtradas.reduce((s, c) => s + CaixaCore.saldoContaAte(c, movs, ateFim), 0));
+    let avAb = document.getElementById('extrato-aviso-abertura');
+    if (!avAb) {
+        avAb = document.createElement('div');
+        avAb.id = 'extrato-aviso-abertura';
+        avAb.style.cssText = 'font-size:13px;color:#8A6A00;margin-bottom:10px';
+        const faixa = document.getElementById('extrato-saldo-fim').parentElement.parentElement;
+        faixa.parentNode.insertBefore(avAb, faixa.nextSibling);
+    }
+    avAb.innerHTML = filtradas.filter(naoAberta).map(c =>
+        `<div>${escolhida ? '' : escapeHtml(c.nome || '') + ': '}Conta aberta em ${fmtDataAb(c.data_saldo_inicial)}</div>`).join('');
     document.getElementById('extrato-saldo-inicio').textContent = brl(inicio);
     document.getElementById('extrato-saldo-fim').textContent = brl(fim);
     document.getElementById('extrato-lbl-fim').textContent = mesFuturo ? 'Saldo previsto no fim do mês' : (ultimo >= hoje ? 'Saldo até hoje' : 'Saldo no fim');
 
     const fmtData = d => d.split('-').reverse().join('/');
     const linhas = movs.filter(mv => {
-        const c = filtradas.find(x => CaixaCore.mesmoId(x.id, mv.conta_id));
+        const c = doExtrato.find(x => CaixaCore.mesmoId(x.id, mv.conta_id));
         return c && mv.data >= primeiro && mv.data <= ultimo && mv.data >= c.data_saldo_inicial;
     }).sort((x, y) => x.data < y.data ? -1 : x.data > y.data ? 1 : 0);
     const tb = document.getElementById('extrato-linhas');
@@ -15491,17 +15583,16 @@ async function abrirModalTransferencia() {
         <label style="display:block;font-size:12px;margin-bottom:4px" for="transf-de">De</label>
         <select id="transf-de" style="${campo}">${opts}</select>
         <label style="display:block;font-size:12px;margin-bottom:4px" for="transf-para">Para</label>
-        <select id="transf-para" style="${campo}">${opts}</select>
+        <select id="transf-para" style="${campo}"><option value="">Selecione…</option>${opts}</select>
         <label style="display:block;font-size:12px;margin-bottom:4px" for="transf-valor">Valor</label>
         <input type="text" inputmode="decimal" id="transf-valor" placeholder="0,00" style="${campo}">
         <label style="display:block;font-size:12px;margin-bottom:4px" for="transf-data">Data</label>
-        <input type="date" id="transf-data" value="${hojeLocal()}" style="${campo}">
+        <input type="date" id="transf-data" value="${hojeLocal()}" max="${hojeLocal()}" style="${campo}">
         <div id="transf-erro" style="display:none;color:#C0392B;font-size:12px;margin-bottom:10px"></div>
         <div class="sc-modal-btns"><button class="btn btn-outline" id="transf-cancel">Cancelar</button><button class="btn btn-success" id="transf-ok">Transferir</button></div>
     </div>`;
     document.body.appendChild(o);
     const para = o.querySelector('#transf-para');
-    if (contas.length > 1) para.value = String(contas[1].id);
     const erroEl = o.querySelector('#transf-erro');
     const erro = msg => { erroEl.textContent = msg; erroEl.style.display = msg ? 'block' : 'none'; };
     const fechar = () => { document.removeEventListener('keydown', esc); o.remove(); };
@@ -15513,10 +15604,12 @@ async function abrirModalTransferencia() {
         const valor = _valorDigitadoBaixa(o.querySelector('#transf-valor').value);
         const data = o.querySelector('#transf-data').value;
         const de = _contaFinPorId(deId), dest = _contaFinPorId(paraId);
-        if (!de || !dest) return erro('Escolha as duas contas.');
-        if (CaixaCore.mesmoId(de.id, dest.id)) return erro('Escolha contas diferentes para sair e entrar.');
+        if (!de) return erro('Escolha a conta de origem.');
+        if (!dest) return erro('Escolha a conta de destino.');
+        if (CaixaCore.mesmoId(de.id, dest.id)) return erro('Escolha uma conta de destino diferente da origem.');
         if (!(valor > 0)) return erro('Informe um valor maior que zero.');
         if (!data) return erro('Informe a data.');
+        if (data > hojeLocal()) return erro('A data não pode ser depois de hoje.');
         if (!CaixaCore.contaAceitaMovimento(de, data) || !CaixaCore.contaAceitaMovimento(dest, data))
             return erro('A data é anterior ao saldo inicial de uma das contas.');
         if (!Array.isArray(db.movimentos_fin)) db.movimentos_fin = [];
@@ -15949,7 +16042,7 @@ function renderDashboardFinanceiro() {
         </tr></thead><tbody>${lista.length ? lista.map(cr => {
             const at = cr.status === 'Atrasado';
             return `<tr class="${at?'fin-atrasado':''}">
-                <td>${new Date(cr.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR')}</td>
+                <td>${_fmtVenc(cr.data_vencimento)}</td>
                 <td>${escapeHtml(cr.cliente_nome)}</td>
                 <td style="font-size:12px;color:#8F8F8F">${escapeHtml(cr.descricao)}</td>
                 <td style="text-align:right"><strong>R$ ${fmt(cr.valor)}</strong></td>
@@ -15970,7 +16063,7 @@ function renderDashboardFinanceiro() {
         </tr></thead><tbody>${lista.length ? lista.map(cp => {
             const at = cp.status === 'Atrasado';
             return `<tr class="${at?'fin-atrasado':''}">
-                <td>${new Date(cp.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR')}</td>
+                <td>${_fmtVenc(cp.data_vencimento)}</td>
                 <td>${escapeHtml(cp.credor_nome||cp.categoria||'—')}</td>
                 <td style="font-size:12px;color:#8F8F8F">${escapeHtml(cp.descricao)}</td>
                 <td style="text-align:right"><strong>R$ ${fmt(cp.valor)}</strong></td>
@@ -15990,7 +16083,7 @@ function renderContasReceber() {
         if (filtroStatus && cr.status !== filtroStatus) return false;
         if (filtroCliente && !cr.cliente_nome.toLowerCase().includes(filtroCliente) && !cr.descricao.toLowerCase().includes(filtroCliente)) return false;
         return true;
-    }).sort((a,b) => a.data_vencimento.localeCompare(b.data_vencimento));
+    }).sort((a,b) => (a.data_vencimento||'9999').localeCompare(b.data_vencimento||'9999'));
     const totPend = lista.filter(cr=>cr.status!=='Pago').reduce((s,cr)=>s+cr.valor,0);
     const totRec  = lista.filter(cr=>cr.status==='Pago').reduce((s,cr)=>s+cr.valor,0);
     const res = document.getElementById('cr-resumo');
@@ -16003,7 +16096,7 @@ function renderContasReceber() {
         const cobravel = !pago && cr.data_vencimento <= hoje;
         const cobrarBtn = cobravel ? `<button class="btn btn-outline btn-sm" onclick="cobrarNoWhatsApp(${cr.id})" title="Cobrar pelo WhatsApp" style="margin-right:4px">💬 Cobrar</button>${cr.ultima_cobranca===hoje?'<span style="font-size:11px;color:#888;margin-right:4px">cobrado hoje</span>':''}` : '';
         return `<tr class="${at?'fin-atrasado':''}">
-            <td>${new Date(cr.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR')}</td>
+            <td>${_fmtVenc(cr.data_vencimento)}</td>
             <td><strong>${escapeHtml(cr.cliente_nome)}</strong></td>
             <td>${escapeHtml(cr.descricao)}</td>
             <td style="text-align:right"><strong>R$ ${cr.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
@@ -16051,7 +16144,7 @@ function renderContasPagar() {
         if (filtroTipo && cp.tipo !== filtroTipo) return false;
         if (filtroStatus && cp.status !== filtroStatus) return false;
         return true;
-    }).sort((a,b) => a.data_vencimento.localeCompare(b.data_vencimento));
+    }).sort((a,b) => (a.data_vencimento||'9999').localeCompare(b.data_vencimento||'9999'));
     const totPend = lista.filter(cp=>cp.status!=='Pago').reduce((s,cp)=>s+cp.valor,0);
     const totPago = lista.filter(cp=>cp.status==='Pago').reduce((s,cp)=>s+cp.valor,0);
     const res = document.getElementById('cp-resumo');
@@ -16069,7 +16162,7 @@ function renderContasPagar() {
             ? `${!pago?`<button class="btn btn-sm btn-success" onclick="marcarCPPago(${cp.id})" title="Confirmar pagamento">✓ Pagar</button>`:(cp.categoria==='taxa_cartao'?'':`<button class="btn btn-outline btn-sm" onclick="estornarCP(${cp.id})" title="Desfazer este pagamento">↩ Estornar</button>`)}<button class="btn btn-outline btn-sm btn-danger" onclick="excluirCP(${cp.id})" title="Excluir" style="margin-left:4px">🗑️</button>${grupoDelBtn}${anexoBtn}`
             : anexoBtn;
         return `<tr class="${at?'fin-atrasado':''}">
-            <td>${new Date(cp.data_vencimento+'T12:00:00').toLocaleDateString('pt-BR')}</td>
+            <td>${_fmtVenc(cp.data_vencimento)}</td>
             <td>${escapeHtml(cp.descricao)}${cp.pedido_cancelado?' <span class="fin-badge fin-badge-red" title="O pedido foi cancelado ou voltou para Orçamento depois desta comissão ser paga">pedido cancelado — revisar</span>':''}${isRT?' <span title="Comissão RT — gerada após quitação total do pedido" style="cursor:help">🏛️</span>':''}${grupoTag?' '+grupoTag:''}</td>
             <td>${escapeHtml(cp.credor_nome||'—')}</td>
             <td style="text-align:right"><strong>R$ ${cp.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
