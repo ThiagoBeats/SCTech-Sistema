@@ -203,3 +203,97 @@ test('visualizar simula mas nao ve Lançar no A Pagar', async ({ page }) => {
     await expect(page.locator('#sc-modal-msg')).toBeHidden();
     expect((await ler(page, 'sc_cp')).length).toBe(antes);
 });
+
+test('Lançar usa descrição, categoria e credor do formulário na hora de lançar', async ({ page }) => {
+    await abrirSimulador(page);
+    await page.selectOption('#sim-categoria', 'tecido');
+    await page.fill('#sim-credor', 'Loja A');
+    await simular(page, { valor: '500' });
+    await expect(page.locator('#sim-titulo')).toHaveText('Cabe');
+    // Mudar descricao, categoria e credor nao invalida a simulacao.
+    await page.fill('#sim-desc', 'Máquina nova');
+    await page.selectOption('#sim-categoria', 'aluguel');
+    await page.fill('#sim-credor', 'Loja B');
+    await expect(page.locator('#sim-lancar')).toBeVisible();
+    await page.locator('#sim-lancar').click();
+    await page.locator('#sc-modal-ok').click();
+    await expect(page.locator('.sc-toast').filter({ hasText: 'Compra lançada no A Pagar.' })).toBeVisible();
+    const cps = (await ler(page, 'sc_cp')).filter(c => c.id !== 1 && c.id !== 2);
+    expect(cps).toHaveLength(1);
+    expect(cps[0]).toMatchObject({ descricao: 'Máquina nova', categoria: 'aluguel', credor_nome: 'Loja B', valor: 500 });
+});
+
+test('mudar valor, forma, parcelas, datas ou ganho depois de simular apaga o resultado e o Lançar', async ({ page }) => {
+    await abrirSimulador(page);
+    const muda = [
+        async () => page.fill('#sim-valor', '600'),
+        async () => page.locator('input[name="sim-forma"][value="parcelado"]').check(),
+        async () => page.fill('#sim-data', '2026-11-15'),
+        async () => page.fill('#sim-ganho', '10')
+    ];
+    for (const m of muda) {
+        await simular(page, { valor: '500' });
+        await expect(page.locator('#sim-lancar')).toBeVisible();
+        await m();
+        await expect(page.locator('#sim-titulo')).toHaveCount(0);
+        await expect(page.locator('#sim-lancar')).toHaveCount(0);
+        await expect(page.locator('#sim-resultado')).toContainText('Os dados da compra mudaram. Clique em Simular para ver de novo.');
+        expect(await page.evaluate(() => _simUltima)).toBeNull();
+    }
+    await simular(page, { valor: '1000', forma: 'parcelado', parcelas: '3' });
+    await expect(page.locator('#sim-lancar')).toBeVisible();
+    await page.fill('#sim-parcelas', '4');
+    await expect(page.locator('#sim-lancar')).toHaveCount(0);
+});
+
+test('voltar para a aba apaga o resultado antigo', async ({ page }) => {
+    await abrirSimulador(page);
+    await simular(page, { valor: '500' });
+    await expect(page.locator('#sim-lancar')).toBeVisible();
+    await page.locator('.fin-tab-btn[data-tab="hoje"]').click();
+    await page.locator('.fin-tab-btn[data-tab="simulador"]').click();
+    await expect(page.locator('#sim-titulo')).toHaveCount(0);
+    await expect(page.locator('#sim-lancar')).toHaveCount(0);
+    expect(await page.evaluate(() => _simUltima)).toBeNull();
+});
+
+test('sem conta ativa: pede para configurar as contas em vez do veredito', async ({ page }) => {
+    await abrirSimulador(page, { sc_contas_fin: [{ ...SEED.sc_contas_fin[0], ativo: false }] });
+    await simular(page, { valor: '500' });
+    await expect(page.locator('#sim-resultado')).toContainText('Configure suas contas para simular.');
+    await expect(page.locator('#sim-resultado a', { hasText: 'Configurar contas' })).toHaveAttribute('href', 'empresa.html#preferencias');
+    await expect(page.locator('#sim-titulo')).toHaveCount(0);
+    await expect(page.locator('#sim-lancar')).toHaveCount(0);
+});
+
+test('1ª parcela segue a data da compra até ser editada; antes da compra é recusada', async ({ page }) => {
+    await abrirSimulador(page);
+    await page.locator('input[name="sim-forma"][value="parcelado"]').check();
+    await page.fill('#sim-data', '2026-11-20');
+    await expect(page.locator('#sim-primeira')).toHaveValue('2026-12-20');
+    await page.fill('#sim-primeira', '2026-11-25');
+    await page.fill('#sim-data', '2026-11-22');
+    await expect(page.locator('#sim-primeira')).toHaveValue('2026-11-25');
+    await page.fill('#sim-primeira', '2026-11-21');
+    await page.fill('#sim-desc', 'Máquina');
+    await page.fill('#sim-valor', '1000');
+    await page.fill('#sim-parcelas', '3');
+    await page.getByRole('button', { name: 'Simular', exact: true }).click();
+    await expect(page.locator('#sim-erro')).toHaveText('A 1ª parcela não pode ser antes da data da compra.');
+    await expect(page.locator('#sim-titulo')).toHaveCount(0);
+    // Limpar volta a seguir a data da compra.
+    await page.getByRole('button', { name: 'Limpar' }).click();
+    await page.fill('#sim-data', '2026-11-30');
+    await expect(page.locator('#sim-primeira')).toHaveValue('2026-12-30');
+});
+
+test('caixa já negativo sem a compra: diz a semana e não procura melhor data', async ({ page }) => {
+    const cps = [{ ...SEED.sc_cp[0], valor: 4000 }, SEED.sc_cp[1]];
+    await abrirSimulador(page, { sc_cp: cps });
+    await simular(page, { valor: '500' });
+    await expect(page.locator('#sim-titulo')).toHaveText('Não cabe agora');
+    const frases = page.locator('#sim-frases');
+    await expect(frases).toContainText('O caixa já fica negativo sem a compra na semana de 14/11.');
+    await expect(frases).not.toContainText('Comprando a partir de');
+    await expect(frases).not.toContainText('Nas próximas 8 semanas não cabe');
+});

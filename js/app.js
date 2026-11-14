@@ -12644,10 +12644,11 @@ function _contaFinPorId(id) {
 
 // Valor em dinheiro digitado (baixa, saldo inicial, transferencia): alem do
 // _numeroBR, "1.000" e "1.000.000" (so ponto de milhar) valem mil e um
-// milhao, e nao 1. Vazio devolve o padrao. Nao serve para taxa nem dias.
+// milhao, e nao 1. Aceita negativo ("-1.500", "-1.234,56") e o sinal "−" (U+2212).
+// Vazio devolve o padrao. Nao serve para taxa nem dias.
 function _valorDigitadoBaixa(t, padrao) {
-    const s = String(t == null ? '' : t).trim();
-    return _numeroBR(/^\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, '') : s, padrao === undefined ? NaN : padrao);
+    const s = String(t == null ? '' : t).trim().replace(/^\u2212/, '-');
+    return _numeroBR(/^-?\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, '') : s, padrao === undefined ? NaN : padrao);
 }
 
 const AVISO_CONTA_BAIXA = 'Esta conta ainda não está configurada / data anterior ao saldo inicial — não entra no saldo';
@@ -14511,7 +14512,6 @@ document.addEventListener('keydown', e => {
     const aviso = document.getElementById('sc-modal-overlay');
     if (aviso && aviso.style.display === 'flex') return;
     document.getElementById('res-ajuste-modal')?.remove();
-    document.getElementById('fech-modal')?.remove();
 });
 
 function ajustarMetaMes(mes) {
@@ -14615,9 +14615,16 @@ function mudancasDoFechamento(mes) {
 
 function _fechTextosMudanca(mes, mudancas) {
     const pre = `⚠ ${_fechMaiusc(FechamentoCore.rotuloMes(mes))} mudou depois do fechamento: `;
-    return (mudancas || []).map(x => pre + (x.tipo === 'resultado'
+    return _fechSoMudancas(mudancas).map(x => pre + (x.tipo === 'resultado'
         ? `resultado era ${_resBrl(x.antes)}, agora é ${_resBrl(x.agora)}`
         : `saldo de ${x.nome} era ${_resBrl(x.antes)}, agora ${_resBrl(x.agora)}`));
+}
+
+// Guia de imposto lancada depois do fechamento: so informa (nao e aviso de mudanca).
+const _fechSoMudancas = ms => (ms || []).filter(x => x.tipo !== 'guia');
+function _fechTextosGuia(mudancas) {
+    return (mudancas || []).filter(x => x.tipo === 'guia')
+        .map(x => `Guia de imposto lançada: ${_resBrl(x.agora)} (estimado era ${_resBrl(x.antes)})`);
 }
 
 // Card do fechamento no topo do Resultado do mes (so para meses que ja terminaram).
@@ -14634,11 +14641,14 @@ function renderFechamentoCard(mes) {
         el.innerHTML = `<div class="fech-card-linha"><span class="fech-card-txt">Confira o dinheiro, veja o que ficou pendente e guarde o resumo do mês.</span>
             <button class="btn btn-primary" id="fech-btn-fechar" onclick="abrirFechamentoMes('${mes}')">🔒 Fechar ${escapeHtml(rot)}</button></div>`;
     } else {
-        const avisos = _fechTextosMudanca(mes, mudancasDoFechamento(mes));
+        const mudancas = mudancasDoFechamento(mes);
+        const avisos = _fechTextosMudanca(mes, mudancas);
+        const guia = _fechTextosGuia(mudancas);
         el.innerHTML = `<div class="fech-card-linha"><span class="fech-selo">🔒 Fechado em ${escapeHtml(_fechDataBR(foto.fechado_em))} por ${escapeHtml(foto.fechado_por || '')}</span>
             <span class="fech-card-botoes"><button class="btn btn-outline btn-sm" onclick="verFechamentoMes('${mes}')">Ver fechamento</button>${pode
                 ? `<button class="btn btn-outline btn-sm" onclick="refazerFechamentoMes('${mes}')">Refazer fechamento</button>` : ''}</span></div>`
-            + (avisos.length ? `<div class="fech-mudou">${avisos.map(t => `<div>${escapeHtml(t)}</div>`).join('')}</div>` : '');
+            + (avisos.length ? `<div class="fech-mudou">${avisos.map(t => `<div>${escapeHtml(t)}</div>`).join('')}</div>` : '')
+            + (guia.length ? `<div class="fech-info">${guia.map(t => `<div>${escapeHtml(t)}</div>`).join('')}</div>` : '');
     }
     el.style.display = '';
 }
@@ -14672,10 +14682,16 @@ function abrirFechamentoMes(mes) {
     o.innerHTML = '<div class="sc-modal-box fech-box"></div>';
     const box = o.querySelector('.fech-box');
     const fechar = () => o.remove();
-    o.addEventListener('click', e => { if (e.target === o) fechar(); });
+    // Sem fechar pelo fundo nem pelo Esc (perderia o que foi digitado). Cancelar pergunta antes, se ha algo digitado.
+    const cancelar = async () => {
+        const digitou = linhas.some(l => String(l.texto || '').trim() || String(l.motivo || '').trim()) || String(st.anotacoes || '').trim();
+        if (digitou && !(await showConfirm('Cancelar o fechamento? O que você digitou será perdido.', '🔒', 'Cancelar fechamento', 'Continuar fechando'))) return;
+        fechar();
+    };
     const pagarLink = temAcesso('financeiro.pagar', 'visualizar') ? `<a href="#" class="fech-link" onclick="_fechAtalho('pagar');return false">A Pagar</a>` : 'A Pagar';
     const receberLink = temAcesso('financeiro.receber', 'visualizar') ? `<a href="#" class="fech-link" onclick="_fechAtalho('receber');return false">A Receber</a>` : 'A Receber';
     const titulo = n => `<h3 class="fech-titulo">🔒 Fechar ${escapeHtml(rot)}</h3><div class="fech-passos">Passo ${n} de 3 · ${['Conferir o dinheiro', 'O que ficou pendente', 'Resumo do mês'][n - 1]}</div>`;
+    const BOTAO_CANCELAR = '<button class="btn btn-outline" data-acao="cancelar">Cancelar</button>';
     const rodape = (voltar, avancar) => `<div class="fech-erro"></div><div class="fech-botoes">${voltar}${avancar}</div>`;
 
     const pend = () => FechamentoCore.pendenciasDoMes({ mes, contasPagar: db.contas_pagar, contasReceber: db.contas_receber, impostoEstimado: resultadoFinanceiroDoMes(mes).imposto.estimado });
@@ -14694,7 +14710,7 @@ function abrirFechamentoMes(mes) {
             + `<p class="fech-texto">Digite o saldo que aparece no extrato de cada conta em ${_fechDiaBR(ultimo)}. Em branco, a conta fica como não conferida.</p>`
             + corpo
             + `<div class="fech-dica">Se a diferença é uma conta que você esqueceu de lançar, lance no ${pagarLink} / ${receberLink} em vez de ajustar.</div>`
-            + rodape('<button class="btn btn-outline" data-acao="cancelar">Cancelar</button>', '<button class="btn btn-primary" data-acao="continuar">Continuar</button>');
+            + rodape(BOTAO_CANCELAR, '<button class="btn btn-primary" data-acao="continuar">Continuar</button>');
         box.querySelectorAll('tr[data-i]').forEach(tr => {
             const l = linhas[Number(tr.dataset.i)];
             const atualizar = () => {
@@ -14710,7 +14726,7 @@ function abrirFechamentoMes(mes) {
             tr.querySelector('.fech-motivo').addEventListener('input', e => { l.motivo = e.target.value; });
             atualizar();
         });
-        box.querySelector('[data-acao="cancelar"]').onclick = fechar;
+        box.querySelector('[data-acao="cancelar"]').onclick = cancelar;
         box.querySelector('[data-acao="continuar"]').onclick = () => {
             const erro = t => { box.querySelector('.fech-erro').textContent = t; };
             const invalida = linhas.find(l => Number.isNaN(extratoDe(l)));
@@ -14723,16 +14739,18 @@ function abrirFechamentoMes(mes) {
     function passo2() {
         const p = pend();
         const venc = x => ` · vence ${_fechDiaBR(x.data_vencimento)}`;
-        const item = (desc, valor, tab, rotuloBotao) => `<div class="fech-pend-item"><span class="fech-pend-desc">${desc}</span>${valor != null ? `<strong>${_resBrl(valor)}</strong>` : ''}<button class="btn btn-outline btn-sm" onclick="_fechAtalho('${tab}')">${rotuloBotao}</button></div>`;
+        const veAba = { pagar: temAcesso('financeiro.pagar', 'visualizar'), receber: temAcesso('financeiro.receber', 'visualizar') };
+        const item = (desc, valor, tab, rotuloBotao) => `<div class="fech-pend-item"><span class="fech-pend-desc">${desc}</span>${valor != null ? `<strong>${_resBrl(valor)}</strong>` : ''}${veAba[tab] ? `<button class="btn btn-outline btn-sm" onclick="_fechAtalho('${tab}')">${rotuloBotao}</button>` : ''}</div>`;
         let html = '';
         if (p.pagar.length) html += `<h4 class="fech-sub">Contas a pagar em aberto (${p.pagar_qtd} · ${_resBrl(p.pagar_valor)})</h4>`
-            + p.pagar.map(x => item(escapeHtml(x.descricao || '') + `<small>${escapeHtml(x.fornecedor || '')}${x.fornecedor ? ' · ' : ''}${venc(x).slice(3)}</small>`, x.valor, 'pagar', 'Abrir A Pagar')).join('');
+            + p.pagar.map(x => { const cred = x.credor_nome || x.fornecedor || ''; return item(escapeHtml(x.descricao || '') + `<small>${escapeHtml(cred)}${cred ? ' · ' : ''}${venc(x).slice(3)}</small>`, x.valor, 'pagar', 'Abrir A Pagar'); }).join('');
         if (p.receber.length) html += `<h4 class="fech-sub">Clientes que não pagaram (${p.receber_qtd} · ${_resBrl(p.receber_valor)})</h4>`
             + p.receber.map(x => item(escapeHtml(x.cliente_nome || '') + `<small>${escapeHtml(x.descricao || '')}${venc(x)}</small>`, x.valor, 'receber', 'Abrir A Receber')).join('');
         if (p.guia_pendente) html += `<h4 class="fech-sub">Imposto</h4>` + item(`Guia de imposto de ${escapeHtml(rot)} não lançada<small>o resultado usa o imposto estimado</small>`, null, 'pagar', 'Abrir A Pagar');
         box.innerHTML = titulo(2)
             + (html ? `<p class="fech-texto">Nada aqui impede fechar; os números vão para a foto do mês.</p>${html}` : '<p class="fech-vazio">Nada pendente neste mês.</p>')
-            + rodape('<button class="btn btn-outline" data-acao="voltar">Voltar</button>', '<button class="btn btn-primary" data-acao="continuar">Continuar</button>');
+            + rodape(BOTAO_CANCELAR + '<button class="btn btn-outline" data-acao="voltar">Voltar</button>', '<button class="btn btn-primary" data-acao="continuar">Continuar</button>');
+        box.querySelector('[data-acao="cancelar"]').onclick = cancelar;
         box.querySelector('[data-acao="voltar"]').onclick = () => { st.passo = 1; mostrar(); };
         box.querySelector('[data-acao="continuar"]').onclick = () => { st.passo = 3; mostrar(); };
     }
@@ -14771,8 +14789,9 @@ function abrirFechamentoMes(mes) {
             + `<h4 class="fech-sub">Orçamentos estourados</h4>${estourados.length ? `<ul class="fech-lista">${estourados.map(o => `<li class="res-faixa-estourou">${escapeHtml(o.rotulo)}: estourou ${_resBrl(-o.falta)}</li>`).join('')}</ul>` : '<p class="fech-vazio">Nenhum orçamento estourado.</p>'}`
             + `<h4 class="fech-sub">Sugestões para o próximo mês</h4><ul class="fech-lista fech-sugestoes">${sugestoes.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>`
             + `<div class="form-group" style="margin-top:12px"><label for="fech-anotacoes">Anotações</label><textarea id="fech-anotacoes" rows="3">${escapeHtml(st.anotacoes)}</textarea></div>`
-            + rodape('<button class="btn btn-outline" data-acao="voltar">Voltar</button>', `<button class="btn btn-primary" id="fech-confirmar">🔒 Fechar ${escapeHtml(rot)}</button>`);
+            + rodape(BOTAO_CANCELAR + '<button class="btn btn-outline" data-acao="voltar">Voltar</button>', `<button class="btn btn-primary" id="fech-confirmar">🔒 Fechar ${escapeHtml(rot)}</button>`);
         box.querySelector('#fech-anotacoes').addEventListener('input', e => { st.anotacoes = e.target.value; });
+        box.querySelector('[data-acao="cancelar"]').onclick = cancelar;
         box.querySelector('[data-acao="voltar"]').onclick = () => { st.passo = 2; mostrar(); };
         box.querySelector('#fech-confirmar').onclick = confirmar;
     }
@@ -14846,7 +14865,9 @@ function verFechamentoMes(mes) {
     const n = foto.numeros || {};
     const td = 'padding:6px 8px;border-bottom:1px solid #ddd';
     const th = `${td};text-align:left;background:#f0f0f0`;
-    const avisos = _fechTextosMudanca(mes, mudancasDoFechamento(mes));
+    const mudancas = mudancasDoFechamento(mes);
+    const avisos = _fechTextosMudanca(mes, mudancas);
+    const guia = _fechTextosGuia(mudancas);
     const grupos = ResultadoCore.GRUPOS.map(g => `<tr><td style="${td}">${escapeHtml(g.rotulo)}${g.id === 'imposto' && n.imposto_estimado ? ' (estimado)' : ''}</td><td style="${td};text-align:right">${_resBrl((n.por_grupo || {})[g.id])}</td></tr>`).join('');
     const situacao = c => c.extrato == null ? 'não conferida'
         : (c.acao === 'ajuste' ? `ajuste lançado — ${c.motivo || ''}` : (c.acao === 'anotado' ? 'diferença anotada' : 'confere'));
@@ -14861,6 +14882,7 @@ function verFechamentoMes(mes) {
         <div class="doc-cab">${buildEmpresaHeaderHTML(52)}</div>
         <h2 style="margin:16px 0 4px">Fechamento de ${escapeHtml(rot)}</h2>
         ${avisos.length ? `<div style="background:#FFF6DB;border-left:4px solid #B26A00;color:#7A4A00;padding:8px 12px;margin:10px 0;font-size:13px">${avisos.map(t => `<div>${escapeHtml(t)}</div>`).join('')}</div>` : ''}
+        ${guia.length ? `<div class="fech-info-doc" style="background:#F0F4F8;border-left:4px solid #8A9BB0;color:#33475B;padding:8px 12px;margin:10px 0;font-size:13px">${guia.map(t => `<div>${escapeHtml(t)}</div>`).join('')}</div>` : ''}
         <div style="display:flex;gap:32px;margin:12px 0;font-size:14px;flex-wrap:wrap">
             <div>Entradas<br><strong style="font-size:18px">${_resBrl(n.entradas)}</strong></div>
             <div>Saídas<br><strong style="font-size:18px">${_resBrl(n.saidas)}</strong></div>
@@ -14911,8 +14933,9 @@ function renderHoje() {
         ${cr.ultima_cobranca === hoje ? '<small style="color:var(--muted);white-space:nowrap">cobrado hoje</small>' : ''}
         ${podeReceber ? `<button class="btn btn-outline btn-sm" onclick='cobrarNoWhatsApp(${jid(cr.id)})'>💬 Cobrar</button>
         <button class="btn btn-success btn-sm" onclick='marcarCRPago(${jid(cr.id)})'>✓ Recebi</button>` : ''}</div>`;
+    const credorCP = cp => cp.credor_nome || cp.fornecedor || '';
     const linhaCP = cp => `<div class="hoje-item">
-        <div class="hoje-item-desc">${escapeHtml(cp.descricao || '')}<small>${escapeHtml(cp.fornecedor || '')}${cp.fornecedor ? ' · ' : ''}vence ${fmtData(cp.data_vencimento)}</small></div>
+        <div class="hoje-item-desc">${escapeHtml(cp.descricao || '')}<small>${escapeHtml(credorCP(cp))}${credorCP(cp) ? ' · ' : ''}vence ${fmtData(cp.data_vencimento)}</small></div>
         <div class="hoje-item-valor">${brl(cp.valor)}</div>
         ${podePagar ? `<button class="btn btn-success btn-sm" onclick='marcarCPPago(${jid(cp.id)})'>✓ Paguei</button>` : ''}</div>`;
     const linhaCartao = m => {
@@ -14942,13 +14965,16 @@ function renderHoje() {
             const acao = pode ? `mostrarTabFinanceiro('resultado');renderResultadoMes('${mesFech}');abrirFechamentoMes('${mesFech}')`
                 : `mostrarTabFinanceiro('resultado');renderResultadoMes('${mesFech}')`;
             linha = `<div class="hoje-fechamento-linha"><span>Feche o mês de ${escapeHtml(FechamentoCore.rotuloMes(mesFech))}</span>
-                <button class="btn btn-primary btn-sm" onclick="${acao}">Fechar agora</button></div>`;
+                <button class="btn btn-primary btn-sm" onclick="${acao}">${pode ? 'Fechar agora' : 'Ver'}</button></div>`;
         } else {
             const mesAnt = FechamentoCore.mesAnterior(hoje.slice(0, 7));
-            if (fechamentoDoMes(mesAnt) && mudancasDoFechamento(mesAnt).length) {
+            const mudancas = fechamentoDoMes(mesAnt) ? mudancasDoFechamento(mesAnt) : [];
+            const ver = `<button class="btn btn-outline btn-sm" onclick="mostrarTabFinanceiro('resultado');renderResultadoMes('${mesAnt}')">Ver</button>`;
+            if (_fechSoMudancas(mudancas).length) {
                 linha = `<div class="hoje-fechamento-linha hoje-fechamento-mudou"><span>⚠ ${escapeHtml(_fechMaiusc(FechamentoCore.rotuloMes(mesAnt)))} mudou depois do fechamento</span>
-                    <button class="btn btn-outline btn-sm" onclick="mostrarTabFinanceiro('resultado');renderResultadoMes('${mesAnt}')">Ver</button></div>`;
+                    ${ver}</div>`;
             }
+            linha += _fechTextosGuia(mudancas).map(t => `<div class="hoje-fechamento-linha hoje-fechamento-info"><span>${escapeHtml(t)}</span>${ver}</div>`).join('');
         }
         if (linha) avisoFech = `<div id="hoje-fechamento">${linha}</div>`;
     }
@@ -15023,15 +15049,50 @@ function _simSomarDias(data, dias) {
     return dataLocal(new Date(Number(data.slice(0, 4)), Number(data.slice(5, 7)) - 1, Number(data.slice(8, 10)) + dias).getTime());
 }
 
+// A 1a parcela acompanha a data da compra (+30 dias) ate o usuario mexer nela.
+let _simPrimeiraManual = false;
+let _simEventosLigados = false;
+
+// Mudou algo que entra na conta: a simulacao mostrada ficou velha (some o resultado e o Lancar).
+function _simInvalidar() {
+    if (!_simUltima && !document.getElementById('sim-lancar') && !document.querySelector('#sim-resultado .sim-veredito')) return;
+    _simUltima = null;
+    _simSaidaVazia('Os dados da compra mudaram. Clique em Simular para ver de novo.');
+}
+
+function _simLigarEventos() {
+    if (_simEventosLigados) return;
+    _simEventosLigados = true;
+    ['sim-valor', 'sim-parcelas', 'sim-entrada', 'sim-data', 'sim-primeira', 'sim-ganho'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', _simInvalidar);
+        el.addEventListener('change', _simInvalidar);
+    });
+    document.querySelectorAll('input[name="sim-forma"]').forEach(r => r.addEventListener('change', _simInvalidar));
+    const primeira = document.getElementById('sim-primeira');
+    if (primeira) primeira.addEventListener('input', () => { _simPrimeiraManual = true; });
+    const data = document.getElementById('sim-data');
+    const segue = () => {
+        if (_simPrimeiraManual || !primeira || !/^\d{4}-\d{2}-\d{2}$/.test(data.value)) return;
+        primeira.value = _simSomarDias(data.value, 30);
+    };
+    if (data) { data.addEventListener('input', segue); data.addEventListener('change', segue); }
+}
+
 function renderSimulador() {
     if (!document.getElementById('fin-simulador')) return;
+    _simLigarEventos();
     const hoje = hojeLocal();
     const data = document.getElementById('sim-data');
     const primeira = document.getElementById('sim-primeira');
     if (data && !data.value) data.value = hoje;
     if (primeira && !primeira.value) primeira.value = _simSomarDias(data && data.value ? data.value : hoje, 30);
     simAtualizarForma();
-    if (!temAcesso('financeiro.simulador', 'completo')) document.getElementById('sim-lancar')?.remove();
+    // Ao entrar na aba, nada de resultado velho (os dados do caixa podem ter mudado).
+    _simUltima = null;
+    _simMostrarErro('');
+    _simSaidaVazia(_SIM_VAZIO);
 }
 
 // As 8 semanas da tela Hoje (mesma chamada), com pagamentos extras como contas a pagar em aberto.
@@ -15070,6 +15131,11 @@ function simularCompra() {
     const saida = document.getElementById('sim-resultado');
     if (!saida) return;
     _simUltima = null;
+    if (!getContasFin().some(c => c.ativo !== false)) {
+        _simMostrarErro('');
+        saida.innerHTML = '<p class="sim-vazio" id="sim-sem-contas">Configure suas contas para simular.</p><a class="btn btn-primary btn-sm" href="empresa.html#preferencias">Configurar contas</a>';
+        return;
+    }
     const val = id => (document.getElementById(id)?.value || '').trim();
     const ddmm = d => d.slice(8, 10) + '/' + d.slice(5, 7);
     const ehData = d => /^\d{4}-\d{2}-\d{2}$/.test(d);
@@ -15116,13 +15182,14 @@ function simularCompra() {
         valorTotal
     });
     const frases = v.frases.slice();
-    if (v.cor === 'vermelho') {
+    // Caixa ja negativo sem a compra: a frase do veredito explica; procurar data so confundiria.
+    if (v.cor === 'vermelho' && !v.jaNegativoSem) {
         const quando = SimuladorCore.melhorData({ hoje, pagamentos, prever: _simPrevisao });
         const frase = quando ? 'Comprando a partir de ' + ddmm(quando) + ', cabe.' : 'Nas próximas 8 semanas não cabe — tente parcelar em mais vezes ou dar uma entrada menor.';
         const iPay = frases.findIndex(f => f.startsWith('Se paga em'));
         if (iPay >= 0) frases.splice(iPay, 0, frase); else frases.push(frase);
     }
-    _simUltima = { descricao, forma, pagamentos, qtdParcelas: parcelas.length, categoria: val('sim-categoria') || 'outro', credor: val('sim-credor') };
+    _simUltima = { forma, pagamentos, qtdParcelas: parcelas.length };
     const celula = x => `<td class="sim-num${x < 0 ? ' res-neg' : ''}">${escapeHtml(_resBrl(x))}</td>`;
     const linhas = semanasCom.map((s, i) => `<tr><td>${ddmm(s.inicio)} a ${ddmm(s.fim)}</td>${celula(semanasSem[i].saldo_final)}${celula(s.saldo_final)}</tr>`).join('');
     const pode = temAcesso('financeiro.simulador', 'completo');
@@ -15142,8 +15209,7 @@ function limparSimulador() {
     ['sim-desc', 'sim-valor', 'sim-parcelas', 'sim-entrada', 'sim-ganho', 'sim-credor', 'sim-data', 'sim-primeira'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     const cat = document.getElementById('sim-categoria'); if (cat) cat.value = 'outro';
     const av = document.querySelector('input[name="sim-forma"][value="avista"]'); if (av) av.checked = true;
-    _simMostrarErro('');
-    _simSaidaVazia(_SIM_VAZIO);
+    _simPrimeiraManual = false;
     renderSimulador();
 }
 
@@ -15151,7 +15217,13 @@ function limparSimulador() {
 async function lancarSimulacaoNoPagar() {
     if (!temAcesso('financeiro.simulador', 'completo')) return;
     if (_simLancando || !_simUltima) return;
-    const sim = _simUltima;
+    // Descricao, categoria e credor nao mudam a conta: valem os do formulario na hora de lancar.
+    const val = id => (document.getElementById(id)?.value || '').trim();
+    const descricao = val('sim-desc');
+    if (!descricao) { _simMostrarErro('Informe a descrição da compra.'); return; }
+    _simMostrarErro('');
+    const sim = { ..._simUltima, descricao, categoria: val('sim-categoria') || 'outro', credor: val('sim-credor') };
+    const ultima = _simUltima;
     const btn = document.getElementById('sim-lancar');
     _simLancando = true;
     if (btn) btn.disabled = true;
@@ -15160,7 +15232,7 @@ async function lancarSimulacaoNoPagar() {
         const msg = sim.forma === 'avista' ? 'Lançar 1 conta no A Pagar?'
             : sim.forma === 'parcelado' ? `Lançar ${n} parcelas no A Pagar?`
             : `Lançar 1 entrada + ${n} parcelas no A Pagar?`;
-        if (!(await showConfirm(msg, '🧮', 'Lançar')) || _simUltima !== sim) return;
+        if (!(await showConfirm(msg, '🧮', 'Lançar')) || _simUltima !== ultima) return;
         const paiId = Date.now();
         const base = { pedido_id: null, tipo: 'variavel', categoria: sim.categoria, credor_nome: sim.credor, data_pagamento: null, status: 'Pendente' };
         const mesRefDe = venc => (sim.categoria === 'imposto' ? { mes_referencia: _mesRefImposto(venc) } : {});

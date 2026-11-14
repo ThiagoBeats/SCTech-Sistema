@@ -211,3 +211,79 @@ test('sem permissao completa: ve o selo, nao ve Fechar nem Refazer', async ({ pa
     await irPara(page, '2026-09');
     await expect(page.locator('#fech-btn-fechar')).toHaveCount(0);
 });
+
+test('passo a passo nao fecha pelo fundo nem pelo Esc; Cancelar pergunta se ha algo digitado', async ({ page }) => {
+    await abrir(page);
+    await irPara(page, '2026-10');
+    await page.click('#fech-btn-fechar');
+    await modal(page).locator('.fech-extrato').first().fill('1.280,00');
+    await modal(page).click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press('Escape');
+    await expect(modal(page)).toBeVisible();
+    await expect(modal(page).locator('.fech-extrato').first()).toHaveValue('1.280,00');
+    // Cancelar com algo digitado: pergunta; "Continuar fechando" mantem.
+    await modal(page).getByRole('button', { name: 'Cancelar' }).click();
+    await expect(page.locator('#sc-modal-msg')).toHaveText('Cancelar o fechamento? O que você digitou será perdido.');
+    await page.click('#sc-modal-cancel');
+    await expect(modal(page)).toBeVisible();
+    await expect(modal(page).locator('.fech-extrato').first()).toHaveValue('1.280,00');
+    // No passo 3 tambem ha Cancelar; confirmando, fecha.
+    await continuar(page).click();
+    await continuar(page).click();
+    await modal(page).getByRole('button', { name: 'Cancelar' }).click();
+    await page.click('#sc-modal-ok');
+    await expect(modal(page)).toHaveCount(0);
+    // Nada digitado: Cancelar fecha sem perguntar.
+    await page.click('#fech-btn-fechar');
+    await modal(page).getByRole('button', { name: 'Cancelar' }).click();
+    await expect(modal(page)).toHaveCount(0);
+    await expect(page.locator('#sc-modal-msg')).toBeHidden();
+});
+
+test('extrato negativo com milhar: "-1.500" e "−1.500" valem -1500', async ({ page }) => {
+    await abrir(page);
+    await irPara(page, '2026-10');
+    await page.click('#fech-btn-fechar');
+    const linha = modal(page).locator('tr[data-conta="10"]');
+    await linha.locator('.fech-extrato').fill('-1.500');
+    await expect(linha.locator('.fech-dif')).toHaveText('−R$ 2.800,00');
+    await linha.locator('.fech-extrato').fill('\u22121.500');
+    await expect(linha.locator('.fech-dif')).toHaveText('−R$ 2.800,00');
+    await linha.locator('.fech-extrato').fill('-1.234,56');
+    await expect(linha.locator('.fech-dif')).toHaveText('−R$ 2.534,56');
+    expect(await page.evaluate(() => [_valorDigitadoBaixa('1.500'), _valorDigitadoBaixa('1.234,56'), _valorDigitadoBaixa('-1.500'), _valorDigitadoBaixa('-1.234,56'), _valorDigitadoBaixa('\u22121.500')]))
+        .toEqual([1500, 1234.56, -1500, -1234.56, -1500]);
+});
+
+test('pendencias: credor da conta a pagar e atalhos so com permissao de ver A Pagar / A Receber', async ({ page }) => {
+    const cps = [SEED.sc_cp[0], { ...SEED.sc_cp[1], credor_nome: 'Companhia de Luz' }];
+    const crs = SEED.sc_cr.concat([{ id: 2, pedido_id: 102, cliente_nome: 'Cli 2', descricao: 'Pedido 2', valor: 90, data_vencimento: '2026-10-28', data_pagamento: null, status: 'Pendente', parcela_tipo: 'saldo' }]);
+    await abrir(page, { sc_cp: cps, sc_cr: crs }, () => {
+        const u = JSON.parse(localStorage.getItem('sc_usr'));
+        u[0].papel_id = 3;
+        // Vendedor: sem A Pagar; A Receber tirado aqui.
+        u[0].permissoes_extras = { 'financeiro.hoje': { nivel: 'visualizar', acoes_restritas: [] }, 'financeiro.resultado': { nivel: 'completo', acoes_restritas: [] },
+            'financeiro.receber': { nivel: 'sem_acesso', acoes_restritas: [] } };
+        localStorage.setItem('sc_usr', JSON.stringify(u));
+    });
+    await irPara(page, '2026-10');
+    await page.click('#fech-btn-fechar');
+    await expect(modal(page).locator('.fech-link')).toHaveCount(0);
+    await continuar(page).click();
+    const luz = modal(page).locator('.fech-pend-item', { hasText: 'Conta de luz' });
+    await expect(luz).toContainText('Companhia de Luz · vence 20/10/2026');
+    await expect(modal(page).locator('.fech-pend-item', { hasText: 'Cli 2' })).toBeVisible();
+    await expect(modal(page).getByRole('button', { name: 'Abrir A Pagar' })).toHaveCount(0);
+    await expect(modal(page).getByRole('button', { name: 'Abrir A Receber' })).toHaveCount(0);
+});
+
+test('guia de imposto lancada depois do fechamento: linha informativa, sem aviso amarelo', async ({ page }) => {
+    const guia = { id: 9, descricao: 'DAS', categoria: 'imposto', tipo: 'variavel', valor: 30, mes_referencia: '2026-10', data_vencimento: '2026-11-20', data_pagamento: null, status: 'Pendente' };
+    await abrir(page, { sc_fin_fech: [FOTO_OUT], sc_cp: SEED.sc_cp.concat([guia]) });
+    await irPara(page, '2026-10');
+    await expect(page.locator('#res-fechamento .fech-info')).toHaveText('Guia de imposto lançada: R$ 30,00 (estimado era R$ 0,00)');
+    await expect(page.locator('#res-fechamento .fech-mudou')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Ver fechamento' }).click();
+    await expect(page.locator('#doc-modal-paper')).toContainText('Guia de imposto lançada: R$ 30,00 (estimado era R$ 0,00)');
+    await expect(page.locator('#doc-modal-paper')).not.toContainText('mudou depois do fechamento');
+});

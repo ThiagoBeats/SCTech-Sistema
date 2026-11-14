@@ -67,3 +67,20 @@ test('mes para fechar: o anterior, se ha contas e ainda nao foi fechado', () => 
     assert.strictEqual(F.mesParaFechar({ hoje: '2026-11-20', fechamentos: [{ mes: '2026-10' }], temContas: true }), null);
     assert.strictEqual(F.mesParaFechar({ hoje: '2026-11-20', fechamentos: [], temContas: false }), null);
 });
+test('guia lancada depois do fechamento: so o item guia, sem aviso de resultado', () => {
+    const r = { entradas: 1000, saidas: 600, imposto: { valor: 60, estimado: true }, resultado: 400, porGrupo: { fixas: 540, imposto: 60 } };
+    const foto = F.montarFoto({ mes: '2026-10', agoraISO: '2026-11-03T10:00:00.000Z', usuario: 'Ana', r, meta: 0, contas: [],
+        pendencias: {}, sugestoes: [], anotacoes: '' });
+    const comGuia = { entradas: 1000, saidas: 615, imposto: { valor: 75, estimado: false }, resultado: 385, porGrupo: { fixas: 540, imposto: 75 } };
+    assert.deepStrictEqual(F.mudancasDesdeFoto(foto, { r: comGuia, saldos: {} }), [{ tipo: 'guia', antes: 60, agora: 75 }]);
+    // Guia igual a estimativa: nada muda.
+    assert.deepStrictEqual(F.mudancasDesdeFoto(foto, { r: { ...comGuia, saidas: 600, imposto: { valor: 60, estimado: false }, resultado: 400 }, saldos: {} }), []);
+});
+test('guia lancada + CR com data retroativa: resultado e guia', () => {
+    const r = { entradas: 1000, saidas: 600, imposto: { valor: 60, estimado: true }, resultado: 400, porGrupo: {} };
+    const foto = F.montarFoto({ mes: '2026-10', agoraISO: '2026-11-03T10:00:00.000Z', usuario: 'Ana', r, meta: 0, contas: [],
+        pendencias: {}, sugestoes: [], anotacoes: '' });
+    const agora = { entradas: 1200, saidas: 615, imposto: { valor: 75, estimado: false }, resultado: 585, porGrupo: {} };
+    assert.deepStrictEqual(F.mudancasDesdeFoto(foto, { r: agora, saldos: {} }),
+        [{ tipo: 'resultado', antes: 400, agora: 585 }, { tipo: 'guia', antes: 60, agora: 75 }]);
+});

@@ -77,10 +77,26 @@ test('sem permissao do Resultado nao mostra', async ({ page }) => {
     await expect(page.locator('#hoje-fechamento')).toHaveCount(0);
 });
 
-test('so visualizar: Fechar agora leva ao Resultado sem abrir o passo a passo', async ({ page }) => {
+test('so visualizar: o botao e "Ver" e leva ao Resultado sem abrir o passo a passo', async ({ page }) => {
     await abrir(page, {}, semCompleto);
-    await page.locator('#hoje-fechamento').getByRole('button', { name: 'Fechar agora' }).click();
+    await expect(page.locator('#hoje-fechamento').getByRole('button', { name: 'Fechar agora' })).toHaveCount(0);
+    await page.locator('#hoje-fechamento').getByRole('button', { name: 'Ver', exact: true }).click();
     await expect(page.locator('#fin-resultado')).toBeVisible();
     await expect(page.locator('#res-mes')).toHaveValue('2026-10');
     await expect(page.locator('#fech-modal')).toHaveCount(0);
+});
+
+test('guia de imposto lancada depois do fechamento: linha informativa, sem aviso de mudanca', async ({ page }) => {
+    const guia = { id: 9, descricao: 'DAS', categoria: 'imposto', tipo: 'variavel', valor: 30, mes_referencia: '2026-10', data_vencimento: '2026-11-20', data_pagamento: null, status: 'Pendente' };
+    await abrir(page, { sc_fin_fech: [FOTO_OUT], sc_cp: [guia] });
+    const bloco = page.locator('#hoje-fechamento');
+    await expect(bloco).toContainText('Guia de imposto lançada: R$ 30,00 (estimado era R$ 0,00)');
+    await expect(bloco).not.toContainText('mudou depois do fechamento');
+    await expect(page.locator('.hoje-fechamento-mudou')).toHaveCount(0);
+});
+
+test('conta a pagar mostra o credor (credor_nome)', async ({ page }) => {
+    const cp = { id: 7, descricao: 'Tecido', categoria: 'tecido', tipo: 'variavel', valor: 120, data_vencimento: '2026-11-03', data_pagamento: null, status: 'Pendente', credor_nome: 'Loja X' };
+    await abrir(page, { sc_fin_fech: [FOTO_OUT], sc_cp: [cp] });
+    await expect(page.locator('[data-grupo="pagar-proximos"]')).toContainText('Loja X · vence 03/11/2026');
 });

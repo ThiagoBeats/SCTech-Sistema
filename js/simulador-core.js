@@ -42,6 +42,7 @@
         if (forma === 'avista') return { ok: true, pagamentos: [{ data: dataCompra, valor: v, rotulo: 'À vista' }] };
         const np = Number(n);
         if (!Number.isInteger(np) || np < 2 || np > 48) return { ok: false, erro: 'Parcelas: de 2 a 48.' };
+        if (String(dataPrimeira) < String(dataCompra)) return { ok: false, erro: 'A 1ª parcela não pode ser antes da data da compra.' };
         if (forma === 'parcelado') return { ok: true, pagamentos: parcelas(v, np, dataPrimeira) };
         const e = Number(entrada);
         if (!(e > 0) || !(e < v)) return { ok: false, erro: 'A entrada precisa ser maior que zero e menor que o valor.' };
@@ -73,6 +74,10 @@
             cor = 'amarelo';
             frases.push('O caixa fica em ' + moeda(menor.saldo) + ' na semana de ' + ddmm(menor.inicio) + '.');
         }
+        // Caixa ja negativo mesmo sem a compra: a culpa nao e so da compra (e nao ha "melhor data").
+        const negSem = (semanasSem || []).find(s => s.saldo_final < 0);
+        const jaNegativoSem = negSem ? negSem.inicio : null;
+        if (jaNegativoSem) frases.push('O caixa já fica negativo sem a compra na semana de ' + ddmm(jaNegativoSem) + '.');
         if (temParcelaAlem) {
             if (medio == null) frases.push('Sem histórico para comparar a parcela com o que sobra por mês.');
             else if (parcelaMensal > medio) {
@@ -86,7 +91,7 @@
             frases.push('Se paga em ' + paybackMeses + (paybackMeses === 1 ? ' mês.' : ' meses.'));
         }
         const titulo = cor === 'verde' ? 'Cabe' : cor === 'amarelo' ? 'Cabe, mas aperta' : 'Não cabe agora';
-        return { cor, titulo, frases, menor, paybackMeses };
+        return { cor, titulo, frases, menor, paybackMeses, jaNegativoSem };
     }
 
     function melhorData({ hoje, pagamentos, prever }) {

@@ -116,9 +116,18 @@
     function mudancasDesdeFoto(foto, { r, saldos }) {
         const out = [];
         const n = foto.numeros;
-        const difere = centavos(n.entradas) !== centavos(r.entradas) || centavos(n.saidas) !== centavos(r.saidas) ||
-            centavos(n.imposto) !== centavos(r.imposto.valor) || centavos(n.resultado) !== centavos(r.resultado);
+        // Guia de imposto lancada depois do fechamento (estimado -> lancado): nao e "mudanca";
+        // compara o resto do resultado (entradas e saidas sem o imposto) e informa a guia a parte.
+        const guiaChegou = n.imposto_estimado === true && r.imposto.estimado === false;
+        const difere = guiaChegou
+            ? centavos(n.entradas) !== centavos(r.entradas) ||
+                centavos(n.saidas) - centavos(n.imposto) !== centavos(r.saidas) - centavos(r.imposto.valor)
+            : centavos(n.entradas) !== centavos(r.entradas) || centavos(n.saidas) !== centavos(r.saidas) ||
+                centavos(n.imposto) !== centavos(r.imposto.valor) || centavos(n.resultado) !== centavos(r.resultado);
         if (difere) out.push({ tipo: 'resultado', antes: n.resultado, agora: r.resultado });
+        if (guiaChegou && centavos(n.imposto) !== centavos(r.imposto.valor)) {
+            out.push({ tipo: 'guia', antes: n.imposto, agora: r.imposto.valor });
+        }
         (foto.contas || []).forEach(c => {
             if (c.extrato == null || !saldos || saldos[c.conta_id] == null) return;
             const antes = (Number(c.esperado) || 0) + (c.acao === 'ajuste' ? Number(c.diferenca) || 0 : 0);

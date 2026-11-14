@@ -48,3 +48,18 @@ test('resultado medio', () => {
     assert.strictEqual(S.resultadoMedio([100, 200, 400]), 233.33);
     assert.strictEqual(S.resultadoMedio([]), null);
 });
+test('1a parcela antes da data da compra e recusada', () => {
+    const erro = 'A 1ª parcela não pode ser antes da data da compra.';
+    assert.strictEqual(S.pagamentosDaCompra({ valor: 100, forma: 'parcelado', parcelas: 2, dataCompra: '2026-11-14', dataPrimeira: '2026-11-13' }).erro, erro);
+    assert.strictEqual(S.pagamentosDaCompra({ valor: 100, forma: 'entrada', entrada: 10, parcelas: 2, dataCompra: '2026-11-14', dataPrimeira: '2026-11-01' }).erro, erro);
+    assert.ok(S.pagamentosDaCompra({ valor: 100, forma: 'parcelado', parcelas: 2, dataCompra: '2026-11-14', dataPrimeira: '2026-11-14' }).ok);
+});
+test('caixa ja negativo sem a compra: frase da primeira semana negativa sem a compra', () => {
+    const r = S.veredito({ semanasSem: sem([100, -50, -80]), semanasCom: sem([-900, -1050, -1080]), folga: 0, parcelaMensal: 0, temParcelaAlem: false, resultadoMedio: null, ganhoMensal: 0, valorTotal: 1000 });
+    assert.strictEqual(r.cor, 'vermelho');
+    assert.strictEqual(r.jaNegativoSem, '2026-11-21');
+    assert.ok(r.frases.includes('O caixa já fica negativo sem a compra na semana de 21/11.'));
+    const ok = S.veredito({ semanasSem: sem([100]), semanasCom: sem([-900]), folga: 0, parcelaMensal: 0, temParcelaAlem: false, resultadoMedio: null, ganhoMensal: 0, valorTotal: 1000 });
+    assert.strictEqual(ok.jaNegativoSem, null);
+    assert.ok(!ok.frases.some(f => f.startsWith('O caixa já fica negativo')));
+});

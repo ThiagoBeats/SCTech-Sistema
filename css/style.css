@@ -2390,6 +2390,7 @@ body.galped-aberta { overflow: hidden; }
 html[data-theme="dark"] .hoje-orcamento-linha { background: rgba(244,57,39,0.14); color: #F79B90; }
 .hoje-fechamento-linha { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; background: var(--white); color: var(--dark); border: 1px solid var(--border); border-left: 4px solid var(--primary); border-radius: 6px; padding: 8px 12px; margin-bottom: 10px; font-size: 13px; font-weight: 600; }
 .hoje-fechamento-mudou { border-left-color: var(--danger); }
+.hoje-fechamento-info { border-left-color: var(--border); font-weight: 500; }
 .hoje-item { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .hoje-item:last-child { border-bottom: 0; }
 .hoje-item-desc { flex: 1; min-width: 140px; }
@@ -2437,6 +2438,8 @@ html[data-theme="dark"] .fin-a-cair { color: #F7DE86; }
 .fech-mudou { margin-top: 10px; background: #FFF6DB; color: #7A4A00; border-left: 4px solid #B26A00; border-radius: 6px; padding: 8px 12px; font-size: 13px; font-weight: 600; }
 .fech-mudou div + div { margin-top: 4px; }
 html[data-theme="dark"] .fech-mudou { background: rgba(247,222,134,0.12); color: #F7DE86; }
+.fech-info { margin-top: 10px; background: var(--white); color: var(--dark); border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: 6px; padding: 8px 12px; font-size: 13px; }
+.fech-info div + div { margin-top: 4px; }
 .fech-overlay { z-index: 9500; }
 .fech-box { text-align: left; max-width: 640px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 22px 22px 18px; background: var(--white); color: var(--dark); }
 .fech-titulo { margin: 0 0 2px; font-size: 17px; }
