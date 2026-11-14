@@ -351,7 +351,9 @@ function formatPedidoId(id) {
     return String(id);
 }
 
-function syncDB() {
+// Grava tudo no navegador; falta de espaco sobe como erro (quem precisa desfazer
+// algo em caso de falha, como a migracao e o importador, usa esta).
+function _syncDBBruto() {
     localStorage.setItem('sc_cli',  JSON.stringify(db.clientes));
     localStorage.setItem('sc_cat',  JSON.stringify(db.catalogo));
     localStorage.setItem('sc_ped',  JSON.stringify(db.pedidos));
@@ -375,6 +377,26 @@ function syncDB() {
     localStorage.setItem('sc_pap',  JSON.stringify(db.papeis));
     localStorage.setItem('sc_usr',  JSON.stringify(db.usuarios));
     localStorage.setItem('sc_imp_perfis', JSON.stringify(db.import_perfis));
+}
+
+function _erroDeEspaco(e) {
+    return !!e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22 || e.code === 1014);
+}
+const MSG_SEM_ESPACO = 'Não foi possível salvar: o espaço do navegador acabou. Baixe uma cópia de segurança e libere espaço.';
+let _avisoSemEspacoMostrado = false;
+
+// Salva sem quebrar a tela: se o espaco do navegador acabou, avisa uma vez e segue.
+function syncDB() {
+    try { _syncDBBruto(); return true; }
+    catch (e) {
+        if (!_erroDeEspaco(e)) throw e;
+        console.warn('Sem espaço no navegador para salvar.', e);
+        if (!_avisoSemEspacoMostrado) {
+            _avisoSemEspacoMostrado = true;
+            if (typeof showAlert === 'function') showAlert(MSG_SEM_ESPACO, '⚠️'); else alert(MSG_SEM_ESPACO);
+        }
+        return false;
+    }
 }
 
 // --- CONFIGURAÇÕES DA EMPRESA ---
@@ -1285,7 +1307,7 @@ function toastReload(msg, tipo = 'success') {
     sessionStorage.setItem('sc_pending_toast', JSON.stringify({ msg, tipo }));
 }
 function salvarERecarregar(msg = 'Salvo com sucesso!') {
-    syncDB(); toastReload(msg); window.location.reload();
+    _syncDBBruto(); toastReload(msg); window.location.reload();
 }
 
 // --- AUTENTICAÇÃO E CONTROLE DE ACESSO ---
@@ -7717,7 +7739,10 @@ function importarDados(event) {
             db.meios_pag      = dados.meios_pag      || [];
             db.movimentos_fin = dados.movimentos_fin || [];
             db.fechamentos_fin = Array.isArray(dados.fechamentos_fin) ? dados.fechamentos_fin : [];
-            syncDB();
+            // Primeiro libera o que era dos dados anteriores (copia, revisao e avisos):
+            // assim as gravacoes abaixo tem mais espaco e a marca da Fase 0 nao se perde.
+            ['sc_fin_migracao', 'sc_fin_backup_fase0', 'sc_fin_revisar', 'sc_fin_backup_falhou', 'sc_fin_migracao_erro'].forEach(k => localStorage.removeItem(k));
+            _syncDBBruto();
             // Ajustes por mes do Resultado: backup antigo (sem eles) volta ao padrao vazio.
             ['fin_metas', 'fin_orcamento_mes'].forEach(k => {
                 const o = dados[k];
@@ -7726,14 +7751,15 @@ function importarDados(event) {
             // Backup antigo (sem empresa/formas) mantem as atuais.
             if (dados.empresa && typeof dados.empresa === 'object') localStorage.setItem('sc_empresa', JSON.stringify(dados.empresa));
             if (Array.isArray(dados.formas_pag) && dados.formas_pag.length) localStorage.setItem('sc_formas_pag', JSON.stringify(dados.formas_pag));
-            // Copia, revisao e avisos eram dos dados anteriores. Backup antigo (sem a
-            // marca fin_fase0) passa pela migracao do Financeiro ao recarregar; com a
-            // marca, ja esta migrado.
-            ['sc_fin_migracao', 'sc_fin_backup_fase0', 'sc_fin_revisar', 'sc_fin_backup_falhou', 'sc_fin_migracao_erro'].forEach(k => localStorage.removeItem(k));
+            // Backup antigo (sem a marca fin_fase0) passa pela migracao do Financeiro
+            // ao recarregar; com a marca, ja esta migrado.
             if (dados.fin_fase0) localStorage.setItem('sc_fin_migracao', '1');
             toastReload('Dados importados com sucesso!', 'info');
             window.location.reload();
-        } catch { await showAlert('Erro ao ler o arquivo. Certifique-se que é um backup válido do SCTech.', '❌'); }
+        } catch (err) {
+            if (_erroDeEspaco(err)) await showAlert('A importação não foi concluída. ' + MSG_SEM_ESPACO, '⚠️');
+            else await showAlert('Erro ao ler o arquivo. Certifique-se que é um backup válido do SCTech.', '❌');
+        }
     };
     reader.readAsText(file);
     event.target.value = '';
@@ -12356,12 +12382,14 @@ function _migrarFinanceiroPedidos() {
         (p.valor || 0) > 0
     );
     if (!pendentes.length) return;
+    const usadosCR = new Set(db.contas_receber.map(c => c.id));
     let nextId = Date.now();
+    const novoIdCR = () => { while (usadosCR.has(nextId)) nextId++; usadosCR.add(nextId); return nextId; };
     pendentes.forEach(ped => {
         if (normalizarStatus(ped.status) === 'Instalado' && (ped.valor_recebido || 0) >= (ped.valor || 0)) {
             const dataPgto = dataLocal(ped.data_instalado) || hojeLocal();
             db.contas_receber.push({
-                id: nextId++,
+                id: novoIdCR(),
                 pedido_id: ped.id,
                 cliente_nome: ped.clienteNome || '',
                 descricao: `Pagamento — Pedido #${formatPedidoId(ped.id)}`,
@@ -12379,7 +12407,7 @@ function _migrarFinanceiroPedidos() {
                     ? (ped.data_entrega || FinanceiroCore.somarDias(hoje, 30))
                     : FinanceiroCore.somarDias(hoje, parcela.dias);
                 db.contas_receber.push({
-                    id: nextId++,
+                    id: novoIdCR(),
                     pedido_id: ped.id,
                     cliente_nome: ped.clienteNome || '',
                     descricao: `${parcela.descricao} — Pedido #${formatPedidoId(ped.id)}`,
@@ -12468,7 +12496,7 @@ function _migrarFinanceiroFase0({ semCopia = false } = {}) {
         plano.revisar.forEach(r => { if (!r.sem_lancamento) tocados.add(r.pedido_id); });
         tocados.forEach(sincronizarRecebidoPedido);
         try {
-            syncDB();
+            _syncDBBruto();
             if (revisar.length) localStorage.setItem('sc_fin_revisar', JSON.stringify(revisar));
             localStorage.setItem(CHAVE_FIN_MIGRACAO, '1');
         } catch (e) {
@@ -12520,6 +12548,7 @@ function renderAvisoCopiaFinanceiro() {
         <span style="font-size:18px;flex-shrink:0">💾</span>
         <div style="flex:1">
             Há uma cópia de segurança dos dados de antes da atualização do Financeiro guardada neste navegador.
+            <strong>Esta cópia é parcial: serve para consulta, não para Importar.</strong>
             <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
                 <button class="btn btn-outline btn-sm" onclick="baixarCopiaFinanceiro()">Baixar cópia</button>
                 <button class="btn btn-outline btn-sm btn-danger" onclick="descartarCopiaFinanceiro()">Descartar cópia</button>
@@ -12535,7 +12564,17 @@ function baixarCopiaEMigrarFinanceiro() {
     _baixarJSON(_dadosExportacao(false), `sctech_backup_antes_fase0_${hojeLocal()}.json`);
     try { _migrarFinanceiroFase0({ semCopia: true }); }
     catch (e) { console.error('Migração do Financeiro falhou:', e); _gravarSemFalhar(CHAVE_FIN_MIGRACAO_ERRO, String(Date.now())); }
-    setTimeout(() => window.location.reload(), 300);
+    // Da tempo de o download comecar; quem quiser pode recarregar antes.
+    _avisoRecarregar('Cópia baixada. Os dados do Financeiro foram atualizados.');
+    setTimeout(() => window.location.reload(), 1500);
+}
+
+function _avisoRecarregar(msg) {
+    let el = document.getElementById('sc-aviso-recarregar');
+    if (!el) { el = document.createElement('div'); el.id = 'sc-aviso-recarregar'; document.body.appendChild(el); }
+    el.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:10000;background:#fff;border:1px solid #ccc;border-radius:8px;padding:12px 16px;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;gap:12px;align-items:center;max-width:90vw';
+    el.innerHTML = '<span></span><button class="btn btn-success btn-sm" type="button" onclick="window.location.reload()">Recarregar agora</button>';
+    el.firstChild.textContent = msg + ' A página recarrega em instantes.';
 }
 
 function baixarCopiaFinanceiro() {
@@ -12544,6 +12583,7 @@ function baixarCopiaFinanceiro() {
     let dados;
     try { dados = JSON.parse(copia); } catch (e) { dados = copia; }
     _baixarJSON(dados, `sctech_copia_financeiro_${hojeLocal()}.json`);
+    toast('Esta cópia é parcial: serve para consulta, não para Importar.', 'warning', 6000);
 }
 
 async function descartarCopiaFinanceiro() {

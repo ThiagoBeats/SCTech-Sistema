@@ -6,19 +6,19 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 ## Da Fase 0 (branch `feat/financeiro-fase0`)
 
 ### Dados e dinheiro
-- [ ] **Importar backup com navegador quase cheio**: `importarDados` grava `sc_empresa`/`sc_formas_pag` antes de limpar as chaves da Fase 0. Se a gravação falhar por falta de espaço, um backup antigo pode não ser corrigido. Correção: limpar as chaves antes ou proteger as gravações.
+- [x] **Importar backup com navegador quase cheio**: `importarDados` grava `sc_empresa`/`sc_formas_pag` antes de limpar as chaves da Fase 0. Se a gravação falhar por falta de espaço, um backup antigo pode não ser corrigido. Correção: limpar as chaves antes ou proteger as gravações. **Feito:** as chaves da Fase 0 são limpas antes das gravações; falta de espaço na importação avisa em vez de falhar em silêncio.
 - [ ] **Valor digitado zerado no "Confirmar pagamento"**: pedido com `financeiro_gerado`, sem parcelas e com `valor_recebido` digitado (ex.: pedido de valor 0, ou parcelas removidas antes da Fase 0) tem o valor zerado ao confirmar.
 - [ ] **Reaprovação com valor pago maior que o novo valor do pedido**: não gera nada e não avisa do pagamento a mais.
 - [ ] **`pedido_cancelado` fica marcado** na comissão paga quando o pedido volta a ser aprovado e chega de novo em Instalado. Limpar a marca nesse momento.
 - [ ] **Comissão de arquiteto antiga (`comissao_rt`) pendente** não aparece para pagar na tela de Vendedores (só pelo A Pagar).
 - [ ] **Excluir pedido de compra** deixa as contas a pagar com `pedido_compra_id` apontando para um PC que não existe.
 - [ ] **Vincular nota a conta existente** não atualiza o `tipo_lancamento` da conta.
-- [ ] **`_migrarFinanceiroPedidos` (código antigo)** ainda cria ids com `nextId++` sem checar ids já usados, e agora roda em toda página.
+- [x] **`_migrarFinanceiroPedidos` (código antigo)** ainda cria ids com `nextId++` sem checar ids já usados, e agora roda em toda página. **Feito:** ids novos pulam os já usados em contas a receber.
 
 ### Cópia de segurança
-- [ ] **Recarregar 300 ms depois do download** da cópia: com cópias grandes, alguns navegadores podem perder o download.
-- [ ] **"Baixar cópia"** baixa a cópia parcial (só serve para consulta, não para Importar). Deixar isso claro no aviso.
-- [ ] **Falta de espaço fora da migração**: só a migração trata erro de espaço; os outros `syncDB` falham como antes.
+- [x] **Recarregar 300 ms depois do download** da cópia: com cópias grandes, alguns navegadores podem perder o download. **Feito:** espera 1500 ms e mostra o botão "Recarregar agora".
+- [x] **"Baixar cópia"** baixa a cópia parcial (só serve para consulta, não para Importar). Deixar isso claro no aviso. **Feito:** aviso "Esta cópia é parcial: serve para consulta, não para Importar." no aviso da cópia e ao baixar.
+- [x] **Falta de espaço fora da migração**: só a migração trata erro de espaço; os outros `syncDB` falham como antes. **Feito:** `syncDB` captura o erro de espaço, avisa uma vez e não quebra a tela (migração e importador seguem tratando o erro por conta própria).
 
 ### Telas e textos
 - [ ] Confirmar pagamento com todas as parcelas já pagas abre a janela vazia (melhor uma confirmação simples).
