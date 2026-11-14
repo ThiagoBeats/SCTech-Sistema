@@ -108,3 +108,15 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [ ] Previsto até o fim do mês: a taxa de repasses de cartão já baixados e ainda a cair não é tirada do faturamento previsto, então o imposto estimado fica um pouco maior (ex.: taxa de R$ 30 a 6% → R$ 1,80).
 - [ ] Ponto de equilíbrio: despesa fixa antiga (sem periodicidade) + a mesma despesa lançada à mão como conta avulsa no mesmo mês contam duas vezes.
 - [ ] Previsto até o fim do mês: transferências futuras entre contas entram no faturamento previsto e aumentam o imposto estimado.
+
+## Da Fase 3
+- [ ] Sugestão de alta de grupo pode incluir o Imposto (repete a sugestão da guia); excluir o imposto da comparação.
+- [ ] Conta sem data de saldo inicial fica fora da conferência do fechamento.
+- [ ] Fechar o passo a passo clicando fora ou com Esc perde o que foi digitado; pedir confirmação.
+- [ ] Atalhos do passo 2 (Abrir A Pagar/A Receber) não conferem permissão.
+- [ ] Comparação com mês anterior mostra "+0%" quando a diferença é zero.
+- [ ] Simulador: editar descrição/categoria/credor depois de Simular não muda o que é lançado; limpar o resultado ao editar o formulário.
+- [ ] Simulador: resultado antigo continua na tela ao voltar para a aba; limpar ao entrar.
+- [ ] Simulador sem conta ativa simula a partir de saldo 0, sem aviso.
+- [ ] Parcelas do simulador param no último dia do mês (31 → 28/02); o parcelado do A Pagar pula para o mês seguinte. Unificar a regra.
+- [ ] Testes que faltam: alta de grupo no limite (30% / R$ 100), ajuste de entrada e "Deixar anotado" no fechamento, duplo clique em Lançar chamando a função duas vezes, migração da permissão em permissões extras do usuário.
