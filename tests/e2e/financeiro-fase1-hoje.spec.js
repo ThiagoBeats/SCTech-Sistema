@@ -145,7 +145,7 @@ test('cobrar na tela Hoje marca "cobrado hoje" e o selo vem salvo', async ({ pag
         sc_cli: [{ id: 1, nome: 'Atrasado Rec', tel: '(11) 98765-4321' }],
         sc_cr: [cr(1, 'Atrasado Rec', somarDias(HOJE, -3))]
     });
-    await page.evaluate(() => { window.__abertos = []; window.open = (u, t) => { window.__abertos.push(u); return null; }; });
+    await page.evaluate(() => { window.__abertos = []; window.open = (u, t) => { window.__abertos.push(u); return {}; }; });
     const grupo = page.locator('#hoje-tarefas .hoje-grupo[data-grupo="receber-atrasados"]');
     await expect(grupo).not.toContainText('cobrado hoje');
     await grupo.locator('button', { hasText: 'Cobrar' }).click();

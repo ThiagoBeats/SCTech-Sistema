@@ -135,6 +135,23 @@ test('normalizarTelefone', () => {
     assert.strictEqual(C.normalizarTelefone(''), null);
     assert.strictEqual(C.normalizarTelefone('1234'), null);
 });
+test('normalizarTelefone: zero de tronco', () => {
+    assert.strictEqual(C.normalizarTelefone('041 9999-0000'), '554199990000');
+    assert.strictEqual(C.normalizarTelefone('(041) 99999-0000'), '5541999990000');
+    assert.strictEqual(C.normalizarTelefone('5541999990000'), '5541999990000');
+    assert.strictEqual(C.normalizarTelefone('0'), null);
+});
+test('clienteDaCobranca: id antes do nome; homonimo nao chuta', () => {
+    const clientes = [{ id: 1, nome: 'Ana', tel: '111' }, { id: 2, nome: 'Ana', tel: '222' }, { id: 3, nome: 'Bia', tel: '333' }, { id: 4, nome: 'Bia', tel: '444' }, { id: 5, nome: 'Cleo', tel: '555' }];
+    const pedidos = [{ id: 10, clienteId: 2, clienteNome: 'Ana' }, { id: 11, clienteNome: 'Bia' }, { id: 12, clienteNome: 'Cleo' }];
+    assert.strictEqual(C.clienteDaCobranca({ pedido_id: 10, cliente_nome: 'Ana' }, pedidos, clientes).cliente.id, 2);
+    assert.strictEqual(C.clienteDaCobranca({ pedido_id: 99, clienteId: 1, cliente_nome: 'Ana' }, pedidos, clientes).cliente.id, 1);
+    const h = C.clienteDaCobranca({ pedido_id: 11, cliente_nome: 'Bia' }, pedidos, clientes);
+    assert.strictEqual(h.cliente, null);
+    assert.strictEqual(h.ambiguo, true);
+    assert.strictEqual(C.clienteDaCobranca({ pedido_id: 12, cliente_nome: ' cleo ' }, pedidos, clientes).cliente.id, 5);
+    assert.strictEqual(C.clienteDaCobranca({ pedido_id: 99, cliente_nome: 'Zed' }, pedidos, clientes).cliente, null);
+});
 test('montarMensagem e linkWhatsApp', () => {
     const m = C.montarMensagem(C.MENSAGEM_COBRANCA_PADRAO, { cliente: 'Maria', empresa: 'SC', valor: 'R$ 2.000,00', pedido: '#26015', vencimento: '10/11/2026' });
     assert.ok(m.includes('Olá, Maria!'));

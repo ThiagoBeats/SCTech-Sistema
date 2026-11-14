@@ -16157,11 +16157,10 @@ async function cobrarNoWhatsApp(crId) {
     const cr = db.contas_receber.find(c => CaixaCore.mesmoId(c.id, crId));
     if (!cr) return;
     const ped = db.pedidos.find(p => CaixaCore.mesmoId(p.id, cr.pedido_id));
-    const nomeCli = (s) => String(s || '').trim().toLowerCase();
-    let cli = ped && ped.clienteId != null ? db.clientes.find(c => CaixaCore.mesmoId(c.id, ped.clienteId)) : null;
-    if (!cli) cli = db.clientes.find(c => nomeCli(c.nome) === nomeCli(cr.cliente_nome));
-    const tel = CaixaCore.normalizarTelefone(cli && cli.tel);
-    if (!tel) { showAlert('Cliente sem telefone no cadastro.'); return; }
+    const achado = CaixaCore.clienteDaCobranca(cr, db.pedidos, db.clientes);
+    const tel = CaixaCore.normalizarTelefone(achado.cliente && achado.cliente.tel);
+    // Nome repetido em dois clientes: abre o WhatsApp sem numero em vez de chutar o primeiro.
+    if (!tel && !achado.ambiguo) { showAlert('Cliente sem telefone no cadastro.'); return; }
     const emp = getEmpresa();
     const venc = String(cr.data_vencimento).split('-').reverse().join('/');
     const msg = CaixaCore.montarMensagem(emp.mensagem_cobranca || CaixaCore.MENSAGEM_COBRANCA_PADRAO, {
@@ -16171,7 +16170,9 @@ async function cobrarNoWhatsApp(crId) {
         pedido: '#' + formatPedidoId(cr.pedido_id),
         vencimento: venc
     });
-    window.open(CaixaCore.linkWhatsApp(tel, msg), '_blank');
+    const link = tel ? CaixaCore.linkWhatsApp(tel, msg) : 'https://wa.me/?text=' + encodeURIComponent(msg);
+    const janela = window.open(link, '_blank');
+    if (!janela) { showAlert('O navegador bloqueou a janela do WhatsApp. Libere os pop-ups e tente de novo.'); return; }
     cr.ultima_cobranca = hojeLocal();
     syncDB();
     renderContasReceber();

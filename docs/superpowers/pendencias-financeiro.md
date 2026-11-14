@@ -53,8 +53,8 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [x] `dividirParcela` compara o valor pago arredondado com o valor cru da parcela. **Feito:** compara em centavos.
 - [x] Data vazia vira hoje; `baixarContasReceber` não valida por conta própria. **Feito:** a baixa recusa data vazia/futura e `baixarContasReceber`/`baixarContasPagar` validam data e valor por conta própria (devolvem `{ ok, erro }`).
 - [x] Conta a receber/pagar sem `data_vencimento` cai em "hoje" sem aviso; item com valor 0 marca "inclui atrasados". **Feito:** mostra "sem vencimento", fica fora de Hoje e da previsão e não é atrasada; valor 0 não marca "inclui atrasados".
-- [ ] Telefone com zero de tronco não é limpo na cobrança; cobrança casa por nome com o primeiro cliente homônimo.
-- [ ] "Cobrado hoje" é marcado mesmo se o navegador bloquear o popup do WhatsApp.
+- [x] Telefone com zero de tronco não é limpo na cobrança; cobrança casa por nome com o primeiro cliente homônimo. Corrigido: zero de tronco removido; cliente achado pelo id (conta ou pedido) e, sem id, pelo nome; nome repetido abre o WhatsApp sem número.
+- [x] "Cobrado hoje" é marcado mesmo se o navegador bloquear o popup do WhatsApp. Corrigido: se o navegador bloqueia, avisa e não marca.
 - [x] Entrada vazia: a visibilidade do saldo usa 50% e o salvar usa o plano. **Feito:** visibilidade do saldo usa a entrada do plano, como o salvar.
 - [x] Meio apagado reabre como "a definir"; entrada 0% ainda mostra o meio da entrada. **Feito:** meio apagado reabre com "escolha o meio (o anterior foi removido)"; entrada 0% esconde o meio da entrada e não grava meio.
 - [x] Os padrões do cartão estão duplicados (`CARTAO_PADRAO_CFG` e CaixaCore). **Feito:** só `CaixaCore.CARTAO_PADRAO`; `CARTAO_PADRAO_CFG` saiu.

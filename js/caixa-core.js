@@ -221,10 +221,29 @@
     }
 
     function normalizarTelefone(tel) {
-        const d = String(tel == null ? '' : tel).replace(/\D/g, '');
+        // Tira o zero de tronco (041 9999-0000) antes de contar os digitos.
+        const d = String(tel == null ? '' : tel).replace(/\D/g, '').replace(/^0+/, '');
         if (d.length === 10 || d.length === 11) return '55' + d;
         if ((d.length === 12 || d.length === 13) && d.startsWith('55')) return d;
         return null;
+    }
+
+    // Acha o cliente da conta a receber: pelo id (da conta ou do pedido) e so sem id pelo nome.
+    // Nome que serve para mais de um cliente nao e adivinhado: devolve { cliente: null, ambiguo: true }.
+    function clienteDaCobranca(cr, pedidos, clientes) {
+        const lista = clientes || [];
+        const ped = (pedidos || []).find(p => mesmoId(p.id, cr && cr.pedido_id));
+        const id = cr && cr.clienteId != null ? cr.clienteId : (cr && cr.cliente_id != null ? cr.cliente_id : (ped ? ped.clienteId : null));
+        if (id != null) {
+            const porId = lista.find(c => mesmoId(c.id, id));
+            if (porId) return { cliente: porId, ambiguo: false };
+        }
+        const nome = s => String(s || '').trim().toLowerCase();
+        const alvo = nome(cr && cr.cliente_nome);
+        if (!alvo) return { cliente: null, ambiguo: false };
+        const achados = lista.filter(c => nome(c.nome) === alvo);
+        if (achados.length === 1) return { cliente: achados[0], ambiguo: false };
+        return { cliente: null, ambiguo: achados.length > 1 };
     }
 
     function montarMensagem(template, dados) {
@@ -237,7 +256,7 @@
         return 'https://wa.me/' + telefone + '?text=' + encodeURIComponent(mensagem || '');
     }
 
-    const api = { contaAceitaMovimento, saldoConta, saldoContaAte, saldosHoje, repassesCartao, dividirParcela, arredondar, somarDias, mesmoId, previsaoSemanal, primeiraSemanaNegativa, tarefasHoje, normalizarTelefone, montarMensagem, linkWhatsApp, MENSAGEM_COBRANCA_PADRAO, CARTAO_PADRAO, lerNumero };
+    const api = { contaAceitaMovimento, saldoConta, saldoContaAte, saldosHoje, repassesCartao, dividirParcela, arredondar, somarDias, mesmoId, previsaoSemanal, primeiraSemanaNegativa, tarefasHoje, normalizarTelefone, clienteDaCobranca, montarMensagem, linkWhatsApp, MENSAGEM_COBRANCA_PADRAO, CARTAO_PADRAO, lerNumero };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.CaixaCore = api;
