@@ -758,7 +758,7 @@ function renderContasCfg() {
                         oninput="_contasRascunho[${i}].data = this.value"></div>
                 <button type="button" class="btn btn-outline btn-sm btn-danger" onclick="removerContaCfg(${i})" title="Remover conta">✕</button>
             </div>
-            ${c.ativo === false ? `<div class="conta-desativada" style="margin-top:8px;font-size:12px;color:var(--muted)">Conta desativada: não entra nos saldos nem na previsão (o histórico continua no Extrato).
+            ${c.ativo === false ? `<div class="conta-desativada" style="margin-top:8px;font-size:12px;color:var(--muted)">Conta desativada (clique em Salvar contas para valer): não entra nos saldos nem na previsão; o histórico continua no Extrato.
                 <button type="button" class="btn btn-outline btn-sm" onclick="reativarContaCfg(${i})">Reativar</button></div>` : ''}
             ${c.tipo === 'maquininha' ? `
             <div class="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:8px">
@@ -787,6 +787,8 @@ function mudarTipoContaCfg(i, tipo) {
     renderContasCfg();
 }
 
+const MSG_CONTA_COM_MOVIMENTOS = 'Esta conta tem movimentos e não pode ser excluída. Você pode desativá-la: ela sai dos saldos e da previsão, e o histórico continua no Extrato.';
+
 // A conta tem historico: algum movimento ou alguma conta a receber/pagar aponta para ela.
 function _contaTemMovimentos(id) {
     if (id == null) return false;
@@ -799,7 +801,7 @@ async function removerContaCfg(i) {
     const c = _contasRascunho[i];
     if (!c) return;
     if (_contaTemMovimentos(c.id)) {
-        if (await showConfirm('Esta conta tem movimentos e não pode ser excluída. Você pode desativá-la: ela sai dos saldos e da previsão, e o histórico continua no Extrato.', '⚠️', 'Desativar', 'Cancelar')) {
+        if (await showConfirm(MSG_CONTA_COM_MOVIMENTOS, '⚠️', 'Desativar', 'Cancelar')) {
             c.ativo = false;
             renderContasCfg();
         }
@@ -820,6 +822,14 @@ function reativarContaCfg(i) {
 }
 
 async function salvarContasCfg() {
+    // Linha salva com o nome apagado = conta excluida: com movimentos so desativa (mesma regra do botao de remover).
+    for (const c of _contasRascunho) {
+        if (c.id == null || (c.nome || '').trim() || !_contaTemMovimentos(c.id)) continue;
+        if (!await showConfirm(MSG_CONTA_COM_MOVIMENTOS, '⚠️', 'Desativar', 'Cancelar')) return;
+        const antiga = _contaFinPorId(c.id);
+        c.nome = (antiga && antiga.nome) || 'Conta';
+        c.ativo = false;
+    }
     const rasc = _contasRascunho.filter(c => (c.nome || '').trim());
     if (rasc.some(c => !/^\d{4}-\d{2}-\d{2}$/.test(c.data || ''))) { await showAlert('Informe a data do saldo inicial de cada conta.', '⚠️'); return; }
     const invalido = rasc.some(c => Number.isNaN(_valorDigitadoBaixa(c.saldo, 0)) ||
@@ -12966,16 +12976,16 @@ function _novosIdsFin(colecao) {
     return () => _novoIdCfgFin(usados);
 }
 
-// Baixa de recebimentos, linha a linha. Valor menor que a parcela divide a
-// parcela (a parte paga vira uma conta nova). Gera movimentos so se a conta
-// aceita (existe, ativa e data >= saldo inicial). Cartao: uma entrada bruta
-// por repasse e uma conta a pagar de taxa ja paga com a sua saida.
 function _erroDataBaixa(data) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(data == null ? '' : data))) return 'Informe a data.';
     if (data > hojeLocal()) return 'A data não pode ser depois de hoje.';
     return '';
 }
 
+// Baixa de recebimentos, linha a linha. Valor menor que a parcela divide a
+// parcela (a parte paga vira uma conta nova). Gera movimentos so se a conta
+// aceita (existe, ativa e data >= saldo inicial). Cartao: uma entrada bruta
+// por repasse e uma conta a pagar de taxa ja paga com a sua saida.
 // Valida data e valores antes de mexer em qualquer coisa. Devolve { ok, erro }.
 function baixarContasReceber(data, linhas) {
     const erroData = _erroDataBaixa(data);
@@ -16093,7 +16103,7 @@ function renderContasReceber() {
     const hoje = hojeLocal();
     tb.innerHTML = lista.map(cr => {
         const at=cr.status==='Atrasado', pago=cr.status==='Pago';
-        const cobravel = !pago && cr.data_vencimento <= hoje;
+        const cobravel = !pago && !!cr.data_vencimento && cr.data_vencimento <= hoje;
         const cobrarBtn = cobravel ? `<button class="btn btn-outline btn-sm" onclick="cobrarNoWhatsApp(${cr.id})" title="Cobrar pelo WhatsApp" style="margin-right:4px">💬 Cobrar</button>${cr.ultima_cobranca===hoje?'<span style="font-size:11px;color:#888;margin-right:4px">cobrado hoje</span>':''}` : '';
         return `<tr class="${at?'fin-atrasado':''}">
             <td>${_fmtVenc(cr.data_vencimento)}</td>

@@ -66,6 +66,38 @@ test('remover conta sem movimentos pede confirmacao', async ({ page }) => {
     await expect(page.locator('#emp-contas .conta-linha')).toHaveCount(1);
 });
 
+test('salvar com o nome apagado numa conta com movimentos nao exclui: oferece desativar', async ({ page }) => {
+    await abrirPref(page, { sc_contas_fin: [CAIXA, BANCO], sc_meios_pag: MEIOS, sc_mov_fin: [mov(1, 10, '2026-01-10', 'entrada', 50, 'x')] });
+    await page.locator('#emp-contas .conta-linha').first().locator('.conta-nome').fill('');
+    await page.click('#emp-contas-card button:has-text("Salvar contas")');
+    await expect(page.locator('#sc-modal-msg')).toContainText('Esta conta tem movimentos e não pode ser excluída.');
+    await page.locator('#sc-modal-cancel').click();
+    let contas = await ler(page, 'sc_contas_fin');
+    expect(contas).toHaveLength(2);
+    expect(contas.find(c => c.id === 10).ativo).toBe(true);
+    await page.click('#emp-contas-card button:has-text("Salvar contas")');
+    await page.locator('#sc-modal-ok').click();
+    await expect.poll(async () => (await ler(page, 'sc_contas_fin')).find(c => c.id === 10).ativo).toBe(false);
+    contas = await ler(page, 'sc_contas_fin');
+    expect(contas).toHaveLength(2);
+    expect(contas.find(c => c.id === 10).nome).toBe('Caixa');
+});
+
+test('conta sem movimentos com nome apagado continua saindo ao salvar', async ({ page }) => {
+    await abrirPref(page, { sc_contas_fin: [CAIXA, BANCO], sc_meios_pag: MEIOS });
+    await page.locator('#emp-contas .conta-linha').nth(1).locator('.conta-nome').fill('');
+    await page.click('#emp-contas-card button:has-text("Salvar contas")');
+    await expect.poll(async () => (await ler(page, 'sc_contas_fin')).length).toBe(1);
+});
+
+test('desativar mostra a linha como desativada e avisa que falta Salvar contas', async ({ page }) => {
+    await abrirPref(page, { sc_contas_fin: [CAIXA, BANCO], sc_meios_pag: MEIOS, sc_mov_fin: [mov(1, 10, '2026-01-10', 'entrada', 50, 'x')] });
+    await page.locator('#emp-contas .conta-linha').first().locator('button[title="Remover conta"]').click();
+    await page.locator('#sc-modal-ok').click();
+    await expect(page.locator('#emp-contas .conta-linha').first()).toContainText('clique em Salvar contas');
+    expect((await ler(page, 'sc_contas_fin')).find(c => c.id === 10).ativo).toBe(true);
+});
+
 test('conta desativada pode ser reativada', async ({ page }) => {
     await abrirPref(page, { sc_contas_fin: [{ ...CAIXA, ativo: false }, BANCO], sc_meios_pag: MEIOS });
     await page.locator('#emp-contas .conta-linha').first().locator('button:has-text("Reativar")').click();
@@ -123,7 +155,7 @@ test('transferencia: destino comeca vazio e e obrigatorio', async ({ page }) => 
     expect(await m.locator('#transf-para').inputValue()).toBe('');
     await m.locator('#transf-valor').fill('10');
     await m.locator('#transf-ok').click();
-    await expect(m.locator('#transf-erro')).toBeVisible();
+    await expect(m.locator('#transf-erro')).toHaveText('Escolha a conta de destino.');
     expect((await ler(page, 'sc_mov_fin')) || []).toHaveLength(0);
 });
 
@@ -203,7 +235,7 @@ test('baixarContasReceber valida data e valor por conta propria e nao altera nad
         ];
     }, [AMANHA]);
     expect(r[0]).toEqual({ ok: false, erro: 'A data não pode ser depois de hoje.' });
-    expect(r[1].ok).toBe(false);
+    expect(r[1]).toEqual({ ok: false, erro: 'Informe a data.' });
     expect(r[2]).toEqual({ ok: false, erro: 'Informe um valor maior que zero.' });
     expect(r[3].ok).toBe(false);
     expect(r[4].ok).toBe(false);
@@ -225,6 +257,17 @@ test('conta sem vencimento mostra "sem vencimento" e nao entra em Hoje nem como 
     await page.locator('.fin-tab-btn[data-tab="pagar"]').click();
     await expect(page.locator('#tb-contas-pagar')).toContainText('sem vencimento');
     expect((await ler(page, 'sc_cr'))[0].status).toBe('Pendente');
+});
+
+test('conta a receber com vencimento vazio nao tem botao Cobrar; com vencimento vencido tem', async ({ page }) => {
+    await entrar(page, BASE, { sc_contas_fin: [CAIXA], sc_meios_pag: MEIOS,
+        sc_cr: [cr(1, { data_vencimento: '', descricao: 'Sem data' }), cr(2, { data_vencimento: somarDias(HOJE, -2), descricao: 'Vencida' })] });
+    await page.goto(BASE + '/financeiro.html');
+    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    const linhas = page.locator('#tb-contas-receber tr');
+    await expect(linhas.filter({ hasText: 'Vencida' }).locator('button:has-text("Cobrar")')).toHaveCount(1);
+    await expect(linhas.filter({ hasText: 'Sem data' })).toHaveCount(1);
+    await expect(linhas.filter({ hasText: 'Sem data' }).locator('button:has-text("Cobrar")')).toHaveCount(0);
 });
 
 test('item atrasado com valor 0 nao marca "inclui atrasados"', async ({ page }) => {
