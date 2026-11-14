@@ -3088,7 +3088,7 @@ function gerarProposta(id) {
 
 function abrirOS(id) {
     _docModalAtual = { tipo: 'os', pedidoId: id };
-    abrirDocModal(gerarHTMLOS(id), 'Ordem de Serviço');
+    abrirDocModal(gerarHTMLOS(id), 'Ordem de Serviço', '', envioOS(id));
 }
 
 async function aprovarPedido(id) {
@@ -4332,6 +4332,7 @@ function abrirBalanco() {
                     <p style="margin:4px 0 0;font-size:12px;color:#8F8F8F">${new Date().toLocaleDateString('pt-BR', {day:'2-digit',month:'long',year:'numeric'})}</p>
                 </div>
                 <div style="display:flex;gap:8px;align-items:center">
+                    <button class="btn btn-success btn-sm" id="btn-enviar-doc" onclick="abrirEnviarBalanco(this)">📤 Enviar</button>
                     <button class="btn btn-outline btn-sm" onclick="exportarBalancoPDF()">📄 Exportar PDF</button>
                     <button class="btn btn-success btn-sm" onclick="aplicarAjustesBalanco()">✔ Aplicar Ajustes</button>
                     <button class="modal-close" onclick="document.getElementById('balanco-overlay').remove()">×</button>
@@ -4489,7 +4490,7 @@ function _diffBalanco(input) {
     else                { cell.textContent = `−${fmt}`; cell.style.color = '#F43927'; }
 }
 
-async function exportarBalancoPDF() {
+async function _balancoPdfPartes() {
     const dataHoje = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const logoSrc  = await _logoBase64();
     const logoHtml = logoSrc
@@ -4528,22 +4529,14 @@ async function exportarBalancoPDF() {
         rowsMat += `<tr style="${trStyle}">${td(cells[0]?.textContent||'—')}${td(cells[1]?.textContent||'—')}${td(cells[2]?.textContent||'un','text-align:center')}${td(cells[3]?.textContent||'—','text-align:right')}${tdBlank('120px')}${tdBlank('100px')}</tr>`;
     });
 
-    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
-    <title>Balanço de Estoque — ${dataHoje}</title>
-    <style>
-        * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',Arial,sans-serif; }
-        body { padding:32px 40px; color:#242424; background:#fff; }
-        @media print {
-            @page { size: A4; margin:20mm 18mm; }
-            body { padding:0; }
-            .no-print { display:none !important; }
-        }
-        table { width:100%; border-collapse:collapse; margin-bottom:32px; }
-        h2 { font-size:21px; font-weight:800; margin-bottom:2px; }
-        h3 { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#005D3B; margin:24px 0 10px; border-left:3px solid #005D3B; padding-left:8px; }
-    </style>
-    </head><body>
-
+    // estilo(raiz): as regras do documento presas a um seletor raiz; no PDF
+    // enviado elas nao podem vazar para a tela do sistema.
+    const estilo = raiz => `
+        ${raiz} * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',Arial,sans-serif; }
+        ${raiz} table { width:100%; border-collapse:collapse; margin-bottom:32px; }
+        ${raiz} h2 { font-size:21px; font-weight:800; margin-bottom:2px; }
+        ${raiz} h3 { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#005D3B; margin:24px 0 10px; border-left:3px solid #005D3B; padding-left:8px; }`;
+    const corpo = `
     <!-- Cabeçalho -->
     <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:18px;border-bottom:3px solid #005D3B;margin-bottom:24px">
         <div style="display:flex;align-items:center;gap:14px">
@@ -4594,12 +4587,40 @@ async function exportarBalancoPDF() {
         </div>
     </div>
 
+`;
+    return { dataHoje, estilo, corpo };
+}
+
+async function exportarBalancoPDF() {
+    const { dataHoje, estilo, corpo } = await _balancoPdfPartes();
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+    <title>Balanço de Estoque — ${dataHoje}</title>
+    <style>
+        ${estilo('')}
+        body { padding:32px 40px; color:#242424; background:#fff; }
+        @media print {
+            @page { size: A4; margin:20mm 18mm; }
+            body { padding:0; }
+            .no-print { display:none !important; }
+        }
+    </style>
+    </head><body>${corpo}
     <script>window.onload = () => window.print();<\/script>
     </body></html>`;
-
     const win = window.open('', '_blank');
     win.document.write(html);
     win.document.close();
+}
+
+// "Enviar" do balanco: monta o mesmo documento do PDF (respeitando os
+// filtros) num elemento, e o envio gera o PDF dele.
+async function abrirEnviarBalanco(botao) {
+    const { dataHoje, estilo, corpo } = await _balancoPdfPartes();
+    const el = document.createElement('div');
+    el.className = 'bal-doc';
+    el.innerHTML = `<style>${estilo('.bal-doc')}</style>${corpo}`;
+    definirEnvioDoc(envioDocumentoInterno('Balanço de estoque — ' + dataHoje, 'Balanco-de-estoque-' + dataHoje.replace(/\//g, '-'), () => el));
+    abrirMenuEnviar(botao);
 }
 
 function _showConfirmBalanco(ajustes) {
@@ -7242,7 +7263,8 @@ function _refrescarDocModalAtual() {
     preencherCodigosDocumento(paper);
 }
 
-function abrirDocModal(htmlContent, titulo, extraToolbar) {
+// envio (opcional): o que vai no botao "📤 Enviar" (js/compartilhar-doc.js).
+function abrirDocModal(htmlContent, titulo, extraToolbar, envio) {
     let overlay = document.getElementById('doc-modal-overlay');
     if (!overlay) {
         overlay = document.createElement('div');
@@ -7263,8 +7285,11 @@ function abrirDocModal(htmlContent, titulo, extraToolbar) {
     paper.innerHTML = htmlContent;
     iniciarAssinaturaPads(paper);
     preencherCodigosDocumento(paper);
+    const comEnvio = !!envio && typeof definirEnvioDoc === 'function';
+    if (typeof definirEnvioDoc === 'function') definirEnvioDoc(envio || null);
     document.getElementById('doc-modal-topbar-actions').innerHTML =
         (extraToolbar || '') +
+        (comEnvio ? botaoEnviarHtml() : '') +
         `<button class="doc-modal-btn" onclick="imprimirDocModal()">🖨️ Imprimir / PDF</button>` +
         `<button class="doc-modal-btn doc-modal-btn-close" onclick="fecharDocModal()">✕ Fechar</button>`;
     overlay.classList.add('active');
@@ -7276,6 +7301,8 @@ function fecharDocModal() {
     if (overlay) overlay.classList.remove('active');
     document.body.style.overflow = '';
     _docModalAtual = null;
+    if (typeof fecharMenuEnviar === 'function') fecharMenuEnviar(true);
+    if (typeof definirEnvioDoc === 'function') definirEnvioDoc(null);
 }
 
 async function imprimirDocModal() {
@@ -7319,45 +7346,14 @@ function abrirPropostaModal(pedidoId) {
         Validade: <input type="number" id="proposta-dias-modal" value="15" min="1" max="365"
             style="width:56px;padding:4px 6px;border-radius:4px;border:none;font-size:13px;text-align:center"
             onchange="atualizarPropostaModal(${pedidoId}, this.value)"> dias
-    </label>
-    <button class="doc-modal-btn doc-modal-btn-compartilhar" id="btn-compartilhar-proposta" onclick="compartilharProposta(this)">📤 Compartilhar</button>
-    <button class="doc-modal-btn doc-modal-btn-compartilhar" id="btn-email-proposta" onclick="enviarPropostaPorEmail(this)">✉️ E-mail</button>`;
-    abrirDocModal(gerarHTMLProposta(pedidoId, 15), 'Proposta Comercial', extra);
+    </label>`;
+    abrirDocModal(gerarHTMLProposta(pedidoId, 15), 'Proposta Comercial', extra, envioProposta(pedidoId));
 }
 
 function atualizarPropostaModal(pedidoId, dias) {
     if (_docModalAtual) _docModalAtual.dias = parseInt(dias) || 15;
     const paper = document.getElementById('doc-modal-paper');
     if (paper) { paper.innerHTML = gerarHTMLProposta(pedidoId, parseInt(dias) || 15); iniciarAssinaturaPads(paper); }
-}
-
-let _pcShareData = null;
-function mostrarSharePC() {
-    if (!_pcShareData) return;
-    const { waUrl, mailUrl, num, avisoWA, avisoMail } = _pcShareData;
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML = `<div class="modal-box" style="max-width:420px">
-        <div class="modal-header">
-            <h3>Compartilhar — Pedido #${num}</h3>
-            <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
-        </div>
-        <div class="modal-body">
-            <p style="font-size:13px;color:#8F8F8F;margin-bottom:16px">Imprima ou salve o PDF clicando em 🖨️ Imprimir / PDF e depois envie ao fornecedor:</p>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                <a href="${waUrl}" target="_blank" onclick="this.closest('.modal-overlay').remove()"
-                   style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 12px;background:#25D366;border-radius:10px;color:#fff;text-decoration:none;font-weight:600;font-size:14px">
-                    <span style="font-size:28px">📱</span>WhatsApp${avisoWA}
-                </a>
-                <a href="${mailUrl}" onclick="this.closest('.modal-overlay').remove()"
-                   style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 12px;background:var(--primary);border-radius:10px;color:#fff;text-decoration:none;font-weight:600;font-size:14px">
-                    <span style="font-size:28px">✉️</span>E-mail${avisoMail}
-                </a>
-            </div>
-        </div>
-    </div>`;
-    document.body.appendChild(overlay);
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 }
 
 // --- ORDEM DE SERVIÇO ---
@@ -7451,6 +7447,7 @@ function renderOS() {
     if (!container) return;
     const pedidoId = localStorage.getItem('sc_os_id');
     _docModalAtual = { tipo: 'os', pedidoId };
+    if (typeof definirEnvioDoc === 'function') definirEnvioDoc(envioOS(pedidoId));
     container.innerHTML = gerarHTMLOS(pedidoId);
     iniciarAssinaturaPads(container);
     preencherCodigosDocumento(container);
@@ -7641,6 +7638,7 @@ function renderProposta() {
     if (!container) return;
     const pedidoId = localStorage.getItem('sc_proposta_id');
     _docModalAtual = { tipo: 'proposta', pedidoId, dias: 15 };
+    if (typeof definirEnvioDoc === 'function') definirEnvioDoc(envioProposta(pedidoId));
     container.innerHTML = gerarHTMLProposta(pedidoId, 15);
     iniciarAssinaturaPads(container);
     preencherCodigosDocumento(container);
@@ -8941,32 +8939,6 @@ function renderListaPedidosCompra() {
     }).join('');
 }
 
-function compartilharPC(id) {
-    const pc   = db.pedidos_compra.find(p => p.id == id);
-    if (!pc) return;
-    const forn  = db.fornecedores.find(f => f.id == pc.fornecedor_id);
-    const tel   = (forn?.tel   || '').replace(/\D/g, '');
-    const email = forn?.email  || '';
-    const num   = formatPedidoId(pc.id);
-    const data  = new Date(pc.data_criacao).toLocaleDateString('pt-BR');
-
-    const msgWA  = encodeURIComponent(`Olá! Segue o pedido de compra #${num} em anexo.`);
-    const waUrl  = tel ? `https://wa.me/55${tel}?text=${msgWA}` : `https://wa.me/?text=${msgWA}`;
-    const corpoEmail =
-        `Olá${forn?.nome ? ', ' + forn.nome : ''}!\n\n` +
-        `Segue em anexo o pedido de compra #${num}, emitido em ${data}.\n\n` +
-        `Itens: ${pc.itens.length}\n` +
-        (pc.observacoes ? `Observações: ${pc.observacoes}\n` : '') +
-        `\nAtenciosamente.`;
-    const mailUrl = `mailto:${email}?subject=${encodeURIComponent('Pedido de compra ' + num)}&body=${encodeURIComponent(corpoEmail)}`;
-    const avisoWA   = !tel   ? `<div style="font-size:11px;color:#F2C924;margin-top:4px">⚠ Sem telefone cadastrado</div>` : `<div style="font-size:11px;margin-top:4px">${escapeHtml(forn?.tel || '')}</div>`;
-    const avisoMail = !email ? `<div style="font-size:11px;color:#F2C924;margin-top:4px">⚠ Sem e-mail cadastrado</div>`   : `<div style="font-size:11px;margin-top:4px">${escapeHtml(email)}</div>`;
-
-    _pcShareData = { waUrl, mailUrl, num, avisoWA, avisoMail };
-    const extra = `<button class="doc-modal-btn" onclick="mostrarSharePC()" style="background:#25D366">📤 Compartilhar</button>`;
-    abrirDocModal(gerarHTMLPedidoCompra(id), 'Pedido de Compra #' + num, extra);
-}
-
 // Enviado ou Recebido: o pedido ja saiu para o fornecedor e nao se edita
 // mais. Para corrigir, volta para Rascunho (com confirmacao).
 function pcBloqueado(pc) {
@@ -9252,11 +9224,11 @@ function exportarHistoricoPDF() {
         <div style="text-align:right;font-weight:bold;font-size:15px;margin-top:12px">Total: ${_histMoeda(total)}</div>
     </div>`;
     fecharHistoricoFornecedor();
-    abrirDocModal(html, 'Histórico de pedidos — ' + forn.nome);
+    abrirDocModal(html, 'Histórico de pedidos — ' + forn.nome, '', envioHistoricoFornecedor(forn, periodo));
 }
 
 function abrirPedidoCompra(id) {
-    abrirDocModal(gerarHTMLPedidoCompra(id), 'Pedido de Compra');
+    abrirDocModal(gerarHTMLPedidoCompra(id), 'Pedido de Compra', '', envioPedidoCompra(id));
 }
 
 // Clicar no numero do pedido abre ele no formulario, para corrigir os itens ou
@@ -9971,6 +9943,7 @@ function renderPedidoCompraDoc() {
     const container = document.getElementById('pedido-compra-container');
     if (!container) return;
     container.innerHTML = gerarHTMLPedidoCompra(localStorage.getItem('sc_pc_id'));
+    if (typeof definirEnvioDoc === 'function') definirEnvioDoc(envioPedidoCompra(localStorage.getItem('sc_pc_id')));
     setTimeout(() => esperarFontesDocumento().then(() => window.print()), 500);
 }
 
@@ -10120,7 +10093,7 @@ async function salvarMedicao() {
 function imprimirAgendamentoMedicao(id) {
     const v = db.medicoes.find(x => x.id == id);
     if (!v) return;
-    abrirDocModal(gerarHTMLAgendamentoMedicao(v), 'Agendamento de Medição');
+    abrirDocModal(gerarHTMLAgendamentoMedicao(v), 'Agendamento de Medição', '', envioAgendamentoMedicao(v));
 }
 
 // Pares rotulo/valor de um bloco de dados, nas tres arrumacoes do layout:
@@ -14188,7 +14161,7 @@ function gerarHTMLRelatorioFinanceiro(layout, opcoes) {
 
 function gerarRelatorioFinanceiro() {
     const { html, label } = gerarHTMLRelatorioFinanceiro();
-    abrirDocModal(html, `Relatório Financeiro — ${label}`);
+    abrirDocModal(html, `Relatório Financeiro — ${label}`, '', envioDocumentoInterno(`Relatório financeiro — ${label}`, `Relatorio-financeiro-${label}`));
 }
 
 function mostrarTabFinanceiro(tab) {
@@ -14527,7 +14500,7 @@ function exportarResultadoPDF(mes) {
         ${orc ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:14px"><thead><tr style="text-align:left;background:#f0f0f0"><th style="${td}">Orçamento</th><th style="${td};text-align:right">Limite</th><th style="${td};text-align:right">Gasto</th><th style="${td};text-align:right">Falta</th><th style="${td};text-align:right">% usado</th><th style="${td}">Situação</th></tr></thead><tbody>${orc}</tbody></table>` : ''}
         ${and ? `<div style="margin-top:14px;font-size:14px"><strong>Mês em andamento</strong><br>Até hoje: ${_resBrl(and.ateHoje)} · Previsto até o fim do mês: ${_resBrl(and.previsto)}${and.atrasados ? ' (inclui atrasados)' : ''}</div>` : ''}
     </div>`;
-    abrirDocModal(html, 'Resultado do mês — ' + rotuloMes);
+    abrirDocModal(html, 'Resultado do mês — ' + rotuloMes, '', envioDocumentoInterno('Resultado do mês — ' + rotuloMes, 'Resultado-do-mes-' + rotuloMes));
 }
 
 // =============================================

@@ -1462,21 +1462,8 @@ Proposta Comercial (PDF):
   - Resumo de valores (subtotal, desconto, valor final, plano de pagamento)
   - Observações
   - Estilo limpo para impressão ou envio ao cliente
-  - Botão "📤 Compartilhar" (na janela da proposta e em proposta.html): gera o
-    PDF de verdade e abre a janela de compartilhar do aparelho com o arquivo
-    já anexado (WhatsApp, e-mail etc.), com a mensagem pronta para o cliente.
-    Funciona no celular e no Chrome/Edge do computador (só aparecem os apps
-    instalados). Onde o navegador não anexa arquivo (ex.: Firefox), o PDF é
-    baixado e abre uma janela com WhatsApp (no número do cliente) e e-mail
-    com a mensagem pronta, para anexar o arquivo baixado. Em teste: por
-    enquanto só na proposta. Precisa de internet (gerador de PDF vem do CDN).
-  - Botão "✉️ E-mail": baixa um rascunho de e-mail (.eml) com o e-mail do
-    cliente, o assunto ("Proposta comercial nº X — Empresa"), o texto e o PDF
-    anexado. Aberto no Outlook ou no Email do Windows, aparece pronto para
-    Enviar. Para Gmail/e-mail no navegador (que não abrem .eml), a janela traz
-    "Abrir e-mail preenchido" (destinatário, assunto e texto, sem anexo) e
-    "Baixar o PDF" para anexar. Cliente sem e-mail: avisa e o destinatário
-    vai em branco.
+  - Botão "📤 Enviar" (ver "Enviar documentos" na seção de funcionalidades
+    globais): compartilhar com o PDF anexado ou e-mail pronto.
 
 Ordem de Serviço (OS):
   - Cabeçalho com dados da empresa
@@ -2025,6 +2012,32 @@ Tema Claro / Escuro:
     precisar clicar em "Salvar preferências". Saiu do popup da logo.
   - Persiste no usuário e em localStorage (chave: sc_tema)
   - Anti-flash: tema aplicado antes do carregamento do CSS em todas as telas
+
+Enviar documentos (botão "📤 Enviar"):
+  - Em todos os documentos que saem em PDF: Proposta Comercial, Ordem de
+    Serviço, Pedido de Compra, Histórico de pedidos do fornecedor,
+    Agendamento de Medição, Relatório Financeiro, Resultado do mês e Balanço
+    de Estoque (também nas páginas proposta.html, os.html e pedido-compra.html).
+  - Clicar em Enviar abre um menu que sai do botão como um gênio da lâmpada
+    (fio de fumaça que estica e se abre; sem animação para quem pede menos
+    movimento no sistema). Esc ou clique fora fecha. Duas opções:
+    → 🔗 Compartilhar externamente: gera o PDF e abre a janela de compartilhar
+      do aparelho com o arquivo anexado (WhatsApp e outros apps). Funciona no
+      celular e no Chrome/Edge do computador. Onde o navegador não anexa
+      arquivo (ex.: Firefox), baixa o PDF e oferece WhatsApp e e-mail com a
+      mensagem pronta.
+    → ✉️ E-mail: baixa um rascunho de e-mail (.eml) com destinatário, assunto,
+      texto e o PDF anexado; aberto no Outlook ou no Email do Windows, aparece
+      pronto para Enviar. Para Gmail/e-mail no navegador, a janela traz
+      "Abrir e-mail preenchido" (sem anexo) e "Baixar o PDF".
+  - Para quem vai: Proposta e Agendamento → cliente; Pedido de Compra e
+    Histórico → fornecedor; OS, relatórios e balanço → sem destinatário
+    (a pessoa escolhe, ex.: contador). Sem e-mail cadastrado, avisa e o
+    destinatário vai em branco.
+  - Mensagem: "Olá <nome>! Segue <documento>…"; assunto "<documento> —
+    <empresa>". Precisa de internet (o gerador de PDF vem do CDN).
+  - O antigo "Compartilhar" do pedido de compra (que só abria WhatsApp/e-mail
+    sem anexo) foi substituído pelo Enviar.
 
 Persistência de Dados:
   - Todos os dados armazenados exclusivamente no localStorage do navegador
