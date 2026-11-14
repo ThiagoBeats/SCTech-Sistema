@@ -33,6 +33,7 @@ test('o botao Compartilhar aparece na proposta, e so nela', async ({ page }) => 
     await expect(page.locator('#doc-modal-topbar-actions #btn-compartilhar-proposta')).toBeVisible();
     await page.evaluate(() => { fecharDocModal(); abrirOS(26070); });
     await expect(page.locator('#doc-modal-topbar-actions #btn-compartilhar-proposta')).toHaveCount(0);
+    await expect(page.locator('#doc-modal-topbar-actions #btn-email-proposta')).toHaveCount(0);
 });
 
 test('com compartilhamento de arquivo: abre a janela do aparelho com o PDF anexado', async ({ page }) => {
@@ -72,4 +73,52 @@ test('a pagina proposta.html tambem tem o Compartilhar', async ({ page }) => {
     await page.evaluate(() => localStorage.setItem('sc_proposta_id', '26070'));
     await page.goto(BASE + '/proposta.html');
     await expect(page.locator('#btn-compartilhar-proposta')).toBeVisible();
+    await expect(page.locator('#btn-email-proposta')).toBeVisible();
+});
+
+// --- E-mail com tudo preenchido -------------------------------------------
+
+test('E-mail: baixa um rascunho .eml com destinatario, assunto, texto e o PDF anexado', async ({ page }) => {
+    test.setTimeout(90000);
+    await abrir(page, false);
+    const download = page.waitForEvent('download', { timeout: 45000 });
+    await page.click('#btn-email-proposta');
+    const d = await download;
+    expect(d.suggestedFilename()).toMatch(/^Proposta-.*Maria-Souza\.eml$/);
+    const fs = require('fs');
+    const eml = fs.readFileSync(await d.path(), 'latin1');
+    expect(eml).toMatch(/^X-Unsent: 1\r\n/);
+    expect(eml).toContain('\r\nTo: maria@exemplo.com\r\n');
+    const assunto = eml.match(/\r\nSubject: =\?UTF-8\?B\?([^?]+)\?=/)[1];
+    expect(Buffer.from(assunto, 'base64').toString('utf8')).toBe('Proposta comercial nº 26070 — Lírio Cortinas');
+    const partes = eml.split(/--sctech_\w+/);
+    const corpo = partes.find(p => p.includes('text/plain')).split('\r\n\r\n')[1].replace(/\s/g, '');
+    expect(Buffer.from(corpo, 'base64').toString('utf8')).toContain('Olá Maria!');
+    const anexo = partes.find(p => p.includes('application/pdf'));
+    expect(anexo).toContain('Content-Disposition: attachment');
+    const pdf = Buffer.from(anexo.split('\r\n\r\n')[1].replace(/\s/g, ''), 'base64');
+    expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+    expect(pdf.length).toBeGreaterThan(20000);
+
+    // reserva para Gmail no navegador: mailto preenchido + PDF para anexar
+    const ajuda = page.locator('#compartilhar-email');
+    await expect(ajuda).toBeVisible();
+    const mail = await ajuda.locator('a:has-text("Abrir e-mail preenchido")').getAttribute('href');
+    expect(mail).toMatch(/^mailto:maria%40exemplo\.com\?subject=Proposta%20comercial/);
+    const pdfDl = page.waitForEvent('download');
+    await ajuda.locator('button:has-text("Baixar o PDF")').click();
+    expect((await pdfDl).suggestedFilename()).toMatch(/\.pdf$/);
+});
+
+test('E-mail: cliente sem e-mail avisa que o destinatario vai em branco', async ({ page }) => {
+    test.setTimeout(90000);
+    await page.addInitScript(() => { navigator.canShare = undefined; });
+    await entrar(page, BASE, { sc_ped: [PED], sc_cli: [{ id: 1, nome: 'Joao' }] });
+    await page.goto(BASE + '/pedidos.html');
+    await page.evaluate(() => abrirPropostaModal(26070));
+    const download = page.waitForEvent('download', { timeout: 45000 });
+    await page.click('#btn-email-proposta');
+    const eml = require('fs').readFileSync(await (await download).path(), 'latin1');
+    expect(eml).not.toContain('\r\nTo:');
+    await expect(page.locator('#compartilhar-email')).toContainText('não tem e-mail cadastrado');
 });

@@ -1470,6 +1470,13 @@ Proposta Comercial (PDF):
     baixado e abre uma janela com WhatsApp (no número do cliente) e e-mail
     com a mensagem pronta, para anexar o arquivo baixado. Em teste: por
     enquanto só na proposta. Precisa de internet (gerador de PDF vem do CDN).
+  - Botão "✉️ E-mail": baixa um rascunho de e-mail (.eml) com o e-mail do
+    cliente, o assunto ("Proposta comercial nº X — Empresa"), o texto e o PDF
+    anexado. Aberto no Outlook ou no Email do Windows, aparece pronto para
+    Enviar. Para Gmail/e-mail no navegador (que não abrem .eml), a janela traz
+    "Abrir e-mail preenchido" (destinatário, assunto e texto, sem anexo) e
+    "Baixar o PDF" para anexar. Cliente sem e-mail: avisa e o destinatário
+    vai em branco.
 
 Ordem de Serviço (OS):
   - Cabeçalho com dados da empresa

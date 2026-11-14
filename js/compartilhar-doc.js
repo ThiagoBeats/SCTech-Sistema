@@ -110,29 +110,35 @@ function _dadosCompartilharProposta(pedidoId) {
     };
 }
 
-// Botao "Compartilhar" da proposta (janela do pedido e pagina proposta.html).
-async function compartilharProposta(botao) {
+// Documento aberto (janela do pedido ou pagina proposta.html), conferido e
+// convertido em PDF. Devolve { dados, arquivo } ou null (falhou / avisado).
+async function _pdfDaPropostaAberta(botao) {
     const origem = document.getElementById('doc-modal-paper')?.closest('#doc-modal-overlay.active')
         ? document.getElementById('doc-modal-paper')
         : document.getElementById('proposta-container');
     const pedidoId = (typeof _docModalAtual !== 'undefined' && _docModalAtual && _docModalAtual.pedidoId)
         || localStorage.getItem('sc_proposta_id');
-    if (!origem || !pedidoId) return;
-    if (!await documentoProntoParaImprimir(origem)) return;
+    if (!origem || !pedidoId) return null;
+    if (!await documentoProntoParaImprimir(origem)) return null;
 
     const dados = _dadosCompartilharProposta(pedidoId);
     const rotulo = botao ? botao.innerHTML : '';
     if (botao) { botao.disabled = true; botao.innerHTML = '⏳ Gerando PDF...'; }
-    let arquivo;
     try {
-        arquivo = await gerarArquivoPdf(origem, dados.arquivo);
+        return { dados, arquivo: await gerarArquivoPdf(origem, dados.arquivo) };
     } catch (e) {
         await showAlert(e.message || 'Não foi possível gerar o PDF.', '⚠️');
-        return;
+        return null;
     } finally {
         if (botao) { botao.disabled = false; botao.innerHTML = rotulo; }
     }
+}
 
+// Botao "Compartilhar" da proposta (janela do pedido e pagina proposta.html).
+async function compartilharProposta(botao) {
+    const pronto = await _pdfDaPropostaAberta(botao);
+    if (!pronto) return;
+    const { dados, arquivo } = pronto;
     if (navigator.canShare && navigator.share && navigator.canShare({ files: [arquivo] })) {
         try {
             await navigator.share({ files: [arquivo], title: dados.assunto, text: dados.texto });
@@ -143,6 +149,104 @@ async function compartilharProposta(botao) {
     }
     _baixarArquivo(arquivo);
     mostrarAlternativaCompartilhar(dados);
+}
+
+// --- E-mail com tudo preenchido (teste) ---
+// O navegador nao manda e-mail sozinho nem anexa arquivo num link mailto:.
+// O que da para fazer sem servidor: um rascunho de e-mail (.eml) com
+// destinatario, assunto, texto e o PDF anexado. "X-Unsent: 1" faz o Outlook
+// e o Email do Windows abrirem o arquivo como rascunho, pronto para Enviar.
+// Gmail/Outlook no navegador nao abrem .eml: para eles fica o link mailto
+// (preenche tudo, menos o anexo) e o PDF para anexar.
+
+function _base64DeBytes(bytes) {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+}
+function _base64Utf8(texto) {
+    return _base64DeBytes(new TextEncoder().encode(texto));
+}
+function _quebrar76(b64) {
+    return b64.replace(/.{1,76}/g, '$&\r\n').trimEnd();
+}
+// Cabecalho com acento (assunto, nome do arquivo): RFC 2047.
+function _cabecalhoMime(texto) {
+    return /^[\x20-\x7E]*$/.test(texto) ? texto : `=?UTF-8?B?${_base64Utf8(texto)}?=`;
+}
+
+async function montarRascunhoEml({ para, assunto, texto, arquivo }) {
+    const limite = 'sctech_' + Date.now().toString(36);
+    const pdf = new Uint8Array(await arquivo.arrayBuffer());
+    const nomeAnexo = _cabecalhoMime(arquivo.name);
+    const linhas = [
+        'X-Unsent: 1',
+        ...(para ? [`To: ${para}`] : []),
+        `Subject: ${_cabecalhoMime(assunto)}`,
+        'MIME-Version: 1.0',
+        `Content-Type: multipart/mixed; boundary="${limite}"`,
+        '',
+        `--${limite}`,
+        'Content-Type: text/plain; charset="utf-8"',
+        'Content-Transfer-Encoding: base64',
+        '',
+        _quebrar76(_base64Utf8(texto)),
+        '',
+        `--${limite}`,
+        `Content-Type: application/pdf; name="${nomeAnexo}"`,
+        'Content-Transfer-Encoding: base64',
+        `Content-Disposition: attachment; filename="${nomeAnexo}"`,
+        '',
+        _quebrar76(_base64DeBytes(pdf)),
+        '',
+        `--${limite}--`,
+        ''
+    ];
+    return new File([linhas.join('\r\n')], arquivo.name.replace(/\.pdf$/i, '') + '.eml', { type: 'message/rfc822' });
+}
+
+// Botao "E-mail" da proposta.
+async function enviarPropostaPorEmail(botao) {
+    const pronto = await _pdfDaPropostaAberta(botao);
+    if (!pronto) return;
+    const { dados, arquivo } = pronto;
+    const texto = dados.texto.replace('! ', '!\n\n') + '\n\nAtenciosamente,\n' + valoresComunsEmpresa().empresa;
+    const eml = await montarRascunhoEml({ para: dados.email, assunto: dados.assunto, texto, arquivo });
+    _baixarArquivo(eml);
+    mostrarAjudaEmail(dados, texto, eml.name, arquivo);
+}
+
+let _pdfEmailAtual = null;
+function mostrarAjudaEmail(dados, texto, nomeEml, arquivo) {
+    _pdfEmailAtual = arquivo;
+    document.getElementById('compartilhar-email')?.remove();
+    const mailUrl = `mailto:${encodeURIComponent(dados.email)}?subject=${encodeURIComponent(dados.assunto)}&body=${encodeURIComponent(texto)}`;
+    const overlay = document.createElement('div');
+    overlay.id = 'compartilhar-email';
+    overlay.className = 'modal-overlay';
+    overlay.style.zIndex = '10050';
+    overlay.innerHTML = `<div class="modal-box" style="max-width:480px">
+        <div class="modal-header">
+            <h3>E-mail da proposta nº ${escapeHtml(dados.num)}</h3>
+            <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
+        </div>
+        <div class="modal-body">
+            ${dados.email ? '' : `<p style="font-size:12px;color:#B45309;background:#FEF3C7;border-radius:6px;padding:8px 10px;margin-bottom:12px">
+                O cliente não tem e-mail cadastrado: o destinatário vai em branco.</p>`}
+            <p style="font-size:13px;color:#242424;margin-bottom:4px"><strong>Outlook ou Email do Windows</strong></p>
+            <p style="font-size:13px;color:#555;margin-bottom:14px">O rascunho <strong>${escapeHtml(nomeEml)}</strong> foi baixado.
+                Abra o arquivo: o e-mail aparece pronto ${dados.email ? `para <strong>${escapeHtml(dados.email)}</strong>, ` : ''}com assunto,
+                texto e o PDF anexado. É só clicar em Enviar.</p>
+            <p style="font-size:13px;color:#242424;margin-bottom:4px"><strong>Gmail ou e-mail no navegador</strong></p>
+            <p style="font-size:13px;color:#555;margin-bottom:12px">Abra o e-mail já preenchido e anexe o PDF (baixe aqui se precisar).</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <a class="btn btn-success" href="${mailUrl}" style="justify-content:center">✉️ Abrir e-mail preenchido</a>
+                <button type="button" class="btn btn-outline" onclick="_pdfEmailAtual && _baixarArquivo(_pdfEmailAtual)" style="justify-content:center">📄 Baixar o PDF</button>
+            </div>
+        </div>
+    </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
 }
 
 // Sem compartilhamento de arquivo no navegador: o PDF ja foi baixado; aqui
