@@ -205,3 +205,41 @@ test('saldoContaAte: antes da abertura da conta vale 0', () => {
     assert.strictEqual(C.saldoContaAte(c, [], '2026-11-09'), 0);
     assert.strictEqual(C.saldoContaAte(c, [], '2026-11-10'), 500);
 });
+
+// ---- Pendencias R1, tarefa 4: cartao ----
+test('lerNumero: virgula, milhar BR e US, ultimo separador e o decimal', () => {
+    assert.strictEqual(C.lerNumero('1,5'), 1.5);
+    assert.strictEqual(C.lerNumero('1.5'), 1.5);
+    assert.strictEqual(C.lerNumero('1.250,50'), 1250.5);
+    assert.strictEqual(C.lerNumero('1,250.50'), 1250.5);
+    assert.strictEqual(C.lerNumero(' 3 '), 3);
+    assert.ok(Number.isNaN(C.lerNumero('')));
+    assert.ok(Number.isNaN(C.lerNumero('abc')));
+});
+test('repassesCartao forca numero: taxa com virgula, valor e vezes em texto', () => {
+    const conta = { ...maq, cartao: { ...maq.cartao, debito_taxa: '1,5', credito_taxa: '1,250.50' } };
+    assert.deepStrictEqual(C.repassesCartao({ valor: '200', data: '2026-11-12', conta, tipo: 'debito' }),
+        [{ data: '2026-11-13', bruto: 200, taxa: 3, liquido: 197 }]);
+    const r = C.repassesCartao({ valor: 100, data: '2026-11-12', conta: { ...maq, cartao: { credito_taxa: '1.250,50' } }, tipo: 'credito', vezes: '1' });
+    assert.strictEqual(r[0].taxa, 1250.5);
+    assert.strictEqual(C.repassesCartao({ valor: 90, data: '2026-11-12', conta: maq, tipo: 'credito', vezes: '3' }).length, 3);
+});
+test('CARTAO_PADRAO exposto pelo core (fonte unica)', () => {
+    assert.strictEqual(C.CARTAO_PADRAO.debito_taxa, 1.5);
+    assert.strictEqual(C.CARTAO_PADRAO.antecipacao_dias, 1);
+});
+test('dividirParcela compara em centavos', () => {
+    assert.deepStrictEqual(C.dividirParcela({ valor: 99.996 }, 100), { pago: 100, resto: 0 });
+    assert.deepStrictEqual(C.dividirParcela({ valor: 0.1 + 0.2 }, 0.3), { pago: 0.3, resto: 0 });
+    assert.throws(() => C.dividirParcela({ valor: 100 }, 100.01));
+});
+test('tarefasHoje: cartaoHoje traz o liquido (entrada menos a taxa do mesmo repasse)', () => {
+    const hoje = '2026-11-12';
+    const movs = [
+        { id: 1, conta_id: 3, data: hoje, sentido: 'entrada', valor: 100, origem: 'cr', origem_id: 9, grupo_id: 7 },
+        { id: 2, conta_id: 3, data: hoje, sentido: 'saida', valor: 3, origem: 'cp', origem_id: 8, grupo_id: 7 },
+        { id: 3, conta_id: 3, data: '2026-12-12', sentido: 'saida', valor: 50, origem: 'cp', origem_id: 5, grupo_id: 7 },
+        { id: 4, conta_id: 3, data: hoje, sentido: 'entrada', valor: 40, origem: 'cr', origem_id: 10, grupo_id: null }];
+    const t = C.tarefasHoje({ hoje, contasReceber: [], contasPagar: [], movimentos: movs, contas: [maq] });
+    assert.deepStrictEqual(t.cartaoHoje.map(m => [m.id, m.liquido]), [[1, 97], [4, 40]]);
+});

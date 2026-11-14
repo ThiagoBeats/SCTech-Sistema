@@ -564,10 +564,12 @@ function _meioDoPedidoSelecionado(k) {
 
 // Mostra vezes/antecipar so para cartao de credito; plano de 100% so pede um meio.
 function atualizarMeiosPedido() {
-    const pct = _entradaValida(document.getElementById('ped-entrada-pct')?.value, 50);
+    const pct = _entradaValida(document.getElementById('ped-entrada-pct')?.value, entradaDaFormaPagamento(document.getElementById('ped-forma-pagamento')?.value));
     const unico = pct >= 100;
     const saldo = document.getElementById('ped-grupo-saldo');
     if (saldo) saldo.style.display = unico ? 'none' : '';
+    const grupoEntrada = document.getElementById('ped-grupo-entrada');
+    if (grupoEntrada) grupoEntrada.style.display = pct <= 0 ? 'none' : '';
     const rot = document.getElementById('ped-rot-meio-entrada');
     if (rot) rot.textContent = unico ? 'Meio de pagamento' : 'Meio da entrada';
     ['entrada', 'saldo'].forEach(k => {
@@ -588,7 +590,13 @@ function _lerMeioPedido(k) {
 function _mostrarMeioPedido(k, mp) {
     const sel = document.getElementById('ped-meio-' + k);
     if (!sel) return;
-    sel.value = mp && getMeiosPag().some(m => String(m.id) === String(mp.meio_id)) ? String(mp.meio_id) : '';
+    const existe = !!(mp && getMeiosPag().some(m => String(m.id) === String(mp.meio_id)));
+    sel.value = existe ? String(mp.meio_id) : '';
+    // Meio que foi apagado nas Preferencias: o campo avisa que e preciso escolher outro.
+    const removido = !!(mp && mp.meio_id != null && !existe);
+    if (sel.options[0]) sel.options[0].textContent = removido ? '— escolha o meio (o anterior foi removido) —' : '— a definir —';
+    sel.classList.toggle('meio-removido', removido);
+    sel.style.borderColor = removido ? 'var(--danger, #c0392b)' : '';
     const v = document.getElementById('ped-vezes-' + k);
     if (v) v.value = String(mp && mp.vezes >= 1 ? Math.min(12, Math.floor(mp.vezes)) : 1);
     const a = document.getElementById('ped-antecipar-' + k);
@@ -664,7 +672,7 @@ function restaurarFormasPagamento() {
 // Contas: onde o dinheiro fica (caixa, banco, maquininha). Meios: como o
 // cliente paga; cada um cai numa conta (cartao cai na maquininha). Telas em
 // Empresa > Preferencias, com rascunho gravado so no "Salvar".
-const CARTAO_PADRAO_CFG = { debito_taxa: 1.5, debito_dias: 1, credito_taxa: 3, credito_dias: 30, parcelado_taxa: 4, antecipacao_taxa: 2, antecipacao_dias: 1 };
+// Padroes do cartao: um lugar so, CaixaCore.CARTAO_PADRAO.
 const CARTAO_CAMPOS_CFG = [
     ['debito_taxa', 'Débito: taxa %'], ['debito_dias', 'Débito: dias p/ cair'],
     ['credito_taxa', 'Crédito à vista: taxa %'], ['credito_dias', 'Crédito: dias p/ cair'],
@@ -693,10 +701,8 @@ function _novoIdCfgFin(usados) {
 // Numero digitado em formulario: "1.250,50" e "1,5" valem; vazio usa o padrao;
 // texto que nao e numero volta NaN (a tela recusa).
 function _numeroBR(v, padrao) {
-    let t = String(v == null ? '' : v).trim();
-    if (t === '') return padrao;
-    if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
-    return /^-?\d+(\.\d+)?$/.test(t) ? parseFloat(t) : NaN;
+    if (String(v == null ? '' : v).trim() === '') return padrao;
+    return CaixaCore.lerNumero(v);
 }
 
 function garantirMeiosPadrao() {
@@ -729,7 +735,7 @@ function _contaParaRascunho(c) {
     if (c.tipo === 'maquininha') {
         r.cartao = {};
         CARTAO_CAMPOS_CFG.forEach(([k]) => {
-            const v = c.cartao && c.cartao[k] != null ? c.cartao[k] : CARTAO_PADRAO_CFG[k];
+            const v = c.cartao && c.cartao[k] != null ? c.cartao[k] : CaixaCore.CARTAO_PADRAO[k];
             r.cartao[k] = String(v).replace('.', ',');
         });
     }
@@ -782,7 +788,7 @@ function mudarTipoContaCfg(i, tipo) {
     c.tipo = tipo;
     if (tipo === 'maquininha' && !c.cartao) {
         c.cartao = {};
-        CARTAO_CAMPOS_CFG.forEach(([k]) => { c.cartao[k] = String(CARTAO_PADRAO_CFG[k]).replace('.', ','); });
+        CARTAO_CAMPOS_CFG.forEach(([k]) => { c.cartao[k] = String(CaixaCore.CARTAO_PADRAO[k]).replace('.', ','); });
     }
     renderContasCfg();
 }
@@ -846,7 +852,7 @@ async function salvarContasCfg() {
         };
         if (c.tipo === 'maquininha') {
             conta.cartao = {};
-            CARTAO_CAMPOS_CFG.forEach(([k]) => { conta.cartao[k] = _numeroBR(c.cartao && c.cartao[k], CARTAO_PADRAO_CFG[k]); });
+            CARTAO_CAMPOS_CFG.forEach(([k]) => { conta.cartao[k] = _numeroBR(c.cartao && c.cartao[k], CaixaCore.CARTAO_PADRAO[k]); });
         }
         return conta;
     });
@@ -878,15 +884,26 @@ function renderMeiosCfg() {
         <div class="meio-linha" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
             <input type="text" class="meio-nome" value="${escapeHtml(m.nome)}" maxlength="60" aria-label="Nome do meio ${i + 1}"
                 oninput="_meiosRascunho[${i}].nome = this.value" style="flex:2;min-width:150px">
-            <select class="meio-tipo" aria-label="Tipo do meio ${i + 1}" onchange="_meiosRascunho[${i}].tipo = this.value" style="flex:1.5;min-width:140px">
+            <select class="meio-tipo" aria-label="Tipo do meio ${i + 1}" onchange="mudarTipoMeioCfg(${i}, this.value)" style="flex:1.5;min-width:140px">
                 ${TIPOS_MEIO_CFG.map(([v, l]) => `<option value="${v}"${m.tipo === v ? ' selected' : ''}>${l}</option>`).join('')}
             </select>
             <select class="meio-conta" aria-label="Conta do meio ${i + 1}" onchange="_meiosRascunho[${i}].conta_id = this.value === '' ? null : Number(this.value)" style="flex:2;min-width:150px">
                 <option value="">(sem conta)</option>
-                ${contas.map(c => `<option value="${escapeHtml(c.id)}"${CaixaCore.mesmoId(c.id, m.conta_id) ? ' selected' : ''}>${escapeHtml(c.nome)}</option>`).join('')}
+                ${contas.filter(c => !(m.tipo === 'cartao_debito' || m.tipo === 'cartao_credito') || c.tipo === 'maquininha').map(c => `<option value="${escapeHtml(c.id)}"${CaixaCore.mesmoId(c.id, m.conta_id) ? ' selected' : ''}>${escapeHtml(c.nome)}</option>`).join('')}
             </select>
             <button type="button" class="btn btn-outline btn-sm btn-danger" onclick="removerMeioCfg(${i})" title="Remover meio">✕</button>
         </div>`).join('') || '<div class="forma-pag-vazia">Nenhum meio cadastrado. Salve as contas para criar os meios padrão.</div>';
+}
+
+// Meio de cartao so aponta para maquininha: ao mudar o tipo, a conta que nao serve sai.
+function mudarTipoMeioCfg(i, tipo) {
+    const m = _meiosRascunho[i];
+    m.tipo = tipo;
+    if ((tipo === 'cartao_debito' || tipo === 'cartao_credito') && m.conta_id != null) {
+        const c = getContasFin().find(x => CaixaCore.mesmoId(x.id, m.conta_id));
+        if (!c || c.tipo !== 'maquininha') m.conta_id = null;
+    }
+    renderMeiosCfg();
 }
 
 function adicionarMeioCfg() {
@@ -6718,7 +6735,7 @@ Volte o pedido para Orçamento para editar.`, '🔒');
         forma_pagamento: document.getElementById('ped-forma-pagamento')?.value || getFormasPagamento()[0]
     };
     dadosPedido.entrada_pct = _entradaValida(document.getElementById('ped-entrada-pct')?.value, entradaDaFormaPagamento(dadosPedido.forma_pagamento));
-    dadosPedido.meio_entrada = _lerMeioPedido('entrada');
+    dadosPedido.meio_entrada = dadosPedido.entrada_pct <= 0 ? null : _lerMeioPedido('entrada');
     dadosPedido.meio_saldo = dadosPedido.entrada_pct >= 100 ? null : _lerMeioPedido('saldo');
     if (editandoIdPedido) {
         const index = db.pedidos.findIndex(p => p.id == editandoIdPedido);
@@ -13028,10 +13045,12 @@ function baixarContasReceber(data, linhas) {
         cr.baixado_por = usuario?.id || null;
         cr.baixado_em = agora;
         if (cr.pedido_id) peds.add(cr.pedido_id);
-        if (!CaixaCore.contaAceitaMovimento(conta, data)) return;
+        const aceita = CaixaCore.contaAceitaMovimento(conta, data);
+        // Conta que nao aceita movimento: sem movimento, mas a taxa de cartao continua sendo despesa (gera so a conta de taxa).
+        if (!aceita && !cr.cartao) return;
         const grupo = novoIdMov();
         const desc = cr.descricao || 'Recebimento';
-        const entrada = (d, v, descricao) => db.movimentos_fin.push({ id: novoIdMov(), conta_id: conta.id, data: d, sentido: 'entrada', valor: v, origem: 'cr', origem_id: cr.id, grupo_id: grupo, descricao });
+        const entrada = (d, v, descricao) => aceita && db.movimentos_fin.push({ id: novoIdMov(), conta_id: conta.id, data: d, sentido: 'entrada', valor: v, origem: 'cr', origem_id: cr.id, grupo_id: grupo, descricao });
         if (!cr.cartao) { entrada(data, cr.valor, desc); return; }
         const repasses = CaixaCore.repassesCartao({ valor: cr.valor, data, conta, tipo: cr.cartao.tipo, vezes: cr.cartao.vezes, antecipar: cr.cartao.antecipar });
         repasses.forEach((r, i) => {
@@ -13039,10 +13058,11 @@ function baixarContasReceber(data, linhas) {
             if (!(r.taxa > 0)) return;
             const cp = {
                 id: novoIdCP(), tipo: 'variavel', categoria: 'taxa_cartao', descricao: 'Taxa de cartão — ' + desc,
-                credor_nome: conta.nome || '', valor: r.taxa, data_vencimento: r.data, data_pagamento: r.data, status: 'Pago',
-                conta_id: conta.id, origem_cr_id: cr.id, baixado_por: usuario?.id || null, baixado_em: agora
+                credor_nome: (conta && conta.nome) || '', valor: r.taxa, data_vencimento: r.data, data_pagamento: r.data, status: 'Pago',
+                conta_id: conta ? conta.id : null, origem_cr_id: cr.id, baixado_por: usuario?.id || null, baixado_em: agora
             };
             db.contas_pagar.push(cp);
+            if (!aceita) return;
             db.movimentos_fin.push({ id: novoIdMov(), conta_id: conta.id, data: r.data, sentido: 'saida', valor: r.taxa, origem: 'cp', origem_id: cp.id, grupo_id: grupo, descricao: cp.descricao });
         });
     });
@@ -15163,7 +15183,7 @@ function renderHoje() {
         ${podePagar ? `<button class="btn btn-success btn-sm" onclick='marcarCPPago(${jid(cp.id)})'>✓ Paguei</button>` : ''}</div>`;
     const linhaCartao = m => {
         const c = todasContas.find(x => CaixaCore.mesmoId(x.id, m.conta_id));
-        return `<div class="hoje-item"><div class="hoje-item-desc">${escapeHtml(m.descricao || 'Repasse do cartão')}<small>${escapeHtml(c ? c.nome : '')}</small></div><div class="hoje-item-valor">${brl(m.valor)}</div></div>`;
+        return `<div class="hoje-item"><div class="hoje-item-desc">${escapeHtml(m.descricao || 'Repasse do cartão')}<small>${escapeHtml(c ? c.nome : '')}</small></div><div class="hoje-item-valor">${brl(m.liquido != null ? m.liquido : m.valor)} <small style="color:var(--muted)">líquido</small></div></div>`;
     };
     const html = grupo('receber-atrasados', 'A receber — atrasados', 'vermelho', t.receberAtrasados, linhaCR)
         + grupo('receber-hoje', 'A receber hoje', 'amarelo', t.receberHoje, linhaCR)

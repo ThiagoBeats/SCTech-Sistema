@@ -22,12 +22,24 @@
 
     const CARTAO_PADRAO = { debito_taxa: 1.5, debito_dias: 1, credito_taxa: 3, credito_dias: 30, parcelado_taxa: 4, antecipacao_taxa: 2, antecipacao_dias: 1 };
 
+    // Numero digitado: "1,5" = 1.5; "1.250,50" e "1,250.50" = 1250.5 (com os dois, o ultimo separador e o decimal);
+    // so ponto ("1.5") e decimal. Vazio ou texto que nao e numero: NaN.
+    function lerNumero(v) {
+        if (typeof v === 'number') return v;
+        let t = String(v == null ? '' : v).trim();
+        if (t === '') return NaN;
+        const vir = t.lastIndexOf(','), pon = t.lastIndexOf('.');
+        if (vir >= 0 && pon >= 0) t = vir > pon ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, '');
+        else if (vir >= 0) t = t.replace(',', '.');
+        return /^-?\d+(\.\d+)?$/.test(t) ? parseFloat(t) : NaN;
+    }
+
     // Cartao da conta com padroes; numeros vindos de formulario (texto) viram numero.
     function cartaoDa(conta) {
         const bruto = (conta && conta.cartao) || {};
         const c = {};
         Object.keys(CARTAO_PADRAO).forEach(k => {
-            const v = bruto[k] === '' || bruto[k] == null ? NaN : Number(bruto[k]);
+            const v = lerNumero(bruto[k]);
             c[k] = Number.isFinite(v) ? v : CARTAO_PADRAO[k];
         });
         return c;
@@ -81,6 +93,8 @@
 
     function repassesCartao({ valor, data, conta, tipo, vezes = 1, antecipar = false }) {
         const c = cartaoDa(conta);
+        const v = lerNumero(valor);
+        valor = Number.isFinite(v) ? v : 0;
         const n = Math.max(1, Math.floor(Number(vezes) || 1));
         if (tipo === 'debito') {
             const taxa = arredondar(valor * c.debito_taxa / 100);
@@ -104,8 +118,8 @@
 
     function dividirParcela(cr, valorPago) {
         const pago = arredondar(valorPago);
-        if (!(pago > 0) || pago > cr.valor) throw new Error('Valor pago invalido');
-        return { pago, resto: arredondar(cr.valor - pago) };
+        if (!(pago > 0) || Math.round(pago * 100) > Math.round(Number(cr.valor) * 100)) throw new Error('Valor pago invalido');
+        return { pago, resto: Math.max(0, arredondar(cr.valor - pago)) || 0 };
     }
 
     const MENSAGEM_COBRANCA_PADRAO = 'Olá, {cliente}! Aqui é da {empresa}. Passando para lembrar da parcela de {valor} do pedido {pedido}, com vencimento em {vencimento}. Qualquer dúvida, estou à disposição.';
@@ -196,7 +210,13 @@
             receberHoje: rec.filter(x => x.data_vencimento === hoje),
             pagarAtrasados: pag.filter(x => x.data_vencimento < hoje),
             pagarProximos: pag.filter(x => x.data_vencimento >= hoje && x.data_vencimento <= em7),
+            // `liquido` = entrada menos a taxa do mesmo repasse (saida do mesmo grupo, conta e dia).
             cartaoHoje: (movimentos || []).filter(m => m.sentido === 'entrada' && m.data === hoje && maquininhas.some(c => mesmoId(c.id, m.conta_id)))
+                .map(m => {
+                    const taxa = m.grupo_id == null ? 0 : (movimentos || []).filter(x => x.sentido === 'saida' && x.origem === 'cp' && x.data === hoje
+                        && mesmoId(x.grupo_id, m.grupo_id) && mesmoId(x.conta_id, m.conta_id)).reduce((t, x) => t + (Number(x.valor) || 0), 0);
+                    return { ...m, liquido: arredondar((Number(m.valor) || 0) - taxa) };
+                })
         };
     }
 
@@ -217,7 +237,7 @@
         return 'https://wa.me/' + telefone + '?text=' + encodeURIComponent(mensagem || '');
     }
 
-    const api = { contaAceitaMovimento, saldoConta, saldoContaAte, saldosHoje, repassesCartao, dividirParcela, arredondar, somarDias, mesmoId, previsaoSemanal, primeiraSemanaNegativa, tarefasHoje, normalizarTelefone, montarMensagem, linkWhatsApp, MENSAGEM_COBRANCA_PADRAO };
+    const api = { contaAceitaMovimento, saldoConta, saldoContaAte, saldosHoje, repassesCartao, dividirParcela, arredondar, somarDias, mesmoId, previsaoSemanal, primeiraSemanaNegativa, tarefasHoje, normalizarTelefone, montarMensagem, linkWhatsApp, MENSAGEM_COBRANCA_PADRAO, CARTAO_PADRAO, lerNumero };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.CaixaCore = api;
