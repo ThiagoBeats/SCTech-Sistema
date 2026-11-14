@@ -327,9 +327,12 @@ campo e mandar para ele. Abre também por pcp.html?view=rotas.
     (sem horário no fim). Visita nova entra no fim; a que saiu do dia some.
   - "✨ Sugerir melhor ordem": localiza os endereços no OpenStreetMap
     (gratuito, sem cadastro; cada endereço só uma vez, guardado neste
-    navegador) e calcula a ordem com menos trajeto. Endereço não encontrado
-    (ou visita sem endereço) vai para o fim com o aviso "⚠ Endereço não
-    encontrado — confira o endereço e posicione à mão".
+    navegador; "não encontrado" é tentado de novo depois de 1 dia) e calcula
+    a ordem com menos trajeto: com a empresa, saindo e voltando para ela; sem
+    a empresa, saindo da visita com horário mais cedo, sem volta. Endereço não
+    encontrado (ou visita sem endereço) vai para o fim com o aviso "⚠ Endereço
+    não encontrado — confira o endereço e posicione à mão"; só ela fica sem
+    km e chegada, as outras continuam com a conta.
   - Ajuste à mão: arrastar (⠿) ou os botões ↑ e ↓.
   - Cada visita mostra: número na rota, cliente, tipo (Medição / Instalação
     #N), endereço, horário agendado, chegada prevista, km do trecho e "📍 Ir".
@@ -344,6 +347,8 @@ campo e mandar para ele. Abre também por pcp.html?view=rotas.
     na observação da medição/instalação. Salvar de novo substitui a linha
     daquele dia; se deixou de haver atraso, a linha sai. Sem as distâncias
     calculadas, salva só a ordem (e avisa que os horários não foram conferidos).
+    Visita sem localização não tem a observação mexida, e o aviso diz quantas
+    ficaram sem conferir.
   - "🗺️ Abrir no Maps": Google Maps com as paradas na ordem (saída e volta na
     empresa). O Maps aceita poucas paradas por link: com mais de 3 paradas no
     meio, a rota vira "Parte 1, Parte 2…", cada uma começando onde a anterior

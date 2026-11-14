@@ -9,7 +9,10 @@
     const TOLERANCIA_MIN = 10;   // atraso ate 10 min nao avisa
 
     const enc = s => encodeURIComponent(String(s).trim());
-    const hhmm = min => String(Math.floor(min / 60) % 24).padStart(2, '0') + ':' + String(Math.round(min) % 60).padStart(2, '0');
+    const hhmm = min => {
+        const m = ((Math.round(+min || 0) % 1440) + 1440) % 1440;
+        return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+    };
     const dataBR = iso => String(iso).slice(8, 10) + '/' + String(iso).slice(5, 7) + '/' + String(iso).slice(0, 4);
 
     function linkIrPara(endereco) {
@@ -72,14 +75,15 @@
     }
 
     // paradas: [{agendadoMin|null, durMin}]; trechosMin[i]: trajeto ate a parada i
-    // (da saida ou da parada anterior), null quando nao se sabe (conta zero).
+    // (da saida ou da parada anterior localizada), null quando nao se sabe:
+    // conta zero e so' aquela parada fica incerta.
     function calcularChegadas({ inicioDia, paradas, trechosMin }) {
         const ps = paradas || [], tr = trechosMin || [];
         const t0 = tr[0] == null ? 0 : +tr[0];
         const saidaMin = ps.length && ps[0].agendadoMin != null ? ps[0].agendadoMin - t0 : (+inicioDia || 0);
-        let t = saidaMin, incerto = false;
+        let t = saidaMin;
         const out = ps.map((p, i) => {
-            if (tr[i] == null) incerto = true;
+            const incerto = tr[i] == null;
             const chegadaMin = t + (tr[i] == null ? 0 : +tr[i]);
             const ag = p.agendadoMin;
             const inicioMin = ag != null ? Math.max(chegadaMin, ag) : chegadaMin;
@@ -128,7 +132,42 @@
         return l.join('\n');
     }
 
-    const api = { linkIrPara, linksRota, normalizarEndereco, ordemDoTrip, trechosDaRota, calcularChegadas,
+    // Melhor caminho aberto (sem volta) saindo do ponto 0, pela matriz de tempos.
+    // Ate 12 pontos: exato (programacao dinamica); acima, vizinho mais proximo.
+    function melhorOrdemAberta(matriz) {
+        const n = (matriz || []).length;
+        if (n <= 2) return Array.from({ length: n }, (_, i) => i);
+        const d = (a, b) => { const v = matriz[a][b]; return v == null ? 1e12 : +v; };
+        if (n > 12) {
+            const ordem = [0], usado = new Set([0]);
+            while (ordem.length < n) {
+                const u = ordem[ordem.length - 1];
+                let melhor = -1;
+                for (let v = 1; v < n; v++) if (!usado.has(v) && (melhor < 0 || d(u, v) < d(u, melhor))) melhor = v;
+                ordem.push(melhor); usado.add(melhor);
+            }
+            return ordem;
+        }
+        const m = n - 1, TOT = 1 << m;            // pontos 1..n-1 viram bits 0..m-1
+        const custo = new Float64Array(TOT * m).fill(Infinity), ant = new Int8Array(TOT * m).fill(-1);
+        for (let j = 0; j < m; j++) custo[(1 << j) * m + j] = d(0, j + 1);
+        for (let mask = 1; mask < TOT; mask++) for (let j = 0; j < m; j++) {
+            const c = custo[mask * m + j];
+            if (!(mask & (1 << j)) || c === Infinity) continue;
+            for (let k = 0; k < m; k++) {
+                if (mask & (1 << k)) continue;
+                const nm = mask | (1 << k), nc = c + d(j + 1, k + 1);
+                if (nc < custo[nm * m + k]) { custo[nm * m + k] = nc; ant[nm * m + k] = j; }
+            }
+        }
+        let mask = TOT - 1, j = 0;
+        for (let k = 1; k < m; k++) if (custo[mask * m + k] < custo[mask * m + j]) j = k;
+        const volta = [];
+        while (j >= 0) { volta.push(j + 1); const p = ant[mask * m + j]; mask &= ~(1 << j); j = p; }
+        return [0].concat(volta.reverse());
+    }
+
+    const api = { linkIrPara, linksRota, normalizarEndereco, ordemDoTrip, melhorOrdemAberta, trechosDaRota, calcularChegadas,
         linhaObsRota, aplicarObsRota, textoWhatsRota, fmtDur, fmtKm, hhmm, TOLERANCIA_MIN };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.RotasCore = api;

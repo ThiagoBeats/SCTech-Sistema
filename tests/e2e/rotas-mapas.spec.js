@@ -42,6 +42,12 @@ async function simularRede(page, { falhar } = {}) {
         const legs = Array.from({ length: n - 1 }, () => ({ distance: 3000, duration: 600 }));
         route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 'Ok', routes: [{ legs }] }) });
     });
+    // table: tempo = distancia entre os pontos na "reta" das longitudes
+    await page.route('**/router.project-osrm.org/table/**', route => {
+        const pts = new URL(route.request().url()).pathname.split('/').pop().split(';').map(c => +c.split(',')[0]);
+        const durations = pts.map(a => pts.map(b => Math.round(Math.abs(a - b) * 10000)));
+        route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 'Ok', durations }) });
+    });
     await page.route('**/router.project-osrm.org/trip/**', async route => {
         const pos = await page.evaluate(() => window.__trip);
         route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 'Ok', waypoints: pos.map(p => ({ waypoint_index: p })), trips: [{ legs: [] }] }) });
@@ -183,6 +189,31 @@ test('dia sem visitas mostra o aviso', async ({ page }) => {
     await page.fill('#rota-data', dia(30));
     await page.locator('#rota-data').dispatchEvent('change');
     await expect(page.locator('#rota-corpo')).toContainText('Nenhuma medição ou instalação agendada');
+});
+
+test('endereco nao encontrado no meio nao esconde a chegada das visitas seguintes', async ({ page }) => {
+    await abrir(page, { dados: { sc_med: [{ ...MEDS()[0], endereco: 'Rua Inexistente, 99' }, MEDS()[1]] } });
+    await abrirDia(page);
+    // Maria (09:00, nao achada) | Pedro 09:50 | Ana sem horario
+    await expect(itens(page).nth(0).locator('.rota-aviso')).toBeVisible();
+    await expect(itens(page).nth(0)).not.toContainText('Chega');
+    await expect(itens(page).nth(1)).toContainText('Chega');
+    await expect(itens(page).nth(2)).toContainText('Chega');
+    await page.locator('#rota-corpo button:has-text("Salvar rota")').click();
+    await expect(page.locator('#sc-modal-msg')).toContainText('1 visita sem localização não teve o horário conferido');
+});
+
+test('sem endereco da empresa: sugerir sai da visita mais cedo e faz o caminho aberto mais curto', async ({ page }) => {
+    // longitudes: Maria -49.21 (09:00), Ana -49.23, Pedro -49.22 -> da Maria, o caminho Maria, Pedro, Ana
+    await abrir(page, { dados: { sc_empresa: { nome: 'Cortinas Teste' } } });
+    await abrirDia(page);
+    await expect(page.locator('.rota-saida')).toContainText('Sem endereço da empresa');
+    await itens(page).nth(2).locator('.rota-subir').click();   // Maria, Ana, Pedro
+    await expect(itens(page).nth(1)).toContainText('Ana Costa');
+    await page.click('#rota-btn-sugerir');
+    await expect.poll(() => nomes(page)).toEqual([
+        expect.stringContaining('Maria Silva'), expect.stringContaining('Pedro Souza'), expect.stringContaining('Ana Costa')]);
+    await expect(page.locator('#rota-total')).not.toContainText('com a volta');
 });
 
 test('📍 Ir nos cards e nos detalhes da agenda abre o Maps sem abrir o card', async ({ page }) => {

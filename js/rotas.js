@@ -9,8 +9,11 @@ const ROTA_NOMINATIM = 'https://nominatim.openstreetmap.org/search?format=jsonv2
 const ROTA_OSRM = 'https://router.project-osrm.org';
 const ROTA_ERRO_REDE = 'Não foi possível calcular as distâncias agora. A ordem e o link do Maps continuam funcionando.';
 
-let _rota = { chave: '', ordem: [], calc: null, seq: 0, status: '' };
-let _rotaUltimaGeo = 0;
+const ROTA_GEO_NAO_VALE = 24 * 3600 * 1000;   // "nao encontrado" vale 1 dia; depois tenta de novo
+
+let _rota = { chave: '', ordem: [], calc: null, seq: 0, status: '', assin: '' };
+let _rotaFilaGeo = Promise.resolve();   // uma consulta ao Nominatim por vez, 1 por segundo
+const _rotaGeoEmCurso = new Map();
 let _rotaArrastando = null;
 
 // --- Visitas do dia ----------------------------------------------------------
@@ -93,17 +96,20 @@ function renderRotas() {
     const chave = data + '|' + sel.value;
     const doProf = visitas.filter(v => v.prof === sel.value);
     if (chave !== _rota.chave) {
-        _rota = { chave, ordem: _rotaOrdemInicial(chave, doProf), calc: null, seq: _rota.seq + 1, status: '' };
-        _rotaDesenhar();
-        _rotaAtualizarKm();
-        return;
+        _rota = { chave, ordem: _rotaOrdemInicial(chave, doProf), calc: null, seq: _rota.seq + 1, status: '', assin: '' };
+    } else {
+        // mesma rota: entra visita nova, sai a que nao e' mais do dia
+        const novas = _rotaOrdemInicial('', doProf);
+        _rota.ordem = _rota.ordem.filter(k => novas.includes(k)).concat(novas.filter(k => !_rota.ordem.includes(k)));
     }
-    // mesma rota: entra visita nova, sai a que nao e' mais do dia
-    const novas = _rotaOrdemInicial('', doProf);
-    const antes = _rota.ordem.join();
-    _rota.ordem = _rota.ordem.filter(k => novas.includes(k)).concat(novas.filter(k => !_rota.ordem.includes(k)));
+    // recalcula quando mudou a ordem, um endereco, um horario ou a empresa
+    if (_rotaAssinatura() !== _rota.assin) _rota.calc = null;
     _rotaDesenhar();
-    if (_rota.ordem.join() !== antes) { _rota.calc = null; _rotaAtualizarKm(); }
+    if (!_rota.calc) _rotaAtualizarKm();
+}
+
+function _rotaAssinatura() {
+    return _rotaEmpresaEnd() + '|' + _rotaItens().map(v => _rotaChaveItem(v) + '@' + v.end + '@' + v.hora + '@' + v.durMin).join('|');
 }
 
 // Chegadas previstas a partir dos trechos calculados (null = ainda sem trajeto).
@@ -195,6 +201,7 @@ function _rotaDrop(ev, i) {
 }
 function _rotaMudouOrdem() {
     _rota.calc = null;
+    _rota.assin = '';
     _rotaDesenhar();
     _rotaAtualizarKm();
 }
@@ -205,23 +212,42 @@ function _rotaCacheGeo() {
     try { return JSON.parse(localStorage.getItem('sc_geo') || '{}') || {}; } catch (e) { return {}; }
 }
 
+function _rotaGeoDoCache(chave) {
+    const c = _rotaCacheGeo()[chave];
+    if (!c) return undefined;
+    if (c.nao) return Date.now() - (+c.em || 0) < ROTA_GEO_NAO_VALE ? null : undefined;
+    return c;
+}
+
 // {lat, lon} ou null (nao encontrado). Erro de rede lanca (e nao fica guardado).
-async function _rotaGeo(end) {
+// Todas as consultas passam por uma fila: uma por vez, com 1,1 s entre elas, e
+// o mesmo endereco pedido duas vezes ao mesmo tempo vira uma consulta so'.
+function _rotaGeo(end) {
     const chave = RotasCore.normalizarEndereco(end);
-    if (!chave) return null;
-    const cache = _rotaCacheGeo();
-    if (cache[chave]) return cache[chave].nao ? null : cache[chave];
-    const espera = _rotaUltimaGeo + 1100 - Date.now();   // no maximo 1 consulta por segundo
-    if (espera > 0) await new Promise(r => setTimeout(r, espera));
-    _rotaUltimaGeo = Date.now();
-    const resp = await fetch(ROTA_NOMINATIM + encodeURIComponent(end), { headers: { 'Accept-Language': 'pt-BR' } });
-    if (!resp.ok) throw new Error('nominatim ' + resp.status);
-    const lista = await resp.json();
-    const achou = Array.isArray(lista) && lista[0] ? { lat: +lista[0].lat, lon: +lista[0].lon } : null;
-    const c2 = _rotaCacheGeo();
-    c2[chave] = achou || { nao: true };
-    try { localStorage.setItem('sc_geo', JSON.stringify(c2)); } catch (e) {}
-    return achou;
+    if (!chave) return Promise.resolve(null);
+    const doCache = _rotaGeoDoCache(chave);
+    if (doCache !== undefined) return Promise.resolve(doCache);
+    if (_rotaGeoEmCurso.has(chave)) return _rotaGeoEmCurso.get(chave);
+    const p = _rotaFilaGeo.then(async () => {
+        const deNovo = _rotaGeoDoCache(chave);
+        if (deNovo !== undefined) return deNovo;
+        try {
+            const resp = await fetch(ROTA_NOMINATIM + encodeURIComponent(end), { headers: { 'Accept-Language': 'pt-BR' } });
+            if (!resp.ok) throw new Error('nominatim ' + resp.status);
+            const lista = await resp.json();
+            const achou = Array.isArray(lista) && lista[0] ? { lat: +lista[0].lat, lon: +lista[0].lon } : null;
+            const c2 = _rotaCacheGeo();
+            c2[chave] = achou || { nao: true, em: Date.now() };
+            try { localStorage.setItem('sc_geo', JSON.stringify(c2)); } catch (e) {}
+            return achou;
+        } finally {
+            await new Promise(r => setTimeout(r, 1100));   // no maximo 1 consulta por segundo
+        }
+    });
+    _rotaFilaGeo = p.catch(() => {});
+    _rotaGeoEmCurso.set(chave, p);
+    p.finally(() => _rotaGeoEmCurso.delete(chave)).catch(() => {});
+    return p;
 }
 
 async function _rotaOsrm(servico, pontos, extra) {
@@ -231,12 +257,15 @@ async function _rotaOsrm(servico, pontos, extra) {
     return resp.json();
 }
 
-// Localiza a empresa e as visitas (na ordem dada).
-async function _rotaLocalizar(itens) {
+// Localiza a empresa e as visitas (na ordem dada). Para no meio se a pessoa
+// trocou de dia ou de tecnico (seq mudou).
+async function _rotaLocalizar(itens, seq) {
+    const conferir = () => { if (seq !== _rota.seq) throw new Error('rota-cancelada'); };
     const emp = _rotaEmpresaEnd();
     const empGeo = emp ? await _rotaGeo(emp) : null;
+    conferir();
     const geos = [];
-    for (const v of itens) geos.push(v.end ? await _rotaGeo(v.end) : null);
+    for (const v of itens) { geos.push(v.end ? await _rotaGeo(v.end) : null); conferir(); }
     return { empGeo, geos };
 }
 
@@ -245,9 +274,10 @@ async function _rotaAtualizarKm() {
     const seq = ++_rota.seq;
     const itens = _rotaItens();
     if (!itens.length) return;
+    const assin = _rotaAssinatura();
     _rotaStatus('Calculando distâncias…');
     try {
-        const { empGeo, geos } = await _rotaLocalizar(itens);
+        const { empGeo, geos } = await _rotaLocalizar(itens, seq);
         if (seq !== _rota.seq) return;
         const achados = itens.map((v, i) => ({ k: _rotaChaveItem(v), g: geos[i] })).filter(x => x.g);
         const calc = { porItem: {}, volta: null, naoAchados: itens.filter((v, i) => !geos[i]).map(_rotaChaveItem) };
@@ -263,6 +293,7 @@ async function _rotaAtualizarKm() {
             calc.porItem[achados[0].k] = { metros: 0, segundos: 0 };
         }
         _rota.calc = calc;
+        _rota.assin = assin;
         _rota.status = calc.naoAchados.length
             ? `${calc.naoAchados.length === 1 ? '1 visita ficou' : calc.naoAchados.length + ' visitas ficaram'} sem localização: os km e a chegada dela não entram na conta.`
             : (_rotaEmpresaEnd() && !empGeo ? 'Endereço da empresa não encontrado: a conta começa na 1ª visita.' : '');
@@ -282,28 +313,36 @@ async function sugerirMelhorOrdem() {
     const seq = ++_rota.seq;
     _rotaStatus('Localizando os endereços…');
     try {
-        const { empGeo, geos } = await _rotaLocalizar(itens);
+        const { empGeo, geos } = await _rotaLocalizar(itens, seq);
         const achados = itens.map((v, i) => ({ v, g: geos[i] })).filter(x => x.g);
         const nao = itens.filter((v, i) => !geos[i]);
         let ordemAchados = achados;
-        if (achados.length >= 2 || (empGeo && achados.length >= 1)) {
-            // sem empresa, sai da visita com horario mais cedo
-            if (!empGeo) achados.sort((a, b) => _rotaPorHora(a.v, b.v));
-            const pontos = (empGeo ? [empGeo] : []).concat(achados.map(x => x.g));
-            const ordem = RotasCore.ordemDoTrip(await _rotaOsrm('trip', pontos, '&source=first&roundtrip=true'), !!empGeo);
+        if (empGeo && achados.length >= 1) {
+            // sai da empresa e volta para ela: viagem circular do OSRM
+            const ordem = RotasCore.ordemDoTrip(await _rotaOsrm('trip', [empGeo].concat(achados.map(x => x.g)), '&source=first&roundtrip=true'), true);
             if (!ordem) throw new Error('trip');
             ordemAchados = ordem.map(i => achados[i]);
+        } else if (!empGeo) {
+            // sem empresa a rota nao volta: sai da visita com horario mais cedo
+            // e procura o caminho aberto mais curto pela tabela de tempos
+            achados.sort((a, b) => _rotaPorHora(a.v, b.v));
+            if (achados.length >= 3) {
+                const tab = await _rotaOsrm('table', achados.map(x => x.g), '&annotations=duration');
+                if (!tab || tab.code !== 'Ok' || !Array.isArray(tab.durations)) throw new Error('table');
+                ordemAchados = RotasCore.melhorOrdemAberta(tab.durations).map(i => achados[i]);
+            }
         }
         if (seq !== _rota.seq) return;   // trocou de dia ou tecnico no meio
         _rota.ordem = ordemAchados.map(x => _rotaChaveItem(x.v)).concat(nao.map(_rotaChaveItem));
         _rota.calc = null;
+        _rota.assin = '';
         _rota.status = '';
         _rotaDesenhar();
         await _rotaAtualizarKm();
     } catch (e) {
-        _rotaStatus(ROTA_ERRO_REDE);
+        if (seq === _rota.seq) _rotaStatus(ROTA_ERRO_REDE);
     } finally {
-        if (btn) { btn.disabled = false; btn.innerHTML = rotulo; }
+        if (btn) { btn.disabled = !!document.getElementById('rota-prof')?.disabled; btn.innerHTML = rotulo; }
     }
 }
 
@@ -319,10 +358,10 @@ async function salvarRota(silencioso) {
     db.rotas.push({ chave: _rota.chave, data, prof, ordem: itens.map(v => ({ tipo: v.tipo, id: v.id })),
         salvo_em: Date.now(), salvo_por: getUsuarioLogado()?.id || null });
     const cheg = _rotaChegadas(itens);
-    let avisos = 0;
+    let avisos = 0, semConferir = 0;
     if (cheg) itens.forEach((v, i) => {
         const c = cheg.paradas[i];
-        if (c.incerto) return;
+        if (c.incerto) { semConferir++; return; }
         const linha = c.atrasoMin ? RotasCore.linhaObsRota(data, c.chegadaMin, v.agendadoMin) : null;
         if (linha) avisos++;
         if (v.tipo === 'med') {
@@ -336,7 +375,8 @@ async function salvarRota(silencioso) {
     syncDB();
     if (!silencioso) {
         const extra = !cheg ? ' As distâncias não foram calculadas, então os horários não foram conferidos.'
-            : avisos ? ` ${avisos === 1 ? '1 visita tem' : avisos + ' visitas têm'} horário que não bate: o aviso foi para a observação.` : '';
+            : (avisos ? ` ${avisos === 1 ? '1 visita tem' : avisos + ' visitas têm'} horário que não bate: o aviso foi para a observação.` : '')
+              + (semConferir ? ` ${semConferir === 1 ? '1 visita sem localização não teve' : semConferir + ' visitas sem localização não tiveram'} o horário conferido.` : '');
         await showAlert('Rota salva.' + extra, '💾');
     }
     return avisos;

@@ -63,9 +63,29 @@ test('calcularChegadas: sai a tempo da 1a visita, espera quando chega cedo e avi
     assert.deepStrictEqual(cedo.paradas.map(p => [p.chegadaMin, p.inicioMin]), [[490, 490], [530, 600]]);
 });
 
-test('calcularChegadas com trecho desconhecido conta zero e marca incerto', () => {
-    const r = R.calcularChegadas({ inicioDia: 480, paradas: [{ agendadoMin: null, durMin: 60 }, { agendadoMin: null, durMin: 60 }], trechosMin: [null, 15] });
-    assert.deepStrictEqual(r.paradas.map(p => [p.chegadaMin, p.incerto]), [[480, true], [555, true]]);
+test('calcularChegadas com trecho desconhecido conta zero e so aquela parada fica incerta', () => {
+    const r = R.calcularChegadas({ inicioDia: 480, paradas: [{ agendadoMin: null, durMin: 60 }, { agendadoMin: null, durMin: 60 }, { agendadoMin: 600, durMin: 30 }], trechosMin: [null, 15, 10] });
+    assert.deepStrictEqual(r.paradas.map(p => [p.chegadaMin, p.incerto]), [[480, true], [555, false], [625, false]]);
+    assert.strictEqual(r.paradas[2].atrasoMin, 25);
+});
+
+test('hhmm arredonda antes e da a volta no dia', () => {
+    assert.strictEqual(R.hhmm(59.6), '01:00');
+    assert.strictEqual(R.hhmm(-20), '23:40');
+    assert.strictEqual(R.hhmm(1450), '00:10');
+});
+
+test('melhorOrdemAberta: caminho sem volta mais curto saindo do 0', () => {
+    // pontos numa reta: 0 - 1 - 2 - 3 (distancia = diferenca)
+    const pos = [0, 10, 20, 30];
+    const reta = pos.map(a => pos.map(b => Math.abs(a - b)));
+    assert.deepStrictEqual(R.melhorOrdemAberta(reta), [0, 1, 2, 3]);
+    // 0 no meio: vai primeiro ao lado mais perto e depois atravessa
+    const p2 = [0, -5, 20, 25];
+    assert.deepStrictEqual(R.melhorOrdemAberta(p2.map(a => p2.map(b => Math.abs(a - b)))), [0, 1, 2, 3]);
+    assert.deepStrictEqual(R.melhorOrdemAberta([[0]]), [0]);
+    const p3 = Array.from({ length: 14 }, (_, i) => i * 3);
+    assert.deepStrictEqual(R.melhorOrdemAberta(p3.map(a => p3.map(b => Math.abs(a - b)))), p3.map((_, i) => i));
 });
 
 test('observacao da rota: grava, substitui a do mesmo dia e sai quando nao ha atraso', () => {
