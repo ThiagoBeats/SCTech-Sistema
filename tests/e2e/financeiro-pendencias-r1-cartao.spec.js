@@ -133,3 +133,38 @@ test('meio de cartao lista so contas maquininha; trocar o tipo limpa conta que n
     expect(await page.locator('#emp-meios .meio-linha').nth(0).locator('.meio-conta option').allInnerTexts()).toEqual(['(sem conta)', 'Maquininha']);
     await expect(page.locator('#emp-meios .meio-linha').nth(0).locator('.meio-conta')).toHaveValue('');
 });
+
+test('estorno de baixa com cartao sem conta remove a conta de taxa e nao deixa sobra', async ({ page }) => {
+    const meios = [{ id: 26, nome: 'Cartão de crédito', tipo: 'cartao_credito', conta_id: null }];
+    await baixarComCartao(page, { sc_contas_fin: [CAIXA, BANCO, MAQ], sc_meios_pag: meios, sc_cr: [cr()], sc_cp: [] });
+    expect(await ler(page, 'sc_cp')).toHaveLength(1);
+    await page.goto(BASE + '/financeiro.html');
+    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await page.locator('#tb-contas-receber button', { hasText: 'Estornar' }).click();
+    await page.locator('#sc-modal-ok').click();
+    await expect.poll(async () => (await ler(page, 'sc_cr'))[0].status).not.toBe('Pago');
+    expect(await ler(page, 'sc_cp')).toHaveLength(0);
+    expect((await ler(page, 'sc_mov_fin')) || []).toHaveLength(0);
+});
+
+test('aviso de meio removido some ao escolher um meio valido', async ({ page }) => {
+    const ped = { id: 26400, clienteId: 9, clienteNome: 'Cli Teste', status: 'Orçamento', valor: 1000, forma_pagamento: 'PIX',
+        entrada_pct: 50, meio_entrada: { meio_id: 999, vezes: 1, antecipar: false }, meio_saldo: null,
+        ambientes: [{ nome: 'Sala', calculado: true, tecidos: [] }], itens: [], data_entrega: '2099-12-01' };
+    await abrirPedido(page, { sc_ped: [ped], sc_editando_id: 26400 });
+    const sel = page.locator('#ped-meio-entrada');
+    await expect(sel).toHaveClass(/meio-removido/);
+    await sel.selectOption('22');
+    await expect(sel).not.toHaveClass(/meio-removido/);
+    expect(await sel.evaluate(e => e.style.borderColor)).toBe('');
+    expect(await sel.locator('option').first().innerText()).toContain('a definir');
+});
+
+test('meio de cartao salvo com conta que nao e maquininha mostra (sem conta) e salva sem conta', async ({ page }) => {
+    const meios = [{ id: 26, nome: 'Cartão de crédito', tipo: 'cartao_credito', conta_id: 11 }];
+    await entrar(page, BASE, { sc_contas_fin: [CAIXA, BANCO, MAQ], sc_meios_pag: meios });
+    await page.goto(BASE + '/empresa.html#preferencias');
+    await expect(page.locator('#emp-meios .meio-linha').first().locator('.meio-conta')).toHaveValue('');
+    await page.click('#emp-meios-card button:has-text("Salvar meios")');
+    await expect.poll(async () => (await ler(page, 'sc_meios_pag'))[0].conta_id).toBeNull();
+});

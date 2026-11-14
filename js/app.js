@@ -576,6 +576,13 @@ function atualizarMeiosPedido() {
         const m = _meioDoPedidoSelecionado(k);
         const box = document.getElementById('ped-cartao-' + k);
         if (box) box.style.display = m && m.tipo === 'cartao_credito' ? 'flex' : 'none';
+        // Escolheu um meio valido: o aviso de "meio removido" sai.
+        const sel = document.getElementById('ped-meio-' + k);
+        if (sel && m && sel.classList.contains('meio-removido')) {
+            sel.classList.remove('meio-removido');
+            sel.style.borderColor = '';
+            if (sel.options[0]) sel.options[0].textContent = '— a definir —';
+        }
     });
 }
 
@@ -880,6 +887,13 @@ function renderMeiosCfg() {
     if (!box) return;
     if (!_meiosRascunho) _meiosRascunho = getMeiosPag().map(m => ({ ...m }));
     const contas = getContasFin();
+    // Meio de cartao com conta que nao e maquininha: o rascunho ja mostra o que sera salvo (sem conta).
+    _meiosRascunho.forEach(m => {
+        if ((m.tipo === 'cartao_debito' || m.tipo === 'cartao_credito') && m.conta_id != null) {
+            const c = contas.find(x => CaixaCore.mesmoId(x.id, m.conta_id));
+            if (!c || c.tipo !== 'maquininha') m.conta_id = null;
+        }
+    });
     box.innerHTML = _meiosRascunho.map((m, i) => `
         <div class="meio-linha" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
             <input type="text" class="meio-nome" value="${escapeHtml(m.nome)}" maxlength="60" aria-label="Nome do meio ${i + 1}"
