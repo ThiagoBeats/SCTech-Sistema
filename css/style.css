@@ -2451,3 +2451,70 @@ html[data-theme="dark"] #balanco-overlay .balanco-caixa { background: #141518 !i
 html[data-theme="dark"] #balanco-overlay th { background: #141518 !important; color: #FEFFFF !important; border-color: #282A2E !important; }
 html[data-theme="dark"] #balanco-overlay tr[data-esgotado="1"] { background: transparent !important; }
 html[data-theme="dark"] #balanco-overlay td input { background: #141518; color: #F5F6F8; border-color: #282A2E !important; }
+
+/* ── BOTÃO "📤 ENVIAR" DOS DOCUMENTOS: menu que sai como gênio da lâmpada ──
+   Nasce como um fio de fumaça no botão, sobe torcendo, incha e se abre.
+   --origem-x: onde fica o botão, para o menu "sair" dele. */
+.menu-enviar {
+    position: fixed; z-index: 10060; min-width: 270px; padding: 8px;
+    background: var(--white); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(0, 93, 59, 0.05);
+    transform-origin: var(--origem-x, 50%) 0;
+    animation: genio-sai .62s cubic-bezier(.22, 1.2, .36, 1) both;
+}
+.menu-enviar::before {           /* o "pescoço" do gênio, apontando o botão */
+    content: ''; position: absolute; top: -7px; left: calc(var(--origem-x, 50%) - 7px);
+    width: 12px; height: 12px; background: var(--white);
+    border-left: 1px solid var(--border); border-top: 1px solid var(--border);
+    transform: rotate(45deg);
+}
+.menu-enviar::after {            /* brilho de fumaça mágica que se desfaz */
+    content: '✨'; position: absolute; top: -18px; left: calc(var(--origem-x, 50%) + 6px);
+    font-size: 14px; pointer-events: none; animation: genio-brilho .9s ease-out both;
+}
+.menu-enviar.saindo { animation: genio-volta .26s cubic-bezier(.55, 0, .9, .4) both; }
+.menu-enviar-item {
+    display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px;
+    border: none; background: none; border-radius: 10px; cursor: pointer; text-align: left;
+    color: var(--dark); font-size: 14px; font-family: inherit;
+    animation: genio-item .45s ease-out both;
+}
+.menu-enviar-item + .menu-enviar-item { animation-delay: .08s; }
+.menu-enviar-item:hover, .menu-enviar-item:focus-visible { background: rgba(0, 93, 59, 0.08); outline: none; }
+.menu-enviar-item b { display: block; font-weight: 700; }
+.menu-enviar-item small { display: block; font-size: 12px; color: #8F8F8F; margin-top: 1px; }
+.menu-enviar-icone {
+    width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 18px;
+    background: rgba(0, 93, 59, 0.10);
+}
+@keyframes genio-sai {
+    0%   { opacity: 0; transform: translateY(-10px) scale(.06, .04) skewX(0);  filter: blur(8px);
+           clip-path: polygon(46% 0, 54% 0, 54% 100%, 46% 100%); }
+    30%  { opacity: .85; transform: translateY(-2px) scale(.22, .85) skewX(-14deg); filter: blur(3px);
+           clip-path: polygon(40% 0, 60% 0, 85% 100%, 15% 100%); }
+    55%  { opacity: 1; transform: translateY(0) scale(.7, 1.08) skewX(6deg); filter: blur(.5px);
+           clip-path: polygon(10% 0, 90% 0, 100% 100%, 0 100%); }
+    78%  { transform: scale(1.04, .98) skewX(-2deg); filter: none;
+           clip-path: polygon(-20px -30px, calc(100% + 20px) -30px, calc(100% + 20px) calc(100% + 20px), -20px calc(100% + 20px)); }
+    100% { opacity: 1; transform: none; filter: none;
+           clip-path: polygon(-20px -30px, calc(100% + 20px) -30px, calc(100% + 20px) calc(100% + 20px), -20px calc(100% + 20px)); }
+}
+@keyframes genio-volta {
+    to { opacity: 0; transform: translateY(-8px) scale(.08, .05) skewX(12deg); filter: blur(6px); }
+}
+@keyframes genio-item {
+    0%, 40% { opacity: 0; transform: translateY(6px); }
+    100%    { opacity: 1; transform: none; }
+}
+@keyframes genio-brilho {
+    0%   { opacity: 0; transform: translateY(14px) scale(.4) rotate(-30deg); }
+    40%  { opacity: 1; transform: translateY(-2px) scale(1.15) rotate(10deg); }
+    100% { opacity: 0; transform: translateY(-14px) scale(.6) rotate(25deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .menu-enviar, .menu-enviar-item, .menu-enviar.saindo { animation: none; }
+    .menu-enviar::after { display: none; }
+}
+html[data-theme="dark"] .menu-enviar-item small { color: #9EA3AC; }
+html[data-theme="dark"] .menu-enviar-icone { background: rgba(201, 247, 117, 0.10); }

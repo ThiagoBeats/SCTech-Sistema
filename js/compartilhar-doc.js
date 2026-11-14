@@ -1,4 +1,6 @@
-// Compartilhar documento como PDF anexado (teste: so na Proposta Comercial).
+// Enviar documentos como PDF anexado: botao "📤 Enviar" em todos os
+// documentos (proposta, OS, pedido de compra, agendamento, relatorios, balanco),
+// com um menu de duas opcoes: Compartilhar externamente e E-mail.
 //
 // O documento vira um arquivo PDF de verdade no navegador (html2pdf.js). Onde
 // o navegador sabe compartilhar arquivos (celular, Chrome/Edge no Windows),
@@ -92,40 +94,171 @@ function _baixarArquivo(arquivo) {
     setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-// Dados da proposta para a mensagem e para os atalhos de WhatsApp/e-mail.
-function _dadosCompartilharProposta(pedidoId) {
-    const ped = db.pedidos.find(p => p.id == pedidoId);
-    const cli = ped ? db.clientes.find(c => c.id == ped.clienteId) : null;
-    const emp = valoresComunsEmpresa().empresa;
-    const nomeCli = (cli && cli.nome) || (ped && ped.clienteNome) || '';
-    const num = ped ? formatPedidoId(ped.id) : '';
-    const primeiroNome = nomeCli.split(' ')[0] || '';
-    const texto = `Olá${primeiroNome ? ' ' + primeiroNome : ''}! Segue a proposta comercial nº ${num} da ${emp}. Qualquer dúvida, estou à disposição.`;
+// --- Documento a enviar ------------------------------------------------------
+// Cada documento diz o que vai no envio: titulo, nome do arquivo, mensagem e
+// para quem (e-mail/telefone, quando se sabe). obterElemento devolve o
+// documento montado; sem ele, vale o papel da janela de documento.
+let _envioDocAtual = null;
+
+function definirEnvioDoc(ctx) { _envioDocAtual = ctx || null; }
+
+// Monta o contexto: "Ola Maria! <frase>" e assunto "<titulo> — <empresa>".
+function contextoEnvio({ titulo, arquivo, nome, frase, email, tel, obterElemento }) {
+    const empresa = valoresComunsEmpresa().empresa;
+    const primeiro = String(nome || '').trim().split(' ')[0] || '';
     return {
-        num, texto,
-        tel: ((cli && cli.tel) || '').replace(/\D/g, ''),
-        email: (cli && cli.email) || '',
-        assunto: `Proposta comercial nº ${num} — ${emp}`,
-        arquivo: `Proposta-${_nomeArquivoSeguro(num)}${nomeCli ? '-' + _nomeArquivoSeguro(nomeCli) : ''}.pdf`
+        titulo, empresa, obterElemento,
+        texto: `Olá${primeiro ? ' ' + primeiro : ''}! ${frase || `Segue ${titulo} da ${empresa}.`}`,
+        assunto: `${titulo} — ${empresa}`,
+        email: email || '',
+        tel: String(tel || '').replace(/\D/g, ''),
+        arquivo: `${_nomeArquivoSeguro(arquivo || titulo)}.pdf`
     };
 }
 
-// Documento aberto (janela do pedido ou pagina proposta.html), conferido e
-// convertido em PDF. Devolve { dados, arquivo } ou null (falhou / avisado).
-async function _pdfDaPropostaAberta(botao) {
-    const origem = document.getElementById('doc-modal-paper')?.closest('#doc-modal-overlay.active')
-        ? document.getElementById('doc-modal-paper')
-        : document.getElementById('proposta-container');
-    const pedidoId = (typeof _docModalAtual !== 'undefined' && _docModalAtual && _docModalAtual.pedidoId)
-        || localStorage.getItem('sc_proposta_id');
-    if (!origem || !pedidoId) return null;
-    if (!await documentoProntoParaImprimir(origem)) return null;
+// Um contexto por documento -------------------------------------------------
 
-    const dados = _dadosCompartilharProposta(pedidoId);
+function envioProposta(pedidoId) {
+    const ped = db.pedidos.find(p => p.id == pedidoId);
+    const cli = ped ? db.clientes.find(c => c.id == ped.clienteId) : null;
+    const nome = (cli && cli.nome) || (ped && ped.clienteNome) || '';
+    const num = ped ? formatPedidoId(ped.id) : '';
+    const empresa = valoresComunsEmpresa().empresa;
+    return contextoEnvio({
+        titulo: `Proposta comercial nº ${num}`, nome,
+        arquivo: `Proposta-${num}${nome ? '-' + nome : ''}`,
+        frase: `Segue a proposta comercial nº ${num} da ${empresa}. Qualquer dúvida, estou à disposição.`,
+        email: cli && cli.email, tel: cli && cli.tel
+    });
+}
+
+// A OS e' do time (costura/instalacao): vai sem destinatario.
+function envioOS(pedidoId) {
+    const ped = db.pedidos.find(p => p.id == pedidoId);
+    const num = ped ? formatPedidoId(ped.id) : '';
+    const cli = ped ? (db.clientes.find(c => c.id == ped.clienteId)?.nome || ped.clienteNome || '') : '';
+    return contextoEnvio({
+        titulo: `Ordem de serviço nº ${num}`,
+        arquivo: `OS-${num}${cli ? '-' + cli : ''}`,
+        frase: `Segue a ordem de serviço nº ${num}${cli ? ` (cliente ${cli})` : ''}.`
+    });
+}
+
+function envioPedidoCompra(pcId) {
+    const pc = db.pedidos_compra.find(p => p.id == pcId);
+    const forn = pc ? db.fornecedores.find(f => f.id == pc.fornecedor_id) : null;
+    const num = pc ? formatPedidoId(pc.id) : '';
+    const data = pc && pc.data_criacao ? new Date(pc.data_criacao).toLocaleDateString('pt-BR') : '';
+    return contextoEnvio({
+        titulo: `Pedido de compra nº ${num}`, nome: forn && forn.nome,
+        arquivo: `Pedido-de-compra-${num}${forn && forn.nome ? '-' + forn.nome : ''}`,
+        frase: `Segue em anexo o pedido de compra nº ${num}${data ? `, emitido em ${data}` : ''}.`,
+        email: forn && forn.email, tel: forn && forn.tel
+    });
+}
+
+function envioHistoricoFornecedor(forn, periodo) {
+    return contextoEnvio({
+        titulo: 'Histórico de pedidos de compra', nome: forn && forn.nome,
+        arquivo: `Historico-de-pedidos${forn && forn.nome ? '-' + forn.nome : ''}`,
+        frase: `Segue o histórico dos nossos pedidos de compra${periodo ? ` (${periodo})` : ''}.`,
+        email: forn && forn.email, tel: forn && forn.tel
+    });
+}
+
+function envioAgendamentoMedicao(v) {
+    const cli = v && v.clienteId ? db.clientes.find(c => c.id == v.clienteId) : null;
+    const data = v && v.data ? new Date(v.data + 'T12:00:00').toLocaleDateString('pt-BR') : '';
+    return contextoEnvio({
+        titulo: 'Agendamento de medição', nome: (v && v.clienteNome) || (cli && cli.nome),
+        arquivo: `Agendamento-medicao${data ? '-' + data.replace(/\//g, '-') : ''}${v && v.clienteNome ? '-' + v.clienteNome : ''}`,
+        frase: `Segue a confirmação da visita de medição${data ? ` do dia ${data}` : ''}${v && v.hora ? ` às ${v.hora}` : ''}.`,
+        email: cli && cli.email, tel: (v && v.clienteTel) || (cli && cli.tel)
+    });
+}
+
+// Documentos internos (relatorios, balanco): sem destinatario, para quem a
+// pessoa quiser (ex.: contador).
+function envioDocumentoInterno(titulo, arquivo, obterElemento) {
+    return contextoEnvio({ titulo, arquivo, obterElemento });
+}
+
+// --- Botao "Enviar" e o menu que sai dele ----------------------------------
+
+function botaoEnviarHtml(classe) {
+    return `<button type="button" class="${classe || 'doc-modal-btn doc-modal-btn-compartilhar'}" id="btn-enviar-doc" onclick="abrirMenuEnviar(this)">📤 Enviar</button>`;
+}
+
+function fecharMenuEnviar(imediato) {
+    const m = document.getElementById('menu-enviar-doc');
+    if (!m) return;
+    document.removeEventListener('mousedown', _cliqueForaMenuEnviar, true);
+    document.removeEventListener('keydown', _escMenuEnviar, true);
+    if (imediato || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { m.remove(); return; }
+    m.classList.add('saindo');
+    setTimeout(() => m.remove(), 260);
+}
+function _cliqueForaMenuEnviar(e) {
+    const m = document.getElementById('menu-enviar-doc');
+    if (m && !m.contains(e.target) && e.target.id !== 'btn-enviar-doc') fecharMenuEnviar();
+}
+function _escMenuEnviar(e) { if (e.key === 'Escape') fecharMenuEnviar(); }
+
+// O menu "sai" do botao como um genio da lampada: nasce fino no botao,
+// estica e se abre (animacao em CSS: .menu-enviar).
+function abrirMenuEnviar(botao) {
+    if (document.getElementById('menu-enviar-doc')) { fecharMenuEnviar(); return; }
+    if (!_envioDocAtual) return;
+    const m = document.createElement('div');
+    m.id = 'menu-enviar-doc';
+    m.className = 'menu-enviar';
+    m.setAttribute('role', 'menu');
+    m.innerHTML = `
+        <button type="button" class="menu-enviar-item" role="menuitem" data-acao="compartilhar">
+            <span class="menu-enviar-icone">🔗</span>
+            <span><b>Compartilhar externamente</b><small>WhatsApp e outros apps, com o PDF anexado</small></span>
+        </button>
+        <button type="button" class="menu-enviar-item" role="menuitem" data-acao="email">
+            <span class="menu-enviar-icone">✉️</span>
+            <span><b>E-mail</b><small>Rascunho pronto, com o PDF anexado</small></span>
+        </button>`;
+    document.body.appendChild(m);
+    // abaixo do botao, com o "pescoco" do genio apontando para ele
+    const r = botao.getBoundingClientRect();
+    const largura = m.offsetWidth;
+    const centro = r.left + r.width / 2;
+    const esquerda = Math.max(8, Math.min(window.innerWidth - largura - 8, centro - largura / 2));
+    m.style.left = esquerda + 'px';
+    m.style.top = (r.bottom + 10) + 'px';
+    m.style.setProperty('--origem-x', (centro - esquerda) + 'px');
+    m.querySelector('[data-acao="compartilhar"]').onclick = () => { fecharMenuEnviar(true); compartilharDocumento(botao); };
+    m.querySelector('[data-acao="email"]').onclick = () => { fecharMenuEnviar(true); enviarDocumentoPorEmail(botao); };
+    setTimeout(() => {
+        document.addEventListener('mousedown', _cliqueForaMenuEnviar, true);
+        document.addEventListener('keydown', _escMenuEnviar, true);
+    }, 0);
+}
+
+// --- Gerar o PDF do documento atual ------------------------------------------
+
+function _elementoDoEnvio(ctx) {
+    if (ctx.obterElemento) return ctx.obterElemento();
+    const paper = document.getElementById('doc-modal-paper');
+    if (paper && paper.closest('#doc-modal-overlay.active')) return paper;
+    return document.getElementById('proposta-container') || document.getElementById('os-container')
+        || document.getElementById('pedido-compra-container');
+}
+
+async function _pdfDoDocumentoAtual(botao) {
+    const ctx = _envioDocAtual;
+    if (!ctx) return null;
+    const origem = _elementoDoEnvio(ctx);
+    if (!origem) return null;
+    if (!await documentoProntoParaImprimir(origem)) return null;
     const rotulo = botao ? botao.innerHTML : '';
     if (botao) { botao.disabled = true; botao.innerHTML = '⏳ Gerando PDF...'; }
     try {
-        return { dados, arquivo: await gerarArquivoPdf(origem, dados.arquivo) };
+        return { dados: ctx, arquivo: await gerarArquivoPdf(origem, ctx.arquivo) };
     } catch (e) {
         await showAlert(e.message || 'Não foi possível gerar o PDF.', '⚠️');
         return null;
@@ -134,9 +267,10 @@ async function _pdfDaPropostaAberta(botao) {
     }
 }
 
-// Botao "Compartilhar" da proposta (janela do pedido e pagina proposta.html).
-async function compartilharProposta(botao) {
-    const pronto = await _pdfDaPropostaAberta(botao);
+// --- Compartilhar externamente ---------------------------------------------
+
+async function compartilharDocumento(botao) {
+    const pronto = await _pdfDoDocumentoAtual(botao);
     if (!pronto) return;
     const { dados, arquivo } = pronto;
     if (navigator.canShare && navigator.share && navigator.canShare({ files: [arquivo] })) {
@@ -148,10 +282,41 @@ async function compartilharProposta(botao) {
         }
     }
     _baixarArquivo(arquivo);
-    mostrarAlternativaCompartilhar(dados);
+    mostrarAlternativaCompartilhar(dados, arquivo.name);
 }
 
-// --- E-mail com tudo preenchido (teste) ---
+// Sem compartilhamento de arquivo no navegador: o PDF ja foi baixado; aqui
+// ficam os atalhos com a mensagem pronta para a pessoa anexar o arquivo.
+function mostrarAlternativaCompartilhar(dados, nomeArquivo) {
+    document.getElementById('compartilhar-alternativa')?.remove();
+    const waUrl = dados.tel
+        ? `https://wa.me/55${dados.tel}?text=${encodeURIComponent(dados.texto)}`
+        : `https://wa.me/?text=${encodeURIComponent(dados.texto)}`;
+    const mailUrl = `mailto:${encodeURIComponent(dados.email)}?subject=${encodeURIComponent(dados.assunto)}&body=${encodeURIComponent(dados.texto)}`;
+    const overlay = document.createElement('div');
+    overlay.id = 'compartilhar-alternativa';
+    overlay.className = 'modal-overlay';
+    overlay.style.zIndex = '10050';
+    overlay.innerHTML = `<div class="modal-box" style="max-width:440px">
+        <div class="modal-header">
+            <h3>Compartilhar — ${escapeHtml(dados.titulo)}</h3>
+            <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:13px;color:#555;margin-bottom:6px">Este navegador não anexa o arquivo sozinho. O PDF
+                <strong>${escapeHtml(nomeArquivo)}</strong> foi baixado: abra a conversa abaixo e anexe (ou arraste) o arquivo.</p>
+            <p style="font-size:12px;color:#8F8F8F;margin-bottom:16px">No celular, ou no Chrome/Edge do computador, o PDF já vai anexado.</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <a class="btn btn-success" href="${waUrl}" target="_blank" rel="noopener" style="justify-content:center">💬 WhatsApp</a>
+                <a class="btn btn-outline" href="${mailUrl}" style="justify-content:center">✉️ E-mail</a>
+            </div>
+        </div>
+    </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+}
+
+// --- E-mail com tudo preenchido ---------------------------------------------
 // O navegador nao manda e-mail sozinho nem anexa arquivo num link mailto:.
 // O que da para fazer sem servidor: um rascunho de e-mail (.eml) com
 // destinatario, assunto, texto e o PDF anexado. "X-Unsent: 1" faz o Outlook
@@ -205,12 +370,11 @@ async function montarRascunhoEml({ para, assunto, texto, arquivo }) {
     return new File([linhas.join('\r\n')], arquivo.name.replace(/\.pdf$/i, '') + '.eml', { type: 'message/rfc822' });
 }
 
-// Botao "E-mail" da proposta.
-async function enviarPropostaPorEmail(botao) {
-    const pronto = await _pdfDaPropostaAberta(botao);
+async function enviarDocumentoPorEmail(botao) {
+    const pronto = await _pdfDoDocumentoAtual(botao);
     if (!pronto) return;
     const { dados, arquivo } = pronto;
-    const texto = dados.texto.replace('! ', '!\n\n') + '\n\nAtenciosamente,\n' + valoresComunsEmpresa().empresa;
+    const texto = dados.texto.replace('! ', '!\n\n') + '\n\nAtenciosamente,\n' + dados.empresa;
     const eml = await montarRascunhoEml({ para: dados.email, assunto: dados.assunto, texto, arquivo });
     _baixarArquivo(eml);
     mostrarAjudaEmail(dados, texto, eml.name, arquivo);
@@ -227,12 +391,12 @@ function mostrarAjudaEmail(dados, texto, nomeEml, arquivo) {
     overlay.style.zIndex = '10050';
     overlay.innerHTML = `<div class="modal-box" style="max-width:480px">
         <div class="modal-header">
-            <h3>E-mail da proposta nº ${escapeHtml(dados.num)}</h3>
+            <h3>E-mail — ${escapeHtml(dados.titulo)}</h3>
             <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
         </div>
         <div class="modal-body">
             ${dados.email ? '' : `<p style="font-size:12px;color:#B45309;background:#FEF3C7;border-radius:6px;padding:8px 10px;margin-bottom:12px">
-                O cliente não tem e-mail cadastrado: o destinatário vai em branco.</p>`}
+                Sem e-mail cadastrado para este documento: o destinatário vai em branco.</p>`}
             <p style="font-size:13px;color:#242424;margin-bottom:4px"><strong>Outlook ou Email do Windows</strong></p>
             <p style="font-size:13px;color:#555;margin-bottom:14px">O rascunho <strong>${escapeHtml(nomeEml)}</strong> foi baixado.
                 Abra o arquivo: o e-mail aparece pronto ${dados.email ? `para <strong>${escapeHtml(dados.email)}</strong>, ` : ''}com assunto,
@@ -242,37 +406,6 @@ function mostrarAjudaEmail(dados, texto, nomeEml, arquivo) {
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
                 <a class="btn btn-success" href="${mailUrl}" style="justify-content:center">✉️ Abrir e-mail preenchido</a>
                 <button type="button" class="btn btn-outline" onclick="_pdfEmailAtual && _baixarArquivo(_pdfEmailAtual)" style="justify-content:center">📄 Baixar o PDF</button>
-            </div>
-        </div>
-    </div>`;
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-    document.body.appendChild(overlay);
-}
-
-// Sem compartilhamento de arquivo no navegador: o PDF ja foi baixado; aqui
-// ficam os atalhos com a mensagem pronta para a pessoa anexar o arquivo.
-function mostrarAlternativaCompartilhar(dados) {
-    document.getElementById('compartilhar-alternativa')?.remove();
-    const waUrl = dados.tel
-        ? `https://wa.me/55${dados.tel}?text=${encodeURIComponent(dados.texto)}`
-        : `https://wa.me/?text=${encodeURIComponent(dados.texto)}`;
-    const mailUrl = `mailto:${encodeURIComponent(dados.email)}?subject=${encodeURIComponent(dados.assunto)}&body=${encodeURIComponent(dados.texto)}`;
-    const overlay = document.createElement('div');
-    overlay.id = 'compartilhar-alternativa';
-    overlay.className = 'modal-overlay';
-    overlay.style.zIndex = '10050';
-    overlay.innerHTML = `<div class="modal-box" style="max-width:440px">
-        <div class="modal-header">
-            <h3>Compartilhar proposta nº ${escapeHtml(dados.num)}</h3>
-            <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
-        </div>
-        <div class="modal-body">
-            <p style="font-size:13px;color:#555;margin-bottom:6px">Este navegador não anexa o arquivo sozinho. O PDF
-                <strong>${escapeHtml(dados.arquivo)}</strong> foi baixado: abra a conversa abaixo e anexe (ou arraste) o arquivo.</p>
-            <p style="font-size:12px;color:#8F8F8F;margin-bottom:16px">No celular, ou no Chrome/Edge do computador, o PDF já vai anexado.</p>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                <a class="btn btn-success" href="${waUrl}" target="_blank" rel="noopener" style="justify-content:center">💬 WhatsApp</a>
-                <a class="btn btn-outline" href="${mailUrl}" style="justify-content:center">✉️ E-mail</a>
             </div>
         </div>
     </div>`;

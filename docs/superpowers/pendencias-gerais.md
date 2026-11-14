@@ -19,7 +19,7 @@ Pendências pequenas fora do Financeiro, para revisar quando o usuário pedir.
 - [ ] Tabela de 7 colunas usa colspan 6 na linha vazia (já existia antes).
 - [ ] Filtro do histórico se perde ao abrir o PDF de um pedido.
 - [ ] Mesmo item adicionado de novo mantém a unidade gravada na primeira vez; se a unidade do cadastro mudar entre os dois, as quantidades somam com o rótulo antigo.
-- [ ] Fechar carrinho abre o PDF simples, não a janela de compartilhar (WhatsApp).
+- [x] Fechar carrinho abre o PDF simples, não a janela de compartilhar (WhatsApp). (Resolvido: o PDF do pedido de compra agora tem o botão Enviar.)
 - [ ] Carrinho só com itens sem preço gera pedido de R$ 0.
 - [ ] Comentários de cabeçalho da galeria ainda citam o simulador.
 - [ ] Loader do SheetJS duplicado (app.js e importador-ui.js); unificar.
