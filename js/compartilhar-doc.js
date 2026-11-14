@@ -103,11 +103,13 @@ let _envioDocAtual = null;
 function definirEnvioDoc(ctx) { _envioDocAtual = ctx || null; }
 
 // Monta o contexto: "Ola Maria! <frase>" e assunto "<titulo> — <empresa>".
-function contextoEnvio({ titulo, arquivo, nome, frase, email, tel, obterElemento }) {
+// aoEnviar (opcional): chamado depois de compartilhar com sucesso, ou pelo
+// botao "Já enviei" das janelas de ajuda (ex.: marcar o pedido como Enviado).
+function contextoEnvio({ titulo, arquivo, nome, frase, email, tel, obterElemento, aoEnviar }) {
     const empresa = valoresComunsEmpresa().empresa;
     const primeiro = String(nome || '').trim().split(' ')[0] || '';
     return {
-        titulo, empresa, obterElemento,
+        titulo, empresa, obterElemento, aoEnviar,
         texto: `Olá${primeiro ? ' ' + primeiro : ''}! ${frase || `Segue ${titulo} da ${empresa}.`}`,
         assunto: `${titulo} — ${empresa}`,
         email: email || '',
@@ -153,7 +155,10 @@ function envioPedidoCompra(pcId) {
         titulo: `Pedido de compra nº ${num}`, nome: forn && forn.nome,
         arquivo: `Pedido-de-compra-${num}${forn && forn.nome ? '-' + forn.nome : ''}`,
         frase: `Segue em anexo o pedido de compra nº ${num}${data ? `, emitido em ${data}` : ''}.`,
-        email: forn && forn.email, tel: forn && forn.tel
+        // o pedido vai para o vendedor quando ele tem telefone proprio
+        email: forn && forn.email, tel: forn && (forn.tel_vendedor || forn.tel),
+        aoEnviar: pc && pc.status === 'Rascunho' && typeof marcarPedidoCompraEnviado === 'function'
+            ? () => marcarPedidoCompraEnviado(pc.id) : null
     });
 }
 
@@ -276,6 +281,7 @@ async function compartilharDocumento(botao) {
     if (navigator.canShare && navigator.share && navigator.canShare({ files: [arquivo] })) {
         try {
             await navigator.share({ files: [arquivo], title: dados.assunto, text: dados.texto });
+            if (dados.aoEnviar) dados.aoEnviar();
             return;
         } catch (e) {
             if (e && e.name === 'AbortError') return;   // a pessoa fechou a janela de compartilhar
@@ -310,6 +316,7 @@ function mostrarAlternativaCompartilhar(dados, nomeArquivo) {
                 <a class="btn btn-success" href="${waUrl}" target="_blank" rel="noopener" style="justify-content:center">💬 WhatsApp</a>
                 <a class="btn btn-outline" href="${mailUrl}" style="justify-content:center">✉️ E-mail</a>
             </div>
+            ${dados.aoEnviar ? `<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:12px" onclick="this.closest('.modal-overlay').remove(); _envioDocAtual && _envioDocAtual.aoEnviar && _envioDocAtual.aoEnviar()">✔ Já enviei — marcar como Enviado</button>` : ''}
         </div>
     </div>`;
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
@@ -407,6 +414,7 @@ function mostrarAjudaEmail(dados, texto, nomeEml, arquivo) {
                 <a class="btn btn-success" href="${mailUrl}" style="justify-content:center">✉️ Abrir e-mail preenchido</a>
                 <button type="button" class="btn btn-outline" onclick="_pdfEmailAtual && _baixarArquivo(_pdfEmailAtual)" style="justify-content:center">📄 Baixar o PDF</button>
             </div>
+            ${dados.aoEnviar ? `<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:12px" onclick="this.closest('.modal-overlay').remove(); _envioDocAtual && _envioDocAtual.aoEnviar && _envioDocAtual.aoEnviar()">✔ Já enviei — marcar como Enviado</button>` : ''}
         </div>
     </div>`;
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
