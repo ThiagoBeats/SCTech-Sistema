@@ -34,7 +34,7 @@ const kpi2 = (page, txt) => page.locator('#fin-kpis2 .fin-kpi', { hasText: txt }
 const kpi1 = (page, rotulo) => page.locator('#fin-kpis .fin-kpi').filter({ has: page.locator('.fin-kpi-label', { hasText: new RegExp('^' + rotulo + '$') }) });
 
 // ---- Extrato ----
-test('Extrato avisa os recebimentos antigos sem conta do mes mostrado', async ({ page }) => {
+test('Extrato avisa os recebimentos sem conta do mes mostrado', async ({ page }) => {
     await abrir(page, {
         sc_contas_fin: [BANCO],
         sc_cr: [crPago(1, 500, '2026-11-03'), crPago(2, 250, '2026-11-05'), crPago(3, 700, '2026-11-07'), crPago(4, 999, '2026-10-12')],
@@ -42,10 +42,10 @@ test('Extrato avisa os recebimentos antigos sem conta do mes mostrado', async ({
     });
     await page.locator('.fin-tab-btn[data-tab="extrato"]').click();
     const aviso = page.locator('#extrato-aviso-sem-conta');
-    await expect(aviso).toHaveText('2 recebimentos antigos sem conta (R$ 750,00) não aparecem aqui');
+    await expect(aviso).toHaveText('2 recebimentos sem conta (R$ 750,00) não aparecem aqui');
     await page.fill('#extrato-mes', '2026-10');
     await page.locator('#extrato-mes').dispatchEvent('change');
-    await expect(aviso).toHaveText('1 recebimento antigo sem conta (R$ 999,00) não aparece aqui');
+    await expect(aviso).toHaveText('1 recebimento sem conta (R$ 999,00) não aparece aqui');
     await page.fill('#extrato-mes', '2026-09');
     await page.locator('#extrato-mes').dispatchEvent('change');
     await expect(aviso).toBeHidden();

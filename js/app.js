@@ -736,6 +736,8 @@ function garantirMeiosPadrao() {
 
 let _contasRascunho = null;
 let _meiosRascunho = null;
+// Meios que ficaram sem conta porque a conta deles foi excluida: o Salvar contas nao lhes da outra conta.
+const _meiosSemContaCfg = new Set();
 
 function _contaParaRascunho(c) {
     const r = { id: c.id, nome: c.nome || '', tipo: c.tipo, ativo: c.ativo !== false,
@@ -822,12 +824,27 @@ async function removerContaCfg(i) {
         }
         return;
     }
+    // Meio ligado a esta conta (salvo ou no rascunho dos meios) fica sem conta; a confirmacao diz qual.
+    const ligado = m => m && c.id != null && CaixaCore.mesmoId(m.conta_id, c.id);
+    const nomesMeios = [];
+    [...getMeiosPag(), ...(_meiosRascunho || [])].filter(ligado).forEach(m => {
+        const n = (m.nome || '').trim() || 'sem nome';
+        if (!nomesMeios.includes(n)) nomesMeios.push(n);
+    });
     if (c.id != null || (c.nome || '').trim()) {
-        if (!await showConfirm('Excluir a conta ' + (c.nome || '').trim() + '?', '🗑️', 'Excluir', 'Cancelar')) return;
+        const sobreMeios = !nomesMeios.length ? ''
+            : nomesMeios.length === 1 ? ' O meio ' + nomesMeios[0] + ' fica sem conta.'
+            : ' Os meios ' + nomesMeios.slice(0, -1).join(', ') + ' e ' + nomesMeios[nomesMeios.length - 1] + ' ficam sem conta.';
+        if (!await showConfirm('Excluir a conta ' + (c.nome || '').trim() + '?' + sobreMeios, '🗑️', 'Excluir', 'Cancelar')) return;
     }
+    [...getMeiosPag(), ...(_meiosRascunho || [])].filter(ligado).forEach(m => {
+        m.conta_id = null;
+        if (m.id != null) _meiosSemContaCfg.add(String(m.id));
+    });
     const k = _contasRascunho.indexOf(c);
     if (k >= 0) _contasRascunho.splice(k, 1);
     renderContasCfg();
+    if (nomesMeios.length) renderMeiosCfg();
 }
 
 function reativarContaCfg(i) {
@@ -872,7 +889,7 @@ async function salvarContasCfg() {
     // meio sem conta ganha a primeira conta do tipo certo; conta escolhida nunca muda
     const contaDoTipo = { dinheiro: 'caixa', pix: 'banco', transferencia: 'banco', boleto: 'banco', cartao_debito: 'maquininha', cartao_credito: 'maquininha' };
     getMeiosPag().forEach(m => {
-        if (m.conta_id != null || !contaDoTipo[m.tipo]) return;
+        if (m.conta_id != null || !contaDoTipo[m.tipo] || _meiosSemContaCfg.has(String(m.id))) return;
         const c = contas.find(x => x.tipo === contaDoTipo[m.tipo]);
         if (c) m.conta_id = c.id;
     });
@@ -13097,6 +13114,8 @@ function baixarContasReceber(data, linhas) {
         const entrada = (d, v, descricao) => aceita && db.movimentos_fin.push({ id: novoIdMov(), conta_id: conta.id, data: d, sentido: 'entrada', valor: v, origem: 'cr', origem_id: cr.id, grupo_id: grupo, descricao });
         if (!cr.cartao) { entrada(data, cr.valor, desc); return; }
         const repasses = CaixaCore.repassesCartao({ valor: cr.valor, data, conta, tipo: cr.cartao.tipo, vezes: cr.cartao.vezes, antecipar: cr.cartao.antecipar });
+        // Sem movimento, o Resultado e a Visao Geral leem as datas dos repasses daqui (as da maquininha na baixa).
+        if (!aceita) cr.cartao.repasses = repasses.map(r => ({ data: r.data, bruto: r.bruto }));
         repasses.forEach((r, i) => {
             entrada(r.data, r.bruto, repasses.length > 1 ? `${desc} (cartão ${i + 1}/${repasses.length})` : `${desc} (cartão)`);
             if (!(r.taxa > 0)) return;
@@ -15636,7 +15655,7 @@ function renderExtrato(opts) {
         const c = doExtrato.find(x => CaixaCore.mesmoId(x.id, mv.conta_id));
         return c && mv.data >= primeiro && mv.data <= ultimo && mv.data >= c.data_saldo_inicial;
     }).sort((x, y) => x.data < y.data ? -1 : x.data > y.data ? 1 : 0);
-    // Recebimentos sem movimento (de antes das contas, ou sem conta) contam no Resultado, mas nao passaram por conta nenhuma.
+    // Recebimentos sem movimento (de antes das contas, sem conta ou no cartao sem conta) contam no Resultado, mas nao passaram por conta nenhuma.
     let avSem = document.getElementById('extrato-aviso-sem-conta');
     if (!avSem) {
         avSem = document.createElement('div');
@@ -15644,9 +15663,9 @@ function renderExtrato(opts) {
         avSem.style.cssText = 'font-size:13px;color:#8A6A00;margin-bottom:10px';
         avAb.parentNode.insertBefore(avSem, avAb.nextSibling);
     }
-    const semMov = ResultadoCore.recebimentosSemMovimento({ de: primeiro, ate: ultimo, contasReceber: db.contas_receber, movimentos: movs, contas });
-    avSem.textContent = semMov.qtd === 1 ? `1 recebimento antigo sem conta (${brl(semMov.valor)}) não aparece aqui`
-        : semMov.qtd > 1 ? `${semMov.qtd} recebimentos antigos sem conta (${brl(semMov.valor)}) não aparecem aqui` : '';
+    const semMov = ResultadoCore.recebimentosSemMovimento({ de: primeiro, ate: ultimo, contasReceber: db.contas_receber, movimentos: movs, contas, contasPagar: db.contas_pagar });
+    avSem.textContent = semMov.qtd === 1 ? `1 recebimento sem conta (${brl(semMov.valor)}) não aparece aqui`
+        : semMov.qtd > 1 ? `${semMov.qtd} recebimentos sem conta (${brl(semMov.valor)}) não aparecem aqui` : '';
     avSem.style.display = semMov.qtd > 0 ? '' : 'none';
     const tb = document.getElementById('extrato-linhas');
     const podeExcluir = temAcesso('financeiro.extrato', 'completo');

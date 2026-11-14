@@ -39,6 +39,8 @@ test('baixa com cartao em maquininha que ainda nao abriu: sem movimento, mas a t
     const cps = await ler(page, 'sc_cp');
     expect(cps).toHaveLength(1);
     expect(cps[0]).toMatchObject({ categoria: 'taxa_cartao', status: 'Pago', valor: 30, origem_cr_id: 601, data_pagamento: somarDias(HOJE, 30) });
+    // Sem movimento: as datas dos repasses ficam guardadas na conta a receber (o Resultado le daqui)
+    expect((await ler(page, 'sc_cr'))[0].cartao.repasses).toEqual([{ data: somarDias(HOJE, 30), bruto: 1000 }]);
 });
 
 test('baixa com cartao sem conta no meio: a taxa continua existindo', async ({ page }) => {

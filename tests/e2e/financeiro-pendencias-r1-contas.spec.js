@@ -58,12 +58,27 @@ test('remover conta sem movimentos pede confirmacao', async ({ page }) => {
     await abrirPref(page, { sc_contas_fin: [CAIXA, BANCO], sc_meios_pag: MEIOS });
     const remover = () => page.locator('#emp-contas .conta-linha').nth(1).locator('button[title="Remover conta"]').click();
     await remover();
-    await expect(page.locator('#sc-modal-msg')).toHaveText('Excluir a conta Banco?');
+    await expect(page.locator('#sc-modal-msg')).toHaveText('Excluir a conta Banco? O meio PIX fica sem conta.');
     await page.locator('#sc-modal-cancel').click();
     await expect(page.locator('#emp-contas .conta-linha')).toHaveCount(2);
+    expect((await ler(page, 'sc_meios_pag'))[1].conta_id, 'cancelar nao mexe no meio').toBe(11);
     await remover();
     await page.locator('#sc-modal-ok').click();
     await expect(page.locator('#emp-contas .conta-linha')).toHaveCount(1);
+    await expect(page.locator('#emp-meios .meio-linha').nth(1).locator('.meio-conta')).toHaveValue('');
+});
+
+test('excluir conta sem movimentos: os meios dela ficam sem conta (e nao ganham outra ao salvar)', async ({ page }) => {
+    const BANCO2 = { ...BANCO, id: 12, nome: 'Banco 2' };
+    const meios = [...MEIOS, { id: 23, nome: 'Transferência', tipo: 'transferencia', conta_id: 11 }];
+    await abrirPref(page, { sc_contas_fin: [CAIXA, BANCO, BANCO2], sc_meios_pag: meios });
+    await page.locator('#emp-contas .conta-linha').nth(1).locator('button[title="Remover conta"]').click();
+    await expect(page.locator('#sc-modal-msg')).toHaveText('Excluir a conta Banco? Os meios PIX e Transferência ficam sem conta.');
+    await page.locator('#sc-modal-ok').click();
+    await page.click('#emp-contas-card button:has-text("Salvar contas")');
+    await expect.poll(async () => (await ler(page, 'sc_contas_fin')).length).toBe(2);
+    const salvos = await ler(page, 'sc_meios_pag');
+    expect(salvos.map(m => [m.nome, m.conta_id])).toEqual([['Dinheiro', 10], ['PIX', null], ['Transferência', null]]);
 });
 
 test('salvar com o nome apagado numa conta com movimentos nao exclui: oferece desativar', async ({ page }) => {
@@ -248,6 +263,7 @@ test('conta sem vencimento mostra "sem vencimento" e nao entra em Hoje nem como 
     await entrar(page, BASE, { sc_contas_fin: [CAIXA], sc_meios_pag: MEIOS,
         sc_cr: [cr(1, { data_vencimento: undefined, descricao: 'Sem data' })], sc_cp: [cp(2, { data_vencimento: '', descricao: 'Sem data pagar' })] });
     await page.goto(BASE + '/financeiro.html');
+    await expect(page.locator('#hoje-tarefas')).toContainText('Tudo em dia');
     await expect(page.locator('#hoje-tarefas')).not.toContainText('Sem data');
     const semanas = await page.evaluate(() => _simPrevisao([]));
     expect(semanas.reduce((s, w) => s + w.entradas + w.saidas, 0)).toBe(0);
@@ -273,7 +289,27 @@ test('conta a receber com vencimento vazio nao tem botao Cobrar; com vencimento 
 test('item atrasado com valor 0 nao marca "inclui atrasados"', async ({ page }) => {
     await entrar(page, BASE, { sc_contas_fin: [CAIXA], sc_meios_pag: MEIOS, sc_cr: [cr(1, { valor: 0, data_vencimento: somarDias(HOJE, -5), status: 'Atrasado' })] });
     await page.goto(BASE + '/financeiro.html');
+    await expect(page.locator('#hoje-total')).toHaveText('R$ 100,00');
+    await expect.poll(() => page.evaluate(() => _chartHoje && _chartHoje.data.labels.length)).toBe(8);
     await expect(page.locator('#hoje-previsao-legenda')).toHaveText('');
+    expect((await page.evaluate(() => _chartHoje.data.labels)).some(l => l.endsWith('*'))).toBe(false);
+});
+
+test('Hoje: previsao e legenda sem a conta desativada', async ({ page }) => {
+    const inativo = { ...BANCO, ativo: false };
+    await entrar(page, BASE, { sc_contas_fin: [CAIXA, inativo], sc_meios_pag: MEIOS,
+        sc_mov_fin: [mov(1, 11, AMANHA, 'entrada', 1000, 'Repasse banco desativado')],
+        sc_cr: [cr(2, { valor: 50, data_vencimento: somarDias(HOJE, -3), status: 'Atrasado' })] });
+    await page.goto(BASE + '/financeiro.html');
+    await expect(page.locator('#hoje-total')).toHaveText('R$ 100,00');
+    await expect(page.locator('#hoje-saldos')).not.toContainText('Banco');
+    await expect(page.locator('#hoje-previsao-legenda')).toHaveText('* inclui atrasados');
+    await expect.poll(() => page.evaluate(() => _chartHoje && _chartHoje.data.labels.length)).toBe(8);
+    const dados = await page.evaluate(() => ({ labels: _chartHoje.data.labels, saldos: _chartHoje.data.datasets[0].data }));
+    expect(dados.labels[0].endsWith('*')).toBe(true);
+    // 100 do Caixa + 50 atrasado; os 1000 do banco desativado nao entram
+    expect(dados.saldos[0]).toBe(150);
+    expect(Math.max(...dados.saldos)).toBe(150);
 });
 
 // ---- Exclusoes (R2, R3) ----

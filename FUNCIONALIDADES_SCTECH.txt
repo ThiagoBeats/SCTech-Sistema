@@ -515,11 +515,17 @@ Importar Dados:
     tela podem ficar trocados até recarregar a página; importar de novo
     sobrescreve tudo
   - A importação limpa os avisos e a cópia da correção única do Financeiro
-    (seção 10.13), para o backup antigo ser corrigido de novo quando abrir
+    (seção 10.13), para o backup antigo ser corrigido de novo quando abrir.
+    Isso só acontece depois que os dados importados foram gravados: se faltar
+    espaço, primeiro sai a cópia da correção única (a parte grande) e a
+    gravação é tentada de novo; se ainda assim não couber, a cópia volta e a
+    marca de "já corrigido" continua como estava (a correção não roda de novo
+    sobre dados misturados)
   - Em qualquer tela, se o navegador ficar sem espaço ao salvar, aparece "Não
     foi possível salvar: o espaço do navegador acabou. Baixe uma cópia de
     segurança e libere espaço." (uma vez por página aberta) e a tela não
-    quebra
+    quebra. Nos botões que salvam e recarregam (baixas, estornos, exclusões,
+    cadastros), o aviso aparece a cada tentativa e a página não recarrega
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1247,9 +1253,13 @@ Contas (Caixa, Banco, Maquininha):
     saldos e da previsão, e o histórico continua no Extrato." com os botões
     Desativar e Cancelar. A conta desativada mostra o botão "Reativar" e só
     vale ao clicar em "Salvar contas". Conta sem movimentos pede "Excluir a
-    conta [nome]?"
+    conta [nome]?". Se algum meio de pagamento usa essa conta, a pergunta diz
+    que ele fica sem conta ("Excluir a conta [nome]? O meio [meio] fica sem
+    conta."; com mais de um, "Os meios [A] e [B] ficam sem conta."). Ao
+    excluir, o meio fica "(sem conta)" e o "Salvar contas" não lhe dá outra
   - Conta desativada não entra no saldo de hoje, na tela Hoje, nos saldos do
-    Extrato nem na previsão; o histórico dela continua no Extrato
+    Extrato, na previsão nem no "Previsto até o fim do mês" do Resultado; o
+    histórico dela continua no Extrato
   - O dinheiro do cartão que ainda não caiu ("a cair") NÃO entra no saldo de
     hoje. No dia em que a data chega, ele passa a contar sozinho
 
@@ -1381,11 +1391,13 @@ Agora o Financeiro tem 7 abas e a primeira, aberta por padrão, é "Hoje".
   - Mês antes da abertura da conta (antes da data do saldo inicial): saldo 0
     no início e no fim, com "Conta aberta em dd/mm/aaaa" (com o nome da conta
     quando está em "Todas"). Abertura no meio do mês continua como antes
-  - Recebimentos antigos, de antes das contas, não passaram por conta nenhuma e
-    não aparecem aqui. O Extrato avisa, só para o mês mostrado e só quando há:
-    "N recebimentos antigos sem conta (R$ X) não aparecem aqui" ("1
-    recebimento antigo sem conta (R$ X) não aparece aqui"). Eles continuam
-    contando no Resultado do mês e na Visão Geral
+  - Recebimentos sem conta (antigos, de antes das contas, ou baixados sem
+    conta ou antes da abertura da conta, como um cartão sem maquininha) não
+    passaram por conta nenhuma e não aparecem aqui. O Extrato avisa, só para o
+    mês mostrado e só quando há: "N recebimentos sem conta (R$ X) não aparecem
+    aqui" ("1 recebimento sem conta (R$ X) não aparece aqui"). Eles continuam
+    contando no Resultado do mês e na Visão Geral (no cartão, nas datas dos
+    repasses guardadas na baixa)
   - "Transferir entre contas": de, para, valor e data (uma saída numa conta e
     uma entrada na outra). O destino começa em "Selecione…" e é obrigatório
     ("Escolha a conta de destino."), diferente da origem ("Escolha uma conta
@@ -1492,9 +1504,11 @@ Nova aba (8ª) que mostra se o mês fechou no azul. Escolha o mês no campo "Mê
     que a guia foi paga. Por isso o Resultado do mês e a Visão Geral podem
     mostrar um valor de imposto diferente do Extrato, que mostra o dinheiro
     na data em que saiu da conta (a data do pagamento)
-  - De propósito: guia parcelada mantém o deslocamento da primeira (cada
-    parcela tem o mês de referência da primeira guia, mudado na mesma
-    distância); o mês de referência continua editável em cada guia
+  - De propósito: guia parcelada mantém o deslocamento da primeira. Cada
+    parcela tem o seu próprio mês de referência padrão (o mês anterior ao
+    vencimento dela), mudado na mesma distância em que a primeira guia foi
+    mudada (sem mudar a primeira, cada parcela fica com o mês anterior ao seu
+    vencimento); o mês de referência continua editável em cada guia
   - De propósito: no gráfico da Visão Geral, o imposto do mês aparece no
     último dia do mês, porque ele vale para o mês inteiro
 

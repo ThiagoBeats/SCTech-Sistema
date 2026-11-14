@@ -55,20 +55,28 @@
 
     // Recebimento sem movimento: pela data_pagamento, valor da parcela. Se foi no cartao (baixa sem conta ou
     // antes da abertura da conta), cada repasse na sua data (valor bruto), como os que tem movimento; a taxa
-    // de cada repasse ja e uma conta paga naquela data.
-    function partesSemMovimento(cr, contas) {
+    // de cada repasse ja e uma conta paga naquela data. As datas sao as da baixa: os repasses guardados na
+    // conta a receber (cartao.repasses); sem eles (dado antigo), as datas das contas de taxa dela
+    // (origem_cr_id), que foram gravadas na baixa; so sem nada disso as datas sao refeitas pela maquininha de hoje.
+    function partesSemMovimento(cr, contas, contasPagar) {
         const cx = cr.cartao && cr.cartao.tipo ? caixa() : null;
         if (!cx) return [{ data: cr.data_pagamento, valor: num(cr.valor) }];
+        const guardados = Array.isArray(cr.cartao.repasses) ? cr.cartao.repasses.filter(r => r && r.data) : [];
+        if (guardados.length) return guardados.map(r => ({ data: String(r.data), valor: num(r.bruto) }));
         const conta = (contas || []).find(c => c && mesmoId(c.id, cr.conta_id));
-        return cx.repassesCartao({ valor: num(cr.valor), data: String(cr.data_pagamento), conta, tipo: cr.cartao.tipo, vezes: cr.cartao.vezes, antecipar: !!cr.cartao.antecipar })
-            .map(r => ({ data: r.data, valor: r.bruto }));
+        const refeitos = cx.repassesCartao({ valor: num(cr.valor), data: String(cr.data_pagamento), conta, tipo: cr.cartao.tipo, vezes: cr.cartao.vezes, antecipar: !!cr.cartao.antecipar });
+        const taxas = (contasPagar || []).filter(cp => cp && cp.categoria === 'taxa_cartao' && mesmoId(cp.origem_cr_id, cr.id) && cp.data_pagamento)
+            .map(cp => String(cp.data_pagamento)).sort();
+        // O bruto de cada repasse nao depende da maquininha; so as datas mudam com ela.
+        if (taxas.length === refeitos.length) return refeitos.map((r, i) => ({ data: taxas[i], valor: r.bruto }));
+        return refeitos.map(r => ({ data: r.data, valor: r.bruto }));
     }
 
     // Entradas: para cada CR paga, os movimentos de entrada origem 'cr' dela (cada um na sua data);
     // sem movimento, a propria parcela pela data_pagamento (no cartao, cada repasse na sua data).
     // Transferencias e CRs nao pagas nao contam. `dentro(data)` diz se a data entra (mes, mes ate hoje ou
     // periodo). `soSemMovimento`: so os recebimentos sem movimento (os que nao passaram por conta nenhuma).
-    function itensEntrada(dentro, contasReceber, movimentos, contas, soSemMovimento) {
+    function itensEntrada(dentro, contasReceber, movimentos, contas, soSemMovimento, contasPagar) {
         const itens = [];
         const porCr = new Map();
         (movimentos || []).forEach(m => {
@@ -82,7 +90,7 @@
             if (dela && dela.length) {
                 if (!soSemMovimento) dela.forEach(m => { if (dentro(m.data)) itens.push({ data: m.data, valor: num(m.valor), cr_id: cr.id }); });
             } else if (cr.data_pagamento) {
-                partesSemMovimento(cr, contas).forEach(p => { if (dentro(p.data)) itens.push({ data: p.data, valor: p.valor, cr_id: cr.id }); });
+                partesSemMovimento(cr, contas, contasPagar).forEach(p => { if (dentro(p.data)) itens.push({ data: p.data, valor: p.valor, cr_id: cr.id }); });
             }
         });
         return itens;
@@ -90,14 +98,14 @@
 
     // Recebimentos sem movimento com data em [de, ate]: contam no Resultado e na Visao Geral, mas nao aparecem
     // no Extrato (nao passaram por conta nenhuma). `qtd` = quantas contas a receber, `valor` = soma no periodo.
-    function recebimentosSemMovimento({ de, ate, contasReceber, movimentos, contas }) {
+    function recebimentosSemMovimento({ de, ate, contasReceber, movimentos, contas, contasPagar }) {
         if (!de || !ate || de > ate) return { qtd: 0, valor: 0 };
-        const itens = itensEntrada(d => !!d && String(d) >= de && String(d) <= ate, contasReceber, movimentos, contas, true);
+        const itens = itensEntrada(d => !!d && String(d) >= de && String(d) <= ate, contasReceber, movimentos, contas, true, contasPagar);
         return { qtd: new Set(itens.map(i => String(i.cr_id))).size, valor: arredondar(itens.reduce((s, i) => s + i.valor, 0)) };
     }
 
-    function entradasDoMes({ mes, contasReceber, movimentos, ateData, contas }) {
-        const itens = itensEntrada(d => noMes(d, mes, ateData), contasReceber, movimentos, contas);
+    function entradasDoMes({ mes, contasReceber, movimentos, ateData, contas, contasPagar }) {
+        const itens = itensEntrada(d => noMes(d, mes, ateData), contasReceber, movimentos, contas, false, contasPagar);
         return { total: arredondar(itens.reduce((s, i) => s + i.valor, 0)), itens };
     }
 
@@ -144,7 +152,7 @@
     }
 
     function resultadoDoMes({ mes, contasReceber, contasPagar, movimentos, aliquota, ateData, contas }) {
-        const entradas = entradasDoMes({ mes, contasReceber, movimentos, ateData, contas }).total;
+        const entradas = entradasDoMes({ mes, contasReceber, movimentos, ateData, contas, contasPagar }).total;
         const sai = saidasDoMes({ mes, contasPagar, ateData });
         const taxas = sai.porGrupo.taxas;
         const faturamento = arredondar(entradas - taxas);
@@ -165,7 +173,7 @@
     function resultadoDoPeriodo({ de, ate, contasReceber, contasPagar, movimentos, aliquota, contas }) {
         const dentro = d => !!d && String(d) >= de && String(d) <= ate;
         const ok = !!de && !!ate && de <= ate;
-        const itensE = ok ? itensEntrada(dentro, contasReceber, movimentos, contas) : [];
+        const itensE = ok ? itensEntrada(dentro, contasReceber, movimentos, contas, false, contasPagar) : [];
         const itensS = ok ? itensSaida(dentro, contasPagar) : [];
         const entradas = arredondar(itensE.reduce((s, i) => s + i.valor, 0));
         const sai = somarPorGrupo(itensS);
@@ -219,9 +227,17 @@
 
     // O que ja foi baixado e ainda vai cair no mes (data depois de hoje ate o fim do mes), pelas mesmas regras do
     // Resultado do mes: entradas (cartao a cair), saidas sem imposto (inclui a taxa desses repasses) e as taxas.
-    // Transferencias entre contas nao entram (nem como entrada, nem como saida).
+    // Transferencias entre contas nao entram (nem como entrada, nem como saida). Como no Hoje e na previsao,
+    // movimentos depois de hoje de conta desativada (ativo === false) nao contam: a entrada vale zero (a conta a
+    // receber continua com movimento, nao volta para as datas de repasse) e a conta a pagar paga por esse
+    // movimento (a taxa do repasse) sai da conta.
     function aCairNoMes({ mes, hoje, contasReceber, contasPagar, movimentos, contas }) {
-        const base = { mes, contasReceber, contasPagar, movimentos, contas, aliquota: 0 };
+        const inativa = id => (contas || []).some(c => c && mesmoId(c.id, id) && c.ativo === false);
+        const fora = new Set((movimentos || []).filter(m => m && String(m.data) > hoje && inativa(m.conta_id)));
+        const movs = fora.size ? (movimentos || []).map(m => (fora.has(m) ? Object.assign({}, m, { valor: 0 }) : m)) : movimentos;
+        const cpsFora = new Set([...fora].filter(m => m.origem === 'cp' && m.origem_id != null).map(m => String(m.origem_id)));
+        const cps = cpsFora.size ? (contasPagar || []).filter(cp => !(cp && cpsFora.has(String(cp.id)) && String(cp.data_pagamento) > hoje)) : contasPagar;
+        const base = { mes, contasReceber, contasPagar: cps, movimentos: movs, contas, aliquota: 0 };
         const todo = resultadoDoMes(base), ate = resultadoDoMes(Object.assign({}, base, { ateData: hoje }));
         const semImposto = r => r.saidas - r.imposto.valor;
         return {
@@ -265,6 +281,7 @@
     // conta, mesmo lancadas avulsas) vencendo no mes (pagas ou nao), cada CP uma vez + DFs antigas (sem periodicidade), ativas, ainda nao geradas naquele mes.
     // A DF conta uma vez so: nao soma se no mes ha CP gerada dela (tipo 'fixo' com a mesma descricao, ou ligada pelo
     // despesa_fixa_id) ou uma CP ja contada aqui com a mesma descricao e o mesmo valor (a mesma despesa lancada a mao).
+    // Cada CP cobre no maximo uma DF (duas DFs iguais e uma CP: so uma DF sai); a ligacao pelo id vale primeiro.
     // Guia de imposto lancada como fixa fica de fora: o imposto ja entra na margem (custo variavel).
     function despesasFixasDoMes({ mes, contasPagar, despesasFixas }) {
         const doMes = (contasPagar || []).filter(cp => cp && mesDe(cp.data_vencimento) === mes);
@@ -273,12 +290,19 @@
         contadas.forEach(cp => { total += num(cp.valor); });
         const texto = v => String(v == null ? '' : v).trim().toLowerCase();
         const cent = v => Math.round(num(v) * 100);
-        (despesasFixas || []).forEach(df => {
-            if (!df || df.periodicidade || df.ativo === false || df.categoria === 'imposto') return;
-            if (!vencimentoDfNoMes(df, mes)) return;
-            const gerada = doMes.some(cp => (cp.tipo === 'fixo' && cp.descricao === df.descricao) || mesmoId(cp.despesa_fixa_id, df.id))
-                || contadas.some(cp => texto(cp.descricao) === texto(df.descricao) && cent(cp.valor) === cent(df.valor));
-            if (!gerada) total += num(df.valor);
+        const dfs = (despesasFixas || []).filter(df => df && !df.periodicidade && df.ativo !== false && df.categoria !== 'imposto' && vencimentoDfNoMes(df, mes));
+        const usadas = new Set();
+        const cobrir = (df, casa) => {
+            const cp = doMes.find(x => !usadas.has(x) && casa(x, df));
+            if (cp) usadas.add(cp);
+            return !!cp;
+        };
+        const pelaLigacao = (cp, df) => mesmoId(cp.despesa_fixa_id, df.id);
+        const pelaDescricao = (cp, df) => ((cp.tipo === 'fixo' && cp.descricao === df.descricao)
+            || (contadas.includes(cp) && texto(cp.descricao) === texto(df.descricao) && cent(cp.valor) === cent(df.valor)));
+        const cobertas = new Set(dfs.filter(df => cobrir(df, pelaLigacao)));
+        dfs.forEach(df => {
+            if (!cobertas.has(df) && !cobrir(df, pelaDescricao)) total += num(df.valor);
         });
         return arredondar(total);
     }
