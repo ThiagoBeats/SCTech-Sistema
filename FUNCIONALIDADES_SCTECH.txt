@@ -642,7 +642,9 @@ Formulário de cadastro/edição:
   - Razão Social (text)
   - Nome Fantasia (text)
   - Endereço Completo (text)
-  - Telefone (text)
+  - Telefone / WhatsApp (text)
+  - Telefone vendedor (text): o envio do pedido de compra pelo WhatsApp usa
+    este número quando preenchido (senão, o telefone geral)
   - E-mail (email)
   - Inscrição Estadual (text)
   - Observações (text)
@@ -651,11 +653,10 @@ Formulário de cadastro/edição:
 Tabela de fornecedores:
   - Colunas: Razão Social / Nome Fantasia | CNPJ | Cidade/UF |
     Telefone | E-mail | Vínculos (qtd de tecidos/materiais) | Ações
+  - Na coluna Telefone, o telefone do vendedor aparece embaixo ("Vendedor: …")
   - A coluna "Total de compras" foi retirada (no lugar dela, o histórico abaixo)
-  - Na célula Ações, antes do ⋮, fica o botão 🛒 (fora do menu, não é coluna
-    separada): mostra quantos itens há no carrinho do fornecedor
-    (sem itens: ícone discreto, sem número) e o selo "novo" quando entra item
-    novo; o selo some ao abrir o carrinho. Clicar abre o carrinho (seção 9.4)
+  - O 🛒 saiu da linha do fornecedor: os carrinhos ficam no botão
+    "🛒 Abrir carrinhos" no topo da tela (seção 9.4)
   - Ações: menu ⋮ com "🛒 Novo pedido de compra" | "📜 Histórico de pedidos" |
     "✏️ Editar fornecedor" | "🗑️ Excluir fornecedor" (com confirmação)
   - Não dá para excluir fornecedor com carrinho aberto: aparece "Este
@@ -685,8 +686,13 @@ Filtros:
 Tabela de pedidos de compra:
   - Colunas: ID | Fornecedor | Data | Qtd. Itens | Valor Estimado |
     Status | Ações (ver, mudar status, excluir)
+  - Pedido em Rascunho tem o botão "📨 Enviar": abre o pedido com o menu de
+    envio aberto (Compartilhar externamente / E-mail — ver "Enviar
+    documentos"). Depois de compartilhar, o sistema pergunta "Marcar o pedido
+    #N como Enviado?"; nas janelas de ajuda (PDF baixado / e-mail) há o botão
+    "✔ Já enviei — marcar como Enviado". "Agora não" mantém em Rascunho.
   - A data de envio é gravada quando o pedido vira "Enviado" (por qualquer
-    caminho, inclusive ao fechar o carrinho); se voltar para Rascunho, é apagada
+    caminho); se voltar para Rascunho, é apagada
 
 ── 9.3 ABA: NOVO PEDIDO DE COMPRA ──────────────────────────────────────────────
 
@@ -718,12 +724,22 @@ Como adicionar:
   - Carrinho aberto não aparece em Pedidos de Compra, nem no histórico, nem em
     totais
 
-Na janela do carrinho (ícone 🛒 em Fornecedores):
+Botão "🛒 Abrir carrinhos" (topo da tela de Fornecedores, à direita):
+  - Bem visível, com uma bolinha vermelha com o número de carrinhos que têm
+    item novo que ninguém viu ainda. A mesma bolinha aparece em
+    "Fornecedores" no menu lateral, em qualquer tela.
+  - Abre a lista de todos os carrinhos com itens: fornecedor, quantidade de
+    itens, total e o selo "novo" (os com novidade vêm primeiro). Clicar abre o
+    carrinho; abrir apaga o "novo" daquele carrinho e diminui a contagem.
+  - Sem carrinho com itens: "Nenhum carrinho com itens."
+
+Na janela do carrinho:
   - Itens com quantidade editável, preço, subtotal e total
   - ✕ tira um item; "Esvaziar" limpa o carrinho (com confirmação)
-  - "Fechar e enviar ao fornecedor": cria o pedido de compra já como Enviado
-    (com data de envio de hoje), abre o PDF para mandar ao fornecedor e deixa o
-    carrinho vazio. Carrinho vazio não pode ser fechado.
+  - "Fechar e gerar pedido": cria o pedido de compra como Rascunho, deixa o
+    carrinho vazio e leva direto para a aba Pedidos de Compra, com o pedido
+    novo destacado. O envio ao fornecedor é feito lá, pelo "📨 Enviar".
+    Carrinho vazio não pode ser fechado.
   - O pedido segue o fluxo normal (marcar Recebido gera a conta a pagar)
   - Ver o carrinho e o histórico de pedidos exigem Fornecedores (visualizar);
     editar quantidade, tirar item, esvaziar e fechar exigem Fornecedores

@@ -5,13 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Fornecedores - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261117a">
+    <link rel="stylesheet" href="css/style.css?v=20261118a">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
     <aside class="sidebar" id="main-sidebar"></aside>
     <main class="main">
-        <div class="header"><h2>Fornecedores e Pedidos de Compra</h2></div>
+        <div class="header">
+            <h2>Fornecedores e Pedidos de Compra</h2>
+            <button type="button" class="btn-abrir-carrinhos" id="btn-abrir-carrinhos" onclick="abrirListaCarrinhos()">
+                🛒 Abrir carrinhos <span class="carrinhos-contagem" id="carrinhos-contagem" hidden>0</span>
+            </button>
+        </div>
 
         <div class="tab-nav">
             <button class="tab-btn forn-tab-btn active" data-tab="lista"   onclick="mostrarTabFornecedores('lista')">🏭 Fornecedores</button>
@@ -71,6 +76,10 @@
                     <div class="form-group">
                         <label>Telefone / WhatsApp</label>
                         <input type="text" id="forn-tel" placeholder="(11) 99999-9999">
+                    </div>
+                    <div class="form-group">
+                        <label>Telefone vendedor</label>
+                        <input type="text" id="forn-tel-vendedor" placeholder="(11) 99999-9999">
                     </div>
                     <div class="form-group">
                         <label>E-mail</label>
@@ -230,15 +239,15 @@
             </div>
         </div>
     </main>
-    <script src="js/etiquetas-core.js?v=20261117a"></script>
-    <script src="js/etiquetas-render.js?v=20261117a"></script>
-    <script src="js/cortina-desenho.js?v=20261117a"></script>
-    <script src="js/docs-layout-core.js?v=20261117a"></script>
-    <script src="js/financeiro-core.js?v=20261117a"></script>
-    <script src="js/caixa-core.js?v=20261117a"></script>
-    <script src="js/carrinho-core.js?v=20261117a"></script>
-    <script src="js/resultado-core.js?v=20261117a"></script>
-    <script src="js/app.js?v=20261117a"></script>
-    <script src="js/compartilhar-doc.js?v=20261117a"></script>
+    <script src="js/etiquetas-core.js?v=20261118a"></script>
+    <script src="js/etiquetas-render.js?v=20261118a"></script>
+    <script src="js/cortina-desenho.js?v=20261118a"></script>
+    <script src="js/docs-layout-core.js?v=20261118a"></script>
+    <script src="js/financeiro-core.js?v=20261118a"></script>
+    <script src="js/caixa-core.js?v=20261118a"></script>
+    <script src="js/carrinho-core.js?v=20261118a"></script>
+    <script src="js/resultado-core.js?v=20261118a"></script>
+    <script src="js/app.js?v=20261118a"></script>
+    <script src="js/compartilhar-doc.js?v=20261118a"></script>
 </body>
 </html>

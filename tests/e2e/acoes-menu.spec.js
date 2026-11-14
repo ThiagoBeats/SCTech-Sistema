@@ -12,7 +12,7 @@ test('fornecedores: ⋮ abre as acoes de hoje e nao ha coluna Total de compras',
     await page.goto(BASE + '/fornecedores.html');
     await expect(page.locator('#tb-fornecedores').locator('..').locator('thead')).not.toContainText('Total de compras');
     const linha = page.locator('#tb-fornecedores tr', { hasText: 'Tecidos Alfa' });
-    await expect(linha.locator('td').last().locator('button:not(.btn-carrinho)')).toHaveCount(1);
+    await expect(linha.locator('td').last().locator('button')).toHaveCount(1);
     await linha.locator('button[aria-label="Ações"]').click();
     await expect(linha.locator('button[aria-label="Ações"]')).toHaveAttribute('aria-expanded', 'true');
     await expect(itens(page)).toHaveText([/Novo pedido de compra$/, /Histórico de pedidos$/, /Editar fornecedor$/, /Excluir fornecedor$/]);

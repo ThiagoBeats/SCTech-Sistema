@@ -1125,7 +1125,8 @@ function renderSidebar() {
         return lista.some(mod => temAcessoAlgumaSub(mod, 'visualizar', usuarioAtual));
     }).map(m => {
         const active = m.href.toLowerCase() === currentFile;
-        return `<a href="${m.href}" class="nav-item${active ? ' active' : ''}" title="${escapeHtml(m.label)}">${navIcon(m.icon)}<span class="nav-text">${escapeHtml(m.label)}</span></a>`;
+        const selo = m.href === 'fornecedores.html' ? `<span class="nav-selo" id="nav-selo-carrinhos"${contarCarrinhosNovos() ? '' : ' hidden'}>${contarCarrinhosNovos()}</span>` : '';
+        return `<a href="${m.href}" class="nav-item${active ? ' active' : ''}" title="${escapeHtml(m.label)}">${navIcon(m.icon)}<span class="nav-text">${escapeHtml(m.label)}</span>${selo}</a>`;
     }).join('');
 
     const papelAtual = usuarioAtual ? db.papeis.find(p => p.id === usuarioAtual.papel_id) : null;
@@ -8338,6 +8339,7 @@ async function salvarFornecedor() {
         cidade: document.getElementById('forn-cidade')?.value.trim() || '',
         estado: document.getElementById('forn-estado')?.value.trim().toUpperCase() || '',
         tel:    document.getElementById('forn-tel')?.value.trim()    || '',
+        tel_vendedor: document.getElementById('forn-tel-vendedor')?.value.trim() || '',
         email:  document.getElementById('forn-email')?.value.trim()  || '',
         ie:     document.getElementById('forn-ie')?.value.trim()     || '',
         obs:    document.getElementById('forn-obs')?.value.trim()    || '',
@@ -8367,6 +8369,7 @@ function editarFornecedor(id) {
     set('forn-cidade',       f.cidade);
     set('forn-estado',       f.estado);
     set('forn-tel',          f.tel);
+    set('forn-tel-vendedor', f.tel_vendedor);
     set('forn-email',        f.email);
     set('forn-ie',           f.ie);
     set('forn-obs',          f.obs);
@@ -8383,7 +8386,7 @@ function editarFornecedor(id) {
 function cancelarEdicaoFornecedor() {
     editandoIdFornecedor = null;
     ['forn-cnpj','forn-nome','forn-nome-fantasia','forn-end','forn-num',
-     'forn-cidade','forn-estado','forn-tel','forn-email','forn-ie','forn-obs',
+     'forn-cidade','forn-estado','forn-tel','forn-tel-vendedor','forn-email','forn-ie','forn-obs',
      'forn-cnpj-status'].forEach(id => {
         const el = document.getElementById(id);
         if (el) { el.tagName === 'SPAN' ? el.innerHTML = '' : el.value = ''; }
@@ -8421,12 +8424,49 @@ function _carrinhoDe(fornecedorId) {
     return db.carrinhos.find(c => c.fornecedor_id == fornecedorId) || null;
 }
 
-function _carrinhoBotaoHtml(fornecedorId) {
-    const car = _carrinhoDe(fornecedorId);
-    const n = CarrinhoCore.contarItens(car);
-    const novo = car && car.novo && n > 0 ? '<span class="carrinho-selo-novo">novo</span>' : '';
-    const num = n > 0 ? `<span class="carrinho-contagem">${n}</span>` : '';
-    return `<button type="button" class="btn-carrinho${n > 0 ? ' cheio' : ''}" title="Carrinho de compras" aria-label="Carrinho de compras" onclick="abrirCarrinho(${fornecedorId})">🛒${num}${novo}</button>`;
+// Quantos carrinhos tem item novo que ninguem viu ainda (o selo "novo").
+// E' o numero do botao "Abrir carrinhos" e da bolinha em Fornecedores no menu.
+function contarCarrinhosNovos() {
+    return (db.carrinhos || []).filter(c => c.novo && CarrinhoCore.contarItens(c) > 0).length;
+}
+
+function atualizarContagemCarrinhos() {
+    const n = contarCarrinhosNovos();
+    document.querySelectorAll('#carrinhos-contagem, #nav-selo-carrinhos').forEach(el => {
+        el.textContent = n;
+        el.hidden = !n;
+    });
+    const btn = document.getElementById('btn-abrir-carrinhos');
+    if (btn) btn.classList.toggle('com-novo', n > 0);
+}
+
+// Janela "Abrir carrinhos": um cartao por fornecedor com carrinho cheio.
+function abrirListaCarrinhos() {
+    if (!temAcesso('fornecedores', 'visualizar')) return;
+    document.getElementById('carrinhos-lista-modal')?.remove();
+    const cheios = (db.carrinhos || [])
+        .filter(c => CarrinhoCore.contarItens(c) > 0)
+        .map(c => ({ c, forn: db.fornecedores.find(f => f.id == c.fornecedor_id) }))
+        .filter(x => x.forn)
+        .sort((a, b) => (b.c.novo ? 1 : 0) - (a.c.novo ? 1 : 0) || String(a.forn.nome).localeCompare(String(b.forn.nome)));
+    const o = document.createElement('div');
+    o.id = 'carrinhos-lista-modal';
+    o.className = 'sc-modal-overlay';
+    o.style.display = 'flex';
+    o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:560px;width:95%">
+        <h3 style="margin:0 0 12px;font-size:16px">🛒 Carrinhos</h3>
+        <div class="carrinhos-lista">${cheios.length ? cheios.map(({ c, forn }) => {
+            const n = CarrinhoCore.contarItens(c);
+            return `<button type="button" class="carrinhos-lista-item${c.novo ? ' novo' : ''}" onclick="document.getElementById('carrinhos-lista-modal')?.remove(); abrirCarrinho(${forn.id})">
+                <span class="carrinhos-lista-nome"><strong>${escapeHtml(forn.nome)}</strong>${c.novo ? '<span class="carrinho-selo-novo">novo</span>' : ''}
+                    <small>${n} ${n === 1 ? 'item' : 'itens'}</small></span>
+                <span class="carrinhos-lista-total">${_histMoeda(CarrinhoCore.totalCarrinho(c))}</span>
+            </button>`;
+        }).join('') : `<p style="color:#8F8F8F;font-size:13px;margin:8px 0 4px">Nenhum carrinho com itens. Adicione itens pelo 🛒 no Estoque ou no Catálogo.</p>`}</div>
+        <div style="text-align:right;margin-top:12px"><button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('carrinhos-lista-modal')?.remove()">Fechar</button></div>
+    </div>`;
+    o.addEventListener('click', e => { if (e.target === o) o.remove(); });
+    document.body.appendChild(o);
 }
 
 let _carFornId = null;
@@ -8444,6 +8484,7 @@ function abrirCarrinho(fornecedorId) {
         car.novo = false;
         syncDB();
         renderTabelaFornecedores();
+        atualizarContagemCarrinhos();
     }
     const o = document.createElement('div');
     o.id = 'carrinho-modal';
@@ -8502,7 +8543,7 @@ function _carRender() {
         <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
             ${edita ? `<button type="button" class="btn btn-outline btn-sm" onclick="esvaziarCarrinho(${_carFornId})"${vazio ? ' disabled' : ''}>Esvaziar</button>` : ''}
             <button type="button" class="btn btn-outline btn-sm" onclick="_carFecharJanela()">Voltar</button>
-            ${edita ? `<button type="button" class="btn btn-success btn-sm" id="car-fechar-btn" onclick="fecharCarrinho(${_carFornId})"${vazio ? ' disabled' : ''}>Fechar e enviar ao fornecedor</button>` : ''}
+            ${edita ? `<button type="button" class="btn btn-success btn-sm" id="car-fechar-btn" onclick="fecharCarrinho(${_carFornId})"${vazio ? ' disabled' : ''}>Fechar e gerar pedido</button>` : ''}
         </div>`;
 }
 
@@ -8551,15 +8592,15 @@ async function fecharCarrinho(fornecedorId) {
     const btn = document.getElementById('car-fechar-btn');
     if (btn) btn.disabled = true;
     try {
-        const ok = await showConfirm(`Fechar o carrinho de ${forn.nome} e gerar o pedido de compra de ${_histMoeda(CarrinhoCore.totalCarrinho(car))}?`, '📨', 'Fechar e enviar', 'Cancelar');
+        const ok = await showConfirm(`Fechar o carrinho de ${forn.nome} e gerar o pedido de compra de ${_histMoeda(CarrinhoCore.totalCarrinho(car))}?\n\nO pedido vai para Pedidos de Compra, de onde você envia ao fornecedor.`, '📋', 'Fechar e gerar pedido', 'Cancelar');
         if (!ok) { if (btn) btn.disabled = false; return; }
         const atual = _carrinhoDe(fornecedorId);
         if (!atual || !CarrinhoCore.contarItens(atual)) return;
         const pc = {
             id: gerarNumeroPedidoCompra(),
             data_criacao: Date.now(),
-            status: 'Enviado',
-            data_envio: hojeLocal(),
+            status: 'Rascunho',
+            data_envio: null,
             fornecedor_id: forn.id,
             fornecedor_nome: forn.nome,
             itens: atual.itens.map(i => ({ ...i })),
@@ -8570,13 +8611,17 @@ async function fecharCarrinho(fornecedorId) {
         syncDB();
         _carFecharJanela();
         renderTabelaFornecedores();
-        abrirPedidoCompra(pc.id);
+        atualizarContagemCarrinhos();
+        mostrarTabFornecedores('pedidos');
+        destacarPedidoCompra(pc.id);
+        toast(`Pedido #${formatPedidoId(pc.id)} gerado. Envie ao fornecedor pelo botão 📨 Enviar.`, 'success', 4000);
     } finally {
         _carFechando = false;
     }
 }
 
 function renderTabelaFornecedores() {
+    atualizarContagemCarrinhos();
     const tb = document.getElementById('tb-fornecedores');
     if (!tb) return;
     if (!db.fornecedores.length) {
@@ -8593,10 +8638,10 @@ function renderTabelaFornecedores() {
             <td><strong>${escapeHtml(f.nome)}</strong>${nomeFantasia}</td>
             <td style="font-size:13px">${escapeHtml(f.cnpj || '—')}</td>
             <td style="font-size:13px">${escapeHtml(cidadeUF)}</td>
-            <td style="font-size:13px">${escapeHtml(f.tel || '—')}</td>
+            <td style="font-size:13px">${escapeHtml(f.tel || '—')}${f.tel_vendedor ? `<br><small style="color:#888;font-size:12px">Vendedor: ${escapeHtml(f.tel_vendedor)}</small>` : ''}</td>
             <td style="font-size:13px">${escapeHtml(f.email || '—')}</td>
             <td style="font-size:12px;color:#555">${vinc}</td>
-            <td class="td-acoes">${_carrinhoBotaoHtml(f.id)}${menuAcoesHtml([
+            <td class="td-acoes">${menuAcoesHtml([
                 { icone: '🛒', rotulo: 'Novo pedido de compra', onclick: `criarPCParaFornecedor(${f.id})` },
                 { icone: '📜', rotulo: 'Histórico de pedidos', onclick: `abrirHistoricoFornecedor(${f.id})`, oculto: !temAcesso('fornecedores', 'visualizar') },
                 { icone: '✏️', rotulo: 'Editar fornecedor', onclick: `editarFornecedor(${f.id})` },
@@ -8915,7 +8960,7 @@ function renderListaPedidosCompra() {
         const data  = new Date(p.data_criacao).toLocaleDateString('pt-BR');
         const total = p.itens.reduce((s, i) => s + i.subtotal, 0);
         const cls   = COR_PC[p.status] || 'st-orcamento';
-        return `<tr>
+        return `<tr data-pc-id="${p.id}">
             <td style="font-size:12px">${pcBloqueado(p)
                 ? `<button class="pc-num-btn" onclick="abrirPedidoCompra(${p.id})" title="${escapeHtml(p.status)}: somente leitura">🔒 #${formatPedidoId(p.id)}</button>`
                 : `<button class="pc-num-btn" onclick="editarPedidoCompra(${p.id})" title="Abrir para editar ou acrescentar itens">#${formatPedidoId(p.id)}</button>`}</td>
@@ -8927,6 +8972,7 @@ function renderListaPedidosCompra() {
                 ? `<div style="font-size:11px;color:#F43927;margin-top:4px">sem conta a pagar</div>` : ''}</td>
             <td>
                 ${p.status === 'Recebido' && !p.conta_pagar_gerada ? `<button class="btn btn-success btn-sm" onclick="gerarContaPagarPCManual(${p.id})" style="margin-right:4px">Gerar conta</button>` : ''}
+                ${p.status === 'Rascunho' ? `<button class="btn btn-success btn-sm pc-enviar-btn" onclick="enviarPedidoCompra(${p.id})" style="margin-right:4px">📨 Enviar</button>` : ''}
                 <select onchange="atualizarStatusPC(${p.id},this.value)" style="padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px;margin-right:4px">
                     <option${p.status==='Rascunho'?' selected':''}>Rascunho</option>
                     <option${p.status==='Enviado'?' selected':''}>Enviado</option>
@@ -8937,6 +8983,30 @@ function renderListaPedidosCompra() {
             </td>
         </tr>`;
     }).join('');
+}
+
+// Pedido recem-gerado pelo carrinho: destaca a linha na lista por uns segundos.
+function destacarPedidoCompra(id) {
+    const tr = document.querySelector(`#tb-pedidos-compra tr[data-pc-id="${id}"]`);
+    if (!tr) return;
+    tr.classList.add('pc-destaque');
+    tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    setTimeout(() => tr.classList.remove('pc-destaque'), 6000);
+}
+
+// "📨 Enviar" do pedido em Rascunho: abre o pedido com o menu de envio aberto.
+// Depois de enviar, o envio pergunta se marca o pedido como Enviado.
+function enviarPedidoCompra(id) {
+    abrirPedidoCompra(id);
+    const btn = document.getElementById('btn-enviar-doc');
+    if (btn && typeof abrirMenuEnviar === 'function') setTimeout(() => abrirMenuEnviar(btn), 50);
+}
+
+async function marcarPedidoCompraEnviado(id) {
+    const pc = db.pedidos_compra.find(p => p.id == id);
+    if (!pc || pc.status !== 'Rascunho') return;
+    if (!await showConfirm(`Marcar o pedido #${formatPedidoId(pc.id)} como Enviado?`, '📨', 'Marcar como Enviado', 'Agora não')) return;
+    await atualizarStatusPC(pc.id, 'Enviado');
 }
 
 // Enviado ou Recebido: o pedido ja saiu para o fornecedor e nao se edita
@@ -9412,6 +9482,7 @@ function _confirmarModalCarrinho() {
     });
     db.carrinhos = carrinhos;
     syncDB();
+    atualizarContagemCarrinhos();
 
     const nForn = new Set(lidos.map(l => String(l.forn.id))).size;
     const msg = lidos.length === 1

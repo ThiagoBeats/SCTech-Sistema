@@ -209,10 +209,12 @@ test('somar 2,2 e 1,1 da 3,3 no carrinho e sem ruido no PDF do pedido', async ({
     await expect(page.locator(MODAL)).toHaveCount(0);
     expect((await carrinhos(page))[0].itens[0].quantidade).toBe(3.3);
     await page.goto(BASE + '/fornecedores.html');
-    await page.locator('#tb-fornecedores tr', { hasText: 'RC Tecidos' }).locator('.btn-carrinho').click();
+    await page.click('#btn-abrir-carrinhos');
+    await page.locator('#carrinhos-lista-modal .carrinhos-lista-item', { hasText: 'RC Tecidos' }).click();
     await expect(page.locator('#carrinho-modal .car-qtd')).toHaveValue('3,3');
-    await page.locator('#carrinho-modal button:has-text("Fechar e enviar ao fornecedor")').click();
+    await page.locator('#carrinho-modal button:has-text("Fechar e gerar pedido")').click();
     await page.click('#sc-modal-ok');
+    await page.evaluate(() => abrirPedidoCompra(JSON.parse(localStorage.getItem('sc_pc'))[0].id));
     const papel = page.locator('#doc-modal-paper');
     await expect(papel).toContainText('LINHO BELGA');
     // o PDF do pedido usa ponto decimal (como nos precos); o que importa e nao ter ruido
