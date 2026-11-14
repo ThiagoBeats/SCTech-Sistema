@@ -281,6 +281,7 @@ let db = {
     movimentos_fin:  JSON.parse(localStorage.getItem('sc_mov_fin'))    || [],
     fechamentos_fin: JSON.parse(localStorage.getItem('sc_fin_fech'))   || [],
     medicoes:        JSON.parse(localStorage.getItem('sc_med'))  || [],
+    rotas:           JSON.parse(localStorage.getItem('sc_rotas')) || [],
     papeis:          JSON.parse(localStorage.getItem('sc_pap'))  || papeisPadrao(),
     usuarios:        JSON.parse(localStorage.getItem('sc_usr'))  || [],
     import_perfis:   JSON.parse(localStorage.getItem('sc_imp_perfis')) || []
@@ -370,6 +371,7 @@ function syncDB() {
     localStorage.setItem('sc_mov_fin',    JSON.stringify(db.movimentos_fin));
     localStorage.setItem('sc_fin_fech',   JSON.stringify(db.fechamentos_fin));
     localStorage.setItem('sc_med',  JSON.stringify(db.medicoes));
+    localStorage.setItem('sc_rotas', JSON.stringify(db.rotas || []));
     localStorage.setItem('sc_pap',  JSON.stringify(db.papeis));
     localStorage.setItem('sc_usr',  JSON.stringify(db.usuarios));
     localStorage.setItem('sc_imp_perfis', JSON.stringify(db.import_perfis));
@@ -7667,7 +7669,7 @@ function _dadosExportacao(marcaFase0) {
         fornecedores: db.fornecedores, pedidos_compra: db.pedidos_compra, carrinhos: db.carrinhos,
         contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, despesas_fixas: db.despesas_fixas,
         contas_fin: db.contas_fin, meios_pag: db.meios_pag, movimentos_fin: db.movimentos_fin, fechamentos_fin: db.fechamentos_fin,
-        medicoes: db.medicoes,
+        medicoes: db.medicoes, rotas: db.rotas || [],
         fin_metas: _lerObjetoLS('sc_fin_metas'), fin_orcamento_mes: _lerObjetoLS('sc_fin_orcamento_mes'),
         empresa: getEmpresa(), formas_pag: getFormasPagamentoCfg()
     };
@@ -7710,6 +7712,7 @@ function importarDados(event) {
             db.contas_pagar   = dados.contas_pagar   || [];
             db.despesas_fixas = dados.despesas_fixas || [];
             db.medicoes       = dados.medicoes       || [];
+            db.rotas          = Array.isArray(dados.rotas) ? dados.rotas : [];
             db.contas_fin     = dados.contas_fin     || [];
             db.meios_pag      = dados.meios_pag      || [];
             db.movimentos_fin = dados.movimentos_fin || [];
@@ -10305,7 +10308,7 @@ function _agdPill(tipo) {
 }
 
 function _agdLinha(o) {
-    return `<button type="button" class="agd-item" onclick="${o.onclick}" title="Ver detalhes">
+    return `<div class="agd-item" role="button" tabindex="0" onclick="${o.onclick}" onkeydown="if(event.target===this&&(event.key==='Enter'||event.key===' ')){event.preventDefault();this.click()}" title="Ver detalhes">
         <span class="agd-avatar">${_agdIco('user', 18)}</span>
         <span class="agd-info">
             <span class="agd-nome">${escapeHtml(o.nome || '—')}</span>
@@ -10318,10 +10321,24 @@ function _agdLinha(o) {
                 <span class="agd-linha">${_agdIco('cal', 13)}${o.data ? _agdFmtData(o.data) : 'Sem data'}</span>
                 <span class="agd-linha">${_agdIco('relogio', 13)}${escapeHtml(o.hora || '--:--')}</span>
             </span>
-            <span class="agd-status">${_agdPill(o.pill)}</span>
+            <span class="agd-status">${_agdPill(o.pill)}${o.end ? linkIrParaHtml(o.end, 'agd-ir') : ''}</span>
         </span>
         <span class="agd-seta">${_agdIco('seta', 16)}</span>
-    </button>`;
+    </div>`;
+}
+
+// "📍 Ir": abre o Google Maps com o caminho ate o endereco, saindo de onde a
+// pessoa esta. Clicar no link nao abre o card em que ele esta.
+function linkIrParaHtml(endereco, classe) {
+    const url = typeof RotasCore !== 'undefined' ? RotasCore.linkIrPara(endereco) : '';
+    if (!url) return '';
+    return `<a class="${classe || 'agd-ir'}" href="${escapeHtml(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()" title="Abrir o caminho no Google Maps">📍 Ir</a>`;
+}
+// Botao ao lado de um campo de endereco: le o que esta digitado.
+async function irParaEndereco(campoId) {
+    const end = (document.getElementById(campoId)?.value || '').trim();
+    if (!end) { await showAlert('Digite o endereço primeiro.', '📍'); return; }
+    window.open(RotasCore.linkIrPara(end), '_blank', 'noopener');
 }
 
 // unidade: [singular, plural] escreve "4 agendamentos"; sem ela, so o numero.
@@ -10925,7 +10942,7 @@ function abrirDetalheMedicao(id) {
     const corpo = `<div class="agd-det-topo">${_agdPill(_medPill(m, _agdHoje()))}</div>` + _agdCampos([
         ['Cliente',     escapeHtml(m.clienteNome || '—')],
         ['Telefone',    tel],
-        ['Endereço',    escapeHtml(m.endereco || '—')],
+        ['Endereço',    escapeHtml(m.endereco || '—') + linkIrParaHtml(m.endereco, 'agd-ir agd-ir-det')],
         ['Data',        _agdFmtData(m.data)],
         ['Horário',     escapeHtml(m.hora ? _agdPeriodo(m.hora, dur) : '—')],
         ['Duração',     escapeHtml(_agdFmtDur(dur))],
@@ -11078,6 +11095,7 @@ function renderDashboardMedicoes() {
             <div style="font-weight:700;font-size:14px;color:var(--dark);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(v.clienteNome)}">${escapeHtml(v.clienteNome)}</div>
             ${v.hora ? `<div style="font-size:12px;color:var(--dark)">🕐 ${v.hora}</div>` : ''}
             ${v.clienteTel ? `<div style="font-size:12px;color:#8F8F8F;margin-top:2px">${escapeHtml(v.clienteTel)}</div>` : ''}
+            ${linkIrParaHtml(v.endereco, 'agd-ir agd-ir-card')}
         </div>`;
     }
 
@@ -11159,6 +11177,7 @@ function renderDashboardInstalacoes() {
             <div style="font-size:11px;color:#8F8F8F">#${formatPedidoId(p.id)}</div>
             ${p.inst_hora     ? `<div style="font-size:12px;color:var(--dark);margin-top:2px">🕐 ${p.inst_hora}</div>` : ''}
             ${p.inst_endereco ? `<div style="font-size:11px;color:#8F8F8F;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(p.inst_endereco)}">📍 ${escapeHtml(p.inst_endereco)}</div>` : ''}
+            ${linkIrParaHtml(p.inst_endereco || db.clientes.find(c => c.id == p.clienteId)?.end, 'agd-ir agd-ir-card')}
         </div>`;
     }
 
@@ -11456,7 +11475,7 @@ function abrirDetalheInstalacao(id) {
         ['Pedido',      '#' + formatPedidoId(p.id)],
         ['Cliente',     escapeHtml(p.clienteNome || '—')],
         ['Telefone',    tel],
-        ['Endereço',    escapeHtml(p.inst_endereco || cli?.end || '—')],
+        ['Endereço',    escapeHtml(p.inst_endereco || cli?.end || '—') + linkIrParaHtml(p.inst_endereco || cli?.end, 'agd-ir agd-ir-det')],
         ['Data',        _agdFmtData(p.data_entrega)],
         ['Horário',     escapeHtml(p.inst_hora ? _agdPeriodo(p.inst_hora, _instDur(p)) : '—')],
         ['Duração',     escapeHtml(_agdFmtDur(_instDur(p)))],
@@ -11576,6 +11595,10 @@ function mostrarViewPCP(view) {
     document.getElementById('pcp-view-kanban').style.display   = view === 'kanban'   ? '' : 'none';
     document.getElementById('pcp-view-agenda').style.display   = view === 'agenda'   ? '' : 'none';
     document.getElementById('pcp-view-medicoes').style.display = view === 'medicoes' ? '' : 'none';
+    const vRotas = document.getElementById('pcp-view-rotas');
+    if (vRotas) vRotas.style.display = view === 'rotas' ? '' : 'none';
+    const tRotas = document.getElementById('tab-btn-rotas');
+    if (tRotas) tRotas.className = 'tab-btn' + (view === 'rotas' ? ' active' : '');
     document.getElementById('tab-btn-kanban').className   = 'tab-btn' + (view === 'kanban'   ? ' active' : '');
     document.getElementById('tab-btn-agenda').className   = 'tab-btn' + (view === 'agenda'   ? ' active' : '');
     document.getElementById('tab-btn-medicoes').className = 'tab-btn' + (view === 'medicoes' ? ' active' : '');
@@ -11583,6 +11606,7 @@ function mostrarViewPCP(view) {
     if (view === 'agenda' || view === 'medicoes') _agdAtualizarListaProf();
     if (view === 'agenda')   renderAgenda();
     if (view === 'medicoes') renderMedicoes();
+    if (view === 'rotas')    renderRotas();
     _tabBackBtn('.tab-nav', _prevViewPCP, () => mostrarViewPCP(_prevViewPCP));
 }
 

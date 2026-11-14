@@ -147,6 +147,8 @@ Mini-painel exibido no dashboard quando há pedidos aguardando instalação:
     número do pedido, horário e endereço (se preenchidos)
   - Cores: vermelho para atrasados, azul para hoje, cinza para outros
   - Clique em qualquer card: navega para pcp.html?view=agenda (agenda completa)
+  - Botão "📍 Ir" no card (quando há endereço): abre o Google Maps com o caminho
+    até o endereço, sem abrir a agenda
   - Botão "Ver agenda completa" no cabeçalho do painel
   - Exibe até 6 próximos e todos os atrasados; até 3 sem data
 
@@ -155,6 +157,7 @@ Mini-painel exibido no dashboard quando há pedidos aguardando instalação:
 Mini-painel exibido no dashboard quando há medições pendentes:
   - Agrupa em: "Atrasadas" e "Próximas"
   - Cada item mostra: cliente, data, horário, endereço
+  - Botão "📍 Ir" no card: abre o Google Maps com o caminho até o endereço
 
 ── 2.6 TABELA DE PEDIDOS ───────────────────────────────────────────────────────
 
@@ -292,7 +295,9 @@ Formulário de agendamento:
     → Se "novo": campos nome (text) e telefone/WhatsApp (text)
   - Data da visita (date, obrigatório)
   - Horário (time, opcional)
-  - Endereço da visita (text, obrigatório)
+  - Endereço da visita (text, obrigatório), com o botão "📍 Ir para endereço"
+    ao lado (abre o Google Maps com o caminho até o que foi digitado; vazio
+    avisa "Digite o endereço primeiro.")
   - Observações (text, opcional): referências, ponto de encontro, instruções
   - Botão "📐 Agendar Visita"
 
@@ -300,6 +305,58 @@ Lista de medições agendadas:
   - Exibidas em cards agrupados por situação (atrasadas, hoje, próximas)
   - Cada card: cliente, data, horário, endereço, observações
   - Ações por medição: editar campos, marcar como realizada, excluir
+
+"📍 Ir" (Google Maps, sem custo e sem cadastro):
+  - Nos cards das agendas de Medições e de Instalações (ao lado do status) e no
+    endereço dos detalhes: abre o Google Maps com o caminho até o endereço,
+    saindo de onde a pessoa está. Clicar no "📍 Ir" não abre o card.
+  - Botão "📍 Ir para endereço" ao lado dos campos de endereço da medição, da
+    instalação e do cadastro do cliente.
+
+── 3.4 ABA: ROTAS DO DIA ───────────────────────────────────────────────────────
+
+Para quem organiza (secretária, vendedor, dono) montar o dia do técnico de
+campo e mandar para ele. Abre também por pcp.html?view=rotas.
+  - Dia + Técnico: entram as medições (Agendado) e as instalações agendadas
+    daquele técnico no dia. O seletor mostra quem tem visitas e quantas
+    ("João (3)"); visitas sem profissional aparecem em "— A definir —".
+    Dia sem visitas: "Nenhuma medição ou instalação agendada para dd/mm/aaaa."
+  - Saída e volta: endereço da empresa (Empresa). Sem ele, a rota sai da 1ª
+    visita e não volta (aviso no topo).
+  - Ordem inicial: a rota salva daquele dia/técnico; sem rota salva, por horário
+    (sem horário no fim). Visita nova entra no fim; a que saiu do dia some.
+  - "✨ Sugerir melhor ordem": localiza os endereços no OpenStreetMap
+    (gratuito, sem cadastro; cada endereço só uma vez, guardado neste
+    navegador) e calcula a ordem com menos trajeto. Endereço não encontrado
+    (ou visita sem endereço) vai para o fim com o aviso "⚠ Endereço não
+    encontrado — confira o endereço e posicione à mão".
+  - Ajuste à mão: arrastar (⠿) ou os botões ↑ e ↓.
+  - Cada visita mostra: número na rota, cliente, tipo (Medição / Instalação
+    #N), endereço, horário agendado, chegada prevista, km do trecho e "📍 Ir".
+  - Chegada prevista: saída + trajeto + duração de cada visita. Se a 1ª visita
+    tem horário, sai a tempo de chegar nele; senão, no início do expediente
+    (configuração da agenda). Chegou antes do horário: espera até ele.
+    Chegada mais de 10 min depois do agendado: "⚠ N min depois do agendado".
+    Não impede nada.
+  - Total: km e tempo de trajeto (com a volta) e horário de saída.
+  - "💾 Salvar rota": grava a ordem e, para cada visita com horário que não
+    bate, a linha "Rota de dd/mm/aaaa: chegada prevista HH:MM (agendado HH:MM)"
+    na observação da medição/instalação. Salvar de novo substitui a linha
+    daquele dia; se deixou de haver atraso, a linha sai. Sem as distâncias
+    calculadas, salva só a ordem (e avisa que os horários não foram conferidos).
+  - "🗺️ Abrir no Maps": Google Maps com as paradas na ordem (saída e volta na
+    empresa). O Maps aceita poucas paradas por link: com mais de 3 paradas no
+    meio, a rota vira "Parte 1, Parte 2…", cada uma começando onde a anterior
+    terminou.
+  - "📤 Enviar ao técnico": salva a rota e abre o WhatsApp com a lista (ordem,
+    horário previsto, tipo, cliente, telefone, endereço, aviso de atraso), o
+    total e o(s) link(s) do Maps. O técnico é escolhido no próprio WhatsApp.
+  - Sem internet ou serviço fora: "Não foi possível calcular as distâncias
+    agora. A ordem e o link do Maps continuam funcionando."
+  - Privacidade: só o texto do endereço vai ao OpenStreetMap; nome e telefone
+    do cliente não.
+  - Rotas salvas entram no backup (rotas); a localização dos endereços fica
+    só neste navegador (sc_geo).
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -458,7 +515,8 @@ Formulário de cadastro/edição:
   - Telefone / WhatsApp (text)
   - E-mail (email)
   - CPF (text)
-  - Endereço completo (text)
+  - Endereço completo (text), com o botão "📍 Ir para endereço" ao lado (abre
+    o Google Maps com o caminho até o endereço digitado)
   - Botão "Salvar Cliente" (cria ou atualiza dependendo do modo)
   - Botão "Cancelar" (visível apenas no modo de edição)
 
