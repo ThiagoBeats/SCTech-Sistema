@@ -146,18 +146,13 @@
 
     const dataValida = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
 
-    function previsaoSemanal({ hoje, saldoHoje, movimentos, contasReceber, contasPagar, despesasFixas, contas, meios, semanas = 8 }) {
-        const lista = [];
-        for (let i = 0; i < semanas; i++) {
-            lista.push({ inicio: somarDias(hoje, 7 * i), fim: somarDias(hoje, 7 * i + 6), entradas: 0, saidas: 0, saldo_final: 0, inclui_atrasados: false });
-        }
-        const limite = lista.length ? lista[lista.length - 1].fim : hoje;
-        const lanca = (data, valor, sentido, atrasado) => {
-            const s = lista.find(w => data >= w.inicio && data <= w.fim);
-            if (!s) return;
-            s[sentido === 'entrada' ? 'entradas' : 'saidas'] += Number(valor) || 0;
-            if (atrasado && Number(valor) > 0) s.inclui_atrasados = true;
-        };
+    // O que ainda vai entrar e sair de hoje (exclusive para movimentos) ate `limite`: movimentos futuros das contas
+    // ativas (cartao a cair, ja com a taxa), contas a receber em aberto (no cartao previsto, cada repasse na sua data
+    // pelo liquido), contas a pagar em aberto e despesas fixas antigas. Atrasados caem em hoje.
+    // Devolve [{ data, valor, sentido, atrasado }] (a previsao semanal e o grafico de fluxo agrupam).
+    function lancamentosPrevistos({ hoje, limite, movimentos, contasReceber, contasPagar, despesasFixas, contas, meios }) {
+        const out = [];
+        const lanca = (data, valor, sentido, atrasado) => out.push({ data, valor: Number(valor) || 0, sentido, atrasado: !!atrasado });
         const inativa = id => (contas || []).some(c => mesmoId(c.id, id) && c.ativo === false);
         (movimentos || []).forEach(m => { if (m.data > hoje && !inativa(m.conta_id)) lanca(m.data, m.valor, m.sentido, false); });
         // Sem data de vencimento nao ha como prever: fica fora (a tela mostra "sem vencimento").
@@ -182,6 +177,21 @@
                 const gerada = (contasPagar || []).some(cp => cp.tipo === 'fixo' && cp.descricao === df.descricao && String(cp.data_vencimento).slice(0, 7) === mes);
                 if (!gerada) lanca(maxData(data, hoje), df.valor, 'saida', data < hoje);
             });
+        });
+        return out;
+    }
+
+    function previsaoSemanal({ hoje, saldoHoje, movimentos, contasReceber, contasPagar, despesasFixas, contas, meios, semanas = 8 }) {
+        const lista = [];
+        for (let i = 0; i < semanas; i++) {
+            lista.push({ inicio: somarDias(hoje, 7 * i), fim: somarDias(hoje, 7 * i + 6), entradas: 0, saidas: 0, saldo_final: 0, inclui_atrasados: false });
+        }
+        const limite = lista.length ? lista[lista.length - 1].fim : hoje;
+        lancamentosPrevistos({ hoje, limite, movimentos, contasReceber, contasPagar, despesasFixas, contas, meios }).forEach(l => {
+            const s = lista.find(w => l.data >= w.inicio && l.data <= w.fim);
+            if (!s) return;
+            s[l.sentido === 'entrada' ? 'entradas' : 'saidas'] += l.valor;
+            if (l.atrasado && l.valor > 0) s.inclui_atrasados = true;
         });
         let saldo = Number(saldoHoje) || 0;
         lista.forEach(s => {
@@ -256,7 +266,7 @@
         return 'https://wa.me/' + telefone + '?text=' + encodeURIComponent(mensagem || '');
     }
 
-    const api = { contaAceitaMovimento, saldoConta, saldoContaAte, saldosHoje, repassesCartao, dividirParcela, arredondar, somarDias, mesmoId, previsaoSemanal, primeiraSemanaNegativa, tarefasHoje, normalizarTelefone, clienteDaCobranca, montarMensagem, linkWhatsApp, MENSAGEM_COBRANCA_PADRAO, CARTAO_PADRAO, lerNumero };
+    const api = { contaAceitaMovimento, saldoConta, saldoContaAte, saldosHoje, repassesCartao, dividirParcela, arredondar, somarDias, mesmoId, previsaoSemanal, lancamentosPrevistos, primeiraSemanaNegativa, tarefasHoje, normalizarTelefone, clienteDaCobranca, montarMensagem, linkWhatsApp, MENSAGEM_COBRANCA_PADRAO, CARTAO_PADRAO, lerNumero };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.CaixaCore = api;

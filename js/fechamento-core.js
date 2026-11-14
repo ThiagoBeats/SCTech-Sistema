@@ -33,7 +33,8 @@
         const ultimo = ultimoDiaMes(mes);
         const movs = (movimentos || []).filter(m => !(ignorarAjustesDe && m.origem === 'ajuste' && m.fechamento_mes === ignorarAjustesDe));
         return (contas || [])
-            .filter(c => c.ativo !== false && c.data_saldo_inicial && String(c.data_saldo_inicial) <= ultimo)
+            // Conta sem data do saldo inicial: entra com o saldo inicial desde sempre.
+            .filter(c => c.ativo !== false && (!c.data_saldo_inicial || String(c.data_saldo_inicial) <= ultimo))
             .map(c => ({ conta_id: c.id, nome: c.nome, esperado: arredondar(saldoConta(c, movs, ultimo)) }));
     }
 
@@ -78,7 +79,8 @@
         if (Number(p.meta) > 0 && Number(p.entradas) < Number(p.meta)) {
             out.push('Faltaram ' + moeda(p.meta - p.entradas) + ' para a meta.');
         }
-        grupos.forEach(g => {
+        // O Imposto fica fora da alta de grupo: a guia ja tem a sua propria sugestao.
+        grupos.filter(g => g.id !== 'imposto').forEach(g => {
             const atual = Number((p.porGrupo || {})[g.id]) || 0;
             const ant = Number((p.porGrupoAnterior || {})[g.id]) || 0;
             if (ant > 0 && atual - ant > 100) {

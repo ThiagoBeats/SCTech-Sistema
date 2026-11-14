@@ -13487,7 +13487,7 @@ async function gerarContasPagarDoMes() {
             db.contas_pagar.push({
                 id: Date.now() + geradas, pedido_id: null,
                 tipo: 'fixo', categoria: df.categoria,
-                descricao: df.descricao, credor_nome: '',
+                descricao: df.descricao, credor_nome: '', despesa_fixa_id: df.id,
                 valor: df.valor, data_vencimento: vencStr,
                 data_pagamento: null, status: 'Pendente',
                 ...(df.categoria === 'imposto' ? { mes_referencia: _mesRefImposto(vencStr) } : {})
@@ -13819,17 +13819,18 @@ async function adicionarContaPagarManual() {
         const paiId = Date.now();
         let somaLancada = 0;
         for (let i = 0; i < numParcelas; i++) {
-            const venc = new Date(vencimento + 'T12:00:00'); venc.setMonth(venc.getMonth() + i);
+            // Mesma regra do simulador: dia que nao existe no mes vira o ultimo dia dele (31/01 -> 28/02 -> 31/03).
+            const vencParcela = FinanceiroCore.somarMesesData(vencimento, i);
             const isUltima = i === numParcelas - 1;
             const valorFinal = isUltima ? Math.round((valor - somaLancada) * 100) / 100 : valorParcela;
             somaLancada += valorFinal;
             db.contas_pagar.push({
                 id: paiId + i + 1, pedido_id: pedidoId ? parseInt(pedidoId) : null,
                 tipo: 'variavel', categoria, descricao: `${descricao} (parcela ${i + 1}/${numParcelas})`,
-                credor_nome: credor, valor: valorFinal, data_vencimento: dataLocal(venc.getTime()),
+                credor_nome: credor, valor: valorFinal, data_vencimento: vencParcela,
                 data_pagamento: null, status: 'Pendente',
                 lancamento_pai_id: paiId, parcelado: true, numero_parcelas: numParcelas, parcela_atual: i + 1,
-                ...mesRefDe(dataLocal(venc.getTime())), ...camposDoc
+                ...mesRefDe(vencParcela), ...camposDoc
             });
         }
         salvarERecarregar(`${numParcelas} parcelas lançadas!`);
@@ -14384,11 +14385,13 @@ function gerarHTMLRelatorioFinanceiro(layout, opcoes) {
     const fmtDate = s => s ? new Date(s+'T12:00:00').toLocaleDateString('pt-BR') : '—';
 
     // Recebido/pago pela mesma regra do Resultado do mes (pela data em que o dinheiro entra).
-    const { recebido, totalPago, lucro, pedPagos, ticketMedio, impostoJaContado, aCair, lucroSub } = dinheiroDoPeriodoFin();
-    const aReceber  = db.contas_receber.filter(cr=>cr.status!=='Pago'&&inRange(cr.data_vencimento)).reduce((s,cr)=>s+cr.valor,0);
-    const aPagar    = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&inRange(cp.data_vencimento)).reduce((s,cp)=>s+cp.valor,0);
+    const { ate: atePer, recebido, totalPago, lucro, pedPagos, ticketMedio, impostoJaContado, aCair, lucroSub } = dinheiroDoPeriodoFin();
+    // A receber/a pagar na mesma janela do recebido/pago ("Este mes" = ate o fim do mes).
+    const naJanela = d => d && d >= ini && d <= atePer;
+    const aReceber  = db.contas_receber.filter(cr=>cr.status!=='Pago'&&naJanela(cr.data_vencimento)).reduce((s,cr)=>s+cr.valor,0);
+    const aPagar    = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&naJanela(cp.data_vencimento)).reduce((s,cp)=>s+cp.valor,0);
     // Guia de imposto em aberto ja contada nas saidas (imposto pela referencia) nao entra duas vezes no saldo.
-    const aPagarDup = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&inRange(cp.data_vencimento)&&impostoJaContado(cp)).reduce((s,cp)=>s+cp.valor,0);
+    const aPagarDup = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&naJanela(cp.data_vencimento)&&impostoJaContado(cp)).reduce((s,cp)=>s+cp.valor,0);
     const saldoPrev = (recebido+aReceber)-(totalPago+aPagar-aPagarDup);
 
     const kpiBox = (lbl, val, sub, cor) =>
@@ -14548,8 +14551,9 @@ function _resPedidosFallback() {
 }
 
 // Dados de entrada do ResultadoCore (os mesmos para Resultado do mes, Visao Geral e Hoje).
+// `contas`: para o recebimento no cartao sem movimento cair nas datas de repasse da maquininha.
 function dadosFinanceirosBase() {
-    return { contasReceber: db.contas_receber, contasPagar: db.contas_pagar, movimentos: db.movimentos_fin, aliquota: getEmpresa().aliquota_estimada };
+    return { contasReceber: db.contas_receber, contasPagar: db.contas_pagar, movimentos: db.movimentos_fin, aliquota: getEmpresa().aliquota_estimada, contas: getContasFin() };
 }
 function resultadoFinanceiroDoMes(mes, ateData) {
     return ResultadoCore.resultadoDoMes({ mes, ...dadosFinanceirosBase(), ateData });
@@ -14564,6 +14568,18 @@ function orcamentoFinanceiroDoMes(mes, porGrupo) {
     return ResultadoCore.statusOrcamento({ limites, gastos: porGrupo });
 }
 
+// Historico de 12 meses da margem: so recalcula quando o mes ou os dados de que ele depende mudam.
+const _resMemoMargem = ResultadoCore.criarMemo();
+let _resMargemCalculos = 0; // quantas vezes o historico foi calculado (para conferir o cache)
+function _resMargemHistorico(mes, base) {
+    const chave = JSON.stringify([mes, base.aliquota, base.contasReceber, base.contasPagar, base.movimentos, base.contas]);
+    return _resMemoMargem(chave, () => {
+        _resMargemCalculos++;
+        const dadosPorMes = m => ResultadoCore.resultadoDoMes({ mes: m, ...base });
+        return ResultadoCore.margemContribuicao({ mesAtual: mes, dadosPorMes, pedidosFallback: [], aliquota: base.aliquota });
+    });
+}
+
 // Tudo o que a tela e o PDF mostram, para um mes.
 function _resDados(mes) {
     const base = dadosFinanceirosBase();
@@ -14571,18 +14587,20 @@ function _resDados(mes) {
     const r = ResultadoCore.resultadoDoMes({ mes, ...base });
     const meta = metaFinanceiraDoMes(mes);
     const fixas = ResultadoCore.despesasFixasDoMes({ mes, contasPagar: db.contas_pagar, despesasFixas: db.despesas_fixas });
-    const dadosPorMes = m => ResultadoCore.resultadoDoMes({ mes: m, ...base });
-    let margem = ResultadoCore.margemContribuicao({ mesAtual: mes, dadosPorMes, pedidosFallback: [], aliquota });
-    if (margem.base === null) margem = ResultadoCore.margemContribuicao({ mesAtual: mes, dadosPorMes, pedidosFallback: _resPedidosFallback(), aliquota });
+    let margem = _resMargemHistorico(mes, base);
+    // Sem historico (nenhum dos 12 meses teve faturamento): margem pelos pedidos, sem refazer os 12 meses.
+    if (margem.base === null) margem = ResultadoCore.margemContribuicao({ mesAtual: mes, dadosPorMes: () => ({}), pedidosFallback: _resPedidosFallback(), aliquota });
     const equilibrio = ResultadoCore.pontoEquilibrio(fixas, margem.pct);
     const orcamento = orcamentoFinanceiroDoMes(mes, r.porGrupo);
     return { r, meta, fixas, margem, equilibrio, orcamento, aliquota };
 }
 
-// Entradas e saidas ainda previstas ate o ultimo dia do mes (hoje em diante), pelo mesmo motor da previsao
-// semanal. Entradas, saidas e despesas fixas passam filtradas ate o fim do mes; os repasses de cartao sao
-// calculados a parte para nao contar o que cai depois do fim do mes. Guias de imposto (e despesas fixas
-// antigas de imposto) ficam de fora: o imposto conta pela referencia e e refeito em ResultadoCore.previstoDoMes.
+// Entradas e saidas ainda previstas ate o ultimo dia do mes (hoje em diante). O que ja foi baixado e cai depois
+// de hoje (cartao a cair e a taxa dele) vem de ResultadoCore.aCairNoMes, pelas regras do Resultado do mes
+// (transferencias entre contas nao contam). O que esta em aberto vem do motor da previsao semanal: entradas,
+// saidas e despesas fixas filtradas ate o fim do mes; os repasses de cartao previstos sao calculados a parte
+// para nao contar o que cai depois do fim do mes. Guias de imposto (e despesas fixas antigas de imposto) ficam
+// de fora: o imposto conta pela referencia e e refeito em ResultadoCore.previstoDoMes.
 function _resPrevisto(mes) {
     const hoje = hojeLocal();
     const fim = _resUltimoDia(mes);
@@ -14594,7 +14612,6 @@ function _resPrevisto(mes) {
     // Guia de imposto, de qualquer referencia, fica fora da previsao: a deste mes ja esta no resultado e a do
     // mes anterior (vencendo agora) e daquele mes.
     const cps = (db.contas_pagar || []).filter(c => c && c.data_vencimento <= fim && c.categoria !== 'imposto');
-    const cpImposto = new Set((db.contas_pagar || []).filter(c => c && c.categoria === 'imposto').map(c => String(c.id)));
     const atrasados = comum.some(c => c.data_vencimento < hoje) || abertos.filter(meioCartao).some(c => c.data_vencimento < hoje)
         || cps.some(c => c.status !== 'Pago' && c.data_vencimento < hoje);
     let cartao = 0;
@@ -14608,16 +14625,17 @@ function _resPrevisto(mes) {
     const dias = Math.round((new Date(fim + 'T00:00:00') - new Date(hoje + 'T00:00:00')) / 86400000) + 1;
     const semanas = CaixaCore.previsaoSemanal({
         hoje, saldoHoje: 0,
-        movimentos: (db.movimentos_fin || []).filter(m => m.data <= fim && !(m.origem === 'cp' && cpImposto.has(String(m.origem_id)))),
+        movimentos: [],
         contasReceber: comum,
         contasPagar: cps,
         despesasFixas: (db.despesas_fixas || []).filter(df => df && df.categoria !== 'imposto').map(df => ({ ...df, data_fim: (df.data_fim && df.data_fim < fim) ? df.data_fim : fim })),
         contas, meios, semanas: Math.max(1, Math.ceil(dias / 7))
     });
-    const entradas = CaixaCore.arredondar(semanas.reduce((s, w) => s + w.entradas, 0) + cartao);
-    const saidas = CaixaCore.arredondar(semanas.reduce((s, w) => s + w.saidas, 0));
-    // Taxas de cartao ainda previstas (CPs em aberto): saem do faturamento previsto.
-    const taxas = CaixaCore.arredondar(cps.filter(c => c.status !== 'Pago' && c.categoria === 'taxa_cartao').reduce((s, c) => s + (Number(c.valor) || 0), 0));
+    const aCair = ResultadoCore.aCairNoMes({ mes, hoje, ...dadosFinanceirosBase() });
+    const entradas = CaixaCore.arredondar(semanas.reduce((s, w) => s + w.entradas, 0) + cartao + aCair.entradas);
+    const saidas = CaixaCore.arredondar(semanas.reduce((s, w) => s + w.saidas, 0) + aCair.saidas);
+    // Taxas de cartao ainda previstas (CPs em aberto e as dos repasses ja baixados que ainda vao cair): saem do faturamento previsto.
+    const taxas = CaixaCore.arredondar(cps.filter(c => c.status !== 'Pago' && c.categoria === 'taxa_cartao').reduce((s, c) => s + (Number(c.valor) || 0), 0) + aCair.taxas);
     return { entradas, saidas, taxas, atrasados };
 }
 
@@ -15588,6 +15606,18 @@ function renderExtrato(opts) {
         const c = doExtrato.find(x => CaixaCore.mesmoId(x.id, mv.conta_id));
         return c && mv.data >= primeiro && mv.data <= ultimo && mv.data >= c.data_saldo_inicial;
     }).sort((x, y) => x.data < y.data ? -1 : x.data > y.data ? 1 : 0);
+    // Recebimentos sem movimento (de antes das contas, ou sem conta) contam no Resultado, mas nao passaram por conta nenhuma.
+    let avSem = document.getElementById('extrato-aviso-sem-conta');
+    if (!avSem) {
+        avSem = document.createElement('div');
+        avSem.id = 'extrato-aviso-sem-conta';
+        avSem.style.cssText = 'font-size:13px;color:#8A6A00;margin-bottom:10px';
+        avAb.parentNode.insertBefore(avSem, avAb.nextSibling);
+    }
+    const semMov = ResultadoCore.recebimentosSemMovimento({ de: primeiro, ate: ultimo, contasReceber: db.contas_receber, movimentos: movs, contas });
+    avSem.textContent = semMov.qtd === 1 ? `1 recebimento antigo sem conta (${brl(semMov.valor)}) não aparece aqui`
+        : semMov.qtd > 1 ? `${semMov.qtd} recebimentos antigos sem conta (${brl(semMov.valor)}) não aparecem aqui` : '';
+    avSem.style.display = semMov.qtd > 0 ? '' : 'none';
     const tb = document.getElementById('extrato-linhas');
     const podeExcluir = temAcesso('financeiro.extrato', 'completo');
     if (!linhas.length) {
@@ -15703,11 +15733,21 @@ function renderDashboardFinanceiro() {
     // ── KPIs ──────────────────────────────────────────────────────
     // Recebido/pago pela mesma regra do Resultado do mes (pela data em que o dinheiro entra).
     const { res: resPer, ate: atePer, recebido, totalPago, lucro, pedPagos, ticketMedio, impostoJaContado, aCair, lucroSub } = dinheiroDoPeriodoFin();
-    const aReceber  = db.contas_receber.filter(cr=>cr.status!=='Pago'&&inRange(cr.data_vencimento)).reduce((s,cr)=>s+cr.valor,0);
-    const aPagar    = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&inRange(cp.data_vencimento)).reduce((s,cp)=>s+cp.valor,0);
+    // A receber/a pagar na mesma janela do recebido/pago ("Este mes" = ate o fim do mes, como o recebido).
+    const naJanela = d => d && d >= ini && d <= atePer;
+    const aReceber  = db.contas_receber.filter(cr=>cr.status!=='Pago'&&naJanela(cr.data_vencimento)).reduce((s,cr)=>s+cr.valor,0);
+    const aPagar    = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&naJanela(cp.data_vencimento)).reduce((s,cp)=>s+cp.valor,0);
     // Guia de imposto em aberto ja contada nas saidas (imposto pela referencia) nao entra duas vezes no saldo.
-    const aPagarDup = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&inRange(cp.data_vencimento)&&impostoJaContado(cp)).reduce((s,cp)=>s+cp.valor,0);
+    const aPagarDup = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&naJanela(cp.data_vencimento)&&impostoJaContado(cp)).reduce((s,cp)=>s+cp.valor,0);
     const saldoPrev = (recebido+aReceber)-(totalPago+aPagar-aPagarDup);
+    // Periodo que pega so um pedaco de algum mes: o imposto (pela referencia) so entra nos meses inteiros.
+    const notaImpEl = document.getElementById('fin-nota-imposto');
+    if (notaImpEl) {
+        notaImpEl.textContent = resPer.imposto.cortaMes ? 'O imposto entra só nos meses inteiros do período' : '';
+        notaImpEl.style.display = resPer.imposto.cortaMes ? '' : 'none';
+    }
+    // Recebido liquido (sem a taxa do cartao), o mesmo valor que cai na conta (Hoje/Extrato).
+    const recebidoLiquido = resPer.faturamento;
 
     // ── 4 CARDS PRINCIPAIS ──────────────────────────────────────────
     // Só Saldo Previsto e Inadimplência usam cor de fundo com significado;
@@ -15746,7 +15786,7 @@ function renderDashboardFinanceiro() {
         const taxaConv     = totalPeds > 0 ? pConvertidos/totalPeds*100 : 0;
 
         kpis2El.innerHTML =
-            kpiBox('Total Recebido', 'R$ '+fmt(recebido), escapeHtml(label) + (aCair ? `<br><span class="fin-a-cair">${escapeHtml(aCair)}</span>` : ''), 'neutral') +
+            kpiBox('Total Recebido', 'R$ '+fmt(recebido), escapeHtml(label) + (resPer.taxas > 0 ? `<br><span class="fin-recebido-liquido">R$ ${fmt(recebidoLiquido)} líquido (sem a taxa do cartão)</span>` : '') + (aCair ? `<br><span class="fin-a-cair">${escapeHtml(aCair)}</span>` : ''), 'neutral') +
             kpiBox('Lucro (Caixa)', 'R$ '+fmt(lucro), escapeHtml(lucroSub), lucro>=0?'green':'red') +
             kpiBox('Ticket Médio', ticketMedio>0?'R$ '+fmt(ticketMedio):'—', `${pedPagos.size} pedido(s) com recebimento`, 'neutral') +
             kpiBox('PMR', pmr > 0 ? pmr+' dias' : '—', pmrN ? `${pmrN} pedidos concluídos` : 'Sem dados', 'neutral') +
@@ -15760,10 +15800,15 @@ function renderDashboardFinanceiro() {
     document.querySelectorAll('.fin-proj-btn').forEach(b => b.classList.toggle('active', Number(b.dataset.d) === _finProjDias));
     const horizStr = FinanceiroCore.somarDias(hojeStr, _finProjDias);
     const projBuckets = _finGerarBuckets(hojeStr, horizStr);
-    const projEnt = projBuckets.map(b => db.contas_receber.filter(cr=>cr.status!=='Pago'&&cr.data_vencimento>=b.ini&&cr.data_vencimento<=b.fim).reduce((s,cr)=>s+cr.valor,0));
-    const projSai = projBuckets.map(b => db.contas_pagar.filter(cp=>cp.status!=='Pago'&&cp.data_vencimento>=b.ini&&cp.data_vencimento<=b.fim).reduce((s,cp)=>s+cp.valor,0));
-    const projEntTotal = projEnt.reduce((s,v)=>s+v,0);
-    const projSaiTotal = projSai.reduce((s,v)=>s+v,0);
+    // Mesmo motor da previsao da tela Hoje: cartao pelas datas de repasse e pelo liquido (o que ja foi baixado
+    // e ainda vai cair, e o cartao previsto nas contas em aberto); atrasados entram hoje.
+    const projLanc = CaixaCore.lancamentosPrevistos({ hoje: hojeStr, limite: horizStr, movimentos: db.movimentos_fin || [], contasReceber: db.contas_receber,
+        contasPagar: db.contas_pagar, despesasFixas: db.despesas_fixas, contas: getContasFin(), meios: getMeiosPag() });
+    const projSoma = (b, sentido) => CaixaCore.arredondar(projLanc.filter(l => l.sentido === sentido && l.data >= b.ini && l.data <= b.fim).reduce((s, l) => s + l.valor, 0));
+    const projEnt = projBuckets.map(b => projSoma(b, 'entrada'));
+    const projSai = projBuckets.map(b => projSoma(b, 'saida'));
+    const projEntTotal = CaixaCore.arredondar(projEnt.reduce((s,v)=>s+v,0));
+    const projSaiTotal = CaixaCore.arredondar(projSai.reduce((s,v)=>s+v,0));
     const projSaldoTotal = projEntTotal - projSaiTotal;
 
     const ctxProj = document.getElementById('chart-fin-projecao');

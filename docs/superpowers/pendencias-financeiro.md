@@ -61,7 +61,7 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [x] "Cartão que cai hoje" na tela Hoje mostra o valor bruto (e qualquer entrada numa maquininha); mostrar o líquido ou rotular "bruto". **Feito:** mostra o líquido (entrada menos a taxa) com o rótulo "líquido".
 - [x] Excluir uma conta em Preferências não pede confirmação mesmo com movimentos; o saldo some do Hoje/Extrato e a previsão ainda conta os movimentos futuros dela. Pedir confirmação ou bloquear. **Feito:** bloqueia com movimentos (Desativar) e confirma sem movimentos; desativada sai da previsão.
 - [x] Na configuração de meios, um meio de cartão pode apontar para conta que não é maquininha (aí a baixa fica "sem conta"). Restringir o select por tipo. **Feito:** meio de cartão só lista contas maquininha; trocar o tipo para cartão limpa a conta que não serve.
-- [ ] Visão Geral (gráfico de fluxo e "Recebido") ainda usa a data da baixa e o valor bruto do cartão, diferente de Hoje/Extrato (datas de repasse). Alinhar na Fase 2.
+- [x] Visão Geral (gráfico de fluxo e "Recebido") ainda usa a data da baixa e o valor bruto do cartão, diferente de Hoje/Extrato (datas de repasse). Alinhar na Fase 2. **Feito:** a Projeção de fluxo usa o mesmo motor da previsão do Hoje (`CaixaCore.lancamentosPrevistos`: cartão a cair e cartão previsto pelo líquido, nas datas de repasse); o "Total Recebido" mostra também o líquido (sem a taxa do cartão); recebimento no cartão sem conta entra em cada repasse, não na data da baixa.
 - [ ] FUNCIONALIDADES: 10.20 não diz que a aba Hoje exige a permissão Hoje; 10.18 não cita o "a cair" por conta.
 
 ### Telas e textos
@@ -83,15 +83,15 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 ## Da Fase 2 (branch `feat/financeiro-fase2`)
 
 ### Dados e dinheiro
-- [ ] Recebimento antigo sem movimento (de antes das contas) conta no Resultado do mês e na Visão Geral, mas não aparece no Extrato (não passou por conta nenhuma).
-- [ ] Visão Geral com período que pega só um pedaço do mês (7 dias, 30 dias, personalizado) não leva o imposto daquele mês; o imposto (pela referência) entra só nos meses inteiros do período.
-- [ ] "Este mês" na Visão Geral vale o mês inteiro para recebido/saídas (inclui cartão a cair até o último dia), como o Resultado do mês e o Extrato; "A receber"/"A pagar" continuam até hoje.
-- [ ] Saldo Previsto da Visão Geral mistura janelas: recebido/pago no mês inteiro contra a receber/a pagar só até hoje.
-- [ ] O imposto do mês aparece no último dia do gráfico combo da Visão Geral.
-- [ ] Imposto parcelado mantém o deslocamento do mês de referência da primeira guia (pode não ser o desejado em todos os casos).
-- [ ] O imposto por referência (Resultado do mês, Visão Geral) pode diferir do caixa do Extrato, que mostra a data do pagamento.
-- [ ] O histórico de 12 meses da margem é recalculado a cada render do Resultado do mês.
-- [ ] Despesas fixas antigas sem data de início contam em meses anteriores à criação (ponto de equilíbrio de meses passados pode ficar maior).
+- [x] Recebimento antigo sem movimento (de antes das contas) conta no Resultado do mês e na Visão Geral, mas não aparece no Extrato (não passou por conta nenhuma). **Feito:** o Extrato mostra "N recebimentos antigos sem conta (R$ X) não aparecem aqui" para o mês mostrado (só quando há algum).
+- [x] Visão Geral com período que pega só um pedaço do mês (7 dias, 30 dias, personalizado) não leva o imposto daquele mês; o imposto (pela referência) entra só nos meses inteiros do período. **Feito:** com período que corta um mês aparece a nota "O imposto entra só nos meses inteiros do período".
+- [x] "Este mês" na Visão Geral vale o mês inteiro para recebido/saídas (inclui cartão a cair até o último dia), como o Resultado do mês e o Extrato; "A receber"/"A pagar" continuam até hoje. **Feito:** em "Este mês", A receber/A pagar vão até o fim do mês, na mesma janela do recebido/pago (tela e relatório); os outros períodos ficam como estavam.
+- [x] Saldo Previsto da Visão Geral mistura janelas: recebido/pago no mês inteiro contra a receber/a pagar só até hoje. **Feito:** Saldo Previsto usa uma janela só (em "Este mês", tudo até o fim do mês).
+- [x] O imposto do mês aparece no último dia do gráfico combo da Visão Geral. **Mantido de propósito:** o imposto conta pela referência (o mês inteiro), então vai no último dia do mês; explicado em FUNCIONALIDADES (Task 7).
+- [x] Imposto parcelado mantém o deslocamento do mês de referência da primeira guia (pode não ser o desejado em todos os casos). **Mantido de propósito:** cada guia parcelada segue o deslocamento da primeira (o mês de referência continua editável na guia); explicado em FUNCIONALIDADES (Task 7).
+- [x] O imposto por referência (Resultado do mês, Visão Geral) pode diferir do caixa do Extrato, que mostra a data do pagamento. **Mantido de propósito:** o resultado usa o imposto do mês (referência) e o Extrato mostra o dinheiro na data em que saiu; explicado em FUNCIONALIDADES (Task 7).
+- [x] O histórico de 12 meses da margem é recalculado a cada render do Resultado do mês. **Feito:** guardado por chave dos dados (mês, alíquota, contas a receber/pagar, movimentos, contas; `ResultadoCore.criarMemo`); sem histórico, a margem pelos pedidos não refaz os 12 meses.
+- [x] Despesas fixas antigas sem data de início contam em meses anteriores à criação (ponto de equilíbrio de meses passados pode ficar maior). **Feito (D4):** sem data de início, vale a partir do mês do cadastro (o `id` é o `Date.now()` do cadastro; id que não parece horário continua valendo sempre).
 - [x] Recebimento com data futura sem movimento some de 'Até hoje' e do 'Previsto' (ligado à pendência de data futura na baixa). **Feito:** conferido e testado: com a data bloqueada não nasce mais; os antigos contam em "Até hoje" quando a data chega.
 
 ### Telas e textos
@@ -105,13 +105,13 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [ ] O Chart.js vem do CDN e é instável nos testes (considerar cópia local ou espera mais robusta).
 
 ### Da revisão final da Fase 2
-- [ ] Previsto até o fim do mês: a taxa de repasses de cartão já baixados e ainda a cair não é tirada do faturamento previsto, então o imposto estimado fica um pouco maior (ex.: taxa de R$ 30 a 6% → R$ 1,80).
-- [ ] Ponto de equilíbrio: despesa fixa antiga (sem periodicidade) + a mesma despesa lançada à mão como conta avulsa no mesmo mês contam duas vezes.
-- [ ] Previsto até o fim do mês: transferências futuras entre contas entram no faturamento previsto e aumentam o imposto estimado.
+- [x] Previsto até o fim do mês: a taxa de repasses de cartão já baixados e ainda a cair não é tirada do faturamento previsto, então o imposto estimado fica um pouco maior (ex.: taxa de R$ 30 a 6% → R$ 1,80). **Feito:** o que já foi baixado e cai até o fim do mês vem de `ResultadoCore.aCairNoMes` (entradas, saídas e taxas pelas regras do Resultado); a taxa a cair sai do faturamento previsto.
+- [x] Ponto de equilíbrio: despesa fixa antiga (sem periodicidade) + a mesma despesa lançada à mão como conta avulsa no mesmo mês contam duas vezes. **Feito:** a fixa não soma se no mês há conta gerada dela (agora com `despesa_fixa_id`) ou uma conta já contada nas fixas com a mesma descrição e o mesmo valor.
+- [x] Previsto até o fim do mês: transferências futuras entre contas entram no faturamento previsto e aumentam o imposto estimado. **Feito:** movimentos futuros não entram mais direto no previsto; o que cai depois de hoje vem pelas regras do Resultado, sem transferências.
 
 ## Da Fase 3
-- [ ] Sugestão de alta de grupo pode incluir o Imposto (repete a sugestão da guia); excluir o imposto da comparação.
-- [ ] Conta sem data de saldo inicial fica fora da conferência do fechamento.
+- [x] Sugestão de alta de grupo pode incluir o Imposto (repete a sugestão da guia); excluir o imposto da comparação. **Feito:** o Imposto fica fora da alta de grupo.
+- [x] Conta sem data de saldo inicial fica fora da conferência do fechamento. **Feito:** entra na conferência com o saldo inicial desde sempre.
 - [ ] Comparação com mês anterior mostra "+0%" quando a diferença é zero.
-- [ ] Parcelas do simulador param no último dia do mês (31 → 28/02); o parcelado do A Pagar pula para o mês seguinte. Unificar a regra.
+- [x] Parcelas do simulador param no último dia do mês (31 → 28/02); o parcelado do A Pagar pula para o mês seguinte. Unificar a regra. **Feito (R4):** os dois usam `FinanceiroCore.somarMesesData` (dia que não existe vira o último dia do mês, sempre a partir da data base).
 - [ ] Testes que faltam: alta de grupo no limite (30% / R$ 100), ajuste de entrada e "Deixar anotado" no fechamento, duplo clique em Lançar chamando a função duas vezes, migração da permissão em permissões extras do usuário.

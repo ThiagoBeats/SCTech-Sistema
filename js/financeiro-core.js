@@ -22,6 +22,16 @@
         return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
     }
 
+    // Mesmo dia n meses depois; dia que nao existe no mes vira o ultimo dia dele (31/01 + 1 = 28/02).
+    // Regra das parcelas do A Pagar e do simulador (sempre a partir da data base, sem acumular o ajuste).
+    function somarMesesData(dataISO, n) {
+        const a = Number(String(dataISO).slice(0, 4)), m = Number(String(dataISO).slice(5, 7)) - 1 + (Number(n) || 0), d = Number(String(dataISO).slice(8, 10));
+        const base = new Date(a, m, 1);
+        const ultimo = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+        const p = x => String(x).padStart(2, '0');
+        return base.getFullYear() + '-' + p(base.getMonth() + 1) + '-' + p(Math.min(d, ultimo));
+    }
+
     function entradaPctDoNome(nome) {
         const n = String(nome || '');
         const m = n.match(/(\d+(?:[.,]\d+)?)\s*%\s*(?:de\s+)?entrada/i);
@@ -275,7 +285,7 @@
     const api = {
         CAMPOS_COMISSAO, arredondar, somarDias, entradaPctDoNome, planejarParcelas, totalRecebido, saldoEmAberto,
         tecidosDoPedido, custoSnapshotPedido, resultadoPedido, contasComissaoDoPedido, parcelasCompra, acharContaDuplicadaNota,
-        dataLocalISO, planoMigracaoFase0
+        dataLocalISO, planoMigracaoFase0, somarMesesData
     };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

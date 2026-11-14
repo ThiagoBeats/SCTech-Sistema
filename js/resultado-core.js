@@ -46,10 +46,29 @@
         return o;
     }
 
+    // Caixa (repasses de cartao): no navegador vem de window.CaixaCore; no node, do require.
+    function caixa() {
+        if (raiz && raiz.CaixaCore) return raiz.CaixaCore;
+        if (typeof require === 'function') { try { return require('./caixa-core.js'); } catch (e) { return null; } }
+        return null;
+    }
+
+    // Recebimento sem movimento: pela data_pagamento, valor da parcela. Se foi no cartao (baixa sem conta ou
+    // antes da abertura da conta), cada repasse na sua data (valor bruto), como os que tem movimento; a taxa
+    // de cada repasse ja e uma conta paga naquela data.
+    function partesSemMovimento(cr, contas) {
+        const cx = cr.cartao && cr.cartao.tipo ? caixa() : null;
+        if (!cx) return [{ data: cr.data_pagamento, valor: num(cr.valor) }];
+        const conta = (contas || []).find(c => c && mesmoId(c.id, cr.conta_id));
+        return cx.repassesCartao({ valor: num(cr.valor), data: String(cr.data_pagamento), conta, tipo: cr.cartao.tipo, vezes: cr.cartao.vezes, antecipar: !!cr.cartao.antecipar })
+            .map(r => ({ data: r.data, valor: r.bruto }));
+    }
+
     // Entradas: para cada CR paga, os movimentos de entrada origem 'cr' dela (cada um na sua data);
-    // sem movimento, a propria parcela pela data_pagamento. Transferencias e CRs nao pagas nao contam.
-    // `dentro(data)` diz se a data entra (mes, mes ate hoje ou periodo).
-    function itensEntrada(dentro, contasReceber, movimentos) {
+    // sem movimento, a propria parcela pela data_pagamento (no cartao, cada repasse na sua data).
+    // Transferencias e CRs nao pagas nao contam. `dentro(data)` diz se a data entra (mes, mes ate hoje ou
+    // periodo). `soSemMovimento`: so os recebimentos sem movimento (os que nao passaram por conta nenhuma).
+    function itensEntrada(dentro, contasReceber, movimentos, contas, soSemMovimento) {
         const itens = [];
         const porCr = new Map();
         (movimentos || []).forEach(m => {
@@ -61,16 +80,24 @@
         (contasReceber || []).filter(cr => cr && cr.status === 'Pago').forEach(cr => {
             const dela = cr.id == null ? null : porCr.get(String(cr.id));
             if (dela && dela.length) {
-                dela.forEach(m => { if (dentro(m.data)) itens.push({ data: m.data, valor: num(m.valor), cr_id: cr.id }); });
-            } else if (dentro(cr.data_pagamento)) {
-                itens.push({ data: cr.data_pagamento, valor: num(cr.valor), cr_id: cr.id });
+                if (!soSemMovimento) dela.forEach(m => { if (dentro(m.data)) itens.push({ data: m.data, valor: num(m.valor), cr_id: cr.id }); });
+            } else if (cr.data_pagamento) {
+                partesSemMovimento(cr, contas).forEach(p => { if (dentro(p.data)) itens.push({ data: p.data, valor: p.valor, cr_id: cr.id }); });
             }
         });
         return itens;
     }
 
-    function entradasDoMes({ mes, contasReceber, movimentos, ateData }) {
-        const itens = itensEntrada(d => noMes(d, mes, ateData), contasReceber, movimentos);
+    // Recebimentos sem movimento com data em [de, ate]: contam no Resultado e na Visao Geral, mas nao aparecem
+    // no Extrato (nao passaram por conta nenhuma). `qtd` = quantas contas a receber, `valor` = soma no periodo.
+    function recebimentosSemMovimento({ de, ate, contasReceber, movimentos, contas }) {
+        if (!de || !ate || de > ate) return { qtd: 0, valor: 0 };
+        const itens = itensEntrada(d => !!d && String(d) >= de && String(d) <= ate, contasReceber, movimentos, contas, true);
+        return { qtd: new Set(itens.map(i => String(i.cr_id))).size, valor: arredondar(itens.reduce((s, i) => s + i.valor, 0)) };
+    }
+
+    function entradasDoMes({ mes, contasReceber, movimentos, ateData, contas }) {
+        const itens = itensEntrada(d => noMes(d, mes, ateData), contasReceber, movimentos, contas);
         return { total: arredondar(itens.reduce((s, i) => s + i.valor, 0)), itens };
     }
 
@@ -116,8 +143,8 @@
         return { valor: Math.max(0, arredondar(num(faturamento) * aliq / 100)), estimado: true, lancado: 0 };
     }
 
-    function resultadoDoMes({ mes, contasReceber, contasPagar, movimentos, aliquota, ateData }) {
-        const entradas = entradasDoMes({ mes, contasReceber, movimentos, ateData }).total;
+    function resultadoDoMes({ mes, contasReceber, contasPagar, movimentos, aliquota, ateData, contas }) {
+        const entradas = entradasDoMes({ mes, contasReceber, movimentos, ateData, contas }).total;
         const sai = saidasDoMes({ mes, contasPagar, ateData });
         const taxas = sai.porGrupo.taxas;
         const faturamento = arredondar(entradas - taxas);
@@ -134,10 +161,11 @@
     // periodo. Periodo so de meses inteiros: so a referencia (igual ao Resultado do mes). Periodo com algum
     // pedaco de mes: a guia PAGA cuja referencia nao e um mes inteiro do periodo conta pela data de pagamento
     // (se estiver no periodo); nunca conta duas vezes. Devolve tambem os itens (para graficos).
-    function resultadoDoPeriodo({ de, ate, contasReceber, contasPagar, movimentos, aliquota }) {
+    // `imposto.cortaMes`: o periodo pega so um pedaco de algum mes (a tela avisa que o imposto e dos meses inteiros).
+    function resultadoDoPeriodo({ de, ate, contasReceber, contasPagar, movimentos, aliquota, contas }) {
         const dentro = d => !!d && String(d) >= de && String(d) <= ate;
         const ok = !!de && !!ate && de <= ate;
-        const itensE = ok ? itensEntrada(dentro, contasReceber, movimentos) : [];
+        const itensE = ok ? itensEntrada(dentro, contasReceber, movimentos, contas) : [];
         const itensS = ok ? itensSaida(dentro, contasPagar) : [];
         const entradas = arredondar(itensE.reduce((s, i) => s + i.valor, 0));
         const sai = somarPorGrupo(itensS);
@@ -146,7 +174,7 @@
         if (ok) {
             for (let mes = mesDe(de); mes <= mesDe(ate); mes = somarMeses(mes, 1)) {
                 if (de > mes + '-01' || ate < ultimoDia(mes)) continue;
-                const imp = resultadoDoMes({ mes, contasReceber, contasPagar, movimentos, aliquota }).imposto;
+                const imp = resultadoDoMes({ mes, contasReceber, contasPagar, movimentos, aliquota, contas }).imposto;
                 porMes[mes] = imp.valor;
                 impostoTotal += imp.valor;
                 if (imp.estimado && imp.valor > 0) estimado = true;
@@ -165,12 +193,12 @@
         if (ok) {
             for (let mes = mesDe(de); mes <= mesDe(ate) && !foraIncompleto; mes = somarMeses(mes, 1)) {
                 if (Object.prototype.hasOwnProperty.call(porMes, mes)) continue;
-                const devido = resultadoDoMes({ mes, contasReceber, contasPagar, movimentos, aliquota }).imposto.valor;
+                const devido = resultadoDoMes({ mes, contasReceber, contasPagar, movimentos, aliquota, contas }).imposto.valor;
                 const contado = pagas.reduce((s, i) => s + (referenciaGuia((contasPagar || []).find(cp => cp && mesmoId(cp.id, i.cp_id)) || {}) === mes ? i.valor : 0), 0);
                 if (arredondar(devido - contado) > 0) foraIncompleto = true;
             }
         }
-        const imposto = { valor: arredondar(impostoTotal), estimado, porMes, pagas, foraIncompleto };
+        const imposto = { valor: arredondar(impostoTotal), estimado, porMes, pagas, foraIncompleto, cortaMes: temPedaco };
         const taxas = sai.porGrupo.taxas;
         const porGrupo = Object.assign({}, sai.porGrupo, { imposto: imposto.valor });
         const saidas = arredondar(sai.total + imposto.valor);
@@ -189,6 +217,20 @@
         return { valor: arredondar(semImposto + num(entradasPrevistas) - num(saidasPrevistas) - imposto.valor), faturamento, imposto };
     }
 
+    // O que ja foi baixado e ainda vai cair no mes (data depois de hoje ate o fim do mes), pelas mesmas regras do
+    // Resultado do mes: entradas (cartao a cair), saidas sem imposto (inclui a taxa desses repasses) e as taxas.
+    // Transferencias entre contas nao entram (nem como entrada, nem como saida).
+    function aCairNoMes({ mes, hoje, contasReceber, contasPagar, movimentos, contas }) {
+        const base = { mes, contasReceber, contasPagar, movimentos, contas, aliquota: 0 };
+        const todo = resultadoDoMes(base), ate = resultadoDoMes(Object.assign({}, base, { ateData: hoje }));
+        const semImposto = r => r.saidas - r.imposto.valor;
+        return {
+            entradas: arredondar(todo.entradas - ate.entradas),
+            saidas: arredondar(semImposto(todo) - semImposto(ate)),
+            taxas: arredondar(todo.taxas - ate.taxas)
+        };
+    }
+
     // Ajuste do mes (> 0) vence; senao o padrao; senao 0.
     function metaDoMes(mes, { padrao, ajustes } = {}) {
         const ajuste = num(ajustes && ajustes[mes]);
@@ -197,31 +239,45 @@
         return p > 0 ? p : 0;
     }
 
+    // DF antiga sem data_inicio vale a partir do mes do cadastro: o id e o Date.now() do cadastro.
+    // Id que nao parece um horario (entre 2000 e 2100) nao diz nada: continua valendo sempre.
+    function inicioDf(df) {
+        if (df.data_inicio) return String(df.data_inicio);
+        const id = Number(df.id);
+        if (!Number.isFinite(id) || id < 946684800000 || id > 4102444800000) return '';
+        const d = new Date(id);
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01';
+    }
+
     // Dia de vencimento de uma DF no mes (ajustado ao fim do mes), ou null se fora de data_inicio/data_fim.
     function vencimentoDfNoMes(df, mes) {
         const ano = Number(mes.slice(0, 4)), m = Number(mes.slice(5, 7));
         const dia = Math.max(1, Math.floor(Number(df.dia_vencimento) || 1));
         const ultimo = new Date(ano, m, 0).getDate();
         const data = mes + '-' + String(Math.min(dia, ultimo)).padStart(2, '0');
-        if (df.data_inicio && data < df.data_inicio) return null;
+        const inicio = inicioDf(df);
+        if (inicio && data < inicio) return null;
         if (df.data_fim && data > df.data_fim) return null;
         return data;
     }
 
     // Despesas fixas do mes (por vencimento): CPs tipo 'fixo' ou do grupo Despesas fixas (aluguel, salario,
     // conta, mesmo lancadas avulsas) vencendo no mes (pagas ou nao), cada CP uma vez + DFs antigas (sem periodicidade), ativas, ainda nao geradas naquele mes.
+    // A DF conta uma vez so: nao soma se no mes ha CP gerada dela (tipo 'fixo' com a mesma descricao, ou ligada pelo
+    // despesa_fixa_id) ou uma CP ja contada aqui com a mesma descricao e o mesmo valor (a mesma despesa lancada a mao).
     // Guia de imposto lancada como fixa fica de fora: o imposto ja entra na margem (custo variavel).
     function despesasFixasDoMes({ mes, contasPagar, despesasFixas }) {
-        const cps = contasPagar || [];
+        const doMes = (contasPagar || []).filter(cp => cp && mesDe(cp.data_vencimento) === mes);
+        const contadas = doMes.filter(cp => cp.categoria !== 'imposto' && (cp.tipo === 'fixo' || grupoDaCategoria(cp.categoria) === 'fixas'));
         let total = 0;
-        cps.forEach(cp => {
-            if (!cp || cp.categoria === 'imposto' || mesDe(cp.data_vencimento) !== mes) return;
-            if (cp.tipo === 'fixo' || grupoDaCategoria(cp.categoria) === 'fixas') total += num(cp.valor);
-        });
+        contadas.forEach(cp => { total += num(cp.valor); });
+        const texto = v => String(v == null ? '' : v).trim().toLowerCase();
+        const cent = v => Math.round(num(v) * 100);
         (despesasFixas || []).forEach(df => {
             if (!df || df.periodicidade || df.ativo === false || df.categoria === 'imposto') return;
             if (!vencimentoDfNoMes(df, mes)) return;
-            const gerada = cps.some(cp => cp && cp.tipo === 'fixo' && cp.descricao === df.descricao && mesDe(cp.data_vencimento) === mes);
+            const gerada = doMes.some(cp => (cp.tipo === 'fixo' && cp.descricao === df.descricao) || mesmoId(cp.despesa_fixa_id, df.id))
+                || contadas.some(cp => texto(cp.descricao) === texto(df.descricao) && cent(cp.valor) === cent(df.valor));
             if (!gerada) total += num(df.valor);
         });
         return arredondar(total);
@@ -257,6 +313,17 @@
         return { pct: null, base: null, meses: [] };
     }
 
+    // Guarda o ultimo resultado por chave: com a mesma chave (mesmos dados) nao recalcula.
+    function criarMemo() {
+        let chave = null, valor;
+        return function (k, calcular) {
+            if (chave !== null && k === chave) return valor;
+            valor = calcular();
+            chave = k;
+            return valor;
+        };
+    }
+
     function pontoEquilibrio(despesasFixas, margemPct) {
         if (!(num(despesasFixas) > 0)) return { valor: null, motivo: 'sem_fixas' };
         if (margemPct == null || margemPct === '' || !Number.isFinite(Number(margemPct))) return { valor: null, motivo: 'sem_margem' };
@@ -282,7 +349,7 @@
         return out;
     }
 
-    const api = { GRUPOS, grupoDaCategoria, entradasDoMes, saidasDoMes, impostoDoMes, resultadoDoMes, resultadoDoPeriodo, metaDoMes, despesasFixasDoMes, margemContribuicao, pontoEquilibrio, statusOrcamento, previstoDoMes, somarMeses, referenciaGuia };
+    const api = { GRUPOS, grupoDaCategoria, entradasDoMes, saidasDoMes, impostoDoMes, resultadoDoMes, resultadoDoPeriodo, metaDoMes, despesasFixasDoMes, margemContribuicao, pontoEquilibrio, statusOrcamento, previstoDoMes, somarMeses, referenciaGuia, aCairNoMes, criarMemo, recebimentosSemMovimento };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ResultadoCore = api;

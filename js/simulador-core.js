@@ -7,10 +7,10 @@
     const ddmm = data => String(data).slice(8, 10) + '/' + String(data).slice(5, 7);
     const arred = v => Math.round(v * 100) / 100;
 
-    function montarData(a, m, d) { // m: 0-11 (pode estourar), d: 1-31
-        const base = new Date(a, m, 1);
-        const ultimo = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
-        return base.getFullYear() + '-' + String(base.getMonth() + 1).padStart(2, '0') + '-' + String(Math.min(d, ultimo)).padStart(2, '0');
+    // Regra das parcelas (a mesma do A Pagar): FinanceiroCore.somarMesesData.
+    function financeiro() {
+        if (raiz && raiz.FinanceiroCore) return raiz.FinanceiroCore;
+        return require('./financeiro-core.js');
     }
 
     function somarDias(data, dias) {
@@ -24,14 +24,13 @@
     }
 
     function parcelas(total, n, dataPrimeira) {
-        const a = Number(dataPrimeira.slice(0, 4)), m = Number(dataPrimeira.slice(5, 7)) - 1, d = Number(dataPrimeira.slice(8, 10));
         const cada = arred(total / n);
         const out = [];
         let soma = 0;
         for (let i = 0; i < n; i++) {
             const valor = i === n - 1 ? arred(total - soma) : cada;
             soma = arred(soma + valor);
-            out.push({ data: montarData(a, m + i, d), valor, rotulo: 'Parcela ' + (i + 1) + '/' + n });
+            out.push({ data: financeiro().somarMesesData(dataPrimeira, i), valor, rotulo: 'Parcela ' + (i + 1) + '/' + n });
         }
         return out;
     }
