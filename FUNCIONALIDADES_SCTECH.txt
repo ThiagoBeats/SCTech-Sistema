@@ -1462,6 +1462,14 @@ Proposta Comercial (PDF):
   - Resumo de valores (subtotal, desconto, valor final, plano de pagamento)
   - Observações
   - Estilo limpo para impressão ou envio ao cliente
+  - Botão "📤 Compartilhar" (na janela da proposta e em proposta.html): gera o
+    PDF de verdade e abre a janela de compartilhar do aparelho com o arquivo
+    já anexado (WhatsApp, e-mail etc.), com a mensagem pronta para o cliente.
+    Funciona no celular e no Chrome/Edge do computador (só aparecem os apps
+    instalados). Onde o navegador não anexa arquivo (ex.: Firefox), o PDF é
+    baixado e abre uma janela com WhatsApp (no número do cliente) e e-mail
+    com a mensagem pronta, para anexar o arquivo baixado. Em teste: por
+    enquanto só na proposta. Precisa de internet (gerador de PDF vem do CDN).
 
 Ordem de Serviço (OS):
   - Cabeçalho com dados da empresa
