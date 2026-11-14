@@ -105,17 +105,22 @@ function definirEnvioDoc(ctx) { _envioDocAtual = ctx || null; }
 // Monta o contexto: "Ola Maria! <frase>" e assunto "<titulo> — <empresa>".
 // aoEnviar (opcional): chamado depois de compartilhar com sucesso, ou pelo
 // botao "Já enviei" das janelas de ajuda (ex.: marcar o pedido como Enviado).
-function contextoEnvio({ titulo, arquivo, nome, frase, email, tel, obterElemento, aoEnviar }) {
+// aoFecharDepoisDeEnviar (opcional): chamado ao fechar a janela do documento
+// quando o botao Enviar foi usado (usouEnviar) e o aoEnviar ainda nao rodou.
+function contextoEnvio({ titulo, arquivo, nome, frase, email, tel, obterElemento, aoEnviar, aoFecharDepoisDeEnviar }) {
     const empresa = valoresComunsEmpresa().empresa;
     const primeiro = String(nome || '').trim().split(' ')[0] || '';
-    return {
-        titulo, empresa, obterElemento, aoEnviar,
+    const ctx = {
+        titulo, empresa, obterElemento, aoFecharDepoisDeEnviar,
+        usouEnviar: false, enviadoTratado: false,
+        aoEnviar: aoEnviar ? () => { ctx.enviadoTratado = true; return aoEnviar(); } : null,
         texto: `Olá${primeiro ? ' ' + primeiro : ''}! ${frase || `Segue ${titulo} da ${empresa}.`}`,
         assunto: `${titulo} — ${empresa}`,
         email: email || '',
         tel: String(tel || '').replace(/\D/g, ''),
         arquivo: `${_nomeArquivoSeguro(arquivo || titulo)}.pdf`
     };
+    return ctx;
 }
 
 // Um contexto por documento -------------------------------------------------
@@ -158,7 +163,9 @@ function envioPedidoCompra(pcId) {
         // o pedido vai para o vendedor quando ele tem telefone proprio
         email: forn && forn.email, tel: forn && (forn.tel_vendedor || forn.tel),
         aoEnviar: pc && pc.status === 'Rascunho' && typeof marcarPedidoCompraEnviado === 'function'
-            ? () => marcarPedidoCompraEnviado(pc.id) : null
+            ? () => marcarPedidoCompraEnviado(pc.id) : null,
+        aoFecharDepoisDeEnviar: pc && pc.status === 'Rascunho' && typeof perguntarPedidoCompraEnviado === 'function'
+            ? () => perguntarPedidoCompraEnviado(pc.id) : null
     });
 }
 
@@ -214,6 +221,7 @@ function _escMenuEnviar(e) { if (e.key === 'Escape') fecharMenuEnviar(); }
 function abrirMenuEnviar(botao) {
     if (document.getElementById('menu-enviar-doc')) { fecharMenuEnviar(); return; }
     if (!_envioDocAtual) return;
+    _envioDocAtual.usouEnviar = true;
     const m = document.createElement('div');
     m.id = 'menu-enviar-doc';
     m.className = 'menu-enviar';

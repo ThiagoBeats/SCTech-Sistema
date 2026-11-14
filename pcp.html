@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Produção - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261119a">
+    <link rel="stylesheet" href="css/style.css?v=20261121a">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
@@ -20,6 +20,7 @@
             <button class="tab-btn active" id="tab-btn-kanban"   onclick="mostrarViewPCP('kanban')">📋 Status dos pedidos</button>
             <button class="tab-btn"        id="tab-btn-agenda"   onclick="mostrarViewPCP('agenda')">📅 Agenda de Instalações</button>
             <button class="tab-btn"        id="tab-btn-medicoes" onclick="mostrarViewPCP('medicoes')">📐 Agenda de Medições</button>
+            <button class="tab-btn"        id="tab-btn-rotas"    onclick="mostrarViewPCP('rotas')">🗺️ Rotas do dia</button>
         </div>
 
         <div id="pcp-view-kanban">
@@ -106,7 +107,7 @@
                         </div>
                         <div class="form-group agd-span2">
                             <label for="inst-end">Endereço de instalação</label>
-                            <input type="text" id="inst-end" placeholder="Rua, nº, bairro, cidade...">
+                            <div class="campo-com-botao"><input type="text" id="inst-end" placeholder="Rua, nº, bairro, cidade..."><button type="button" class="btn btn-outline btn-ir-end" onclick="irParaEndereco('inst-end')" title="Abrir o caminho no Google Maps">📍 Ir para endereço</button></div>
                         </div>
                         <div class="form-group agd-span4">
                             <label for="inst-obs">Observações</label>
@@ -206,7 +207,7 @@
                     </div>
                     <div class="form-group agd-span2">
                         <label for="med-end">Endereço da visita <span style="color:var(--danger)">*</span></label>
-                        <input type="text" id="med-end" placeholder="Rua, nº, bairro, cidade…">
+                        <div class="campo-com-botao"><input type="text" id="med-end" placeholder="Rua, nº, bairro, cidade…"><button type="button" class="btn btn-outline btn-ir-end" onclick="irParaEndereco('med-end')" title="Abrir o caminho no Google Maps">📍 Ir para endereço</button></div>
                     </div>
                     <div class="form-group agd-span2" style="grid-column:1 / -1">
                         <label for="med-obs">Observações</label>
@@ -250,19 +251,36 @@
                 </section>
             </div>
         </div>
+
+        <div id="pcp-view-rotas" style="display:none">
+            <section class="card rota-topo">
+                <div class="form-group">
+                    <label for="rota-data">Dia</label>
+                    <input type="date" id="rota-data" onchange="renderRotas()">
+                </div>
+                <div class="form-group">
+                    <label for="rota-prof">Técnico</label>
+                    <select id="rota-prof" onchange="renderRotas()"></select>
+                </div>
+                <button type="button" class="btn" id="rota-btn-sugerir" onclick="sugerirMelhorOrdem()">✨ Sugerir melhor ordem</button>
+            </section>
+            <section class="card rota-corpo" id="rota-corpo" aria-live="polite"></section>
+        </div>
     </main>
-    <script src="js/etiquetas-core.js?v=20261119a"></script>
-    <script src="js/etiquetas-render.js?v=20261119a"></script>
-    <script src="js/cortina-desenho.js?v=20261119a"></script>
-    <script src="js/docs-layout-core.js?v=20261119a"></script>
-    <script src="js/financeiro-core.js?v=20261119a"></script>
-    <script src="js/caixa-core.js?v=20261119a"></script>
-    <script src="js/carrinho-core.js?v=20261119a"></script>
-    <script src="js/resultado-core.js?v=20261119a"></script>
-    <script src="js/fechamento-core.js?v=20261119a"></script>
-    <script src="js/simulador-core.js?v=20261119a"></script>
-    <script src="js/app.js?v=20261119a"></script>
-    <script src="js/compartilhar-doc.js?v=20261119a"></script>
+    <script src="js/etiquetas-core.js?v=20261121a"></script>
+    <script src="js/etiquetas-render.js?v=20261121a"></script>
+    <script src="js/cortina-desenho.js?v=20261121a"></script>
+    <script src="js/docs-layout-core.js?v=20261121a"></script>
+    <script src="js/financeiro-core.js?v=20261121a"></script>
+    <script src="js/caixa-core.js?v=20261121a"></script>
+    <script src="js/carrinho-core.js?v=20261121a"></script>
+    <script src="js/resultado-core.js?v=20261121a"></script>
+    <script src="js/fechamento-core.js?v=20261121a"></script>
+    <script src="js/simulador-core.js?v=20261121a"></script>
+    <script src="js/rotas-core.js?v=20261121a"></script>
+    <script src="js/app.js?v=20261121a"></script>
+    <script src="js/rotas.js?v=20261121a"></script>
+    <script src="js/compartilhar-doc.js?v=20261121a"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const view = new URLSearchParams(window.location.search).get('view');
