@@ -62,7 +62,7 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [x] Excluir uma conta em Preferências não pede confirmação mesmo com movimentos; o saldo some do Hoje/Extrato e a previsão ainda conta os movimentos futuros dela. Pedir confirmação ou bloquear. **Feito:** bloqueia com movimentos (Desativar) e confirma sem movimentos; desativada sai da previsão.
 - [x] Na configuração de meios, um meio de cartão pode apontar para conta que não é maquininha (aí a baixa fica "sem conta"). Restringir o select por tipo. **Feito:** meio de cartão só lista contas maquininha; trocar o tipo para cartão limpa a conta que não serve.
 - [x] Visão Geral (gráfico de fluxo e "Recebido") ainda usa a data da baixa e o valor bruto do cartão, diferente de Hoje/Extrato (datas de repasse). Alinhar na Fase 2. **Feito:** a Projeção de fluxo usa o mesmo motor da previsão do Hoje (`CaixaCore.lancamentosPrevistos`: cartão a cair e cartão previsto pelo líquido, nas datas de repasse); o "Total Recebido" mostra também o líquido (sem a taxa do cartão); recebimento no cartão sem conta entra em cada repasse, não na data da baixa.
-- [ ] FUNCIONALIDADES: 10.20 não diz que a aba Hoje exige a permissão Hoje; 10.18 não cita o "a cair" por conta.
+- [x] FUNCIONALIDADES: 10.20 não diz que a aba Hoje exige a permissão Hoje; 10.18 não cita o "a cair" por conta. **Feito:** 10.20 diz que a aba Hoje exige a permissão Hoje; 10.18 mostra o "a cair" por conta.
 
 ### Telas e textos
 - [ ] Botões e textos ainda dizem "forma de pagamento" onde agora é "plano".
@@ -115,3 +115,12 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [ ] Comparação com mês anterior mostra "+0%" quando a diferença é zero.
 - [x] Parcelas do simulador param no último dia do mês (31 → 28/02); o parcelado do A Pagar pula para o mês seguinte. Unificar a regra. **Feito (R4):** os dois usam `FinanceiroCore.somarMesesData` (dia que não existe vira o último dia do mês, sempre a partir da data base).
 - [ ] Testes que faltam: alta de grupo no limite (30% / R$ 100), ajuste de entrada e "Deixar anotado" no fechamento, duplo clique em Lançar chamando a função duas vezes, migração da permissão em permissões extras do usuário.
+
+## Da rodada de pendências 1
+- [ ] Previsão do Hoje (e a projeção da Visão Geral) ainda pode somar duas vezes uma despesa fixa antiga e a mesma conta lançada à mão no mesmo mês.
+- [ ] Contas recorrentes (`gerarOcorrenciasRecorrentes`) ainda calculam o mês somando um mês de cada vez (`setMonth` acumulado); aplicar a mesma regra das parcelas (dia que não existe vira o último dia do mês).
+- [ ] O relatório exportado (PDF) da Visão Geral não tem a linha "líquido (sem a taxa do cartão)" que a tela mostra.
+- [ ] Transferências antigas com data futura (de antes da trava de data) entram nas duas barras da projeção da Visão Geral.
+- [ ] Importação interrompida por falta de espaço deixa os dados da tela trocados até recarregar; o aviso de espaço aparece uma vez por página.
+- [ ] O aviso de "meio removido" no pedido não impede salvar (o meio é opcional).
+- [ ] Contador de cálculos da margem existe só para teste (`_resMargemCalculos`).
