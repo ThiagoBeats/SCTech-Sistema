@@ -2388,6 +2388,8 @@ body.galped-aberta { overflow: hidden; }
 .hoje-grupo.hoje-info { border-left-color: #3B82F6; }
 .hoje-orcamento-linha { background: #FEF4F2; color: #B3160A; border-left: 4px solid var(--danger); border-radius: 6px; padding: 8px 12px; margin-bottom: 10px; font-size: 13px; font-weight: 600; }
 html[data-theme="dark"] .hoje-orcamento-linha { background: rgba(244,57,39,0.14); color: #F79B90; }
+.hoje-fechamento-linha { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; background: var(--white); color: var(--dark); border: 1px solid var(--border); border-left: 4px solid var(--primary); border-radius: 6px; padding: 8px 12px; margin-bottom: 10px; font-size: 13px; font-weight: 600; }
+.hoje-fechamento-mudou { border-left-color: var(--danger); }
 .hoje-item { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .hoje-item:last-child { border-bottom: 0; }
 .hoje-item-desc { flex: 1; min-width: 140px; }

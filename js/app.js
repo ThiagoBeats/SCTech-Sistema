@@ -14931,7 +14931,27 @@ function renderHoje() {
         if (estourados.length) avisoOrc = `<div id="hoje-orcamento">${estourados.map(o =>
             `<div class="hoje-orcamento-linha" data-grupo="${escapeHtml(o.grupo)}">Orçamento de ${escapeHtml(o.rotulo)} estourado: ${brl(-o.falta)} acima</div>`).join('')}</div>`;
     }
-    elT.innerHTML = avisoOrc + (html || '<p style="color:#888;margin:0">Tudo em dia 👍</p>');
+    // Fechamento do mes anterior: lembrete de fechar, ou aviso se o mes fechado mudou depois.
+    let avisoFech = '';
+    if (typeof FechamentoCore !== 'undefined' && temAcesso('financeiro.resultado', 'visualizar')) {
+        const pode = temAcesso('financeiro.resultado', 'completo');
+        const mesFech = FechamentoCore.mesParaFechar({ hoje, fechamentos: db.fechamentos_fin, temContas: todasContas.length > 0 });
+        let linha = '';
+        if (mesFech) {
+            const acao = pode ? `mostrarTabFinanceiro('resultado');renderResultadoMes('${mesFech}');abrirFechamentoMes('${mesFech}')`
+                : `mostrarTabFinanceiro('resultado');renderResultadoMes('${mesFech}')`;
+            linha = `<div class="hoje-fechamento-linha"><span>Feche o mês de ${escapeHtml(FechamentoCore.rotuloMes(mesFech))}</span>
+                <button class="btn btn-primary btn-sm" onclick="${acao}">Fechar agora</button></div>`;
+        } else {
+            const mesAnt = FechamentoCore.mesAnterior(hoje.slice(0, 7));
+            if (fechamentoDoMes(mesAnt) && mudancasDoFechamento(mesAnt).length) {
+                linha = `<div class="hoje-fechamento-linha hoje-fechamento-mudou"><span>⚠ ${escapeHtml(_fechMaiusc(FechamentoCore.rotuloMes(mesAnt)))} mudou depois do fechamento</span>
+                    <button class="btn btn-outline btn-sm" onclick="mostrarTabFinanceiro('resultado');renderResultadoMes('${mesAnt}')">Ver</button></div>`;
+            }
+        }
+        if (linha) avisoFech = `<div id="hoje-fechamento">${linha}</div>`;
+    }
+    elT.innerHTML = avisoFech + avisoOrc + (html || '<p style="color:#888;margin:0">Tudo em dia 👍</p>');
 
     // Lado direito: so com permissao de ver o Extrato.
     const lado = document.getElementById('hoje-lado');
