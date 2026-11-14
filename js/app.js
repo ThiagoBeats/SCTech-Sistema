@@ -45,6 +45,7 @@ const MODULOS_PERMISSAO = [
         { key: 'hoje',      label: 'Hoje' },
         { key: 'extrato',   label: 'Extrato' },
         { key: 'resultado', label: 'Resultado do mês' },
+        { key: 'simulador', label: 'Simular compra' },
     ]},
     { key: 'relatorios',    label: 'Relatórios',         subs: [
         { key: 'faturamento', label: 'Faturamento Mensal' },
@@ -120,6 +121,7 @@ function papeisPadrao() {
             'financeiro.hoje':     'sem_acesso',
             'financeiro.extrato':  'sem_acesso',
             'financeiro.resultado':'sem_acesso',
+            'financeiro.simulador':'sem_acesso',
             producao:              'visualizar',
             catalogo:              'visualizar',
             galeria:               'visualizar',
@@ -221,7 +223,7 @@ function migrarPermissoesSalvas() {
         // seguir o nivel da Visao Geral (sem acesso se nao houver).
         if (p.permissoes && typeof p.permissoes === 'object') {
             const base = p.permissoes['financeiro.dashboard'] || p.permissoes.financeiro;
-            ['financeiro.hoje', 'financeiro.extrato', 'financeiro.resultado'].forEach(k => {
+            ['financeiro.hoje', 'financeiro.extrato', 'financeiro.resultado', 'financeiro.simulador'].forEach(k => {
                 if (!p.permissoes[k]) p.permissoes[k] = { nivel: (base && base.nivel) || 'sem_acesso', acoes_restritas: [] };
             });
         }
@@ -247,7 +249,7 @@ function migrarPermissoesSalvas() {
         });
         if (novo.financeiro) {
             const base = novo['financeiro.dashboard'] || novo.financeiro;
-            ['financeiro.hoje', 'financeiro.extrato', 'financeiro.resultado'].forEach(k => {
+            ['financeiro.hoje', 'financeiro.extrato', 'financeiro.resultado', 'financeiro.simulador'].forEach(k => {
                 if (!novo[k]) novo[k] = { nivel: base.nivel || 'sem_acesso', acoes_restritas: [] };
             });
         }
@@ -277,6 +279,7 @@ let db = {
     contas_fin:      JSON.parse(localStorage.getItem('sc_contas_fin')) || [],
     meios_pag:       JSON.parse(localStorage.getItem('sc_meios_pag'))  || [],
     movimentos_fin:  JSON.parse(localStorage.getItem('sc_mov_fin'))    || [],
+    fechamentos_fin: JSON.parse(localStorage.getItem('sc_fin_fech'))   || [],
     medicoes:        JSON.parse(localStorage.getItem('sc_med'))  || [],
     papeis:          JSON.parse(localStorage.getItem('sc_pap'))  || papeisPadrao(),
     usuarios:        JSON.parse(localStorage.getItem('sc_usr'))  || [],
@@ -365,6 +368,7 @@ function syncDB() {
     localStorage.setItem('sc_contas_fin', JSON.stringify(db.contas_fin));
     localStorage.setItem('sc_meios_pag',  JSON.stringify(db.meios_pag));
     localStorage.setItem('sc_mov_fin',    JSON.stringify(db.movimentos_fin));
+    localStorage.setItem('sc_fin_fech',   JSON.stringify(db.fechamentos_fin));
     localStorage.setItem('sc_med',  JSON.stringify(db.medicoes));
     localStorage.setItem('sc_pap',  JSON.stringify(db.papeis));
     localStorage.setItem('sc_usr',  JSON.stringify(db.usuarios));
@@ -1289,7 +1293,7 @@ function salvarERecarregar(msg = 'Salvo com sucesso!') {
 // não guardar a senha em texto puro; quando o sistema migrar para um banco de
 // dados/backend real, a autenticação deve ser refeita lá (hash forte no
 // servidor, verificação em cada rota) e este arquivo deixa de ser a fonte da verdade.
-const FIN_TAB_MODULO = { dashboard: 'financeiro.dashboard', receber: 'financeiro.receber', pagar: 'financeiro.pagar', fixas: 'financeiro.fixas', dre: 'financeiro.dre', hoje: 'financeiro.hoje', extrato: 'financeiro.extrato', resultado: 'financeiro.resultado' };
+const FIN_TAB_MODULO = { dashboard: 'financeiro.dashboard', receber: 'financeiro.receber', pagar: 'financeiro.pagar', fixas: 'financeiro.fixas', dre: 'financeiro.dre', hoje: 'financeiro.hoje', extrato: 'financeiro.extrato', resultado: 'financeiro.resultado', simulador: 'financeiro.simulador' };
 
 const PAGINA_MODULO = {
     'index.html':         'inicio',
@@ -7659,7 +7663,7 @@ function _dadosExportacao(marcaFase0) {
         movimentos: db.movimentos, vendedores: db.vendedores,
         fornecedores: db.fornecedores, pedidos_compra: db.pedidos_compra, carrinhos: db.carrinhos,
         contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, despesas_fixas: db.despesas_fixas,
-        contas_fin: db.contas_fin, meios_pag: db.meios_pag, movimentos_fin: db.movimentos_fin,
+        contas_fin: db.contas_fin, meios_pag: db.meios_pag, movimentos_fin: db.movimentos_fin, fechamentos_fin: db.fechamentos_fin,
         medicoes: db.medicoes,
         fin_metas: _lerObjetoLS('sc_fin_metas'), fin_orcamento_mes: _lerObjetoLS('sc_fin_orcamento_mes'),
         empresa: getEmpresa(), formas_pag: getFormasPagamentoCfg()
@@ -7706,6 +7710,7 @@ function importarDados(event) {
             db.contas_fin     = dados.contas_fin     || [];
             db.meios_pag      = dados.meios_pag      || [];
             db.movimentos_fin = dados.movimentos_fin || [];
+            db.fechamentos_fin = Array.isArray(dados.fechamentos_fin) ? dados.fechamentos_fin : [];
             syncDB();
             // Ajustes por mes do Resultado: backup antigo (sem eles) volta ao padrao vazio.
             ['fin_metas', 'fin_orcamento_mes'].forEach(k => {
@@ -12639,10 +12644,11 @@ function _contaFinPorId(id) {
 
 // Valor em dinheiro digitado (baixa, saldo inicial, transferencia): alem do
 // _numeroBR, "1.000" e "1.000.000" (so ponto de milhar) valem mil e um
-// milhao, e nao 1. Vazio devolve o padrao. Nao serve para taxa nem dias.
+// milhao, e nao 1. Aceita negativo ("-1.500", "-1.234,56") e o sinal "−" (U+2212).
+// Vazio devolve o padrao. Nao serve para taxa nem dias.
 function _valorDigitadoBaixa(t, padrao) {
-    const s = String(t == null ? '' : t).trim();
-    return _numeroBR(/^\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, '') : s, padrao === undefined ? NaN : padrao);
+    const s = String(t == null ? '' : t).trim().replace(/^\u2212/, '-');
+    return _numeroBR(/^-?\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, '') : s, padrao === undefined ? NaN : padrao);
 }
 
 const AVISO_CONTA_BAIXA = 'Esta conta ainda não está configurada / data anterior ao saldo inicial — não entra no saldo';
@@ -14249,6 +14255,7 @@ function mostrarTabFinanceiro(tab) {
     else if (tab === 'extrato') renderExtrato();
     else if (tab === 'hoje')    renderHoje();
     else if (tab === 'resultado') renderResultadoMes(_resMesAtual);
+    else if (tab === 'simulador') renderSimulador();
     _tabBackBtn('.tab-nav', _prevTabFin, () => mostrarTabFinanceiro(_prevTabFin));
 }
 
@@ -14461,6 +14468,8 @@ function renderResultadoMes(mes) {
         set('res-aberto-legenda', and.atrasados ? 'inclui atrasados' : '');
         aberto.style.display = '';
     } else aberto.style.display = 'none';
+
+    renderFechamentoCard(mes);
 }
 
 // Janelinha de ajuste de um valor (meta ou limite do mes). Vazio remove o ajuste.
@@ -14575,6 +14584,326 @@ function exportarResultadoPDF(mes) {
 }
 
 // =============================================
+// FINANCEIRO — FECHAMENTO DO MES
+// =============================================
+// Passo a passo (conferir o dinheiro -> pendencias -> resumo), foto em
+// db.fechamentos_fin, aviso de mudanca depois do fechamento e documento.
+
+const _fechMaiusc = s => String(s || '').charAt(0).toUpperCase() + String(s || '').slice(1);
+const _fechDataBR = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('pt-BR'); };
+const _fechDiaBR = d => String(d || '').split('-').reverse().join('/');
+// Diferenca com sinal: "−R$ 20,00" / "+R$ 20,00" / "R$ 0,00".
+const _fechDifTxt = v => { const c = Math.round((Number(v) || 0) * 100); return (c < 0 ? '−' : c > 0 ? '+' : '') + _resBrl(Math.abs(c) / 100); };
+
+function fechamentoDoMes(mes) {
+    return (Array.isArray(db.fechamentos_fin) ? db.fechamentos_fin : []).find(f => f && f.mes === mes) || null;
+}
+
+// O que mudou no mes desde a foto: resultado de agora e saldo de agora (no ultimo dia) de cada conta da foto.
+function mudancasDoFechamento(mes) {
+    const foto = fechamentoDoMes(mes);
+    if (!foto || typeof FechamentoCore === 'undefined') return [];
+    const ultimo = FechamentoCore.ultimoDiaMes(mes);
+    const movs = Array.isArray(db.movimentos_fin) ? db.movimentos_fin : [];
+    const saldos = {};
+    (foto.contas || []).forEach(c => {
+        const conta = _contaFinPorId(c.conta_id);
+        if (conta) saldos[c.conta_id] = CaixaCore.saldoConta(conta, movs, ultimo);
+    });
+    return FechamentoCore.mudancasDesdeFoto(foto, { r: resultadoFinanceiroDoMes(mes), saldos });
+}
+
+function _fechTextosMudanca(mes, mudancas) {
+    const pre = `⚠ ${_fechMaiusc(FechamentoCore.rotuloMes(mes))} mudou depois do fechamento: `;
+    return _fechSoMudancas(mudancas).map(x => pre + (x.tipo === 'resultado'
+        ? `resultado era ${_resBrl(x.antes)}, agora é ${_resBrl(x.agora)}`
+        : `saldo de ${x.nome} era ${_resBrl(x.antes)}, agora ${_resBrl(x.agora)}`));
+}
+
+// Guia de imposto lancada depois do fechamento: so informa (nao e aviso de mudanca).
+const _fechSoMudancas = ms => (ms || []).filter(x => x.tipo !== 'guia');
+function _fechTextosGuia(mudancas) {
+    return (mudancas || []).filter(x => x.tipo === 'guia')
+        .map(x => `Guia de imposto lançada: ${_resBrl(x.agora)} (estimado era ${_resBrl(x.antes)})`);
+}
+
+// Card do fechamento no topo do Resultado do mes (so para meses que ja terminaram).
+function renderFechamentoCard(mes) {
+    const el = document.getElementById('res-fechamento');
+    if (!el) return;
+    const esconder = () => { el.style.display = 'none'; el.innerHTML = ''; };
+    if (typeof FechamentoCore === 'undefined' || !/^\d{4}-\d{2}$/.test(mes || '') || mes >= hojeLocal().slice(0, 7)) return esconder();
+    const pode = temAcesso('financeiro.resultado', 'completo');
+    const rot = FechamentoCore.rotuloMes(mes);
+    const foto = fechamentoDoMes(mes);
+    if (!foto) {
+        if (!pode) return esconder();
+        el.innerHTML = `<div class="fech-card-linha"><span class="fech-card-txt">Confira o dinheiro, veja o que ficou pendente e guarde o resumo do mês.</span>
+            <button class="btn btn-primary" id="fech-btn-fechar" onclick="abrirFechamentoMes('${mes}')">🔒 Fechar ${escapeHtml(rot)}</button></div>`;
+    } else {
+        const mudancas = mudancasDoFechamento(mes);
+        const avisos = _fechTextosMudanca(mes, mudancas);
+        const guia = _fechTextosGuia(mudancas);
+        el.innerHTML = `<div class="fech-card-linha"><span class="fech-selo">🔒 Fechado em ${escapeHtml(_fechDataBR(foto.fechado_em))} por ${escapeHtml(foto.fechado_por || '')}</span>
+            <span class="fech-card-botoes"><button class="btn btn-outline btn-sm" onclick="verFechamentoMes('${mes}')">Ver fechamento</button>${pode
+                ? `<button class="btn btn-outline btn-sm" onclick="refazerFechamentoMes('${mes}')">Refazer fechamento</button>` : ''}</span></div>`
+            + (avisos.length ? `<div class="fech-mudou">${avisos.map(t => `<div>${escapeHtml(t)}</div>`).join('')}</div>` : '')
+            + (guia.length ? `<div class="fech-info">${guia.map(t => `<div>${escapeHtml(t)}</div>`).join('')}</div>` : '');
+    }
+    el.style.display = '';
+}
+
+function _fechAtalho(tab) {
+    document.getElementById('fech-modal')?.remove();
+    mostrarTabFinanceiro(tab);
+}
+
+// Passo a passo do fechamento (3 telas). Os valores digitados ficam em "linhas" ao trocar de tela.
+function abrirFechamentoMes(mes) {
+    if (!temAcesso('financeiro.resultado', 'completo')) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
+    if (typeof FechamentoCore === 'undefined' || !/^\d{4}-\d{2}$/.test(mes || '') || mes >= hojeLocal().slice(0, 7)) return;
+    if (fechamentoDoMes(mes)) { verFechamentoMes(mes); return; }
+    document.getElementById('fech-modal')?.remove();
+    const rot = FechamentoCore.rotuloMes(mes);
+    const ultimo = FechamentoCore.ultimoDiaMes(mes);
+    const linhas = FechamentoCore.contasDaConferencia({
+        mes, contas: getContasFin(), movimentos: db.movimentos_fin || [], saldoConta: CaixaCore.saldoConta, ignorarAjustesDe: null
+    }).map(c => ({ ...c, texto: '', acao: 'anotado', motivo: '' }));
+    const st = { passo: 1, anotacoes: '' };
+    // Extrato digitado: null = nao conferida, NaN = invalido.
+    const extratoDe = l => { const t = String(l.texto || '').trim(); return t ? _valorDigitadoBaixa(t, NaN) : null; };
+    const difDe = l => { const e = extratoDe(l); return e == null || Number.isNaN(e) ? null : CaixaCore.arredondar(e - l.esperado); };
+    const temDif = l => { const d = difDe(l); return d != null && Math.round(d * 100) !== 0; };
+
+    const o = document.createElement('div');
+    o.id = 'fech-modal';
+    o.className = 'sc-modal-overlay fech-overlay';
+    o.style.display = 'flex';
+    o.innerHTML = '<div class="sc-modal-box fech-box"></div>';
+    const box = o.querySelector('.fech-box');
+    const fechar = () => o.remove();
+    // Sem fechar pelo fundo nem pelo Esc (perderia o que foi digitado). Cancelar pergunta antes, se ha algo digitado.
+    const cancelar = async () => {
+        const digitou = linhas.some(l => String(l.texto || '').trim() || String(l.motivo || '').trim()) || String(st.anotacoes || '').trim();
+        if (digitou && !(await showConfirm('Cancelar o fechamento? O que você digitou será perdido.', '🔒', 'Cancelar fechamento', 'Continuar fechando'))) return;
+        fechar();
+    };
+    const pagarLink = temAcesso('financeiro.pagar', 'visualizar') ? `<a href="#" class="fech-link" onclick="_fechAtalho('pagar');return false">A Pagar</a>` : 'A Pagar';
+    const receberLink = temAcesso('financeiro.receber', 'visualizar') ? `<a href="#" class="fech-link" onclick="_fechAtalho('receber');return false">A Receber</a>` : 'A Receber';
+    const titulo = n => `<h3 class="fech-titulo">🔒 Fechar ${escapeHtml(rot)}</h3><div class="fech-passos">Passo ${n} de 3 · ${['Conferir o dinheiro', 'O que ficou pendente', 'Resumo do mês'][n - 1]}</div>`;
+    const BOTAO_CANCELAR = '<button class="btn btn-outline" data-acao="cancelar">Cancelar</button>';
+    const rodape = (voltar, avancar) => `<div class="fech-erro"></div><div class="fech-botoes">${voltar}${avancar}</div>`;
+
+    const pend = () => FechamentoCore.pendenciasDoMes({ mes, contasPagar: db.contas_pagar, contasReceber: db.contas_receber, impostoEstimado: resultadoFinanceiroDoMes(mes).imposto.estimado });
+
+    function passo1() {
+        const corpo = linhas.length ? `<div class="fech-tabela-wrap"><table class="fech-tabela"><thead><tr><th>Conta</th><th style="text-align:right">Esperado</th><th>Saldo no extrato</th><th>Diferença</th></tr></thead><tbody>${linhas.map((l, i) => `
+            <tr data-conta="${escapeHtml(String(l.conta_id))}" data-i="${i}"><td>${escapeHtml(l.nome || '')}</td><td style="text-align:right">${_resBrl(l.esperado)}</td>
+                <td><input type="text" inputmode="decimal" class="fech-extrato" value="${escapeHtml(l.texto)}" placeholder="não conferida" aria-label="Saldo no extrato de ${escapeHtml(l.nome || '')}"></td>
+                <td><div class="fech-dif"></div><div class="fech-acao" style="display:none">
+                    <label><input type="radio" name="fech-acao-${i}" value="ajuste"${l.acao === 'ajuste' ? ' checked' : ''}> Lançar ajuste</label>
+                    <label><input type="radio" name="fech-acao-${i}" value="anotado"${l.acao !== 'ajuste' ? ' checked' : ''}> Deixar anotado</label>
+                    <input type="text" class="fech-motivo" placeholder="Motivo do ajuste" value="${escapeHtml(l.motivo)}"${l.acao === 'ajuste' ? '' : ' style="display:none"'}>
+                </div></td></tr>`).join('')}</tbody></table></div>`
+            : '<p class="fech-vazio">Nenhuma conta para conferir neste mês.</p>';
+        box.innerHTML = titulo(1)
+            + `<p class="fech-texto">Digite o saldo que aparece no extrato de cada conta em ${_fechDiaBR(ultimo)}. Em branco, a conta fica como não conferida.</p>`
+            + corpo
+            + `<div class="fech-dica">Se a diferença é uma conta que você esqueceu de lançar, lance no ${pagarLink} / ${receberLink} em vez de ajustar.</div>`
+            + rodape(BOTAO_CANCELAR, '<button class="btn btn-primary" data-acao="continuar">Continuar</button>');
+        box.querySelectorAll('tr[data-i]').forEach(tr => {
+            const l = linhas[Number(tr.dataset.i)];
+            const atualizar = () => {
+                const e = extratoDe(l), d = difDe(l);
+                const dif = tr.querySelector('.fech-dif');
+                dif.textContent = e == null ? 'não conferida' : (Number.isNaN(e) ? 'valor inválido' : _fechDifTxt(d));
+                dif.className = 'fech-dif' + (d != null && Math.round(d * 100) < 0 ? ' res-neg' : '');
+                tr.querySelector('.fech-acao').style.display = temDif(l) ? '' : 'none';
+                tr.querySelector('.fech-motivo').style.display = l.acao === 'ajuste' ? '' : 'none';
+            };
+            tr.querySelector('.fech-extrato').addEventListener('input', e => { l.texto = e.target.value; atualizar(); });
+            tr.querySelectorAll('input[type="radio"]').forEach(r => r.addEventListener('change', () => { if (r.checked) { l.acao = r.value; atualizar(); } }));
+            tr.querySelector('.fech-motivo').addEventListener('input', e => { l.motivo = e.target.value; });
+            atualizar();
+        });
+        box.querySelector('[data-acao="cancelar"]').onclick = cancelar;
+        box.querySelector('[data-acao="continuar"]').onclick = () => {
+            const erro = t => { box.querySelector('.fech-erro').textContent = t; };
+            const invalida = linhas.find(l => Number.isNaN(extratoDe(l)));
+            if (invalida) return erro(`Saldo do extrato de ${invalida.nome} inválido. Use só números (ex: 1.234,56).`);
+            if (linhas.some(l => temDif(l) && l.acao === 'ajuste' && !String(l.motivo || '').trim())) return erro('Informe o motivo do ajuste.');
+            st.passo = 2; mostrar();
+        };
+    }
+
+    function passo2() {
+        const p = pend();
+        const venc = x => ` · vence ${_fechDiaBR(x.data_vencimento)}`;
+        const veAba = { pagar: temAcesso('financeiro.pagar', 'visualizar'), receber: temAcesso('financeiro.receber', 'visualizar') };
+        const item = (desc, valor, tab, rotuloBotao) => `<div class="fech-pend-item"><span class="fech-pend-desc">${desc}</span>${valor != null ? `<strong>${_resBrl(valor)}</strong>` : ''}${veAba[tab] ? `<button class="btn btn-outline btn-sm" onclick="_fechAtalho('${tab}')">${rotuloBotao}</button>` : ''}</div>`;
+        let html = '';
+        if (p.pagar.length) html += `<h4 class="fech-sub">Contas a pagar em aberto (${p.pagar_qtd} · ${_resBrl(p.pagar_valor)})</h4>`
+            + p.pagar.map(x => { const cred = x.credor_nome || x.fornecedor || ''; return item(escapeHtml(x.descricao || '') + `<small>${escapeHtml(cred)}${cred ? ' · ' : ''}${venc(x).slice(3)}</small>`, x.valor, 'pagar', 'Abrir A Pagar'); }).join('');
+        if (p.receber.length) html += `<h4 class="fech-sub">Clientes que não pagaram (${p.receber_qtd} · ${_resBrl(p.receber_valor)})</h4>`
+            + p.receber.map(x => item(escapeHtml(x.cliente_nome || '') + `<small>${escapeHtml(x.descricao || '')}${venc(x)}</small>`, x.valor, 'receber', 'Abrir A Receber')).join('');
+        if (p.guia_pendente) html += `<h4 class="fech-sub">Imposto</h4>` + item(`Guia de imposto de ${escapeHtml(rot)} não lançada<small>o resultado usa o imposto estimado</small>`, null, 'pagar', 'Abrir A Pagar');
+        box.innerHTML = titulo(2)
+            + (html ? `<p class="fech-texto">Nada aqui impede fechar; os números vão para a foto do mês.</p>${html}` : '<p class="fech-vazio">Nada pendente neste mês.</p>')
+            + rodape(BOTAO_CANCELAR + '<button class="btn btn-outline" data-acao="voltar">Voltar</button>', '<button class="btn btn-primary" data-acao="continuar">Continuar</button>');
+        box.querySelector('[data-acao="cancelar"]').onclick = cancelar;
+        box.querySelector('[data-acao="voltar"]').onclick = () => { st.passo = 1; mostrar(); };
+        box.querySelector('[data-acao="continuar"]').onclick = () => { st.passo = 3; mostrar(); };
+    }
+
+    // Numeros e sugestoes do mes (os mesmos do Resultado do mes).
+    function resumo() {
+        const d = _resDados(mes);
+        const ant = FechamentoCore.mesAnterior(mes);
+        const rAnt = resultadoFinanceiroDoMes(ant);
+        const p = pend();
+        const sugestoes = FechamentoCore.sugestoesDoMes({
+            resultado: d.r.resultado, entradas: d.r.faturamento, meta: d.meta, equilibrio: d.equilibrio, orcamento: d.orcamento,
+            porGrupo: d.r.porGrupo, porGrupoAnterior: rAnt.porGrupo, rotuloAnterior: FechamentoCore.rotuloMes(ant),
+            pendencias: p, impostoEstimado: d.r.imposto.estimado, rotuloMes: rot, grupos: ResultadoCore.GRUPOS
+        });
+        return { d, ant, rAnt, p, sugestoes };
+    }
+
+    function passo3() {
+        const { d, ant, rAnt, sugestoes } = resumo();
+        const r = d.r;
+        const comp = (rotulo, atual, anterior) => {
+            const dif = CaixaCore.arredondar(atual - anterior);
+            const pct = Math.round(anterior * 100) !== 0 ? ` (${dif >= 0 ? '+' : '−'}${Math.abs(Math.round(dif / Math.abs(anterior) * 100))}%)` : '';
+            return `<li>${rotulo}: ${_resBrl(atual)} × ${_resBrl(anterior)} em ${escapeHtml(FechamentoCore.rotuloMes(ant))} — ${_fechDifTxt(dif)}${pct}</li>`;
+        };
+        const meta = d.meta > 0 ? ` · meta ${_resBrl(d.meta)} (${Math.round(r.faturamento / d.meta * 100)}% da meta)` : ' · sem meta definida';
+        const maiores = FechamentoCore.maioresGastos(r.porGrupo, 3, ResultadoCore.GRUPOS);
+        const estourados = d.orcamento.filter(o => o.faixa === 'estourou');
+        box.innerHTML = titulo(3)
+            + `<div class="fech-kpis"><div><span>Entradas</span><strong>${_resBrl(r.entradas)}</strong></div><div><span>Saídas</span><strong>${_resBrl(r.saidas)}</strong></div><div><span>Resultado</span><strong class="${r.resultado < 0 ? 'res-neg' : 'res-pos'}">${_resBrl(r.resultado)}</strong></div></div>`
+            + `<div class="fech-texto">Imposto ${r.imposto.estimado ? 'estimado' : 'lançado'}: ${_resBrl(r.imposto.valor)} · faturamento líquido ${_resBrl(r.faturamento)}${meta}</div>`
+            + `<h4 class="fech-sub">Saídas por grupo</h4><table class="fech-tabela"><tbody>${ResultadoCore.GRUPOS.map(g => `<tr><td>${escapeHtml(g.rotulo)}${g.id === 'imposto' && r.imposto.estimado ? ' <small class="fech-vazio">(estimado)</small>' : ''}</td><td style="text-align:right">${_resBrl(r.porGrupo[g.id])}</td></tr>`).join('')}</tbody></table>`
+            + `<h4 class="fech-sub">Comparação com ${escapeHtml(FechamentoCore.rotuloMes(ant))}</h4><ul class="fech-lista">${comp('Resultado', r.resultado, rAnt.resultado)}${comp('Entradas', r.entradas, rAnt.entradas)}</ul>`
+            + `<h4 class="fech-sub">Maiores gastos</h4>${maiores.length ? `<ul class="fech-lista">${maiores.map(m => `<li>${escapeHtml(m.rotulo)}: ${_resBrl(m.valor)}</li>`).join('')}</ul>` : '<p class="fech-vazio">Nenhum gasto no mês.</p>'}`
+            + `<h4 class="fech-sub">Orçamentos estourados</h4>${estourados.length ? `<ul class="fech-lista">${estourados.map(o => `<li class="res-faixa-estourou">${escapeHtml(o.rotulo)}: estourou ${_resBrl(-o.falta)}</li>`).join('')}</ul>` : '<p class="fech-vazio">Nenhum orçamento estourado.</p>'}`
+            + `<h4 class="fech-sub">Sugestões para o próximo mês</h4><ul class="fech-lista fech-sugestoes">${sugestoes.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>`
+            + `<div class="form-group" style="margin-top:12px"><label for="fech-anotacoes">Anotações</label><textarea id="fech-anotacoes" rows="3">${escapeHtml(st.anotacoes)}</textarea></div>`
+            + rodape(BOTAO_CANCELAR + '<button class="btn btn-outline" data-acao="voltar">Voltar</button>', `<button class="btn btn-primary" id="fech-confirmar">🔒 Fechar ${escapeHtml(rot)}</button>`);
+        box.querySelector('#fech-anotacoes').addEventListener('input', e => { st.anotacoes = e.target.value; });
+        box.querySelector('[data-acao="cancelar"]').onclick = cancelar;
+        box.querySelector('[data-acao="voltar"]').onclick = () => { st.passo = 2; mostrar(); };
+        box.querySelector('#fech-confirmar').onclick = confirmar;
+    }
+
+    let gravando = false;
+    function confirmar() {
+        if (gravando) return;
+        gravando = true;
+        const btn = document.getElementById('fech-confirmar');
+        if (btn) btn.disabled = true;
+        if (fechamentoDoMes(mes)) { fechar(); renderResultadoMes(mes); return; }
+        if (!Array.isArray(db.movimentos_fin)) db.movimentos_fin = [];
+        const novoId = _novosIdsFin(db.movimentos_fin);
+        const contas = linhas.map(l => {
+            const extrato = extratoDe(l);
+            const conferida = extrato != null && !Number.isNaN(extrato);
+            const dif = conferida ? difDe(l) : null;
+            const acao = conferida && temDif(l) ? l.acao : null;
+            const motivo = acao === 'ajuste' ? String(l.motivo || '').trim() : '';
+            if (acao === 'ajuste') {
+                db.movimentos_fin.push({
+                    id: novoId(), conta_id: l.conta_id, data: ultimo, sentido: dif < 0 ? 'saida' : 'entrada', valor: CaixaCore.arredondar(Math.abs(dif)),
+                    origem: 'ajuste', origem_id: null, grupo_id: null, fechamento_mes: mes,
+                    descricao: `Ajuste da conferência de ${_fechMaiusc(rot)}: ${motivo}`
+                });
+            }
+            return { conta_id: l.conta_id, nome: l.nome, esperado: l.esperado, extrato: conferida ? CaixaCore.arredondar(extrato) : null, diferenca: dif, acao, motivo };
+        });
+        const { d, p, sugestoes } = resumo();
+        const foto = FechamentoCore.montarFoto({
+            mes, agoraISO: new Date().toISOString(), usuario: nomeExibicao(getUsuarioLogado()), r: d.r, meta: d.meta, contas,
+            pendencias: { pagar_qtd: p.pagar_qtd, pagar_valor: p.pagar_valor, receber_qtd: p.receber_qtd, receber_valor: p.receber_valor, guia_pendente: p.guia_pendente },
+            sugestoes, anotacoes: String(st.anotacoes || '').trim()
+        });
+        db.fechamentos_fin = (Array.isArray(db.fechamentos_fin) ? db.fechamentos_fin : []).filter(f => f && f.mes !== mes);
+        db.fechamentos_fin.push(foto);
+        syncDB();
+        fechar();
+        renderResultadoMes(mes);
+        verFechamentoMes(mes);
+    }
+
+    function mostrar() {
+        if (st.passo === 1) passo1(); else if (st.passo === 2) passo2(); else passo3();
+        box.scrollTop = 0;
+    }
+    document.body.appendChild(o);
+    mostrar();
+    box.querySelector('.fech-extrato')?.focus();
+}
+
+// Apaga a foto e os ajustes lancados por este fechamento e reabre o passo a passo.
+async function refazerFechamentoMes(mes) {
+    if (!temAcesso('financeiro.resultado', 'completo')) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
+    if (!fechamentoDoMes(mes)) return;
+    const ok = await showConfirm(`Refazer o fechamento de ${FechamentoCore.rotuloMes(mes)}? A foto e os ajustes lançados nele serão apagados.`, '🔒', 'Refazer', 'Cancelar');
+    if (!ok) return;
+    db.fechamentos_fin = (db.fechamentos_fin || []).filter(f => f && f.mes !== mes);
+    db.movimentos_fin = (db.movimentos_fin || []).filter(m => !(m && m.origem === 'ajuste' && m.fechamento_mes === mes));
+    syncDB();
+    renderResultadoMes(mes);
+    abrirFechamentoMes(mes);
+}
+
+// Documento do fechamento: sempre a foto (o que foi fechado), com o aviso se o mes mudou depois.
+function verFechamentoMes(mes) {
+    if (!temAcesso('financeiro.resultado', 'visualizar')) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
+    const foto = fechamentoDoMes(mes);
+    if (!foto) return;
+    const rot = FechamentoCore.rotuloMes(mes);
+    const n = foto.numeros || {};
+    const td = 'padding:6px 8px;border-bottom:1px solid #ddd';
+    const th = `${td};text-align:left;background:#f0f0f0`;
+    const mudancas = mudancasDoFechamento(mes);
+    const avisos = _fechTextosMudanca(mes, mudancas);
+    const guia = _fechTextosGuia(mudancas);
+    const grupos = ResultadoCore.GRUPOS.map(g => `<tr><td style="${td}">${escapeHtml(g.rotulo)}${g.id === 'imposto' && n.imposto_estimado ? ' (estimado)' : ''}</td><td style="${td};text-align:right">${_resBrl((n.por_grupo || {})[g.id])}</td></tr>`).join('');
+    const situacao = c => c.extrato == null ? 'não conferida'
+        : (c.acao === 'ajuste' ? `ajuste lançado — ${c.motivo || ''}` : (c.acao === 'anotado' ? 'diferença anotada' : 'confere'));
+    const contas = (foto.contas || []).map(c => `<tr><td style="${td}">${escapeHtml(c.nome || '')}</td><td style="${td};text-align:right">${_resBrl(c.esperado)}</td><td style="${td};text-align:right">${c.extrato == null ? '—' : _resBrl(c.extrato)}</td><td style="${td};text-align:right">${c.diferenca == null ? '—' : _fechDifTxt(c.diferenca)}</td><td style="${td}">${escapeHtml(situacao(c))}</td></tr>`).join('');
+    const pd = foto.pendencias || {};
+    const pend = [];
+    if (pd.pagar_qtd) pend.push(`${pd.pagar_qtd} ${pd.pagar_qtd === 1 ? 'conta' : 'contas'} a pagar em aberto (${_resBrl(pd.pagar_valor)})`);
+    if (pd.receber_qtd) pend.push(`${pd.receber_qtd} ${pd.receber_qtd === 1 ? 'conta' : 'contas'} a receber em aberto (${_resBrl(pd.receber_valor)})`);
+    if (pd.guia_pendente) pend.push('Guia de imposto do mês não lançada (imposto estimado)');
+    const meta = Number(n.meta) > 0 ? `Meta ${_resBrl(n.meta)}` : 'Sem meta definida';
+    const html = `<div style="padding:24px;color:#242424">
+        <div class="doc-cab">${buildEmpresaHeaderHTML(52)}</div>
+        <h2 style="margin:16px 0 4px">Fechamento de ${escapeHtml(rot)}</h2>
+        ${avisos.length ? `<div style="background:#FFF6DB;border-left:4px solid #B26A00;color:#7A4A00;padding:8px 12px;margin:10px 0;font-size:13px">${avisos.map(t => `<div>${escapeHtml(t)}</div>`).join('')}</div>` : ''}
+        ${guia.length ? `<div class="fech-info-doc" style="background:#F0F4F8;border-left:4px solid #8A9BB0;color:#33475B;padding:8px 12px;margin:10px 0;font-size:13px">${guia.map(t => `<div>${escapeHtml(t)}</div>`).join('')}</div>` : ''}
+        <div style="display:flex;gap:32px;margin:12px 0;font-size:14px;flex-wrap:wrap">
+            <div>Entradas<br><strong style="font-size:18px">${_resBrl(n.entradas)}</strong></div>
+            <div>Saídas<br><strong style="font-size:18px">${_resBrl(n.saidas)}</strong></div>
+            <div>Resultado<br><strong style="font-size:18px;color:${Number(n.resultado) < 0 ? '#F43927' : '#005D3B'}">${_resBrl(n.resultado)}</strong></div>
+        </div>
+        <div style="font-size:13px;margin-bottom:12px">Imposto ${n.imposto_estimado ? 'estimado' : 'lançado'}: ${_resBrl(n.imposto)} · ${meta}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="${th}">Saídas por grupo</th><th style="${th};text-align:right">Valor</th></tr></thead><tbody>${grupos}</tbody></table>
+        <h3 style="margin:18px 0 6px;font-size:15px">Conferência das contas</h3>
+        ${contas ? `<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="${th}">Conta</th><th style="${th};text-align:right">Esperado</th><th style="${th};text-align:right">Extrato</th><th style="${th};text-align:right">Diferença</th><th style="${th}">Situação</th></tr></thead><tbody>${contas}</tbody></table>` : '<div style="font-size:13px">Nenhuma conta conferida.</div>'}
+        <h3 style="margin:18px 0 6px;font-size:15px">Pendências</h3>
+        <div style="font-size:13px">${pend.length ? pend.map(t => `<div>${escapeHtml(t)}</div>`).join('') : 'Nada pendente neste mês.'}</div>
+        <h3 style="margin:18px 0 6px;font-size:15px">Sugestões para o próximo mês</h3>
+        <ul style="font-size:13px;margin:0;padding-left:20px">${(foto.sugestoes || []).map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>
+        ${foto.anotacoes ? `<h3 style="margin:18px 0 6px;font-size:15px">Anotações</h3><div style="font-size:13px;white-space:pre-wrap">${escapeHtml(foto.anotacoes)}</div>` : ''}
+        <div style="font-size:12px;color:#666;margin-top:18px">Fechado em ${escapeHtml(_fechDataBR(foto.fechado_em))} por ${escapeHtml(foto.fechado_por || '')}</div>
+    </div>`;
+    const tit = 'Fechamento de ' + rot;
+    abrirDocModal(html, tit, '', envioDocumentoInterno(tit, 'Fechamento-' + mes));
+}
+
+// =============================================
 // FINANCEIRO — TELA "HOJE"
 // =============================================
 
@@ -14604,8 +14933,9 @@ function renderHoje() {
         ${cr.ultima_cobranca === hoje ? '<small style="color:var(--muted);white-space:nowrap">cobrado hoje</small>' : ''}
         ${podeReceber ? `<button class="btn btn-outline btn-sm" onclick='cobrarNoWhatsApp(${jid(cr.id)})'>💬 Cobrar</button>
         <button class="btn btn-success btn-sm" onclick='marcarCRPago(${jid(cr.id)})'>✓ Recebi</button>` : ''}</div>`;
+    const credorCP = cp => cp.credor_nome || cp.fornecedor || '';
     const linhaCP = cp => `<div class="hoje-item">
-        <div class="hoje-item-desc">${escapeHtml(cp.descricao || '')}<small>${escapeHtml(cp.fornecedor || '')}${cp.fornecedor ? ' · ' : ''}vence ${fmtData(cp.data_vencimento)}</small></div>
+        <div class="hoje-item-desc">${escapeHtml(cp.descricao || '')}<small>${escapeHtml(credorCP(cp))}${credorCP(cp) ? ' · ' : ''}vence ${fmtData(cp.data_vencimento)}</small></div>
         <div class="hoje-item-valor">${brl(cp.valor)}</div>
         ${podePagar ? `<button class="btn btn-success btn-sm" onclick='marcarCPPago(${jid(cp.id)})'>✓ Paguei</button>` : ''}</div>`;
     const linhaCartao = m => {
@@ -14625,7 +14955,30 @@ function renderHoje() {
         if (estourados.length) avisoOrc = `<div id="hoje-orcamento">${estourados.map(o =>
             `<div class="hoje-orcamento-linha" data-grupo="${escapeHtml(o.grupo)}">Orçamento de ${escapeHtml(o.rotulo)} estourado: ${brl(-o.falta)} acima</div>`).join('')}</div>`;
     }
-    elT.innerHTML = avisoOrc + (html || '<p style="color:#888;margin:0">Tudo em dia 👍</p>');
+    // Fechamento do mes anterior: lembrete de fechar, ou aviso se o mes fechado mudou depois.
+    let avisoFech = '';
+    if (typeof FechamentoCore !== 'undefined' && temAcesso('financeiro.resultado', 'visualizar')) {
+        const pode = temAcesso('financeiro.resultado', 'completo');
+        const mesFech = FechamentoCore.mesParaFechar({ hoje, fechamentos: db.fechamentos_fin, temContas: todasContas.length > 0 });
+        let linha = '';
+        if (mesFech) {
+            const acao = pode ? `mostrarTabFinanceiro('resultado');renderResultadoMes('${mesFech}');abrirFechamentoMes('${mesFech}')`
+                : `mostrarTabFinanceiro('resultado');renderResultadoMes('${mesFech}')`;
+            linha = `<div class="hoje-fechamento-linha"><span>Feche o mês de ${escapeHtml(FechamentoCore.rotuloMes(mesFech))}</span>
+                <button class="btn btn-primary btn-sm" onclick="${acao}">${pode ? 'Fechar agora' : 'Ver'}</button></div>`;
+        } else {
+            const mesAnt = FechamentoCore.mesAnterior(hoje.slice(0, 7));
+            const mudancas = fechamentoDoMes(mesAnt) ? mudancasDoFechamento(mesAnt) : [];
+            const ver = `<button class="btn btn-outline btn-sm" onclick="mostrarTabFinanceiro('resultado');renderResultadoMes('${mesAnt}')">Ver</button>`;
+            if (_fechSoMudancas(mudancas).length) {
+                linha = `<div class="hoje-fechamento-linha hoje-fechamento-mudou"><span>⚠ ${escapeHtml(_fechMaiusc(FechamentoCore.rotuloMes(mesAnt)))} mudou depois do fechamento</span>
+                    ${ver}</div>`;
+            }
+            linha += _fechTextosGuia(mudancas).map(t => `<div class="hoje-fechamento-linha hoje-fechamento-info"><span>${escapeHtml(t)}</span>${ver}</div>`).join('');
+        }
+        if (linha) avisoFech = `<div id="hoje-fechamento">${linha}</div>`;
+    }
+    elT.innerHTML = avisoFech + avisoOrc + (html || '<p style="color:#888;margin:0">Tudo em dia 👍</p>');
 
     // Lado direito: so com permissao de ver o Extrato.
     const lado = document.getElementById('hoje-lado');
@@ -14667,6 +15020,242 @@ function renderHoje() {
             },
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => brl(ctx.parsed.y) } } } }
         });
+    }
+}
+
+// =============================================
+// FINANCEIRO — SIMULAR COMPRA
+// =============================================
+
+// Ultima simulacao valida (o que "Lancar no A Pagar" grava). null = nada para lancar.
+let _simUltima = null;
+let _simLancando = false;
+const _SIM_VAZIO = 'Preencha a compra e clique em Simular para ver se cabe no caixa das próximas 8 semanas.';
+
+function _simForma() {
+    const r = document.querySelector('input[name="sim-forma"]:checked');
+    return r ? r.value : 'avista';
+}
+
+function simAtualizarForma() {
+    const forma = _simForma();
+    const mostra = (id, sim) => { const el = document.getElementById(id); if (el) el.style.display = sim ? '' : 'none'; };
+    mostra('sim-parcelas-grupo', forma !== 'avista');
+    mostra('sim-primeira-grupo', forma !== 'avista');
+    mostra('sim-entrada-grupo', forma === 'entrada');
+}
+
+function _simSomarDias(data, dias) {
+    return dataLocal(new Date(Number(data.slice(0, 4)), Number(data.slice(5, 7)) - 1, Number(data.slice(8, 10)) + dias).getTime());
+}
+
+// A 1a parcela acompanha a data da compra (+30 dias) ate o usuario mexer nela.
+let _simPrimeiraManual = false;
+let _simEventosLigados = false;
+
+// Mudou algo que entra na conta: a simulacao mostrada ficou velha (some o resultado e o Lancar).
+function _simInvalidar() {
+    if (!_simUltima && !document.getElementById('sim-lancar') && !document.querySelector('#sim-resultado .sim-veredito')) return;
+    _simUltima = null;
+    _simSaidaVazia('Os dados da compra mudaram. Clique em Simular para ver de novo.');
+}
+
+function _simLigarEventos() {
+    if (_simEventosLigados) return;
+    _simEventosLigados = true;
+    ['sim-valor', 'sim-parcelas', 'sim-entrada', 'sim-data', 'sim-primeira', 'sim-ganho'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', _simInvalidar);
+        el.addEventListener('change', _simInvalidar);
+    });
+    document.querySelectorAll('input[name="sim-forma"]').forEach(r => r.addEventListener('change', _simInvalidar));
+    const primeira = document.getElementById('sim-primeira');
+    if (primeira) primeira.addEventListener('input', () => { _simPrimeiraManual = true; });
+    const data = document.getElementById('sim-data');
+    const segue = () => {
+        if (_simPrimeiraManual || !primeira || !/^\d{4}-\d{2}-\d{2}$/.test(data.value)) return;
+        primeira.value = _simSomarDias(data.value, 30);
+    };
+    if (data) { data.addEventListener('input', segue); data.addEventListener('change', segue); }
+}
+
+function renderSimulador() {
+    if (!document.getElementById('fin-simulador')) return;
+    _simLigarEventos();
+    const hoje = hojeLocal();
+    const data = document.getElementById('sim-data');
+    const primeira = document.getElementById('sim-primeira');
+    if (data && !data.value) data.value = hoje;
+    if (primeira && !primeira.value) primeira.value = _simSomarDias(data && data.value ? data.value : hoje, 30);
+    simAtualizarForma();
+    // Ao entrar na aba, nada de resultado velho (os dados do caixa podem ter mudado).
+    _simUltima = null;
+    _simMostrarErro('');
+    _simSaidaVazia(_SIM_VAZIO);
+}
+
+// As 8 semanas da tela Hoje (mesma chamada), com pagamentos extras como contas a pagar em aberto.
+function _simPrevisao(pagamentosExtras) {
+    const hoje = hojeLocal();
+    const contas = getContasFin().filter(c => c.ativo !== false);
+    const movs = Array.isArray(db.movimentos_fin) ? db.movimentos_fin : [];
+    const sd = CaixaCore.saldosHoje(contas, movs, hoje);
+    const extras = pagamentosExtras && pagamentosExtras.length ? SimuladorCore.pagamentosComoContas(pagamentosExtras) : [];
+    return CaixaCore.previsaoSemanal({ hoje, saldoHoje: sd.total, movimentos: movs, contasReceber: db.contas_receber, contasPagar: (db.contas_pagar || []).concat(extras), despesasFixas: db.despesas_fixas, contas, meios: getMeiosPag(), semanas: 8 });
+}
+
+// Media do resultado dos 3 meses mais recentes antes do atual que tiveram movimento (ate 12 para tras).
+function _simResultadoMedio(mesAtual) {
+    const resultados = [];
+    for (let i = 1; i <= 12 && resultados.length < 3; i++) {
+        const r = resultadoFinanceiroDoMes(ResultadoCore.somarMeses(mesAtual, -i));
+        if (r.entradas !== 0 || r.saidas !== 0) resultados.push(r.resultado);
+    }
+    return SimuladorCore.resultadoMedio(resultados);
+}
+
+function _simMostrarErro(msg) {
+    const e = document.getElementById('sim-erro');
+    if (e) { e.textContent = msg || ''; e.style.display = msg ? '' : 'none'; }
+}
+
+function _simSaidaVazia(texto) {
+    const saida = document.getElementById('sim-resultado');
+    if (saida) saida.innerHTML = `<p class="sim-vazio">${escapeHtml(texto)}</p>`;
+}
+
+const _simEhAvulsa = p => p.rotulo === 'À vista' || p.rotulo === 'Entrada';
+
+function simularCompra() {
+    const saida = document.getElementById('sim-resultado');
+    if (!saida) return;
+    _simUltima = null;
+    if (!getContasFin().some(c => c.ativo !== false)) {
+        _simMostrarErro('');
+        saida.innerHTML = '<p class="sim-vazio" id="sim-sem-contas">Configure suas contas para simular.</p><a class="btn btn-primary btn-sm" href="empresa.html#preferencias">Configurar contas</a>';
+        return;
+    }
+    const val = id => (document.getElementById(id)?.value || '').trim();
+    const ddmm = d => d.slice(8, 10) + '/' + d.slice(5, 7);
+    const ehData = d => /^\d{4}-\d{2}-\d{2}$/.test(d);
+    const descricao = val('sim-desc');
+    const forma = _simForma();
+    const dataCompra = val('sim-data');
+    const dataPrimeira = val('sim-primeira');
+    const valorTotal = _valorDigitadoBaixa(val('sim-valor'), NaN);
+    let erro = '';
+    if (!descricao) erro = 'Informe a descrição da compra.';
+    else if (!['avista', 'parcelado', 'entrada'].includes(forma)) erro = 'Escolha a forma de pagamento.';
+    else if (!ehData(dataCompra)) erro = 'Informe a data da compra.';
+    else if (forma !== 'avista' && !ehData(dataPrimeira)) erro = 'Informe a data da 1ª parcela.';
+    let r = null;
+    if (!erro) {
+        r = SimuladorCore.pagamentosDaCompra({
+            valor: valorTotal, forma,
+            parcelas: val('sim-parcelas') === '' ? NaN : Number(val('sim-parcelas')),
+            entrada: _valorDigitadoBaixa(val('sim-entrada'), NaN),
+            dataCompra, dataPrimeira
+        });
+        if (!r.ok) erro = r.erro;
+    }
+    if (erro) {
+        _simMostrarErro(erro);
+        _simSaidaVazia('Corrija o formulário e clique em Simular.');
+        return;
+    }
+    _simMostrarErro('');
+    const pagamentos = r.pagamentos;
+    const hoje = hojeLocal();
+    const semanasSem = _simPrevisao([]);
+    const semanasCom = _simPrevisao(pagamentos);
+    const fim = semanasCom.length ? semanasCom[semanasCom.length - 1].fim : hoje;
+    const ganho = _valorDigitadoBaixa(val('sim-ganho'), NaN);
+    const parcelas = pagamentos.filter(p => !_simEhAvulsa(p));
+    const v = SimuladorCore.veredito({
+        semanasSem, semanasCom,
+        folga: ResultadoCore.despesasFixasDoMes({ mes: hoje.slice(0, 7), contasPagar: db.contas_pagar, despesasFixas: db.despesas_fixas }) / 2,
+        parcelaMensal: parcelas.length ? parcelas[0].valor : pagamentos[0].valor,
+        temParcelaAlem: pagamentos.some(p => p.data > fim),
+        resultadoMedio: _simResultadoMedio(hoje.slice(0, 7)),
+        ganhoMensal: ganho > 0 ? ganho : 0,
+        valorTotal
+    });
+    const frases = v.frases.slice();
+    // Caixa ja negativo sem a compra: a frase do veredito explica; procurar data so confundiria.
+    if (v.cor === 'vermelho' && !v.jaNegativoSem) {
+        const quando = SimuladorCore.melhorData({ hoje, pagamentos, prever: _simPrevisao });
+        const frase = quando ? 'Comprando a partir de ' + ddmm(quando) + ', cabe.' : 'Nas próximas 8 semanas não cabe — tente parcelar em mais vezes ou dar uma entrada menor.';
+        const iPay = frases.findIndex(f => f.startsWith('Se paga em'));
+        if (iPay >= 0) frases.splice(iPay, 0, frase); else frases.push(frase);
+    }
+    _simUltima = { forma, pagamentos, qtdParcelas: parcelas.length };
+    const celula = x => `<td class="sim-num${x < 0 ? ' res-neg' : ''}">${escapeHtml(_resBrl(x))}</td>`;
+    const linhas = semanasCom.map((s, i) => `<tr><td>${ddmm(s.inicio)} a ${ddmm(s.fim)}</td>${celula(semanasSem[i].saldo_final)}${celula(s.saldo_final)}</tr>`).join('');
+    const pode = temAcesso('financeiro.simulador', 'completo');
+    saida.innerHTML = `<div class="sim-veredito sim-${v.cor}">
+            <h3 id="sim-titulo" class="sim-titulo sim-${v.cor}">${escapeHtml(v.titulo)}</h3>
+            <ul id="sim-frases" class="sim-frases">${frases.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>
+        </div>
+        <div class="sim-tabela-wrap"><table class="sim-tabela">
+            <thead><tr><th>Semana</th><th class="sim-num">Saldo sem a compra</th><th class="sim-num">Saldo com a compra</th></tr></thead>
+            <tbody>${linhas}</tbody>
+        </table></div>
+        ${pode ? '<div class="sim-botoes"><button class="btn btn-success" id="sim-lancar" onclick="lancarSimulacaoNoPagar()">Lançar no A Pagar</button></div>' : ''}`;
+}
+
+function limparSimulador() {
+    _simUltima = null;
+    ['sim-desc', 'sim-valor', 'sim-parcelas', 'sim-entrada', 'sim-ganho', 'sim-credor', 'sim-data', 'sim-primeira'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const cat = document.getElementById('sim-categoria'); if (cat) cat.value = 'outro';
+    const av = document.querySelector('input[name="sim-forma"][value="avista"]'); if (av) av.checked = true;
+    _simPrimeiraManual = false;
+    renderSimulador();
+}
+
+// Cria as contas a pagar como o parcelado do A Pagar: entrada/a vista avulsa, parcelas agrupadas.
+async function lancarSimulacaoNoPagar() {
+    if (!temAcesso('financeiro.simulador', 'completo')) return;
+    if (_simLancando || !_simUltima) return;
+    // Descricao, categoria e credor nao mudam a conta: valem os do formulario na hora de lancar.
+    const val = id => (document.getElementById(id)?.value || '').trim();
+    const descricao = val('sim-desc');
+    if (!descricao) { _simMostrarErro('Informe a descrição da compra.'); return; }
+    _simMostrarErro('');
+    const sim = { ..._simUltima, descricao, categoria: val('sim-categoria') || 'outro', credor: val('sim-credor') };
+    const ultima = _simUltima;
+    const btn = document.getElementById('sim-lancar');
+    _simLancando = true;
+    if (btn) btn.disabled = true;
+    try {
+        const n = sim.qtdParcelas;
+        const msg = sim.forma === 'avista' ? 'Lançar 1 conta no A Pagar?'
+            : sim.forma === 'parcelado' ? `Lançar ${n} parcelas no A Pagar?`
+            : `Lançar 1 entrada + ${n} parcelas no A Pagar?`;
+        if (!(await showConfirm(msg, '🧮', 'Lançar')) || _simUltima !== ultima) return;
+        const paiId = Date.now();
+        const base = { pedido_id: null, tipo: 'variavel', categoria: sim.categoria, credor_nome: sim.credor, data_pagamento: null, status: 'Pendente' };
+        const mesRefDe = venc => (sim.categoria === 'imposto' ? { mes_referencia: _mesRefImposto(venc) } : {});
+        let i = 0;
+        sim.pagamentos.forEach(p => {
+            if (_simEhAvulsa(p)) {
+                // Avulsa: id depois das parcelas, para nunca coincidir com o lancamento_pai_id.
+                db.contas_pagar.push({ id: paiId + n + 1, ...base, descricao: sim.descricao, valor: p.valor, data_vencimento: p.data, ...mesRefDe(p.data) });
+            } else {
+                i++;
+                db.contas_pagar.push({
+                    id: paiId + i, ...base, descricao: `${sim.descricao} (parcela ${i}/${n})`, valor: p.valor, data_vencimento: p.data,
+                    lancamento_pai_id: paiId, parcelado: true, numero_parcelas: n, parcela_atual: i, ...mesRefDe(p.data)
+                });
+            }
+        });
+        _simUltima = null;
+        syncDB();
+        toast('Compra lançada no A Pagar.');
+        _simSaidaVazia('Compra lançada. Preencha outra compra e clique em Simular.');
+    } finally {
+        _simLancando = false;
+        if (btn && btn.isConnected) btn.disabled = false;
     }
 }
 
