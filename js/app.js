@@ -3143,8 +3143,10 @@ async function aprovarPedido(id) {
     ped.data_producao = Date.now();
     if (!ped.timeline) ped.timeline = [];
     ped.timeline.push({ status: 'Medição', data: Date.now() });
-    gerarFinanceiroPedido(ped);
+    const pagoAMais = gerarFinanceiroPedido(ped);
     registrarCustoPedido(ped);
+    syncDB();
+    await avisarPagoAMais(pagoAMais);
     salvarERecarregar('Pedido aprovado!');
 }
 
@@ -3340,7 +3342,9 @@ async function confirmarPagamentoPedido(id) {
     });
     if (!r) return;
     baixarContasReceber(r.data, r.linhas);
-    sincronizarRecebidoPedido(ped.id);
+    // Sem parcela nenhuma o valor recebido digitado no pedido nao tem de onde
+    // ser recalculado: fica como esta (sincronizar zeraria).
+    if ((db.contas_receber || []).some(c => c.pedido_id == ped.id)) sincronizarRecebidoPedido(ped.id);
     ped.pagamento_pendente = FinanceiroCore.saldoEmAberto(db.contas_receber, ped.id) > 0.01;
     ped.pagamento_confirmado_em = Date.now();
     ped.pagamento_confirmado_por = getUsuarioLogado()?.id || null;
@@ -3463,12 +3467,15 @@ async function moverStatus(id, direcao) {
     ped.status = STATUS_PIPELINE[novoIdx];
     if (!ped.timeline) ped.timeline = [];
     ped.timeline.push({ status: STATUS_PIPELINE[novoIdx], data: Date.now() });
-    if (idx === 0) { gerarFinanceiroPedido(ped); registrarCustoPedido(ped); }
+    let pagoAMais = null;
+    if (idx === 0) { pagoAMais = gerarFinanceiroPedido(ped); registrarCustoPedido(ped); }
     if (novoIdx === 1 && !ped.data_producao)  ped.data_producao  = Date.now();
     if (STATUS_PIPELINE[novoIdx] === 'Instalado' && !ped.data_instalado) ped.data_instalado = Date.now();
     if (STATUS_PIPELINE[novoIdx] === 'Instalado') gerarComissoesPedido(ped);
+    syncDB();
+    await avisarPagoAMais(pagoAMais);
     toastReload('Status atualizado!');
-    syncDB(); window.location.reload();
+    window.location.reload();
 }
 
 // --- DASHBOARD: métricas ---
@@ -6724,12 +6731,14 @@ Volte o pedido para Orçamento para editar.`, '🔒');
         }
         db.pedidos.push(dadosPedido);
     }
+    let pagoAMais = null;
     if (statusAnterior === 'Orçamento' && normalizarStatus(dadosPedido.status) !== 'Orçamento') {
-        gerarFinanceiroPedido(dadosPedido);
+        pagoAMais = gerarFinanceiroPedido(dadosPedido);
         registrarCustoPedido(dadosPedido);
     }
     if (normalizarStatus(dadosPedido.status) === 'Instalado') gerarComissoesPedido(dadosPedido);
     syncDB();
+    await avisarPagoAMais(pagoAMais);
     localStorage.removeItem('sc_editando_id');
     toastReload('Pedido salvo!');
     window.location.href = 'index.html';
@@ -8114,7 +8123,32 @@ function _comissoesPendentesDoTipo(filtroVend) {
     let pedidos = db.pedidos.filter(p => p[c.id] && (p[c.valor] || 0) > 0 && !p[c.paga] &&
         normalizarStatus(p.status) === 'Instalado');
     if (filtroVend) pedidos = pedidos.filter(p => p[c.id] == filtroVend);
+    // Comissao de arquiteto antiga (categoria comissao_rt, sem papel) pendente
+    // tambem entra na lista do arquiteto: so existe como conta a pagar.
+    if (_tipoVend === 'arquiteto') {
+        db.contas_pagar.filter(_ehComissaoRTAntiga).forEach(cp => {
+            const ped = db.pedidos.find(p => p.id == cp.pedido_id);
+            if (!ped || pedidos.includes(ped)) return;
+            if (filtroVend && cp.vendedor_id != filtroVend) return;
+            pedidos.push(ped);
+        });
+    }
     return pedidos;
+}
+
+function _ehComissaoRTAntiga(cp) {
+    return cp.categoria === 'comissao_rt' && !cp.papel_comissao && cp.status !== 'Pago' && cp.pedido_id != null;
+}
+
+// Valor, % e nome da comissao pendente do pedido na aba aberta.
+function _dadosComissaoPendente(p) {
+    const c = CAMPOS_COMISSAO[_tipoVend];
+    if (p[c.id] && (p[c.valor] || 0) > 0 && !p[c.paga]) {
+        const v = db.vendedores.find(x => x.id == p[c.id]);
+        return { valor: p[c.valor] || 0, pct: p[c.pct] || 0, nome: v?.nome || p[c.nome] || '' };
+    }
+    const cp = _tipoVend === 'arquiteto' ? db.contas_pagar.find(x => _ehComissaoRTAntiga(x) && x.pedido_id == p.id) : null;
+    return cp ? { valor: Number(cp.valor) || 0, pct: p.rt_pct || 0, nome: cp.credor_nome || p.arquiteto_nome || '' } : { valor: 0, pct: 0, nome: '' };
 }
 
 function renderComissoesPendentes() {
@@ -8131,17 +8165,17 @@ function renderComissoesPendentes() {
         return;
     }
     tb.innerHTML = pedidos.map(p => {
-        const v = db.vendedores.find(x => x.id == p[c.id]);
+        const d = _dadosComissaoPendente(p);
         return `<tr>
             <td style="font-size:12px">#${formatPedidoId(p.id)}</td>
             <td>${escapeHtml(p.clienteNome || '—')}</td>
-            <td>${escapeHtml(v?.nome || p[c.nome] || '—')}</td>
+            <td>${escapeHtml(d.nome || '—')}</td>
             <td>R$ ${(p.valor || 0).toFixed(2)}</td>
-            <td><strong>R$ ${(p[c.valor] || 0).toFixed(2)}</strong> <span style="color:#888;font-size:12px">(${p[c.pct] || 0}%)</span></td>
+            <td><strong>R$ ${d.valor.toFixed(2)}</strong> <span style="color:#888;font-size:12px">(${d.pct}%)</span></td>
             <td><button class="btn btn-sm btn-success" onclick="pagarComissao(${p.id})">✓ Pagar</button></td>
         </tr>`;
     }).join('');
-    const total = pedidos.reduce((s, p) => s + (p[c.valor] || 0), 0);
+    const total = pedidos.reduce((s, p) => s + _dadosComissaoPendente(p).valor, 0);
     if (totalEl) totalEl.textContent = `R$ ${total.toFixed(2)}`;
 }
 
@@ -8189,7 +8223,8 @@ async function _baixarComissoes(pedidos, titulo) {
     const itens = [];
     pedidos.forEach(p => {
         gerarComissoesPedido(p);
-        const cp = db.contas_pagar.find(x => x.pedido_id == p.id && x.papel_comissao === papel && x.status !== 'Pago');
+        const cp = db.contas_pagar.find(x => x.pedido_id == p.id && x.status !== 'Pago' &&
+            (x.papel_comissao === papel || (papel === 'arquiteto' && _ehComissaoRTAntiga(x))));
         if (cp) itens.push({ id: cp.id, descricao: `#${formatPedidoId(p.id)} — ${cp.credor_nome || ''}`, valor: cp.valor, marcado: true });
     });
     if (!itens.length) { await showAlert('Nenhuma comissão pendente para pagar.', 'ℹ️'); return; }
@@ -9202,7 +9237,17 @@ async function gerarContaPagarPCManual(id) {
 }
 
 async function excluirPedidoCompra(id) {
-    if (!await showConfirm('Excluir este pedido de compra?', '🗑️', 'Excluir', 'Cancelar')) return;
+    const contas = (db.contas_pagar || []).filter(c => c.pedido_compra_id != null && c.pedido_compra_id == id);
+    if (contas.some(c => c.status === 'Pago')) {
+        await showAlert('Este pedido tem conta paga. Estorne o pagamento antes de excluir.', '⚠️');
+        return;
+    }
+    if (contas.length) {
+        const n = contas.length;
+        const msg = `Excluir o pedido #${formatPedidoId(id)} e ${n === 1 ? 'a conta a pagar dele' : `as ${n} contas a pagar dele`}?`;
+        if (!await showConfirm(msg, '🗑️', 'Excluir', 'Cancelar')) return;
+        db.contas_pagar = db.contas_pagar.filter(c => !(c.pedido_compra_id != null && c.pedido_compra_id == id));
+    } else if (!await showConfirm('Excluir este pedido de compra?', '🗑️', 'Excluir', 'Cancelar')) return;
     db.pedidos_compra = db.pedidos_compra.filter(p => p.id != id);
     salvarERecarregar('Pedido excluído.');
 }
@@ -12630,11 +12675,15 @@ function _copiaMeioPrevisto(mp) {
     return mp && mp.meio_id != null ? { meio_id: mp.meio_id, vezes: mp.vezes || 1, antecipar: !!mp.antecipar } : null;
 }
 
+// Devolve { pago, valor } quando o cliente ja pagou mais que o valor do pedido
+// (reaprovacao com valor menor); nesse caso nao ha o que gerar.
 function gerarFinanceiroPedido(ped) {
-    if (ped.financeiro_gerado) return;
+    if (ped.financeiro_gerado) return null;
     const num = formatPedidoId(ped.id);
     const hoje = hojeLocal();
     const jaPago = FinanceiroCore.totalRecebido(db.contas_receber, ped.id);
+    const pagoAMais = Math.round(jaPago * 100) > Math.round((Number(ped.valor) || 0) * 100)
+        ? { pago: jaPago, valor: Number(ped.valor) || 0 } : null;
     let parcelas;
     if (ped.forma_pagamento || !ped.tipo_pagamento) {
         const pct = Number.isFinite(ped.entrada_pct) ? ped.entrada_pct : entradaDaFormaPagamento(ped.forma_pagamento);
@@ -12675,6 +12724,14 @@ function gerarFinanceiroPedido(ped) {
         });
     });
     ped.financeiro_gerado = true;
+    return pagoAMais;
+}
+
+// Aviso da reaprovacao com valor pago maior que o novo valor do pedido.
+async function avisarPagoAMais(r) {
+    if (!r) return;
+    const brl = v => 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    await showAlert(`O cliente já pagou ${brl(r.pago)}, mais que o novo valor do pedido (${brl(r.valor)}). Devolva ${brl(r.pago - r.valor)} ou ajuste o pedido.`, '⚠️');
 }
 
 function atualizarStatusVencimentos() {
@@ -12954,6 +13011,11 @@ function gerarComissoesPedido(ped) {
     const novas = FinanceiroCore.contasComissaoDoPedido(ped, {
         vendedores: db.vendedores, contasPagar: db.contas_pagar,
         data: dataInst, rotuloPedido: '#' + formatPedidoId(ped.id)
+    });
+    // Pedido que voltou a ser Instalado: a marca "pedido cancelado" da comissao
+    // ja paga nao vale mais.
+    (db.contas_pagar || []).forEach(cp => {
+        if (cp.pedido_id == ped.id && cp.papel_comissao && cp.pedido_cancelado) delete cp.pedido_cancelado;
     });
     const usados = new Set((db.contas_pagar || []).map(c => c.id));
     let proximoId = Date.now();
@@ -13594,6 +13656,7 @@ async function adicionarContaPagarManual() {
                     ? db.contas_pagar.filter(x => x.lancamento_pai_id == dup.lancamento_pai_id && x.pedido_compra_id)
                     : [dup];
                 grupo.forEach(c => {
+                    c.tipo_lancamento = tipoLancamento;
                     if (chaveAcesso) c.chave_acesso = chaveAcesso;
                     if (numeroDocumento) c.numero_documento = numeroDocumento;
                     if (ehLinhaDigitavel) c.linha_digitavel = docDigits;
