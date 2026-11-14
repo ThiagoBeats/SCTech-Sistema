@@ -386,12 +386,14 @@ const MSG_SEM_ESPACO = 'Não foi possível salvar: o espaço do navegador acabou
 let _avisoSemEspacoMostrado = false;
 
 // Salva sem quebrar a tela: se o espaco do navegador acabou, avisa uma vez e segue.
-function syncDB() {
+// { silencioso: true } nao abre o aviso (quem chama ja mostra o seu, como o
+// desfazer do importador de catalogo).
+function syncDB({ silencioso = false } = {}) {
     try { _syncDBBruto(); return true; }
     catch (e) {
         if (!_erroDeEspaco(e)) throw e;
         console.warn('Sem espaço no navegador para salvar.', e);
-        if (!_avisoSemEspacoMostrado) {
+        if (!silencioso && !_avisoSemEspacoMostrado) {
             _avisoSemEspacoMostrado = true;
             if (typeof showAlert === 'function') showAlert(MSG_SEM_ESPACO, '⚠️'); else alert(MSG_SEM_ESPACO);
         }
@@ -1376,8 +1378,20 @@ function toast(msg, tipo = 'success', ms = 3000) {
 function toastReload(msg, tipo = 'success') {
     sessionStorage.setItem('sc_pending_toast', JSON.stringify({ msg, tipo }));
 }
-function salvarERecarregar(msg = 'Salvo com sucesso!') {
-    _syncDBBruto(); toastReload(msg); window.location.reload();
+// Sem espaco no navegador: nao recarrega. Por padrao avisa (MSG_SEM_ESPACO) e
+// devolve false, sem erro solto na tela. Com { relancarErro: true } nao avisa e
+// devolve o erro, para quem chama desfazer o que mudou e dar o seu proprio aviso
+// (como o importador de catalogo).
+function salvarERecarregar(msg = 'Salvo com sucesso!', { relancarErro = false } = {}) {
+    try { _syncDBBruto(); }
+    catch (e) {
+        if (relancarErro || !_erroDeEspaco(e)) throw e;
+        console.warn('Sem espaço no navegador para salvar.', e);
+        if (typeof showAlert === 'function') showAlert(MSG_SEM_ESPACO, '⚠️'); else alert(MSG_SEM_ESPACO);
+        return false;
+    }
+    toastReload(msg); window.location.reload();
+    return true;
 }
 
 // --- AUTENTICAÇÃO E CONTROLE DE ACESSO ---
@@ -7819,10 +7833,29 @@ function importarDados(event) {
             db.meios_pag      = dados.meios_pag      || [];
             db.movimentos_fin = dados.movimentos_fin || [];
             db.fechamentos_fin = Array.isArray(dados.fechamentos_fin) ? dados.fechamentos_fin : [];
-            // Primeiro libera o que era dos dados anteriores (copia, revisao e avisos):
-            // assim as gravacoes abaixo tem mais espaco e a marca da Fase 0 nao se perde.
-            ['sc_fin_migracao', 'sc_fin_backup_fase0', 'sc_fin_revisar', 'sc_fin_backup_falhou', 'sc_fin_migracao_erro'].forEach(k => localStorage.removeItem(k));
-            _syncDBBruto();
+            // A marca da Fase 0 so muda depois de gravar: se a gravacao falhar, os dados
+            // anteriores continuam com a marca e a migracao nao roda sobre dados misturados.
+            // Sem espaco, a copia da Fase 0 (a chave grande) sai e tenta de novo; se ainda
+            // falhar, ela volta.
+            const marcaAntes = localStorage.getItem('sc_fin_migracao');
+            const copiaAntes = localStorage.getItem('sc_fin_backup_fase0');
+            try { _syncDBBruto(); }
+            catch (e1) {
+                if (!_erroDeEspaco(e1) || copiaAntes === null) throw e1;
+                localStorage.removeItem('sc_fin_backup_fase0');
+                try { _syncDBBruto(); }
+                catch (e2) {
+                    _gravarSemFalhar('sc_fin_backup_fase0', copiaAntes);
+                    if (marcaAntes !== null) _gravarSemFalhar('sc_fin_migracao', marcaAntes);
+                    throw e2;
+                }
+            }
+            // Gravou: o que era dos dados anteriores (copia, revisao e avisos) sai.
+            ['sc_fin_backup_fase0', 'sc_fin_revisar', 'sc_fin_backup_falhou', 'sc_fin_migracao_erro'].forEach(k => localStorage.removeItem(k));
+            // Backup antigo (sem a marca fin_fase0) passa pela migracao do Financeiro
+            // ao recarregar; com a marca, ja esta migrado.
+            if (dados.fin_fase0) localStorage.setItem('sc_fin_migracao', '1');
+            else localStorage.removeItem('sc_fin_migracao');
             // Ajustes por mes do Resultado: backup antigo (sem eles) volta ao padrao vazio.
             ['fin_metas', 'fin_orcamento_mes'].forEach(k => {
                 const o = dados[k];
@@ -7831,9 +7864,6 @@ function importarDados(event) {
             // Backup antigo (sem empresa/formas) mantem as atuais.
             if (dados.empresa && typeof dados.empresa === 'object') localStorage.setItem('sc_empresa', JSON.stringify(dados.empresa));
             if (Array.isArray(dados.formas_pag) && dados.formas_pag.length) localStorage.setItem('sc_formas_pag', JSON.stringify(dados.formas_pag));
-            // Backup antigo (sem a marca fin_fase0) passa pela migracao do Financeiro
-            // ao recarregar; com a marca, ja esta migrado.
-            if (dados.fin_fase0) localStorage.setItem('sc_fin_migracao', '1');
             toastReload('Dados importados com sucesso!', 'info');
             window.location.reload();
         } catch (err) {

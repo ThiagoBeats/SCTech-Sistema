@@ -29,7 +29,7 @@ test('syncDB sem espaco: avisa uma vez, nao quebra', async ({ page }) => {
     await expect(page.locator('#sc-modal-overlay'), 'segundo erro nao reabre o aviso').toBeHidden();
 });
 
-test('importar com navegador cheio: limpa as chaves da Fase 0 antes e nao some em silencio', async ({ page }) => {
+test('importar com navegador cheio depois de gravar: limpa as chaves da Fase 0 e nao some em silencio', async ({ page }) => {
     await entrar(page, BASE, { sc_fin_backup_fase0: { x: 1 }, sc_fin_revisar: [{ a: 1 }] });
     await falharChave(page, 'sc_empresa');
     await page.goto(BASE + '/index.html');
@@ -38,6 +38,97 @@ test('importar com navegador cheio: limpa as chaves da Fase 0 antes e nao some e
     await page.locator('#sc-modal-ok').click();
     await expect(page.locator('#sc-modal-msg')).toContainText('A importação não foi concluída. ' + MSG);
     expect(await page.evaluate(() => [localStorage.getItem('sc_fin_backup_fase0'), localStorage.getItem('sc_fin_revisar')])).toEqual([null, null]);
+});
+
+test('importar sem espaco para os dados: a marca da Fase 0 e a copia continuam', async ({ page }) => {
+    await entrar(page, BASE, { sc_fin_backup_fase0: { x: 1 }, sc_fin_revisar: [{ a: 1 }] });
+    await page.evaluate(() => localStorage.setItem('sc_fin_migracao', '1'));
+    await falharChave(page, 'sc_cp');
+    await page.goto(BASE + '/index.html');
+    await page.evaluate(() => { window.__marca = 1; });
+    await page.evaluate(json => importarDados({ target: { files: [new File([json], 'b.json')], value: '' } }),
+        JSON.stringify({ clientes: [], catalogo: [], pedidos: [], contas_pagar: [], fin_fase0: true }));
+    await page.locator('#sc-modal-ok').click();
+    await expect(page.locator('#sc-modal-msg')).toHaveText('A importação não foi concluída. ' + MSG);
+    expect(await page.evaluate(() => window.__marca), 'nao recarregou').toBe(1);
+    expect(await page.evaluate(() => [localStorage.getItem('sc_fin_migracao'), localStorage.getItem('sc_fin_backup_fase0'), localStorage.getItem('sc_fin_revisar')]))
+        .toEqual(['1', JSON.stringify({ x: 1 }), JSON.stringify([{ a: 1 }])]);
+});
+
+test('importar quase sem espaco: tira so a copia da Fase 0 e grava', async ({ page }) => {
+    await entrar(page, BASE, { sc_fin_backup_fase0: { x: 1 } });
+    await page.evaluate(() => localStorage.setItem('sc_fin_migracao', '1'));
+    // sc_cp so cabe sem a copia da Fase 0
+    await page.addInitScript(() => {
+        const orig = Storage.prototype.setItem;
+        Storage.prototype.setItem = function (k, v) {
+            if (k === 'sc_cp' && this.getItem('sc_fin_backup_fase0') !== null) throw new DOMException('cheio', 'QuotaExceededError');
+            return orig.call(this, k, v);
+        };
+    });
+    await page.goto(BASE + '/index.html');
+    await page.evaluate(() => { window.__marca = 1; });
+    await page.evaluate(json => importarDados({ target: { files: [new File([json], 'b.json')], value: '' } }),
+        JSON.stringify({ clientes: [{ id: 7, nome: 'Bia' }], catalogo: [], pedidos: [], contas_pagar: [], fin_fase0: true }));
+    await page.locator('#sc-modal-ok').click();
+    await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
+    expect(await page.evaluate(() => [localStorage.getItem('sc_fin_migracao'), localStorage.getItem('sc_fin_backup_fase0'), JSON.parse(localStorage.getItem('sc_cli'))[0].nome]))
+        .toEqual(['1', null, 'Bia']);
+});
+
+test('salvarERecarregar sem espaco: uma baixa avisa uma vez, nao recarrega e nao solta erro', async ({ page }) => {
+    const erros = [];
+    page.on('pageerror', e => erros.push(e.message));
+    await entrar(page, BASE, {
+        sc_contas_fin: [{ id: 11, nome: 'Banco', tipo: 'banco', saldo_inicial: 0, data_saldo_inicial: '2026-11-01', ativo: true }],
+        sc_meios_pag: [{ id: 22, nome: 'PIX', tipo: 'pix', conta_id: 11 }],
+        sc_cr: [{ id: 601, cliente_nome: 'Ana', descricao: 'Avulsa', valor: 500, data_vencimento: '2099-12-10', data_pagamento: null, status: 'Pendente' }]
+    });
+    await page.addInitScript(() => {
+        const orig = Storage.prototype.setItem;
+        Storage.prototype.setItem = function (k, v) {
+            if (k === 'sc_cr' && window.__cheio) throw new DOMException('cheio', 'QuotaExceededError');
+            return orig.call(this, k, v);
+        };
+    });
+    await page.goto(BASE + '/financeiro.html');
+    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await page.evaluate(() => { window.__marca = 1; window.__cheio = true; });
+    let alertas = 0;
+    await page.exposeFunction('__contarAlerta', () => { alertas++; });
+    await page.evaluate(() => { const o = window.showAlert; window.showAlert = (...a) => { window.__contarAlerta(); return o(...a); }; });
+    await page.locator('#tb-contas-receber button', { hasText: '✓ Recebido' }).first().click();
+    const modal = page.locator('#baixa-modal');
+    await expect(modal).toBeVisible();
+    await modal.locator('.baixa-linha').first().locator('.baixa-meio').selectOption({ label: 'PIX' });
+    await modal.locator('#baixa-ok').click();
+    await expect(page.locator('#sc-modal-msg')).toHaveText(MSG);
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => window.__marca), 'nao recarregou').toBe(1);
+    expect(alertas).toBe(1);
+    expect(erros).toEqual([]);
+});
+
+test('caminho do importador sem espaco: devolve o erro e o desfazer nao abre um segundo aviso', async ({ page }) => {
+    await entrar(page, BASE, {});
+    await page.addInitScript(() => {
+        const orig = Storage.prototype.setItem;
+        Storage.prototype.setItem = function (k, v) {
+            if (k === 'sc_cat' && window.__cheio) throw new DOMException('cheio', 'QuotaExceededError');
+            return orig.call(this, k, v);
+        };
+    });
+    await page.goto(BASE + '/index.html');
+    await expect(page.locator('#sc-modal-overlay')).toBeHidden();
+    const r = await page.evaluate(() => {
+        window.__cheio = true;
+        let erro = null;
+        try { salvarERecarregar('x', { relancarErro: true }); } catch (e) { erro = e.name; }
+        return [erro, syncDB({ silencioso: true })];
+    });
+    expect(r).toEqual(['QuotaExceededError', false]);
+    await page.waitForTimeout(300);
+    await expect(page.locator('#sc-modal-overlay')).toBeHidden();
 });
 
 test('_migrarFinanceiroPedidos nao repete id de conta a receber ja usado', async ({ page }) => {

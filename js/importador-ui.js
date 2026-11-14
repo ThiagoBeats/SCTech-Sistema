@@ -1899,7 +1899,7 @@ async function _impGravar() {
             : '';
         salvarERecarregar(`Importação concluída: ${criados} criado(s), ${atualizados} atualizado(s).`
             + sobreKits
-            + (naoAplicadas ? ` ${naoAplicadas} linha(s) não puderam ser gravadas.` : ''));
+            + (naoAplicadas ? ` ${naoAplicadas} linha(s) não puderam ser gravadas.` : ''), { relancarErro: true });
     } catch (e) {
         db.catalogo = catalogoAntes;
         db.materiais = materiaisAntes;
@@ -1907,7 +1907,7 @@ async function _impGravar() {
         db.estoque = estoqueAntesDaGravacao;
         // Tenta devolver o armazenamento ao estado anterior: syncDB grava sc_cat
         // antes de sc_mat, entao uma falha no meio pode ter persistido so metade.
-        try { syncDB(); } catch (e2) { /* nada mais a fazer aqui */ }
+        try { syncDB({ silencioso: true }); } catch (e2) { /* nada mais a fazer aqui */ }
         try { localStorage.removeItem(CHAVE_SNAPSHOT); } catch (e3) { /* idem */ }
         await showAlert('Não foi possível gravar a importação'
             + (e && e.message ? ' (' + e.message + ')' : '')
@@ -1992,13 +1992,13 @@ async function desfazerUltimaImportacao() {
         const extras = [];
         if (mantidos) extras.push(`${mantidos} item(ns) foram mantidos por já terem estoque`);
         if (sumidos) extras.push(`${sumidos} item(ns) já não existiam`);
-        salvarERecarregar('Importação desfeita.' + (extras.length ? ' ' + extras.join('; ') + '.' : ''));
+        salvarERecarregar('Importação desfeita.' + (extras.length ? ' ' + extras.join('; ') + '.' : ''), { relancarErro: true });
     } catch (e) {
         db.catalogo = catalogoAntes;
         db.materiais = materiaisAntes;
         db.kits = kitsAntes;
         db.estoque = estoqueAntes;
-        try { syncDB(); } catch (e2) { /* nada mais a fazer aqui */ }
+        try { syncDB({ silencioso: true }); } catch (e2) { /* nada mais a fazer aqui */ }
         // o desfazer continua disponivel: nada foi revertido
         try { if (snapshotBruto) localStorage.setItem(CHAVE_SNAPSHOT, snapshotBruto); } catch (e3) { /* idem */ }
         await showAlert('Não foi possível desfazer a importação'
