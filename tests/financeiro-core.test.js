@@ -76,6 +76,7 @@ test('parcelasCompra: a vista, prazo e parcelado com soma exata', () => {
     const p = F.parcelasCompra({ valor: 100, modo: 'parcelado', hoje: '2026-11-11', numParcelas: 3, intervaloDias: 30 });
     assert.deepStrictEqual(p.map(x => x.data_vencimento), ['2026-12-11', '2027-01-10', '2027-02-09']);
     assert.strictEqual(F.arredondar(p.reduce((s, x) => s + x.valor, 0)), 100);
+    assert.deepStrictEqual(p.map(x => x.valor), [33.33, 33.33, 33.34], '100 em 3: a sobra fica na ultima');
 });
 test('acharContaDuplicadaNota: mesmo CNPJ, valor proximo, em aberto, vinda de PC', () => {
     const cps = [{ id: 1, pedido_compra_id: 9, cnpj_fornecedor: '12.345.678/0001-90', valor: 1000, status: 'Pendente' },
@@ -100,10 +101,6 @@ test('acharContaDuplicadaNota: conta parcelada casa pela soma do grupo (parcela 
     const dois = [...grupo(), { id: 21, pedido_compra_id: 8, lancamento_pai_id: 20, cnpj_fornecedor: cnpj, valor: 500, status: 'Pendente' },
         { id: 22, pedido_compra_id: 8, lancamento_pai_id: 20, cnpj_fornecedor: cnpj, valor: 500, status: 'Pendente' }];
     assert.strictEqual(F.acharContaDuplicadaNota(dois, { cnpj, valor: 1000 }).id, 12);
-});
-test('parcelasCompra: 100 em 3 fecha em 100 com a sobra na ultima', () => {
-    const p = F.parcelasCompra({ valor: 100, modo: 'parcelado', hoje: '2026-11-11', numParcelas: 3, intervaloDias: 30 });
-    assert.deepStrictEqual(p.map(x => x.valor), [33.33, 33.33, 33.34]);
 });
 
 // ── Migracao dos dados antigos (Fase 0) ─────────────────────────────

@@ -5,14 +5,16 @@ const { test, expect } = require('@playwright/test');
 const { entrar } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
-// Varias acoes terminam recarregando a pagina: espera a recarga em vez de falhar no meio dela.
-async function lerChave(page, k) {
+// Varias acoes terminam recarregando a pagina: repete a leitura/escrita se a recarga pegar no meio
+// (contexto destruido ou scripts da pagina nova ainda nao carregados).
+async function tentar(page, fn, arg) {
     for (let i = 0; i < 40; i++) {
-        try { return await page.evaluate(c => JSON.parse(localStorage.getItem(c)), k); }
-        catch (e) { if (!/context was destroyed|navigation/i.test(String(e))) throw e; await page.waitForLoadState('load'); }
+        try { return await page.evaluate(fn, arg); }
+        catch (e) { if (!/context was destroyed|navigation|is not defined/i.test(String(e))) throw e; await page.waitForLoadState('load'); }
     }
     throw new Error('pagina nao estabilizou');
 }
+const lerChave = (page, k) => tentar(page, c => JSON.parse(localStorage.getItem(c)), k);
 const CLI = [{ id: 1, nome: 'Ana Paula Lima' }];
 const ped = extra => ({ id: 26500, clienteId: 1, clienteNome: 'Ana Paula Lima', status: 'Instalado', financeiro_gerado: true,
     valor: 1000, valor_recebido: 0, ambientes: [], itens: [], forma_pagamento: 'PIX', ...(extra || {}) });
@@ -152,9 +154,8 @@ test('moverStatus de Orcamento para Medicao guarda o custo; avancar depois nao r
     const p = (await lerChave(page, 'sc_ped'))[0];
     expect(p.custo_snapshot.total).toBe(60);
     expect(p.custo_snapshot.faltando).toBe(0);
-    await page.waitForLoadState('load');
-    expect(p.custo_snapshot.data).toBe(await page.evaluate(() => hojeLocal()));
-    await page.evaluate(() => { const m = JSON.parse(localStorage.getItem('sc_mat')); m[0].preco_custo = 90; localStorage.setItem('sc_mat', JSON.stringify(m)); });
+    expect(p.custo_snapshot.data).toBe(await tentar(page, () => hojeLocal()));
+    await tentar(page, () => { const m = JSON.parse(localStorage.getItem('sc_mat')); m[0].preco_custo = 90; localStorage.setItem('sc_mat', JSON.stringify(m)); });
     await page.reload();
     await page.evaluate(() => { moverStatus(26500, 1); });
     await expect.poll(async () => (await lerChave(page, 'sc_ped'))[0].status).not.toBe('Medição');
@@ -170,7 +171,7 @@ test('salvarPedido que tira o pedido de Orcamento guarda o custo; continuar em O
     let p = (await lerChave(page, 'sc_ped'))[0];
     expect(p.status).toBe('Orçamento');
     expect(p.custo_snapshot, 'orcamento nao guarda custo').toBeUndefined();
-    await page.evaluate(() => localStorage.setItem('sc_editando_id', '26500'));
+    await tentar(page, () => localStorage.setItem('sc_editando_id', '26500'));
     await page.goto(BASE + '/pedido.html');
     await page.selectOption('#ped-status', 'Medição');
     await page.evaluate(() => { document.getElementById('ped-desconto').value = 0; salvarPedido(); });
@@ -186,8 +187,7 @@ test('reaprovar depois de voltar para Orcamento refaz o custo com o preco de ago
     await page.evaluate(() => { aprovarPedido(26500); });
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_ped'))[0].custo_snapshot?.total).toBe(60);
-    await page.waitForLoadState('load');
-    await page.evaluate(() => { const m = JSON.parse(localStorage.getItem('sc_mat')); m[0].preco_custo = 45; localStorage.setItem('sc_mat', JSON.stringify(m)); localStorage.setItem('sc_editando_id', '26500'); });
+    await tentar(page, () => { const m = JSON.parse(localStorage.getItem('sc_mat')); m[0].preco_custo = 45; localStorage.setItem('sc_mat', JSON.stringify(m)); localStorage.setItem('sc_editando_id', '26500'); });
     await page.goto(BASE + '/pedido.html');
     await page.click('#ped-voltar-orcamento');
     await page.locator('#sc-modal-ok').click();
@@ -283,8 +283,8 @@ test('aliquota fora da faixa ou invalida: acima de 100 vira 100; negativa, texto
     };
     expect(await salvar('150')).toBe(100);
     expect(await salvar('-5')).toBe(0);
-    expect(await salvar('abc')).toBe(0);
     expect(await salvar('12,5')).toBe(12.5);
+    expect(await salvar('abc')).toBe(0);
     expect(await salvar('')).toBe(0);
     await page.reload();
     await expect(page.locator('#emp-aliquota')).toHaveValue('0');
@@ -300,8 +300,7 @@ test('estorno, exportar e importar: a parcela continua em aberto (a migracao nao
     await page.evaluate(() => { estornarCR(601); });
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_cr')).find(c => c.id === 601).status).toBe('Atrasado');
-    await page.waitForLoadState('load');
-    const dados = await page.evaluate(() => JSON.parse(JSON.stringify(_dadosExportacao(localStorage.getItem('sc_fin_migracao') === '1'))));
+    const dados = await tentar(page, () => JSON.parse(JSON.stringify(_dadosExportacao(localStorage.getItem('sc_fin_migracao') === '1'))));
     expect(dados.fin_fase0, 'o arquivo sai com a marca da Fase 0').toBe(1);
     expect(dados.contas_receber.find(c => c.id === 601)).toMatchObject({ status: 'Atrasado', estornado_por: 1 });
     expect(dados.pedidos[0].pagamento_pendente).toBe(true);
