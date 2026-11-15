@@ -4997,17 +4997,23 @@ async function salvarEntradaEstoque() {
     const precoVendaConf = custo > 0 ? (custo * (1 + markup / 100)).toFixed(2) : null;
     const linhaPreco = custo > 0 ? `\nCusto: R$ ${custo.toFixed(2)}/m  →  Venda: R$ ${precoVendaConf}/m` : '';
     if (!await showConfirm(`Confirmar entrada de rolo?\n\nTecido: ${nomeTecConf}\nCódigo: ${referencia}\nMetragem: ${metros} m${linhaPreco}`, '📦', 'Confirmar Entrada', 'Cancelar')) return;
-    db.estoque.push({ id: Date.now(), tecido_id: tecidoId, lote: referencia, metragem_inicial: metros, metragem_atual: metros, data_entrada: data });
-    if (custo > 0) {
-        const tec = db.catalogo.find(t => t.id === tecidoId);
-        if (tec) {
-            tec.preco_custo = custo;
-            tec.preco = Math.round(custo * (1 + markup / 100) * 100) / 100;
-        }
-    }
-    const nomeTec = db.catalogo.find(t => t.id === tecidoId)?.nome || 'Tecido';
-    registrarMovimento('Entrada', `${nomeTec} — Código ${referencia}`, 'tecido', metros, 'm', referencia);
+    _aplicarEntradaTecido({ tecidoId, lote: referencia, metros, data, custo, markup });
     salvarERecarregar('Entrada registrada!');
+}
+
+// Grava a entrada de um rolo: rolo no estoque, custo/preco do tecido e o
+// movimento "Entrada". Usada pela entrada manual e pela entrada que abre quando
+// o pedido de compra e marcado Recebido. markup null = nao mexe no preco de venda.
+function _aplicarEntradaTecido({ tecidoId, lote, metros, data, custo, markup }) {
+    let id = Date.now();
+    while (db.estoque.some(r => r.id === id)) id++;
+    db.estoque.push({ id, tecido_id: tecidoId, lote, metragem_inicial: metros, metragem_atual: metros, data_entrada: data });
+    const tec = db.catalogo.find(t => t.id === tecidoId);
+    if (custo > 0 && tec) {
+        tec.preco_custo = custo;
+        if (markup !== null) tec.preco = Math.round(custo * (1 + markup / 100) * 100) / 100;
+    }
+    registrarMovimento('Entrada', `${tec?.nome || 'Tecido'} — Código ${lote}`, 'tecido', metros, 'm', lote);
 }
 
 function autoFillTecidoNoAmbiente(ambId, tidx) {
@@ -9484,6 +9490,157 @@ async function atualizarStatusPC(id, status) {
     renderListaPedidosCompra();
     // Recebeu a mercadoria: a conta a pagar nasce aqui, uma vez so.
     if (status === 'Recebido' && !pc.conta_pagar_gerada) await abrirModalContaPagarPC(pc);
+    // Depois da conta a pagar: a mercadoria que chegou entra no estoque.
+    if (status === 'Recebido') await abrirEntradaEstoquePC(pc);
+}
+
+// --- ENTRADA NO ESTOQUE AO RECEBER O PEDIDO DE COMPRA ---
+
+// Codigo sugerido para o rolo: o codigo do tecido; se ja existe rolo com ele,
+// "<codigo>-A", "<codigo>-B"... o primeiro livre.
+function _sugerirCodigoRolo(tec, usados) {
+    const base = tec.referencia || tec.nome || 'ROLO';
+    const jaTem = new Set((db.estoque || []).filter(r => r.tecido_id == tec.id).map(r => String(r.lote || '').toLowerCase()));
+    usados.forEach(u => jaTem.add(String(u).toLowerCase()));
+    if (!jaTem.has(base.toLowerCase())) return base;
+    for (let n = 0; n < 26 * 26; n++) {
+        const letra = n < 26 ? String.fromCharCode(65 + n) : String.fromCharCode(65 + Math.floor(n / 26) - 1) + String.fromCharCode(65 + n % 26);
+        if (!jaTem.has(`${base}-${letra}`.toLowerCase())) return `${base}-${letra}`;
+    }
+    return `${base}-${Date.now()}`;
+}
+
+// Monta as linhas da janela a partir dos itens do pedido. Item sem cadastro
+// (texto livre ou cadastro apagado) vira linha "sem cadastro".
+function _linhasEntradaPC(pc) {
+    const usados = [];
+    return (pc.itens || []).map((it, idx) => {
+        const qtd = Number(it.quantidade) || 0;
+        const custo = Number(it.preco_unit) || 0;
+        if (it.tipo === 'tecido') {
+            const tec = (db.catalogo || []).find(c => c.id == it.item_id);
+            if (!tec) return { idx, nome: it.item_nome, semCadastro: true };
+            let metros = qtd, custoM = custo;
+            if (it.unidade === 'rolo') {
+                // Pedido em rolos: a metragem vem do ultimo rolo desse tecido, se houver.
+                const ult = (db.estoque || []).filter(r => r.tecido_id == tec.id).sort((a, b) => b.id - a.id)[0];
+                metros = ult ? qtd * (ult.metragem_inicial || 0) : 0;
+                custoM = metros > 0 ? Math.round(custo * qtd / metros * 100) / 100 : 0;
+            }
+            const lote = _sugerirCodigoRolo(tec, usados);
+            usados.push(lote);
+            const margem = tec.preco_custo > 0 && tec.preco > 0 ? Math.round(((tec.preco / tec.preco_custo) - 1) * 100) : '';
+            return { idx, tipo: 'tecido', id: tec.id, nome: tec.nome, lote, metros, custo: custoM, margem, unidadePedido: it.unidade };
+        }
+        if (it.tipo === 'kit') {
+            const kit = (db.kits || []).find(k => k.id == it.item_id);
+            if (!kit) return { idx, nome: it.item_nome, semCadastro: true };
+            return { idx, tipo: 'kit', id: kit.id, nome: kit.nome, qtd, unidade: 'un' };
+        }
+        const mat = (db.materiais || []).find(m => m.id == it.item_id);
+        if (!mat) return { idx, nome: it.item_nome, semCadastro: true };
+        const margem = mat.preco_custo > 0 && mat.preco > 0 ? Math.round(((mat.preco / mat.preco_custo) - 1) * 100) : '';
+        return { idx, tipo: 'material', id: mat.id, nome: mat.nome, qtd, unidade: mat.unidade || 'un', custo, margem };
+    });
+}
+
+// Janela "Entrada no estoque — Pedido #N". Resolve quando fecha. "Lançar depois"
+// so fecha (o status ja mudou); "Confirmar entrada" grava como a entrada manual.
+async function abrirEntradaEstoquePC(pc) {
+    if (pc.entrada_estoque_data) {
+        const d = new Date(pc.entrada_estoque_data + 'T12:00:00').toLocaleDateString('pt-BR');
+        await showAlert(`A entrada deste pedido já foi feita em ${d}.`, 'ℹ️');
+        return;
+    }
+    const linhas = _linhasEntradaPC(pc);
+    if (!linhas.length) return;
+    if (!linhas.some(l => !l.semCadastro)) return;
+    if (!temAcesso('estoque', 'completo')) { toast('Sem permissão para lançar no estoque: lance depois.', 'info', 3000); return; }
+    return new Promise(resolve => {
+        if (document.getElementById('pcent-modal')) { resolve(); return; }
+        const o = document.createElement('div');
+        o.id = 'pcent-modal';
+        o.className = 'sc-modal-overlay';
+        o.style.display = 'flex';
+        const inp = 'padding:5px;border:1px solid var(--border-strong);border-radius:4px;width:100%';
+        const campo = (rot, html) => `<div style="flex:1;min-width:90px"><label style="display:block;font-size:11px;color:#8F8F8F;margin-bottom:2px">${rot}</label>${html}</div>`;
+        const num = (cls, v, step) => `<input type="number" class="${cls}" step="${step}" min="0" value="${v === '' ? '' : v}" style="${inp}">`;
+        const html = linhas.map(l => {
+            if (l.semCadastro) {
+                return `<div class="pcent-linha pcent-sem" style="padding:8px 0;border-top:1px solid var(--border-strong);font-size:13px;color:#8F8F8F"><strong>${escapeHtml(l.nome || 'Item')}</strong> — sem cadastro — lance à mão</div>`;
+            }
+            let campos;
+            if (l.tipo === 'tecido') {
+                campos = campo('Código do rolo', `<input type="text" class="pcent-lote" value="${escapeHtml(l.lote)}" style="${inp}">`)
+                    + campo('Metragem (m)', num('pcent-metros', l.metros, '0.01'))
+                    + campo('Custo (R$/m)', num('pcent-custo', l.custo, '0.01'))
+                    + campo('Margem (%)', num('pcent-margem', l.margem, '1'));
+            } else if (l.tipo === 'material') {
+                campos = campo(`Quantidade (${escapeHtml(l.unidade)})`, num('pcent-qtd', l.qtd, '0.001'))
+                    + campo('Custo (R$)', num('pcent-custo', l.custo, '0.01'))
+                    + campo('Margem (%)', num('pcent-margem', l.margem, '1'));
+            } else {
+                campos = campo('Quantidade (un)', num('pcent-qtd', l.qtd, '1'));
+            }
+            const rotuloTipo = l.tipo === 'tecido' ? 'Tecido' : l.tipo === 'kit' ? 'Kit pronto' : 'Material';
+            return `<div class="pcent-linha" data-idx="${l.idx}" data-tipo="${l.tipo}" data-id="${l.id}" style="padding:8px 0;border-top:1px solid var(--border-strong)">
+                <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px"><input type="checkbox" class="pcent-marca" checked><strong>${escapeHtml(l.nome)}</strong><span style="color:#8F8F8F">(${rotuloTipo})</span></label>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">${campos}</div></div>`;
+        }).join('');
+        o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:640px;max-height:90vh;overflow:auto">
+            <h3 style="margin:0 0 4px;font-size:16px">Entrada no estoque — Pedido #${formatPedidoId(pc.id)}</h3>
+            <div style="font-size:12px;color:#8F8F8F;margin-bottom:8px">${escapeHtml(pc.fornecedor_nome || '')} · Confira o que chegou e desmarque o que não entra agora.</div>
+            <div style="margin-bottom:8px"><label style="font-size:12px;margin-right:6px">Data da entrada</label><input type="date" id="pcent-data" value="${hojeLocal()}" style="padding:4px;border:1px solid var(--border-strong);border-radius:4px"></div>
+            ${html}
+            <div id="pcent-erro" style="display:none;color:#F43927;font-size:12px;margin:8px 0"></div>
+            <div class="sc-modal-btns" style="margin-top:10px"><button class="btn btn-outline" id="pcent-depois">Lançar depois</button><button class="btn btn-success" id="pcent-ok">Confirmar entrada</button></div>
+        </div>`;
+        document.body.appendChild(o);
+        const fechar = () => { document.removeEventListener('keydown', esc); o.remove(); resolve(); };
+        const esc = e => {
+            const alerta = document.getElementById('sc-modal-overlay');
+            if (e.key === 'Escape' && !(alerta && alerta.style.display !== 'none')) fechar();
+        };
+        document.addEventListener('keydown', esc);
+        const erroEl = o.querySelector('#pcent-erro');
+        const erro = msg => { erroEl.textContent = msg; erroEl.style.display = ''; };
+        o.querySelector('#pcent-depois').onclick = fechar;
+        o.querySelector('#pcent-ok').onclick = () => {
+            erroEl.style.display = 'none';
+            const data = o.querySelector('#pcent-data').value || hojeLocal();
+            const val = (el, c) => parseFloat(el.querySelector(c)?.value);
+            const marcadas = [...o.querySelectorAll('.pcent-linha[data-idx]')].filter(el => el.querySelector('.pcent-marca').checked);
+            if (!marcadas.length) { erro('Marque pelo menos um item, ou toque em "Lançar depois".'); return; }
+            const entradas = [];
+            for (const el of marcadas) {
+                const tipo = el.dataset.tipo, id = parseInt(el.dataset.id, 10);
+                const nome = el.querySelector('strong').textContent;
+                const custo = val(el, '.pcent-custo') || 0;
+                const margemTxt = el.querySelector('.pcent-margem')?.value;
+                const markup = margemTxt === undefined || margemTxt === '' ? null : parseFloat(margemTxt);
+                if (tipo === 'tecido') {
+                    const lote = el.querySelector('.pcent-lote').value.trim();
+                    const metros = val(el, '.pcent-metros');
+                    if (!lote) { erro(`Informe o código do rolo de ${nome}.`); return; }
+                    if (!metros || metros <= 0) { erro(`Informe a metragem de ${nome}.`); return; }
+                    entradas.push({ tipo, id, lote, metros, custo, markup });
+                } else {
+                    const qtd = val(el, '.pcent-qtd');
+                    if (!qtd || qtd <= 0) { erro(`Informe a quantidade de ${nome}.`); return; }
+                    entradas.push({ tipo, id, qtd, custo, markup });
+                }
+            }
+            entradas.forEach(e => {
+                if (e.tipo === 'tecido') _aplicarEntradaTecido({ tecidoId: e.id, lote: e.lote, metros: e.metros, data, custo: e.custo, markup: e.markup });
+                else if (e.tipo === 'material') _aplicarEntradaMaterial({ mat: db.materiais.find(m => m.id === e.id), qtd: e.qtd, data, custo: e.custo, markup: e.markup });
+                else _aplicarEntradaKit({ kit: db.kits.find(k => k.id === e.id), qtd: e.qtd, data });
+            });
+            pc.entrada_estoque_data = hojeLocal();
+            syncDB();
+            toast('Entrada no estoque registrada!', 'success', 2000);
+            fechar();
+        };
+    });
 }
 
 // Total do pedido de compra (soma dos subtotais dos itens).
@@ -12441,14 +12598,27 @@ async function salvarEntradaMaterial() {
     const precoVendaMatConf = custo > 0 ? (custo * (1 + markup / 100)).toFixed(2) : null;
     const linhaPrecoMat = custo > 0 ? `\nCusto: R$ ${custo.toFixed(2)}  →  Venda: R$ ${precoVendaMatConf}` : '';
     if (!await showConfirm(`Confirmar entrada de material?\n\nMaterial: ${mat.nome}\nQuantidade: ${qtd} ${mat.unidade}${linhaPrecoMat}`, '📦', 'Confirmar Entrada', 'Cancelar')) return;
+    _aplicarEntradaMaterial({ mat, qtd, data, custo, markup });
+    salvarERecarregar('Entrada de material registrada!');
+}
+
+// Grava a entrada de material: saldo, custo/preco e o movimento "Entrada".
+// Usada pela entrada manual e pela do pedido de compra Recebido.
+function _aplicarEntradaMaterial({ mat, qtd, data, custo, markup }) {
     mat.estoque_atual = Math.round(((mat.estoque_atual || 0) + qtd) * 1000) / 1000;
     if (custo > 0) {
         mat.preco_custo = custo;
-        mat.preco = Math.round(custo * (1 + markup / 100) * 100) / 100;
+        if (markup !== null) mat.preco = Math.round(custo * (1 + markup / 100) * 100) / 100;
     }
     const refData = data ? `Entrada ${new Date(data + 'T12:00:00').toLocaleDateString('pt-BR')}` : 'Entrada manual';
     registrarMovimento('Entrada', mat.nome, 'material', qtd, mat.unidade, refData);
-    salvarERecarregar('Entrada de material registrada!');
+}
+
+// Entrada de kit pronto (so pelo pedido de compra Recebido).
+function _aplicarEntradaKit({ kit, qtd, data }) {
+    kit.estoque_atual = Math.round(((kit.estoque_atual || 0) + qtd) * 1000) / 1000;
+    const refData = data ? `Entrada ${new Date(data + 'T12:00:00').toLocaleDateString('pt-BR')}` : 'Entrada manual';
+    registrarMovimento('Entrada', kit.nome, 'kit', qtd, 'un', refData);
 }
 
 // ─── CONSULTA DE ESTOQUE ─────────────────────────────────────────────────────
