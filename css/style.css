@@ -2706,38 +2706,86 @@ html[data-theme="dark"] {
 html[data-theme="dark"] a:not([class]) { color: var(--secondary); }
 html[data-theme="dark"] label.btn-success, html[data-theme="dark"] label.btn-primary { color: #fff; }
 html[data-theme="dark"] .kanban-card-age-critical { color: var(--danger-text) !important; }
-/* Documentos (proposta, OS, pedido de compra, relatorios) ficam claros de proposito, tambem no tema escuro */
+/* Documentos (proposta, OS, pedido de compra, relatorios, PDF gerado) ficam claros de proposito, tambem no tema escuro.
+   Classe .doc-claro = qualquer recipiente de documento. */
 html[data-theme="dark"] #doc-modal-paper,
+html[data-theme="dark"] .proposta-wrapper,
+html[data-theme="dark"] .os-wrapper,
 html[data-theme="dark"] #os-container,
-html[data-theme="dark"] #proposta-container {
+html[data-theme="dark"] #proposta-container,
+html[data-theme="dark"] #pedido-compra-container,
+html[data-theme="dark"] .doc-claro,
+html[data-theme="dark"] .compartilhar-pdf-render {
     --white: #FEFFFF; --light: #FAFAFA; --dark: #242424; --border: #E0E0E0;
     --surface-2: #FAFAFA; --surface-3: #F1F1F1; --surface-4: #E0E0E0; --border-strong: #CCCCCC;
     --text-soft: #555555; --text-strong: #242424; --primary-text: #005D3B;
     --info-bg: #EDF5FC; --info-text: #1F5A96; --danger-bg: #FDE8E5; --danger-text: #B3160A;
     --warn-bg: #FEF6D8; --warn-text: #8A6A00; --ok-bg: #E3F7E2; --ok-text: #0F6B0D; --purple-bg: #F2E6F9; --orange-bg: #FFF0E0;
-    --primary: #005D3B; --kpi-blue: #2D77C1; --kpi-green: #159912; --kpi-purple: #9B31C8;
+    --primary: #005D3B; --primary-hover: #00452B; --kpi-blue: #2D77C1; --kpi-green: #159912; --kpi-purple: #9B31C8;
     background: #FFFFFF; color: #242424;
 }
 html[data-theme="dark"] #doc-modal-paper input,
-html[data-theme="dark"] #doc-modal-paper select,
-html[data-theme="dark"] #doc-modal-paper textarea,
+html[data-theme="dark"] .proposta-wrapper input,
+html[data-theme="dark"] .os-wrapper input,
 html[data-theme="dark"] #os-container input,
-html[data-theme="dark"] #os-container textarea,
 html[data-theme="dark"] #proposta-container input,
-html[data-theme="dark"] #proposta-container textarea { background: #FFFFFF !important; border-color: #CCCCCC !important; color: #242424 !important; }
+html[data-theme="dark"] #pedido-compra-container input,
+html[data-theme="dark"] .doc-claro input,
+html[data-theme="dark"] .compartilhar-pdf-render input,
+html[data-theme="dark"] #doc-modal-paper select,
+html[data-theme="dark"] .proposta-wrapper select,
+html[data-theme="dark"] .os-wrapper select,
+html[data-theme="dark"] #os-container select,
+html[data-theme="dark"] #proposta-container select,
+html[data-theme="dark"] #pedido-compra-container select,
+html[data-theme="dark"] .doc-claro select,
+html[data-theme="dark"] .compartilhar-pdf-render select,
+html[data-theme="dark"] #doc-modal-paper textarea,
+html[data-theme="dark"] .proposta-wrapper textarea,
+html[data-theme="dark"] .os-wrapper textarea,
+html[data-theme="dark"] #os-container textarea,
+html[data-theme="dark"] #proposta-container textarea,
+html[data-theme="dark"] #pedido-compra-container textarea,
+html[data-theme="dark"] .doc-claro textarea,
+html[data-theme="dark"] .compartilhar-pdf-render textarea { background: #FFFFFF !important; border-color: #CCCCCC !important; color: #242424 !important; }
 html[data-theme="dark"] #doc-modal-paper td,
+html[data-theme="dark"] .proposta-wrapper td,
+html[data-theme="dark"] .os-wrapper td,
 html[data-theme="dark"] #os-container td,
-html[data-theme="dark"] #proposta-container td { color: #242424; border-bottom-color: #E0E0E0; }
+html[data-theme="dark"] #proposta-container td,
+html[data-theme="dark"] #pedido-compra-container td,
+html[data-theme="dark"] .doc-claro td,
+html[data-theme="dark"] .compartilhar-pdf-render td { color: #242424; border-bottom-color: #E0E0E0; }
 html[data-theme="dark"] #doc-modal-paper th,
+html[data-theme="dark"] .proposta-wrapper th,
+html[data-theme="dark"] .os-wrapper th,
 html[data-theme="dark"] #os-container th,
-html[data-theme="dark"] #proposta-container th { background: #F5F5F5; color: #242424; border-bottom-color: #E0E0E0; }
+html[data-theme="dark"] #proposta-container th,
+html[data-theme="dark"] #pedido-compra-container th,
+html[data-theme="dark"] .doc-claro th,
+html[data-theme="dark"] .compartilhar-pdf-render th { background: #F5F5F5; color: #242424; border-bottom-color: #E0E0E0; }
 html[data-theme="dark"] #doc-modal-paper tr:hover td,
+html[data-theme="dark"] .proposta-wrapper tr:hover td,
+html[data-theme="dark"] .os-wrapper tr:hover td,
 html[data-theme="dark"] #os-container tr:hover td,
-html[data-theme="dark"] #proposta-container tr:hover td { background: transparent; }
+html[data-theme="dark"] #proposta-container tr:hover td,
+html[data-theme="dark"] #pedido-compra-container tr:hover td,
+html[data-theme="dark"] .doc-claro tr:hover td,
+html[data-theme="dark"] .compartilhar-pdf-render tr:hover td { background: transparent; }
 html[data-theme="dark"] #doc-modal-paper label,
+html[data-theme="dark"] .proposta-wrapper label,
+html[data-theme="dark"] .os-wrapper label,
 html[data-theme="dark"] #os-container label,
 html[data-theme="dark"] #proposta-container label,
+html[data-theme="dark"] #pedido-compra-container label,
+html[data-theme="dark"] .doc-claro label,
+html[data-theme="dark"] .compartilhar-pdf-render label,
 html[data-theme="dark"] #doc-modal-paper h3,
+html[data-theme="dark"] .proposta-wrapper h3,
+html[data-theme="dark"] .os-wrapper h3,
 html[data-theme="dark"] #os-container h3,
-html[data-theme="dark"] #proposta-container h3 { color: inherit; }
+html[data-theme="dark"] #proposta-container h3,
+html[data-theme="dark"] #pedido-compra-container h3,
+html[data-theme="dark"] .doc-claro h3,
+html[data-theme="dark"] .compartilhar-pdf-render h3 { color: inherit; }
 

@@ -53,7 +53,7 @@ function _cloneParaPdf(origem) {
     // O html2pdf copia o elemento que recebe; por isso a posicao fora da tela
     // fica so na moldura, e o conteudo (o que vira PDF) nao leva deslocamento.
     const moldura = document.createElement('div');
-    moldura.className = 'compartilhar-pdf-render';
+    moldura.className = 'compartilhar-pdf-render doc-claro';
     moldura.style.cssText = 'position:fixed;left:-10000px;top:0';
     const folha = document.createElement('div');
     folha.style.cssText = 'width:718px;background:#fff;color:#242424';

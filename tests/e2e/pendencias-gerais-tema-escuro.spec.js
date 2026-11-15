@@ -152,7 +152,7 @@ for (const [arquivo, passos] of TELAS) {
         await abrirTela(page, arquivo);
         await conferir(page, arquivo);
         for (const passo of passos) {
-            await page.evaluate(p => { try { (0, eval)(p); } catch (e) { /* passo opcional */ } return null; }, passo);
+            await page.evaluate(p => { (0, eval)(p); return null; }, passo);
             await conferir(page, arquivo + ' -> ' + passo);
             // fecha janelas que o passo abriu, para nao acumular
             await page.keyboard.press('Escape');
@@ -189,4 +189,63 @@ test('tema claro: as cores claras de sempre continuam', async ({ page }) => {
     await expect(page.locator('#carrinho-modal')).toBeVisible();
     const th = await page.evaluate(() => getComputedStyle(document.querySelector('#carrinho-modal thead tr')).backgroundColor);
     expect(th).toBe('rgb(241, 241, 241)');
+});
+
+// ---- documentos reais no tema escuro: sempre papel claro ----
+const CLI = { id: 1, nome: 'Maria Souza', tel: '(47) 99999-1234', email: 'maria@exemplo.com', endereco: 'Rua A, 10' };
+const PED_DOC = {
+    id: 26050, clienteId: 1, status: 'Orçamento', valor: 1500, ambientes: [],
+    itens: [{ nome: 'Trilho', quantidade: 2, unidade: 'un', preco: 30 }]
+};
+
+// Roda na pagina: luminancia do fundo efetivo (primeiro ancestral opaco) e cor do texto.
+function medirDoc(seletores) {
+    const lum = c => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+    const rgb = s => { const m = s.match(/rgba?\(([^)]+)\)/); const p = m[1].split(/[ ,\/]+/).map(Number); return { c: p.slice(0, 3), a: p.length > 3 ? p[3] : 1 }; };
+    const fundo = el => { for (let e = el; e; e = e.parentElement) { const b = rgb(getComputedStyle(e).backgroundColor); if (b.a >= 0.99) return lum(b.c); } return 0; };
+    const out = {};
+    for (const sel of seletores) {
+        const els = [...document.querySelectorAll(sel)];
+        out[sel] = els.length ? { n: els.length, fundoMin: Math.min(...els.map(fundo)), textoMax: Math.max(...els.map(e => lum(rgb(getComputedStyle(e).color).c))) } : { n: 0 };
+    }
+    return out;
+}
+function exigirClaro(m, sels) {
+    for (const sel of sels) {
+        expect(m[sel].n, sel + ' existe').toBeGreaterThan(0);
+        expect(m[sel].fundoMin, sel + ' fundo claro').toBeGreaterThan(0.7);
+        expect(m[sel].textoMax, sel + ' texto escuro').toBeLessThan(0.4);
+    }
+}
+
+test('tema escuro: proposta.html e os.html tem papel claro', async ({ page }) => {
+    await abrirTela(page, 'proposta.html', { sc_ped: [PED_DOC], sc_cli: [CLI], sc_proposta_id: 26050 });
+    await expect(page.locator('#proposta-container .proposta-header')).toBeVisible();
+    exigirClaro(await page.evaluate(medirDoc, ['.proposta-wrapper', '#proposta-container', '#proposta-container .proposta-cliente', '#proposta-container table td', '#proposta-container table th']),
+        ['.proposta-wrapper', '#proposta-container', '#proposta-container .proposta-cliente', '#proposta-container table td']);
+    await abrirTela(page, 'os.html', { sc_ped: [PED_DOC], sc_cli: [CLI], sc_os_id: 26050 });
+    await expect(page.locator('#os-container .os-header')).toBeVisible();
+    exigirClaro(await page.evaluate(medirDoc, ['.os-wrapper', '#os-container', '#os-container .os-header', '#os-container table td']),
+        ['.os-wrapper', '#os-container', '#os-container table td']);
+});
+
+test('tema escuro: pedido-compra.html tem papel claro', async ({ page }) => {
+    await abrirTela(page, 'pedido-compra.html', { sc_pc_id: 5001 });
+    await expect(page.locator('#pedido-compra-container table').first()).toBeVisible();
+    exigirClaro(await page.evaluate(medirDoc, ['body', '#pedido-compra-container', '#pedido-compra-container table td', '#pedido-compra-container table th']),
+        ['body', '#pedido-compra-container', '#pedido-compra-container table td']);
+});
+
+test('tema escuro: copia do documento para PDF continua clara', async ({ page }) => {
+    await abrirTela(page, 'proposta.html', { sc_ped: [PED_DOC], sc_cli: [CLI], sc_proposta_id: 26050 });
+    await expect(page.locator('#proposta-container .proposta-cliente')).toBeVisible();
+    const m = await page.evaluate(() => {
+        const { moldura } = _cloneParaPdf(document.getElementById('proposta-container'));
+        moldura.style.cssText = 'position:absolute;left:0;top:0;z-index:99999';
+        window.__moldura = moldura;
+        return null;
+    });
+    if (process.env.TEMA_SHOTS) await page.screenshot({ path: process.env.TEMA_SHOTS + '/tema-pdf-clone-proposta.png', fullPage: false });
+    const med = await page.evaluate(medirDoc, ['.compartilhar-pdf-render', '.compartilhar-pdf-render .proposta-cliente', '.compartilhar-pdf-render table td', '.compartilhar-pdf-render table th']);
+    exigirClaro(med, ['.compartilhar-pdf-render', '.compartilhar-pdf-render .proposta-cliente', '.compartilhar-pdf-render table td']);
 });
