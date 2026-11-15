@@ -1058,7 +1058,7 @@ function carregarEmpresaConfigs() {
         const preview = document.getElementById('emp-logo-preview');
         const removeBtn = document.getElementById('emp-remove-logo');
         if (preview) {
-            preview.innerHTML = `<img src="${emp.logo_base64}" style="max-height:90px;max-width:200px;object-fit:contain;border:1px solid #E0E0E0;border-radius:8px;padding:8px">`;
+            preview.innerHTML = `<img src="${emp.logo_base64}" style="max-height:90px;max-width:200px;object-fit:contain;border:1px solid var(--border);border-radius:8px;padding:8px">`;
             preview.dataset.base64 = emp.logo_base64;
         }
         if (removeBtn) removeBtn.style.display = '';
@@ -1072,7 +1072,7 @@ function previewLogoEmpresa(input) {
         const preview   = document.getElementById('emp-logo-preview');
         const removeBtn = document.getElementById('emp-remove-logo');
         if (preview) {
-            preview.innerHTML = `<img src="${base64}" style="max-height:90px;max-width:200px;object-fit:contain;border:1px solid #E0E0E0;border-radius:8px;padding:8px">`;
+            preview.innerHTML = `<img src="${base64}" style="max-height:90px;max-width:200px;object-fit:contain;border:1px solid var(--border);border-radius:8px;padding:8px">`;
             preview.dataset.base64 = base64;
         }
         if (removeBtn) removeBtn.style.display = '';
@@ -1958,7 +1958,7 @@ function renderConfigUsuarios() {
             <td><strong>${escapeHtml(u.nome)}</strong></td>
             <td>${escapeHtml(u.email)}</td>
             <td>${escapeHtml(papel ? papel.nome : '—')}${nExtras ? ` <span class="cfg-badge-personalizado" title="${nExtras} módulo(s) com permissão personalizada para este usuário">✏️ ${nExtras}</span>` : ''}</td>
-            <td><span class="status-tag" style="background:${u.ativo ? '#E3F7E2' : '#F1F1F1'};color:${u.ativo ? '#0F6B0D' : '#8F8F8F'}">${u.ativo ? 'Ativo' : 'Inativo'}</span></td>
+            <td><span class="status-tag" style="background:${u.ativo ? 'var(--ok-bg)' : 'var(--surface-3)'};color:${u.ativo ? 'var(--ok-text)' : '#8F8F8F'}">${u.ativo ? 'Ativo' : 'Inativo'}</span></td>
             <td>
                 <button class="btn btn-outline btn-sm" onclick="abrirModalUsuario(${u.id})" title="Editar">✏️</button>
                 <button class="btn btn-outline btn-sm" onclick="toggleAtivoUsuario(${u.id})" title="${u.ativo ? 'Desativar' : 'Ativar'}">${u.ativo ? '🚫' : '✅'}</button>
@@ -2397,7 +2397,7 @@ function mostrarPedidosCliente(clienteId) {
         tbody.innerHTML = pedidos.slice(inicio, inicio + POR_PAG).map(p => {
             const cls = COR_STATUS[normalizarStatus(p.status)] || 'st-orcamento';
             const pagto = statusPagamento(p);
-            return `<tr style="cursor:pointer" onclick="this.closest('.modal-overlay').remove();editarPedido(${p.id})" onmouseover="this.style.background='#EDF5FC'" onmouseout="this.style.background=''">
+            return `<tr style="cursor:pointer" onclick="this.closest('.modal-overlay').remove();editarPedido(${p.id})" onmouseover="this.style.background='var(--info-bg)'" onmouseout="this.style.background=''">
                 <td style="font-size:12px;color:var(--primary);font-weight:600">#${formatPedidoId(p.id)}</td>
                 <td style="font-size:13px">${escapeHtml(p.amb || '—')}</td>
                 <td>R$ ${(p.valor||0).toFixed(2)} ${pagto.cls ? `<span class="${pagto.cls}">${pagto.label}</span>` : ''}</td>
@@ -2477,7 +2477,7 @@ function previewFotoCatalogo(input) {
     const preview = document.getElementById('cat-foto-preview');
     if (!file || !preview) return;
     _resizeImageBase64(file).then(function(base64) {
-        preview.innerHTML = `<img src="${base64}" style="max-width:120px;max-height:80px;border-radius:6px;border:1px solid #E0E0E0;margin-top:6px">`;
+        preview.innerHTML = `<img src="${base64}" style="max-width:120px;max-height:80px;border-radius:6px;border:1px solid var(--border);margin-top:6px">`;
         preview.dataset.base64 = base64;
     });
 }
@@ -2591,7 +2591,7 @@ function verDetalhesTecido(id) {
     });
 
     const rolosHtml = rolosAtivos.length
-        ? rolosAtivos.map(r => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#FAFAFA;border-radius:6px;margin-bottom:4px;font-size:13px">
+        ? rolosAtivos.map(r => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--surface-2);border-radius:6px;margin-bottom:4px;font-size:13px">
             <span style="color:var(--dark)">${escapeHtml(r.lote || '—')}</span>
             <strong>${r.metragem_atual.toFixed(2)} m</strong>
           </div>`).join('')
@@ -2608,27 +2608,27 @@ function verDetalhesTecido(id) {
             <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
         </div>
         <div class="modal-body" style="padding-top:0">
-            ${c.imagem ? `<div style="text-align:center;margin-bottom:18px;background:#F1F1F1;border-radius:10px;padding:12px">
+            ${c.imagem ? `<div style="text-align:center;margin-bottom:18px;background:var(--surface-3);border-radius:10px;padding:12px">
                 <img src="${c.imagem}" style="max-width:100%;max-height:300px;border-radius:8px;object-fit:contain;box-shadow:0 2px 8px rgba(0,0,0,.10)">
             </div>` : ''}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
-                <div style="background:#FAFAFA;border-radius:8px;padding:10px 14px">
+                <div style="background:var(--surface-2);border-radius:8px;padding:10px 14px">
                     <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Preço de Venda</div>
                     <div style="font-size:17px;font-weight:700;color:var(--primary)">R$ ${c.preco.toFixed(2)}<span style="font-size:13px;font-weight:400;color:#8F8F8F">/m</span></div>
                 </div>
-                <div style="background:#FAFAFA;border-radius:8px;padding:10px 14px">
+                <div style="background:var(--surface-2);border-radius:8px;padding:10px 14px">
                     <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Em Estoque</div>
                     <div style="font-size:17px;font-weight:700;color:${abaixoMin ? '#F43927' : '#159912'}">${temEstoqueInfinito(c) ? '∞' : disp.toFixed(2) + ' m'} ${abaixoMin ? '<span style="font-size:12px">⚠ Abaixo do mínimo</span>' : ''}</div>
                 </div>
-                <div style="background:#FAFAFA;border-radius:8px;padding:10px 14px">
+                <div style="background:var(--surface-2);border-radius:8px;padding:10px 14px">
                     <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Largura do Rolo</div>
                     <div style="font-size:14px;font-weight:600">${(c.largura_rolo || 2.80).toFixed(2)} m</div>
                 </div>
-                <div style="background:#FAFAFA;border-radius:8px;padding:10px 14px">
+                <div style="background:var(--surface-2);border-radius:8px;padding:10px 14px">
                     <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Estoque Mínimo</div>
                     <div style="font-size:14px;font-weight:600">${textoMinimo(c, 'm')}</div>
                 </div>
-                ${(c.preco_corte || c.preco_peca) ? `<div style="background:#FAFAFA;border-radius:8px;padding:10px 14px;grid-column:1/-1">
+                ${(c.preco_corte || c.preco_peca) ? `<div style="background:var(--surface-2);border-radius:8px;padding:10px 14px;grid-column:1/-1">
                     <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Preços da tabela do fornecedor</div>
                     <div style="font-size:14px;font-weight:600">
                         Corte: ${c.preco_corte ? 'R$ ' + Number(c.preco_corte).toFixed(2) : '—'}
@@ -2636,7 +2636,7 @@ function verDetalhesTecido(id) {
                     </div>
                     <div style="font-size:11px;color:#8F8F8F;margin-top:2px">Registro da tabela, sem margem aplicada.</div>
                 </div>` : ''}
-                ${c.fornecedor_nome ? `<div style="background:#FAFAFA;border-radius:8px;padding:10px 14px;grid-column:1/-1">
+                ${c.fornecedor_nome ? `<div style="background:var(--surface-2);border-radius:8px;padding:10px 14px;grid-column:1/-1">
                     <div style="font-size:11px;font-weight:700;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Fornecedor</div>
                     <div style="font-size:14px;font-weight:500">${escapeHtml(c.fornecedor_nome)}</div>
                 </div>` : ''}
@@ -2901,7 +2901,7 @@ function renderCatalogoTecidos() {
         const disp    = estoqueDisponivel(c.id);
         const dispTxt = textoSaldoTecido(c);
         const alertMin = !temEstoqueInfinito(c) && c.min_estoque > 0 && disp < c.min_estoque ? `<span class="badge-alerta" style="margin-left:6px">⚠</span>` : '';
-        const thumb = c.imagem ? `<img src="${c.imagem}" style="width:32px;height:32px;object-fit:cover;border-radius:4px;margin-right:7px;vertical-align:middle;border:1px solid #E0E0E0">` : '';
+        const thumb = c.imagem ? `<img src="${c.imagem}" style="width:32px;height:32px;object-fit:cover;border-radius:4px;margin-right:7px;vertical-align:middle;border:1px solid var(--border)">` : '';
         const nomeClick = `<span style="cursor:pointer;color:var(--primary);font-weight:500;text-decoration:underline dotted" onclick="verDetalhesTecido(${c.id})" title="Ver detalhes">${escapeHtml(c.nome)}</span>`;
         const marcado = catSelecao.tecido.has(c.id);
         return `<tr class="${marcado ? 'cat-linha-marcada' : ''}">
@@ -3110,7 +3110,7 @@ function editarCatalogo(id) {
     const preview = document.getElementById('cat-foto-preview');
     if (preview) {
         if (c.imagem) {
-            preview.innerHTML = `<img src="${c.imagem}" style="max-width:120px;max-height:80px;border-radius:6px;border:1px solid #E0E0E0;margin-top:6px">`;
+            preview.innerHTML = `<img src="${c.imagem}" style="max-width:120px;max-height:80px;border-radius:6px;border:1px solid var(--border);margin-top:6px">`;
             preview.dataset.base64 = c.imagem;
         } else {
             preview.innerHTML = '';
@@ -3302,10 +3302,10 @@ function verTimeline(id) {
         const isCurrent = i === eventos.length - 1;
         const icon = STATUS_ICONS[e.status] || '⏺';
         const dataStr = new Date(e.data).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-        return `<div style="display:flex;gap:14px;align-items:flex-start;padding:10px 0;${i < eventos.length - 1 ? 'border-bottom:1px solid #F1F1F1' : ''}">
-            <div style="min-width:38px;height:38px;border-radius:50%;background:${isCurrent ? 'var(--primary)' : '#E0E0E0'};color:${isCurrent ? '#fff' : '#8F8F8F'};display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">${icon}</div>
+        return `<div style="display:flex;gap:14px;align-items:flex-start;padding:10px 0;${i < eventos.length - 1 ? 'border-bottom:1px solid var(--border)' : ''}">
+            <div style="min-width:38px;height:38px;border-radius:50%;background:${isCurrent ? 'var(--primary)' : 'var(--surface-4)'};color:${isCurrent ? '#fff' : '#8F8F8F'};display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">${icon}</div>
             <div>
-                <div style="font-weight:600;font-size:14px;color:${isCurrent ? 'var(--primary)' : '#242424'}">${escapeHtml(e.label || e.status)}</div>
+                <div style="font-weight:600;font-size:14px;color:${isCurrent ? 'var(--primary)' : 'var(--text-strong)'}">${escapeHtml(e.label || e.status)}</div>
                 <div style="font-size:12px;color:#8F8F8F;margin-top:3px">${dataStr}</div>
             </div>
         </div>`;
@@ -3410,10 +3410,10 @@ function mostrarModalPagamento(ped, callback) {
         <div style="background:white;border-radius:10px;padding:28px 32px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22)">
             <h3 style="margin-bottom:6px;color:var(--dark)">Confirmar Entrega</h3>
             <p style="font-size:13px;color:#888;margin-bottom:18px">Pedido #${formatPedidoId(ped.id)}</p>
-            <div style="background:#FAFAFA;border-radius:6px;padding:14px 16px;margin-bottom:20px;font-size:14px">
-                <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:#555">Valor Total</span><strong>R$ ${total.toFixed(2)}</strong></div>
-                <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:#555">Valor Recebido</span><strong style="color:#005D3B">R$ ${recebido.toFixed(2)}</strong></div>
-                <div style="display:flex;justify-content:space-between;padding:8px 0 4px;border-top:1px solid #E0E0E0;margin-top:4px"><span style="color:#555;font-weight:600">Saldo a Receber</span><strong style="color:${saldo > 0.01 ? '#F43927' : '#005D3B'}">R$ ${saldo.toFixed(2)}</strong></div>
+            <div style="background:var(--surface-2);border-radius:6px;padding:14px 16px;margin-bottom:20px;font-size:14px">
+                <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:var(--text-soft)">Valor Total</span><strong>R$ ${total.toFixed(2)}</strong></div>
+                <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:var(--text-soft)">Valor Recebido</span><strong style="color:var(--primary-text)">R$ ${recebido.toFixed(2)}</strong></div>
+                <div style="display:flex;justify-content:space-between;padding:8px 0 4px;border-top:1px solid var(--border);margin-top:4px"><span style="color:var(--text-soft);font-weight:600">Saldo a Receber</span><strong style="color:${saldo > 0.01 ? '#F43927' : 'var(--primary-text)'}">R$ ${saldo.toFixed(2)}</strong></div>
             </div>
             <p style="font-size:13px;color:var(--dark);font-weight:600;margin-bottom:6px">O pagamento foi recebido integralmente?</p>
             <p style="font-size:12px;color:#888;margin-bottom:14px">Nos dois casos o pedido vai para "Aguardando Financeiro", onde o financeiro confirma o pagamento.</p>
@@ -4040,7 +4040,7 @@ function renderEmpresaAlertasCfg() {
                 <span style="font-size:20px">${info.icon}</span>
                 <div>
                     <div style="font-size:13px;font-weight:500;color:var(--dark)">${info.label}</div>
-                    <div style="font-size:11px;color:${ativo?'#005D3B':'#8F8F8F'};margin-top:1px">${ativo?'Ativo':'Desativado'}</div>
+                    <div style="font-size:11px;color:${ativo?'var(--primary-text)':'#8F8F8F'};margin-top:1px">${ativo?'Ativo':'Desativado'}</div>
                 </div>
             </div>
             <label class="toggle-switch">
@@ -4095,7 +4095,7 @@ function renderEmpresaDashCardsCfg() {
                 <span style="font-size:20px">${info.icon}</span>
                 <div>
                     <div style="font-size:13px;font-weight:500;color:var(--dark)">${info.label}</div>
-                    <div style="font-size:11px;color:${ativo?'#005D3B':'#8F8F8F'};margin-top:1px">${ativo?'Visível':'Oculto'}</div>
+                    <div style="font-size:11px;color:${ativo?'var(--primary-text)':'#8F8F8F'};margin-top:1px">${ativo?'Visível':'Oculto'}</div>
                 </div>
             </div>
             <label class="toggle-switch">
@@ -4225,7 +4225,7 @@ function renderDashboardAlertas() {
 
     // vermelho = atrasado (urgente): a preferencia "so as urgentes" mantem so estes
     const mkBanner = (icon, bg, bord, textClr, titulo, itens) =>
-        `<div data-urgente="${bg === '#FEF4F2' ? 1 : 0}" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:${bg};border:1px solid ${bord};border-radius:8px;padding:10px 16px;font-size:13px">
+        `<div data-urgente="${bg === 'var(--danger-bg)' ? 1 : 0}" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:${bg};border:1px solid ${bord};border-radius:8px;padding:10px 16px;font-size:13px">
             <span style="font-size:17px;flex-shrink:0">${icon}</span>
             <span style="color:${textClr}">${titulo}</span>
             <span>${itens}</span>
@@ -4242,9 +4242,9 @@ function renderDashboardAlertas() {
                 .sort((a, b) => a.data_entrega.localeCompare(b.data_entrega))
                 .map(p => {
                     const diasAtraso = Math.round((hoje - new Date(p.data_entrega + 'T00:00:00')) / 86400000);
-                    return `<span style="cursor:pointer;color:#B3160A;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})" title="${diasAtraso}d de atraso">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')} (${p.data_entrega.split('-').reverse().join('/')})</span>`;
+                    return `<span style="cursor:pointer;color:var(--danger-text);font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})" title="${diasAtraso}d de atraso">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')} (${p.data_entrega.split('-').reverse().join('/')})</span>`;
                 }).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('🚨', '#FEF4F2', '#F79B90', '#B3160A',
+            banners.push(mkBanner('🚨', 'var(--danger-bg)', '#F79B90', 'var(--danger-text)',
                 `<strong>${entregasAtrasadas.length} entrega(s) atrasada(s):</strong>`, itens));
         }
 
@@ -4254,9 +4254,9 @@ function renderDashboardAlertas() {
         });
         if (entregasHoje.length) {
             const itens = entregasHoje.map(p =>
-                `<span style="cursor:pointer;color:#8A6A00;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}</span>`
+                `<span style="cursor:pointer;color:var(--warn-text);font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}</span>`
             ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('🔔', '#FEF6D8', '#F2C924', '#8A6A00',
+            banners.push(mkBanner('🔔', 'var(--warn-bg)', '#F2C924', 'var(--warn-text)',
                 `<strong>${entregasHoje.length} pedido(s)</strong> com entrega prevista para hoje:`, itens));
         }
     }
@@ -4266,9 +4266,9 @@ function renderDashboardAlertas() {
         const medicAtrasadas = filtrarMedicoesVisiveis(db.medicoes).filter(m => m.status === 'Agendado' && m.data < hojeStr);
         if (medicAtrasadas.length) {
             const itens = medicAtrasadas.map(m =>
-                `<span style="cursor:pointer;color:#B3160A;font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')} (${m.data.split('-').reverse().join('/')})</span>`
+                `<span style="cursor:pointer;color:var(--danger-text);font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')} (${m.data.split('-').reverse().join('/')})</span>`
             ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('📐', '#FEF4F2', '#F79B90', '#B3160A',
+            banners.push(mkBanner('📐', 'var(--danger-bg)', '#F79B90', 'var(--danger-text)',
                 `<strong>${medicAtrasadas.length} medição(ões)</strong> atrasada(s):`, itens));
         }
         const medicHoje = filtrarMedicoesVisiveis(db.medicoes).filter(m => m.status === 'Agendado' && m.data === hojeStr);
@@ -4276,7 +4276,7 @@ function renderDashboardAlertas() {
             const itens = medicHoje.map(m =>
                 `<span style="cursor:pointer;color:#2D77C1;font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')}${m.hora ? ' às ' + m.hora : ''}</span>`
             ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('📐', '#E4EFF9', '#9FC4E5', '#1F5A96',
+            banners.push(mkBanner('📐', 'var(--info-bg)', '#9FC4E5', 'var(--info-text)',
                 `<strong>${medicHoje.length} medição(ões)</strong> agendada(s) para hoje:`, itens));
         }
     }
@@ -4288,9 +4288,9 @@ function renderDashboardAlertas() {
             instStatus.includes(normalizarStatus(p.status)) && p.data_entrega && p.data_entrega < hojeStr);
         if (instAtrasadas.length) {
             const itens = instAtrasadas.map(p =>
-                `<span style="cursor:pointer;color:#B3160A;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')} (${p.data_entrega.split('-').reverse().join('/')})</span>`
+                `<span style="cursor:pointer;color:var(--danger-text);font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')} (${p.data_entrega.split('-').reverse().join('/')})</span>`
             ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('🔧', '#FEF4F2', '#F79B90', '#B3160A',
+            banners.push(mkBanner('🔧', 'var(--danger-bg)', '#F79B90', 'var(--danger-text)',
                 `<strong>${instAtrasadas.length} instalação(ões)</strong> atrasada(s):`, itens));
         }
         const instHoje = filtrarPedidosVisiveis(db.pedidos).filter(p =>
@@ -4299,7 +4299,7 @@ function renderDashboardAlertas() {
             const itens = instHoje.map(p =>
                 `<span style="cursor:pointer;color:#2D77C1;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}${p.inst_hora ? ' às ' + p.inst_hora : ''}</span>`
             ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('🔧', '#E4EFF9', '#9FC4E5', '#1F5A96',
+            banners.push(mkBanner('🔧', 'var(--info-bg)', '#9FC4E5', 'var(--info-text)',
                 `<strong>${instHoje.length} instalação(ões)</strong> agendada(s) para hoje:`, itens));
         }
     }
@@ -4311,10 +4311,10 @@ function renderDashboardAlertas() {
         const totalCriticos   = tecidosCriticos.length + matCriticos.length;
         if (totalCriticos) {
             const itens = [
-                ...tecidosCriticos.map(c => `<span style="cursor:pointer;color:#8A6A00;font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(c.nome)}: ${estoqueDisponivel(c.id).toFixed(2)} m (mín. ${c.min_estoque} m)</span>`),
-                ...matCriticos.map(m => `<span style="cursor:pointer;color:#8A6A00;font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(m.nome)}: ${(m.estoque_atual||0).toFixed(2)} ${m.unidade||''} (mín. ${m.min_estoque})</span>`)
+                ...tecidosCriticos.map(c => `<span style="cursor:pointer;color:var(--warn-text);font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(c.nome)}: ${estoqueDisponivel(c.id).toFixed(2)} m (mín. ${c.min_estoque} m)</span>`),
+                ...matCriticos.map(m => `<span style="cursor:pointer;color:var(--warn-text);font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(m.nome)}: ${(m.estoque_atual||0).toFixed(2)} ${m.unidade||''} (mín. ${m.min_estoque})</span>`)
             ].join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('⚠️', '#FEF6D8', '#F2C924', '#8A6A00',
+            banners.push(mkBanner('⚠️', 'var(--warn-bg)', '#F2C924', 'var(--warn-text)',
                 `<strong>${totalCriticos} item(ns)</strong> com estoque abaixo do mínimo:`, itens));
         }
     }
@@ -4328,11 +4328,11 @@ function renderDashboardAlertas() {
     if (countEl) {
         if (banners.length) {
             countEl.textContent = banners.length + (banners.length === 1 ? ' alerta' : ' alertas');
-            countEl.style.background = '#FDE8E5';
-            countEl.style.color = '#B3160A';
+            countEl.style.background = 'var(--danger-bg)';
+            countEl.style.color = 'var(--danger-text)';
         } else {
             countEl.textContent = '';
-            countEl.style.background = '#F1F1F1';
+            countEl.style.background = 'var(--surface-3)';
             countEl.style.color = '#8F8F8F';
         }
     }
@@ -4471,17 +4471,17 @@ function abrirBalanco() {
         const nome = cat ? cat.nome : '—';
         const cod  = (cat && cat.referencia) || '';
         const sys  = (r.metragem_atual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        const rowStyle = esgotado ? 'opacity:.5;background:#FAFAFA' : '';
+        const rowStyle = esgotado ? 'opacity:.5;background:var(--surface-2)' : '';
         rowsTecidos += `<tr data-balanco-nome="${escapeHtml(nome.toLowerCase())}" data-balanco-ref="${escapeHtml(cod.toLowerCase())}" data-balanco-rolo-cod="${escapeHtml((r.lote||'').toLowerCase())}"
             data-pdf-cod="${escapeHtml(cod || '—')}" data-pdf-nome="${escapeHtml(nome)}" data-pdf-rolo="${escapeHtml(r.lote || '')}" data-esgotado="${esgotado ? '1' : '0'}" style="${rowStyle}">
             <td>${escapeHtml(cod || '—')}</td>
-            <td>${escapeHtml(nome)}${esgotado ? ' <span style="font-size:10px;background:#E0E0E0;color:#8F8F8F;padding:1px 5px;border-radius:4px;font-weight:600">ESGOTADO</span>' : ''}${r.lote ? `<div style="font-size:11px;color:#8F8F8F">Rolo: ${escapeHtml(r.lote)}</div>` : ''}</td>
+            <td>${escapeHtml(nome)}${esgotado ? ' <span style="font-size:10px;background:var(--surface-4);color:#8F8F8F;padding:1px 5px;border-radius:4px;font-weight:600">ESGOTADO</span>' : ''}${r.lote ? `<div style="font-size:11px;color:#8F8F8F">Rolo: ${escapeHtml(r.lote)}</div>` : ''}</td>
             <td style="text-align:right;color:${esgotado ? '#8F8F8F' : 'inherit'}">${sys} m</td>
             <td><input type="number" min="0" step="0.01" placeholder="—"
                 data-balanco-rolo="${r.id}"
                 data-sys="${r.metragem_atual || 0}"
                 oninput="_diffBalanco(this)"
-                style="width:100%;padding:5px 8px;border:1px solid #ccc;border-radius:4px;text-align:right"></td>
+                style="width:100%;padding:5px 8px;border:1px solid var(--border-strong);border-radius:4px;text-align:right"></td>
             <td id="diff-rolo-${r.id}" style="text-align:right;font-weight:600;color:#8F8F8F">—</td>
         </tr>`;
     });
@@ -4500,14 +4500,14 @@ function abrirBalanco() {
                 data-balanco-mat="${m.id}"
                 data-sys="${m.estoque_atual || 0}"
                 oninput="_diffBalanco(this)"
-                style="width:100%;padding:5px 8px;border:1px solid #ccc;border-radius:4px;text-align:right"></td>
+                style="width:100%;padding:5px 8px;border:1px solid var(--border-strong);border-radius:4px;text-align:right"></td>
             <td id="diff-mat-${m.id}" style="text-align:right;font-weight:600;color:#8F8F8F">—</td>
         </tr>`;
     });
     if (!rowsMats) rowsMats = '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:16px">Nenhum material em estoque</td></tr>';
 
-    const thStyle = 'background:#FAFAFA;padding:10px 12px;border-bottom:2px solid #E0E0E0;color:#555;font-size:13px;white-space:nowrap';
-    const inpStyle = 'padding:7px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px;outline:none;transition:border-color .15s;width:100%';
+    const thStyle = 'background:var(--surface-2);padding:10px 12px;border-bottom:2px solid var(--border);color:var(--text-soft);font-size:13px;white-space:nowrap';
+    const inpStyle = 'padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;outline:none;transition:border-color .15s;width:100%';
     const overlay = document.createElement('div');
     overlay.id = 'balanco-overlay';
     overlay.className = 'modal-overlay';
@@ -4532,7 +4532,7 @@ function abrirBalanco() {
                 </p>
 
                 <!-- Filtros -->
-                <div class="balanco-caixa" style="display:flex;gap:10px;margin-bottom:${rolosEsgotados.length ? '8px' : '20px'};padding:12px 14px;background:#FAFAFA;border:1px solid #E0E0E0;border-radius:8px;flex-wrap:wrap">
+                <div class="balanco-caixa" style="display:flex;gap:10px;margin-bottom:${rolosEsgotados.length ? '8px' : '20px'};padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;flex-wrap:wrap">
                     <div style="flex:1;min-width:150px">
                         <label style="font-size:11px;font-weight:600;color:#8F8F8F;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Código</label>
                         <input id="balanco-filter-ref" type="text" list="balanco-lista-cod" autocomplete="off" placeholder="Código do item ou do rolo..." style="${inpStyle}" oninput="_balancoDigitou('cod')">
@@ -4547,14 +4547,14 @@ function abrirBalanco() {
                         <button class="btn btn-outline btn-sm" onclick="_limparFiltrosBalanco()" style="white-space:nowrap">✕ Limpar</button>
                     </div>
                 </div>
-                ${rolosEsgotados.length ? `<div class="balanco-caixa" style="margin-bottom:16px;padding:8px 12px;background:#FAFAFA;border:1px solid #E0E0E0;border-radius:6px;display:flex;align-items:center;gap:10px;font-size:12px;color:#8F8F8F">
+                ${rolosEsgotados.length ? `<div class="balanco-caixa" style="margin-bottom:16px;padding:8px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;gap:10px;font-size:12px;color:#8F8F8F">
                     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
                         <input type="checkbox" id="balanco-show-esgotados" onchange="_filtrarBalanco()" style="width:14px;height:14px;cursor:pointer">
                         Mostrar <strong style="color:var(--dark)">${rolosEsgotados.length} rolo(s) esgotado(s)</strong> (metragem = 0 no sistema)
                     </label>
                 </div>` : ''}
 
-                <h4 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#005D3B;margin-bottom:8px">🧵 Tecidos / Rolos</h4>
+                <h4 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--primary-text);margin-bottom:8px">🧵 Tecidos / Rolos</h4>
                 <div style="overflow-x:auto;margin-bottom:24px">
                     <table style="width:100%;border-collapse:collapse;font-size:13px">
                         <thead><tr>
@@ -4568,7 +4568,7 @@ function abrirBalanco() {
                     </table>
                 </div>
 
-                <h4 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#005D3B;margin-bottom:8px">🔩 Materiais e Acessórios</h4>
+                <h4 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--primary-text);margin-bottom:8px">🔩 Materiais e Acessórios</h4>
                 <div style="overflow-x:auto">
                     <table style="width:100%;border-collapse:collapse;font-size:13px">
                         <thead><tr>
@@ -4673,7 +4673,7 @@ function _diffBalanco(input) {
     const diff = contado - sys;
     const fmt  = (Math.abs(diff)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     if (Math.abs(diff) < 0.001) { cell.textContent = '='; cell.style.color = '#8F8F8F'; }
-    else if (diff > 0)  { cell.textContent = `+${fmt}`; cell.style.color = '#005D3B'; }
+    else if (diff > 0)  { cell.textContent = `+${fmt}`; cell.style.color = 'var(--primary-text)'; }
     else                { cell.textContent = `−${fmt}`; cell.style.color = '#F43927'; }
 }
 
@@ -4818,7 +4818,7 @@ function _showConfirmBalanco(ajustes) {
 
         const fmt = (v, un) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (un ? ' ' + un : '');
         let listHtml = `<strong style="font-size:14px;display:block;margin-bottom:10px">Confirmar ${ajustes.length} ajuste(s) no estoque?</strong>`;
-        listHtml += `<div style="max-height:240px;overflow-y:auto;text-align:left;border:1px solid #E0E0E0;border-radius:8px;background:#FAFAFA">`;
+        listHtml += `<div style="max-height:240px;overflow-y:auto;text-align:left;border:1px solid var(--border);border-radius:8px;background:var(--surface-2)">`;
         ajustes.forEach((a, i) => {
             const nome   = a.tipo === 'rolo'
                 ? ((db.catalogo.find(c => c.id === a.rolo.tecido_id)?.nome || 'Tecido') + (a.rolo.lote ? ` [${a.rolo.lote}]` : ''))
@@ -4826,9 +4826,9 @@ function _showConfirmBalanco(ajustes) {
             const antes  = a.tipo === 'rolo' ? (a.rolo.metragem_atual || 0) : (a.mat.estoque_atual || 0);
             const un     = a.tipo === 'rolo' ? 'm' : (a.mat.unidade || 'un');
             const diff   = a.contado - antes;
-            const color  = diff > 0 ? '#005D3B' : '#F43927';
+            const color  = diff > 0 ? 'var(--primary-text)' : '#F43927';
             const sign   = diff > 0 ? '+' : '';
-            const sep    = i < ajustes.length - 1 ? 'border-bottom:1px solid #E0E0E0' : '';
+            const sep    = i < ajustes.length - 1 ? 'border-bottom:1px solid var(--border)' : '';
             listHtml += `<div style="padding:8px 12px;${sep};display:flex;justify-content:space-between;align-items:center;gap:16px;font-size:12px">
                 <span style="color:var(--dark);font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nome}</span>
                 <span style="white-space:nowrap;flex-shrink:0;color:#8F8F8F">
@@ -5308,7 +5308,7 @@ function renderEstoque() {
             <thead><tr><th>Código</th><th>Metragem inicial</th><th>Disponível</th><th>Ocupação</th><th>Entrada</th><th>Ações</th></tr></thead>
             <tbody>` + rolos.map(r => {
             const pct = r.metragem_inicial > 0 ? Math.round((r.metragem_atual / r.metragem_inicial) * 100) : 0;
-            const cor = pct > 40 ? '#005D3B' : pct > 15 ? '#F2C924' : '#F43927';
+            const cor = pct > 40 ? 'var(--primary-text)' : pct > 15 ? '#F2C924' : '#F43927';
             const esgotado = r.metragem_atual <= 0;
             return `<tr class="${esgotado ? 'rolo-esgotado' : ''}">
                 <td>${escapeHtml(r.lote)}</td>
@@ -5325,7 +5325,7 @@ function renderEstoque() {
             ${infinito ? '' : `<tr id="baixa-${r.id}" class="baixa-form" style="display:none">
                 <td colspan="6" class="baixa-form-cell" onclick="event.stopPropagation()">
                     <strong>Baixar rolo ${escapeHtml(r.lote)}</strong> — saldo: <strong>${r.metragem_atual.toFixed(3)} m</strong> &emsp;
-                    <input type="number" id="baixa-qtd-${r.id}" placeholder="Metros a baixar" step="0.001" min="0.001" max="${r.metragem_atual}" style="width:160px;padding:5px 8px;border:1px solid #ccc;border-radius:4px">
+                    <input type="number" id="baixa-qtd-${r.id}" placeholder="Metros a baixar" step="0.001" min="0.001" max="${r.metragem_atual}" style="width:160px;padding:5px 8px;border:1px solid var(--border-strong);border-radius:4px">
                     <button class="btn btn-sm" style="background:#F2C924" onclick="confirmarBaixa(${r.id})">Confirmar Baixa</button>
                     <button class="btn btn-outline btn-sm" onclick="cancelarBaixa()">Cancelar</button>
                 </td>
@@ -5497,7 +5497,7 @@ function renderMateriais() {
 
     tb.innerHTML = lista.map(m => {
         const abaixoMin = !temEstoqueInfinito(m) && m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque;
-        const corEstoque = abaixoMin ? '#F43927' : '#005D3B';
+        const corEstoque = abaixoMin ? '#F43927' : 'var(--primary-text)';
         const marcado = catSelecao.material.has(m.id);
         return `
         <tr class="${marcado ? 'cat-linha-marcada' : ''}">
@@ -5521,7 +5521,7 @@ function renderMateriais() {
             <td colspan="8" class="baixa-form-cell">
                 <strong>${escapeHtml(m.nome)}</strong> — saldo: <strong>${(m.estoque_atual||0).toFixed(2)} ${m.unidade}</strong> &emsp;
                 Quantidade (+ entrada / − saída):
-                <input type="number" id="ajuste-qtd-${m.id}" placeholder="Ex: +10 ou -3" step="0.01" style="width:130px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;margin:0 8px">
+                <input type="number" id="ajuste-qtd-${m.id}" placeholder="Ex: +10 ou -3" step="0.01" style="width:130px;padding:5px 8px;border:1px solid var(--border-strong);border-radius:4px;margin:0 8px">
                 <button class="btn btn-sm" style="background:#005D3B" onclick="confirmarAjuste(${m.id})">Confirmar</button>
                 <button class="btn btn-outline btn-sm" onclick="cancelarAjuste()">Cancelar</button>
             </td>
@@ -5936,7 +5936,7 @@ function renderKits() {
             <td colspan="${colunas}" class="baixa-form-cell">
                 <strong>${escapeHtml(k.nome)}</strong> — saldo: <strong>${(k.estoque_atual || 0).toFixed(0)} un</strong> &emsp;
                 Quantidade (+ entrada / − saída):
-                <input type="number" id="ajuste-qtd-kit-${k.id}" placeholder="Ex: +10 ou -3" step="1" style="width:130px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;margin:0 8px">
+                <input type="number" id="ajuste-qtd-kit-${k.id}" placeholder="Ex: +10 ou -3" step="1" style="width:130px;padding:5px 8px;border:1px solid var(--border-strong);border-radius:4px;margin:0 8px">
                 <button class="btn btn-sm" style="background:#005D3B" onclick="confirmarAjusteKit(${k.id})">Confirmar</button>
                 <button class="btn btn-outline btn-sm" onclick="cancelarAjuste()">Cancelar</button>
             </td>
@@ -6177,7 +6177,7 @@ function renderAmbienteBreakdown(a) {
     const parts = tecidos.map((t, tidx) => {
         if (!t.tecidoId) return '';
         const disp = estoqueDisponivel(t.tecidoId);
-        const stockColor = !tecidoTemEstoqueInfinito(t.tecidoId) && disp < (t.consumo_linear||0) ? '#F43927' : '#005D3B';
+        const stockColor = !tecidoTemEstoqueInfinito(t.tecidoId) && disp < (t.consumo_linear||0) ? '#F43927' : 'var(--primary-text)';
         const temConflito = verificarConflitoDeLote(t.tecidoId, t.consumo_linear||0);
         const alt_bruta = (a.altura||0) + (t.bainha_cm??15)/100 + (t.cabecote_cm??0)/100;
         const titulo = tecidos.length > 1 ? `<div class="breakdown-row" style="font-weight:bold;color:var(--primary);padding-bottom:6px;border-bottom:1px solid #dde">Tecido ${tidx+1}: ${escapeHtml(t.tecidoNome||'')}</div>` : '';
@@ -6353,7 +6353,7 @@ function renderAmbientes() {
         </div>
         <div style="flex:0 1 560px;min-width:220px;max-width:560px;margin:0 auto;text-align:center">
             <img id="img-abertura-${a.id}" src="${urlDesenhoCortina(a.abertura||'A', tecidos.map(t => t.prega), false)}" alt="${escapeHtml(descricaoDesenhoCortina(a.abertura||'A', tecidos.map(t => t.prega)))}" style="width:100%;height:auto;border:1px solid var(--border);border-radius:6px;display:block">
-            <div id="lbl-abertura-${a.id}" style="font-size:11px;color:#666;margin-top:4px;font-weight:600">${escapeHtml(descricaoDesenhoCortina(a.abertura||'A', tecidos.map(t => t.prega)))}</div>
+            <div id="lbl-abertura-${a.id}" style="font-size:11px;color:var(--text-soft);margin-top:4px;font-weight:600">${escapeHtml(descricaoDesenhoCortina(a.abertura||'A', tecidos.map(t => t.prega)))}</div>
         </div>
     </div>
     ${a.calculado ? renderAmbienteBreakdown(a) : ''}
@@ -6541,7 +6541,7 @@ function renderItensPedido() {
     }
     tb.innerHTML = pedidoDraft.itens.map((item, idx) => `<tr${item.origem === 'fixacao' ? ' class="ped-item-fixacao"' : ''}>
         <td>${escapeHtml(item.nome)}${item.origem === 'fixacao' ? ' <span class="kit-selo kit-selo-fixacao" title="Vem do Material de Instalação dos ambientes; é refeito ao trocar o kit ou a largura">fixação</span>' : ''}</td>
-        <td><input type="number" value="${item.quantidade}" step="0.01" min="0.01" style="width:72px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:13px" onchange="atualizarQuantidadeItem(${idx},this.value)"></td>
+        <td><input type="number" value="${item.quantidade}" step="0.01" min="0.01" style="width:72px;padding:4px 6px;border:1px solid var(--border-strong);border-radius:4px;font-size:13px" onchange="atualizarQuantidadeItem(${idx},this.value)"></td>
         <td>${item.unidade}</td>
         <td>R$ ${item.preco_unit.toFixed(2)}</td>
         <td>R$ ${item.subtotal.toFixed(2)}</td>
@@ -7054,12 +7054,12 @@ function renderKanban() {
     const board = document.getElementById('kanban-board');
     if (!board) return;
     const COLUNAS = [
-        { status: 'Medição',              label: 'Aguardando Medição Fina', cor: '#2D77C1', bg: '#E4EFF9' },
-        { status: 'Aguardando Tecido',    label: 'Aguardando Tecido',       cor: '#FF7F08', bg: '#FFF0E0' },
-        { status: 'Na Costura',           label: 'Na Costura',              cor: '#9B31C8', bg: '#F2E6F9' },
-        { status: 'Pronto p/ Instalação', label: 'Pronto p/ Instalação',    cor: '#005D3B', bg: '#F0FBEF' },
-        { status: 'Aguardando Financeiro', label: 'Aguardando Financeiro',    cor: '#FF575F', bg: '#FEF4F2' },
-        { status: 'Instalado',            label: 'Instalado / Entregue',    cor: '#159912', bg: '#E3F7E2' }
+        { status: 'Medição',              label: 'Aguardando Medição Fina', cor: '#2D77C1', bg: 'var(--info-bg)' },
+        { status: 'Aguardando Tecido',    label: 'Aguardando Tecido',       cor: '#FF7F08', bg: 'var(--orange-bg)' },
+        { status: 'Na Costura',           label: 'Na Costura',              cor: '#9B31C8', bg: 'var(--purple-bg)' },
+        { status: 'Pronto p/ Instalação', label: 'Pronto p/ Instalação',    cor: '#005D3B', bg: 'var(--ok-bg)' },
+        { status: 'Aguardando Financeiro', label: 'Aguardando Financeiro',    cor: '#FF575F', bg: 'var(--danger-bg)' },
+        { status: 'Instalado',            label: 'Instalado / Entregue',    cor: '#159912', bg: 'var(--ok-bg)' }
     ];
     const avisoEl = document.getElementById('aviso-orcamentos');
     const orcamentos = db.pedidos.filter(p => normalizarStatus(p.status) === 'Orçamento');
@@ -8028,8 +8028,8 @@ function renderRelRecebiveis() {
     tb.innerHTML = pendentes.map(p => {
         const faixa = p._dias > 90 ? '<span class="badge-pendente">+90 dias</span>'
             : p._dias > 60 ? '<span class="badge-parcial">61–90 dias</span>'
-            : p._dias > 30 ? '<span style="background:#FEF6D8;color:#8A6A00;font-size:11px;font-weight:bold;padding:2px 8px;border-radius:10px">31–60 dias</span>'
-            : '<span style="background:#EDF5FC;color:#1F5A96;font-size:11px;font-weight:bold;padding:2px 8px;border-radius:10px">≤30 dias</span>';
+            : p._dias > 30 ? '<span style="background:var(--warn-bg);color:var(--warn-text);font-size:11px;font-weight:bold;padding:2px 8px;border-radius:10px">31–60 dias</span>'
+            : '<span style="background:var(--info-bg);color:var(--info-text);font-size:11px;font-weight:bold;padding:2px 8px;border-radius:10px">≤30 dias</span>';
         const cls = COR_STATUS[normalizarStatus(p.status)] || 'st-orcamento';
         return `<tr>
             <td style="font-size:12px">#${formatPedidoId(p.id)}</td>
@@ -8042,7 +8042,7 @@ function renderRelRecebiveis() {
     }).join('');
     const totalPendente = pendentes.reduce((s, p) => s + p._saldo, 0);
     const tfootEl = document.getElementById('tfoot-rel-rec');
-    if (tfootEl) tfootEl.innerHTML = `<tr><td colspan="3" style="text-align:right;font-weight:bold;color:#555">Total a receber:</td><td style="font-weight:bold;color:#F43927">R$ ${totalPendente.toFixed(2)}</td><td colspan="2"></td></tr>`;
+    if (tfootEl) tfootEl.innerHTML = `<tr><td colspan="3" style="text-align:right;font-weight:bold;color:var(--text-soft)">Total a receber:</td><td style="font-weight:bold;color:#F43927">R$ ${totalPendente.toFixed(2)}</td><td colspan="2"></td></tr>`;
 
     // Gráfico aging por faixa
     const agingBuckets = { '≤ 30 dias': 0, '31–60 dias': 0, '61–90 dias': 0, '> 90 dias': 0 };
@@ -8092,7 +8092,7 @@ function renderRelVendedores() {
         <td style="text-align:center">${d.qtd}</td>
         <td style="text-align:center">${d.instalados}</td>
         <td>R$ ${d.total.toFixed(2)}</td>
-        <td style="color:#005D3B;font-weight:bold">R$ ${d.fat.toFixed(2)}</td>
+        <td style="color:var(--primary-text);font-weight:bold">R$ ${d.fat.toFixed(2)}</td>
     </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:#999;padding:20px">Nenhum dado.</td></tr>';
 
     const ctx = document.getElementById('chart-rel-vend');
@@ -8530,7 +8530,7 @@ async function buscarCNPJ() {
         const ie = est.inscricoes_estaduais?.[0]?.inscricao_estadual;
         if (ie) set('forn-ie', ie);
 
-        statusEl.innerHTML = '<span style="color:#005D3B">✅ Dados preenchidos!</span>';
+        statusEl.innerHTML = '<span style="color:var(--primary-text)">✅ Dados preenchidos!</span>';
         setTimeout(() => { statusEl.innerHTML = ''; }, 4000);
     } catch (e) {
         statusEl.innerHTML = _cnpjMensagemDeErro(e);
@@ -8574,7 +8574,7 @@ async function empresaCnpjMudou(el) {
         if (est.ddd1 && est.telefone1) set('emp-tel', `(${est.ddd1}) ${est.telefone1}`);
         set('emp-email', est.email || '');
         if (statusEl) {
-            statusEl.innerHTML = '<span style="color:#005D3B">✅ Dados preenchidos!</span>';
+            statusEl.innerHTML = '<span style="color:var(--primary-text)">✅ Dados preenchidos!</span>';
             setTimeout(() => { if (statusEl) statusEl.innerHTML = ''; }, 4000);
         }
     } catch (e) {
@@ -8796,19 +8796,19 @@ function _carRender() {
         const sem = !(Number(i.preco_unit) > 0);
         const chave = `'${i.tipo}',${Number(i.item_id)},${escapeHtml(_carJsStr(i.unidade || ''))}`;
         const qtd = edita
-            ? `<input type="text" inputmode="decimal" class="car-qtd" value="${fmtQ(i.quantidade)}" style="width:70px;padding:4px;border:1px solid #ccc;border-radius:4px;text-align:right" onchange="_carAlterarQtd(${chave},this.value)"> ${escapeHtml(i.unidade || '')}`
+            ? `<input type="text" inputmode="decimal" class="car-qtd" value="${fmtQ(i.quantidade)}" style="width:70px;padding:4px;border:1px solid var(--border-strong);border-radius:4px;text-align:right" onchange="_carAlterarQtd(${chave},this.value)"> ${escapeHtml(i.unidade || '')}`
             : `${fmtQ(i.quantidade)} ${escapeHtml(i.unidade || '')}`;
-        return `<tr style="border-top:1px solid #eee" data-lin="${idx}">
+        return `<tr style="border-top:1px solid var(--border)" data-lin="${idx}">
             <td style="${th}"><strong>${escapeHtml(i.item_nome)}</strong>${i.referencia ? `<br><small style="color:#888">${escapeHtml(i.referencia)}</small>` : ''}</td>
             <td style="white-space:nowrap">${qtd}</td>
-            <td style="text-align:right">${sem ? '<span style="color:#B3160A">sem preço</span>' : _histMoeda(i.preco_unit)}</td>
+            <td style="text-align:right">${sem ? '<span style="color:var(--danger-text)">sem preço</span>' : _histMoeda(i.preco_unit)}</td>
             <td class="car-sub" style="text-align:right">${sem ? '—' : _histMoeda(i.subtotal)}</td>
             <td style="text-align:center">${edita ? `<button type="button" class="car-remover btn btn-outline btn-sm" title="Tirar do carrinho" aria-label="Tirar do carrinho" onclick="_carRemover(${chave})">✕</button>` : ''}</td>
         </tr>`;
     }).join('') || `<tr><td colspan="5" style="text-align:center;color:#999;padding:16px">O carrinho está vazio.</td></tr>`; // 5 = colunas da tabela abaixo
-    corpo.innerHTML = `<div style="max-height:50vh;overflow:auto;border:1px solid #eee;border-radius:4px">
+    corpo.innerHTML = `<div style="max-height:50vh;overflow:auto;border:1px solid var(--border);border-radius:4px">
             <table style="width:100%;border-collapse:collapse;font-size:13px">
-                <thead><tr style="text-align:left;background:#f6f6f6"><th style="${th}">Item</th><th>Quantidade</th><th style="text-align:right">Preço</th><th style="text-align:right">Subtotal</th><th></th></tr></thead>
+                <thead><tr style="text-align:left;background:var(--surface-3)"><th style="${th}">Item</th><th>Quantidade</th><th style="text-align:right">Preço</th><th style="text-align:right">Subtotal</th><th></th></tr></thead>
                 <tbody>${linhas}</tbody>
             </table>
         </div>
@@ -8939,7 +8939,7 @@ function renderTabelaFornecedores() {
             <td style="font-size:13px">${escapeHtml(cidadeUF)}</td>
             <td style="font-size:13px">${escapeHtml(f.tel || '—')}${f.tel_vendedor ? `<br><small style="color:#888;font-size:12px">Vendedor: ${escapeHtml(f.tel_vendedor)}</small>` : ''}</td>
             <td style="font-size:13px">${escapeHtml(f.email || '—')}</td>
-            <td style="font-size:12px;color:#555">${vinc}</td>
+            <td style="font-size:12px;color:var(--text-soft)">${vinc}</td>
             <td class="td-acoes">${menuAcoesHtml([
                 { icone: '🛒', rotulo: 'Novo pedido de compra', onclick: `criarPCParaFornecedor(${f.id})` },
                 { icone: '📜', rotulo: 'Histórico de pedidos', onclick: `abrirHistoricoFornecedor(${f.id})`, oculto: !temAcesso('fornecedores', 'visualizar') },
@@ -9069,12 +9069,12 @@ function renderItensPCDraft() {
         return `<tr>
             <td>${escapeHtml(i.item_nome)} <span style="font-size:11px;color:#888">(${_pcRotuloTipo(i.tipo)})</span></td>
             <td><input type="text" class="pc-draft-obs" value="${escapeHtml(i.observacao || '')}" placeholder="Observações sobre este item..." onchange="atualizarObsItemPC(${idx},this.value)" aria-label="Observações de ${escapeHtml(i.item_nome)}"></td>
-            <td><input type="number" value="${i.quantidade}" step="0.01" min="0.01" style="width:80px;padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:13px" onchange="atualizarQtdPC(${idx},this.value)"></td>
+            <td><input type="number" value="${i.quantidade}" step="0.01" min="0.01" style="width:80px;padding:4px 6px;border:1px solid var(--border-strong);border-radius:4px;font-size:13px" onchange="atualizarQtdPC(${idx},this.value)"></td>
             <td>${i.unidade}</td>
             <td>${precoLabel}</td>
             <td><button class="btn btn-outline btn-sm btn-danger" onclick="removerItemPC(${idx})">✕</button></td>
         </tr>`;
-    }).join('') + `<tr style="background:#FAFAFA"><td colspan="4" style="text-align:right;font-weight:bold;color:#555;padding:10px 12px">Total estimado:</td><td style="font-weight:bold;padding:10px 12px">${total > 0 ? 'R$ ' + total.toFixed(2) : '<span style="color:#8F8F8F;font-size:12px">—</span>'}</td><td></td></tr>`;
+    }).join('') + `<tr style="background:var(--surface-2)"><td colspan="4" style="text-align:right;font-weight:bold;color:var(--text-soft);padding:10px 12px">Total estimado:</td><td style="font-weight:bold;padding:10px 12px">${total > 0 ? 'R$ ' + total.toFixed(2) : '<span style="color:#8F8F8F;font-size:12px">—</span>'}</td><td></td></tr>`;
 }
 
 // So kit PRONTO entra num pedido de compra: o kit de montagem e' feito aqui
@@ -9273,7 +9273,7 @@ function renderListaPedidosCompra() {
             <td>
                 ${p.status === 'Recebido' && !p.conta_pagar_gerada ? `<button class="btn btn-success btn-sm" onclick="gerarContaPagarPCManual(${p.id})" style="margin-right:4px">Gerar conta</button>` : ''}
                 ${p.status === 'Rascunho' ? `<button class="btn btn-success btn-sm pc-enviar-btn" onclick="enviarPedidoCompra(${p.id})" style="margin-right:4px">📨 Enviar</button>` : ''}
-                <select onchange="atualizarStatusPC(${p.id},this.value)" style="padding:4px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px;margin-right:4px">
+                <select onchange="atualizarStatusPC(${p.id},this.value)" style="padding:4px 6px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-right:4px">
                     <option${p.status==='Rascunho'?' selected':''}>Rascunho</option>
                     <option${p.status==='Enviado'?' selected':''}>Enviado</option>
                     <option${p.status==='Recebido'?' selected':''}>Recebido</option>
@@ -9383,7 +9383,7 @@ function abrirModalContaPagarPC(pc) {
         o.id = 'pcp-modal';
         o.className = 'sc-modal-overlay';
         o.style.display = 'flex';
-        const inp = 'width:100%;padding:7px;border:1px solid #ccc;border-radius:4px;margin-bottom:10px';
+        const inp = 'width:100%;padding:7px;border:1px solid var(--border-strong);border-radius:4px;margin-bottom:10px';
         o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:440px">
             <h3 style="margin:0 0 4px;font-size:16px">Gerar conta a pagar</h3>
             <div style="font-size:12px;color:#8F8F8F;margin-bottom:12px">Pedido #${formatPedidoId(pc.id)} — ${escapeHtml(pc.fornecedor_nome || '')}</div>
@@ -9530,16 +9530,16 @@ function abrirHistoricoFornecedor(fornecedorId, filtro) {
     o.id = 'hist-forn-modal';
     o.className = 'sc-modal-overlay';
     o.style.display = 'flex';
-    const inp = 'padding:6px;border:1px solid #ccc;border-radius:4px';
+    const inp = 'padding:6px;border:1px solid var(--border-strong);border-radius:4px';
     o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:640px;width:95%">
         <h3 style="margin:0 0 10px;font-size:16px">Histórico de pedidos — ${escapeHtml(forn.nome)}</h3>
         <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
             <label style="font-size:12px">De<br><input type="date" id="hist-forn-de" style="${inp}" oninput="_histRender()"></label>
             <label style="font-size:12px">Até<br><input type="date" id="hist-forn-ate" style="${inp}" oninput="_histRender()"></label>
         </div>
-        <div style="max-height:50vh;overflow:auto;border:1px solid #eee;border-radius:4px">
+        <div style="max-height:50vh;overflow:auto;border:1px solid var(--border);border-radius:4px">
             <table style="width:100%;border-collapse:collapse;font-size:13px">
-                <thead><tr style="text-align:left;background:#f6f6f6"><th style="padding:6px">Nº</th><th>Data de envio</th><th>Situação</th><th style="text-align:right;padding-right:8px">Valor</th></tr></thead>
+                <thead><tr style="text-align:left;background:var(--surface-3)"><th style="padding:6px">Nº</th><th>Data de envio</th><th>Situação</th><th style="text-align:right;padding-right:8px">Valor</th></tr></thead>
                 <tbody id="hist-forn-corpo"></tbody>
             </table>
         </div>
@@ -9572,7 +9572,7 @@ function _histRender() {
     const corpo = document.getElementById('hist-forn-corpo');
     if (!corpo) return;
     const { linhas, total } = _histDados();
-    corpo.innerHTML = linhas.length ? linhas.map(l => `<tr style="cursor:pointer;border-top:1px solid #eee" onclick="_histAbrirPedido(${l.id})" title="Abrir o pedido">
+    corpo.innerHTML = linhas.length ? linhas.map(l => `<tr style="cursor:pointer;border-top:1px solid var(--border)" onclick="_histAbrirPedido(${l.id})" title="Abrir o pedido">
             <td style="padding:6px">#${formatPedidoId(l.id)}</td><td>${_histData(l.data_envio)}</td><td>${escapeHtml(l.status)}</td>
             <td style="text-align:right;padding-right:8px">${_histMoeda(l.valor)}</td></tr>`).join('')
         : '<tr><td colspan="4" style="text-align:center;color:#999;padding:16px">Nenhum pedido enviado neste período.</td></tr>';
@@ -9743,19 +9743,19 @@ function _abrirModalCarrinho(tipo, ids, daSelecao) {
         const opcoesForn = db.fornecedores.slice()
             .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'))
             .map(f => `<option value="${escapeHtml(String(f.id))}">${escapeHtml(f.nome || '')}</option>`).join('');
-        const inp = 'padding:6px 8px;border:1px solid #ccc;border-radius:4px';
+        const inp = 'padding:6px 8px;border:1px solid var(--border-strong);border-radius:4px';
         const linhas = cads.map((c, i) => {
             const forn = _pcFornecedorDoCadastro(c);
             const fornHtml = forn.fornecedor_id
                 ? `<span style="font-size:14px">${escapeHtml(forn.fornecedor_nome)}</span>`
                 : `<select class="car-add-forn" style="${inp};max-width:100%"><option value="">Escolha o fornecedor…</option>${opcoesForn}</select>`;
-            return `<div class="car-add-linha" data-i="${i}" style="padding:10px 0;${i ? 'border-top:1px solid #eee' : ''}">
+            return `<div class="car-add-linha" data-i="${i}" style="padding:10px 0;${i ? 'border-top:1px solid var(--border)' : ''}">
                 <div style="font-weight:600">${c.referencia ? `<span style="color:#8F8F8F;font-weight:400">${escapeHtml(c.referencia)}</span> ` : ''}${escapeHtml(c.nome)}</div>
                 <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-top:6px">
                     <label style="font-size:12px;flex:1 1 180px">Fornecedor<br>${fornHtml}</label>
                     <label style="font-size:12px">Quantidade<br><input type="text" inputmode="decimal" autocomplete="off" class="car-add-qtd" style="${inp};width:110px"> <span class="car-add-un">${escapeHtml(_unidadeNoCarrinho(tipo, c))}</span></label>
                 </div>
-                <div class="car-add-erro" style="color:#C62828;font-size:12px;margin-top:4px"></div>
+                <div class="car-add-erro" style="color:var(--danger-text);font-size:12px;margin-top:4px"></div>
             </div>`;
         }).join('');
 
@@ -11407,12 +11407,12 @@ function renderDashboardMedicoes() {
         if (atrasada) {
             const dias = Math.abs(diff);
             label = dias === 1 ? 'Ontem' : `${dias}d atrás`;
-            bg = '#FEF4F2'; bord = '#F79B90'; acc = '#F43927'; clrL = '#F43927';
+            bg = 'var(--danger-bg)'; bord = '#F79B90'; acc = '#F43927'; clrL = '#F43927';
         } else {
             label = diff === 0 ? 'Hoje' : diff === 1 ? 'Amanhã' : d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
-            bg    = diff === 0 ? '#E4EFF9' : '#FAFAFA';
+            bg    = diff === 0 ? 'var(--info-bg)' : 'var(--surface-2)';
             bord  = diff === 0 ? '#9FC4E5' : 'var(--border)';
-            acc   = diff === 0 ? '#2D77C1' : '#005D3B';
+            acc   = diff === 0 ? '#2D77C1' : 'var(--primary-text)';
             clrL  = diff === 0 ? '#2D77C1' : '#8F8F8F';
         }
         return `<div onclick="location.href='pcp.html?view=medicoes'" style="cursor:pointer;background:${bg};border:1px solid ${bord};border-left:4px solid ${acc};border-radius:8px;padding:12px 16px;min-width:155px;flex:1;max-width:200px;transition:transform 0.1s,box-shadow 0.1s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
@@ -11440,7 +11440,7 @@ function renderDashboardMedicoes() {
         </div>`;
     }
 
-    const titleColor = atrasadas.length ? '#F43927' : '#242424';
+    const titleColor = atrasadas.length ? '#F43927' : 'var(--text-strong)';
     const titleText  = atrasadas.length
         ? `⚠️ Medições — ${atrasadas.length} atrasada${atrasadas.length > 1 ? 's' : ''}`
         : '📐 Próximas Medições';
@@ -11484,16 +11484,16 @@ function renderDashboardInstalacoes() {
         const atrasado = diff !== null && diff < 0;
         let label, bg, bord, acc, clrL;
         if (diff === null) {
-            label = 'Sem data'; bg = '#FAFAFA'; bord = 'var(--border)'; acc = '#8F8F8F'; clrL = '#8F8F8F';
+            label = 'Sem data'; bg = 'var(--surface-2)'; bord = 'var(--border)'; acc = '#8F8F8F'; clrL = '#8F8F8F';
         } else if (atrasado) {
             const dias = Math.abs(diff);
             label = dias === 1 ? 'Ontem' : `${dias}d atrás`;
-            bg = '#FEF4F2'; bord = '#F79B90'; acc = '#F43927'; clrL = '#F43927';
+            bg = 'var(--danger-bg)'; bord = '#F79B90'; acc = '#F43927'; clrL = '#F43927';
         } else {
             label = diff === 0 ? 'Hoje' : diff === 1 ? 'Amanhã' : d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
-            bg    = diff === 0 ? '#E4EFF9' : '#FAFAFA';
+            bg    = diff === 0 ? 'var(--info-bg)' : 'var(--surface-2)';
             bord  = diff === 0 ? '#9FC4E5' : 'var(--border)';
-            acc   = diff === 0 ? '#2D77C1' : '#005D3B';
+            acc   = diff === 0 ? '#2D77C1' : 'var(--primary-text)';
             clrL  = diff === 0 ? '#2D77C1' : '#8F8F8F';
         }
         return `<div onclick="location.href='pcp.html?view=agenda'" style="cursor:pointer;background:${bg};border:1px solid ${bord};border-left:4px solid ${acc};border-radius:8px;padding:12px 16px;min-width:155px;flex:1;max-width:200px;transition:transform 0.1s,box-shadow 0.1s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
@@ -11526,7 +11526,7 @@ function renderDashboardInstalacoes() {
         </div>`;
     }
 
-    const titleColor = atrasados.length ? '#F43927' : '#242424';
+    const titleColor = atrasados.length ? '#F43927' : 'var(--text-strong)';
     const titleText  = atrasados.length
         ? `⚠️ Instalações — ${atrasados.length} atrasada${atrasados.length > 1 ? 's' : ''}`
         : '🔧 Agenda de Instalações';
@@ -12624,7 +12624,7 @@ function renderEstoqueMateriais() {
     if (!lista.length) { tb.innerHTML = linhaNadaEncontrado(7); return; }
     tb.innerHTML = lista.map(m => {
         const abaixoMin = !temEstoqueInfinito(m) && m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque;
-        const cor = abaixoMin ? '#F43927' : '#005D3B';
+        const cor = abaixoMin ? '#F43927' : 'var(--primary-text)';
         return `<tr>
             <td class="col-codigo" title="${escapeHtml(m.referencia||'')}">${escapeHtml(m.referencia||'—')}</td>
             <td class="col-nome" title="${escapeHtml(m.nome)}"><strong>${escapeHtml(m.nome)}</strong>${abaixoMin?`<span class="badge-alerta" style="margin-left:6px">⚠</span>`:''}</td>
@@ -12632,7 +12632,7 @@ function renderEstoqueMateriais() {
             <td class="col-num" style="color:${cor}" title="${temEstoqueInfinito(m) || !(m.min_estoque > 0) ? '' : 'Mínimo: ' + m.min_estoque + ' ' + (m.unidade || '')}">${temEstoqueInfinito(m)
                 ? '<strong title="Estoque infinito">∞</strong>'
                 : `<strong>${(m.estoque_atual||0).toFixed(2)}</strong>`}</td>
-            <td class="col-num" style="color:#005D3B;font-weight:600">${m.preco > 0 ? 'R$ '+m.preco.toFixed(2) : '—'}</td>
+            <td class="col-num" style="color:var(--primary-text);font-weight:600">${m.preco > 0 ? 'R$ '+m.preco.toFixed(2) : '—'}</td>
             <td class="col-forn" title="${escapeHtml(m.fornecedor_nome||'')}">${escapeHtml(m.fornecedor_nome||'—')}</td>
             <td class="col-acoes">${botaoAdicionarAoCarrinho('material', m.id)}${menuAcoesHtml([
                 { icone: '±', rotulo: 'Ajustar estoque', onclick: `mostrarAjusteForm(${m.id})` }
@@ -12642,7 +12642,7 @@ function renderEstoqueMateriais() {
             <td colspan="7" class="baixa-form-cell">
                 <strong>${escapeHtml(m.nome)}</strong> — saldo: <strong>${(m.estoque_atual||0).toFixed(2)} ${m.unidade}</strong> &emsp;
                 Quantidade (+ entrada / − saída):
-                <input type="number" id="ajuste-qtd-${m.id}" placeholder="Ex: +10 ou -3" step="0.01" style="width:130px;padding:5px 8px;border:1px solid #ccc;border-radius:4px;margin:0 8px">
+                <input type="number" id="ajuste-qtd-${m.id}" placeholder="Ex: +10 ou -3" step="0.01" style="width:130px;padding:5px 8px;border:1px solid var(--border-strong);border-radius:4px;margin:0 8px">
                 <button class="btn btn-sm" style="background:#005D3B" onclick="confirmarAjuste(${m.id})">Confirmar</button>
                 <button class="btn btn-outline btn-sm" onclick="cancelarAjuste()">Cancelar</button>
             </td>
@@ -12871,7 +12871,7 @@ function baixarCopiaEMigrarFinanceiro() {
 function _avisoRecarregar(msg) {
     let el = document.getElementById('sc-aviso-recarregar');
     if (!el) { el = document.createElement('div'); el.id = 'sc-aviso-recarregar'; document.body.appendChild(el); }
-    el.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:10000;background:#fff;border:1px solid #ccc;border-radius:8px;padding:12px 16px;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;gap:12px;align-items:center;max-width:90vw';
+    el.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:10000;background:var(--white);border:1px solid var(--border-strong);border-radius:8px;padding:12px 16px;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;gap:12px;align-items:center;max-width:90vw';
     el.innerHTML = '<span></span><button class="btn btn-success btn-sm" type="button" onclick="window.location.reload()">Recarregar agora</button>';
     el.firstChild.textContent = msg + ' A página recarrega em instantes.';
 }
@@ -13069,39 +13069,39 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
         // Cartao so cai em conta de maquininha.
         const contasDoMeio = m => ehCartao(m) ? contas.filter(c => c.tipo === 'maquininha') : contas;
         const opcoesConta = (m, escolhida) => '<option value="">— sem conta —</option>' + contasDoMeio(m).map(c => `<option value="${escapeHtml(String(c.id))}" ${String(c.id) === escolhida ? 'selected' : ''}>${escapeHtml(c.nome || '')}</option>`).join('');
-        const sel = 'width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:13px;box-sizing:border-box';
+        const sel = 'width:100%;padding:6px;border:1px solid var(--border-strong);border-radius:4px;font-size:13px;box-sizing:border-box';
         const o = document.createElement('div');
         o.id = 'baixa-modal';
         o.className = 'sc-modal-overlay';
         o.style.display = 'flex';
         o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:560px;width:calc(100% - 32px)">
             <h3 style="margin:0 0 12px;font-size:16px">${escapeHtml(titulo || 'Registrar recebimento')}</h3>
-            ${comData ? `<label style="display:block;font-size:12px;margin-bottom:4px">Data</label><input type="date" id="baixa-data" value="${hoje}" max="${hoje}" style="${sel};margin-bottom:10px"><div id="baixa-erro-data" style="display:none;color:#C0392B;font-size:12px;margin:-6px 0 10px"></div>` : ''}
-            ${semContas ? `<div id="baixa-aviso-geral" style="background:#FEF6D8;color:#8A6A00;font-size:12px;padding:8px;border-radius:4px;margin-bottom:10px">Contas ainda não configuradas (Empresa › Preferências) — esta baixa não entra no saldo.</div>` : ''}
+            ${comData ? `<label style="display:block;font-size:12px;margin-bottom:4px">Data</label><input type="date" id="baixa-data" value="${hoje}" max="${hoje}" style="${sel};margin-bottom:10px"><div id="baixa-erro-data" style="display:none;color:var(--danger-text);font-size:12px;margin:-6px 0 10px"></div>` : ''}
+            ${semContas ? `<div id="baixa-aviso-geral" style="background:var(--warn-bg);color:var(--warn-text);font-size:12px;padding:8px;border-radius:4px;margin-bottom:10px">Contas ainda não configuradas (Empresa › Preferências) — esta baixa não entra no saldo.</div>` : ''}
             <div style="max-height:50vh;overflow:auto;margin-bottom:12px">${itens.map((it, idx) => {
                 const m = meioInicial(it) || {};
                 const mp = it.meio_previsto || {};
                 const vezes = Math.min(12, Math.max(1, Math.floor(Number(mp.vezes) || 1)));
-                return `<div class="baixa-linha" data-idx="${idx}" style="padding:8px 0;border-bottom:1px solid #eee;font-size:13px">
+                return `<div class="baixa-linha" data-idx="${idx}" style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
                     <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
                         <input type="checkbox" class="baixa-check" data-id="${escapeHtml(String(it.id))}" ${it.marcado ? 'checked' : ''}>
                         <span style="flex:1">${escapeHtml(it.descricao || '')}</span>
                         <strong>${brl(it.valor)}</strong>
                     </label>
                     <div class="baixa-detalhe" style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0 24px">
-                        <input type="text" inputmode="decimal" class="baixa-valor" title="Valor recebido" value="${(Number(it.valor) || 0).toFixed(2).replace('.', ',')}" ${permiteParcial ? '' : 'readonly'} style="${sel};flex:1 1 90px;${permiteParcial ? '' : 'background:#f5f5f5'}">
+                        <input type="text" inputmode="decimal" class="baixa-valor" title="Valor recebido" value="${(Number(it.valor) || 0).toFixed(2).replace('.', ',')}" ${permiteParcial ? '' : 'readonly'} style="${sel};flex:1 1 90px;${permiteParcial ? '' : 'background:var(--surface-3)'}">
                         <select class="baixa-meio" title="Meio" style="${sel};flex:2 1 130px">${m.chave ? '' : '<option value="" selected>Escolha o meio</option>'}${meios.map(x => `<option value="${escapeHtml(x.chave)}" ${x === m ? 'selected' : ''}>${escapeHtml(x.nome)}</option>`).join('')}</select>
                         <select class="baixa-conta" title="Conta" style="${sel};flex:2 1 130px;${semContas ? 'display:none' : ''}">${opcoesConta(m, contaDe(m))}</select>
                         <div class="baixa-cartao" style="display:none;flex:1 1 100%;gap:10px;align-items:center">
-                            <label style="font-size:12px">Vezes <select class="baixa-vezes" style="padding:4px;border:1px solid #ccc;border-radius:4px">${Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}" ${i + 1 === vezes ? 'selected' : ''}>${i + 1}x</option>`).join('')}</select></label>
+                            <label style="font-size:12px">Vezes <select class="baixa-vezes" style="padding:4px;border:1px solid var(--border-strong);border-radius:4px">${Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}" ${i + 1 === vezes ? 'selected' : ''}>${i + 1}x</option>`).join('')}</select></label>
                             <label style="font-size:12px;cursor:pointer"><input type="checkbox" class="baixa-antecipar" ${mp.antecipar ? 'checked' : ''}> Antecipar</label>
                         </div>
-                        <div class="baixa-aviso" style="display:none;flex:1 1 100%;color:#8A6A00;font-size:12px"></div>
-                        <div class="baixa-erro" style="display:none;flex:1 1 100%;color:#C0392B;font-size:12px"></div>
+                        <div class="baixa-aviso" style="display:none;flex:1 1 100%;color:var(--warn-text);font-size:12px"></div>
+                        <div class="baixa-erro" style="display:none;flex:1 1 100%;color:var(--danger-text);font-size:12px"></div>
                     </div>
                 </div>`;
             }).join('')}</div>
-            <div id="baixa-erro-nenhum" style="display:none;color:#C0392B;font-size:12px;margin:-6px 0 8px">Marque pelo menos um item.</div>
+            <div id="baixa-erro-nenhum" style="display:none;color:var(--danger-text);font-size:12px;margin:-6px 0 8px">Marque pelo menos um item.</div>
             <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:12px"><span>Total marcado</span><strong id="baixa-total">R$ 0,00</strong></div>
             <div class="sc-modal-btns"><button class="btn btn-outline" id="baixa-cancel">Cancelar</button><button class="btn btn-success" id="baixa-ok">Confirmar</button></div>
         </div>`;
@@ -13757,7 +13757,7 @@ function abrirModalContaPagar(modo, manterAnexoPendente) {
                     <div id="cpm-doc-help" style="font-size:11px;margin-top:3px;color:#8F8F8F;min-height:14px"></div>
                 </div>
             </div>
-            <div style="display:flex;gap:24px;flex-wrap:wrap;margin:6px 0 14px;padding:12px 14px;background:#FAFAFA;border:1px solid var(--border);border-radius:8px">
+            <div style="display:flex;gap:24px;flex-wrap:wrap;margin:6px 0 14px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">
                 <div style="display:flex;align-items:center;gap:10px">
                     <label class="toggle-switch"><input type="checkbox" id="cpm-recorrente" onchange="onToggleRecorrenteCP()"><span class="toggle-slider"></span></label>
                     <span style="font-size:13px;font-weight:600">Recorrente?</span>
@@ -13865,7 +13865,7 @@ async function onCnpjContaPagarInput() {
         const est = d.estabelecimento || {};
         const credorEl = document.getElementById('cpm-credor');
         if (credorEl) credorEl.value = est.nome_fantasia || d.razao_social || credorEl.value;
-        statusEl.innerHTML = '<span style="color:#005D3B">✅ Fornecedor encontrado e preenchido.</span>';
+        statusEl.innerHTML = '<span style="color:var(--primary-text)">✅ Fornecedor encontrado e preenchido.</span>';
     } catch (e) {
         statusEl.innerHTML = e.message === 'nao_encontrado'
             ? '<span style="color:#8F8F8F">CNPJ não encontrado — preencha o credor manualmente.</span>'
@@ -13892,7 +13892,7 @@ function onDocContaPagarInput() {
             if (res.vencimento) document.getElementById('cpm-vencimento').value = res.vencimento;
             const descEl = document.getElementById('cpm-descricao');
             if (descEl && !descEl.value.trim()) descEl.value = res.tipo === 'boleto' ? `Boleto ${res.banco}` : 'Conta de consumo (convênio)';
-            helpEl.style.color = '#005D3B';
+            helpEl.style.color = 'var(--primary-text)';
             helpEl.textContent = res.tipo === 'boleto'
                 ? `Boleto identificado — ${res.banco}${res.valor ? `, valor R$ ${res.valor.toFixed(2)}` : ''}${res.vencimento ? `, vencimento ${new Date(res.vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}.`
                 : `Linha de convênio identificada${res.valorReferencia ? ' (valor de referência — confirme o valor real a pagar)' : ''}. Este tipo de linha não codifica vencimento — informe manualmente.`;
@@ -13910,7 +13910,7 @@ function onDocContaPagarInput() {
             const valorEl = document.getElementById('cpm-valor');
             if (credorEl && !credorEl.value.trim()) credorEl.value = achado.credor_nome || '';
             if (valorEl && !valorEl.value) valorEl.value = achado.valor.toFixed(2).replace('.', ',');
-            helpEl.style.color = '#005D3B';
+            helpEl.style.color = 'var(--primary-text)';
             helpEl.textContent = `Encontrado no histórico: lançamento anterior de "${achado.credor_nome || '—'}" com este número de documento.`;
         } else {
             helpEl.style.color = '#8F8F8F';
@@ -14094,7 +14094,7 @@ function abrirModalImportarNota() {
     dz.addEventListener('click', () => input.click());
     input.addEventListener('change', () => onArquivoContaPagarSelecionado(input.files?.[0]));
     ['dragover', 'dragleave', 'drop'].forEach(evt => dz.addEventListener(evt, e => e.preventDefault()));
-    dz.addEventListener('dragover', () => { dz.style.borderColor = 'var(--primary)'; dz.style.background = '#EDF5FC'; });
+    dz.addEventListener('dragover', () => { dz.style.borderColor = 'var(--primary)'; dz.style.background = 'var(--info-bg)'; });
     dz.addEventListener('dragleave', () => { dz.style.borderColor = 'var(--border)'; dz.style.background = ''; });
     dz.addEventListener('drop', e => {
         dz.style.borderColor = 'var(--border)'; dz.style.background = '';
@@ -14152,7 +14152,7 @@ async function onArquivoContaPagarSelecionado(file) {
     }
 
     if (statusEl) statusEl.innerHTML = extraidos.ok
-        ? '<span style="color:#005D3B">✅ Dados extraídos! Abrindo para revisão...</span>'
+        ? '<span style="color:var(--primary-text)">✅ Dados extraídos! Abrindo para revisão...</span>'
         : '<span style="color:#8F8F8F">Não foi possível extrair automaticamente. Abrindo para preenchimento manual...</span>';
 
     await new Promise(r => setTimeout(r, 500));
@@ -14179,7 +14179,7 @@ function _preencherModalComExtracao(dados, nomeArquivo) {
     const helpEl = document.getElementById('cpm-doc-help');
     if (!helpEl) return;
     if (dados.ok) {
-        helpEl.style.color = '#005D3B';
+        helpEl.style.color = 'var(--primary-text)';
         helpEl.textContent = `Preenchido a partir de "${nomeArquivo}". Revise os campos antes de lançar.`;
         if (dados.dupInfo) helpEl.textContent += ` Esta nota possui ${dados.dupInfo} parcela(s) de cobrança — marque "Parcelado?" abaixo se quiser lançar todas.`;
     } else if (dados.motivo === 'ocr_falhou') {
@@ -15813,7 +15813,7 @@ function renderExtrato(opts) {
     if (!avAb) {
         avAb = document.createElement('div');
         avAb.id = 'extrato-aviso-abertura';
-        avAb.style.cssText = 'font-size:13px;color:#8A6A00;margin-bottom:10px';
+        avAb.style.cssText = 'font-size:13px;color:var(--warn-text);margin-bottom:10px';
         const faixa = document.getElementById('extrato-saldo-fim').parentElement.parentElement;
         faixa.parentNode.insertBefore(avAb, faixa.nextSibling);
     }
@@ -15833,7 +15833,7 @@ function renderExtrato(opts) {
     if (!avSem) {
         avSem = document.createElement('div');
         avSem.id = 'extrato-aviso-sem-conta';
-        avSem.style.cssText = 'font-size:13px;color:#8A6A00;margin-bottom:10px';
+        avSem.style.cssText = 'font-size:13px;color:var(--warn-text);margin-bottom:10px';
         avAb.parentNode.insertBefore(avSem, avAb.nextSibling);
     }
     const semMov = ResultadoCore.recebimentosSemMovimento({ de: primeiro, ate: ultimo, contasReceber: db.contas_receber, movimentos: movs, contas, contasPagar: db.contas_pagar });
@@ -15849,7 +15849,7 @@ function renderExtrato(opts) {
     tb.innerHTML = linhas.map(mv => {
         const ent = mv.sentido === 'entrada';
         const conta = _contaFinPorId(mv.conta_id);
-        const cair = mv.data > hoje ? ' <span style="background:#FEF6D8;color:#8A6A00;font-size:11px;padding:1px 6px;border-radius:8px">a cair</span>' : '';
+        const cair = mv.data > hoje ? ' <span style="background:var(--warn-bg);color:var(--warn-text);font-size:11px;padding:1px 6px;border-radius:8px">a cair</span>' : '';
         const excluir = mv.origem === 'transferencia' && mv.grupo_id != null && podeExcluir
             ? `<button class="btn btn-outline btn-sm extrato-excluir" title="Excluir transferência" onclick='excluirTransferencia(${escapeHtml(JSON.stringify(mv.grupo_id))})'>🗑</button>` : '';
         return `<tr class="extrato-linha ${ent ? 'entrada' : 'saida'}">
@@ -15857,7 +15857,7 @@ function renderExtrato(opts) {
             <td>${escapeHtml(mv.descricao || '')}${cair}</td>
             <td>${escapeHtml(conta ? conta.nome : '—')}</td>
             <td style="text-align:right;color:#27AE60">${ent ? brl(mv.valor) : ''}</td>
-            <td style="text-align:right;color:#C0392B">${ent ? '' : brl(mv.valor)}</td>
+            <td style="text-align:right;color:var(--danger-text)">${ent ? '' : brl(mv.valor)}</td>
             <td style="text-align:right">${excluir}</td></tr>`;
     }).join('');
 }
@@ -15869,7 +15869,7 @@ async function abrirModalTransferencia() {
     document.getElementById('transf-modal')?.remove();
     const contas = getContasFin().filter(c => c.ativo !== false);
     const opts = contas.map(c => `<option value="${escapeHtml(String(c.id))}">${escapeHtml(c.nome || '')}</option>`).join('');
-    const campo = 'width:100%;padding:6px;border:1px solid #ccc;border-radius:4px;font-size:13px;box-sizing:border-box;margin-bottom:10px';
+    const campo = 'width:100%;padding:6px;border:1px solid var(--border-strong);border-radius:4px;font-size:13px;box-sizing:border-box;margin-bottom:10px';
     const o = document.createElement('div');
     o.id = 'transf-modal';
     o.className = 'sc-modal-overlay';
@@ -15884,7 +15884,7 @@ async function abrirModalTransferencia() {
         <input type="text" inputmode="decimal" id="transf-valor" placeholder="0,00" style="${campo}">
         <label style="display:block;font-size:12px;margin-bottom:4px" for="transf-data">Data</label>
         <input type="date" id="transf-data" value="${hojeLocal()}" max="${hojeLocal()}" style="${campo}">
-        <div id="transf-erro" style="display:none;color:#C0392B;font-size:12px;margin-bottom:10px"></div>
+        <div id="transf-erro" style="display:none;color:var(--danger-text);font-size:12px;margin-bottom:10px"></div>
         <div class="sc-modal-btns"><button class="btn btn-outline" id="transf-cancel">Cancelar</button><button class="btn btn-success" id="transf-ok">Transferir</button></div>
     </div>`;
     document.body.appendChild(o);
@@ -16054,7 +16054,7 @@ function renderDashboardFinanceiro() {
     if (resumoEl) resumoEl.innerHTML = `
         <div class="fp-item"><span class="fp-label">▲ Entradas totais</span><span class="fp-val" style="color:#159912">R$ ${fmt(projEntTotal)}</span></div>
         <div class="fp-item"><span class="fp-label">▼ Saídas totais</span><span class="fp-val" style="color:#F43927">R$ ${fmt(projSaiTotal)}</span></div>
-        <div class="fp-item"><span class="fp-label">Saldo líquido previsto</span><span class="fp-val" style="color:${projSaldoTotal>=0?'#005D3B':'#F43927'}">${projSaldoTotal>=0?'+':''}R$ ${fmt(projSaldoTotal)}</span></div>`;
+        <div class="fp-item"><span class="fp-label">Saldo líquido previsto</span><span class="fp-val" style="color:${projSaldoTotal>=0?'var(--primary-text)':'#F43927'}">${projSaldoTotal>=0?'+':''}R$ ${fmt(projSaldoTotal)}</span></div>`;
 
     // ── ALERTAS ───────────────────────────────────────────────────
     const alertasEl = document.getElementById('fin-alertas');
@@ -16141,19 +16141,19 @@ function renderDashboardFinanceiro() {
         } else {
             const pctRaw = Math.min(100, fatMesAt/metaValor*100);
             const pctStr = pctRaw.toFixed(1);
-            const cor = pctRaw>=100?'#005D3B':pctRaw>=70?'#159912':pctRaw>=40?'#F2C924':'#F43927';
+            const cor = pctRaw>=100?'var(--primary-text)':pctRaw>=70?'#159912':pctRaw>=40?'#F2C924':'#F43927';
             progressEl.innerHTML = `
                 <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
                     <span style="color:#8F8F8F">Faturado: <strong>R$ ${fmt(fatMesAt)}</strong></span>
                     <span style="color:#8F8F8F">Meta: <strong>R$ ${fmt(metaValor)}</strong></span>
                     <span style="font-weight:700;color:${cor}">${pctStr}%</span>
                 </div>
-                <div style="background:#F1F1F1;border-radius:8px;height:22px;overflow:hidden">
+                <div style="background:var(--surface-3);border-radius:8px;height:22px;overflow:hidden">
                     <div style="height:100%;width:${pctStr}%;background:linear-gradient(90deg,${cor},${cor}cc);border-radius:8px;transition:width .5s;display:flex;align-items:center;justify-content:flex-end;padding-right:${pctRaw>10?8:0}px">
                         ${pctRaw>12?`<span style="font-size:11px;font-weight:700;color:#fff">${pctStr}%</span>`:''}
                     </div>
                 </div>
-                <p style="font-size:12px;color:${pctRaw>=100?'#005D3B':'#8F8F8F'};margin-top:5px;font-weight:${pctRaw>=100?700:400}">
+                <p style="font-size:12px;color:${pctRaw>=100?'var(--primary-text)':'#8F8F8F'};margin-top:5px;font-weight:${pctRaw>=100?700:400}">
                     ${pctRaw>=100?'🏆 Meta atingida!':`Faltam <strong style="color:var(--dark)">R$ ${fmt(metaValor-fatMesAt)}</strong> para a meta.`}
                 </p>`;
         }
@@ -16406,7 +16406,7 @@ function renderContasReceber() {
     const totPend = lista.filter(cr=>cr.status!=='Pago').reduce((s,cr)=>s+cr.valor,0);
     const totRec  = lista.filter(cr=>cr.status==='Pago').reduce((s,cr)=>s+cr.valor,0);
     const res = document.getElementById('cr-resumo');
-    if (res) res.innerHTML = `<span style="color:#005D3B">✓ Recebido: <strong>R$ ${totRec.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>&nbsp;&nbsp;<span style="color:#F2C924">⏳ Pendente: <strong>R$ ${totPend.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>`;
+    if (res) res.innerHTML = `<span style="color:var(--primary-text)">✓ Recebido: <strong>R$ ${totRec.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>&nbsp;&nbsp;<span style="color:#F2C924">⏳ Pendente: <strong>R$ ${totPend.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>`;
     if (!lista.length) { tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:#999;padding:24px">Nenhum registro encontrado.</td></tr>'; return; }
     const podeEditar = temAcesso('financeiro.receber', 'completo');
     const hoje = hojeLocal();
@@ -16419,7 +16419,7 @@ function renderContasReceber() {
             <td><strong>${escapeHtml(cr.cliente_nome)}</strong></td>
             <td>${escapeHtml(cr.descricao)}</td>
             <td style="text-align:right"><strong>R$ ${cr.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
-            <td>${pago?`<span style="color:#005D3B;font-size:12px">✓ ${new Date(cr.data_pagamento+'T12:00:00').toLocaleDateString('pt-BR')}</span>`:`<span class="fin-badge fin-badge-${at?'red':'pending'}">${cr.status}</span>`}</td>
+            <td>${pago?`<span style="color:var(--primary-text);font-size:12px">✓ ${new Date(cr.data_pagamento+'T12:00:00').toLocaleDateString('pt-BR')}</span>`:`<span class="fin-badge fin-badge-${at?'red':'pending'}">${cr.status}</span>`}</td>
             <td>${podeEditar ? `${cobrarBtn}${!pago?`<button class="btn btn-sm btn-success" onclick="marcarCRPago(${cr.id})" title="Confirmar recebimento">✓ Recebido</button>`:`<button class="btn btn-outline btn-sm" onclick="estornarCR(${cr.id})" title="Desfazer este recebimento">↩ Estornar</button>`}<button class="btn btn-outline btn-sm btn-danger" onclick="excluirCR(${cr.id})" title="Excluir" style="margin-left:4px">🗑️</button>` : ''}</td>
         </tr>`;
     }).join('');
@@ -16487,7 +16487,7 @@ function renderContasPagar() {
             <td>${escapeHtml(cp.credor_nome||'—')}</td>
             <td style="text-align:right"><strong>R$ ${cp.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
             <td>${tipoTag}</td>
-            <td>${pago?`<span style="color:#005D3B;font-size:12px">✓ ${new Date(cp.data_pagamento+'T12:00:00').toLocaleDateString('pt-BR')}</span>`:`<span class="fin-badge fin-badge-${at?'red':'pending'}">${cp.status}</span>`}</td>
+            <td>${pago?`<span style="color:var(--primary-text);font-size:12px">✓ ${new Date(cp.data_pagamento+'T12:00:00').toLocaleDateString('pt-BR')}</span>`:`<span class="fin-badge fin-badge-${at?'red':'pending'}">${cp.status}</span>`}</td>
             <td>${acoes}</td>
         </tr>`;
     }).join('');
@@ -16517,7 +16517,7 @@ function renderDRE() {
     pedidos = pedidos.sort((a,b)=>b.id-a.id).slice(0,50);
     if (!pedidos.length) { tb.innerHTML='<tr><td colspan="8" style="text-align:center;color:#999;padding:24px">Nenhum pedido aprovado encontrado.</td></tr>'; return; }
     const brl = v => 'R$ ' + (v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
-    const corDe = m => m>=30?'#005D3B':m>=15?'#F2C924':'#F43927';
+    const corDe = m => m>=30?'var(--primary-text)':m>=15?'#F2C924':'#F43927';
     const cad = { catalogo: db.catalogo, materiais: db.materiais, kits: db.kits };
     let totRec=0, totMat=0, totServ=0, totCom=0, totLucro=0;
     const rows = pedidos.map(p=>{
@@ -16543,7 +16543,7 @@ function renderDRE() {
     const totM = totRec>0?Math.round(totLucro/totRec*1000)/10:0;
     const corT = corDe(totM);
     tb.innerHTML = rows.join('') + `
-        <tr style="border-top:2px solid #242424;background:#FAFAFA;font-weight:700">
+        <tr style="border-top:2px solid #242424;background:var(--surface-2);font-weight:700">
             <td colspan="2">TOTAL (${pedidos.length} pedidos)</td>
             <td style="text-align:right">${brl(totRec)}</td>
             <td style="text-align:right;color:#888">${brl(totMat)}</td>

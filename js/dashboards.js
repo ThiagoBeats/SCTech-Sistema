@@ -796,9 +796,9 @@ function _gerAlertas(hoje) {
     const semData=db.pedidos.filter(p=>EM_PROD.includes(normalizarStatus(p.status))&&!p.data_entrega);
     if(semData.length) al.push({t:'info',ic:'📅',txt:`<strong>${semData.length} pedido(s)</strong> em produção sem data de entrega definida`});
     if(!al.length) return `<div class="dash-empty">🎉 Nenhum alerta crítico no momento!</div>`;
-    const corMap={danger:'#FEF4F2',warning:'#FEF6D8',info:'#E4EFF9'};
+    const corMap={danger:'var(--danger-bg)',warning:'var(--warn-bg)',info:'var(--info-bg)'};
     const bordMap={danger:'#F79B90',warning:'#F2C924',info:'#9FC4E5'};
-    const txtMap={danger:'#B3160A',warning:'#8A6A00',info:'#1F5A96'};
+    const txtMap={danger:'var(--danger-text)',warning:'var(--warn-text)',info:'var(--info-text)'};
     return al.map(a=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:8px;background:${corMap[a.t]};border:1px solid ${bordMap[a.t]};border-radius:8px;font-size:13px;color:${txtMap[a.t]}">
         <span style="font-size:18px;flex-shrink:0">${a.ic}</span><span>${a.txt}</span></div>`).join('');
 }
