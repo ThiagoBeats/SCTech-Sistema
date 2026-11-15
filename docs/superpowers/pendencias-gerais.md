@@ -18,7 +18,7 @@ Pendências pequenas fora do Financeiro, para revisar quando o usuário pedir.
 - [x] Quantidade "1.000" é lida como mil; definir regra de separador. (Regra: a mesma dos valores em R$ — "1.000" = mil, "1,5" = 1,5, "1.250,50" = 1250,5, "1250.5" = 1250,5; documentada e testada.)
 - [x] Tabela de 7 colunas usa colspan 6 na linha vazia (já existia antes). (Resolvido: Estoque de materiais vazio usa colspan 7.)
 - [x] Filtro do histórico se perde ao abrir o PDF de um pedido. (Resolvido: ao fechar o PDF volta ao histórico com o mesmo filtro.)
-- [x] Mesmo item adicionado de novo mantém a unidade gravada na primeira vez; se a unidade do cadastro mudar entre os dois, as quantidades somam com o rótulo antigo. (Resolvido: unidade diferente vira outra linha; editar/tirar mexe só na linha da unidade certa.)
+- [x] Mesmo item adicionado de novo mantém a unidade gravada na primeira vez; se a unidade do cadastro mudar entre os dois, as quantidades somam com o rótulo antigo. (Resolvido: unidade diferente vira outra linha; editar/tirar mexe só na linha da unidade certa.) Linha na unidade antiga vira linha separada no pedido de compra; ao receber, entra no estoque na unidade atual do item.
 - [x] Fechar carrinho abre o PDF simples, não a janela de compartilhar (WhatsApp). (Resolvido: o PDF do pedido de compra agora tem o botão Enviar.)
 - [x] Carrinho só com itens sem preço gera pedido de R$ 0. (Resolvido: pergunta antes de gerar o pedido de R$ 0,00.)
 - [x] Comentários de cabeçalho da galeria ainda citam o simulador. (Resolvido: cabeçalhos dizem que o simulador está desligado por `SIMULADOR_ATIVO`.)

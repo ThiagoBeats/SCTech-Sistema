@@ -2715,6 +2715,7 @@ html[data-theme="dark"] #os-container,
 html[data-theme="dark"] #proposta-container,
 html[data-theme="dark"] #pedido-compra-container,
 html[data-theme="dark"] .doc-claro,
+html[data-theme="dark"] .dl-folha,
 html[data-theme="dark"] .compartilhar-pdf-render {
     --white: #FEFFFF; --light: #FAFAFA; --dark: #242424; --border: #E0E0E0;
     --surface-2: #FAFAFA; --surface-3: #F1F1F1; --surface-4: #E0E0E0; --border-strong: #CCCCCC;
@@ -2788,4 +2789,12 @@ html[data-theme="dark"] #proposta-container h3,
 html[data-theme="dark"] #pedido-compra-container h3,
 html[data-theme="dark"] .doc-claro h3,
 html[data-theme="dark"] .compartilhar-pdf-render h3 { color: inherit; }
-
+/* Avisos e realces que tinham cor clara fixa: versao escura (tema claro nao muda) */
+html[data-theme="dark"] .exp-resultado.aviso { background: var(--warn-bg); color: var(--warn-text); border-color: rgba(242, 201, 36, 0.45); }
+html[data-theme="dark"] .gm-aviso { background: var(--warn-bg); color: var(--warn-text); border-color: rgba(242, 201, 36, 0.45); }
+html[data-theme="dark"] .badge-comissao-pendente { background: var(--orange-bg); color: #FFB066; }
+html[data-theme="dark"] .alertas-toggle:hover { background: var(--danger-bg); }
+html[data-theme="dark"] .gm-foto-remover:hover, html[data-theme="dark"] .gm-cor-remover:hover { background: var(--danger-bg); color: var(--danger-text); }
+html[data-theme="dark"] .proposta-validade-chip { background: var(--surface-2); border-color: var(--border); color: var(--text-soft); }
+html[data-theme="dark"] .dl-previa-moldura { background: var(--surface-3); }
+html[data-theme="dark"] #mpg-nao { color: #242424; }

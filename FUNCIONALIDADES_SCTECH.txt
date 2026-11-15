@@ -634,6 +634,8 @@ Menu de ações (⋮) e carrinho no Catálogo:
     "✏️ Editar kit" (kit de montagem) só aparece na Gestão de Estoque, não no
     Catálogo. Clicar fora,
     Esc ou escolher uma ação fecha o menu; só um fica aberto por vez.
+    Se a lista for redesenhada com o menu aberto, ele fecha sozinho (nunca age
+    sobre uma linha antiga).
   - "🛒 Adicionar ao carrinho" substitui o antigo "Criar pedido de compra" por
     item (e o "Pedir Tecido" da janela de detalhes do tecido).
   - Seleção de vários itens: o botão agora adiciona todos os selecionados aos
@@ -2459,8 +2461,8 @@ Tema Claro / Escuro:
     variáveis do CSS com versão escura). Os documentos (proposta, OS, pedido
     de compra, relatórios, etiquetas e o PDF gerado pelo "📤 Enviar")
     continuam sempre claros, de propósito: são para imprimir e mandar.
-  - Menu ⋮: se a lista for redesenhada com o menu aberto, ele fecha sozinho
-    (nunca age sobre uma linha antiga).
+    Isso inclui a pré-visualização do Layout de documentos (Empresa ›
+    Layout) e a do cabeçalho em Empresa › Dados.
 
 Enviar documentos (botão "📤 Enviar"):
   - Em todos os documentos que saem em PDF: Proposta Comercial, Ordem de

@@ -66,7 +66,7 @@ function varrer() {
         const p = m[1].split(/[ ,\/]+/).filter(Boolean).map(Number);
         return { c: [p[0], p[1], p[2]], a: p.length > 3 ? p[3] : 1 };
     };
-    const IGNORAR = '.etq, .etq-editor-folha, .dl-previa-moldura, #doc-modal-paper, #os-container, #proposta-container, .doc-paper, .etiqueta, [data-doc], canvas, svg, img, iframe, .sc-etiqueta, .fin-simulador-svg, #toast-container';
+    const IGNORAR = '.etq, .etq-editor-folha, .dl-folha, .doc-claro, #doc-modal-paper, #os-container, #proposta-container, .doc-paper, .etiqueta, [data-doc], canvas, svg, img, iframe, .sc-etiqueta, .fin-simulador-svg, #toast-container';
     // fundo efetivo: percorre os ancestrais compondo translucidos sobre o primeiro opaco
     const fundoEfetivo = el => {
         const camadas = [];
@@ -114,7 +114,8 @@ function varrer() {
 }
 
 async function conferir(page, rotulo) {
-    await page.waitForTimeout(250);
+    await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+    await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== 'running'));
     if (process.env.TEMA_SHOTS) await page.screenshot({ path: process.env.TEMA_SHOTS + '/tema-' + rotulo.replace(/[^a-z0-9]+/gi, '-') + '.png' });
     const r = await page.evaluate(varrer);
     expect.soft(r.claros, rotulo + ': blocos claros').toEqual([]);
@@ -136,7 +137,7 @@ const TELAS = [
     ['clientes.html', []],
     ['vendedores.html', []],
     ['catalogo.html', ['mostrarTabCatalogo("tecidos")', 'mostrarTabCatalogo("materiais")', 'mostrarTabCatalogo("kits")', 'verDetalhesTecido(1)']],
-    ['pcp.html', ['mostrarViewPCP("kanban")', 'mostrarViewPCP("agenda")', 'mostrarViewPCP("medicoes")', 'mostrarViewPCP("rotas")']],
+    ['pcp.html', ['mostrarViewPCP("kanban")', 'mostrarViewPCP("agenda")', 'mostrarViewPCP("medicoes")', 'mostrarViewPCP("rotas")', 'mostrarModalPagamento({ id: 26314, valor: 900 }, () => {})']],
     ['estoque.html', ['mostrarTabEstoque("tecidos")', 'mostrarTabEstoque("materiais")', 'mostrarTabEstoque("kits")', 'mostrarTabEstoque("consulta")', 'abrirBalanco()', 'showConfirm("Tem certeza que deseja continuar?")', 'showAlert("Aviso de teste", "⚠️")']],
     ['fornecedores.html', ['mostrarTabFornecedores("lista")', 'mostrarTabFornecedores("pedidos")', 'mostrarTabFornecedores("novo")', 'abrirCarrinho(7)', 'abrirHistoricoFornecedor(7)']],
     ['financeiro.html', ['hoje', 'dashboard', 'resultado', 'simulador', 'receber', 'pagar', 'fixas', 'dre', 'extrato'].map(t => 'mostrarTabFinanceiro("' + t + '")').concat(['abrirModalContaPagar("novo")', 'abrirModalTransferencia()'])],
@@ -152,10 +153,11 @@ for (const [arquivo, passos] of TELAS) {
         await abrirTela(page, arquivo);
         await conferir(page, arquivo);
         for (const passo of passos) {
+            // recarrega a tela a cada passo: janelas do passo anterior nao se acumulam
+            await page.reload();
+            await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
             await page.evaluate(p => { (0, eval)(p); return null; }, passo);
             await conferir(page, arquivo + ' -> ' + passo);
-            // fecha janelas que o passo abriu, para nao acumular
-            await page.keyboard.press('Escape');
         }
     });
 }
@@ -248,4 +250,36 @@ test('tema escuro: copia do documento para PDF continua clara', async ({ page })
     if (process.env.TEMA_SHOTS) await page.screenshot({ path: process.env.TEMA_SHOTS + '/tema-pdf-clone-proposta.png', fullPage: false });
     const med = await page.evaluate(medirDoc, ['.compartilhar-pdf-render', '.compartilhar-pdf-render .proposta-cliente', '.compartilhar-pdf-render table td', '.compartilhar-pdf-render table th']);
     exigirClaro(med, ['.compartilhar-pdf-render', '.compartilhar-pdf-render .proposta-cliente', '.compartilhar-pdf-render table td']);
+});
+
+test('tema escuro: janela "Confirmar Entrega" tem cartao escuro e texto legivel', async ({ page }) => {
+    await abrirTela(page, 'pcp.html');
+    await page.evaluate(() => mostrarModalPagamento({ id: 26314, valor: 900 }, () => {}));
+    await expect(page.locator('#mpg-sim')).toBeVisible();
+    if (process.env.TEMA_SHOTS) await page.screenshot({ path: process.env.TEMA_SHOTS + '/final-confirmar-entrega.png' });
+    const m = await page.evaluate(() => {
+        const lum = c => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+        const nums = s => s.match(/[\d.]+/g).map(Number);
+        const cartao = document.querySelector('#mpg-sim').parentElement.parentElement;
+        const bg = lum(nums(getComputedStyle(cartao).backgroundColor));
+        const textos = [...cartao.querySelectorAll('h3, p, span, strong')].map(e => lum(nums(getComputedStyle(e).color)));
+        return { bg, textoMin: Math.min(...textos) };
+    });
+    expect(m.bg, 'cartao escuro').toBeLessThan(0.25);
+    expect(m.textoMin, 'texto claro o bastante').toBeGreaterThan(0.2);
+});
+
+test('tema escuro: pre-visualizacao do Layout de documentos (OS e Proposta) fica clara', async ({ page }) => {
+    await abrirTela(page, 'empresa.html', { sc_ped: [] });   // sem pedido real: a previa usa o exemplo, com ambientes
+    await page.evaluate(() => mostrarTabEmpresa('layout'));
+    for (const doc of ['os', 'proposta']) {
+        await page.selectOption('#dl-doc', doc);
+        await expect(page.locator('#dl-previa .' + (doc === 'os' ? 'os-amb-head' : 'proposta-cliente')).first()).toBeVisible();
+        if (process.env.TEMA_SHOTS) await page.screenshot({ path: process.env.TEMA_SHOTS + '/final-layout-' + doc + '.png' });
+        const sels = doc === 'os' ? ['#dl-previa', '#dl-previa .os-th', '#dl-previa .os-amb-head'] : ['#dl-previa', '#dl-previa .proposta-cliente'];
+        exigirClaro(await page.evaluate(medirDoc, sels), sels);
+    }
+    // o cabecalho de empresa.html tambem e documento
+    await page.evaluate(() => mostrarTabEmpresa('dados'));
+    exigirClaro(await page.evaluate(medirDoc, ['#emp-cabecalho-preview']), ['#emp-cabecalho-preview']);
 });

@@ -3407,16 +3407,16 @@ function mostrarModalPagamento(ped, callback) {
     const overlay  = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center';
     overlay.innerHTML = `
-        <div style="background:white;border-radius:10px;padding:28px 32px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22)">
+        <div style="background:var(--white);border-radius:10px;padding:28px 32px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22)">
             <h3 style="margin-bottom:6px;color:var(--dark)">Confirmar Entrega</h3>
-            <p style="font-size:13px;color:#888;margin-bottom:18px">Pedido #${formatPedidoId(ped.id)}</p>
+            <p style="font-size:13px;color:var(--text-soft);margin-bottom:18px">Pedido #${formatPedidoId(ped.id)}</p>
             <div style="background:var(--surface-2);border-radius:6px;padding:14px 16px;margin-bottom:20px;font-size:14px">
                 <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:var(--text-soft)">Valor Total</span><strong>R$ ${total.toFixed(2)}</strong></div>
                 <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:var(--text-soft)">Valor Recebido</span><strong style="color:var(--primary-text)">R$ ${recebido.toFixed(2)}</strong></div>
                 <div style="display:flex;justify-content:space-between;padding:8px 0 4px;border-top:1px solid var(--border);margin-top:4px"><span style="color:var(--text-soft);font-weight:600">Saldo a Receber</span><strong style="color:${saldo > 0.01 ? '#F43927' : 'var(--primary-text)'}">R$ ${saldo.toFixed(2)}</strong></div>
             </div>
             <p style="font-size:13px;color:var(--dark);font-weight:600;margin-bottom:6px">O pagamento foi recebido integralmente?</p>
-            <p style="font-size:12px;color:#888;margin-bottom:14px">Nos dois casos o pedido vai para "Aguardando Financeiro", onde o financeiro confirma o pagamento.</p>
+            <p style="font-size:12px;color:var(--text-soft);margin-bottom:14px">Nos dois casos o pedido vai para "Aguardando Financeiro", onde o financeiro confirma o pagamento.</p>
             <div style="display:flex;flex-direction:column;gap:10px">
                 <button id="mpg-sim" class="btn btn-success" style="padding:11px;font-size:14px">✓ Sim, pagamento completo</button>
                 <button id="mpg-nao" class="btn" style="background:#F2C924;padding:11px;font-size:14px">⏳ Não, há saldo pendente</button>

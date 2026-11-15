@@ -14,11 +14,18 @@ test('menu aberto fecha quando a lista e redesenhada (sem acao em ids velhos)', 
     await page.evaluate(() => { window._chamadas = []; window.editarFornecedor = id => window._chamadas.push(id); });
     await page.locator('#tb-fornecedores tr', { hasText: 'Alfa' }).locator('button[aria-label="Ações"]').click();
     await expect(page.locator(MENU)).toHaveCount(1);
+    // guarda o item do menu aberto: depois do redesenho ele precisa estar solto da pagina
+    await page.evaluate(() => { window._itemVelho = [...document.querySelectorAll('#menu-acoes-flutuante .menu-acoes-item')].find(b => /Editar fornecedor/.test(b.textContent)); });
+    const onde = await page.evaluate(() => { const r = window._itemVelho.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
     // o outro lugar do sistema (ex.: outra aba/ação) redesenha a mesma lista
     await page.evaluate(() => renderTabelaFornecedores());
     await expect(page.locator(MENU)).toHaveCount(0);
     await expect(page.locator('#tb-fornecedores button[aria-expanded="true"]')).toHaveCount(0);
-    expect(await page.evaluate(() => window._chamadas)).toEqual([]);
+    expect(await page.evaluate(() => window._itemVelho.isConnected), 'item do menu velho saiu da pagina').toBe(false);
+    // um clique de verdade onde o item estava nao chega em acao nenhuma
+    await page.mouse.click(onde.x, onde.y);
+    expect(await page.evaluate(() => window._chamadas), 'clicar onde o item estava nao executa acao').toEqual([]);
+    await expect(page.locator(MENU)).toHaveCount(0);
     // e um menu novo, aberto depois, funciona normalmente
     await page.locator('#tb-fornecedores tr', { hasText: 'Beta' }).locator('button[aria-label="Ações"]').click();
     await expect(page.locator(MENU)).toHaveCount(1);

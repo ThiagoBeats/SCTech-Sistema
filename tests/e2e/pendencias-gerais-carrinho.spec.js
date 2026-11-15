@@ -44,7 +44,7 @@ test('pedido de compra novo, gravado pelo formulario, nasce com data_envio null'
     const ok = page.locator('#sc-modal-ok');
     await ok.waitFor({ timeout: 3000 }).catch(() => {});
     if (await ok.count()) await ok.click();
-    await page.waitForTimeout(400);
+    await expect.poll(async () => (await lerChave(page, 'sc_pc')).length).toBe(1);
     const pcs = await lerChave(page, 'sc_pc');
     expect(pcs.length).toBe(1);
     expect('data_envio' in pcs[0]).toBe(true);
@@ -180,6 +180,15 @@ test('no carrinho, editar/remover mexe so na linha da unidade certa', async ({ p
     await page.locator(MODAL + ' tbody tr').nth(1).locator('.car-remover').click();
     const c = (await lerChave(page, 'sc_carrinhos'))[0];
     expect(c.itens.map(i => i.unidade)).toEqual(['m']);
+});
+
+test('no carrinho, editar a quantidade mexe so na linha da unidade certa', async ({ page }) => {
+    const itens = [L('material', 11, 'TRILHO SUIÇO', 'm', 2, 30), L('material', 11, 'TRILHO SUIÇO', 'pct', 3, 30)];
+    await abrir(page, { sc_carrinhos: [{ fornecedor_id: 9, novo: false, atualizado_em: 1, itens }] });
+    await abrirCarrinhoDe(page, 'Trilhos Brasil');
+    await page.locator(MODAL + ' tbody tr').nth(1).locator('.car-qtd').fill('7');
+    await page.locator(MODAL + ' tbody tr').nth(1).locator('.car-qtd').blur();
+    await expect.poll(async () => (await lerChave(page, 'sc_carrinhos'))[0].itens.map(i => [i.unidade, i.quantidade])).toEqual([['m', 2], ['pct', 7]]);
 });
 
 test('carrinho so com itens sem preco pergunta antes de gerar pedido de R$ 0,00', async ({ page }) => {
