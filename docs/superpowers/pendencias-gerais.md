@@ -32,4 +32,4 @@ Pendências pequenas fora do Financeiro, para revisar quando o usuário pedir.
 
 ## Do tema e da busca no estoque (2026-11-13)
 - [x] Tema escuro: outras telas e janelas ainda têm cores claras fixas no estilo da linha (como o Balanço tinha); revisar tela a tela. (Resolvido: cores claras fixas viraram variáveis de CSS com valor escuro (`--surface-2`, `--info-bg`, `--danger-bg`, `--warn-bg`, `--ok-bg` etc.); documentos e PDF (proposta, OS, pedido de compra, relatórios, etiquetas) continuam claros de propósito, inclusive dentro da janela de documento. Teste em `pendencias-gerais-tema-escuro.spec.js`.)
-- [ ] Balanço: dois itens com o mesmo nome (ex.: um tecido e um material) — o nome puxa o código do primeiro que achar.
+- [x] Balanço: dois itens com o mesmo nome (ex.: um tecido e um material) — o nome puxa o código do primeiro que achar.

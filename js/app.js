@@ -4542,7 +4542,7 @@ function abrirBalanco() {
                         <input id="balanco-filter-nome" type="text" list="balanco-lista-nome" autocomplete="off" placeholder="Nome do item..." style="${inpStyle}" oninput="_balancoDigitou('nome')">
                     </div>
                     <datalist id="balanco-lista-cod">${_itensDoBalanco().filter(i => i.cod).map(i => `<option value="${escapeHtml(i.cod)}">${escapeHtml(i.nome)}</option>`).join('')}</datalist>
-                    <datalist id="balanco-lista-nome">${_itensDoBalanco().map(i => `<option value="${escapeHtml(i.nome)}">${escapeHtml(i.cod)}</option>`).join('')}</datalist>
+                    <datalist id="balanco-lista-nome">${_balancoOpcoesNome()}</datalist>
                     <div style="display:flex;align-items:flex-end;gap:8px">
                         <button class="btn btn-outline btn-sm" onclick="_limparFiltrosBalanco()" style="white-space:nowrap">✕ Limpar</button>
                     </div>
@@ -4594,9 +4594,28 @@ function abrirBalanco() {
 // e para o preenchimento automatico Codigo <-> Nome.
 function _itensDoBalanco() {
     const itens = [];
-    db.catalogo.filter(c => !temEstoqueInfinito(c)).forEach(c => itens.push({ cod: c.referencia || '', nome: c.nome || '' }));
-    db.materiais.filter(m => !temEstoqueInfinito(m)).forEach(m => itens.push({ cod: m.referencia || '', nome: m.nome || '' }));
+    db.catalogo.filter(c => !temEstoqueInfinito(c)).forEach(c => itens.push({ cod: c.referencia || '', nome: c.nome || '', tipo: 'Tecido' }));
+    db.materiais.filter(m => !temEstoqueInfinito(m)).forEach(m => itens.push({ cod: m.referencia || '', nome: m.nome || '', tipo: 'Material' }));
+    const vezes = {};
+    itens.forEach(i => { const k = i.nome.trim().toLowerCase(); vezes[k] = (vezes[k] || 0) + 1; });
+    // Nome repetido (ex.: um tecido e um material): a sugestao leva o tipo.
+    itens.forEach(i => { i.repetido = vezes[i.nome.trim().toLowerCase()] > 1; i.rotulo = i.repetido ? `${i.nome} — ${i.tipo}` : i.nome; });
     return itens;
+}
+
+// Sugestoes do campo Nome: nome repetido aparece como "Nome — Tipo".
+function _balancoOpcoesNome() {
+    return _itensDoBalanco().map(i => `<option value="${escapeHtml(i.rotulo)}">${escapeHtml(i.cod)}</option>`).join('');
+}
+
+// O que foi digitado no Nome aponta para um item? Nome unico, ou sugestao
+// "Nome — Tipo" escolhida. Nome repetido sem o tipo nao aponta para nenhum.
+function _balancoItemPorNome(v) {
+    const itens = _itensDoBalanco();
+    const porRotulo = itens.find(i => i.rotulo.trim().toLowerCase() === v);
+    if (porRotulo) return porRotulo;
+    const iguais = itens.filter(i => i.nome.trim().toLowerCase() === v);
+    return iguais.length === 1 ? iguais[0] : null;
 }
 
 // Digitou o codigo exato de um item: o nome vem sozinho (e vice-versa). Se o
@@ -4608,9 +4627,13 @@ function _balancoDigitou(campo) {
     const fonte = campo === 'cod' ? cod : nome;
     const alvo  = campo === 'cod' ? nome : cod;
     const v = fonte.value.trim().toLowerCase();
-    const item = v && _itensDoBalanco().find(i => (campo === 'cod' ? i.cod : i.nome).trim().toLowerCase() === v);
+    const item = v && (campo === 'cod'
+        ? _itensDoBalanco().find(i => i.cod.trim().toLowerCase() === v)
+        : _balancoItemPorNome(v));
     delete fonte.dataset.auto;
     if (item) {
+        // escolheu "Nome — Tipo": o campo fica com o nome puro e o codigo certo
+        if (campo === 'nome' && fonte.value.trim().toLowerCase() !== item.nome.trim().toLowerCase()) fonte.value = item.nome;
         alvo.value = campo === 'cod' ? item.nome : item.cod;
         alvo.dataset.auto = '1';
     } else if (alvo.dataset.auto === '1') {

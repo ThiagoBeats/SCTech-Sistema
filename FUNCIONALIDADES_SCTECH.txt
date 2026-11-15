@@ -383,6 +383,10 @@ Balanço de Estoque (botão no topo da tela):
   - Filtros na ordem Código e depois Nome, com sugestões. Digitar o código
     exato de um item preenche o nome sozinho (e vice-versa); o item já
     aparece filtrado abaixo. Apagar o campo apaga o que foi preenchido sozinho.
+    Com nomes repetidos (ex.: um tecido e um material com o mesmo nome) a
+    sugestão mostra o tipo ("Nome — Tecido" / "Nome — Material"); o nome só
+    puxa o código quando é único, senão basta escolher a sugestão certa, que
+    preenche o código correto e filtra só aquele item.
   - O campo Código também acha o rolo pelo código do rolo.
   - Tabelas e PDF com Código antes do Nome. A coluna Código mostra o código
     do item; o código do rolo aparece em letra menor embaixo do nome.
