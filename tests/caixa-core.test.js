@@ -268,3 +268,38 @@ test('tarefasHoje: cartaoHoje traz o liquido (entrada menos a taxa do mesmo repa
     const t = C.tarefasHoje({ hoje, contasReceber: [], contasPagar: [], movimentos: movs, contas: [maq] });
     assert.deepStrictEqual(t.cartaoHoje.map(m => [m.id, m.liquido]), [[1, 97], [4, 40]]);
 });
+test('lancamentosPrevistos: fixa antiga sem data_inicio so vale a partir do mes do cadastro (id)', () => {
+    const cadastro = new Date(2026, 11, 3).getTime(); // dezembro de 2026
+    const df = { id: cadastro, descricao: 'Aluguel', valor: 500, dia_vencimento: 5, categoria: 'aluguel', ativo: true };
+    const l = C.lancamentosPrevistos({ hoje: '2026-11-12', limite: '2027-01-31', movimentos: [], contasReceber: [], contasPagar: [], despesasFixas: [df], contas: [], meios: [] });
+    assert.deepStrictEqual(l.map(x => x.data), ['2026-12-05', '2027-01-05']);
+});
+test('lancamentosPrevistos: fixa com id que nao e horario (ou com data_inicio) continua como antes', () => {
+    const base = { descricao: 'Luz', valor: 80, dia_vencimento: 20, categoria: 'conta', ativo: true };
+    const pedir = df => C.lancamentosPrevistos({ hoje: '2026-11-12', limite: '2026-12-31', movimentos: [], contasReceber: [], contasPagar: [], despesasFixas: [df], contas: [], meios: [] }).map(x => x.data);
+    assert.deepStrictEqual(pedir({ ...base, id: 5 }), ['2026-11-20', '2026-12-20']);
+    assert.deepStrictEqual(pedir({ ...base, id: new Date(2026, 11, 3).getTime(), data_inicio: '2026-11-01' }), ['2026-11-20', '2026-12-20']);
+});
+test('lancamentosPrevistos: guia de imposto lancada como fixa antiga continua no caixa (a previsao do caixa nao estima imposto a parte)', () => {
+    const df = { id: 7, descricao: 'DAS', valor: 300, dia_vencimento: 20, categoria: 'imposto', ativo: true };
+    const l = C.lancamentosPrevistos({ hoje: '2026-11-12', limite: '2026-11-30', movimentos: [], contasReceber: [], contasPagar: [], despesasFixas: [df], contas: [], meios: [] });
+    assert.deepStrictEqual(l.map(x => [x.data, x.valor, x.sentido]), [['2026-11-20', 300, 'saida']]);
+});
+test('previsao: fixa com periodicidade sem conta pre-gerada no horizonte nao entra (a tela so soma a conta, nunca a regra)', () => {
+    const hoje = '2026-11-12';
+    // Anual e mensal com periodicidade: se fossem projetadas por mes, o dia 20 cairia em 20/11 e 20/12.
+    const dfs = [
+        { id: 1, descricao: 'Seguro', valor: 1200, dia_vencimento: 20, ativo: true, periodicidade: 'anual' },
+        { id: 2, descricao: 'Internet', valor: 100, dia_vencimento: 20, ativo: true, periodicidade: 'mensal' }
+    ];
+    const longe = { id: 7, tipo: 'fixo', descricao: 'Seguro', valor: 1200, data_vencimento: '2027-11-20', status: 'Pendente' }; // fora das 8 semanas
+    const l = C.lancamentosPrevistos({ hoje, limite: '2027-01-31', movimentos: [], contasReceber: [], contasPagar: [longe], despesasFixas: dfs, contas: [], meios: [] });
+    // Fora o proprio lancamento da conta longe (a janela e cortada por quem agrupa), nada da regra da fixa.
+    assert.deepStrictEqual(l.map(x => [x.data, x.valor]), [['2027-11-20', 1200]]);
+    const s = C.previsaoSemanal(Object.assign({}, base, { despesasFixas: dfs, contasPagar: [longe] }));
+    assert.strictEqual(s.reduce((a, x) => a + x.saidas, 0), 0);
+    // A conta pre-gerada dentro do horizonte entra uma vez so (nao soma a fixa por cima).
+    const dentro = { id: 8, tipo: 'fixo', descricao: 'Seguro', valor: 1200, data_vencimento: '2026-12-20', status: 'Pendente' };
+    const l2 = C.lancamentosPrevistos({ hoje, limite: '2027-01-31', movimentos: [], contasReceber: [], contasPagar: [dentro], despesasFixas: dfs, contas: [], meios: [] });
+    assert.deepStrictEqual(l2.map(x => [x.data, x.valor]), [['2026-12-20', 1200]]);
+});

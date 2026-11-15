@@ -139,12 +139,14 @@
         if (!df || df.ativo === false) return [];
         const dia = Math.max(1, Math.floor(Number(df.dia_vencimento) || 1));
         const out = [];
+        // Fixa antiga sem data_inicio vale a partir do mes do cadastro (mesma regra do Resultado).
+        const inicio = resultado().inicioDf(df);
         let ano = Number(de.slice(0, 4)), mes = Number(de.slice(5, 7));
         const fimAno = Number(ate.slice(0, 4)), fimMes = Number(ate.slice(5, 7));
         while (ano < fimAno || (ano === fimAno && mes <= fimMes)) {
             const ultimo = new Date(ano, mes, 0).getDate();
             const data = ano + '-' + String(mes).padStart(2, '0') + '-' + String(Math.min(dia, ultimo)).padStart(2, '0');
-            if (data >= de && data <= ate && (!df.data_inicio || data >= df.data_inicio) && (!df.data_fim || data <= df.data_fim)) out.push(data);
+            if (data >= de && data <= ate && (!inicio || data >= inicio) && (!df.data_fim || data <= df.data_fim)) out.push(data);
             mes++; if (mes > 12) { mes = 1; ano++; }
         }
         return out;

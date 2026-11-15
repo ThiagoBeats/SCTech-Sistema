@@ -389,7 +389,7 @@
         return out;
     }
 
-    const api = { GRUPOS, grupoDaCategoria, entradasDoMes, saidasDoMes, impostoDoMes, resultadoDoMes, resultadoDoPeriodo, metaDoMes, despesasFixasDoMes, fixasCobertasNoMes, margemContribuicao, pontoEquilibrio, statusOrcamento, previstoDoMes, somarMeses, referenciaGuia, aCairNoMes, criarMemo, recebimentosSemMovimento };
+    const api = { GRUPOS, grupoDaCategoria, entradasDoMes, saidasDoMes, impostoDoMes, resultadoDoMes, resultadoDoPeriodo, metaDoMes, despesasFixasDoMes, inicioDf, fixasCobertasNoMes, margemContribuicao, pontoEquilibrio, statusOrcamento, previstoDoMes, somarMeses, referenciaGuia, aCairNoMes, criarMemo, recebimentosSemMovimento };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ResultadoCore = api;

@@ -84,3 +84,17 @@ test('guia lancada + CR com data retroativa: resultado e guia', () => {
     assert.deepStrictEqual(F.mudancasDesdeFoto(foto, { r: agora, saldos: {} }),
         [{ tipo: 'resultado', antes: 400, agora: 585 }, { tipo: 'guia', antes: 60, agora: 75 }]);
 });
+test('sugestao de alta no limite: exatamente 30% ou exatamente R$ 100 de aumento nao entra; um pouco acima entra', () => {
+    const sug = (anterior, atual) => F.sugestoesDoMes({ resultado: 10, entradas: 10, meta: 0, orcamento: [], porGrupo: { outros: atual }, porGrupoAnterior: { outros: anterior },
+        rotuloAnterior: 'setembro', grupos: [{ id: 'outros', rotulo: 'Outros' }], pendencias: { receber_valor: 0 }, impostoEstimado: false, rotuloMes: 'outubro' });
+    const NADA = ['Nenhum ponto de atenção. Bom mês!'];
+    // 30% exatos (e mais de R$ 100): nao entra; 31%: entra.
+    assert.deepStrictEqual(sug(1000, 1300), NADA);
+    assert.deepStrictEqual(sug(1000, 1310), ['Outros subiu 31% em relação a setembro.']);
+    // R$ 100 exatos (mesmo com 50%): nao entra; R$ 100,01: entra.
+    assert.deepStrictEqual(sug(200, 300), NADA);
+    assert.deepStrictEqual(sug(200, 300.01), ['Outros subiu 50% em relação a setembro.']);
+    // Grupo que nao existia no mes anterior (base zero) nunca entra, e queda tambem nao.
+    assert.deepStrictEqual(sug(0, 5000), NADA);
+    assert.deepStrictEqual(sug(1000, 500), NADA);
+});

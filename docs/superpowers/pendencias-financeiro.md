@@ -74,11 +74,11 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [x] Comissão antiga paga sem conta a pagar não tem botão Estornar. **Feito:** o histórico de comissões ganhou "Estornar" para a comissão paga sem conta (`estornarComissaoAntiga`): desmarca a comissão no pedido e ela volta a pendente.
 
 ### Testes que faltam
-- [ ] Cartão: cancelar, débito, antecipar, recebimento parcial com cartão e conta removida.
-- [ ] Estorno de pagamento: sem conta e com permissão negada.
-- [ ] Cobrança: casar por nome, fallback e permissão.
-- [ ] Excluir transferência: permissão negada.
-- [ ] Periodicidade de despesas fixas: teste com data fora do horizonte (o atual pode ser fraco).
+- [x] Cartão: cancelar, débito, antecipar, recebimento parcial com cartão e conta removida. **Teste:** `tests/e2e/financeiro-pendencias-r3-fases123.spec.js` (cancelar por botão e Escape, débito, antecipado, parcial com estorno que junta de volta, parcial com a maquininha removida).
+- [x] Estorno de pagamento: sem conta e com permissão negada. **Teste:** `tests/e2e/financeiro-pendencias-r3-fases123.spec.js` (sem conta) e `tests/e2e/financeiro-pendencias-r3-fase0.spec.js` (permissão negada).
+- [x] Cobrança: casar por nome, fallback e permissão. **Teste:** `tests/e2e/financeiro-pendencias-r3-fases123.spec.js` (nome sem pedido, cliente do pedido apagado, sem telefone, só visualizar) e `tests/caixa-core.test.js` (`clienteDaCobranca`).
+- [x] Excluir transferência: permissão negada. **Teste:** `tests/e2e/financeiro-pendencias-r3-fases123.spec.js` (sem botão, a função recusa, os dois lados ficam).
+- [x] Periodicidade de despesas fixas: teste com data fora do horizonte (o atual pode ser fraco). **Teste:** `tests/caixa-core.test.js` (conta pré-gerada fora das 8 semanas e fixa com periodicidade sem conta no horizonte não entram; o teste antigo passava mesmo se a fixa fosse projetada).
 
 ## Da Fase 2 (branch `feat/financeiro-fase2`)
 
@@ -101,7 +101,7 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [x] O seletor "+ Limite só neste mês" fica visível mesmo sem nenhum orçamento definido. **Feito:** só aparece com algum orçamento definido (padrão ou ajuste do mês, mesmo 0).
 
 ### Testes que faltam
-- [ ] Escape e empilhamento das janelas de ajuste (meta/limite) com outras janelas abertas.
+- [x] Escape e empilhamento das janelas de ajuste (meta/limite) com outras janelas abertas. **Teste:** `tests/e2e/financeiro-pendencias-r3-fases123.spec.js` (Escape sem salvar, aviso/pergunta por cima, meta e limite não empilham, passo a passo do fechamento fica).
 - [x] O Chart.js vem do CDN e é instável nos testes (considerar cópia local ou espera mais robusta). — Feito (R9): cópia local da mesma versão (4.4.0) em `js/vendor/chart.umd.min.js`; as páginas carregam a cópia.
 
 ### Da revisão final da Fase 2
@@ -114,7 +114,7 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [x] Conta sem data de saldo inicial fica fora da conferência do fechamento. **Feito:** entra na conferência com o saldo inicial desde sempre.
 - [x] Comparação com mês anterior mostra "+0%" quando a diferença é zero. **Feito:** diferença zero mostra "igual ao mês anterior" (passo 3 do fechamento e alerta de tendência).
 - [x] Parcelas do simulador param no último dia do mês (31 → 28/02); o parcelado do A Pagar pula para o mês seguinte. Unificar a regra. **Feito (R4):** os dois usam `FinanceiroCore.somarMesesData` (dia que não existe vira o último dia do mês, sempre a partir da data base).
-- [ ] Testes que faltam: alta de grupo no limite (30% / R$ 100), ajuste de entrada e "Deixar anotado" no fechamento, duplo clique em Lançar chamando a função duas vezes, migração da permissão em permissões extras do usuário.
+- [x] Testes que faltam: alta de grupo no limite (30% / R$ 100), ajuste de entrada e "Deixar anotado" no fechamento, duplo clique em Lançar chamando a função duas vezes, migração da permissão em permissões extras do usuário. **Teste:** `tests/fechamento-core.test.js` (limite 30% / R$ 100) e `tests/e2e/financeiro-pendencias-r3-fases123.spec.js` (ajuste de entrada, Deixar anotado, duplo clique com a pergunta contada, migração nas permissões extras). O guarda `_simLancando` já impedia o duplo lançamento.
 
 ## Da rodada de pendências 1
 - [x] Previsão do Hoje (e a projeção da Visão Geral) ainda pode somar duas vezes uma despesa fixa antiga e a mesma conta lançada à mão no mesmo mês. — Feito: mesma regra do Resultado (`ResultadoCore.fixasCobertasNoMes`, uma conta cobre no máximo uma fixa).
