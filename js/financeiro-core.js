@@ -36,6 +36,8 @@
         const n = String(nome || '');
         const m = n.match(/(\d+(?:[.,]\d+)?)\s*%\s*(?:de\s+)?entrada/i);
         if (m) return parseFloat(m[1].replace(',', '.'));
+        const m2 = n.match(/entrada\s*(?:de\s*)?\(?\s*(\d+(?:[.,]\d+)?)\s*%/i);
+        if (m2) return parseFloat(m2[1].replace(',', '.'));
         const semAcento = n.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
         if (semAcento.includes('vista')) return 100;
         return 50;

@@ -2465,6 +2465,9 @@ html[data-theme="dark"] .fin-a-cair { color: #F7DE86; }
 .res-meta, .res-linha { margin-top: 10px; font-size: 14px; }
 .res-frase { font-size: 16px; font-weight: 600; }
 .res-aviso { margin-top: 8px; font-size: 12px; color: #B26A00; }
+:root { --dre-selo-aviso: #B26A00; }
+html[data-theme="dark"] { --dre-selo-aviso: #E8A94A; }
+.dre-selo-aviso { font-size: 10px; color: var(--dre-selo-aviso); font-weight: 600; }
 .res-faixa-ok { color: #005D3B; }
 .res-faixa-perto { color: #B26A00; font-weight: 600; }
 .res-faixa-estourou { color: #F43927; font-weight: 600; }

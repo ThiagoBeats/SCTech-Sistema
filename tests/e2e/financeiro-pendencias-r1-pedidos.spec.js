@@ -44,7 +44,7 @@ test('comissao paga perde a marca de pedido cancelado ao chegar de novo em Insta
         sc_cp: [cp] });
     await page.goto(BASE + '/pcp.html');
     await page.evaluate(() => { confirmarPagamentoPedido(26500); });
-    await page.locator('#baixa-ok').click();
+    await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_ped'))[0].status).toBe('Instalado');
     const cps = await lerChave(page, 'sc_cp');
     expect(cps.find(c => c.id === 701).pedido_cancelado).toBeUndefined();

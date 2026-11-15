@@ -1026,7 +1026,10 @@ function carregarEmpresaConfigs() {
     set('emp-email',    emp.email);
     set('emp-site',     emp.site);
     set('emp-regime',   emp.regime_tributario);
-    set('emp-aliquota', emp.aliquota_estimada);
+    // Alíquota 0 volta como "0" e decimal com vírgula ("6,5"); nunca salva = vazio.
+    const aliqSalva = emp.aliquota_estimada;
+    const aliqEl = document.getElementById('emp-aliquota');
+    if (aliqEl) aliqEl.value = (aliqSalva == null || aliqSalva === '' || !Number.isFinite(Number(aliqSalva))) ? '' : String(Number(aliqSalva)).replace('.', ',');
     set('emp-meta-padrao', emp.meta_faturamento_padrao);
     renderOrcamentoCfg(emp);
     set('emp-msg-cobranca', emp.mensagem_cobranca || (typeof CaixaCore !== 'undefined' ? CaixaCore.MENSAGEM_COBRANCA_PADRAO : ''));
@@ -3438,15 +3441,21 @@ async function confirmarPagamentoPedido(id) {
     if (ped.pagamento_pendente && abertas.length) {
         desmarcar = abertas.find(c => c.parcela_tipo === 'saldo') || abertas[abertas.length - 1];
     }
-    const r = await abrirModalBaixa({
-        titulo: `Confirmar pagamento do pedido #${formatPedidoId(ped.id)}`,
-        itens: abertas.map(c => ({ id: c.id, descricao: c.descricao, valor: c.valor, marcado: c !== desmarcar, meio_previsto: c.meio_previsto || null })),
-        formaPadrao: formaPagamentoDoPedido(ped),
-        permiteParcial: true
-    });
-    if (!r) return;
-    const baixa = baixarContasReceber(r.data, r.linhas);
-    if (!baixa.ok) { await showAlert(baixa.erro, '⚠️'); return; }
+    // Tudo ja pago: sem janela de baixa vazia, so um aviso simples antes de fechar o pedido.
+    const todasPagas = !abertas.length && (db.contas_receber || []).some(c => c.pedido_id == ped.id);
+    if (todasPagas) {
+        if (!await showConfirm('Todas as parcelas deste pedido já estão pagas.', 'ℹ️', 'Marcar como instalado', 'Cancelar')) return;
+    } else {
+        const r = await abrirModalBaixa({
+            titulo: `Confirmar pagamento do pedido #${formatPedidoId(ped.id)}`,
+            itens: abertas.map(c => ({ id: c.id, descricao: c.descricao, valor: c.valor, marcado: c !== desmarcar, meio_previsto: c.meio_previsto || null })),
+            formaPadrao: formaPagamentoDoPedido(ped),
+            permiteParcial: true
+        });
+        if (!r) return;
+        const baixa = baixarContasReceber(r.data, r.linhas);
+        if (!baixa.ok) { await showAlert(baixa.erro, '⚠️'); return; }
+    }
     // Sem parcela nenhuma o valor recebido digitado no pedido nao tem de onde
     // ser recalculado: fica como esta (sincronizar zeraria).
     if ((db.contas_receber || []).some(c => c.pedido_id == ped.id)) sincronizarRecebidoPedido(ped.id);
@@ -6900,9 +6909,11 @@ O que já foi recebido continua no Financeiro.${abertos.length ? ` ${abertos.len
             : `
 
 ${abertos.length} lançamento(s) a receber em aberto sairão do Financeiro e serão gerados de novo ao aprovar.`;
+    const nCom = (db.contas_pagar || []).filter(cp => cp.pedido_id == ped.id && cp.papel_comissao && cp.status !== 'Pago').length;
+    const avisoCom = nCom ? (nCom === 1 ? ' A comissão pendente deste pedido será removida.' : ` As ${nCom} comissões pendentes deste pedido serão removidas.`) : '';
     const ok = await showConfirm(`Voltar o pedido #${formatPedidoId(ped.id)} de "${status}" para Orçamento?
 
-Ele sai do painel de produção e fica liberado para edição até ser aprovado de novo.${avisoFin}`, '↩', 'Voltar para Orçamento', 'Cancelar');
+Ele sai do painel de produção e fica liberado para edição até ser aprovado de novo.${avisoFin}${avisoCom}`, '↩', 'Voltar para Orçamento', 'Cancelar');
     if (!ok) return;
     removerFinanceiroAbertoPedido(ped.id);
     ped.financeiro_gerado = false;
@@ -9267,6 +9278,11 @@ function _pcTotal(pc) {
 function abrirModalContaPagarPC(pc) {
     return new Promise(resolve => {
         if (document.getElementById('pcp-modal')) { resolve(); return; }
+        // Sem permissao nem abre a janela: avisa antes (o pedido continua oferecendo "Gerar conta" ao financeiro).
+        if (!temAcesso('financeiro.pagar', 'completo')) {
+            showAlert('Você não tem permissão para gerar contas a pagar. O pedido fica marcado como "sem conta a pagar" para o financeiro gerar depois.', '🚫').then(() => resolve());
+            return;
+        }
         const hoje = new Date().toLocaleDateString('sv-SE');
         const o = document.createElement('div');
         o.id = 'pcp-modal';
@@ -12809,12 +12825,15 @@ function gerarFinanceiroPedido(ped) {
     let parcelas;
     if (ped.forma_pagamento || !ped.tipo_pagamento) {
         const pct = Number.isFinite(ped.entrada_pct) ? ped.entrada_pct : entradaDaFormaPagamento(ped.forma_pagamento);
+        // Entrada paga em parte: o % da descricao e o que ainda falta pagar, nao o da forma.
+        const pctEntradaRestante = p => (jaPago > 0 && Number(ped.valor) > 0)
+            ? Math.round(p.valor / Number(ped.valor) * 1000) / 10 : pct;
         parcelas = FinanceiroCore.planejarParcelas({
             valor: ped.valor || 0, entradaPct: pct,
             jaPago, dataAprovacao: hoje, dataEntrega: ped.data_entrega
         }).map(p => ({
             ...p,
-            descricao: p.tipo === 'entrada' ? `Entrada (${pct}%) — Pedido #${num}`
+            descricao: p.tipo === 'entrada' ? `Entrada (${String(pctEntradaRestante(p)).replace('.', ',')}%) — Pedido #${num}`
                 : p.tipo === 'saldo' ? `Saldo na instalação — Pedido #${num}`
                 : `Pagamento — Pedido #${num}`
         }));
@@ -12966,12 +12985,14 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
                     </div>
                 </div>`;
             }).join('')}</div>
+            <div id="baixa-erro-nenhum" style="display:none;color:#C0392B;font-size:12px;margin:-6px 0 8px">Marque pelo menos um item.</div>
             <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:12px"><span>Total marcado</span><strong id="baixa-total">R$ 0,00</strong></div>
             <div class="sc-modal-btns"><button class="btn btn-outline" id="baixa-cancel">Cancelar</button><button class="btn btn-success" id="baixa-ok">Confirmar</button></div>
         </div>`;
         document.body.appendChild(o);
         const linhas = [...o.querySelectorAll('.baixa-linha')];
         let tentou = false;
+        const abriuSemMarcar = itens.length > 0 && itens.every(i => !i.marcado);
         const dataAtual = () => o.querySelector('#baixa-data')?.value || hoje;
         // Data vazia ou depois de hoje nao vale (a baixa registra o que ja aconteceu).
         const erroDaData = () => comData ? _erroDataBaixa(o.querySelector('#baixa-data')?.value || '') : '';
@@ -13009,6 +13030,11 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
             const t = linhas.filter(l => l.querySelector('.baixa-check').checked)
                 .reduce((s, l) => { const { v } = lerLinha(l); return s + (v > 0 ? v : 0); }, 0);
             o.querySelector('#baixa-total').textContent = brl(t);
+            // Nada marcado: Confirmar fica desabilitado e a janela avisa (nao fecha sozinha).
+            // Exceto quando a janela ja abriu sem nada marcado de proposito (pedido com saldo pendente).
+            const nenhum = linhas.length > 0 && !abriuSemMarcar && !linhas.some(l => l.querySelector('.baixa-check').checked);
+            o.querySelector('#baixa-erro-nenhum').style.display = nenhum ? 'block' : 'none';
+            o.querySelector('#baixa-ok').disabled = nenhum;
         };
         linhas.forEach(l => {
             l.querySelector('.baixa-meio').addEventListener('change', () => {
@@ -16350,7 +16376,7 @@ function renderDRE() {
         const aviso = [];
         if (r.origem_custo === 'estimado') aviso.push('custo estimado');
         if (r.itens_sem_custo > 0) aviso.push(`custo não informado (${r.itens_sem_custo} ${r.itens_sem_custo === 1 ? 'item' : 'itens'})`);
-        const badges = aviso.map(t => `<div style="font-size:10px;color:#B26A00;font-weight:600">${t}</div>`).join('');
+        const badges = aviso.map(t => `<div class="dre-selo-aviso">${t}</div>`).join('');
         return `<tr>
             <td style="font-size:12px;color:#888">#${formatPedidoId(p.id)}</td>
             <td>${escapeHtml(p.clienteNome||'—')}</td>

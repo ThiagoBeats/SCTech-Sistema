@@ -15,7 +15,7 @@ test('regime e aliquota sao salvos e recarregados', async ({ page }) => {
     expect(emp.aliquota_estimada).toBe(6.5);
     await page.reload();
     await expect(page.locator('#emp-regime')).toHaveValue('Simples Nacional');
-    await expect(page.locator('#emp-aliquota')).toHaveValue('6.5');
+    await expect(page.locator('#emp-aliquota')).toHaveValue('6,5');
 });
 
 test('salvar dados da empresa nao apaga regime nem campos que a tela nao tem', async ({ page }) => {

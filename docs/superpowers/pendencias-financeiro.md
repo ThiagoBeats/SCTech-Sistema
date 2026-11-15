@@ -21,15 +21,15 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [x] **Falta de espaço fora da migração**: só a migração trata erro de espaço; os outros `syncDB` falham como antes. **Feito:** `syncDB` captura o erro de espaço, avisa uma vez e não quebra a tela (migração e importador seguem tratando o erro por conta própria).
 
 ### Telas e textos
-- [ ] Confirmar pagamento com todas as parcelas já pagas abre a janela vazia (melhor uma confirmação simples).
-- [ ] Forma de pagamento padrão da comissão vem com a primeira forma da lista (ex.: "50% entrada…"). Oferecer opção em branco ou "PIX". Ligado à separação plano × meio de pagamento (Fase 1).
-- [ ] Usuário sem permissão vê a janela de gerar conta do pedido de compra e só é barrado ao confirmar.
-- [ ] Texto do aviso de "Voltar para Orçamento" não cita as comissões pendentes removidas.
-- [ ] Descrição "Entrada (X%)" fica desatualizada na reaprovação com entrada paga em parte.
-- [ ] Alíquota: 0 recarrega como campo vazio; "6,5" recarrega como "6.5".
-- [ ] "Entrada de 30%" no nome da forma não é reconhecido (vira 50%, editável).
-- [ ] Data futura aceita na baixa; desmarcar o único item da janela de baixa fecha sem aviso. **Parte da data feita:** baixa de recebimento/pagamento e transferência recusam data depois de hoje ("A data não pode ser depois de hoje."). A parte "desmarcar o único item" continua pendente.
-- [ ] Cor `#B26A00` fixa no selo do DRE (usar variável de CSS).
+- [x] Confirmar pagamento com todas as parcelas já pagas abre a janela vazia (melhor uma confirmação simples). **Feito (R2):** com tudo pago aparece a confirmação "Todas as parcelas deste pedido já estão pagas." (botão "Marcar como instalado"), sem a janela de baixa vazia.
+- [x] Forma de pagamento padrão da comissão vem com a primeira forma da lista (ex.: "50% entrada…"). Oferecer opção em branco ou "PIX". Ligado à separação plano × meio de pagamento (Fase 1). **Feito (R2):** já resolvido pela Fase 1: o meio da comissão começa em "Escolha o meio" (em branco) e é obrigatório ao pagar; teste novo confirma.
+- [x] Usuário sem permissão vê a janela de gerar conta do pedido de compra e só é barrado ao confirmar. **Feito (R2):** sem permissão a janela nem abre; aparece o aviso de permissão antes.
+- [x] Texto do aviso de "Voltar para Orçamento" não cita as comissões pendentes removidas. **Feito (R2):** o aviso diz quantas comissões pendentes serão removidas (só quando há).
+- [x] Descrição "Entrada (X%)" fica desatualizada na reaprovação com entrada paga em parte. **Feito (R2):** a descrição mostra o % que ainda falta (ex.: 50% com R$ 200 pagos de R$ 1.000 vira "Entrada (30%)").
+- [x] Alíquota: 0 recarrega como campo vazio; "6,5" recarrega como "6.5". **Feito (R2):** recarrega "0" e "6,5".
+- [x] "Entrada de 30%" no nome da forma não é reconhecido (vira 50%, editável). **Feito (R2):** "Entrada de 30%" vale 30% (as formas antigas continuam valendo).
+- [x] Data futura aceita na baixa; desmarcar o único item da janela de baixa fecha sem aviso. **Parte da data feita:** baixa de recebimento/pagamento e transferência recusam data depois de hoje ("A data não pode ser depois de hoje."). **Feito (R2):** desmarcar o único item deixa Confirmar desabilitado com "Marque pelo menos um item." (a janela não fecha).
+- [x] Cor `#B26A00` fixa no selo do DRE (usar variável de CSS). **Feito (R2):** `--dre-selo-aviso` no `:root`, com cor própria no tema escuro.
 
 ### Testes que faltam
 - [ ] Cancelar a janela de baixa / de comissão sem mudar nada.

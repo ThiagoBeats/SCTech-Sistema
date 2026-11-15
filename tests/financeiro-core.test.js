@@ -8,6 +8,8 @@ test('entradaPctDoNome le o % do nome da forma', () => {
     assert.strictEqual(F.entradaPctDoNome('30% de entrada + 70%'), 30);
     assert.strictEqual(F.entradaPctDoNome('À vista'), 100);
     assert.strictEqual(F.entradaPctDoNome('PIX'), 50);
+    assert.strictEqual(F.entradaPctDoNome('Entrada de 30% + saldo na instalação'), 30);
+    assert.strictEqual(F.entradaPctDoNome('Entrada de 12,5%'), 12.5);
 });
 test('planejarParcelas: entrada na aprovacao, saldo na entrega, soma exata', () => {
     const p = F.planejarParcelas({ valor: 1000.01, entradaPct: 33, dataAprovacao: '2026-11-11', dataEntrega: '2026-12-01' });
