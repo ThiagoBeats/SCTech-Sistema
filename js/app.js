@@ -7895,6 +7895,17 @@ function renderProposta() {
 function _lerObjetoLS(chave) {
     try { const o = JSON.parse(localStorage.getItem(chave) || '{}'); return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {}; } catch (e) { return {}; }
 }
+// Configuracoes que moram em chave propria do navegador e entram no backup (texto
+// cru de cada chave). Ficam de fora o que e so do navegador/aba (sessao, tema,
+// menu lateral, ordenacao, filtros, avisos ja vistos, cache de enderecos, passagem
+// de dados entre telas e a copia de desfazer do importador).
+const CHAVES_CONFIG_BACKUP = ['sc_doc_layouts', 'sc_cond_gerais', 'sc_etiqueta_cfg', 'sc_mostruario',
+    'sc_alertas_cfg', 'sc_dashcards_cfg', 'sc_agd_cfg', 'sc_kits_fixacao_padrao', 'sc_papel_gerente'];
+function _configsLS() {
+    const o = {};
+    CHAVES_CONFIG_BACKUP.forEach(k => { try { const v = localStorage.getItem(k); if (v !== null) o[k] = v; } catch (e) { /* sem storage */ } });
+    return o;
+}
 function _dadosExportacao(marcaFase0) {
     const dados = {
         versao: '1.0', exportado_em: new Date().toISOString(),
@@ -7909,7 +7920,8 @@ function _dadosExportacao(marcaFase0) {
         empresa: getEmpresa(), formas_pag: getFormasPagamentoCfg(),
         // Acesso: usuarios (com senha ja em hash e preferencias) e papeis. A sessao de quem
         // esta logado fica so na aba e nunca entra no arquivo.
-        usuarios: db.usuarios, papeis: db.papeis,
+        usuarios: db.usuarios, papeis: db.papeis, import_perfis: db.import_perfis || [],
+        config_ls: _configsLS(),
         ped_seq: parseInt(localStorage.getItem('sc_ped_seq') || '0') || 0,
         pc_seq: parseInt(localStorage.getItem('sc_pc_seq') || '0') || 0
     };
@@ -7995,6 +8007,16 @@ function importarDados(event) {
             // sai do maior pedido existente.
             extras.push(['sc_ped_seq', Number.isFinite(dados.ped_seq) ? String(Math.max(0, Math.floor(dados.ped_seq))) : null]);
             extras.push(['sc_pc_seq',  Number.isFinite(dados.pc_seq)  ? String(Math.max(0, Math.floor(dados.pc_seq)))  : null]);
+            // Layout dos documentos, etiquetas, galeria, alertas, cards, agenda: com a secao
+            // config_ls no arquivo, o que nao veio volta ao padrao; backup antigo (sem a secao)
+            // mantem os atuais.
+            if (Array.isArray(dados.import_perfis)) db.import_perfis = dados.import_perfis;
+            if (dados.config_ls && typeof dados.config_ls === 'object' && !Array.isArray(dados.config_ls)) {
+                CHAVES_CONFIG_BACKUP.forEach(k => {
+                    const v = dados.config_ls[k];
+                    extras.push([k, typeof v === 'string' ? v : null]);
+                });
+            }
             // Backup antigo (sem empresa/formas) mantem as atuais.
             if (dados.empresa && typeof dados.empresa === 'object') extras.push(['sc_empresa', JSON.stringify(dados.empresa)]);
             if (Array.isArray(dados.formas_pag) && dados.formas_pag.length) extras.push(['sc_formas_pag', JSON.stringify(dados.formas_pag)]);

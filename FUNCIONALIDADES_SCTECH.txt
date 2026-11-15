@@ -528,6 +528,10 @@ Importar Dados:
     com o mesmo e-mail e senha. Quem importou continua logado (pelo mesmo
     e-mail); se o arquivo não o tem nem traz um administrador ativo, ele é
     mantido. Arquivo antigo, sem usuários, não mexe nos usuários atuais
+  - Também voltam as configurações: layout dos documentos, etiquetas, galeria/
+    mostruário, alertas, cards da página inicial, agenda e perfis do importador.
+    Ficam de fora o que é só do navegador (tema, menu lateral, filtros, cache de
+    endereços). Arquivo antigo, sem essa parte, mantém as configurações atuais
   - O próximo número de pedido (e de pedido de compra) é sempre maior que o
     maior já existente, mesmo com arquivo antigo sem o contador
   - Se o navegador ficar sem espaço no meio da importação, aparece "A importação

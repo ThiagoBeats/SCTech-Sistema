@@ -72,3 +72,36 @@ test('backup antigo (sem usuarios nem contador): importa, usuarios ficam e numer
     const nums = await page.evaluate(() => [gerarNumeroPedido(), gerarNumeroPedidoCompra()]);
     expect(nums).toEqual([parseInt(YY + '003'), parseInt(YY + '006')]);
 });
+
+const CFG = {
+    sc_doc_layouts: JSON.stringify({ marca: 'teste-layout' }),
+    sc_agd_cfg: JSON.stringify({ inicio: '07:00', fim: '19:00' }),
+    sc_alertas_cfg: JSON.stringify({ tecido_minimo: 7 }),
+};
+
+test('layout dos documentos, agenda e alertas voltam depois de exportar, limpar e importar', async ({ page }) => {
+    await entrar(page, BASE, {});
+    await page.goto(BASE + '/index.html');
+    const backup = await page.evaluate(cfg => {
+        Object.entries(cfg).forEach(([k, v]) => localStorage.setItem(k, v));
+        return JSON.parse(JSON.stringify(_dadosExportacao(false)));
+    }, CFG);
+    expect(backup.config_ls).toMatchObject(CFG);
+    await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); });
+    await entrar(page, BASE, {});
+    await page.goto(BASE + '/index.html');
+    await importar(page, backup);
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_agd_cfg'))).toBe(CFG.sc_agd_cfg);
+    expect(await page.evaluate(() => [localStorage.getItem('sc_doc_layouts'), localStorage.getItem('sc_alertas_cfg')]))
+        .toEqual([CFG.sc_doc_layouts, CFG.sc_alertas_cfg]);
+});
+
+test('backup antigo (sem config_ls) nao apaga as configuracoes atuais', async ({ page }) => {
+    await entrar(page, BASE, {});
+    await page.goto(BASE + '/index.html');
+    await page.evaluate(cfg => Object.entries(cfg).forEach(([k, v]) => localStorage.setItem(k, v)), CFG);
+    await importar(page, { clientes: [], catalogo: [], pedidos: [{ id: ID1, status: 'Orçamento', itens: [] }] });
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('sc_ped') || '[]').length)).toBe(1);
+    expect(await page.evaluate(() => ['sc_doc_layouts', 'sc_agd_cfg', 'sc_alertas_cfg'].map(k => localStorage.getItem(k))))
+        .toEqual([CFG.sc_doc_layouts, CFG.sc_agd_cfg, CFG.sc_alertas_cfg]);
+});
