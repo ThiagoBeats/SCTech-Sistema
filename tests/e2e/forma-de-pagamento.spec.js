@@ -121,7 +121,7 @@ test('empresa: lista a padrao e marca a primeira como padrao', async ({ page }) 
 
 test('empresa: adicionar, renomear, reordenar e remover, gravando so ao salvar', async ({ page }) => {
     await abrir(page, 'empresa.html#preferencias');
-    await page.click('button:has-text("Adicionar forma de pagamento")');
+    await page.click('button:has-text("Adicionar plano de pagamento")');
     await expect(linhas(page)).toHaveCount(5);
     await expect(linhas(page).nth(4)).toBeFocused();
     await linhas(page).nth(4).fill('PIX');
@@ -131,7 +131,7 @@ test('empresa: adicionar, renomear, reordenar e remover, gravando so ao salvar',
     await page.locator('#emp-formas-pag .forma-pag-linha').nth(4).locator('button[title="Remover"]').click();
     expect(await ler(page, 'sc_formas_pag'), 'nada gravado antes de salvar').toBeNull();
 
-    await page.click('button:has-text("Salvar Formas de Pagamento")');
+    await page.click('button:has-text("Salvar Planos de Pagamento")');
     expect(await ler(page, 'sc_formas_pag')).toEqual([['PIX', 50], ['Dinheiro', 50], ['À vista', 100], ['30% entrada + 70% na instalação', 30]].map(([nome, entrada]) => ({ nome, desconto: 0, entrada })));
 
     await page.goto(BASE + '/pedido.html');
@@ -141,12 +141,12 @@ test('empresa: adicionar, renomear, reordenar e remover, gravando so ao salvar',
 
 test('empresa: nomes vazios e repetidos sao descartados ao salvar', async ({ page }) => {
     await abrir(page, 'empresa.html#preferencias', { sc_formas_pag: ['PIX'] });
-    await page.click('button:has-text("Adicionar forma de pagamento")');
+    await page.click('button:has-text("Adicionar plano de pagamento")');
     await linhas(page).nth(1).fill('  pix ');
-    await page.click('button:has-text("Adicionar forma de pagamento")');
-    await page.click('button:has-text("Adicionar forma de pagamento")');
+    await page.click('button:has-text("Adicionar plano de pagamento")');
+    await page.click('button:has-text("Adicionar plano de pagamento")');
     await linhas(page).nth(3).fill(' Boleto ');
-    await page.click('button:has-text("Salvar Formas de Pagamento")');
+    await page.click('button:has-text("Salvar Planos de Pagamento")');
     expect(await ler(page, 'sc_formas_pag')).toEqual([{ nome: 'PIX', desconto: 0, entrada: 50 }, { nome: 'Boleto', desconto: 0, entrada: 50 }]);
     await expect(linhas(page)).toHaveCount(2);
 });
@@ -154,9 +154,9 @@ test('empresa: nomes vazios e repetidos sao descartados ao salvar', async ({ pag
 test('empresa: nao deixa salvar a lista vazia', async ({ page }) => {
     await abrir(page, 'empresa.html#preferencias', { sc_formas_pag: ['PIX'] });
     await page.locator('#emp-formas-pag button[title="Remover"]').click();
-    await expect(page.locator('#emp-formas-pag')).toContainText('Nenhuma forma cadastrada');
-    await page.click('button:has-text("Salvar Formas de Pagamento")');
-    await expect(page.locator('#sc-modal-msg')).toContainText('pelo menos uma');
+    await expect(page.locator('#emp-formas-pag')).toContainText('Nenhum plano cadastrado');
+    await page.click('button:has-text("Salvar Planos de Pagamento")');
+    await expect(page.locator('#sc-modal-msg')).toContainText('pelo menos um plano');
     expect(await ler(page, 'sc_formas_pag'), 'a lista antiga, so com nomes, fica como estava').toEqual(['PIX']);
 });
 
@@ -183,10 +183,10 @@ test('empresa: cada forma tem o % de desconto, gravado ao salvar', async ({ page
     expect(await campos.evaluateAll(l => l.map(i => i.value))).toEqual(['5', '0', '7.5']);
     await campos.nth(1).fill('3');
     await campos.nth(0).fill('150');   // acima de 100 vira 100
-    await page.click('button:has-text("Adicionar forma de pagamento")');
+    await page.click('button:has-text("Adicionar plano de pagamento")');
     await linhas(page).nth(3).fill('Boleto');
     await page.locator('#emp-formas-pag .forma-pag-desconto').nth(3).fill('-2');   // negativo vira 0
-    await page.click('button:has-text("Salvar Formas de Pagamento")');
+    await page.click('button:has-text("Salvar Planos de Pagamento")');
     expect(await ler(page, 'sc_formas_pag')).toEqual([
         { nome: 'À vista', desconto: 100, entrada: 100 }, { nome: 'Cartão em 10x', desconto: 3, entrada: 50 },
         { nome: 'PIX', desconto: 7.5, entrada: 50 }, { nome: 'Boleto', desconto: 0, entrada: 50 },
@@ -196,7 +196,7 @@ test('empresa: cada forma tem o % de desconto, gravado ao salvar', async ({ page
 test('empresa: subir e descer leva o desconto junto', async ({ page }) => {
     await abrir(page, 'empresa.html#preferencias', { sc_formas_pag: FORMAS_DESC });
     await page.locator('#emp-formas-pag .forma-pag-linha').nth(2).locator('button[title="Subir"]').click();
-    await page.click('button:has-text("Salvar Formas de Pagamento")');
+    await page.click('button:has-text("Salvar Planos de Pagamento")');
     expect((await ler(page, 'sc_formas_pag')).map(f => [f.nome, f.desconto]))
         .toEqual([['À vista', 5], ['PIX', 7.5], ['Cartão em 10x', 0]]);
 });

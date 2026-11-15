@@ -160,6 +160,14 @@ test('montarMensagem e linkWhatsApp', () => {
     assert.ok(C.linkWhatsApp('5511987654321', m).startsWith('https://wa.me/5511987654321?text=Ol%C3%A1'));
     assert.strictEqual(C.linkWhatsApp(null, m), null);
 });
+test('montarMensagem sem pedido tira o trecho "do pedido" em vez de deixar vazio', () => {
+    const dados = { cliente: 'Maria', empresa: 'SC', valor: 'R$ 2.000,00', pedido: '', vencimento: '10/11/2026' };
+    const m = C.montarMensagem(C.MENSAGEM_COBRANCA_PADRAO, dados);
+    assert.ok(m.includes('parcela de R$ 2.000,00, com vencimento em 10/11/2026.'));
+    assert.ok(!/pedido|undefined|null|#/.test(m));
+    assert.strictEqual(C.montarMensagem('Oi {cliente}, {pedido}!', { cliente: 'Ana' }), 'Oi Ana, !');
+    assert.ok(C.montarMensagem(C.MENSAGEM_COBRANCA_PADRAO, Object.assign({}, dados, { pedido: '#7' })).includes('do pedido #7'));
+});
 
 // ---- Task 2 fix round 1 ----
 test('previsao: despesa fixa com periodicidade nao e projetada (so o CP pre-gerado)', () => {

@@ -623,23 +623,23 @@ function renderFormasPagamentoCfg() {
     box.innerHTML = _formasPagRascunho.map((f, i) => `
         <div class="forma-pag-linha">
             <span class="forma-pag-ordem">${i + 1}</span>
-            <input type="text" class="forma-pag-nome" value="${escapeHtml(f.nome)}" maxlength="80" aria-label="Forma de pagamento ${i + 1}"
+            <input type="text" class="forma-pag-nome" value="${escapeHtml(f.nome)}" maxlength="80" aria-label="Plano de pagamento ${i + 1}"
                 oninput="_formasPagRascunho[${i}].nome = this.value" placeholder="Ex.: PIX, Cartão em 10x, Boleto 30/60/90">
-            <label class="forma-pag-desc" title="Desconto aplicado ao pedido quando esta forma é escolhida">
+            <label class="forma-pag-desc" title="Desconto aplicado ao pedido quando este plano é escolhido">
                 <input type="number" class="forma-pag-desconto" value="${f.desconto || 0}" min="0" max="100" step="0.5"
-                    aria-label="Desconto da forma de pagamento ${i + 1}" oninput="_formasPagRascunho[${i}].desconto = this.value">
+                    aria-label="Desconto do plano de pagamento ${i + 1}" oninput="_formasPagRascunho[${i}].desconto = this.value">
                 <span>% desc.</span>
             </label>
             <label class="forma-pag-desc" title="Parte do valor cobrada na aprovação; o resto vence na entrega">
                 <input type="number" class="forma-pag-entrada" value="${f.entrada == null ? '' : f.entrada}" min="0" max="100" step="1"
-                    aria-label="Entrada da forma de pagamento ${i + 1}" oninput="_formasPagRascunho[${i}].entrada = this.value">
+                    aria-label="Entrada do plano de pagamento ${i + 1}" oninput="_formasPagRascunho[${i}].entrada = this.value">
                 <span>% entrada</span>
             </label>
             <span class="forma-pag-padrao"${i === 0 ? '' : ' style="visibility:hidden" aria-hidden="true"'}>padrão</span>
             <button type="button" class="btn btn-outline btn-sm" onclick="moverFormaPagamento(${i},-1)" title="Subir" ${i === 0 ? 'disabled' : ''}>↑</button>
             <button type="button" class="btn btn-outline btn-sm" onclick="moverFormaPagamento(${i},1)" title="Descer" ${i === n - 1 ? 'disabled' : ''}>↓</button>
             <button type="button" class="btn btn-outline btn-sm btn-danger" onclick="removerFormaPagamento(${i})" title="Remover">✕</button>
-        </div>`).join('') || '<div class="forma-pag-vazia">Nenhuma forma cadastrada. Adicione pelo menos uma.</div>';
+        </div>`).join('') || '<div class="forma-pag-vazia">Nenhum plano cadastrado. Adicione pelo menos um.</div>';
 }
 
 function adicionarFormaPagamento() {
@@ -663,18 +663,18 @@ function removerFormaPagamento(i) {
 
 async function salvarFormasPagamento() {
     const limpas = _formasLimpas(_formasPagRascunho);
-    if (!limpas.length) { await showAlert('Cadastre pelo menos uma forma de pagamento.', '⚠️'); return; }
+    if (!limpas.length) { await showAlert('Cadastre pelo menos um plano de pagamento.', '⚠️'); return; }
     localStorage.setItem('sc_formas_pag', JSON.stringify(limpas));
     _formasPagRascunho = limpas.map(f => ({ ...f }));
     renderFormasPagamentoCfg();
-    toast('Formas de pagamento salvas!', 'success');
+    toast('Planos de pagamento salvos!', 'success');
 }
 
 function restaurarFormasPagamento() {
     localStorage.removeItem('sc_formas_pag');
     _formasPagRascunho = getFormasPagamentoCfg();
     renderFormasPagamentoCfg();
-    toast('Formas de pagamento restauradas para o padrão.', 'info', 1800);
+    toast('Planos de pagamento restaurados para o padrão.', 'info', 1800);
 }
 
 // --- CONTAS, MEIOS DE PAGAMENTO E MENSAGEM DE COBRANCA (Caixa) ---
@@ -7148,7 +7148,7 @@ function _kanbanFinanceiroHTML(p) {
     const forma = formaPagamentoDoPedido(p);
     const pend = p.pagamento_pendente ? `<span class="kanban-pag-pendente" title="Saldo pendente informado na instalação">⏳ Pendente</span>` : '';
     if (!forma && !pend) return '';
-    return `<div class="kanban-fin">${forma ? `<span class="kanban-fin-forma" title="Forma de pagamento">💳 ${escapeHtml(forma)}</span>` : ''}${pend}</div>`;
+    return `<div class="kanban-fin">${forma ? `<span class="kanban-fin-forma" title="Plano de pagamento">💳 ${escapeHtml(forma)}</span>` : ''}${pend}</div>`;
 }
 
 // Pedido Instalado com parcela ainda em aberto.
@@ -8327,7 +8327,10 @@ function renderHistoricoComissoes() {
         const v        = db.vendedores.find(x => x.id == p[c.id]);
         const dataPgto = p[c.data] ? new Date(p[c.data]).toLocaleDateString('pt-BR') : '—';
         const cpPaga = db.contas_pagar.find(x => x.pedido_id == p.id && x.papel_comissao === _tipoVend && x.status === 'Pago');
-        const estornar = cpPaga ? `<button class="btn btn-outline btn-sm" onclick="estornarCP(${cpPaga.id})" title="Desfazer este pagamento">↩ Estornar</button>` : '';
+        // Comissao paga antes de virar conta a pagar: sem conta para estornar, volta pelo pedido.
+        const estornar = cpPaga
+            ? `<button class="btn btn-outline btn-sm" onclick="estornarCP(${cpPaga.id})" title="Desfazer este pagamento">↩ Estornar</button>`
+            : `<button class="btn btn-outline btn-sm" onclick="estornarComissaoAntiga(${p.id})" title="Desfazer este pagamento">↩ Estornar</button>`;
         return `<tr>
             <td style="font-size:12px;white-space:nowrap">${dataPgto}</td>
             <td style="font-size:12px">#${formatPedidoId(p.id)}</td>
@@ -8338,6 +8341,21 @@ function renderHistoricoComissoes() {
             <td>${estornar}</td>
         </tr>`;
     }).join('');
+}
+
+// Estorna a comissao paga antes de existir conta a pagar (so a marca no pedido):
+// o pedido volta a ter a comissao pendente, como no estorno de uma conta paga.
+async function estornarComissaoAntiga(pedidoId) {
+    if (!await exigirPermissao('financeiro.pagar', 'completo')) return;
+    const ped = db.pedidos.find(p => p.id == pedidoId);
+    const c = CAMPOS_COMISSAO[_tipoVend];
+    if (!ped || !c || !ped[c.paga]) return;
+    const cpPaga = db.contas_pagar.find(x => x.pedido_id == ped.id && x.papel_comissao === _tipoVend && x.status === 'Pago');
+    if (cpPaga) { await estornarCP(cpPaga.id); return; }
+    if (!await showConfirm('Estornar este pagamento? A comissão volta a ficar pendente.', '↩', 'Estornar', 'Cancelar')) return;
+    ped[c.paga] = false;
+    ped[c.data] = null;
+    salvarERecarregar('Pagamento estornado.');
 }
 
 // Paga a comissao do papel da aba aberta; a do outro papel no mesmo pedido fica.
@@ -12609,7 +12627,7 @@ function _migrarFinanceiroPedidos() {
 // Migracao unica dos dados antigos para a Fase 0 (ver FinanceiroCore.planoMigracaoFase0).
 // Antes de mexer em qualquer coisa guarda uma copia em sc_fin_backup_fase0; os
 // pedidos que precisam de conferencia manual ficam em sc_fin_revisar. Sem espaco
-// para a copia, nao migra: marca sc_fin_backup_falhou e a Visao Geral oferece
+// para a copia, nao migra: marca sc_fin_backup_falhou e o aviso no topo do Financeiro oferece
 // baixar a copia e seguir. Erro ao salvar o resultado desfaz tudo, deixa a marca
 // sem gravar (tenta de novo na proxima abertura) e marca sc_fin_migracao_erro.
 const CHAVE_FIN_MIGRACAO = 'sc_fin_migracao';
@@ -12644,7 +12662,7 @@ function _migrarFinanceiroFase0({ semCopia = false } = {}) {
             } catch (e) {
                 console.warn('Migração do Financeiro adiada: não foi possível guardar a cópia de segurança.', e);
                 _gravarSemFalhar(CHAVE_FIN_BACKUP_FALHOU, '1');
-                return false;   // sem copia, nao migra; a Visao Geral oferece baixar a copia
+                return false;   // sem copia, nao migra; o aviso no topo do Financeiro oferece baixar a copia
             }
         }
         const agora = Date.now();
@@ -12703,7 +12721,7 @@ function _migrarFinanceiroFase0({ semCopia = false } = {}) {
     return true;
 }
 
-// Aviso na Visao Geral sobre a copia de seguranca da migracao: sem espaco para
+// Aviso no topo do Financeiro (em todas as abas) sobre a copia de seguranca da migracao: sem espaco para
 // guarda-la (baixar e seguir), erro ao salvar, ou copia guardada (baixar/descartar).
 function renderAvisoCopiaFinanceiro() {
     const el = document.getElementById('fin-backup');
@@ -12775,7 +12793,7 @@ async function descartarCopiaFinanceiro() {
     renderAvisoCopiaFinanceiro();
 }
 
-// Aviso na Visao Geral: pedidos que a migracao nao conseguiu acertar sozinha.
+// Aviso no topo do Financeiro (em todas as abas): pedidos que a migracao nao conseguiu acertar sozinha.
 function renderAvisoRevisaoFinanceiro() {
     const el = document.getElementById('fin-revisar');
     if (!el) return;
@@ -13310,7 +13328,7 @@ async function estornarCR(id) {
     const { caidos } = _movimentosDaBaixaCR(cr.id);
     if (cr.cartao && caidos.length) {
         const nomes = [...new Set(caidos.map(m => (_contaFinPorId(m.conta_id) || {}).nome).filter(Boolean))];
-        if (nomes.length) msg += `\n\nIsso muda o saldo de hoje da conta ${nomes.join(', ')}.`;
+        if (nomes.length) msg += ` Isso muda o saldo de hoje da conta ${nomes.join(', ')}.`;
     }
     if (!await showConfirm(msg, '↩', 'Estornar', 'Cancelar')) return;
     removerMovimentosDaBaixaCR(cr.id);
@@ -13621,7 +13639,7 @@ function abrirModalContaPagar(modo, manterAnexoPendente) {
                 </div>
                 <div class="form-group">
                     <label>Valor (R$) <span style="color:#F43927">*</span></label>
-                    <input type="number" id="cpm-valor" step="0.01" min="0" placeholder="0.00">
+                    <input type="text" inputmode="decimal" id="cpm-valor" placeholder="0,00">
                 </div>
                 <div class="form-group">
                     <label>Vencimento <span style="color:#F43927">*</span></label>
@@ -13670,15 +13688,7 @@ function abrirModalContaPagar(modo, manterAnexoPendente) {
                 <div class="form-group">
                     <label>Categoria</label>
                     <select id="cpm-categoria" onchange="atualizarMesRefImposto(true)">
-                        <option value="tecido">Tecido / Material</option>
-                        <option value="instalador">Instalador</option>
-                        <option value="costureira">Costureira</option>
-                        <option value="aluguel">Aluguel</option>
-                        <option value="salario">Salário</option>
-                        <option value="conta">Conta (luz, internet…)</option>
-                        <option value="comissao_rt">Comissão RT</option>
-                        <option value="imposto">Imposto</option>
-                        <option value="outro">Outro</option>
+                        ${_opcoesCategoria(CATEGORIAS_CONTA_PAGAR)}
                     </select>
                 </div>
                 <div class="form-group" id="cpm-mes-ref-grupo" style="display:none">
@@ -13772,7 +13782,7 @@ function onDocContaPagarInput() {
     if (digits.length === 47 || digits.length === 48) {
         const res = decodificarLinhaDigitavel(digits);
         if (res.ok) {
-            if (res.valor) document.getElementById('cpm-valor').value = res.valor.toFixed(2);
+            if (res.valor) document.getElementById('cpm-valor').value = res.valor.toFixed(2).replace('.', ',');
             if (res.vencimento) document.getElementById('cpm-vencimento').value = res.vencimento;
             const descEl = document.getElementById('cpm-descricao');
             if (descEl && !descEl.value.trim()) descEl.value = res.tipo === 'boleto' ? `Boleto ${res.banco}` : 'Conta de consumo (convênio)';
@@ -13793,7 +13803,7 @@ function onDocContaPagarInput() {
             const credorEl = document.getElementById('cpm-credor');
             const valorEl = document.getElementById('cpm-valor');
             if (credorEl && !credorEl.value.trim()) credorEl.value = achado.credor_nome || '';
-            if (valorEl && !valorEl.value) valorEl.value = achado.valor.toFixed(2);
+            if (valorEl && !valorEl.value) valorEl.value = achado.valor.toFixed(2).replace('.', ',');
             helpEl.style.color = '#005D3B';
             helpEl.textContent = `Encontrado no histórico: lançamento anterior de "${achado.credor_nome || '—'}" com este número de documento.`;
         } else {
@@ -13810,7 +13820,7 @@ async function adicionarContaPagarManual() {
     const descricao   = document.getElementById('cpm-descricao')?.value.trim();
     const cnpjFornecedor = document.getElementById('cpm-cnpj')?.value.trim() || '';
     const credor      = document.getElementById('cpm-credor')?.value.trim() || '';
-    const valor       = parseFloat(document.getElementById('cpm-valor')?.value) || 0;
+    const valor       = _valorDigitadoBaixa(document.getElementById('cpm-valor')?.value, 0);
     const vencimento  = document.getElementById('cpm-vencimento')?.value;
     const categoria   = document.getElementById('cpm-categoria')?.value || 'outro';
     const mesRefDigitado = document.getElementById('cpm-mes-ref')?.value || '';
@@ -13825,7 +13835,7 @@ async function adicionarContaPagarManual() {
     const numParcelas = parseInt(document.getElementById('cpm-parcelas')?.value) || 1;
 
     if (!descricao)  { await showAlert('Informe a descrição.', '⚠️'); return; }
-    if (!valor)      { await showAlert('Informe o valor.', '⚠️'); return; }
+    if (!(valor > 0)) { await showAlert('Informe o valor.', '⚠️'); return; }
     if (!vencimento) { await showAlert('Informe a data de vencimento.', '⚠️'); return; }
     if (cnpjFornecedor.replace(/\D/g, '').length === 14 && !validarCNPJ(cnpjFornecedor)) {
         if (!await showConfirm('O CNPJ informado parece inválido (dígito verificador não confere). Deseja lançar mesmo assim?', '⚠️', 'Lançar mesmo assim', 'Corrigir')) return;
@@ -14052,7 +14062,7 @@ function _preencherModalComExtracao(dados, nomeArquivo) {
     if (dados.ok) {
         if (dados.cnpj) { set('cpm-cnpj', dados.cnpj); const el = document.getElementById('cpm-cnpj'); if (el) mascaraCNPJ(el); }
         set('cpm-credor', dados.credor || '');
-        if (dados.valor != null) set('cpm-valor', dados.valor.toFixed(2));
+        if (dados.valor != null) set('cpm-valor', dados.valor.toFixed(2).replace('.', ','));
         set('cpm-vencimento', dados.vencimento || '');
         set('cpm-descricao', dados.credor ? `Nota/Boleto ${dados.credor}` : (dados.tipo === 'nota' ? 'Nota fiscal importada' : 'Boleto importado'));
         const docEl = document.getElementById('cpm-doc');
@@ -14579,7 +14589,26 @@ function gerarRelatorioFinanceiro() {
     abrirDocModal(html, `Relatório Financeiro — ${label}`, '', envioDocumentoInterno(`Relatório financeiro — ${label}`, `Relatorio-financeiro-${label}`));
 }
 
+// Categorias das contas a pagar e das despesas fixas: uma lista so; o Imposto vem de CATEGORIA_IMPOSTO.
+const CATEGORIA_IMPOSTO = ['imposto', 'Imposto'];
+const CATEGORIAS_CONTA_PAGAR = [['tecido', 'Tecido / Material'], ['instalador', 'Instalador'], ['costureira', 'Costureira'], ['aluguel', 'Aluguel'],
+    ['salario', 'Salário'], ['conta', 'Conta (luz, internet…)'], ['comissao_rt', 'Comissão RT'], CATEGORIA_IMPOSTO, ['outro', 'Outro']];
+const CATEGORIAS_DESPESA_FIXA = [['aluguel', 'Aluguel'], ['salario', 'Salário'], ['conta', 'Conta (luz, internet…)'], CATEGORIA_IMPOSTO, ['outro', 'Outro']];
+function _opcoesCategoria(lista) {
+    return lista.map(([valor, rotulo]) => `<option value="${valor}">${escapeHtml(rotulo)}</option>`).join('');
+}
+// Os selects de categoria da pagina vem vazios no HTML; preenche uma vez.
+function preencherCategoriasFinanceiro() {
+    [['df-categoria', CATEGORIAS_DESPESA_FIXA, null], ['sim-categoria', CATEGORIAS_CONTA_PAGAR, 'outro']].forEach(([id, lista, padrao]) => {
+        const el = document.getElementById(id);
+        if (!el || el.options.length) return;
+        el.innerHTML = _opcoesCategoria(lista);
+        if (padrao) el.value = padrao;
+    });
+}
+
 function mostrarTabFinanceiro(tab) {
+    preencherCategoriasFinanceiro();
     if (_curTabFin !== tab) { _prevTabFin = _curTabFin; _curTabFin = tab; }
     document.querySelectorAll('.fin-tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.fin-panel').forEach(p => p.classList.remove('active'));
@@ -14808,7 +14837,10 @@ function renderResultadoMes(mes) {
     }).join('');
     document.getElementById('res-orcamento-vazio').style.display = d.orcamento.length ? 'none' : '';
     const addBox = document.getElementById('res-orc-add');
-    addBox.style.display = podeEditar ? 'flex' : 'none';
+    // O "+ Limite so neste mes" so faz sentido com algum orcamento definido (padrao ou ajuste deste mes, mesmo que 0).
+    const padraoOrc = getEmpresa().orcamento_padrao || {};
+    const temOrcamento = Object.values(padraoOrc).some(v => Number(v) > 0) || Object.keys(_resLerLS('sc_fin_orcamento_mes')[mes] || {}).length > 0;
+    addBox.style.display = podeEditar && temOrcamento ? 'flex' : 'none';
     const selGrupo = document.getElementById('res-orc-grupo');
     if (selGrupo && !selGrupo.options.length) selGrupo.innerHTML = ResultadoCore.GRUPOS.map(g => `<option value="${g.id}">${escapeHtml(g.rotulo)}</option>`).join('');
 
@@ -14826,7 +14858,7 @@ function renderResultadoMes(mes) {
 }
 
 // Janelinha de ajuste de um valor (meta ou limite do mes). Vazio remove o ajuste.
-function _resAbrirAjuste({ titulo, dica, atual, aoSalvar }) {
+function _resAbrirAjuste({ titulo, dica, atual, aoSalvar, sugestao }) {
     document.getElementById('res-ajuste-modal')?.remove();
     const o = document.createElement('div');
     o.id = 'res-ajuste-modal';
@@ -14835,7 +14867,7 @@ function _resAbrirAjuste({ titulo, dica, atual, aoSalvar }) {
     o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:380px;width:92%">
         <h3 style="margin:0 0 10px;font-size:16px">${escapeHtml(titulo)}</h3>
         <div class="form-group"><label for="res-ajuste-valor">Valor (R$)</label>
-            <input type="text" inputmode="decimal" id="res-ajuste-valor" value="${atual != null ? escapeHtml(String(atual).replace('.', ',')) : ''}" placeholder="ex: 30.000">
+            <input type="text" inputmode="decimal" id="res-ajuste-valor" value="${atual != null ? escapeHtml(String(atual).replace('.', ',')) : ''}" placeholder="${escapeHtml(sugestao || 'ex: 30.000')}">
             <small style="color:#888">${escapeHtml(dica)}</small></div>
         <div id="res-ajuste-erro" style="color:#F43927;font-size:13px;min-height:16px"></div>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
@@ -14870,8 +14902,10 @@ document.addEventListener('keydown', e => {
 function ajustarMetaMes(mes) {
     if (!temAcesso('financeiro.resultado', 'completo')) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
     const atual = _resLerLS('sc_fin_metas')[mes] > 0 ? _resLerLS('sc_fin_metas')[mes] : null;
+    const padrao = Number(getEmpresa().meta_faturamento_padrao);
     _resAbrirAjuste({
         titulo: 'Meta de faturamento deste mês', dica: 'Vale só para este mês. Vazio volta à meta padrão da Empresa.', atual,
+        sugestao: padrao > 0 ? padrao.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '',
         aoSalvar: v => {
             const metas = _resLerLS('sc_fin_metas');
             if (v != null && v > 0) metas[mes] = v; else delete metas[mes];
@@ -15127,6 +15161,7 @@ function abrirFechamentoMes(mes) {
         const r = d.r;
         const comp = (rotulo, atual, anterior) => {
             const dif = CaixaCore.arredondar(atual - anterior);
+            if (Math.round(dif * 100) === 0) return `<li>${rotulo}: ${_resBrl(atual)} × ${_resBrl(anterior)} em ${escapeHtml(FechamentoCore.rotuloMes(ant))} — igual ao mês anterior</li>`;
             const pct = Math.round(anterior * 100) !== 0 ? ` (${dif >= 0 ? '+' : '−'}${Math.abs(Math.round(dif / Math.abs(anterior) * 100))}%)` : '';
             return `<li>${rotulo}: ${_resBrl(atual)} × ${_resBrl(anterior)} em ${escapeHtml(FechamentoCore.rotuloMes(ant))} — ${_fechDifTxt(dif)}${pct}</li>`;
         };
@@ -15295,10 +15330,13 @@ function renderHoje() {
         const c = todasContas.find(x => CaixaCore.mesmoId(x.id, m.conta_id));
         return `<div class="hoje-item"><div class="hoje-item-desc">${escapeHtml(m.descricao || 'Repasse do cartão')}<small>${escapeHtml(c ? c.nome : '')}</small></div><div class="hoje-item-valor">${brl(m.liquido != null ? m.liquido : m.valor)} <small style="color:var(--muted)">líquido</small></div></div>`;
     };
-    const html = grupo('receber-atrasados', 'A receber — atrasados', 'vermelho', t.receberAtrasados, linhaCR)
-        + grupo('receber-hoje', 'A receber hoje', 'amarelo', t.receberHoje, linhaCR)
-        + grupo('pagar-atrasados', 'A pagar — atrasados', 'vermelho', t.pagarAtrasados, linhaCP)
-        + grupo('pagar-proximos', 'A pagar nos próximos 7 dias', 'cinza', t.pagarProximos, linhaCP)
+    // As tarefas seguem a permissao de ver: quem nao ve A Receber/A Pagar nao ve as tarefas de la.
+    const veReceber = temAcesso('financeiro.receber', 'visualizar');
+    const vePagar = temAcesso('financeiro.pagar', 'visualizar');
+    const html = grupo('receber-atrasados', 'A receber — atrasados', 'vermelho', veReceber ? t.receberAtrasados : [], linhaCR)
+        + grupo('receber-hoje', 'A receber hoje', 'amarelo', veReceber ? t.receberHoje : [], linhaCR)
+        + grupo('pagar-atrasados', 'A pagar — atrasados', 'vermelho', vePagar ? t.pagarAtrasados : [], linhaCP)
+        + grupo('pagar-proximos', 'A pagar nos próximos 7 dias', 'cinza', vePagar ? t.pagarProximos : [], linhaCP)
         + grupo('cartao-hoje', 'Cartão que cai hoje', 'info', t.cartaoHoje, linhaCartao);
     // Orcamento estourado no mes atual (mesma regra do Resultado do mes), so para quem ve o Resultado.
     let avisoOrc = '';
@@ -15357,7 +15395,7 @@ function renderHoje() {
     if (cardPrev) cardPrev.style.display = '';
     const sd = CaixaCore.saldosHoje(contas, movs, hoje);
     elS.innerHTML = `<div class="hoje-total">Total <span id="hoje-total">${brl(sd.total)}</span></div>` + sd.contas.map(c =>
-        `<div class="hoje-conta" onclick='abrirExtratoDaConta(${jid(c.id)})'><span>${escapeHtml(c.nome || '')}${c.a_cair > 0 ? `<small>${brl(c.a_cair)} a cair</small>` : ''}</span><strong>${brl(c.saldo)}</strong></div>`).join('');
+        `<div class="hoje-conta" role="button" tabindex="0" onclick='abrirExtratoDaConta(${jid(c.id)})' onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();abrirExtratoDaConta(${jid(c.id)})}"><span>${escapeHtml(c.nome || '')}${c.a_cair > 0 ? `<small>${brl(c.a_cair)} a cair</small>` : ''}</span><strong>${brl(c.saldo)}</strong></div>`).join('');
 
     const semanas = CaixaCore.previsaoSemanal({ hoje, saldoHoje: sd.total, movimentos: movs, contasReceber: db.contas_receber, contasPagar: db.contas_pagar, despesasFixas: db.despesas_fixas, contas: todasContas, meios: getMeiosPag(), semanas: 8 });
     const neg = CaixaCore.primeiraSemanaNegativa(semanas);
@@ -15941,8 +15979,9 @@ function renderDashboardFinanceiro() {
         const fatAnt= resultadoFinanceiroDoMes(mesAntStr).faturamento;
         if (alertaAtivo('fin_tendencia') && fatAnt>0) {
             const pct = ((fatAt-fatAnt)/fatAnt*100).toFixed(1);
+            const igual = Math.round(fatAt * 100) === Math.round(fatAnt * 100);
             alertas.push(mkA(fatAt>=fatAnt?'success':'warning', fatAt>=fatAnt?'📈':'📉',
-                `Faturamento deste mês <strong>${fatAt>=fatAnt?'+':''}${pct}%</strong> vs. mês anterior (R$ ${fmt(fatAt)} × R$ ${fmt(fatAnt)})`));
+                `Faturamento deste mês <strong>${igual ? 'igual ao mês anterior' : (fatAt>=fatAnt?'+':'') + pct + '% vs. mês anterior'}</strong> (R$ ${fmt(fatAt)} × R$ ${fmt(fatAnt)})`));
         }
 
         const metaMes = metaFinanceiraDoMes(mesAtStr);
@@ -16290,7 +16329,7 @@ async function cobrarNoWhatsApp(crId) {
         cliente: cr.cliente_nome,
         empresa: emp.nome_fantasia || emp.razao_social || 'nossa empresa',
         valor: 'R$ ' + cr.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
-        pedido: '#' + formatPedidoId(cr.pedido_id),
+        pedido: cr.pedido_id != null && cr.pedido_id !== '' ? '#' + formatPedidoId(cr.pedido_id) : '',
         vencimento: venc
     });
     const link = tel ? CaixaCore.linkWhatsApp(tel, msg) : 'https://wa.me/?text=' + encodeURIComponent(msg);

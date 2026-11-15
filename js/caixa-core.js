@@ -258,7 +258,10 @@
 
     function montarMensagem(template, dados) {
         const d = dados || {};
-        return String(template == null ? '' : template).replace(/\{(cliente|empresa|valor|pedido|vencimento)\}/g, (_, k) => (d[k] == null ? '' : String(d[k])));
+        let t = String(template == null ? '' : template);
+        // Sem pedido (conta avulsa): tira o trecho "do pedido {pedido}" em vez de deixar o texto sem sentido.
+        if (d.pedido == null || d.pedido === '') t = t.replace(/\s+(?:do |de |ao |no )?pedido\s+\{pedido\}/gi, '');
+        return t.replace(/\{(cliente|empresa|valor|pedido|vencimento)\}/g, (_, k) => (d[k] == null ? '' : String(d[k])));
     }
 
     function linkWhatsApp(telefone, mensagem) {

@@ -136,14 +136,14 @@
         <div class="card" style="max-width:860px" id="emp-formas-pag-card">
             <h3 style="margin-bottom:6px;color:var(--primary)">📋 Planos de pagamento</h3>
             <p style="font-size:12px;color:#8F8F8F;margin-bottom:14px">
-                Planos que aparecem no campo "Forma de Pagamento" ao emitir um pedido (ex.: 50% entrada + 50% na instalação).
+                Planos que aparecem no campo "Plano" ao emitir um pedido (ex.: 50% entrada + 50% na instalação).
                 A primeira da lista já vem marcada nos pedidos novos. Use as setas para mudar a ordem.
-                O <strong>% desc.</strong> é o desconto que o pedido recebe ao escolher a forma. A <strong>% entrada</strong> é a parte cobrada ao aprovar; o resto vence na entrega. Os dois podem ser alterados no pedido.
+                O <strong>% desc.</strong> é o desconto que o pedido recebe ao escolher o plano. A <strong>% entrada</strong> é a parte cobrada ao aprovar; o resto vence na entrega. Os dois podem ser alterados no pedido.
             </p>
             <div id="emp-formas-pag" class="formas-pag-lista"></div>
-            <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px" onclick="adicionarFormaPagamento()">+ Adicionar forma de pagamento</button>
+            <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px" onclick="adicionarFormaPagamento()">+ Adicionar plano de pagamento</button>
             <div style="display:flex;gap:10px;margin-top:14px;align-items:center">
-                <button class="btn btn-success" onclick="salvarFormasPagamento()">💾 Salvar Formas de Pagamento</button>
+                <button class="btn btn-success" onclick="salvarFormasPagamento()">💾 Salvar Planos de Pagamento</button>
                 <button class="btn btn-outline" onclick="restaurarFormasPagamento()">↩ Restaurar Padrão</button>
             </div>
         </div>

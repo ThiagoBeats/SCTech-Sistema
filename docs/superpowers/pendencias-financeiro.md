@@ -65,13 +65,13 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [x] FUNCIONALIDADES: 10.20 não diz que a aba Hoje exige a permissão Hoje; 10.18 não cita o "a cair" por conta. **Feito:** 10.20 diz que a aba Hoje exige a permissão Hoje; 10.18 mostra o "a cair" por conta.
 
 ### Telas e textos
-- [ ] Botões e textos ainda dizem "forma de pagamento" onde agora é "plano".
-- [ ] Aviso de repasse com quebras de linha (\n\n) sobrando.
-- [ ] "#undefined" na conta a receber sem pedido.
-- [ ] Hover da conta na tela Hoje invisível no tema escuro; `.hoje-conta` sem acesso por teclado.
-- [ ] Tarefas da tela Hoje aparecem para quem não pode visualizar receber/pagar (só os botões são barrados).
-- [ ] Comentários "na Visão Geral" no código estão desatualizados.
-- [ ] Comissão antiga paga sem conta a pagar não tem botão Estornar.
+- [x] Botões e textos ainda dizem "forma de pagamento" onde agora é "plano". **Feito:** na configuração (Empresa > Preferências) botões, avisos e rótulos dizem "plano" (Adicionar plano, Salvar Planos, "Nenhum plano cadastrado") e o card do kanban diz "Plano de pagamento". Mantido: o simulador de compra (à vista/parcelado) e o título "4. Forma de Pagamento" do pedido (tem plano e meio).
+- [x] Aviso de repasse com quebras de linha (\n\n) sobrando. **Feito:** o aviso do estorno de cartão ("Isso muda o saldo de hoje da conta X.") vem na mesma frase, sem quebra de linha.
+- [x] "#undefined" na conta a receber sem pedido. **Feito:** a cobrança de conta sem pedido não escreve número; o trecho "do pedido" some da mensagem.
+- [x] Hover da conta na tela Hoje invisível no tema escuro; `.hoje-conta` sem acesso por teclado. **Feito:** hover e foco visíveis no tema escuro; a conta é `role="button"` com `tabindex="0"` e abre o Extrato com Enter ou Espaço.
+- [x] Tarefas da tela Hoje aparecem para quem não pode visualizar receber/pagar (só os botões são barrados). **Feito:** tarefas de receber só com `financeiro.receber` (visualizar) e de pagar só com `financeiro.pagar` (visualizar).
+- [x] Comentários "na Visão Geral" no código estão desatualizados. **Feito:** os avisos de cópia e de revisão ficam no topo do Financeiro (todas as abas); comentários corrigidos.
+- [x] Comissão antiga paga sem conta a pagar não tem botão Estornar. **Feito:** o histórico de comissões ganhou "Estornar" para a comissão paga sem conta (`estornarComissaoAntiga`): desmarca a comissão no pedido e ela volta a pendente.
 
 ### Testes que faltam
 - [ ] Cartão: cancelar, débito, antecipar, recebimento parcial com cartão e conta removida.
@@ -95,10 +95,10 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [x] Recebimento com data futura sem movimento some de 'Até hoje' e do 'Previsto' (ligado à pendência de data futura na baixa). **Feito:** conferido e testado: com a data bloqueada não nasce mais; os antigos contam em "Até hoje" quando a data chega.
 
 ### Telas e textos
-- [ ] A opção "Imposto" está duplicada em dois lugares no código (formulário do A Pagar e despesas fixas).
-- [ ] O campo de valor das parcelas (`cpm-valor`) ainda é `type=number` e não aceita "1.250,50".
-- [ ] Na Visão Geral, a meta padrão não aparece como sugestão (sem placeholder) no campo de ajuste do mês.
-- [ ] O seletor "+ Limite só neste mês" fica visível mesmo sem nenhum orçamento definido.
+- [x] A opção "Imposto" está duplicada em dois lugares no código (formulário do A Pagar e despesas fixas). **Feito:** `CATEGORIA_IMPOSTO` única, usada pelas listas do A Pagar, do simulador e das despesas fixas.
+- [x] O campo de valor das parcelas (`cpm-valor`) ainda é `type=number` e não aceita "1.250,50". **Feito:** campo de texto lido com `_valorDigitadoBaixa` (aceita "1.250,50").
+- [x] Na Visão Geral, a meta padrão não aparece como sugestão (sem placeholder) no campo de ajuste do mês. **Feito:** a meta padrão da Empresa aparece como placeholder no ajuste do mês (no Resultado do mês).
+- [x] O seletor "+ Limite só neste mês" fica visível mesmo sem nenhum orçamento definido. **Feito:** só aparece com algum orçamento definido (padrão ou ajuste do mês, mesmo 0).
 
 ### Testes que faltam
 - [ ] Escape e empilhamento das janelas de ajuste (meta/limite) com outras janelas abertas.
@@ -112,7 +112,7 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 ## Da Fase 3
 - [x] Sugestão de alta de grupo pode incluir o Imposto (repete a sugestão da guia); excluir o imposto da comparação. **Feito:** o Imposto fica fora da alta de grupo.
 - [x] Conta sem data de saldo inicial fica fora da conferência do fechamento. **Feito:** entra na conferência com o saldo inicial desde sempre.
-- [ ] Comparação com mês anterior mostra "+0%" quando a diferença é zero.
+- [x] Comparação com mês anterior mostra "+0%" quando a diferença é zero. **Feito:** diferença zero mostra "igual ao mês anterior" (passo 3 do fechamento e alerta de tendência).
 - [x] Parcelas do simulador param no último dia do mês (31 → 28/02); o parcelado do A Pagar pula para o mês seguinte. Unificar a regra. **Feito (R4):** os dois usam `FinanceiroCore.somarMesesData` (dia que não existe vira o último dia do mês, sempre a partir da data base).
 - [ ] Testes que faltam: alta de grupo no limite (30% / R$ 100), ajuste de entrada e "Deixar anotado" no fechamento, duplo clique em Lançar chamando a função duas vezes, migração da permissão em permissões extras do usuário.
 
