@@ -92,8 +92,8 @@ test('cartao credito 3x gera 3 entradas e 3 taxas pagas, nada no saldo de hoje',
     expect(saidas).toHaveLength(3);
     expect(new Set(movs.map(m => m.grupo_id)).size).toBe(1);
     expect(movs[0].grupo_id).not.toBeNull();
-    const saldo = await page.evaluate(h => CaixaCore.saldoConta(getContasFin()[2], db.movimentos_fin, h), HOJE);
-    expect(saldo).toBe(0);
+    // A pagina recarrega depois da baixa: espera o app da pagina nova antes de ler.
+    await expect.poll(() => page.evaluate(h => (typeof getContasFin === 'function' ? CaixaCore.saldoConta(getContasFin()[2], db.movimentos_fin, h) : null), HOJE)).toBe(0);
 });
 
 test('entrada PIX e saldo cartao na mesma baixa, cada linha com seu meio', async ({ page }) => {

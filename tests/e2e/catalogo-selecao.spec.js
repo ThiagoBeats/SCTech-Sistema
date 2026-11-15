@@ -574,6 +574,7 @@ test('da para desistir do que falta na fila sem perder o que ja foi salvo', asyn
     await page.click('#sc-modal-ok');
 
     await page.waitForFunction(() => localStorage.getItem('sc_pc_fila') === null);
-    expect(await page.evaluate(() => db.pedidos_compra.length), 'o que ja foi salvo fica').toBe(1);
+    // A pagina recarrega depois de gravar: espera o app da pagina nova (db) antes de ler.
+    await expect.poll(() => page.evaluate(() => (typeof db === 'undefined' ? null : db.pedidos_compra.length)), 'o que ja foi salvo fica').toBe(1);
     await expect(page.locator('#pc-fila-banner')).toBeHidden();
 });
