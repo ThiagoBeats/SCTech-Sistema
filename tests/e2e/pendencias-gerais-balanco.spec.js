@@ -76,3 +76,23 @@ test('digitar o codigo ainda puxa o nome', async ({ page }) => {
     expect(await codigos(page, 'balanco-tbody-mats')).toEqual(['M-900']);
     expect(await codigos(page, 'balanco-tbody-tecidos')).toEqual([]);
 });
+
+test('mesmo nome e mesmo tipo: o codigo desempata na sugestao', async ({ page }) => {
+    await semear(page);
+    await page.evaluate(() => {
+        const mat = JSON.parse(localStorage.getItem('sc_mat'));
+        mat.push({ id: 23, referencia: 'M-902', nome: 'SUPORTE', unidade: 'un', estoque_atual: 5, preco: 5 });
+        localStorage.setItem('sc_mat', JSON.stringify(mat));
+    });
+    await page.reload();
+    await page.click('button:has-text("Balanço de Estoque")');
+    const ops = await opcoes(page);
+    expect(ops).toContain('SUPORTE — Material (M-901)');
+    expect(ops).toContain('SUPORTE — Material (M-902)');
+    await page.fill('#balanco-filter-nome', 'SUPORTE');
+    await expect(page.locator('#balanco-filter-ref')).toHaveValue('');
+    expect(await codigos(page, 'balanco-tbody-mats')).toEqual(['M-901', 'M-902']);
+    await page.fill('#balanco-filter-nome', 'SUPORTE — Material (M-902)');
+    await expect(page.locator('#balanco-filter-ref')).toHaveValue('M-902');
+    expect(await codigos(page, 'balanco-tbody-mats')).toEqual(['M-902']);
+});

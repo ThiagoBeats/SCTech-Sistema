@@ -4600,6 +4600,10 @@ function _itensDoBalanco() {
     itens.forEach(i => { const k = i.nome.trim().toLowerCase(); vezes[k] = (vezes[k] || 0) + 1; });
     // Nome repetido (ex.: um tecido e um material): a sugestao leva o tipo.
     itens.forEach(i => { i.repetido = vezes[i.nome.trim().toLowerCase()] > 1; i.rotulo = i.repetido ? `${i.nome} — ${i.tipo}` : i.nome; });
+    // Mesmo nome e mesmo tipo: o codigo desempata ("Nome — Tecido (T-100)").
+    const rotulos = {};
+    itens.forEach(i => { const k = i.rotulo.trim().toLowerCase(); rotulos[k] = (rotulos[k] || 0) + 1; });
+    itens.forEach(i => { if (rotulos[i.rotulo.trim().toLowerCase()] > 1 && i.cod) i.rotulo = `${i.rotulo} (${i.cod})`; });
     return itens;
 }
 
