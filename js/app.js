@@ -326,7 +326,8 @@ function garantirKitsFixacaoPadrao() {
 garantirKitsFixacaoPadrao();
 
 // Maior sequencial ja usado no formato ano + sequencial (ex.: 26001 -> 1).
-// Ids antigos (Date.now()) e de outro formato nao entram na conta.
+// O prefixo do ano e ignorado (conta so o sequencial), de proposito: o contador nao
+// zera na virada do ano. Ids antigos (Date.now()) e de outro formato nao entram na conta.
 function _maiorSeqExistente(lista) {
     let maior = 0;
     (lista || []).forEach(p => {
@@ -7981,26 +7982,48 @@ function importarDados(event) {
                 extras.push(['sc_' + k, JSON.stringify(o && typeof o === 'object' && !Array.isArray(o) ? o : {})]);
             });
             // Acesso e numeracao. Backup antigo (sem usuarios/papeis) deixa os atuais como estao.
-            // Quem esta logado continua entrando: a sessao passa para o mesmo e-mail do backup;
-            // se o backup nao o tem e tambem nao traz um administrador ativo, ele e mantido.
-            let sessaoNova = null;
+            // Com usuarios no arquivo: quem importou continua entrando pelo mesmo e-mail; se o
+            // arquivo nao tem administrador ativo, quem importou vira administrador (ativo) para
+            // ninguem ficar trancado fora. Se nao ha como manter a sessao, ela e encerrada
+            // depois da gravacao e a pessoa entra pela tela de login (nunca vira outro usuario).
+            let sessaoNova = null, encerrarSessao = false;
             const usuariosAtuais = db.usuarios.slice();
             if (Array.isArray(dados.papeis) && dados.papeis.length) db.papeis = dados.papeis;
             if (Array.isArray(dados.usuarios) && dados.usuarios.length) {
                 db.usuarios = dados.usuarios;
+                encerrarSessao = true;
+                const mesmoId = (a, b) => String(a) === String(b);
+                const maiorId = lista => lista.reduce((m, x) => Math.max(m, Number(x.id) || 0), 0);
+                // papeis e usuarios precisam combinar: papel que falta volta do padrao; sem padrao,
+                // o usuario fica com o papel Vendedor/Atendimento (o de menos acesso entre os padroes com login).
+                const padroes = papeisPadrao();
+                db.usuarios.forEach(u => {
+                    if (db.papeis.some(p => mesmoId(p.id, u.papel_id))) return;
+                    let p = padroes.find(x => mesmoId(x.id, u.papel_id)) || padroes.find(x => x.id === 3);
+                    if (!db.papeis.some(x => mesmoId(x.id, p.id))) db.papeis.push(p);
+                    u.papel_id = p.id;
+                });
                 let sess = null;
                 try { sess = JSON.parse(sessionStorage.getItem('sc_user') || 'null'); } catch (e1) { sess = null; }
-                const atual = sess && usuariosAtuais.find(u => u.id === sess.id);
+                const atual = sess && usuariosAtuais.find(u => mesmoId(u.id, sess.id));
                 if (atual) {
-                    const mesmo = db.usuarios.find(u => String(u.email || '').toLowerCase() === String(atual.email || '').toLowerCase());
-                    const papelAdmin = db.papeis.find(p => p.nome === 'Administrador');
-                    const temAdmin = db.usuarios.some(u => u.ativo && papelAdmin && u.papel_id === papelAdmin.id);
-                    if (mesmo) sessaoNova = { id: mesmo.id, nome: nomeExibicao(mesmo), email: mesmo.email };
-                    else if (!temAdmin) {
-                        const novoId = db.usuarios.reduce((m, u) => Math.max(m, Number(u.id) || 0), 0) + 1;
-                        db.usuarios.push(Object.assign({}, atual, { id: novoId }));
-                        sessaoNova = { id: novoId, nome: nomeExibicao(atual), email: atual.email };
+                    let eu = db.usuarios.find(u => String(u.email || '').toLowerCase() === String(atual.email || '').toLowerCase());
+                    let papelAdmin = db.papeis.find(p => p.nome === 'Administrador');
+                    const temAdmin = () => db.usuarios.some(u => u.ativo && papelAdmin && mesmoId(u.papel_id, papelAdmin.id));
+                    if (!temAdmin()) {
+                        if (!papelAdmin) {
+                            const padrao = padroes.find(p => p.nome === 'Administrador');
+                            papelAdmin = db.papeis.some(p => mesmoId(p.id, padrao.id)) ? Object.assign({}, padrao, { id: maiorId(db.papeis) + 1 }) : padrao;
+                            db.papeis.push(papelAdmin);
+                        }
+                        if (!eu) {
+                            eu = Object.assign({}, atual, { id: maiorId(db.usuarios) + 1 });
+                            db.usuarios.push(eu);
+                        }
+                        eu.ativo = true;
+                        eu.papel_id = papelAdmin.id;
                     }
+                    if (eu && eu.ativo) { sessaoNova = { id: eu.id, nome: nomeExibicao(eu), email: eu.email }; encerrarSessao = false; }
                 }
             }
             // Contadores: o do backup quando existe; sem ele (backup antigo) o proximo numero
@@ -8036,6 +8059,7 @@ function importarDados(event) {
             // Gravou: o que era dos dados anteriores (copia, revisao e avisos) sai.
             ['sc_fin_backup_fase0', 'sc_fin_revisar', 'sc_fin_backup_falhou', 'sc_fin_migracao_erro'].forEach(k => localStorage.removeItem(k));
             if (sessaoNova) sessionStorage.setItem('sc_user', JSON.stringify(sessaoNova));
+            else if (encerrarSessao) sessionStorage.removeItem('sc_user');
             toastReload('Dados importados com sucesso!', 'info');
             window.location.reload();
         } catch (err) {

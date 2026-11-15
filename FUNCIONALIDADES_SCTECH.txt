@@ -532,6 +532,11 @@ Importar Dados:
     mostruário, alertas, cards da página inicial, agenda e perfis do importador.
     Ficam de fora o que é só do navegador (tema, menu lateral, filtros, cache de
     endereços). Arquivo antigo, sem essa parte, mantém as configurações atuais
+  - O arquivo de backup contém as senhas dos usuários (em código, não em texto) e
+    os dados dos clientes: guarde-o em lugar privado e não o envie a ninguém
+  - Se o arquivo importado não tiver administrador ativo, quem importou passa a ser
+    administrador. Se o e-mail de quem importou não estiver no arquivo, a sessão
+    é encerrada e a pessoa entra pela tela de login
   - O próximo número de pedido (e de pedido de compra) é sempre maior que o
     maior já existente, mesmo com arquivo antigo sem o contador
   - Se o navegador ficar sem espaço no meio da importação, aparece "A importação
