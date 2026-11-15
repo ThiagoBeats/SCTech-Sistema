@@ -837,10 +837,8 @@ async function removerContaCfg(i) {
             : ' Os meios ' + nomesMeios.slice(0, -1).join(', ') + ' e ' + nomesMeios[nomesMeios.length - 1] + ' ficam sem conta.';
         if (!await showConfirm('Excluir a conta ' + (c.nome || '').trim() + '?' + sobreMeios, '🗑️', 'Excluir', 'Cancelar')) return;
     }
-    [...getMeiosPag(), ...(_meiosRascunho || [])].filter(ligado).forEach(m => {
-        m.conta_id = null;
-        if (m.id != null) _meiosSemContaCfg.add(String(m.id));
-    });
+    // so o rascunho dos meios muda agora; o salvo so muda no "Salvar contas"
+    (_meiosRascunho || []).filter(ligado).forEach(m => { m.conta_id = null; });
     const k = _contasRascunho.indexOf(c);
     if (k >= 0) _contasRascunho.splice(k, 1);
     renderContasCfg();
@@ -884,7 +882,12 @@ async function salvarContasCfg() {
     });
     db.contas_fin = contas;
     // meio ligado a uma conta que sumiu fica sem conta
-    getMeiosPag().forEach(m => { if (m.conta_id != null && !contas.some(c => CaixaCore.mesmoId(c.id, m.conta_id))) m.conta_id = null; });
+    // (e nao ganha outra conta sozinho)
+    getMeiosPag().forEach(m => {
+        if (m.conta_id == null || contas.some(c => CaixaCore.mesmoId(c.id, m.conta_id))) return;
+        m.conta_id = null;
+        if (m.id != null) _meiosSemContaCfg.add(String(m.id));
+    });
     garantirMeiosPadrao();
     // meio sem conta ganha a primeira conta do tipo certo; conta escolhida nunca muda
     const contaDoTipo = { dinheiro: 'caixa', pix: 'banco', transferencia: 'banco', boleto: 'banco', cartao_debito: 'maquininha', cartao_credito: 'maquininha' };

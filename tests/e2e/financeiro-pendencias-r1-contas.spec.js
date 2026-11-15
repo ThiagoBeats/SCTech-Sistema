@@ -68,6 +68,17 @@ test('remover conta sem movimentos pede confirmacao', async ({ page }) => {
     await expect(page.locator('#emp-meios .meio-linha').nth(1).locator('.meio-conta')).toHaveValue('');
 });
 
+test('excluir conta e nao salvar: o meio salvo continua com a conta', async ({ page }) => {
+    await abrirPref(page, { sc_contas_fin: [CAIXA, BANCO], sc_meios_pag: MEIOS });
+    await page.locator('#emp-contas .conta-linha').nth(1).locator('button[title="Remover conta"]').click();
+    await page.locator('#sc-modal-ok').click();
+    await expect(page.locator('#emp-contas .conta-linha')).toHaveCount(1);
+    // outra gravacao qualquer na mesma pagina nao leva a exclusao ainda nao salva
+    await page.evaluate(() => syncDB());
+    expect((await ler(page, 'sc_meios_pag'))[1].conta_id).toBe(11);
+    expect((await ler(page, 'sc_contas_fin')).length).toBe(2);
+});
+
 test('excluir conta sem movimentos: os meios dela ficam sem conta (e nao ganham outra ao salvar)', async ({ page }) => {
     const BANCO2 = { ...BANCO, id: 12, nome: 'Banco 2' };
     const meios = [...MEIOS, { id: 23, nome: 'Transferência', tipo: 'transferencia', conta_id: 11 }];
