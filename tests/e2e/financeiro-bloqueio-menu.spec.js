@@ -228,7 +228,7 @@ test('a preferencia sobrevive a sair e entrar, por usuario', async ({ page }) =>
     expect(await page.evaluate(() => localStorage.getItem('sc_sidebar_u1'))).toBe('collapsed');
     // Sai (sessao some) e entra de novo.
     await page.evaluate(() => sessionStorage.clear());
-    await page.evaluate(() => sessionStorage.setItem('sc_user', JSON.stringify({ id: 1 })));
+    await page.evaluate(() => sessionStorage.setItem('sc_user', JSON.stringify({ id: 1, email: 'teste@sctech.local' })));
     await page.goto(BASE + '/pcp.html');
     await page.mouse.move(900, 400);
     await expect(page.locator('html')).toHaveAttribute('data-sidebar', 'collapsed');

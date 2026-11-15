@@ -157,3 +157,49 @@ test('usuarios sem papeis no arquivo: todo usuario fica com um papel que existe'
     expect(r.u.find(u => u.email === 'a@x.com').papel_id).toBe(3);
     expect(r.u.find(u => u.email === 'b@x.com').papel_id).toBe(6);
 });
+
+// Revisao final: a aba Backup tambem e do Gerente/Financeiro, mas usuarios e papeis
+// (com as senhas em hash) so saem e entram pelo Administrador.
+const GERENTE = { sc_usr: [{ id: 1, nome: 'Teste', email: 'teste@sctech.local', papel_id: 6, ativo: true, permissoes_extras: {}, senha_hash: '' }] };
+
+test('Gerente exporta: o arquivo nao leva usuarios nem papeis', async ({ page }) => {
+    await entrar(page, BASE, GERENTE);
+    await page.goto(BASE + '/index.html');
+    const backup = await page.evaluate(() => JSON.parse(JSON.stringify(_dadosExportacao(false))));
+    expect(backup.clientes).toBeDefined();
+    expect(backup.usuarios).toBeUndefined();
+    expect(backup.papeis).toBeUndefined();
+});
+
+test('Gerente importa backup com usuarios: usuarios e papeis ficam, ninguem vira administrador', async ({ page }) => {
+    await entrar(page, BASE, GERENTE);
+    await page.goto(BASE + '/index.html');
+    const antes = await usuariosPapeis(page);
+    await importar(page, Object.assign({}, base, {
+        clientes: [{ id: 77, nome: 'Cliente do backup' }],
+        usuarios: [U(1, 'teste@sctech.local', { papel_id: 3 }), U(2, 'intruso@x.com', { papel_id: 3 })],
+        papeis: [{ id: 3, nome: 'Vendedor/Atendimento', permissoes: {} }],
+    }));
+    await expect(page.locator('#sc-modal-msg')).toHaveText('Dados importados. Usuários e acessos não foram importados: só o Administrador importa usuários.');
+    await page.locator('#sc-modal-ok').click();
+    await page.waitForURL(/index\.html/);
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_cli'))).toContain('Cliente do backup');
+    const r = await usuariosPapeis(page);
+    expect(r.u).toEqual(antes.u);
+    expect(r.p).toEqual(antes.p);
+    expect(JSON.parse(r.s).id).toBe(1);
+    expect(await page.evaluate(() => getUsuarioLogado().papel_id)).toBe(6);
+});
+
+test('sessao de outra aba nao vira outro usuario: e-mail diferente do da sessao vai para o login', async ({ page }) => {
+    await entrar(page, BASE, {});
+    await page.goto(BASE + '/index.html');
+    await page.evaluate(() => {
+        const u = JSON.parse(localStorage.getItem('sc_usr'));
+        u[0].email = 'outro@x.com';
+        localStorage.setItem('sc_usr', JSON.stringify(u));
+    });
+    await page.goto(BASE + '/pcp.html');
+    await page.waitForURL(/login\.html/);
+    expect(await page.evaluate(() => sessionStorage.getItem('sc_user'))).toBeNull();
+});

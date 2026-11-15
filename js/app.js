@@ -1508,7 +1508,11 @@ function getUsuarioLogado() {
     let sess;
     try { sess = JSON.parse(sessionStorage.getItem('sc_user') || 'null'); } catch { return null; }
     if (!sess) return null;
-    return db.usuarios.find(u => u.id === sess.id) || null;
+    const u = db.usuarios.find(x => x.id === sess.id);
+    // A sessao guarda o e-mail de quem entrou: se o usuario com esse id agora tem outro
+    // e-mail (ex.: outra aba importou um backup com outros usuarios), a sessao nao vale.
+    if (!u || String(u.email || '').toLowerCase() !== String(sess.email || '').toLowerCase()) return null;
+    return u;
 }
 
 // Resolução: permissão específica do usuário sobrescreve o papel quando presente.
@@ -2057,7 +2061,16 @@ async function salvarUsuario(id) {
             await showAlert('Este é o único Administrador ativo. Defina outro Administrador antes de mudar o papel dele.', '🛡️');
             return;
         }
+        const eraEu = getUsuarioLogado() === u;
         u.nome = nome; u.email = email; u.papel_id = papelId; u.permissoes_extras = permissoes_extras;
+        // Mudou o proprio e-mail: a sessao acompanha (ela confere o e-mail a cada tela).
+        if (eraEu) {
+            try {
+                const sess = JSON.parse(sessionStorage.getItem('sc_user') || '{}');
+                sess.email = email;
+                sessionStorage.setItem('sc_user', JSON.stringify(sess));
+            } catch (e) {}
+        }
         const ativoEl = document.getElementById('usr-ativo');
         if (ativoEl) u.ativo = ativoEl.checked;
         if (senha) u.senha_hash = await hashSenha(senha);
@@ -7929,13 +7942,15 @@ function _dadosExportacao(marcaFase0) {
         medicoes: db.medicoes, rotas: db.rotas || [],
         fin_metas: _lerObjetoLS('sc_fin_metas'), fin_orcamento_mes: _lerObjetoLS('sc_fin_orcamento_mes'),
         empresa: getEmpresa(), formas_pag: getFormasPagamentoCfg(),
-        // Acesso: usuarios (com senha ja em hash e preferencias) e papeis. A sessao de quem
-        // esta logado fica so na aba e nunca entra no arquivo.
-        usuarios: db.usuarios, papeis: db.papeis, import_perfis: db.import_perfis || [],
+        import_perfis: db.import_perfis || [],
         config_ls: _configsLS(),
         ped_seq: parseInt(localStorage.getItem('sc_ped_seq') || '0') || 0,
         pc_seq: parseInt(localStorage.getItem('sc_pc_seq') || '0') || 0
     };
+    // Acesso: usuarios (com senha ja em hash e preferencias) e papeis so entram no arquivo
+    // quando quem exporta e o Administrador (a aba Backup tambem e do Gerente/Financeiro).
+    // A sessao de quem esta logado fica so na aba e nunca entra no arquivo.
+    if (ehAdministrador()) { dados.usuarios = db.usuarios; dados.papeis = db.papeis; }
     if (marcaFase0) dados.fin_fase0 = 1;
     return dados;
 }
@@ -7996,10 +8011,14 @@ function importarDados(event) {
             // arquivo nao tem administrador ativo, quem importou vira administrador (ativo) para
             // ninguem ficar trancado fora. Se nao ha como manter a sessao, ela e encerrada
             // depois da gravacao e a pessoa entra pela tela de login (nunca vira outro usuario).
+            // So o Administrador importa usuarios e papeis: para os demais eles ficam como estao.
             let sessaoNova = null, encerrarSessao = false;
             const usuariosAtuais = db.usuarios.slice();
-            if (Array.isArray(dados.papeis) && dados.papeis.length) db.papeis = dados.papeis;
-            if (Array.isArray(dados.usuarios) && dados.usuarios.length) {
+            const importaAcessos = ehAdministrador();
+            const acessosIgnorados = !importaAcessos &&
+                ((Array.isArray(dados.papeis) && dados.papeis.length > 0) || (Array.isArray(dados.usuarios) && dados.usuarios.length > 0));
+            if (importaAcessos && Array.isArray(dados.papeis) && dados.papeis.length) db.papeis = dados.papeis;
+            if (importaAcessos && Array.isArray(dados.usuarios) && dados.usuarios.length) {
                 db.usuarios = dados.usuarios;
                 encerrarSessao = true;
                 const mesmoId = (a, b) => String(a) === String(b);
@@ -8046,6 +8065,8 @@ function importarDados(event) {
             if (Array.isArray(dados.import_perfis)) db.import_perfis = dados.import_perfis;
             if (dados.config_ls && typeof dados.config_ls === 'object' && !Array.isArray(dados.config_ls)) {
                 CHAVES_CONFIG_BACKUP.forEach(k => {
+                    // a marca do papel Gerente e parte dos papeis: so o Administrador a troca
+                    if (k === CHAVE_PAPEL_GERENTE && !importaAcessos) return;
                     const v = dados.config_ls[k];
                     extras.push([k, typeof v === 'string' ? v : null]);
                 });
@@ -8070,6 +8091,7 @@ function importarDados(event) {
             ['sc_fin_backup_fase0', 'sc_fin_revisar', 'sc_fin_backup_falhou', 'sc_fin_migracao_erro'].forEach(k => localStorage.removeItem(k));
             if (sessaoNova) sessionStorage.setItem('sc_user', JSON.stringify(sessaoNova));
             else if (encerrarSessao) sessionStorage.removeItem('sc_user');
+            if (acessosIgnorados) await showAlert('Dados importados. Usuários e acessos não foram importados: só o Administrador importa usuários.', 'ℹ️');
             toastReload('Dados importados com sucesso!', 'info');
             window.location.reload();
         } catch (err) {
@@ -9488,6 +9510,9 @@ async function atualizarStatusPC(id, status) {
         renderListaPedidosCompra();
         return;
     }
+    // Pedido que ja foi Recebido antes da entrada automatica existir: tem a conta a pagar,
+    // mas nunca passou pela janela de entrada (nem a marca de entrada feita).
+    const recebidoAntes = status === 'Recebido' && !!pc.conta_pagar_gerada && !pc.entrada_estoque_data && !pc.entrada_estoque_vista;
     pc.status = status;
     if (status === 'Enviado') pc.data_envio = hojeLocal();
     else if (status === 'Rascunho') pc.data_envio = null;
@@ -9497,18 +9522,18 @@ async function atualizarStatusPC(id, status) {
     // Recebeu a mercadoria: a conta a pagar nasce aqui, uma vez so.
     if (status === 'Recebido' && !pc.conta_pagar_gerada) await abrirModalContaPagarPC(pc);
     // Depois da conta a pagar: a mercadoria que chegou entra no estoque.
-    if (status === 'Recebido') await abrirEntradaEstoquePC(pc);
+    if (status === 'Recebido') await abrirEntradaEstoquePC(pc, { perguntarSeJaLancou: recebidoAntes });
 }
 
 // --- ENTRADA NO ESTOQUE AO RECEBER O PEDIDO DE COMPRA ---
 
-// Codigo sugerido para o rolo: o codigo do tecido; se ja existe rolo com ele,
-// "<codigo>-A", "<codigo>-B"... o primeiro livre.
+// Codigo sugerido para o rolo: o codigo do tecido; se ja existe rolo com ele
+// (ou ja existe o "<codigo>-A"), "<codigo>-A", "<codigo>-B"... o primeiro livre.
 function _sugerirCodigoRolo(tec, usados) {
     const base = tec.referencia || tec.nome || 'ROLO';
     const jaTem = new Set((db.estoque || []).filter(r => r.tecido_id == tec.id).map(r => String(r.lote || '').toLowerCase()));
     usados.forEach(u => jaTem.add(String(u).toLowerCase()));
-    if (!jaTem.has(base.toLowerCase())) return base;
+    if (!jaTem.has(base.toLowerCase()) && !jaTem.has(`${base}-A`.toLowerCase())) return base;
     for (let n = 0; n < 26 * 26; n++) {
         const letra = n < 26 ? String.fromCharCode(65 + n) : String.fromCharCode(65 + Math.floor(n / 26) - 1) + String.fromCharCode(65 + n % 26);
         if (!jaTem.has(`${base}-${letra}`.toLowerCase())) return `${base}-${letra}`;
@@ -9517,7 +9542,8 @@ function _sugerirCodigoRolo(tec, usados) {
 }
 
 // Monta as linhas da janela a partir dos itens do pedido. Item sem cadastro
-// (texto livre ou cadastro apagado) vira linha "sem cadastro".
+// (texto livre ou cadastro apagado) vira linha "sem cadastro"; item sem controle
+// de estoque (infinito) vira linha desmarcada e travada: nunca entra.
 function _linhasEntradaPC(pc) {
     const usados = [];
     return (pc.itens || []).map((it, idx) => {
@@ -9526,6 +9552,7 @@ function _linhasEntradaPC(pc) {
         if (it.tipo === 'tecido') {
             const tec = (db.catalogo || []).find(c => c.id == it.item_id);
             if (!tec) return { idx, nome: it.item_nome, semCadastro: true };
+            if (temEstoqueInfinito(tec)) return { idx, nome: tec.nome, infinito: true };
             let metros = qtd, custoM = custo;
             if (it.unidade === 'rolo') {
                 // Pedido em rolos: a metragem vem do ultimo rolo desse tecido, se houver.
@@ -9541,10 +9568,12 @@ function _linhasEntradaPC(pc) {
         if (it.tipo === 'kit') {
             const kit = (db.kits || []).find(k => k.id == it.item_id);
             if (!kit) return { idx, nome: it.item_nome, semCadastro: true };
+            if (temEstoqueInfinito(kit)) return { idx, nome: kit.nome, infinito: true };
             return { idx, tipo: 'kit', id: kit.id, nome: kit.nome, qtd, unidade: 'un' };
         }
         const mat = (db.materiais || []).find(m => m.id == it.item_id);
         if (!mat) return { idx, nome: it.item_nome, semCadastro: true };
+        if (temEstoqueInfinito(mat)) return { idx, nome: mat.nome, infinito: true };
         const margem = mat.preco_custo > 0 && mat.preco > 0 ? Math.round(((mat.preco / mat.preco_custo) - 1) * 100) : '';
         return { idx, tipo: 'material', id: mat.id, nome: mat.nome, qtd, unidade: mat.unidade || 'un', custo, margem };
     });
@@ -9552,7 +9581,7 @@ function _linhasEntradaPC(pc) {
 
 // Janela "Entrada no estoque — Pedido #N". Resolve quando fecha. "Lançar depois"
 // so fecha (o status ja mudou); "Confirmar entrada" grava como a entrada manual.
-async function abrirEntradaEstoquePC(pc) {
+async function abrirEntradaEstoquePC(pc, { perguntarSeJaLancou = false } = {}) {
     if (pc.entrada_estoque_data) {
         const d = new Date(pc.entrada_estoque_data + 'T12:00:00').toLocaleDateString('pt-BR');
         await showAlert(`A entrada deste pedido já foi feita em ${d}.`, 'ℹ️');
@@ -9560,14 +9589,25 @@ async function abrirEntradaEstoquePC(pc) {
     }
     const linhas = _linhasEntradaPC(pc);
     if (!linhas.length) return;
-    if (!linhas.some(l => !l.semCadastro)) {
-        await showAlert('Os itens deste pedido não têm cadastro no estoque: lance a entrada à mão no Estoque.', 'ℹ️');
+    if (!linhas.some(l => !l.semCadastro && !l.infinito)) {
+        if (linhas.some(l => l.semCadastro)) await showAlert('Os itens deste pedido não têm cadastro no estoque: lance a entrada à mão no Estoque.', 'ℹ️');
+        else await showAlert('Os itens deste pedido não têm controle de estoque: não há entrada a lançar.', 'ℹ️');
         return;
     }
     if (!temAcesso('estoque', 'completo')) {
         await showAlert('O pedido foi marcado como Recebido. A entrada no estoque precisa de alguém com permissão de Estoque.', 'ℹ️');
         return;
     }
+    // Pedido Recebido de antes desta janela existir: a entrada pode ja ter sido feita a mao.
+    if (perguntarSeJaLancou && await showConfirm('Este pedido já estava como Recebido antes. A entrada no estoque já foi lançada à mão?', '📦', 'Sim, já lancei', 'Não, lançar agora')) {
+        pc.entrada_estoque_data = hojeLocal();
+        pc.entrada_estoque_manual = true;
+        syncDB();
+        return;
+    }
+    // A janela ja abriu para este pedido: daqui em diante ele nao e mais "de antes".
+    pc.entrada_estoque_vista = true;
+    syncDB({ silencioso: true });
     return new Promise(resolve => {
         if (document.getElementById('pcent-modal')) { resolve(); return; }
         const o = document.createElement('div');
@@ -9580,6 +9620,9 @@ async function abrirEntradaEstoquePC(pc) {
         const html = linhas.map(l => {
             if (l.semCadastro) {
                 return `<div class="pcent-linha pcent-sem" style="padding:8px 0;border-top:1px solid var(--border-strong);font-size:13px;color:#8F8F8F"><strong>${escapeHtml(l.nome || 'Item')}</strong> — sem cadastro — lance à mão</div>`;
+            }
+            if (l.infinito) {
+                return `<div class="pcent-linha pcent-infinito" style="padding:8px 0;border-top:1px solid var(--border-strong);font-size:13px;color:#8F8F8F"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" class="pcent-marca" disabled><strong>${escapeHtml(l.nome)}</strong> — sem controle de estoque</label></div>`;
             }
             let campos;
             if (l.tipo === 'tecido') {
@@ -9617,7 +9660,7 @@ async function abrirEntradaEstoquePC(pc) {
         const erroEl = o.querySelector('#pcent-erro');
         const erro = msg => { erroEl.textContent = msg; erroEl.style.display = ''; };
         o.querySelector('#pcent-depois').onclick = fechar;
-        o.querySelector('#pcent-ok').onclick = () => {
+        o.querySelector('#pcent-ok').onclick = async () => {
             erroEl.style.display = 'none';
             const data = o.querySelector('#pcent-data').value || hojeLocal();
             const val = (el, c) => parseFloat(el.querySelector(c)?.value);
@@ -9647,8 +9690,15 @@ async function abrirEntradaEstoquePC(pc) {
                 else if (e.tipo === 'material') _aplicarEntradaMaterial({ mat: db.materiais.find(m => m.id === e.id), qtd: e.qtd, data, custo: e.custo, markup: e.markup });
                 else _aplicarEntradaKit({ kit: db.kits.find(k => k.id === e.id), qtd: e.qtd, data });
             });
-            pc.entrada_estoque_data = hojeLocal();
-            syncDB();
+            pc.entrada_estoque_data = data;
+            // Sem espaco: nada foi gravado. Avisa e recarrega para a tela mostrar o que esta
+            // salvo (a marca de entrada nao fica so na memoria).
+            if (!syncDB({ silencioso: true })) {
+                fechar();
+                await showAlert('A entrada no estoque não foi salva. ' + MSG_SEM_ESPACO, '⚠️');
+                window.location.reload();
+                return;
+            }
             toast('Entrada no estoque registrada!', 'success', 2000);
             fechar();
         };

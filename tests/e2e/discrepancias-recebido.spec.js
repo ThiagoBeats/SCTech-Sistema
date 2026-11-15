@@ -130,3 +130,94 @@ test('sem permissao de Estoque avisa e nao abre a janela', async ({ page }) => {
     expect((await lerChave(page, 'sc_pc'))[0].status).toBe('Recebido');
     expect(await lerChave(page, 'sc_est')).toHaveLength(1);
 });
+
+// Revisao final ----------------------------------------------------------------
+
+test('tecido sem controle de estoque fica travado e desmarcado: so o material entra', async ({ page }) => {
+    const catInf = [{ id: 1, nome: 'TRICO HERA', referencia: 'TH01', preco_custo: 80, preco: 120, estoque_infinito: true }];
+    const estInf = [{ id: 500, tecido_id: 1, lote: 'TH01', metragem_inicial: 99999, metragem_atual: 99999, data_entrada: '2026-01-01' }];
+    await entrar(page, BASE, { sc_forn: FORN, sc_pc: [pc({ conta_pagar_gerada: true, entrada_estoque_vista: true })], sc_cat: catInf, sc_est: estInf, sc_mat: MAT, sc_kits: KITS, sc_mov: [], sc_cp: [] });
+    await page.goto(BASE + '/fornecedores.html?tab=pedidos');
+    await receber(page);
+    const modal = page.locator('#pcent-modal');
+    const inf = modal.locator('.pcent-infinito');
+    await expect(inf).toContainText('TRICO HERA');
+    await expect(inf).toContainText('sem controle de estoque');
+    await expect(inf.locator('.pcent-marca')).toBeDisabled();
+    await expect(inf.locator('.pcent-marca')).not.toBeChecked();
+    await expect(modal.locator('.pcent-linha[data-tipo="tecido"]')).toHaveCount(0);
+    await page.locator('#pcent-ok').click();
+    await expect.poll(async () => (await lerChave(page, 'sc_mat'))[0].estoque_atual).toBe(7);
+    expect(await lerChave(page, 'sc_est')).toEqual(estInf);
+    const cat = (await lerChave(page, 'sc_cat'))[0];
+    expect([cat.preco_custo, cat.preco]).toEqual([80, 120]);
+    const mov = await lerChave(page, 'sc_mov');
+    expect(mov).toHaveLength(1);
+    expect(mov[0].item_tipo).toBe('material');
+});
+
+test('pedido so com itens sem controle de estoque nao abre a janela', async ({ page }) => {
+    const catInf = [{ id: 1, nome: 'TRICO HERA', referencia: 'TH01', preco_custo: 80, preco: 120, estoque_infinito: true }];
+    const p = pc({ conta_pagar_gerada: true, entrada_estoque_vista: true, itens: [pc().itens[0]] });
+    await entrar(page, BASE, { sc_forn: FORN, sc_pc: [p], sc_cat: catInf, sc_est: [], sc_mat: MAT, sc_kits: KITS, sc_mov: [], sc_cp: [] });
+    await page.goto(BASE + '/fornecedores.html?tab=pedidos');
+    await receber(page);
+    await expect(page.locator('#sc-modal-msg')).toContainText('não têm controle de estoque');
+    await expect(page.locator('#pcent-modal')).toHaveCount(0);
+});
+
+test('a data escolhida na janela vira a data da entrada do pedido', async ({ page }) => {
+    await abrir(page, [pc()]);
+    await receber(page);
+    await pularConta(page);
+    await page.locator('#pcent-data').fill('2026-02-10');
+    await page.locator('#pcent-ok').click();
+    await expect.poll(async () => (await lerChave(page, 'sc_pc'))[0].entrada_estoque_data).toBe('2026-02-10');
+    expect((await lerChave(page, 'sc_est')).find(r => r.lote === 'TH01-A').data_entrada).toBe('2026-02-10');
+});
+
+test('sem espaco para gravar: nao mostra sucesso e recarrega com o que esta salvo', async ({ page }) => {
+    await abrir(page, [pc()]);
+    await receber(page);
+    await pularConta(page);
+    await page.evaluate(() => { window._syncDBBruto = () => { const e = new Error('cheio'); e.name = 'QuotaExceededError'; throw e; }; });
+    await page.locator('#pcent-ok').click();
+    await expect(page.locator('#sc-modal-msg')).toContainText('A entrada no estoque não foi salva.');
+    await expect(page.locator('.sc-toast', { hasText: 'Entrada no estoque registrada!' })).toHaveCount(0);
+    await page.locator('#sc-modal-ok').click();
+    await page.waitForLoadState('load');
+    await expect.poll(async () => (await lerChave(page, 'sc_pc'))[0].entrada_estoque_data).toBeFalsy();
+    expect(await lerChave(page, 'sc_est')).toHaveLength(1);
+});
+
+test('codigo sugerido: com o "-A" ja usado, sugere a proxima letra livre', async ({ page }) => {
+    const est = [{ id: 501, tecido_id: 1, lote: 'TH01-A', metragem_inicial: 50, metragem_atual: 20, data_entrada: '2026-01-01' }];
+    await entrar(page, BASE, { sc_forn: FORN, sc_pc: [pc()], sc_cat: CAT, sc_est: est, sc_mat: MAT, sc_kits: KITS, sc_mov: [], sc_cp: [] });
+    await page.goto(BASE + '/fornecedores.html?tab=pedidos');
+    expect(await page.evaluate(() => _sugerirCodigoRolo(db.catalogo[0], []))).toBe('TH01-B');
+    expect(await page.evaluate(() => { db.estoque = []; return _sugerirCodigoRolo(db.catalogo[0], []); })).toBe('TH01');
+});
+
+test('pedido Recebido de antes: "Sim, ja lancei" marca sem dar entrada', async ({ page }) => {
+    await abrir(page, [pc({ conta_pagar_gerada: true })]);
+    await receber(page);
+    await expect(page.locator('#sc-modal-msg')).toHaveText('Este pedido já estava como Recebido antes. A entrada no estoque já foi lançada à mão?');
+    await page.locator('#sc-modal-ok').click();   // Sim, ja lancei
+    await expect.poll(async () => (await lerChave(page, 'sc_pc'))[0].entrada_estoque_data).toBe(hojeLocal());
+    await expect(page.locator('#pcent-modal')).toHaveCount(0);
+    expect(await lerChave(page, 'sc_est')).toHaveLength(1);
+    expect(await lerChave(page, 'sc_mov')).toHaveLength(0);
+});
+
+test('pedido Recebido de antes: "Nao, lancar agora" abre a janela', async ({ page }) => {
+    await abrir(page, [pc({ conta_pagar_gerada: true })]);
+    await receber(page);
+    await expect(page.locator('#sc-modal-ok')).toHaveText('Sim, já lancei');
+    await page.locator('#sc-modal-cancel').click();
+    await expect(page.locator('#pcent-modal')).toBeVisible();
+    await page.locator('#pcent-depois').click();
+    // depois da janela aberta, marcar de novo nao pergunta mais
+    await page.evaluate(() => { atualizarStatusPC(5001, 'Enviado'); });
+    await receber(page);
+    await expect(page.locator('#pcent-modal')).toBeVisible();
+});
