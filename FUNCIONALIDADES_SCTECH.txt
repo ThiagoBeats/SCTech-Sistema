@@ -2455,6 +2455,12 @@ Tema Claro / Escuro:
     precisar clicar em "Salvar preferências". Saiu do popup da logo.
   - Persiste no usuário e em localStorage (chave: sc_tema)
   - Anti-flash: tema aplicado antes do carregamento do CSS em todas as telas
+  - O tema escuro vale em todas as telas e janelas (cores das telas vêm de
+    variáveis do CSS com versão escura). Os documentos (proposta, OS, pedido
+    de compra, relatórios, etiquetas e o PDF gerado pelo "📤 Enviar")
+    continuam sempre claros, de propósito: são para imprimir e mandar.
+  - Menu ⋮: se a lista for redesenhada com o menu aberto, ele fecha sozinho
+    (nunca age sobre uma linha antiga).
 
 Enviar documentos (botão "📤 Enviar"):
   - Em todos os documentos que saem em PDF: Proposta Comercial, Ordem de
