@@ -1,6 +1,7 @@
 // Configurar Empresa > aba "Galeria e Mostruario": a empresa monta o que o
-// instalador mostra ao cliente — fotos reais (ate 60), cores e tecidos do
-// simulador e quais modelos aparecem. Cada acao grava na hora (sc_mostruario);
+// instalador mostra ao cliente — fotos reais (ate 60) e quais modelos aparecem
+// (cores e tecidos do simulador so aparecem com GaleriaCore.SIMULADOR_ATIVO).
+// Cada acao grava na hora (sc_mostruario);
 // os bytes das imagens ficam em GaleriaImagens.
 const _gm = { m: null, podeEditar: true, disp: true, ocupado: false };
 

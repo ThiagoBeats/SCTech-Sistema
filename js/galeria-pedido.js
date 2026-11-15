@@ -1,6 +1,7 @@
 // Galeria dentro do pedido: abre por cima do formulario (o pedido continua
 // aberto, nada se perde) para mostrar ao cliente os modelos de prega e
-// persiana, as fotos reais do mostruario e o simulador na parede dele.
+// persiana e as fotos reais do mostruario (a aba do simulador na parede do
+// cliente so aparece com GaleriaCore.SIMULADOR_ATIVO, hoje desligado).
 // O modelo escolhido aqui volta para o "Tipo de Prega" do tecido no pedido.
 const _galPed = {
     aba: 'modelos',

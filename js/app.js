@@ -3786,7 +3786,11 @@ function salvarFiltroVendedorTela() {
 // Um menu flutuante so, reaproveitado por todas as linhas: abre junto do botao
 // (posicao fixa, para nao ser cortado pela tabela) e fecha no clique fora, no
 // Esc, ao rolar ou ao escolher uma acao.
+// Se a lista do botao e redesenhada com o menu aberto (o botao sai da pagina), o
+// menu fecha: as acoes dele apontam para os ids de antes do redesenho.
+let _menuAcoesObservador = null;
 function _menuAcoesFechar() {
+    if (_menuAcoesObservador) { _menuAcoesObservador.disconnect(); _menuAcoesObservador = null; }
     const m = document.getElementById('menu-acoes-flutuante');
     if (m) m.remove();
     document.querySelectorAll('.btn-kebab[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
@@ -3814,6 +3818,10 @@ function abrirMenuAcoes(ev, itens, botaoAlvo) {
     });
     document.body.appendChild(menu);
     botao.setAttribute('aria-expanded', 'true');
+    if (typeof MutationObserver === 'function') {
+        _menuAcoesObservador = new MutationObserver(() => { if (!botao.isConnected) _menuAcoesFechar(); });
+        _menuAcoesObservador.observe(document.body, { childList: true, subtree: true });
+    }
     const r = botao.getBoundingClientRect();
     const w = menu.offsetWidth, h = menu.offsetHeight;
     let top = r.bottom + 4;
@@ -3837,6 +3845,11 @@ window.addEventListener('resize', _menuAcoesFechar);
 
 // Botao ⋮ para linhas de tabela montadas em template (HTML). Cada acao traz o
 // onclick como string, igual ao botao que ela substitui; "oculto" a tira do menu.
+// Escape: a lista de acoes vai como JSON dentro do atributo data-acoes (entre aspas
+// duplas), entao o JSON inteiro passa por escapeHtml (& < > "). O navegador desfaz o
+// escape ao ler dataset.acoes, e o onclick e posto com setAttribute, sem HTML no meio:
+// por isso o onclick de cada acao entra aqui como texto puro, SEM escape proprio
+// (aspas simples, & e < funcionam; escapar de novo estragaria o codigo).
 // As perigosas vao para o fim, separadas. Um unico listener global (abaixo) abre
 // o menu, entao as linhas podem ser re-renderizadas a vontade.
 function menuAcoesHtml(acoes) {
@@ -9473,23 +9486,27 @@ async function excluirPedidoCompra(id) {
 }
 
 // --- HISTORICO DE PEDIDOS DO FORNECEDOR ---
-const _HIST_CDN_SHEETJS = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-let _histSheetJsPronto = null;
 let _histFornId = null;
 
-async function _histGarantirSheetJs() {
+// Carregador unico do SheetJS (so baixa quando alguem pede uma planilha). Serve ao
+// historico do fornecedor (aqui) e ao importador de tabelas (js/importador-ui.js).
+// `nomeDoRecurso` so entra na mensagem de erro ("o gerador de planilhas" / "o leitor...").
+const _CDN_SHEETJS = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+let _sheetJsPronto = null;
+async function garantirSheetJs(nomeDoRecurso) {
     if (window.XLSX) return;
-    if (!_histSheetJsPronto) {
-        _histSheetJsPronto = new Promise((resolve, reject) => {
+    if (!_sheetJsPronto) {
+        _sheetJsPronto = new Promise((resolve, reject) => {
             const s = document.createElement('script');
-            s.src = _HIST_CDN_SHEETJS;
+            s.src = _CDN_SHEETJS;
             s.onload = resolve;
-            s.onerror = () => { _histSheetJsPronto = null; reject(new Error('Não foi possível carregar o gerador de planilhas — verifique sua conexão.')); };
+            s.onerror = () => { _sheetJsPronto = null; reject(new Error('Não foi possível carregar ' + (nomeDoRecurso || 'o gerador de planilhas') + ' — verifique sua conexão.')); };
             document.head.appendChild(s);
         });
     }
-    await _histSheetJsPronto;
+    await _sheetJsPronto;
 }
+async function _histGarantirSheetJs() { return garantirSheetJs('o gerador de planilhas'); }
 
 function _histMoeda(v) { return 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function _histData(iso) { const [a, m, d] = String(iso || '').split('-'); return d ? `${d}/${m}/${a}` : ''; }

@@ -6,7 +6,7 @@ const BASE = process.env.BASE || 'http://localhost:8131';
 test('olho mostra e esconde cada senha', async ({ page }) => {
     await entrar(page, BASE);
     await page.goto(BASE + '/configuracoes.html');
-    await page.locator('button:has-text("Segurança")').first().click();
+    await page.locator('button.cfg-tab-btn[data-tab="seguranca"]').click();
     for (const id of ['seg-senha-atual', 'seg-senha-nova', 'seg-senha-conf']) {
         const campo = page.locator('#' + id);
         const olho = page.locator(`.btn-ver-senha[data-alvo="${id}"]`);

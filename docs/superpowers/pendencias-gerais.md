@@ -11,7 +11,7 @@ Pendências pequenas fora do Financeiro, para revisar quando o usuário pedir.
 - [x] Arredondamento do histórico é local (cópia); unificar com o core. (Resolvido: o núcleo do carrinho usa o `arredondar` do financeiro, sem cópia.)
 
 ### Telas e textos
-- [ ] Menu ⋮ aberto durante um re-render aponta para ids antigos.
+- [x] Menu ⋮ aberto durante um re-render aponta para ids antigos. (Resolvido: o menu fecha quando o botão dele sai da página por causa de um redesenho da lista.)
 - [x] Bloqueio de exclusão diz "1 itens"; ajustar o singular. (Resolvido: "1 item".)
 - [x] Clique no ✕ logo após editar a quantidade pode ser perdido no re-render. (Resolvido: editar a quantidade só atualiza os números, sem trocar a tabela.)
 - [x] Enter não confirma quando o foco está no select de fornecedor da janela de adicionar. (Resolvido.)
@@ -21,14 +21,14 @@ Pendências pequenas fora do Financeiro, para revisar quando o usuário pedir.
 - [x] Mesmo item adicionado de novo mantém a unidade gravada na primeira vez; se a unidade do cadastro mudar entre os dois, as quantidades somam com o rótulo antigo. (Resolvido: unidade diferente vira outra linha; editar/tirar mexe só na linha da unidade certa.)
 - [x] Fechar carrinho abre o PDF simples, não a janela de compartilhar (WhatsApp). (Resolvido: o PDF do pedido de compra agora tem o botão Enviar.)
 - [x] Carrinho só com itens sem preço gera pedido de R$ 0. (Resolvido: pergunta antes de gerar o pedido de R$ 0,00.)
-- [ ] Comentários de cabeçalho da galeria ainda citam o simulador.
-- [ ] Loader do SheetJS duplicado (app.js e importador-ui.js); unificar.
-- [ ] Comentário sobre escapar onclick no `menuAcoesHtml`.
+- [x] Comentários de cabeçalho da galeria ainda citam o simulador. (Resolvido: cabeçalhos dizem que o simulador está desligado por `SIMULADOR_ATIVO`.)
+- [x] Loader do SheetJS duplicado (app.js e importador-ui.js); unificar. (Resolvido: `garantirSheetJs` em app.js; o importador e o histórico usam a mesma função, mesma versão e CDN; também corrige o importador, que não tentava de novo depois de falha de rede.)
+- [x] Comentário sobre escapar onclick no `menuAcoesHtml`. (Resolvido: comentário explica o escape; conferido que está correto e testado com aspas, & e <.)
 
 ### Testes que faltam
-- [ ] Menu ⋮: posição (flip) perto da borda e tema escuro.
-- [ ] Teste "não contém Simular" está amplo demais; restringir.
-- [ ] Seletor solto no teste do ver senha.
+- [x] Menu ⋮: posição (flip) perto da borda e tema escuro. (Testes em `pendencias-gerais-menu.spec.js`.)
+- [x] Teste "não contém Simular" está amplo demais; restringir. (Resolvido: só a área da galeria.)
+- [x] Seletor solto no teste do ver senha. (Resolvido: botão da aba pelo `data-tab`.)
 
 ## Do tema e da busca no estoque (2026-11-13)
 - [ ] Tema escuro: outras telas e janelas ainda têm cores claras fixas no estilo da linha (como o Balanço tinha); revisar tela a tela.
