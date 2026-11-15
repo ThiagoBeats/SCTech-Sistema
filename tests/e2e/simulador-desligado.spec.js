@@ -25,7 +25,10 @@ test('nenhum acesso ao simulador aparece (galeria, #simular, galeria do pedido, 
     await expect(page.locator('.gal-foto[data-id="f1"]')).toBeVisible();
     await expect(page.locator('a.gal-simular-topo')).toHaveCount(0);
     await expect(page.locator('a.gal-simular')).toHaveCount(0);
-    await expect(page.locator('body')).not.toContainText('Simular');
+    // so a area da galeria (o menu lateral tem "Simular compra" do Financeiro, que e outra coisa)
+    await expect(page.locator('#gal-conteudo')).not.toContainText(/simula/i);
+    await expect(page.locator('#gal-visor-raiz')).not.toContainText(/simula/i);
+    await expect(page.locator('#sim')).toBeHidden();
 
     // #simular vira galeria normal
     await page.goto(BASE + '/galeria.html#simular');

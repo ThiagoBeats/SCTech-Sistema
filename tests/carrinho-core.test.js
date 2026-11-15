@@ -89,3 +89,46 @@ test('somar quantidades decimais nao deixa ruido de ponto flutuante', () => {
     assert.strictEqual(b[0].itens[0].quantidade, 3.3);
     assert.strictEqual(C.alterarQuantidade(b[0], 'material', 5, 0.1 + 0.2).itens[0].quantidade, 0.3);
 });
+
+test('historico: pedido sem data de envio e sem data de criacao nao vira NaN', () => {
+    const pcs = [
+        { id: 1, fornecedor_id: 3, status: 'Enviado', itens: [{ subtotal: 10 }] },
+        { id: 2, fornecedor_id: 3, status: 'Enviado', data_envio: null, data_criacao: null, itens: [{ subtotal: 5 }] },
+        { id: 3, fornecedor_id: 3, status: 'Enviado', data_envio: '2026-11-01', itens: [{ subtotal: 1 }] }
+    ];
+    const h = C.historicoFornecedor(pcs, 3, {});
+    assert.strictEqual(h.linhas.length, 3);
+    h.linhas.forEach(l => assert.ok(!String(l.data_envio).includes('NaN'), String(l.data_envio)));
+    assert.strictEqual(h.linhas[0].data_envio, '2026-11-01');
+    assert.strictEqual(h.linhas[1].data_envio, '');
+    assert.strictEqual(h.total, 16);
+});
+
+test('historico usa o mesmo arredondamento do financeiro', () => {
+    const F = require('../js/financeiro-core.js');
+    const pcs = [{ id: 1, fornecedor_id: 3, status: 'Enviado', data_envio: '2026-11-01', itens: [{ subtotal: 1.005 }, { subtotal: 2.675 }] }];
+    const h = C.historicoFornecedor(pcs, 3, {});
+    assert.strictEqual(C.arredondar, F.arredondar);
+    assert.strictEqual(h.total, F.arredondar(1.005 + 2.675));
+    assert.strictEqual(h.linhas[0].valor, F.arredondar(1.005 + 2.675));
+});
+
+test('mesmo item com outra unidade vira outra linha; mesma unidade soma', () => {
+    let c = C.adicionarAoCarrinho([], { fornecedor_id: 1, item: item(2, 10, { unidade: 'm' }) });
+    c = C.adicionarAoCarrinho(c, { fornecedor_id: 1, item: item(1, 10, { unidade: 'pct' }) });
+    assert.strictEqual(c[0].itens.length, 2);
+    c = C.adicionarAoCarrinho(c, { fornecedor_id: 1, item: item(3, 10, { unidade: 'm' }) });
+    assert.strictEqual(c[0].itens.length, 2);
+    assert.strictEqual(c[0].itens[0].quantidade, 5);
+    assert.strictEqual(c[0].itens[1].quantidade, 1);
+    // alterar/remover por unidade mexe so na linha certa
+    const alt = C.alterarQuantidade(c[0], 'material', 5, 9, 'pct');
+    assert.deepStrictEqual(alt.itens.map(l => l.quantidade), [5, 9]);
+    const rem = C.removerItem(c[0], 'material', 5, 'm');
+    assert.deepStrictEqual(rem.itens.map(l => l.unidade), ['pct']);
+});
+
+test('removerVazios tira carrinho sem item', () => {
+    const r = C.removerVazios([{ fornecedor_id: 1, itens: [] }, { fornecedor_id: 2, itens: [{ subtotal: 1 }] }, { fornecedor_id: 3 }]);
+    assert.deepStrictEqual(r.map(c => c.fornecedor_id), [2]);
+});

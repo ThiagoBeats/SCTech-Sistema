@@ -1,6 +1,7 @@
 // Pagina Galeria: fotos reais do mostruario, por grupo, com visor em tela cheia
-// (setas, deslizar o dedo, Esc). Cada foto ligada a um modelo leva ao
-// simulador ja com ele escolhido. A rota #simular abre o simulador.
+// (setas, deslizar o dedo, Esc). O simulador (rota #simular e o link nas fotos
+// ligadas a um modelo) esta desligado por GaleriaCore.SIMULADOR_ATIVO = false:
+// o codigo fica aqui, mas nenhum acesso a ele aparece enquanto a chave estiver off.
 const _gal = { fotos: [], indice: -1 };
 
 function iniciarGaleria() {

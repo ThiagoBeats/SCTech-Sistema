@@ -3,23 +3,26 @@
 // So funcoes puras — sem DOM, sem db, sem localStorage — para rodar em `node --test`.
 (function (raiz) {
 
-    function arredondar(v) {
-        const n = Number(v) || 0;
-        return Math.round(n * 100 + (n >= 0 ? 1e-9 : -1e-9)) / 100;
-    }
+    // Mesmo arredondamento do financeiro (uma regra so, sem copia).
+    const arredondar = ((typeof module !== 'undefined' && module.exports) ? require('./financeiro-core.js') : raiz.FinanceiroCore).arredondar;
 
     function mesmoId(a, b) {
         return a != null && b != null && String(a) === String(b);
     }
 
+    // Sem data valida devolve '' (e nao "NaN-NaN-NaN").
     function dataLocal(ms) {
         const d = new Date(ms);
+        if (ms == null || ms === '' || isNaN(d.getTime())) return '';
         const p = n => String(n).padStart(2, '0');
         return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
     }
 
-    function mesmaLinha(l, tipo, itemId) {
-        return l.tipo === tipo && mesmoId(l.item_id, itemId);
+    // Mesmo item na mesma unidade. `unidade` indefinida: nao compara a unidade
+    // (so tipo e id). Unidades diferentes do mesmo item sao linhas diferentes.
+    function mesmaLinha(l, tipo, itemId, unidade) {
+        return l.tipo === tipo && mesmoId(l.item_id, itemId)
+            && (unidade === undefined || String(l.unidade || '') === String(unidade || ''));
     }
 
     function linhaCom(l, quantidade, precoUnit) {
@@ -28,10 +31,15 @@
         return Object.assign({}, l, { quantidade: q, preco_unit: p, subtotal: arredondar(q * (Number(p) || 0)) });
     }
 
-    function removerItem(carrinho, tipo, itemId) {
+    function removerItem(carrinho, tipo, itemId, unidade) {
         return Object.assign({}, carrinho, {
-            itens: (carrinho.itens || []).filter(l => !mesmaLinha(l, tipo, itemId))
+            itens: (carrinho.itens || []).filter(l => !mesmaLinha(l, tipo, itemId, unidade))
         });
+    }
+
+    // Tira os carrinhos sem item (sobra de carrinho esvaziado).
+    function removerVazios(carrinhos) {
+        return (carrinhos || []).filter(c => c && (c.itens || []).length > 0);
     }
 
     function adicionarAoCarrinho(carrinhos, { fornecedor_id, item }) {
@@ -41,7 +49,7 @@
             car = { fornecedor_id, itens: [], novo: true, atualizado_em: 0 };
             lista.push(car);
         }
-        const idx = car.itens.findIndex(l => mesmaLinha(l, item.tipo, item.item_id));
+        const idx = car.itens.findIndex(l => mesmaLinha(l, item.tipo, item.item_id, item.unidade));
         if (idx >= 0) {
             const l = car.itens[idx];
             car.itens[idx] = linhaCom(l, (Number(l.quantidade) || 0) + (Number(item.quantidade) || 0), item.preco_unit);
@@ -53,11 +61,11 @@
         return lista;
     }
 
-    function alterarQuantidade(carrinho, tipo, itemId, quantidade) {
+    function alterarQuantidade(carrinho, tipo, itemId, quantidade, unidade) {
         const q = Number(quantidade) || 0;
-        if (q <= 0) return removerItem(carrinho, tipo, itemId);
+        if (q <= 0) return removerItem(carrinho, tipo, itemId, unidade);
         return Object.assign({}, carrinho, {
-            itens: (carrinho.itens || []).map(l => mesmaLinha(l, tipo, itemId) ? linhaCom(l, q) : l)
+            itens: (carrinho.itens || []).map(l => mesmaLinha(l, tipo, itemId, unidade) ? linhaCom(l, q) : l)
         });
     }
 
@@ -84,7 +92,7 @@
         return { linhas, total: arredondar(linhas.reduce((s, l) => s + l.valor, 0)) };
     }
 
-    const api = { adicionarAoCarrinho, alterarQuantidade, removerItem, totalCarrinho, contarItens, valorPedidoCompra, historicoFornecedor };
+    const api = { arredondar, adicionarAoCarrinho, alterarQuantidade, removerItem, removerVazios, totalCarrinho, contarItens, valorPedidoCompra, historicoFornecedor };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.CarrinhoCore = api;

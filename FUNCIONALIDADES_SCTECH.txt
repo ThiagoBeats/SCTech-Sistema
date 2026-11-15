@@ -383,6 +383,10 @@ Balanço de Estoque (botão no topo da tela):
   - Filtros na ordem Código e depois Nome, com sugestões. Digitar o código
     exato de um item preenche o nome sozinho (e vice-versa); o item já
     aparece filtrado abaixo. Apagar o campo apaga o que foi preenchido sozinho.
+    Com nomes repetidos (ex.: um tecido e um material com o mesmo nome) a
+    sugestão mostra o tipo ("Nome — Tecido" / "Nome — Material"); o nome só
+    puxa o código quando é único, senão basta escolher a sugestão certa, que
+    preenche o código correto e filtra só aquele item.
   - O campo Código também acha o rolo pelo código do rolo.
   - Tabelas e PDF com Código antes do Nome. A coluna Código mostra o código
     do item; o código do rolo aparece em letra menor embaixo do nome.
@@ -630,6 +634,8 @@ Menu de ações (⋮) e carrinho no Catálogo:
     "✏️ Editar kit" (kit de montagem) só aparece na Gestão de Estoque, não no
     Catálogo. Clicar fora,
     Esc ou escolher uma ação fecha o menu; só um fica aberto por vez.
+    Se a lista for redesenhada com o menu aberto, ele fecha sozinho (nunca age
+    sobre uma linha antiga).
   - "🛒 Adicionar ao carrinho" substitui o antigo "Criar pedido de compra" por
     item (e o "Pedir Tecido" da janela de detalhes do tecido).
   - Seleção de vários itens: o botão agora adiciona todos os selecionados aos
@@ -771,7 +777,9 @@ fornecedor):
   - Pedidos antigos sem data de envio usam a data de criação
   - Filtro de período (de / até) pela data de envio; o total no rodapé
     acompanha o filtro
-  - Clicar num pedido abre o PDF dele
+  - Pedido sem nenhuma data fica com a data em branco
+  - Clicar num pedido abre o PDF dele; ao fechar o PDF volta ao histórico com
+    o mesmo filtro
   - Exportar o que está filtrado em Excel (.xlsx) ou PDF
 
 ── 9.2 ABA: PEDIDOS DE COMPRA ──────────────────────────────────────────────────
@@ -825,8 +833,12 @@ Como adicionar:
     completo a Estoque.
   - Item sem fornecedor: a janela pede para escolher um; a escolha fica gravada
     no cadastro do item
+  - Quantidade digitada como os valores em R$: "1.000" = mil, "1,5" = 1,5,
+    "1.250,50" = 1250,5 e "1250.5" = 1250,5. Enter confirma (também com o
+    foco no fornecedor).
   - Cada fornecedor tem um carrinho aberto. Adicionar o mesmo item de novo soma
-    a quantidade. O preço é o custo do cadastro no momento (sem custo aparece
+    a quantidade; se a unidade for outra, vira outra linha (não soma unidades
+    diferentes). O preço é o custo do cadastro no momento (sem custo aparece
     "sem preço")
   - Carrinho aberto não aparece em Pedidos de Compra, nem no histórico, nem em
     totais
@@ -846,7 +858,10 @@ Na janela do carrinho:
   - "Fechar e gerar pedido": cria o pedido de compra como Rascunho, deixa o
     carrinho vazio e leva direto para a aba Pedidos de Compra, com o pedido
     novo destacado. O envio ao fornecedor é feito lá, pelo "📨 Enviar".
-    Carrinho vazio não pode ser fechado.
+    Carrinho vazio não pode ser fechado. Se todos os itens estão sem preço,
+    pergunta antes: "Os itens deste carrinho estão sem preço: o pedido sai com
+    valor R$ 0,00. Continuar?".
+  - Carrinho sem item não fica guardado.
   - O pedido segue o fluxo normal (marcar Recebido gera a conta a pagar)
   - Ver o carrinho e o histórico de pedidos exigem Fornecedores (visualizar);
     editar quantidade, tirar item, esvaziar e fechar exigem Fornecedores
@@ -2442,6 +2457,12 @@ Tema Claro / Escuro:
     precisar clicar em "Salvar preferências". Saiu do popup da logo.
   - Persiste no usuário e em localStorage (chave: sc_tema)
   - Anti-flash: tema aplicado antes do carregamento do CSS em todas as telas
+  - O tema escuro vale em todas as telas e janelas (cores das telas vêm de
+    variáveis do CSS com versão escura). Os documentos (proposta, OS, pedido
+    de compra, relatórios, etiquetas e o PDF gerado pelo "📤 Enviar")
+    continuam sempre claros, de propósito: são para imprimir e mandar.
+    Isso inclui a pré-visualização do Layout de documentos (Empresa ›
+    Layout) e a do cabeçalho em Empresa › Dados.
 
 Enviar documentos (botão "📤 Enviar"):
   - Em todos os documentos que saem em PDF: Proposta Comercial, Ordem de

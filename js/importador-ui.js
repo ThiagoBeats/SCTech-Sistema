@@ -2,29 +2,14 @@
 // Assistente de importacao de tabelas de fornecedor.
 // A logica pura vive em js/importador-core.js (window.ImportadorCore).
 
-const CDN_SHEETJS = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-
-let _impSheetJsPronto = null;
-
 // O app.js nao tem helper de moeda compartilhado — ele repete toLocaleString
 // em cada tela. Este modulo define o seu.
 function _impMoeda(v) {
     return 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-async function _impGarantirSheetJs() {
-    if (window.XLSX) return;
-    if (!_impSheetJsPronto) {
-        _impSheetJsPronto = new Promise((resolve, reject) => {
-            const s = document.createElement('script');
-            s.src = CDN_SHEETJS;
-            s.onload = resolve;
-            s.onerror = () => reject(new Error('Não foi possível carregar o leitor de planilhas — verifique sua conexão.'));
-            document.head.appendChild(s);
-        });
-    }
-    await _impSheetJsPronto;
-}
+// O carregador do SheetJS e um so: garantirSheetJs, em js/app.js.
+async function _impGarantirSheetJs() { return garantirSheetJs('o leitor de planilhas'); }
 
 let _impPdfJsPronto = null;
 
