@@ -325,11 +325,29 @@ function garantirKitsFixacaoPadrao() {
 }
 garantirKitsFixacaoPadrao();
 
+// Maior sequencial ja usado no formato ano + sequencial (ex.: 26001 -> 1).
+// Ids antigos (Date.now()) e de outro formato nao entram na conta.
+function _maiorSeqExistente(lista) {
+    let maior = 0;
+    (lista || []).forEach(p => {
+        const s = String(p && p.id);
+        if (/^\d{5,6}$/.test(s)) maior = Math.max(maior, parseInt(s.slice(2)));
+    });
+    return maior;
+}
+
+// O proximo numero e sempre maior que qualquer pedido existente, mesmo que o
+// contador salvo esteja atrasado (backup antigo, dados importados).
 function gerarNumeroPedido() {
-    const seq = (parseInt(localStorage.getItem('sc_ped_seq') || '0') + 1);
-    localStorage.setItem('sc_ped_seq', String(seq));
     const yy = String(new Date().getFullYear()).slice(-2);
-    return parseInt(yy + String(seq).padStart(3, '0'));
+    let seq = Math.max(parseInt(localStorage.getItem('sc_ped_seq') || '0') || 0, _maiorSeqExistente(db.pedidos));
+    let id;
+    do {
+        seq += 1;
+        id = parseInt(yy + String(seq).padStart(3, '0'));
+    } while (db.pedidos.some(p => p.id === id));
+    localStorage.setItem('sc_ped_seq', String(seq));
+    return id;
 }
 
 // O pedido de compra tem sequencia propria: usar a dos pedidos faria uma
@@ -337,7 +355,7 @@ function gerarNumeroPedido() {
 // pula numero ja ocupado, porque as compras antigas nasceram com Date.now().
 function gerarNumeroPedidoCompra() {
     const yy = String(new Date().getFullYear()).slice(-2);
-    let seq = parseInt(localStorage.getItem('sc_pc_seq') || '0');
+    let seq = Math.max(parseInt(localStorage.getItem('sc_pc_seq') || '0') || 0, _maiorSeqExistente(db.pedidos_compra));
     let id;
     do {
         seq += 1;
@@ -7888,7 +7906,12 @@ function _dadosExportacao(marcaFase0) {
         contas_fin: db.contas_fin, meios_pag: db.meios_pag, movimentos_fin: db.movimentos_fin, fechamentos_fin: db.fechamentos_fin,
         medicoes: db.medicoes, rotas: db.rotas || [],
         fin_metas: _lerObjetoLS('sc_fin_metas'), fin_orcamento_mes: _lerObjetoLS('sc_fin_orcamento_mes'),
-        empresa: getEmpresa(), formas_pag: getFormasPagamentoCfg()
+        empresa: getEmpresa(), formas_pag: getFormasPagamentoCfg(),
+        // Acesso: usuarios (com senha ja em hash e preferencias) e papeis. A sessao de quem
+        // esta logado fica so na aba e nunca entra no arquivo.
+        usuarios: db.usuarios, papeis: db.papeis,
+        ped_seq: parseInt(localStorage.getItem('sc_ped_seq') || '0') || 0,
+        pc_seq: parseInt(localStorage.getItem('sc_pc_seq') || '0') || 0
     };
     if (marcaFase0) dados.fin_fase0 = 1;
     return dados;
@@ -7945,6 +7968,33 @@ function importarDados(event) {
                 const o = dados[k];
                 extras.push(['sc_' + k, JSON.stringify(o && typeof o === 'object' && !Array.isArray(o) ? o : {})]);
             });
+            // Acesso e numeracao. Backup antigo (sem usuarios/papeis) deixa os atuais como estao.
+            // Quem esta logado continua entrando: a sessao passa para o mesmo e-mail do backup;
+            // se o backup nao o tem e tambem nao traz um administrador ativo, ele e mantido.
+            let sessaoNova = null;
+            const usuariosAtuais = db.usuarios.slice();
+            if (Array.isArray(dados.papeis) && dados.papeis.length) db.papeis = dados.papeis;
+            if (Array.isArray(dados.usuarios) && dados.usuarios.length) {
+                db.usuarios = dados.usuarios;
+                let sess = null;
+                try { sess = JSON.parse(sessionStorage.getItem('sc_user') || 'null'); } catch (e1) { sess = null; }
+                const atual = sess && usuariosAtuais.find(u => u.id === sess.id);
+                if (atual) {
+                    const mesmo = db.usuarios.find(u => String(u.email || '').toLowerCase() === String(atual.email || '').toLowerCase());
+                    const papelAdmin = db.papeis.find(p => p.nome === 'Administrador');
+                    const temAdmin = db.usuarios.some(u => u.ativo && papelAdmin && u.papel_id === papelAdmin.id);
+                    if (mesmo) sessaoNova = { id: mesmo.id, nome: nomeExibicao(mesmo), email: mesmo.email };
+                    else if (!temAdmin) {
+                        const novoId = db.usuarios.reduce((m, u) => Math.max(m, Number(u.id) || 0), 0) + 1;
+                        db.usuarios.push(Object.assign({}, atual, { id: novoId }));
+                        sessaoNova = { id: novoId, nome: nomeExibicao(atual), email: atual.email };
+                    }
+                }
+            }
+            // Contadores: o do backup quando existe; sem ele (backup antigo) o proximo numero
+            // sai do maior pedido existente.
+            extras.push(['sc_ped_seq', Number.isFinite(dados.ped_seq) ? String(Math.max(0, Math.floor(dados.ped_seq))) : null]);
+            extras.push(['sc_pc_seq',  Number.isFinite(dados.pc_seq)  ? String(Math.max(0, Math.floor(dados.pc_seq)))  : null]);
             // Backup antigo (sem empresa/formas) mantem as atuais.
             if (dados.empresa && typeof dados.empresa === 'object') extras.push(['sc_empresa', JSON.stringify(dados.empresa)]);
             if (Array.isArray(dados.formas_pag) && dados.formas_pag.length) extras.push(['sc_formas_pag', JSON.stringify(dados.formas_pag)]);
@@ -7963,6 +8013,7 @@ function importarDados(event) {
             }
             // Gravou: o que era dos dados anteriores (copia, revisao e avisos) sai.
             ['sc_fin_backup_fase0', 'sc_fin_revisar', 'sc_fin_backup_falhou', 'sc_fin_migracao_erro'].forEach(k => localStorage.removeItem(k));
+            if (sessaoNova) sessionStorage.setItem('sc_user', JSON.stringify(sessaoNova));
             toastReload('Dados importados com sucesso!', 'info');
             window.location.reload();
         } catch (err) {

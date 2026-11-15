@@ -514,7 +514,9 @@ Exportar Dados:
   - Gera arquivo JSON com todos os dados do sistema
   - Inclui: clientes, catálogo, pedidos, estoque, materiais, kits,
     movimentos, vendedores, fornecedores, pedidos de compra,
-    contas a receber, contas a pagar, despesas fixas, medições
+    contas a receber, contas a pagar, despesas fixas, medições,
+    usuários e papéis de acesso (senhas já em código, nunca em texto; a sessão
+    de quem está logado não vai no arquivo) e a numeração dos pedidos
   - Nome do arquivo: sctech_backup_YYYY-MM-DD.json
 
 Importar Dados:
@@ -522,6 +524,12 @@ Importar Dados:
   - Exibe aviso: "substituirá TODOS os dados atuais"
   - Requer confirmação antes de restaurar
   - Após importação: recarrega a página com os dados restaurados
+  - Usuários e papéis do arquivo voltam junto: quem fez backup entra de novo
+    com o mesmo e-mail e senha. Quem importou continua logado (pelo mesmo
+    e-mail); se o arquivo não o tem nem traz um administrador ativo, ele é
+    mantido. Arquivo antigo, sem usuários, não mexe nos usuários atuais
+  - O próximo número de pedido (e de pedido de compra) é sempre maior que o
+    maior já existente, mesmo com arquivo antigo sem o contador
   - Se o navegador ficar sem espaço no meio da importação, aparece "A importação
     não foi concluída. Não foi possível salvar: o espaço do navegador acabou.
     Baixe uma cópia de segurança e libere espaço." Depois do OK a página
