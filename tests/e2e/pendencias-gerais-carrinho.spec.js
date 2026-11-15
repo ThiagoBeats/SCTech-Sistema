@@ -204,3 +204,19 @@ test('carrinho com algum item com preco segue a confirmacao de sempre', async ({
     await expect(page.locator('#sc-modal-msg')).toContainText('90,00');
     await expect(page.locator('#sc-modal-msg')).not.toContainText('sem preço');
 });
+
+test('se o PDF do pedido nao abre, a volta ao historico nao fica armada para outro PDF', async ({ page }) => {
+    const pc = { id: 5001, fornecedor_id: 7, fornecedor_nome: 'RC Tecidos', data_criacao: Date.now(), status: 'Enviado', data_envio: '2026-10-05', itens: [L('material', 1, 'X', 'm', 1, 10)] };
+    await abrir(page, { sc_pc: [pc] });
+    await page.evaluate(() => { window.abrirPedidoCompra = () => { throw new Error('falhou'); }; });
+    await page.locator('#tb-fornecedores tr', { hasText: 'RC Tecidos' }).locator('button[aria-label="Ações"]').click();
+    await page.locator('#menu-acoes-flutuante .menu-acoes-item', { hasText: 'Histórico de pedidos' }).click();
+    await page.locator('#hist-forn-modal tbody tr').click();
+    await expect(page.locator('#hist-forn-modal')).toBeVisible();
+    await page.click('#hist-forn-modal button:has-text("Fechar")');
+    await expect(page.locator('#hist-forn-modal')).toHaveCount(0);
+    // outro PDF abre e fecha: nao pode reabrir o historico
+    await page.evaluate(() => abrirDocModal('<p>x</p>', 'Outro'));
+    await page.click('#doc-modal-overlay .doc-modal-btn-close');
+    await expect(page.locator('#hist-forn-modal')).toHaveCount(0);
+});

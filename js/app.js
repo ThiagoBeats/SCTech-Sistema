@@ -9583,8 +9583,14 @@ function _histRender() {
 function _histAbrirPedido(id) {
     const fornId = _histFornId, filtro = _histFiltro();
     fecharHistoricoFornecedor();
-    abrirPedidoCompra(id);
-    _docAoFecharUmaVez = () => abrirHistoricoFornecedor(fornId, filtro);
+    _docAoFecharUmaVez = null;
+    try { abrirPedidoCompra(id); } catch (e) { console.error(e); }
+    // so arma a volta se o PDF abriu de verdade
+    if (document.getElementById('doc-modal-overlay')?.classList.contains('active')) {
+        _docAoFecharUmaVez = () => abrirHistoricoFornecedor(fornId, filtro);
+    } else {
+        abrirHistoricoFornecedor(fornId, filtro);
+    }
 }
 
 function _histNomeArquivo(forn, filtro) {

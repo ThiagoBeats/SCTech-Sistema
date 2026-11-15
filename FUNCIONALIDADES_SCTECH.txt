@@ -770,10 +770,10 @@ fornecedor):
   - Colunas: Nº do pedido | Data de envio | Situação | Valor
   - Pedidos antigos sem data de envio usam a data de criação
   - Filtro de período (de / até) pela data de envio; o total no rodapé
-  - Clicar num pedido abre o PDF; ao fechar o PDF volta ao histórico com o
-    mesmo filtro. Pedido sem nenhuma data fica com a data em branco.
     acompanha o filtro
-  - Clicar num pedido abre o PDF dele
+  - Pedido sem nenhuma data fica com a data em branco
+  - Clicar num pedido abre o PDF dele; ao fechar o PDF volta ao histórico com
+    o mesmo filtro
   - Exportar o que está filtrado em Excel (.xlsx) ou PDF
 
 ── 9.2 ABA: PEDIDOS DE COMPRA ──────────────────────────────────────────────────
