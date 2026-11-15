@@ -272,7 +272,7 @@ let db = {
     vendedores:  JSON.parse(localStorage.getItem('sc_vend')) || [],
     fornecedores:    JSON.parse(localStorage.getItem('sc_forn')) || [],
     pedidos_compra:  JSON.parse(localStorage.getItem('sc_pc'))   || [],
-    carrinhos:       JSON.parse(localStorage.getItem('sc_carrinhos')) || [],
+    carrinhos:       CarrinhoCore.removerVazios(JSON.parse(localStorage.getItem('sc_carrinhos')) || []),
     contas_receber:  JSON.parse(localStorage.getItem('sc_cr'))   || [],
     contas_pagar:    JSON.parse(localStorage.getItem('sc_cp'))   || [],
     despesas_fixas:  JSON.parse(localStorage.getItem('sc_df'))   || [],
@@ -7474,7 +7474,12 @@ function abrirDocModal(htmlContent, titulo, extraToolbar, envio) {
     document.body.style.overflow = 'hidden';
 }
 
+// Quem abre um documento por cima de outra tela pode pedir para voltar a ela ao fechar (uma vez so).
+let _docAoFecharUmaVez = null;
+
 function fecharDocModal() {
+    const voltar = _docAoFecharUmaVez;
+    _docAoFecharUmaVez = null;
     // Usou o Enviar e nao respondeu se enviou: pergunta depois de fechar.
     const envio = typeof _envioDocAtual !== 'undefined' ? _envioDocAtual : null;
     const overlay = document.getElementById('doc-modal-overlay');
@@ -7484,6 +7489,7 @@ function fecharDocModal() {
     if (typeof fecharMenuEnviar === 'function') fecharMenuEnviar(true);
     if (typeof definirEnvioDoc === 'function') definirEnvioDoc(null);
     if (envio && envio.usouEnviar && !envio.enviadoTratado && envio.aoFecharDepoisDeEnviar) envio.aoFecharDepoisDeEnviar();
+    if (voltar) voltar();
 }
 
 async function imprimirDocModal() {
@@ -7878,7 +7884,7 @@ function importarDados(event) {
             db.vendedores    = dados.vendedores    || [];
             db.fornecedores  = dados.fornecedores  || [];
             db.pedidos_compra = dados.pedidos_compra || [];
-            db.carrinhos      = Array.isArray(dados.carrinhos) ? dados.carrinhos : [];
+            db.carrinhos      = Array.isArray(dados.carrinhos) ? CarrinhoCore.removerVazios(dados.carrinhos) : [];
             db.contas_receber = dados.contas_receber || [];
             db.contas_pagar   = dados.contas_pagar   || [];
             db.despesas_fixas = dados.despesas_fixas || [];
@@ -8663,7 +8669,8 @@ async function excluirFornecedor(id) {
     }
     const car = _carrinhoDe(id);
     if (car && CarrinhoCore.contarItens(car) > 0) {
-        await showAlert(`Este fornecedor tem um carrinho aberto com ${CarrinhoCore.contarItens(car)} itens. Feche ou esvazie o carrinho antes.`, '🚫');
+        const nItens = CarrinhoCore.contarItens(car);
+        await showAlert(`Este fornecedor tem um carrinho aberto com ${nItens} ${nItens === 1 ? 'item' : 'itens'}. Feche ou esvazie o carrinho antes.`, '🚫');
         return;
     }
     if (!await showConfirm(`Excluir o fornecedor "${f.nome}"?`, '🗑️', 'Excluir', 'Cancelar')) return;
@@ -8772,20 +8779,20 @@ function _carRender() {
     const vazio = !CarrinhoCore.contarItens(car);
     const th = 'padding:6px';
     const fmtQ = q => String(q).replace('.', ',');
-    const linhas = car.itens.map(i => {
+    const linhas = car.itens.map((i, idx) => {
         const sem = !(Number(i.preco_unit) > 0);
-        const chave = `'${i.tipo}',${Number(i.item_id)}`;
+        const chave = `'${i.tipo}',${Number(i.item_id)},${escapeHtml(_carJsStr(i.unidade || ''))}`;
         const qtd = edita
             ? `<input type="text" inputmode="decimal" class="car-qtd" value="${fmtQ(i.quantidade)}" style="width:70px;padding:4px;border:1px solid #ccc;border-radius:4px;text-align:right" onchange="_carAlterarQtd(${chave},this.value)"> ${escapeHtml(i.unidade || '')}`
             : `${fmtQ(i.quantidade)} ${escapeHtml(i.unidade || '')}`;
-        return `<tr style="border-top:1px solid #eee">
+        return `<tr style="border-top:1px solid #eee" data-lin="${idx}">
             <td style="${th}"><strong>${escapeHtml(i.item_nome)}</strong>${i.referencia ? `<br><small style="color:#888">${escapeHtml(i.referencia)}</small>` : ''}</td>
             <td style="white-space:nowrap">${qtd}</td>
             <td style="text-align:right">${sem ? '<span style="color:#B3160A">sem preço</span>' : _histMoeda(i.preco_unit)}</td>
-            <td style="text-align:right">${sem ? '—' : _histMoeda(i.subtotal)}</td>
+            <td class="car-sub" style="text-align:right">${sem ? '—' : _histMoeda(i.subtotal)}</td>
             <td style="text-align:center">${edita ? `<button type="button" class="car-remover btn btn-outline btn-sm" title="Tirar do carrinho" aria-label="Tirar do carrinho" onclick="_carRemover(${chave})">✕</button>` : ''}</td>
         </tr>`;
-    }).join('') || `<tr><td colspan="5" style="text-align:center;color:#999;padding:16px">O carrinho está vazio.</td></tr>`;
+    }).join('') || `<tr><td colspan="5" style="text-align:center;color:#999;padding:16px">O carrinho está vazio.</td></tr>`; // 5 = colunas da tabela abaixo
     corpo.innerHTML = `<div style="max-height:50vh;overflow:auto;border:1px solid #eee;border-radius:4px">
             <table style="width:100%;border-collapse:collapse;font-size:13px">
                 <thead><tr style="text-align:left;background:#f6f6f6"><th style="${th}">Item</th><th>Quantidade</th><th style="text-align:right">Preço</th><th style="text-align:right">Subtotal</th><th></th></tr></thead>
@@ -8800,29 +8807,51 @@ function _carRender() {
         </div>`;
 }
 
-function _carSalvar(carNovo) {
+// Texto como literal JS entre aspas simples (para ir dentro de um onclick).
+function _carJsStr(s) { return "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'"; }
+
+// emPlace: so atualiza os numeros na tela, sem refazer a tabela — assim o clique
+// no ✕ logo depois de editar a quantidade (o campo perde o foco e salva antes do
+// clique) nao cai num botao que acabou de ser trocado.
+function _carSalvar(carNovo, emPlace) {
     const i = db.carrinhos.findIndex(c => c.fornecedor_id == carNovo.fornecedor_id);
     carNovo.atualizado_em = Date.now();
-    if (i >= 0) db.carrinhos[i] = carNovo; else db.carrinhos.push(carNovo);
+    // carrinho sem item nao fica gravado
+    if (!CarrinhoCore.contarItens(carNovo)) { if (i >= 0) db.carrinhos.splice(i, 1); }
+    else if (i >= 0) db.carrinhos[i] = carNovo; else db.carrinhos.push(carNovo);
     syncDB();
     renderTabelaFornecedores();
-    _carRender();
+    if (emPlace && CarrinhoCore.contarItens(carNovo)) _carAtualizarNumeros(carNovo); else _carRender();
 }
 
-function _carAlterarQtd(tipo, itemId, texto) {
+function _carAtualizarNumeros(car) {
+    document.querySelectorAll('#carrinho-corpo tr[data-lin]').forEach(tr => {
+        const i = car.itens[Number(tr.dataset.lin)];
+        if (!i) return;
+        const campo = tr.querySelector('.car-qtd');
+        if (campo && document.activeElement !== campo) campo.value = String(i.quantidade).replace('.', ',');
+        const sub = tr.querySelector('.car-sub');
+        if (sub) sub.textContent = !(Number(i.preco_unit) > 0) ? '—' : _histMoeda(i.subtotal);
+    });
+    const tot = document.querySelector('#carrinho-corpo .car-total');
+    if (tot) tot.textContent = 'Total: ' + _histMoeda(CarrinhoCore.totalCarrinho(car));
+}
+
+function _carAlterarQtd(tipo, itemId, unidade, texto) {
     if (!_carPodeEditar()) return;
     const car = _carrinhoDe(_carFornId);
     if (!car) return;
+    // mesma leitura dos valores em R$: "1.000" = mil, "1,5" = 1,5, "1250.5" = 1250,5
     const q = _valorDigitadoBaixa(texto, NaN);
     if (!isFinite(q)) { _carRender(); return; }
-    _carSalvar(CarrinhoCore.alterarQuantidade(car, tipo, itemId, q));
+    _carSalvar(CarrinhoCore.alterarQuantidade(car, tipo, itemId, q, unidade), q > 0);
 }
 
-function _carRemover(tipo, itemId) {
+function _carRemover(tipo, itemId, unidade) {
     if (!_carPodeEditar()) return;
     const car = _carrinhoDe(_carFornId);
     if (!car) return;
-    _carSalvar(CarrinhoCore.removerItem(car, tipo, itemId));
+    _carSalvar(CarrinhoCore.removerItem(car, tipo, itemId, unidade));
 }
 
 async function esvaziarCarrinho(fornecedorId) {
@@ -8845,7 +8874,11 @@ async function fecharCarrinho(fornecedorId) {
     const btn = document.getElementById('car-fechar-btn');
     if (btn) btn.disabled = true;
     try {
-        const ok = await showConfirm(`Fechar o carrinho de ${forn.nome} e gerar o pedido de compra de ${_histMoeda(CarrinhoCore.totalCarrinho(car))}?\n\nO pedido vai para Pedidos de Compra, de onde você envia ao fornecedor.`, '📋', 'Fechar e gerar pedido', 'Cancelar');
+        // todos os itens sem preço: o pedido sairia com R$ 0,00 — pergunta antes
+        const semPreco = car.itens.every(i => !(Number(i.preco_unit) > 0));
+        const ok = await showConfirm(semPreco
+            ? 'Os itens deste carrinho estão sem preço: o pedido sai com valor R$ 0,00. Continuar?'
+            : `Fechar o carrinho de ${forn.nome} e gerar o pedido de compra de ${_histMoeda(CarrinhoCore.totalCarrinho(car))}?\n\nO pedido vai para Pedidos de Compra, de onde você envia ao fornecedor.`, '📋', 'Fechar e gerar pedido', 'Cancelar');
         if (!ok) { if (btn) btn.disabled = false; return; }
         const atual = _carrinhoDe(fornecedorId);
         if (!atual || !CarrinhoCore.contarItens(atual)) return;
@@ -9142,7 +9175,8 @@ async function salvarPedidoCompra() {
     db.pedidos_compra.push(Object.assign({
         id:           gerarNumeroPedidoCompra(),
         data_criacao: Date.now(),
-        status:       'Rascunho'
+        status:       'Rascunho',
+        data_envio:   null
     }, dados));
     pcDraftItens = [];
 
@@ -9470,7 +9504,7 @@ function _histDados(filtro) {
     return CarrinhoCore.historicoFornecedor(db.pedidos_compra, _histFornId, filtro || _histFiltro());
 }
 
-function abrirHistoricoFornecedor(fornecedorId) {
+function abrirHistoricoFornecedor(fornecedorId, filtro) {
     if (!temAcesso('fornecedores', 'visualizar')) return;
     const forn = db.fornecedores.find(f => f.id == fornecedorId);
     if (!forn || document.getElementById('hist-forn-modal')) return;
@@ -9501,6 +9535,10 @@ function abrirHistoricoFornecedor(fornecedorId) {
     </div>`;
     o.addEventListener('click', e => { if (e.target === o) fecharHistoricoFornecedor(); });
     document.body.appendChild(o);
+    if (filtro) {
+        o.querySelector('#hist-forn-de').value = filtro.de || '';
+        o.querySelector('#hist-forn-ate').value = filtro.ate || '';
+    }
     _histRender();
 }
 
@@ -9524,9 +9562,12 @@ function _histRender() {
     document.getElementById('hist-forn-total').textContent = 'Total: ' + _histMoeda(total);
 }
 
+// Abre o PDF do pedido; ao fechar o PDF volta ao historico com o mesmo filtro.
 function _histAbrirPedido(id) {
+    const fornId = _histFornId, filtro = _histFiltro();
     fecharHistoricoFornecedor();
     abrirPedidoCompra(id);
+    _docAoFecharUmaVez = () => abrirHistoricoFornecedor(fornId, filtro);
 }
 
 function _histNomeArquivo(forn, filtro) {
@@ -9708,7 +9749,11 @@ function _abrirModalCarrinho(tipo, ids, daSelecao) {
             </div>
         </div>`;
         o.addEventListener('click', e => { if (e.target === o) _fecharModalCarrinho(); });
-        o.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('.car-add-qtd')) _confirmarModalCarrinho(); });
+        o.addEventListener('keydown', e => {
+            if (e.key !== 'Enter' || !e.target.matches('.car-add-qtd, .car-add-forn')) return;
+            e.preventDefault();
+            _confirmarModalCarrinho();
+        });
         document.body.appendChild(o);
         o.querySelector('.car-add-qtd')?.focus();
     });
@@ -12547,7 +12592,7 @@ function renderEstoqueMateriais() {
     const tb = document.getElementById('tb-estoque-mat');
     if (!tb) return;
     if (!db.materiais.length) {
-        tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;padding:24px">Nenhum material cadastrado. <a href="catalogo.html">Cadastre em Catálogo</a>.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:24px">Nenhum material cadastrado. <a href="catalogo.html">Cadastre em Catálogo</a>.</td></tr>';
         return;
     }
     const buscaMat = textoBuscaEstoque('busca-est-materiais');

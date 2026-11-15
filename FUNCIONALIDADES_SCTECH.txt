@@ -770,6 +770,8 @@ fornecedor):
   - Colunas: Nº do pedido | Data de envio | Situação | Valor
   - Pedidos antigos sem data de envio usam a data de criação
   - Filtro de período (de / até) pela data de envio; o total no rodapé
+  - Clicar num pedido abre o PDF; ao fechar o PDF volta ao histórico com o
+    mesmo filtro. Pedido sem nenhuma data fica com a data em branco.
     acompanha o filtro
   - Clicar num pedido abre o PDF dele
   - Exportar o que está filtrado em Excel (.xlsx) ou PDF
@@ -825,8 +827,12 @@ Como adicionar:
     completo a Estoque.
   - Item sem fornecedor: a janela pede para escolher um; a escolha fica gravada
     no cadastro do item
+  - Quantidade digitada como os valores em R$: "1.000" = mil, "1,5" = 1,5,
+    "1.250,50" = 1250,5 e "1250.5" = 1250,5. Enter confirma (também com o
+    foco no fornecedor).
   - Cada fornecedor tem um carrinho aberto. Adicionar o mesmo item de novo soma
-    a quantidade. O preço é o custo do cadastro no momento (sem custo aparece
+    a quantidade; se a unidade for outra, vira outra linha (não soma unidades
+    diferentes). O preço é o custo do cadastro no momento (sem custo aparece
     "sem preço")
   - Carrinho aberto não aparece em Pedidos de Compra, nem no histórico, nem em
     totais
@@ -846,7 +852,10 @@ Na janela do carrinho:
   - "Fechar e gerar pedido": cria o pedido de compra como Rascunho, deixa o
     carrinho vazio e leva direto para a aba Pedidos de Compra, com o pedido
     novo destacado. O envio ao fornecedor é feito lá, pelo "📨 Enviar".
-    Carrinho vazio não pode ser fechado.
+    Carrinho vazio não pode ser fechado. Se todos os itens estão sem preço,
+    pergunta antes: "Os itens deste carrinho estão sem preço: o pedido sai com
+    valor R$ 0,00. Continuar?".
+  - Carrinho sem item não fica guardado.
   - O pedido segue o fluxo normal (marcar Recebido gera a conta a pagar)
   - Ver o carrinho e o histórico de pedidos exigem Fornecedores (visualizar);
     editar quantidade, tirar item, esvaziar e fechar exigem Fornecedores
