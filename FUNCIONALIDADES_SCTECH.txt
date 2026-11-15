@@ -14,7 +14,8 @@ Escopo: Somente funcionalidades implementadas e operacionais
 Tecnologia:
   - Aplicação web offline-first (HTML5 + CSS3 + JavaScript puro)
   - Armazenamento: localStorage do navegador (sem servidor/banco externo)
-  - Gráficos: Chart.js 4.4.0
+  - Gráficos: Chart.js 4.4.0, cópia local (js/vendor/chart.umd.min.js): os
+    gráficos funcionam sem internet
   - Autenticação: sessionStorage com credencial hardcoded
   - Compatível com: Chrome, Firefox, Edge, Safari (versões modernas)
 
@@ -251,6 +252,13 @@ Confirmar pagamento (ao instalar):
   - Pede a data (padrão hoje) e a forma de pagamento
   - Dá baixa só nas parcelas marcadas; se alguma ficar de fora, o pedido vai
     para Instalado mesmo assim, com o aviso "saldo em aberto" no card
+  - Se todas as parcelas do pedido já estão pagas, a janela de baixa não abre:
+    aparece a pergunta "Todas as parcelas deste pedido já estão pagas." com os
+    botões "Marcar como instalado" e "Cancelar"
+  - Se o usuário desmarcar tudo, aparece "Marque pelo menos um item." e o botão
+    Confirmar fica desabilitado (a janela não fecha sozinha). A janela que já
+    abre sem nada marcado de propósito (pedido com saldo pendente) continua
+    deixando confirmar
 
 ── 3.2 ABA: AGENDA DE INSTALAÇÕES ─────────────────────────────────────────────
 
@@ -511,9 +519,9 @@ Importar Dados:
   - Após importação: recarrega a página com os dados restaurados
   - Se o navegador ficar sem espaço no meio da importação, aparece "A importação
     não foi concluída. Não foi possível salvar: o espaço do navegador acabou.
-    Baixe uma cópia de segurança e libere espaço." Os dados que aparecem na
-    tela podem ficar trocados até recarregar a página; importar de novo
-    sobrescreve tudo
+    Baixe uma cópia de segurança e libere espaço." Depois do OK a página
+    recarrega e mostra os dados de antes (o que já tinha sido gravado pela
+    metade volta ao valor anterior); importar de novo sobrescreve tudo
   - A importação limpa os avisos e a cópia da correção única do Financeiro
     (seção 10.13), para o backup antigo ser corrigido de novo quando abrir.
     Isso só acontece depois que os dados importados foram gravados: se faltar
@@ -524,8 +532,12 @@ Importar Dados:
   - Em qualquer tela, se o navegador ficar sem espaço ao salvar, aparece "Não
     foi possível salvar: o espaço do navegador acabou. Baixe uma cópia de
     segurança e libere espaço." (uma vez por página aberta) e a tela não
-    quebra. Nos botões que salvam e recarregam (baixas, estornos, exclusões,
-    cadastros), o aviso aparece a cada tentativa e a página não recarrega
+    quebra. Se a gravação falhar no meio (várias chaves salvas de uma vez), o
+    que já tinha sido gravado volta ao valor anterior, para não ficar nada pela
+    metade. Nos botões que salvam e recarregam (baixas, estornos, exclusões,
+    cadastros), o aviso aparece a cada tentativa e, depois do OK, a página
+    recarrega com os dados salvos de antes. O aviso das outras gravações
+    continua uma vez por página, sem recarregar
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -881,7 +893,8 @@ KPIs — Linha 1 (6 cards em linha):
      cartão no período, uma linha a mais mostra "R$ X líquido (sem a taxa do
      cartão)", o valor que cai na conta. Recebimento no cartão sem conta (ou de
      antes da abertura da conta) entra nas datas de repasse do cartão, como
-     os demais. O relatório em PDF ainda não traz essa linha do líquido
+     os demais. O relatório em PDF traz a mesma linha "R$ X líquido (sem a
+     taxa do cartão)" no Total Recebido, com o mesmo valor da tela
   2. A Receber: soma de contas a receber com vencimento no período
   3. A Pagar: soma de contas a pagar com vencimento no período
   4. Saldo Previsto: (recebido + a receber) − (pago + a pagar)
@@ -909,8 +922,11 @@ Projeção de Fluxo de Caixa (3 cards):
     não baixado pelo valor líquido, despesas fixas ainda não lançadas e
     atrasados contados em hoje (excluindo já pagas). Conta sem vencimento
     fica de fora, porque não dá para prever sem data
-  - Transferências antigas com data futura (de antes da trava de data) ainda
-    entram nas duas barras da projeção
+  - Transferências entre contas não entram nas barras de entrada e saída da
+    projeção (somam zero), inclusive as antigas com data futura
+  - Despesa fixa antiga e conta lançada à mão que cobre a mesma despesa contam
+    uma vez só aqui, como no Resultado do mês (mesma regra de cobertura do
+    10.21)
 
 Meta de Faturamento:
   - Input para definir meta mensal em R$ + botão "Salvar"
@@ -1011,7 +1027,8 @@ Tabela de contas a receber:
 Formulário — Lançar Conta a Pagar:
   - Descrição (text, obrigatório)
   - Credor / Fornecedor (text)
-  - Valor R$ (number, step 0.01)
+  - Valor R$ (campo de texto decimal): aceita "1.250,50", "1250.5" e "12,5";
+    valor zero, negativo ou inválido dá "Informe o valor."
   - Vencimento (date, obrigatório)
   - Categoria (select): Tecido/Material | Instalador | Costureira | Aluguel |
     Salário | Conta (luz, internet…) | Comissão RT | Outro
@@ -1036,6 +1053,10 @@ Tabela de contas a pagar:
   - Conta lançada em várias parcelas mensais: o dia que não existe no mês vira
     o último dia do mês (31/01, 28/02, 31/03), sempre contando a partir da
     primeira data, a mesma regra do Simular compra
+  - Conta recorrente (mensal, bimestral…): as datas contam sempre a partir da
+    primeira; um dia que não existe no mês vira o último dia dele (31/01 →
+    28/02 ou 29/02 → 31/03 → 30/04). Quinzenal soma 15 dias a cada vez. O teto
+    de 60 meses e de 240 ocorrências continua
   - Contas de comissão aparecem aqui com a categoria "Comissão" (seção 10.9)
   - Contas vindas de pedido de compra ficam vinculadas a ele (seção 10.11)
 
@@ -1094,6 +1115,10 @@ De onde vem o percentual de entrada:
   - Ao escolher a forma de pagamento no pedido, o % de entrada do pedido é
     preenchido sozinho e pode ser editado ali antes de aprovar.
   - Com 100% de entrada, o pedido gera uma parcela única (à vista).
+  - Ao aprovar de novo um pedido que já tem valor pago, a descrição da parcela
+    "Entrada (X%)" mostra o que falta (50% de R$ 1.000 com R$ 200 já pagos vira
+    "Entrada (30%)"; o decimal usa vírgula). O sistema também reconhece "Entrada
+    de 30%", "entrada 40%" e "Entrada de 12,5%" em parcelas antigas
   - Cada parcela guarda cliente, pedido, vencimento e descrição.
 
 O que não muda:
@@ -1137,6 +1162,9 @@ Voltar o pedido para Orçamento:
   - É permitido mesmo com valor recebido
   - Saem só as parcelas em aberto e as comissões pendentes; as parcelas já pagas
     ficam no Financeiro
+  - A pergunta de confirmação acrescenta "A comissão pendente deste pedido será
+    removida." (ou "As N comissões pendentes deste pedido serão removidas."),
+    só quando há comissão pendente
   - Ao aprovar de novo, só o valor que ainda falta é cobrado
   - Se o cliente já pagou mais do que o novo valor do pedido, ao aprovar de
     novo aparece "O cliente já pagou R$ X, mais que o novo valor do pedido (R$
@@ -1152,7 +1180,8 @@ Voltar o pedido para Orçamento:
     instalação, vinculada ao pedido
   - A comissão é gerada na instalação, mesmo que o cliente ainda deva o saldo
   - Pagar comissão (tela de Vendedores ou aba A Pagar) é a mesma ação e pede
-    data e forma de pagamento
+    data e forma de pagamento. O meio começa em branco ("Escolha o meio") e é
+    obrigatório: sem escolher, aparece "Escolha o meio."
   - Pagar pedido a pedido (padrão) ou várias de uma vez: escolhe-se a pessoa,
     marcam-se as comissões pendentes e todas são pagas com a mesma data e forma
     (cada conta fica paga individualmente)
@@ -1163,6 +1192,10 @@ Voltar o pedido para Orçamento:
     "pedido cancelado — revisar" sai das comissões já pagas
   - Comissão de RT antiga ainda pendente também aparece na aba Arquitetos da
     tela de Vendedores (seção 8.2)
+  - Comissão antiga já paga, sem conta no A Pagar, também tem o botão Estornar
+    no histórico (pede permissão completa do A Pagar e confirmação): desmarca o
+    pago no pedido, a comissão volta a Pendentes e gera a conta no próximo
+    Pagar. Se existir conta paga, o estorno é o mesmo da conta
 
 ── 10.10 DRE POR PEDIDO: COMO O RESULTADO É CALCULADO ──────────────────────────
 
@@ -1198,7 +1231,8 @@ Ao marcar um pedido de compra como Recebido abre "Gerar conta a pagar?":
     lista, e dá para gerar depois
   - A conta fica vinculada ao pedido de compra; credor = fornecedor
   - Exige acesso completo ao A Pagar (permissão "financeiro.pagar"); sem ela o
-    modal não deixa gerar a conta
+    modal nem abre: o aviso de permissão aparece antes, ao clicar para gerar a
+    conta
   - Ao vincular uma nota a uma conta já existente, a conta passa a ter o tipo
     de lançamento da nota ou do boleto
 
@@ -1213,6 +1247,8 @@ Nota fiscal já lançada:
   - No cadastro da empresa (Configurar Empresa): regime tributário (MEI, Simples
     Nacional, Lucro Presumido, Lucro Real) e alíquota estimada em %
   - Por enquanto os dados só são guardados; nenhum imposto é calculado
+  - A alíquota aceita de 0 a 100 (vírgula ou ponto); recarregar mostra "0" e
+    "6,5" (e não "0.0" ou "6.5")
 
 ── 10.13 CORREÇÃO ÚNICA DOS DADOS ANTIGOS ──────────────────────────────────────
 
@@ -1284,6 +1320,13 @@ Maquininha (taxas e prazos), para cada maquininha:
 Planos de pagamento (antes chamado "Formas de pagamento"):
   - Cada plano tem nome, % de entrada e % de desconto (o desconto fica no plano)
   - Os planos que você já tinha continuam valendo, sem precisar refazer
+  - Em Empresa › Preferências: campo "Plano", botão "+ Adicionar plano de
+    pagamento" e "Salvar Planos de Pagamento" (aviso "Planos de pagamento
+    salvos!" / "restaurados para o padrão."). Sem nenhum plano: "Nenhum plano
+    cadastrado. Adicione pelo menos um." e, ao salvar, "Cadastre pelo menos um
+    plano de pagamento.". O card do pedido no kanban mostra "Plano de
+    pagamento". "Forma de pagamento" continua só onde é o meio (à vista /
+    parcelado do Simular compra, seção 4 do pedido)
 
 ── 10.15 FASE 1: PLANO E MEIO NO PEDIDO ────────────────────────────────────────
 
@@ -1318,7 +1361,8 @@ Baixa de recebimento:
   - Estorno: devolve a parcela e apaga o movimento. Estornar uma parte paga
     junta o valor de volta na parte em aberto (se ela ainda estiver aberta).
     Estorno de cartão apaga todos os repasses e as taxas, mesmo os que já caíram,
-    e avisa que muda o saldo de hoje da conta
+    e avisa que muda o saldo de hoje da conta (o aviso é uma frase só, sem
+    quebra de parágrafo)
   - Baixa feita antes da data do saldo inicial da conta, ou sem conta, é registrada
     normalmente, mas NÃO entra no saldo. A janela mostra um aviso disso
   - Baixa no cartão sem conta (ou antes do saldo inicial) também gera a conta
@@ -1353,6 +1397,8 @@ Pagamentos (A Pagar e comissões):
   - Parcela sem vencimento não tem o botão Cobrar
   - A mensagem é configurável em Preferências, com os campos {cliente}, {empresa},
     {valor}, {pedido} e {vencimento}
+  - Conta sem pedido (lançada à mão): a mensagem sai sem o trecho "do pedido
+    {pedido}" ("...parcela de R$ X, com vencimento em ..."), sem "#undefined"
   - A parcela fica marcada "cobrado hoje" para não cobrar duas vezes no mesmo dia
 
 ── 10.18 FASE 1: ABA HOJE ──────────────────────────────────────────────────────
@@ -1364,6 +1410,9 @@ Agora o Financeiro tem 7 abas e a primeira, aberta por padrão, é "Hoje".
     de hoje e dos próximos 7 dias, e o cartão que cai hoje. Vazio: "Tudo em dia"
   - Botões na própria tarefa: Cobrar e Recebi (para quem pode receber) e Paguei
     (para quem pode pagar)
+  - As tarefas de receber só aparecem para quem tem Receber (visualizar ou
+    mais) e as de pagar para quem tem Pagar (visualizar ou mais); o cartão que
+    cai hoje continua aparecendo como antes
   - O cartão que cai hoje mostra o valor líquido (a entrada menos a taxa do
     mesmo grupo, conta e dia), com o rótulo "líquido"
   - Conta a receber ou a pagar sem data de vencimento não vira tarefa (nem
@@ -1372,11 +1421,19 @@ Agora o Financeiro tem 7 abas e a primeira, aberta por padrão, é "Hoje".
     dela. Quando a conta tem dinheiro do cartão que ainda não caiu, aparece
     embaixo do nome dela "R$ X a cair" (esse valor não entra no saldo de hoje).
     Sem contas configuradas, aparece um convite para configurar. Conta
-    desativada não aparece
+    desativada não aparece. Os cartões das contas abrem também pelo teclado
+    (Tab, Enter ou Espaço) e têm destaque ao passar o mouse ou focar no tema
+    escuro
   - "Próximas semanas": gráfico de 8 semanas a partir do saldo de hoje, somando
     o que já vai cair do cartão, as parcelas e contas a pagar em aberto e as
     despesas fixas ainda não lançadas. Atrasados entram na semana atual. Se o
     dinheiro não fechar, avisa "Semana de DD/MM: falta R$ X"
+  - Despesa fixa antiga e conta lançada à mão que é a mesma despesa (ligação
+    pelo id, mesma descrição, ou grupo Despesas fixas com a mesma descrição e
+    valor) contam uma vez só na previsão. Despesa fixa antiga sem data de início
+    começa no mês em que foi cadastrada também na previsão (antes contava em
+    todos os meses). Fixa antiga de Imposto continua na previsão (é saída real
+    de caixa)
   - Os avisos da migração da Fase 0 aparecem no topo de todas as abas
 
 ── 10.19 FASE 1: ABA EXTRATO ───────────────────────────────────────────────────
@@ -1420,7 +1477,9 @@ Agora o Financeiro tem 7 abas e a primeira, aberta por padrão, é "Hoje".
     (padrão)". Vale para todos os meses. Vazio ou 0 = sem meta
   - Ajuste do mês: na Visão Geral (card "Meta de Faturamento") ou na aba
     Resultado do mês (botão ✏️). Vale só para aquele mês e vence a meta padrão.
-    Salvar vazio ou 0 apaga o ajuste e o mês volta à meta padrão
+    Salvar vazio ou 0 apaga o ajuste e o mês volta à meta padrão. O campo do
+    ajuste mostra a meta padrão (formatada, ex.: 50.000,00) como sugestão cinza
+    (placeholder), sem preencher
   - A meta é comparada com o faturamento líquido do mês (o que entrou menos as
     taxas de cartão), a mesma conta do Resultado do mês
   - Orçamento padrão: em Empresa, um limite mensal por grupo de saída (campo
@@ -1469,7 +1528,8 @@ Nova aba (8ª) que mostra se o mês fechou no azul. Escolha o mês no campo "Mê
     a situação. Faixas: "dentro do limite" (até 79%), "perto do limite" (de
     80% a 100%) e "estourou R$ X" (acima de 100%). Só aparecem grupos com
     limite. Quem tem permissão completa ajusta o limite só do mês (✏️ ou o
-    seletor "+ Limite só neste mês")
+    seletor "+ Limite só neste mês"). O seletor só aparece quando existe
+    orçamento (limite padrão maior que zero, ou um ajuste do mês já lançado)
   - Mês em andamento (só o mês atual): "Até hoje" é o resultado já realizado
     e "Previsto até o fim do mês" soma o que ainda deve entrar e sair (contas
     a receber e a pagar, cartão que cai, despesas fixas). Se há atrasados
@@ -1492,7 +1552,7 @@ Nova aba (8ª) que mostra se o mês fechou no azul. Escolha o mês no campo "Mê
 ── 10.23 FASE 2: IMPOSTO NO A PAGAR ────────────────────────────────────────────
 
   - Nova categoria "Imposto" ao lançar uma conta a pagar (e nas despesas
-    fixas)
+    fixas e no Simular compra). As listas de categoria vêm de uma só definição
   - Ao escolher Imposto aparece o campo "Mês de referência" (mês a que a guia
     se refere). Vem preenchido com o mês anterior ao vencimento e pode ser
     editado. Em conta parcelada ou recorrente, cada guia mantém a mesma
@@ -1595,6 +1655,8 @@ Nova aba (8ª) que mostra se o mês fechou no azul. Escolha o mês no campo "Mê
   - Conta sem data de saldo inicial também entra na conferência: o saldo
     esperado é o saldo inicial mais todos os movimentos até o último dia do mês
   - A sugestão de alta de grupo (para o próximo mês) não inclui o Imposto
+  - Quando a diferença do resumo (passo 3) é zero, aparece "igual ao mês anterior"
+    (o mesmo texto vale no alerta de tendência da Visão Geral)
   - Depois desta atualização, um mês que já estava fechado pode mostrar "mudou
     depois do fechamento" uma única vez: recebimentos de cartão sem conta
     agora caem nas datas de repasse, e contas sem data de saldo inicial

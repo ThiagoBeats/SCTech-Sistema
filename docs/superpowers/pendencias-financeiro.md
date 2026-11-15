@@ -1,5 +1,7 @@
 # Pendências do módulo Financeiro
 
+Todas as pendências das Fases 0–3 foram resolvidas nas rodadas 1, 2 e 3 (branch feat/financeiro-pendencias-r1).
+
 Combinado com o usuário: as pendências ficam anotadas aqui e são revisadas e
 resolvidas **todas de uma vez, no final das fases** do Financeiro.
 
