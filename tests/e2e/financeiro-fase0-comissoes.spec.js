@@ -22,7 +22,8 @@ test('instalar gera uma conta por papel', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_vend: VEND, sc_ped: [pedido()], sc_cr: cr() });
     await page.goto(BASE + '/pcp.html');
     await page.locator('.kanban-btn-pagamento').click();
-    await page.locator('#baixa-modal #baixa-ok').click();
+    // tudo ja pago: sem janela de baixa, so a confirmacao simples
+    await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_ped'))[0].status).toBe('Instalado');
     const cps = (await lerChave(page, 'sc_cp')).filter(c => c.categoria === 'comissao');
     expect(cps).toHaveLength(2);

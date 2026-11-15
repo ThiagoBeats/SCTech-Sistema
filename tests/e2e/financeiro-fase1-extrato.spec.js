@@ -111,7 +111,7 @@ test('mesma conta de origem e destino e bloqueado dentro do modal', async ({ pag
     await m.locator('#transf-valor').fill('10');
     await m.locator('#transf-ok').click();
     await expect(m).toBeVisible();
-    await expect(m.locator('#transf-erro')).toContainText('diferentes');
+    await expect(m.locator('#transf-erro')).toContainText('diferente da origem');
     await m.locator('#transf-para').selectOption('11');
     await m.locator('#transf-valor').fill('0');
     await m.locator('#transf-ok').click();

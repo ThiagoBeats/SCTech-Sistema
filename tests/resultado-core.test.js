@@ -400,3 +400,10 @@ test('periodo: marca quando o imposto de mes incompleto ficou de fora', () => {
     const aberta = { ...guia, status: 'Pendente', data_pagamento: null };
     assert.strictEqual(R.resultadoDoPeriodo({ de: '2026-10-10', ate: '2026-11-08', contasPagar: [aberta], ...base, aliquota: 0 }).imposto.foraIncompleto, true);
 });
+
+test('recebimento antigo com data futura e sem movimento: fora de "Ate hoje" ate a data chegar', () => {
+    const contasReceber = [{ id: 1, status: 'Pago', valor: 400, data_pagamento: '2026-11-20' }];
+    assert.strictEqual(R.entradasDoMes({ mes: '2026-11', contasReceber, movimentos: [], ateData: '2026-11-12' }).total, 0);
+    assert.strictEqual(R.entradasDoMes({ mes: '2026-11', contasReceber, movimentos: [], ateData: '2026-11-20' }).total, 400);
+    assert.strictEqual(R.entradasDoMes({ mes: '2026-11', contasReceber, movimentos: [] }).total, 400);
+});

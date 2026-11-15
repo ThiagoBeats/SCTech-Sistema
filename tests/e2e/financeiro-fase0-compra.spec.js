@@ -126,9 +126,10 @@ test('sem permissao de contas a pagar: nao cria conta e o PC fica sem conta a pa
     });
     await page.reload();
     await receber(page);
-    await page.locator('#pcp-ok').click();
-    await expect(page.locator('#pcp-erro')).toContainText('permissão');
-    await page.locator('#pcp-agora').click();
+    // sem permissao a janela nem abre: aparece o aviso
+    await expect(page.locator('#sc-modal-msg')).toContainText('permissão');
+    await expect(page.locator('#pcp-modal')).toHaveCount(0);
+    await page.locator('#sc-modal-ok').click();
     expect(await lerChave(page, 'sc_cp')).toHaveLength(0);
     expect((await lerChave(page, 'sc_pc'))[0].status).toBe('Recebido');
     await expect(page.locator('#tb-pedidos-compra')).toContainText('sem conta a pagar');

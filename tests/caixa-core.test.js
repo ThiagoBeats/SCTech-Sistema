@@ -135,6 +135,23 @@ test('normalizarTelefone', () => {
     assert.strictEqual(C.normalizarTelefone(''), null);
     assert.strictEqual(C.normalizarTelefone('1234'), null);
 });
+test('normalizarTelefone: zero de tronco', () => {
+    assert.strictEqual(C.normalizarTelefone('041 9999-0000'), '554199990000');
+    assert.strictEqual(C.normalizarTelefone('(041) 99999-0000'), '5541999990000');
+    assert.strictEqual(C.normalizarTelefone('5541999990000'), '5541999990000');
+    assert.strictEqual(C.normalizarTelefone('0'), null);
+});
+test('clienteDaCobranca: id antes do nome; homonimo nao chuta', () => {
+    const clientes = [{ id: 1, nome: 'Ana', tel: '111' }, { id: 2, nome: 'Ana', tel: '222' }, { id: 3, nome: 'Bia', tel: '333' }, { id: 4, nome: 'Bia', tel: '444' }, { id: 5, nome: 'Cleo', tel: '555' }];
+    const pedidos = [{ id: 10, clienteId: 2, clienteNome: 'Ana' }, { id: 11, clienteNome: 'Bia' }, { id: 12, clienteNome: 'Cleo' }];
+    assert.strictEqual(C.clienteDaCobranca({ pedido_id: 10, cliente_nome: 'Ana' }, pedidos, clientes).cliente.id, 2);
+    assert.strictEqual(C.clienteDaCobranca({ pedido_id: 99, clienteId: 1, cliente_nome: 'Ana' }, pedidos, clientes).cliente.id, 1);
+    const h = C.clienteDaCobranca({ pedido_id: 11, cliente_nome: 'Bia' }, pedidos, clientes);
+    assert.strictEqual(h.cliente, null);
+    assert.strictEqual(h.ambiguo, true);
+    assert.strictEqual(C.clienteDaCobranca({ pedido_id: 12, cliente_nome: ' cleo ' }, pedidos, clientes).cliente.id, 5);
+    assert.strictEqual(C.clienteDaCobranca({ pedido_id: 99, cliente_nome: 'Zed' }, pedidos, clientes).cliente, null);
+});
 test('montarMensagem e linkWhatsApp', () => {
     const m = C.montarMensagem(C.MENSAGEM_COBRANCA_PADRAO, { cliente: 'Maria', empresa: 'SC', valor: 'R$ 2.000,00', pedido: '#26015', vencimento: '10/11/2026' });
     assert.ok(m.includes('Olá, Maria!'));
@@ -142,6 +159,14 @@ test('montarMensagem e linkWhatsApp', () => {
     assert.ok(!m.includes('{'));
     assert.ok(C.linkWhatsApp('5511987654321', m).startsWith('https://wa.me/5511987654321?text=Ol%C3%A1'));
     assert.strictEqual(C.linkWhatsApp(null, m), null);
+});
+test('montarMensagem sem pedido tira o trecho "do pedido" em vez de deixar vazio', () => {
+    const dados = { cliente: 'Maria', empresa: 'SC', valor: 'R$ 2.000,00', pedido: '', vencimento: '10/11/2026' };
+    const m = C.montarMensagem(C.MENSAGEM_COBRANCA_PADRAO, dados);
+    assert.ok(m.includes('parcela de R$ 2.000,00, com vencimento em 10/11/2026.'));
+    assert.ok(!/pedido|undefined|null|#/.test(m));
+    assert.strictEqual(C.montarMensagem('Oi {cliente}, {pedido}!', { cliente: 'Ana' }), 'Oi Ana, !');
+    assert.ok(C.montarMensagem(C.MENSAGEM_COBRANCA_PADRAO, Object.assign({}, dados, { pedido: '#7' })).includes('do pedido #7'));
 });
 
 // ---- Task 2 fix round 1 ----
@@ -170,4 +195,111 @@ test('previsao: CR/CP pagos ficam fora e ids misturados string/numero casam o me
     assert.strictEqual(s[0].entradas, 0);
     assert.strictEqual(s[0].saidas, 0);
     assert.strictEqual(s[4].entradas, 97);
+});
+
+// ---- Pendencias R1, tarefa 3: contas inativas, sem vencimento, valor zero, mes antes da abertura ----
+test('saldosHoje ignora conta inativa no total e na lista', () => {
+    const a = { id: 1, nome: 'A', tipo: 'banco', saldo_inicial: 100, data_saldo_inicial: '2026-01-01' };
+    const b = { id: 2, nome: 'B', tipo: 'banco', saldo_inicial: 50, data_saldo_inicial: '2026-01-01', ativo: false };
+    const s = C.saldosHoje([a, b], [{ conta_id: 2, data: '2026-11-20', sentido: 'entrada', valor: 10 }], '2026-11-12');
+    assert.strictEqual(s.total, 100);
+    assert.deepStrictEqual(s.contas.map(c => c.id), [1]);
+});
+test('previsao: movimento futuro de conta inativa fica fora', () => {
+    const ativa = { id: 1, tipo: 'banco', saldo_inicial: 0, data_saldo_inicial: '2026-01-01' };
+    const inativa = { id: 2, tipo: 'banco', saldo_inicial: 0, data_saldo_inicial: '2026-01-01', ativo: false };
+    const s = C.previsaoSemanal(Object.assign({}, base, { contas: [ativa, inativa], meios: [], movimentos: [
+        { conta_id: 1, data: '2026-11-15', sentido: 'entrada', valor: 10 }, { conta_id: 2, data: '2026-11-15', sentido: 'entrada', valor: 999 }] }));
+    assert.strictEqual(s[0].entradas, 10);
+});
+test('previsao: sem vencimento nao entra nem marca atrasado; valor 0 nao marca atrasado', () => {
+    const s = C.previsaoSemanal(Object.assign({}, base, {
+        contasReceber: [{ id: 1, valor: 300, status: 'Pendente' }, { id: 2, valor: 0, data_vencimento: '2026-11-01', status: 'Atrasado' }],
+        contasPagar: [{ id: 3, valor: 80, data_vencimento: '', status: 'Pendente' }]
+    }));
+    assert.strictEqual(s[0].entradas, 0);
+    assert.strictEqual(s[0].saidas, 0);
+    assert.strictEqual(s[0].inclui_atrasados, false);
+});
+test('tarefasHoje: sem vencimento nao e atrasado nem de hoje', () => {
+    const t = C.tarefasHoje({ hoje: '2026-11-12', contasReceber: [{ id: 1, valor: 5, status: 'Pendente' }], contasPagar: [{ id: 2, valor: 5, status: 'Pendente', data_vencimento: '' }] });
+    assert.strictEqual(t.receberAtrasados.length + t.receberHoje.length + t.pagarAtrasados.length + t.pagarProximos.length, 0);
+});
+test('saldoContaAte: antes da abertura da conta vale 0', () => {
+    const c = { id: 1, tipo: 'banco', saldo_inicial: 500, data_saldo_inicial: '2026-11-10' };
+    assert.strictEqual(C.saldoContaAte(c, [], '2026-11-09'), 0);
+    assert.strictEqual(C.saldoContaAte(c, [], '2026-11-10'), 500);
+});
+
+// ---- Pendencias R1, tarefa 4: cartao ----
+test('lerNumero: virgula, milhar BR e US, ultimo separador e o decimal', () => {
+    assert.strictEqual(C.lerNumero('1,5'), 1.5);
+    assert.strictEqual(C.lerNumero('1.5'), 1.5);
+    assert.strictEqual(C.lerNumero('1.250,50'), 1250.5);
+    assert.strictEqual(C.lerNumero('1,250.50'), 1250.5);
+    assert.strictEqual(C.lerNumero(' 3 '), 3);
+    assert.ok(Number.isNaN(C.lerNumero('')));
+    assert.ok(Number.isNaN(C.lerNumero('abc')));
+});
+test('repassesCartao forca numero: taxa com virgula, valor e vezes em texto', () => {
+    const conta = { ...maq, cartao: { ...maq.cartao, debito_taxa: '1,5', credito_taxa: '1,250.50' } };
+    assert.deepStrictEqual(C.repassesCartao({ valor: '200', data: '2026-11-12', conta, tipo: 'debito' }),
+        [{ data: '2026-11-13', bruto: 200, taxa: 3, liquido: 197 }]);
+    const r = C.repassesCartao({ valor: 100, data: '2026-11-12', conta: { ...maq, cartao: { credito_taxa: '1.250,50' } }, tipo: 'credito', vezes: '1' });
+    assert.strictEqual(r[0].taxa, 1250.5);
+    assert.strictEqual(C.repassesCartao({ valor: 90, data: '2026-11-12', conta: maq, tipo: 'credito', vezes: '3' }).length, 3);
+});
+test('CARTAO_PADRAO exposto pelo core (fonte unica)', () => {
+    assert.strictEqual(C.CARTAO_PADRAO.debito_taxa, 1.5);
+    assert.strictEqual(C.CARTAO_PADRAO.antecipacao_dias, 1);
+});
+test('dividirParcela compara em centavos', () => {
+    assert.deepStrictEqual(C.dividirParcela({ valor: 99.996 }, 100), { pago: 100, resto: 0 });
+    assert.deepStrictEqual(C.dividirParcela({ valor: 0.1 + 0.2 }, 0.3), { pago: 0.3, resto: 0 });
+    assert.throws(() => C.dividirParcela({ valor: 100 }, 100.01));
+});
+test('tarefasHoje: cartaoHoje traz o liquido (entrada menos a taxa do mesmo repasse)', () => {
+    const hoje = '2026-11-12';
+    const movs = [
+        { id: 1, conta_id: 3, data: hoje, sentido: 'entrada', valor: 100, origem: 'cr', origem_id: 9, grupo_id: 7 },
+        { id: 2, conta_id: 3, data: hoje, sentido: 'saida', valor: 3, origem: 'cp', origem_id: 8, grupo_id: 7 },
+        { id: 3, conta_id: 3, data: '2026-12-12', sentido: 'saida', valor: 50, origem: 'cp', origem_id: 5, grupo_id: 7 },
+        { id: 4, conta_id: 3, data: hoje, sentido: 'entrada', valor: 40, origem: 'cr', origem_id: 10, grupo_id: null }];
+    const t = C.tarefasHoje({ hoje, contasReceber: [], contasPagar: [], movimentos: movs, contas: [maq] });
+    assert.deepStrictEqual(t.cartaoHoje.map(m => [m.id, m.liquido]), [[1, 97], [4, 40]]);
+});
+test('lancamentosPrevistos: fixa antiga sem data_inicio so vale a partir do mes do cadastro (id)', () => {
+    const cadastro = new Date(2026, 11, 3).getTime(); // dezembro de 2026
+    const df = { id: cadastro, descricao: 'Aluguel', valor: 500, dia_vencimento: 5, categoria: 'aluguel', ativo: true };
+    const l = C.lancamentosPrevistos({ hoje: '2026-11-12', limite: '2027-01-31', movimentos: [], contasReceber: [], contasPagar: [], despesasFixas: [df], contas: [], meios: [] });
+    assert.deepStrictEqual(l.map(x => x.data), ['2026-12-05', '2027-01-05']);
+});
+test('lancamentosPrevistos: fixa com id que nao e horario (ou com data_inicio) continua como antes', () => {
+    const base = { descricao: 'Luz', valor: 80, dia_vencimento: 20, categoria: 'conta', ativo: true };
+    const pedir = df => C.lancamentosPrevistos({ hoje: '2026-11-12', limite: '2026-12-31', movimentos: [], contasReceber: [], contasPagar: [], despesasFixas: [df], contas: [], meios: [] }).map(x => x.data);
+    assert.deepStrictEqual(pedir({ ...base, id: 5 }), ['2026-11-20', '2026-12-20']);
+    assert.deepStrictEqual(pedir({ ...base, id: new Date(2026, 11, 3).getTime(), data_inicio: '2026-11-01' }), ['2026-11-20', '2026-12-20']);
+});
+test('lancamentosPrevistos: guia de imposto lancada como fixa antiga continua no caixa (a previsao do caixa nao estima imposto a parte)', () => {
+    const df = { id: 7, descricao: 'DAS', valor: 300, dia_vencimento: 20, categoria: 'imposto', ativo: true };
+    const l = C.lancamentosPrevistos({ hoje: '2026-11-12', limite: '2026-11-30', movimentos: [], contasReceber: [], contasPagar: [], despesasFixas: [df], contas: [], meios: [] });
+    assert.deepStrictEqual(l.map(x => [x.data, x.valor, x.sentido]), [['2026-11-20', 300, 'saida']]);
+});
+test('previsao: fixa com periodicidade sem conta pre-gerada no horizonte nao entra (a tela so soma a conta, nunca a regra)', () => {
+    const hoje = '2026-11-12';
+    // Anual e mensal com periodicidade: se fossem projetadas por mes, o dia 20 cairia em 20/11 e 20/12.
+    const dfs = [
+        { id: 1, descricao: 'Seguro', valor: 1200, dia_vencimento: 20, ativo: true, periodicidade: 'anual' },
+        { id: 2, descricao: 'Internet', valor: 100, dia_vencimento: 20, ativo: true, periodicidade: 'mensal' }
+    ];
+    const longe = { id: 7, tipo: 'fixo', descricao: 'Seguro', valor: 1200, data_vencimento: '2027-11-20', status: 'Pendente' }; // fora das 8 semanas
+    const l = C.lancamentosPrevistos({ hoje, limite: '2027-01-31', movimentos: [], contasReceber: [], contasPagar: [longe], despesasFixas: dfs, contas: [], meios: [] });
+    // Fora o proprio lancamento da conta longe (a janela e cortada por quem agrupa), nada da regra da fixa.
+    assert.deepStrictEqual(l.map(x => [x.data, x.valor]), [['2027-11-20', 1200]]);
+    const s = C.previsaoSemanal(Object.assign({}, base, { despesasFixas: dfs, contasPagar: [longe] }));
+    assert.strictEqual(s.reduce((a, x) => a + x.saidas, 0), 0);
+    // A conta pre-gerada dentro do horizonte entra uma vez so (nao soma a fixa por cima).
+    const dentro = { id: 8, tipo: 'fixo', descricao: 'Seguro', valor: 1200, data_vencimento: '2026-12-20', status: 'Pendente' };
+    const l2 = C.lancamentosPrevistos({ hoje, limite: '2027-01-31', movimentos: [], contasReceber: [], contasPagar: [dentro], despesasFixas: dfs, contas: [], meios: [] });
+    assert.deepStrictEqual(l2.map(x => [x.data, x.valor]), [['2026-12-20', 1200]]);
 });

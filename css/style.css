@@ -2438,6 +2438,9 @@ html[data-theme="dark"] .hoje-orcamento-linha { background: rgba(244,57,39,0.14)
 .hoje-item-valor { font-weight: 600; white-space: nowrap; }
 .hoje-conta { display: flex; justify-content: space-between; gap: 10px; padding: 8px 6px; border-bottom: 1px solid var(--border); cursor: pointer; border-radius: 6px; }
 .hoje-conta:hover { background: var(--border-subtle); }
+html[data-theme="dark"] .hoje-conta:hover { background: rgba(255,255,255,0.08); }
+.hoje-conta:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; background: var(--border-subtle); }
+html[data-theme="dark"] .hoje-conta:focus-visible { background: rgba(255,255,255,0.08); }
 .hoje-conta small { color: var(--muted); display: block; }
 .hoje-total { display: flex; justify-content: space-between; font-size: 18px; font-weight: 700; padding: 4px 6px 10px; }
 #hoje-previsao-aviso { margin-top: 10px; font-weight: 600; color: var(--danger); }
@@ -2465,6 +2468,9 @@ html[data-theme="dark"] .fin-a-cair { color: #F7DE86; }
 .res-meta, .res-linha { margin-top: 10px; font-size: 14px; }
 .res-frase { font-size: 16px; font-weight: 600; }
 .res-aviso { margin-top: 8px; font-size: 12px; color: #B26A00; }
+:root { --dre-selo-aviso: #B26A00; }
+html[data-theme="dark"] { --dre-selo-aviso: #E8A94A; }
+.dre-selo-aviso { font-size: 10px; color: var(--dre-selo-aviso); font-weight: 600; }
 .res-faixa-ok { color: #005D3B; }
 .res-faixa-perto { color: #B26A00; font-weight: 600; }
 .res-faixa-estourou { color: #F43927; font-weight: 600; }
