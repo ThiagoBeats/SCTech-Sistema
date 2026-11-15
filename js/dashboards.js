@@ -693,11 +693,16 @@ function _dashGerencial() {
     const hoje = new Date().toISOString().split('T')[0];
 
     // Financeiro
-    const recebido  = db.contas_receber.filter(cr=>cr.status==='Pago'&&inR(cr.data_pagamento)).reduce((s,cr)=>s+cr.valor,0);
-    const totalPago = db.contas_pagar.filter(cp=>cp.status==='Pago'&&inR(cp.data_pagamento)).reduce((s,cp)=>s+cp.valor,0);
+    // Mesmas regras da Visao Geral do Financeiro: dinheiro pela data em que entra/sai (cartao pelo repasse),
+    // imposto pela referencia. "Este mes" vale o mes inteiro, como la.
+    const _perG = document.getElementById('df-periodo')?.value || 'mes';
+    const ateG = _perG === 'mes' ? _resUltimoDia(ini.slice(0, 7)) : fim;
+    const resG = ResultadoCore.resultadoDoPeriodo({ de: ini, ate: ateG, ...dadosFinanceirosBase() });
+    const recebido  = resG.entradas;
+    const totalPago = resG.saidas;
     const aReceber  = db.contas_receber.filter(cr=>cr.status!=='Pago').reduce((s,cr)=>s+cr.valor,0);
     const aPagar    = db.contas_pagar.filter(cp=>cp.status!=='Pago').reduce((s,cp)=>s+cp.valor,0);
-    const lucro     = recebido - totalPago;
+    const lucro     = resG.resultado;
     const totalAtras= db.contas_receber.filter(cr=>cr.status==='Atrasado').reduce((s,cr)=>s+cr.valor,0);
     const totalCR   = db.contas_receber.filter(cr=>cr.status!=='Pago').reduce((s,cr)=>s+cr.valor,0);
     const inadimpl  = totalCR>0 ? totalAtras/totalCR*100 : 0;

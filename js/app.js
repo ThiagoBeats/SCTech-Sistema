@@ -3654,7 +3654,8 @@ function renderMetrics() {
     const fatMes = instaladosMes.reduce((s, p) => s + (p.valor || 0), 0);
     const emProducao = db.pedidos.filter(p => { const s = normalizarStatus(p.status); return s !== 'Orçamento' && s !== 'Instalado'; }).length;
     const orcamentos = db.pedidos.filter(p => normalizarStatus(p.status) === 'Orçamento').length;
-    const aprovados  = db.pedidos.filter(p => normalizarStatus(p.status) !== 'Orçamento' && (p.valor || 0) > 0);
+    // Ticket Medio: so pedidos ja instalados (Aguardando Financeiro = instalado, falta o pagamento).
+    const aprovados  = db.pedidos.filter(p => ['Instalado', 'Aguardando Financeiro'].includes(normalizarStatus(p.status)) && (p.valor || 0) > 0);
     const ticketMedio = aprovados.length ? aprovados.reduce((s, p) => s + p.valor, 0) / aprovados.length : 0;
     const estoqueCritico = db.catalogo.filter(c => !temEstoqueInfinito(c) && c.min_estoque > 0 && estoqueDisponivel(c.id) < c.min_estoque).length
         + db.materiais.filter(m => !temEstoqueInfinito(m) && m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque).length;
@@ -6087,6 +6088,8 @@ function renderEstoqueFuturo() {
     const pedAtivos = db.pedidos.filter(p => statusAtivos.includes(normalizarStatus(p.status)));
     const consumoPorTecido = {};
     for (const ped of pedAtivos) {
+        // Tecido ja baixado do rolo: ja saiu do estoque, nao conta de novo.
+        if (ped.baixa_tecido_realizada || ped.baixa_realizada) continue;
         for (const amb of normalizarAmbientes(ped)) {
             for (const t of (amb.tecidos || [])) {
                 if (!t.tecidoId || !(t.consumo_linear > 0)) continue;
@@ -7170,7 +7173,8 @@ function renderKanban() {
                     </div>`;
                 }
                 let badgeEst = '';
-                for (const a of ambientes) {
+                const tecidoJaBaixado = p.baixa_tecido_realizada || p.baixa_realizada;
+                for (const a of (tecidoJaBaixado ? [] : ambientes)) {
                     for (const t of (a.tecidos||[])) {
                         if (!t.tecidoId) continue;
                         if (tecidoTemEstoqueInfinito(t.tecidoId)) continue;
@@ -8148,7 +8152,9 @@ function renderRelRecebiveis() {
     }).map(p => {
         const cli   = db.clientes.find(c => c.id == p.clienteId);
         const saldo = (p.valor || 0) - (p.valor_recebido || 0);
-        const dias  = Math.floor((hoje - new Date(p.id)) / (1000 * 60 * 60 * 24));
+        // Data real do pedido (o numero e sequencial, nao e data).
+        const criado = typeof p.data_criacao === 'number' ? p.data_criacao : (typeof p.id === 'number' && p.id > 1e11 ? p.id : Date.now());
+        const dias  = Math.max(0, Math.floor((hoje - new Date(criado)) / (1000 * 60 * 60 * 24)));
         return { ...p, _cli: cli?.nome || '—', _saldo: saldo, _dias: dias };
     }).sort((a, b) => b._dias - a._dias);
     if (!pendentes.length) {
@@ -16795,7 +16801,7 @@ function renderDespesasFixas() {
     tb.innerHTML = db.despesas_fixas.map(df=>`
         <tr>
             <td><strong>${escapeHtml(df.descricao)}</strong></td>
-            <td>${escapeHtml(df.categoria)}</td>
+            <td>${escapeHtml((CATEGORIAS_DESPESA_FIXA.find(c => c[0] === df.categoria) || [, df.categoria])[1])}</td>
             <td>Todo dia ${df.dia_vencimento}</td>
             <td>R$ ${(df.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
             <td>${podeEditar ? `<button class="btn btn-outline btn-sm btn-danger" onclick="excluirDespesaFixa(${df.id})" title="Excluir">🗑️</button>` : ''}</td>

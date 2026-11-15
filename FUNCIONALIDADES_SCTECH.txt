@@ -120,7 +120,8 @@ Tipo "Estoque crítico":
      → clique filtra a tabela de pedidos pelo status "em produção"
   3. Orçamentos Abertos: quantidade de pedidos com status "Orçamento"
      → clique filtra a tabela de pedidos por "Orçamento"
-  4. Ticket Médio: valor médio dos pedidos instalados
+  4. Ticket Médio: valor médio dos pedidos instalados (Instalado ou Aguardando Financeiro);
+     sem nenhum pedido instalado, mostra "—"
   5. Estoque Crítico: quantidade de itens (tecidos + materiais) abaixo do mínimo
   6. Entregas Atrasadas: pedidos com data de entrega vencida e não instalados
      → clique filtra a tabela de pedidos por "atrasados"
@@ -226,6 +227,8 @@ Cada card no kanban exibe:
   - Número do pedido, cliente, ambiente, valor
   - Data de entrega (badge colorido: urgente / atrasado / normal)
   - Status de pagamento (badge)
+  - Aviso "⚠ Sem estoque" quando o tecido do pedido não cobre o consumo; depois que o
+    tecido do pedido foi baixado, o aviso some (o tecido já saiu do estoque)
   - Botões: avançar status (→), retroceder status (←), editar (✏️)
 
 Avanço de status com comportamentos automáticos:
@@ -504,7 +507,8 @@ Busca unificada de tecidos e materiais:
 Projeção de consumo de estoque com base nos pedidos em andamento:
   - Para cada tecido com pedidos não instalados, calcula:
     → Estoque atual disponível
-    → Total consumido pelos pedidos em produção
+    → Total consumido pelos pedidos em produção (tecido que já foi baixado do rolo
+      não conta de novo: já saiu do estoque)
     → Saldo projetado após conclusão dos pedidos
   - Destaque visual para itens com saldo projetado negativo (falta de estoque)
 
@@ -688,6 +692,7 @@ Tabela de contas a receber:
   - Colunas: ID do Pedido | Cliente | Valor Total | Saldo Devedor |
     Status | Aging (dias)
   - Aging colorido: verde (em dia), amarelo (próximo), vermelho (atrasado)
+  - O aging conta os dias desde a data de criação do pedido (não pelo número do pedido)
 
 ── 7.3 ABA: POR VENDEDOR ───────────────────────────────────────────────────────
 
