@@ -140,16 +140,21 @@ test('margem de 12 meses nao recalcula a cada render sem mudanca nos dados', asy
     });
     await page.locator('.fin-tab-btn[data-tab="resultado"]').click();
     await expect(page.locator('#res-previsto')).toContainText('R$');
-    const n = await page.evaluate(() => _resMargemCalculos);
-    expect(n).toBeGreaterThan(0);
-    const depois = await page.evaluate(() => { renderResultadoMes('2026-11'); renderResultadoMes('2026-11'); return _resMargemCalculos; });
-    expect(depois).toBe(n);
+    // O contador so de teste saiu do codigo: espia a funcao do nucleo que o historico chama.
+    expect(await page.evaluate(() => typeof _resMargemCalculos)).toBe('undefined');
+    await page.evaluate(() => {
+        window.__calculos = 0;
+        const orig = ResultadoCore.margemContribuicao;
+        ResultadoCore.margemContribuicao = function (...a) { window.__calculos++; return orig.apply(this, a); };
+    });
+    const depois = await page.evaluate(() => { renderResultadoMes('2026-11'); renderResultadoMes('2026-11'); return window.__calculos; });
+    expect(depois).toBe(0);
     const mudou = await page.evaluate(() => {
         db.contas_pagar.push({ id: 2, tipo: 'variavel', categoria: 'tecido', descricao: 'Tecido 2', valor: 100, data_vencimento: '2026-10-13', data_pagamento: '2026-10-13', status: 'Pago' });
         renderResultadoMes('2026-11');
-        return _resMargemCalculos;
+        return window.__calculos;
     });
-    expect(mudou).toBe(n + 1);
+    expect(mudou).toBe(1);
 });
 
 // ---- Fechamento ----

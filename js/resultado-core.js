@@ -284,13 +284,31 @@
     // Cada CP cobre no maximo uma DF (duas DFs iguais e uma CP: so uma DF sai); a ligacao pelo id vale primeiro.
     // Guia de imposto lancada como fixa fica de fora: o imposto ja entra na margem (custo variavel).
     function despesasFixasDoMes({ mes, contasPagar, despesasFixas }) {
-        const doMes = (contasPagar || []).filter(cp => cp && mesDe(cp.data_vencimento) === mes);
-        const contadas = doMes.filter(cp => cp.categoria !== 'imposto' && (cp.tipo === 'fixo' || grupoDaCategoria(cp.categoria) === 'fixas'));
         let total = 0;
-        contadas.forEach(cp => { total += num(cp.valor); });
+        contasFixasDoMes(mes, contasPagar).forEach(cp => { total += num(cp.valor); });
+        const dfs = (despesasFixas || []).filter(df => df && !df.periodicidade && df.ativo !== false && df.categoria !== 'imposto' && vencimentoDfNoMes(df, mes));
+        const cobertas = fixasCobertasNoMes({ mes, contasPagar, fixas: dfs });
+        dfs.forEach(df => { if (!cobertas.has(df)) total += num(df.valor); });
+        return arredondar(total);
+    }
+
+    // CPs do grupo Despesas fixas (tipo 'fixo' ou categoria do grupo, fora o Imposto) vencendo no mes.
+    function contasFixasDoMes(mes, contasPagar) {
+        return (contasPagar || []).filter(cp => cp && mesDe(cp.data_vencimento) === mes
+            && cp.categoria !== 'imposto' && (cp.tipo === 'fixo' || grupoDaCategoria(cp.categoria) === 'fixas'));
+    }
+
+    // Quais DFs antigas do mes (`fixas`, as que vencem nele) ja tem conta a pagar no mes (paga ou nao), para nao
+    // contar duas vezes. Regra unica do Resultado e da previsao do caixa (Hoje e projecao da Visao Geral):
+    // primeiro a ligacao (despesa_fixa_id); depois CP 'fixo' com a mesma descricao, ou CP do grupo Despesas fixas
+    // com a mesma descricao e o mesmo valor em centavos (a mesma despesa lancada a mao).
+    // Cada CP cobre no maximo uma DF (duas DFs iguais e uma CP: so uma sai). Devolve o Set das DFs cobertas.
+    function fixasCobertasNoMes({ mes, contasPagar, fixas }) {
+        const doMes = (contasPagar || []).filter(cp => cp && mesDe(cp.data_vencimento) === mes);
+        const contadas = contasFixasDoMes(mes, contasPagar);
         const texto = v => String(v == null ? '' : v).trim().toLowerCase();
         const cent = v => Math.round(num(v) * 100);
-        const dfs = (despesasFixas || []).filter(df => df && !df.periodicidade && df.ativo !== false && df.categoria !== 'imposto' && vencimentoDfNoMes(df, mes));
+        const dfs = (fixas || []).filter(Boolean);
         const usadas = new Set();
         const cobrir = (df, casa) => {
             const cp = doMes.find(x => !usadas.has(x) && casa(x, df));
@@ -301,10 +319,8 @@
         const pelaDescricao = (cp, df) => ((cp.tipo === 'fixo' && cp.descricao === df.descricao)
             || (contadas.includes(cp) && texto(cp.descricao) === texto(df.descricao) && cent(cp.valor) === cent(df.valor)));
         const cobertas = new Set(dfs.filter(df => cobrir(df, pelaLigacao)));
-        dfs.forEach(df => {
-            if (!cobertas.has(df) && !cobrir(df, pelaDescricao)) total += num(df.valor);
-        });
-        return arredondar(total);
+        dfs.forEach(df => { if (!cobertas.has(df) && cobrir(df, pelaDescricao)) cobertas.add(df); });
+        return cobertas;
     }
 
     // Margem de contribuicao em % (0-100), PONDERADA: soma das contribuicoes / soma do faturamento.
@@ -373,7 +389,7 @@
         return out;
     }
 
-    const api = { GRUPOS, grupoDaCategoria, entradasDoMes, saidasDoMes, impostoDoMes, resultadoDoMes, resultadoDoPeriodo, metaDoMes, despesasFixasDoMes, margemContribuicao, pontoEquilibrio, statusOrcamento, previstoDoMes, somarMeses, referenciaGuia, aCairNoMes, criarMemo, recebimentosSemMovimento };
+    const api = { GRUPOS, grupoDaCategoria, entradasDoMes, saidasDoMes, impostoDoMes, resultadoDoMes, resultadoDoPeriodo, metaDoMes, despesasFixasDoMes, fixasCobertasNoMes, margemContribuicao, pontoEquilibrio, statusOrcamento, previstoDoMes, somarMeses, referenciaGuia, aCairNoMes, criarMemo, recebimentosSemMovimento };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ResultadoCore = api;

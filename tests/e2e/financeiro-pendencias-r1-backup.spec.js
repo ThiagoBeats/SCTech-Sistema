@@ -76,7 +76,7 @@ test('importar quase sem espaco: tira so a copia da Fase 0 e grava', async ({ pa
         .toEqual(['1', null, 'Bia']);
 });
 
-test('salvarERecarregar sem espaco: uma baixa avisa uma vez, nao recarrega e nao solta erro', async ({ page }) => {
+test('salvarERecarregar sem espaco: uma baixa avisa uma vez, so recarrega depois do OK e nao solta erro', async ({ page }) => {
     const erros = [];
     page.on('pageerror', e => erros.push(e.message));
     await entrar(page, BASE, {
@@ -104,8 +104,11 @@ test('salvarERecarregar sem espaco: uma baixa avisa uma vez, nao recarrega e nao
     await modal.locator('#baixa-ok').click();
     await expect(page.locator('#sc-modal-msg')).toHaveText(MSG);
     await page.waitForTimeout(500);
-    expect(await page.evaluate(() => window.__marca), 'nao recarregou').toBe(1);
+    expect(await page.evaluate(() => window.__marca), 'nao recarregou antes do OK').toBe(1);
     expect(alertas).toBe(1);
+    // R11: depois do aviso a tela recarrega os dados salvos.
+    await page.locator('#sc-modal-ok').click();
+    await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
     expect(erros).toEqual([]);
 });
 

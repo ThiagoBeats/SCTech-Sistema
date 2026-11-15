@@ -354,29 +354,47 @@ function formatPedidoId(id) {
 // Grava tudo no navegador; falta de espaco sobe como erro (quem precisa desfazer
 // algo em caso de falha, como a migracao e o importador, usa esta).
 function _syncDBBruto() {
-    localStorage.setItem('sc_cli',  JSON.stringify(db.clientes));
-    localStorage.setItem('sc_cat',  JSON.stringify(db.catalogo));
-    localStorage.setItem('sc_ped',  JSON.stringify(db.pedidos));
-    localStorage.setItem('sc_est',  JSON.stringify(db.estoque));
-    localStorage.setItem('sc_mat',  JSON.stringify(db.materiais));
-    localStorage.setItem('sc_kits', JSON.stringify(db.kits));
-    localStorage.setItem('sc_mov',  JSON.stringify(db.movimentos));
-    localStorage.setItem('sc_vend', JSON.stringify(db.vendedores));
-    localStorage.setItem('sc_forn', JSON.stringify(db.fornecedores));
-    localStorage.setItem('sc_pc',   JSON.stringify(db.pedidos_compra));
-    localStorage.setItem('sc_carrinhos', JSON.stringify(db.carrinhos));
-    localStorage.setItem('sc_cr',   JSON.stringify(db.contas_receber));
-    localStorage.setItem('sc_cp',   JSON.stringify(db.contas_pagar));
-    localStorage.setItem('sc_df',   JSON.stringify(db.despesas_fixas));
-    localStorage.setItem('sc_contas_fin', JSON.stringify(db.contas_fin));
-    localStorage.setItem('sc_meios_pag',  JSON.stringify(db.meios_pag));
-    localStorage.setItem('sc_mov_fin',    JSON.stringify(db.movimentos_fin));
-    localStorage.setItem('sc_fin_fech',   JSON.stringify(db.fechamentos_fin));
-    localStorage.setItem('sc_med',  JSON.stringify(db.medicoes));
-    localStorage.setItem('sc_rotas', JSON.stringify(db.rotas || []));
-    localStorage.setItem('sc_pap',  JSON.stringify(db.papeis));
-    localStorage.setItem('sc_usr',  JSON.stringify(db.usuarios));
-    localStorage.setItem('sc_imp_perfis', JSON.stringify(db.import_perfis));
+    const pares = [
+        ['sc_cli', db.clientes],
+        ['sc_cat', db.catalogo],
+        ['sc_ped', db.pedidos],
+        ['sc_est', db.estoque],
+        ['sc_mat', db.materiais],
+        ['sc_kits', db.kits],
+        ['sc_mov', db.movimentos],
+        ['sc_vend', db.vendedores],
+        ['sc_forn', db.fornecedores],
+        ['sc_pc', db.pedidos_compra],
+        ['sc_carrinhos', db.carrinhos],
+        ['sc_cr', db.contas_receber],
+        ['sc_cp', db.contas_pagar],
+        ['sc_df', db.despesas_fixas],
+        ['sc_contas_fin', db.contas_fin],
+        ['sc_meios_pag', db.meios_pag],
+        ['sc_mov_fin', db.movimentos_fin],
+        ['sc_fin_fech', db.fechamentos_fin],
+        ['sc_med', db.medicoes],
+        ['sc_rotas', db.rotas || []],
+        ['sc_pap', db.papeis],
+        ['sc_usr', db.usuarios],
+        ['sc_imp_perfis', db.import_perfis],
+    ];
+    // Se faltar espaco no meio, as chaves ja gravadas voltam ao valor anterior (o navegador
+    // fica todo com os dados antigos, nunca metade novo, metade antigo) e o erro sobe.
+    const gravadas = [];
+    try {
+        pares.forEach(([chave, valor]) => {
+            const antes = localStorage.getItem(chave);
+            localStorage.setItem(chave, JSON.stringify(valor));
+            gravadas.push([chave, antes]);
+        });
+    } catch (e) {
+        gravadas.reverse().forEach(([chave, antes]) => {
+            try { if (antes === null) localStorage.removeItem(chave); else localStorage.setItem(chave, antes); }
+            catch (e2) { /* melhor esforco: segue devolvendo as outras */ }
+        });
+        throw e;
+    }
 }
 
 function _erroDeEspaco(e) {
@@ -1410,7 +1428,9 @@ function salvarERecarregar(msg = 'Salvo com sucesso!', { relancarErro = false } 
     catch (e) {
         if (relancarErro || !_erroDeEspaco(e)) throw e;
         console.warn('Sem espaço no navegador para salvar.', e);
-        if (typeof showAlert === 'function') showAlert(MSG_SEM_ESPACO, '⚠️'); else alert(MSG_SEM_ESPACO);
+        // O navegador ficou com os dados antigos: depois do aviso, recarrega para a tela mostrar o que esta salvo.
+        if (typeof showAlert === 'function') Promise.resolve(showAlert(MSG_SEM_ESPACO, '⚠️')).then(() => window.location.reload());
+        else { alert(MSG_SEM_ESPACO); window.location.reload(); }
         return false;
     }
     toastReload(msg); window.location.reload();
@@ -7898,7 +7918,8 @@ function importarDados(event) {
             toastReload('Dados importados com sucesso!', 'info');
             window.location.reload();
         } catch (err) {
-            if (_erroDeEspaco(err)) await showAlert('A importação não foi concluída. ' + MSG_SEM_ESPACO, '⚠️');
+            // Sem espaco: o navegador ficou com os dados antigos; recarrega para a tela mostrar o que esta salvo.
+            if (_erroDeEspaco(err)) { await showAlert('A importação não foi concluída. ' + MSG_SEM_ESPACO, '⚠️'); window.location.reload(); }
             else await showAlert('Erro ao ler o arquivo. Certifique-se que é um backup válido do SCTech.', '❌');
         }
     };
@@ -13500,18 +13521,18 @@ function buscarNumeroDocumentoHistorico(numero, cnpjDigits) {
 
 // Gera as datas de vencimento futuras de uma despesa recorrente, respeitando data-fim (se houver)
 // e um teto de segurança de 60 meses a partir do início (não dá pra gerar "para sempre").
+// Mesma regra das parcelas (FinanceiroCore.somarMesesData): cada ocorrência conta da data inicial
+// e dia que não existe no mês vira o último dia dele (31/01 → 28/02 → 31/03).
 function gerarOcorrenciasRecorrentes(dataInicioStr, periodicidade, dataFimStr) {
     const passosMeses = { mensal: 1, bimestral: 2, trimestral: 3, semestral: 6, anual: 12 };
     const datas = [];
-    let atual = new Date(dataInicioStr + 'T12:00:00');
-    const limiteMax = new Date(atual); limiteMax.setMonth(limiteMax.getMonth() + 60);
-    const limite = dataFimStr ? new Date(Math.min(new Date(dataFimStr + 'T12:00:00').getTime(), limiteMax.getTime())) : limiteMax;
-    let guard = 0;
-    while (atual <= limite && guard < 240) {
-        datas.push(dataLocal(atual.getTime()));
-        if (periodicidade === 'quinzenal') { atual = new Date(atual); atual.setDate(atual.getDate() + 15); }
-        else { const meses = passosMeses[periodicidade] || 1; atual = new Date(atual); atual.setMonth(atual.getMonth() + meses); }
-        guard++;
+    const limiteMax = FinanceiroCore.somarMesesData(dataInicioStr, 60);
+    const limite = dataFimStr && dataFimStr < limiteMax ? dataFimStr : limiteMax;
+    const meses = passosMeses[periodicidade] || 1;
+    for (let i = 0; i < 240; i++) {
+        const atual = periodicidade === 'quinzenal' ? FinanceiroCore.somarDias(dataInicioStr, 15 * i) : FinanceiroCore.somarMesesData(dataInicioStr, meses * i);
+        if (atual > limite) break;
+        datas.push(atual);
     }
     return datas;
 }
@@ -14473,7 +14494,7 @@ function gerarHTMLRelatorioFinanceiro(layout, opcoes) {
     const fmtDate = s => s ? new Date(s+'T12:00:00').toLocaleDateString('pt-BR') : '—';
 
     // Recebido/pago pela mesma regra do Resultado do mes (pela data em que o dinheiro entra).
-    const { ate: atePer, recebido, totalPago, lucro, pedPagos, ticketMedio, impostoJaContado, aCair, lucroSub } = dinheiroDoPeriodoFin();
+    const { res: resPer, ate: atePer, recebido, totalPago, lucro, pedPagos, ticketMedio, impostoJaContado, aCair, lucroSub } = dinheiroDoPeriodoFin();
     // A receber/a pagar na mesma janela do recebido/pago ("Este mes" = ate o fim do mes).
     const naJanela = d => d && d >= ini && d <= atePer;
     const aReceber  = db.contas_receber.filter(cr=>cr.status!=='Pago'&&naJanela(cr.data_vencimento)).reduce((s,cr)=>s+cr.valor,0);
@@ -14549,7 +14570,7 @@ function gerarHTMLRelatorioFinanceiro(layout, opcoes) {
     </div>`,
         indicadores: `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
-        ${kpiBox('Total Recebido', 'R$ '+fmt(recebido), escapeHtml(label) + (aCair ? ' · ' + escapeHtml(aCair) : ''), '#005D3B')}
+        ${kpiBox('Total Recebido', 'R$ '+fmt(recebido), escapeHtml(label) + (aCair ? ' · ' + escapeHtml(aCair) : '') + (resPer.taxas > 0 ? `<br><span class="fin-recebido-liquido">R$ ${fmt(resPer.faturamento)} líquido (sem a taxa do cartão)</span>` : ''), '#005D3B')}
         ${kpiBox('A Receber', 'R$ '+fmt(aReceber), 'vence no período', '#2D77C1')}
         ${kpiBox('A Pagar', 'R$ '+fmt(aPagar), 'vence no período', '#F2C924')}
         ${kpiBox('Saldo Previsto', 'R$ '+fmt(saldoPrev), 'receb.+a receber−despesas', saldoPrev>=0?'#17E8FF':'#F43927')}
@@ -14677,11 +14698,9 @@ function orcamentoFinanceiroDoMes(mes, porGrupo) {
 
 // Historico de 12 meses da margem: so recalcula quando o mes ou os dados de que ele depende mudam.
 const _resMemoMargem = ResultadoCore.criarMemo();
-let _resMargemCalculos = 0; // quantas vezes o historico foi calculado (para conferir o cache)
 function _resMargemHistorico(mes, base) {
     const chave = JSON.stringify([mes, base.aliquota, base.contasReceber, base.contasPagar, base.movimentos, base.contas]);
     return _resMemoMargem(chave, () => {
-        _resMargemCalculos++;
         const dadosPorMes = m => ResultadoCore.resultadoDoMes({ mes: m, ...base });
         return ResultadoCore.margemContribuicao({ mesAtual: mes, dadosPorMes, pedidosFallback: [], aliquota: base.aliquota });
     });
@@ -15918,7 +15937,8 @@ function renderDashboardFinanceiro() {
     const projBuckets = _finGerarBuckets(hojeStr, horizStr);
     // Mesmo motor da previsao da tela Hoje: cartao pelas datas de repasse e pelo liquido (o que ja foi baixado
     // e ainda vai cair, e o cartao previsto nas contas em aberto); atrasados entram hoje.
-    const projLanc = CaixaCore.lancamentosPrevistos({ hoje: hojeStr, limite: horizStr, movimentos: db.movimentos_fin || [], contasReceber: db.contas_receber,
+    // Transferencias entre contas somam zero: ficam fora das barras de entrada e saida.
+    const projLanc = CaixaCore.lancamentosPrevistos({ hoje: hojeStr, limite: horizStr, movimentos: (db.movimentos_fin || []).filter(m => m.origem !== 'transferencia'), contasReceber: db.contas_receber,
         contasPagar: db.contas_pagar, despesasFixas: db.despesas_fixas, contas: getContasFin(), meios: getMeiosPag() });
     const projSoma = (b, sentido) => CaixaCore.arredondar(projLanc.filter(l => l.sentido === sentido && l.data >= b.ini && l.data <= b.fim).reduce((s, l) => s + l.valor, 0));
     const projEnt = projBuckets.map(b => projSoma(b, 'entrada'));

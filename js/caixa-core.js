@@ -20,6 +20,12 @@
         return a != null && b != null && String(a) === String(b);
     }
 
+    // Regra das despesas fixas ja lancadas no mes: a mesma do Resultado (ResultadoCore.fixasCobertasNoMes).
+    function resultado() {
+        if (raiz && raiz.ResultadoCore) return raiz.ResultadoCore;
+        return require('./resultado-core.js');
+    }
+
     const CARTAO_PADRAO = { debito_taxa: 1.5, debito_dias: 1, credito_taxa: 3, credito_dias: 30, parcelado_taxa: 4, antecipacao_taxa: 2, antecipacao_dias: 1 };
 
     // Numero digitado: "1,5" = 1.5; "1.250,50" e "1,250.50" = 1250.5 (com os dois, o ultimo separador e o decimal);
@@ -171,11 +177,20 @@
         });
         (contasPagar || []).filter(cp => aberto(cp) && dataValida(cp.data_vencimento)).forEach(cp => lanca(maxData(cp.data_vencimento, hoje), cp.valor, 'saida', cp.data_vencimento < hoje));
         // Com periodicidade, as ocorrencias ja viram CP pre-gerados; so as antigas (sem periodicidade) sao projetadas por mes.
-        (despesasFixas || []).filter(df => !df.periodicidade).forEach(df => {
+        // A fixa que ja tem conta a pagar no mes (gerada dela ou a mesma lancada a mao) nao entra de novo:
+        // mesma regra do Resultado (ResultadoCore.fixasCobertasNoMes, uma conta cobre no maximo uma fixa).
+        const antigas = (despesasFixas || []).filter(df => df && !df.periodicidade);
+        const cobertasPorMes = {};
+        const coberta = (df, mes) => {
+            if (!cobertasPorMes[mes]) {
+                const fixas = antigas.filter(x => ocorrenciasFixa(x, mes + '-01', mes + '-31').length);
+                cobertasPorMes[mes] = resultado().fixasCobertasNoMes({ mes, contasPagar, fixas });
+            }
+            return cobertasPorMes[mes].has(df);
+        };
+        antigas.forEach(df => {
             ocorrenciasFixa(df, hoje.slice(0, 8) + '01', limite).forEach(data => {
-                const mes = data.slice(0, 7);
-                const gerada = (contasPagar || []).some(cp => cp.tipo === 'fixo' && cp.descricao === df.descricao && String(cp.data_vencimento).slice(0, 7) === mes);
-                if (!gerada) lanca(maxData(data, hoje), df.valor, 'saida', data < hoje);
+                if (!coberta(df, data.slice(0, 7))) lanca(maxData(data, hoje), df.valor, 'saida', data < hoje);
             });
         });
         return out;

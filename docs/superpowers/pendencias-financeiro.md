@@ -102,7 +102,7 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 
 ### Testes que faltam
 - [ ] Escape e empilhamento das janelas de ajuste (meta/limite) com outras janelas abertas.
-- [ ] O Chart.js vem do CDN e é instável nos testes (considerar cópia local ou espera mais robusta).
+- [x] O Chart.js vem do CDN e é instável nos testes (considerar cópia local ou espera mais robusta). — Feito (R9): cópia local da mesma versão (4.4.0) em `js/vendor/chart.umd.min.js`; as páginas carregam a cópia.
 
 ### Da revisão final da Fase 2
 - [x] Previsto até o fim do mês: a taxa de repasses de cartão já baixados e ainda a cair não é tirada do faturamento previsto, então o imposto estimado fica um pouco maior (ex.: taxa de R$ 30 a 6% → R$ 1,80). **Feito:** o que já foi baixado e cai até o fim do mês vem de `ResultadoCore.aCairNoMes` (entradas, saídas e taxas pelas regras do Resultado); a taxa a cair sai do faturamento previsto.
@@ -117,10 +117,10 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [ ] Testes que faltam: alta de grupo no limite (30% / R$ 100), ajuste de entrada e "Deixar anotado" no fechamento, duplo clique em Lançar chamando a função duas vezes, migração da permissão em permissões extras do usuário.
 
 ## Da rodada de pendências 1
-- [ ] Previsão do Hoje (e a projeção da Visão Geral) ainda pode somar duas vezes uma despesa fixa antiga e a mesma conta lançada à mão no mesmo mês.
-- [ ] Contas recorrentes (`gerarOcorrenciasRecorrentes`) ainda calculam o mês somando um mês de cada vez (`setMonth` acumulado); aplicar a mesma regra das parcelas (dia que não existe vira o último dia do mês).
-- [ ] O relatório exportado (PDF) da Visão Geral não tem a linha "líquido (sem a taxa do cartão)" que a tela mostra.
-- [ ] Transferências antigas com data futura (de antes da trava de data) entram nas duas barras da projeção da Visão Geral.
-- [ ] Salvar que falha por falta de espaço (importação de backup ou qualquer `salvarERecarregar`) agora avisa e não recarrega, e a importação mantém a marca e a cópia da Fase 0; ainda fica: os dados da tela continuam trocados até recarregar e uma gravação pela metade pode ter ficado (algumas chaves novas, outras antigas); o aviso do `syncDB` aparece uma vez por página.
-- [ ] O aviso de "meio removido" no pedido não impede salvar (o meio é opcional).
-- [ ] Contador de cálculos da margem existe só para teste (`_resMargemCalculos`).
+- [x] Previsão do Hoje (e a projeção da Visão Geral) ainda pode somar duas vezes uma despesa fixa antiga e a mesma conta lançada à mão no mesmo mês. — Feito: mesma regra do Resultado (`ResultadoCore.fixasCobertasNoMes`, uma conta cobre no máximo uma fixa).
+- [x] Contas recorrentes (`gerarOcorrenciasRecorrentes`) ainda calculam o mês somando um mês de cada vez (`setMonth` acumulado); aplicar a mesma regra das parcelas (dia que não existe vira o último dia do mês). — Feito: cada ocorrência conta da data inicial (`FinanceiroCore.somarMesesData`).
+- [x] O relatório exportado (PDF) da Visão Geral não tem a linha "líquido (sem a taxa do cartão)" que a tela mostra. — Feito: o relatório mostra a mesma linha no Total Recebido.
+- [x] Transferências antigas com data futura (de antes da trava de data) entram nas duas barras da projeção da Visão Geral. — Feito (R12): transferências entre contas ficam fora das barras de entrada e saída.
+- [x] Salvar que falha por falta de espaço (importação de backup ou qualquer `salvarERecarregar`) agora avisa e não recarrega, e a importação mantém a marca e a cópia da Fase 0; ainda fica: os dados da tela continuam trocados até recarregar e uma gravação pela metade pode ter ficado (algumas chaves novas, outras antigas); o aviso do `syncDB` aparece uma vez por página. — Feito (R11): a gravação que falha no meio devolve as chaves já gravadas ao valor anterior e, depois do aviso, a página recarrega (baixa e importação de backup); o aviso do `syncDB` uma vez por página: mantido de propósito.
+- [x] O aviso de "meio removido" no pedido não impede salvar (o meio é opcional). — Mantido de propósito: o meio é opcional (R10).
+- [x] Contador de cálculos da margem existe só para teste (`_resMargemCalculos`). — Feito (R13): saiu do código; o teste espia `ResultadoCore.margemContribuicao`.
