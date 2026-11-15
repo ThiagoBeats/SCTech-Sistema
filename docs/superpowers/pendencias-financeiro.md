@@ -32,12 +32,12 @@ resolvidas **todas de uma vez, no final das fases** do Financeiro.
 - [x] Cor `#B26A00` fixa no selo do DRE (usar variável de CSS). **Feito (R2):** `--dre-selo-aviso` no `:root`, com cor própria no tema escuro.
 
 ### Testes que faltam
-- [ ] Cancelar a janela de baixa / de comissão sem mudar nada.
-- [ ] Estorno de parcela vencida volta como "Atrasado"; teste negativo de permissão do estorno.
-- [ ] Custo guardado ao aprovar por `moverStatus`/`salvarPedido` e na reaprovação.
-- [ ] Vincular nota a conta parcelada; parcelas 100/3; soma de grupo na nota duplicada.
-- [ ] Alíquota fora da faixa / inválida.
-- [ ] Ciclo estorno → exportar → importar.
+- [x] Cancelar a janela de baixa / de comissão sem mudar nada. **Teste:** `tests/e2e/financeiro-pendencias-r3-fase0.spec.js` (recebimento, pagamento por Escape e comissão).
+- [x] Estorno de parcela vencida volta como "Atrasado"; teste negativo de permissão do estorno. **Teste:** `tests/e2e/financeiro-pendencias-r3-fase0.spec.js` (a receber e a pagar vencidas; sem permissão em recebimento, pagamento e comissão).
+- [x] Custo guardado ao aprovar por `moverStatus`/`salvarPedido` e na reaprovação. **Teste:** `tests/e2e/financeiro-pendencias-r3-fase0.spec.js` (`aprovarPedido` já era coberto em `financeiro-fase0-dre.spec.js`).
+- [x] Vincular nota a conta parcelada; parcelas 100/3; soma de grupo na nota duplicada. **Teste:** `tests/e2e/financeiro-pendencias-r3-fase0.spec.js` e `tests/financeiro-core.test.js` (soma do grupo).
+- [x] Alíquota fora da faixa / inválida. **Teste:** `tests/e2e/financeiro-pendencias-r3-fase0.spec.js` (acima de 100 vira 100; negativa, texto e vazia viram 0).
+- [x] Ciclo estorno → exportar → importar. **Teste:** `tests/e2e/financeiro-pendencias-r3-fase0.spec.js` (a parcela estornada continua em aberto depois de importar).
 
 ## Da Fase 1 (branch `feat/financeiro-fase1`)
 

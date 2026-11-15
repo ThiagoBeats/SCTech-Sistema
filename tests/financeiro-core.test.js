@@ -84,6 +84,28 @@ test('acharContaDuplicadaNota: mesmo CNPJ, valor proximo, em aberto, vinda de PC
     assert.strictEqual(F.acharContaDuplicadaNota(cps, { cnpj: '12345678000190', valor: 1100 }), null);
 });
 
+test('acharContaDuplicadaNota: conta parcelada casa pela soma do grupo (parcela paga entra na soma)', () => {
+    const cnpj = '12.345.678/0001-90';
+    const grupo = (extra) => [
+        { id: 11, pedido_compra_id: 9, lancamento_pai_id: 10, cnpj_fornecedor: cnpj, valor: 333.33, status: 'Pago', ...(extra || {}) },
+        { id: 12, pedido_compra_id: 9, lancamento_pai_id: 10, cnpj_fornecedor: cnpj, valor: 333.33, status: 'Pendente' },
+        { id: 13, pedido_compra_id: 9, lancamento_pai_id: 10, cnpj_fornecedor: cnpj, valor: 333.34, status: 'Pendente' }];
+    assert.strictEqual(F.acharContaDuplicadaNota(grupo(), { cnpj, valor: 1000 }).id, 12, 'acha uma parcela em aberto do grupo');
+    assert.strictEqual(F.acharContaDuplicadaNota(grupo(), { cnpj, valor: 333.33 }).id, 12, 'valor de uma parcela tambem casa');
+    assert.strictEqual(F.acharContaDuplicadaNota(grupo(), { cnpj, valor: 900 }), null, 'nem parcela nem soma');
+    assert.strictEqual(F.acharContaDuplicadaNota(grupo(), { cnpj: '99.999.999/0001-99', valor: 1000 }), null, 'outro fornecedor');
+    const tudoPago = grupo().map(c => ({ ...c, status: 'Pago' }));
+    assert.strictEqual(F.acharContaDuplicadaNota(tudoPago, { cnpj, valor: 1000 }), null, 'grupo todo pago nao oferece vincular');
+    // grupos diferentes nao se misturam na soma
+    const dois = [...grupo(), { id: 21, pedido_compra_id: 8, lancamento_pai_id: 20, cnpj_fornecedor: cnpj, valor: 500, status: 'Pendente' },
+        { id: 22, pedido_compra_id: 8, lancamento_pai_id: 20, cnpj_fornecedor: cnpj, valor: 500, status: 'Pendente' }];
+    assert.strictEqual(F.acharContaDuplicadaNota(dois, { cnpj, valor: 1000 }).id, 12);
+});
+test('parcelasCompra: 100 em 3 fecha em 100 com a sobra na ultima', () => {
+    const p = F.parcelasCompra({ valor: 100, modo: 'parcelado', hoje: '2026-11-11', numParcelas: 3, intervaloDias: 30 });
+    assert.deepStrictEqual(p.map(x => x.valor), [33.33, 33.33, 33.34]);
+});
+
 // ── Migracao dos dados antigos (Fase 0) ─────────────────────────────
 const msLocal = (a, m, d) => new Date(a, m - 1, d, 15, 0).getTime();   // 15h locais: a data local e sempre a do dia
 const baseMig = extra => ({ pedidos: [], contas_receber: [], contas_pagar: [], vendedores: [], hoje: '2026-11-11', rotuloPedido: p => '#' + p.id, ...extra });
