@@ -1,7 +1,5 @@
 // Pendencias R2, tarefa 2: telas e textos das Fases 1, 2 e 3 do Financeiro.
 const { test, expect } = require('@playwright/test');
-const fs = require('fs');
-const path = require('path');
 const { entrar } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
@@ -10,7 +8,6 @@ const p2 = n => String(n).padStart(2, '0');
 const iso = d => d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
 const somarDias = (dataISO, dias) => { const d = new Date(dataISO + 'T12:00:00'); d.setDate(d.getDate() + dias); return iso(d); };
 const HOJE = iso(new Date());
-const RAIZ = path.join(__dirname, '..', '..');
 
 const CONTAS = [
     { id: 10, nome: 'Caixa', tipo: 'caixa', saldo_inicial: 100, data_saldo_inicial: '2020-01-01', ativo: true },
@@ -148,17 +145,24 @@ test('comissao antiga paga sem conta a pagar ganha Estornar e volta a pendente',
 
 // ---- Fase 2: "Imposto" numa lista so ----
 test('a opcao Imposto vem de um lugar so e aparece nas tres listas', async ({ page }) => {
-    const fonte = ['js/app.js', 'financeiro.html'].map(f => fs.readFileSync(path.join(RAIZ, f), 'utf8')).join('\n');
-    expect(fonte.match(/<option value="imposto">/g) || []).toHaveLength(0);
-    expect(fonte.match(/\['imposto', 'Imposto'\]/g) || []).toHaveLength(1);
     await entrar(page, BASE, {});
     await page.goto(BASE + '/financeiro.html');
-    for (const id of ['df-categoria', 'sim-categoria']) {
-        await expect(page.locator(`#${id} option[value="imposto"]`)).toHaveText('Imposto');
-    }
+    const ids = ['df-categoria', 'sim-categoria', 'cpm-categoria'];
+    // Opcoes de imposto de cada lista (pelo valor ou pelo texto), para pegar repeticao
+    const opcoesImposto = () => page.evaluate(lista => lista.map(id => [...document.querySelectorAll(`#${id} option`)]
+        .filter(o => o.value === 'imposto' || /imposto|tributo/i.test(o.textContent)).map(o => [o.value, o.textContent])), ids);
     await page.evaluate(() => abrirModalContaPagar('manual'));
-    await expect(page.locator('#cpm-categoria option[value="imposto"]')).toHaveText('Imposto');
+    expect(await opcoesImposto(), 'cada lista tem o Imposto exatamente uma vez').toEqual(ids.map(() => [['imposto', 'Imposto']]));
     await expect(page.locator('#sim-categoria')).toHaveValue('outro');
+    // Mesma fonte: trocar o rotulo num lugar so muda as tres listas
+    await page.evaluate(() => {
+        document.querySelectorAll('.modal-overlay').forEach(o => o.remove());
+        CATEGORIA_IMPOSTO[1] = 'Tributo';
+        ['df-categoria', 'sim-categoria'].forEach(id => { document.getElementById(id).innerHTML = ''; });
+        preencherCategoriasFinanceiro();
+        abrirModalContaPagar('manual');
+    });
+    expect(await opcoesImposto()).toEqual(ids.map(() => [['imposto', 'Tributo']]));
 });
 
 // ---- Fase 2: valor da conta a pagar aceita "1.250,50" ----

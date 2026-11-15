@@ -353,7 +353,9 @@ function formatPedidoId(id) {
 
 // Grava tudo no navegador; falta de espaco sobe como erro (quem precisa desfazer
 // algo em caso de falha, como a migracao e o importador, usa esta).
-function _syncDBBruto() {
+// `extras`: outras chaves gravadas junto, com a mesma volta ao anterior,
+// como [chave, texto]; texto null apaga a chave.
+function _syncDBBruto(extras) {
     const pares = [
         ['sc_cli', db.clientes],
         ['sc_cat', db.catalogo],
@@ -379,13 +381,14 @@ function _syncDBBruto() {
         ['sc_usr', db.usuarios],
         ['sc_imp_perfis', db.import_perfis],
     ];
-    // Se faltar espaco no meio, as chaves ja gravadas voltam ao valor anterior (o navegador
-    // fica todo com os dados antigos, nunca metade novo, metade antigo) e o erro sobe.
+    // Se faltar espaco no meio, as chaves ja gravadas voltam (no que der) ao valor anterior,
+    // para o navegador ficar com os dados antigos, e o erro sobe.
+    const textos = pares.map(([chave, valor]) => [chave, JSON.stringify(valor)]).concat(extras || []);
     const gravadas = [];
     try {
-        pares.forEach(([chave, valor]) => {
+        textos.forEach(([chave, texto]) => {
             const antes = localStorage.getItem(chave);
-            localStorage.setItem(chave, JSON.stringify(valor));
+            if (texto === null) localStorage.removeItem(chave); else localStorage.setItem(chave, texto);
             gravadas.push([chave, antes]);
         });
     } catch (e) {
@@ -1419,10 +1422,10 @@ function toast(msg, tipo = 'success', ms = 3000) {
 function toastReload(msg, tipo = 'success') {
     sessionStorage.setItem('sc_pending_toast', JSON.stringify({ msg, tipo }));
 }
-// Sem espaco no navegador: nao recarrega. Por padrao avisa (MSG_SEM_ESPACO) e
-// devolve false, sem erro solto na tela. Com { relancarErro: true } nao avisa e
-// devolve o erro, para quem chama desfazer o que mudou e dar o seu proprio aviso
-// (como o importador de catalogo).
+// Sem espaco no navegador: por padrao avisa (MSG_SEM_ESPACO), recarrega depois do
+// aviso (a tela volta a mostrar o que ficou salvo) e devolve false, sem erro solto
+// na tela. Com { relancarErro: true } nao avisa nem recarrega e devolve o erro, para
+// quem chama desfazer o que mudou e dar o seu proprio aviso (como o importador de catalogo).
 function salvarERecarregar(msg = 'Salvo com sucesso!', { relancarErro = false } = {}) {
     try { _syncDBBruto(); }
     catch (e) {
@@ -3470,7 +3473,8 @@ async function confirmarPagamentoPedido(id) {
             titulo: `Confirmar pagamento do pedido #${formatPedidoId(ped.id)}`,
             itens: abertas.map(c => ({ id: c.id, descricao: c.descricao, valor: c.valor, marcado: c !== desmarcar, meio_previsto: c.meio_previsto || null })),
             formaPadrao: formaPagamentoDoPedido(ped),
-            permiteParcial: true
+            permiteParcial: true,
+            permiteNenhum: true
         });
         if (!r) return;
         const baixa = baixarContasReceber(r.data, r.linhas);
@@ -7884,37 +7888,35 @@ function importarDados(event) {
             db.meios_pag      = dados.meios_pag      || [];
             db.movimentos_fin = dados.movimentos_fin || [];
             db.fechamentos_fin = Array.isArray(dados.fechamentos_fin) ? dados.fechamentos_fin : [];
-            // A marca da Fase 0 so muda depois de gravar: se a gravacao falhar, os dados
-            // anteriores continuam com a marca e a migracao nao roda sobre dados misturados.
+            // Tudo numa gravacao so (dados, marca da Fase 0, metas, orcamentos, empresa e
+            // planos): se faltar espaco no meio, o que ja foi gravado volta ao anterior e a
+            // migracao nunca roda sobre dados misturados.
+            // Backup antigo (sem a marca fin_fase0) passa pela migracao do Financeiro
+            // ao recarregar; com a marca, ja esta migrado.
+            const extras = [['sc_fin_migracao', dados.fin_fase0 ? '1' : null]];
+            // Ajustes por mes do Resultado: backup antigo (sem eles) volta ao padrao vazio.
+            ['fin_metas', 'fin_orcamento_mes'].forEach(k => {
+                const o = dados[k];
+                extras.push(['sc_' + k, JSON.stringify(o && typeof o === 'object' && !Array.isArray(o) ? o : {})]);
+            });
+            // Backup antigo (sem empresa/formas) mantem as atuais.
+            if (dados.empresa && typeof dados.empresa === 'object') extras.push(['sc_empresa', JSON.stringify(dados.empresa)]);
+            if (Array.isArray(dados.formas_pag) && dados.formas_pag.length) extras.push(['sc_formas_pag', JSON.stringify(dados.formas_pag)]);
             // Sem espaco, a copia da Fase 0 (a chave grande) sai e tenta de novo; se ainda
             // falhar, ela volta.
-            const marcaAntes = localStorage.getItem('sc_fin_migracao');
             const copiaAntes = localStorage.getItem('sc_fin_backup_fase0');
-            try { _syncDBBruto(); }
+            try { _syncDBBruto(extras); }
             catch (e1) {
                 if (!_erroDeEspaco(e1) || copiaAntes === null) throw e1;
                 localStorage.removeItem('sc_fin_backup_fase0');
-                try { _syncDBBruto(); }
+                try { _syncDBBruto(extras); }
                 catch (e2) {
                     _gravarSemFalhar('sc_fin_backup_fase0', copiaAntes);
-                    if (marcaAntes !== null) _gravarSemFalhar('sc_fin_migracao', marcaAntes);
                     throw e2;
                 }
             }
             // Gravou: o que era dos dados anteriores (copia, revisao e avisos) sai.
             ['sc_fin_backup_fase0', 'sc_fin_revisar', 'sc_fin_backup_falhou', 'sc_fin_migracao_erro'].forEach(k => localStorage.removeItem(k));
-            // Backup antigo (sem a marca fin_fase0) passa pela migracao do Financeiro
-            // ao recarregar; com a marca, ja esta migrado.
-            if (dados.fin_fase0) localStorage.setItem('sc_fin_migracao', '1');
-            else localStorage.removeItem('sc_fin_migracao');
-            // Ajustes por mes do Resultado: backup antigo (sem eles) volta ao padrao vazio.
-            ['fin_metas', 'fin_orcamento_mes'].forEach(k => {
-                const o = dados[k];
-                localStorage.setItem('sc_' + k, JSON.stringify(o && typeof o === 'object' && !Array.isArray(o) ? o : {}));
-            });
-            // Backup antigo (sem empresa/formas) mantem as atuais.
-            if (dados.empresa && typeof dados.empresa === 'object') localStorage.setItem('sc_empresa', JSON.stringify(dados.empresa));
-            if (Array.isArray(dados.formas_pag) && dados.formas_pag.length) localStorage.setItem('sc_formas_pag', JSON.stringify(dados.formas_pag));
             toastReload('Dados importados com sucesso!', 'info');
             window.location.reload();
         } catch (err) {
@@ -8347,7 +8349,7 @@ function renderHistoricoComissoes() {
     tb.innerHTML = pedidos.map(p => {
         const v        = db.vendedores.find(x => x.id == p[c.id]);
         const dataPgto = p[c.data] ? new Date(p[c.data]).toLocaleDateString('pt-BR') : '—';
-        const cpPaga = db.contas_pagar.find(x => x.pedido_id == p.id && x.papel_comissao === _tipoVend && x.status === 'Pago');
+        const cpPaga = _contaComissaoPaga(p.id);
         // Comissao paga antes de virar conta a pagar: sem conta para estornar, volta pelo pedido.
         const estornar = cpPaga
             ? `<button class="btn btn-outline btn-sm" onclick="estornarCP(${cpPaga.id})" title="Desfazer este pagamento">↩ Estornar</button>`
@@ -8364,6 +8366,13 @@ function renderHistoricoComissoes() {
     }).join('');
 }
 
+// Conta a pagar ja paga da comissao do papel da aba neste pedido. Na aba do
+// arquiteto vale tambem a antiga 'comissao_rt' (sem papel).
+function _contaComissaoPaga(pedidoId) {
+    return db.contas_pagar.find(x => x.pedido_id == pedidoId && x.status === 'Pago' && (x.papel_comissao === _tipoVend ||
+        (_tipoVend === 'arquiteto' && !x.papel_comissao && x.categoria === 'comissao_rt')));
+}
+
 // Estorna a comissao paga antes de existir conta a pagar (so a marca no pedido):
 // o pedido volta a ter a comissao pendente, como no estorno de uma conta paga.
 async function estornarComissaoAntiga(pedidoId) {
@@ -8371,7 +8380,7 @@ async function estornarComissaoAntiga(pedidoId) {
     const ped = db.pedidos.find(p => p.id == pedidoId);
     const c = CAMPOS_COMISSAO[_tipoVend];
     if (!ped || !c || !ped[c.paga]) return;
-    const cpPaga = db.contas_pagar.find(x => x.pedido_id == ped.id && x.papel_comissao === _tipoVend && x.status === 'Pago');
+    const cpPaga = _contaComissaoPaga(ped.id);
     if (cpPaga) { await estornarCP(cpPaga.id); return; }
     if (!await showConfirm('Estornar este pagamento? A comissão volta a ficar pendente.', '↩', 'Estornar', 'Cancelar')) return;
     ped[c.paga] = false;
@@ -12973,7 +12982,7 @@ const AVISO_CONTA_BAIXA = 'Esta conta ainda não está configurada / data anteri
 // Modal de baixa: uma linha por parcela (marcar, valor, meio, conta e, no
 // cartao de credito, vezes e antecipar). Data unica. Devolve
 // { data, linhas: [{ id, valor, meio_id, meio_nome, conta_id, cartao }] } ou null.
-function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false, permiteCartao = true, formaPadrao = '' }) {
+function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false, permiteCartao = true, formaPadrao = '', permiteNenhum = false }) {
     return new Promise(resolve => {
         const hoje = hojeLocal();
         const meios = _meiosDaBaixa(permiteCartao);
@@ -13031,7 +13040,6 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
         document.body.appendChild(o);
         const linhas = [...o.querySelectorAll('.baixa-linha')];
         let tentou = false;
-        const abriuSemMarcar = itens.length > 0 && itens.every(i => !i.marcado);
         const dataAtual = () => o.querySelector('#baixa-data')?.value || hoje;
         // Data vazia ou depois de hoje nao vale (a baixa registra o que ja aconteceu).
         const erroDaData = () => comData ? _erroDataBaixa(o.querySelector('#baixa-data')?.value || '') : '';
@@ -13070,8 +13078,8 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
                 .reduce((s, l) => { const { v } = lerLinha(l); return s + (v > 0 ? v : 0); }, 0);
             o.querySelector('#baixa-total').textContent = brl(t);
             // Nada marcado: Confirmar fica desabilitado e a janela avisa (nao fecha sozinha).
-            // Exceto quando a janela ja abriu sem nada marcado de proposito (pedido com saldo pendente).
-            const nenhum = linhas.length > 0 && !abriuSemMarcar && !linhas.some(l => l.querySelector('.baixa-check').checked);
+            // Exceto com permiteNenhum (confirmar o pagamento do pedido: o cliente pode nao ter pago nada).
+            const nenhum = linhas.length > 0 && !permiteNenhum && !linhas.some(l => l.querySelector('.baixa-check').checked);
             o.querySelector('#baixa-erro-nenhum').style.display = nenhum ? 'block' : 'none';
             o.querySelector('#baixa-ok').disabled = nenhum;
         };
@@ -13246,6 +13254,13 @@ function gerarComissoesPedido(ped) {
     });
 }
 
+// Papel da comissao de uma conta a pagar: o gravado nela ou, na antiga
+// 'comissao_rt' (sem papel), o arquiteto. Outras contas: null.
+function _papelDaComissao(cp) {
+    if (cp.papel_comissao) return cp.papel_comissao;
+    return cp.categoria === 'comissao_rt' ? 'arquiteto' : null;
+}
+
 // Baixa de pagamentos, linha a linha: grava meio e conta e gera uma saida se a
 // conta aceita. A comissao so e marcada como paga aqui (Fase 0).
 function baixarContasPagar(data, linhas) {
@@ -13266,10 +13281,11 @@ function baixarContasPagar(data, linhas) {
         cp.forma_pagamento = meio ? meio.nome : (linha.meio_nome || null);
         cp.baixado_por = usuario?.id || null;
         cp.baixado_em = Date.now();
-        if (cp.papel_comissao && cp.pedido_id) {
+        const papelCom = _papelDaComissao(cp);
+        if (papelCom && cp.pedido_id) {
             const ped = db.pedidos.find(p => p.id == cp.pedido_id);
-            const c = CAMPOS_COMISSAO[cp.papel_comissao];
-            if (ped && c) {
+            const c = CAMPOS_COMISSAO[papelCom];
+            if (ped && c && (cp.papel_comissao || ped[c.id])) {
                 ped[c.paga] = true;
                 ped[c.data] = new Date(data + 'T12:00:00').getTime();
             }
@@ -13301,10 +13317,11 @@ async function estornarCP(id) {
     ['data_pagamento', 'forma_pagamento', 'meio_id', 'conta_id', 'baixado_por', 'baixado_em'].forEach(k => { cp[k] = null; });
     cp.estornado_por = getUsuarioLogado()?.id || null;
     cp.estornado_em = Date.now();
-    if (cp.papel_comissao && cp.pedido_id) {
+    const papelCom = _papelDaComissao(cp);
+    if (papelCom && cp.pedido_id) {
         const ped = db.pedidos.find(p => p.id == cp.pedido_id);
-        const c = CAMPOS_COMISSAO[cp.papel_comissao];
-        if (ped && c) { ped[c.paga] = false; ped[c.data] = null; }
+        const c = CAMPOS_COMISSAO[papelCom];
+        if (ped && c && (cp.papel_comissao || ped[c.id])) { ped[c.paga] = false; ped[c.data] = null; }
     }
     salvarERecarregar('Pagamento estornado.');
 }
@@ -15180,8 +15197,10 @@ function abrirFechamentoMes(mes) {
         const r = d.r;
         const comp = (rotulo, atual, anterior) => {
             const dif = CaixaCore.arredondar(atual - anterior);
-            if (Math.round(dif * 100) === 0) return `<li>${rotulo}: ${_resBrl(atual)} × ${_resBrl(anterior)} em ${escapeHtml(FechamentoCore.rotuloMes(ant))} — igual ao mês anterior</li>`;
-            const pct = Math.round(anterior * 100) !== 0 ? ` (${dif >= 0 ? '+' : '−'}${Math.abs(Math.round(dif / Math.abs(anterior) * 100))}%)` : '';
+            // Porcentagem arredondada a 0% (ou diferenca zero) tambem e "igual ao mes anterior", nunca "+0%".
+            const pctArred = Math.round(anterior * 100) !== 0 ? Math.round(Math.abs(dif / anterior) * 100) : null;
+            if (Math.round(dif * 100) === 0 || pctArred === 0) return `<li>${rotulo}: ${_resBrl(atual)} × ${_resBrl(anterior)} em ${escapeHtml(FechamentoCore.rotuloMes(ant))} — igual ao mês anterior</li>`;
+            const pct = pctArred != null ? ` (${dif >= 0 ? '+' : '−'}${pctArred}%)` : '';
             return `<li>${rotulo}: ${_resBrl(atual)} × ${_resBrl(anterior)} em ${escapeHtml(FechamentoCore.rotuloMes(ant))} — ${_fechDifTxt(dif)}${pct}</li>`;
         };
         const meta = d.meta > 0 ? ` · meta ${_resBrl(d.meta)} (${Math.round(r.faturamento / d.meta * 100)}% da meta)` : ' · sem meta definida';
@@ -15999,7 +16018,8 @@ function renderDashboardFinanceiro() {
         const fatAnt= resultadoFinanceiroDoMes(mesAntStr).faturamento;
         if (alertaAtivo('fin_tendencia') && fatAnt>0) {
             const pct = ((fatAt-fatAnt)/fatAnt*100).toFixed(1);
-            const igual = Math.round(fatAt * 100) === Math.round(fatAnt * 100);
+            // Igual tambem quando a porcentagem mostrada arredonda para 0,0% (nunca "+0.0%").
+            const igual = Math.round(fatAt * 100) === Math.round(fatAnt * 100) || Math.abs(Number(pct)) === 0;
             alertas.push(mkA(fatAt>=fatAnt?'success':'warning', fatAt>=fatAnt?'📈':'📉',
                 `Faturamento deste mês <strong>${igual ? 'igual ao mês anterior' : (fatAt>=fatAnt?'+':'') + pct + '% vs. mês anterior'}</strong> (R$ ${fmt(fatAt)} × R$ ${fmt(fatAnt)})`));
         }
@@ -16038,6 +16058,11 @@ function renderDashboardFinanceiro() {
     const fatMesAt   = resultadoFinanceiroDoMes(mesKey).faturamento;
     const metaInputEl = document.getElementById('fin-meta-valor');
     if (metaInputEl && !metaInputEl._userEditing) metaInputEl.value = Number(_finMetas[mesKey]) > 0 ? _finMetas[mesKey] : '';
+    // Sem ajuste no mes, a sugestao e a meta padrao da Empresa (como no Resultado do mes).
+    if (metaInputEl) {
+        const metaPadrao = Number(getEmpresa().meta_faturamento_padrao);
+        metaInputEl.placeholder = metaPadrao > 0 ? metaPadrao.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : 'Ex: 15000';
+    }
     const nomeMes = hoje3.toLocaleString('pt-BR',{month:'long',year:'numeric'});
     const labelMetaEl = document.getElementById('fin-meta-mes-label');
     if (labelMetaEl) labelMetaEl.textContent = nomeMes.charAt(0).toUpperCase()+nomeMes.slice(1);

@@ -255,10 +255,11 @@ Confirmar pagamento (ao instalar):
   - Se todas as parcelas do pedido já estão pagas, a janela de baixa não abre:
     aparece a pergunta "Todas as parcelas deste pedido já estão pagas." com os
     botões "Marcar como instalado" e "Cancelar"
-  - Se o usuário desmarcar tudo, aparece "Marque pelo menos um item." e o botão
-    Confirmar fica desabilitado (a janela não fecha sozinha). A janela que já
-    abre sem nada marcado de propósito (pedido com saldo pendente) continua
-    deixando confirmar
+  - Aqui dá para confirmar sem nenhuma parcela marcada (o cliente ainda não
+    pagou nada): o pedido vai para Instalado com o aviso "saldo em aberto". Nas
+    outras janelas de baixa (A Receber, A Pagar, comissões), desmarcar tudo
+    mostra "Marque pelo menos um item." e deixa o botão Confirmar desabilitado
+    (a janela não fecha sozinha)
 
 ── 3.2 ABA: AGENDA DE INSTALAÇÕES ─────────────────────────────────────────────
 
@@ -520,8 +521,9 @@ Importar Dados:
   - Se o navegador ficar sem espaço no meio da importação, aparece "A importação
     não foi concluída. Não foi possível salvar: o espaço do navegador acabou.
     Baixe uma cópia de segurança e libere espaço." Depois do OK a página
-    recarrega e mostra os dados de antes (o que já tinha sido gravado pela
-    metade volta ao valor anterior); importar de novo sobrescreve tudo
+    recarrega e mostra o que ficou salvo: o sistema tenta devolver ao valor
+    anterior tudo o que já tinha sido gravado (dados, metas, orçamentos do mês,
+    dados da empresa e planos de pagamento); importar de novo sobrescreve tudo
   - A importação limpa os avisos e a cópia da correção única do Financeiro
     (seção 10.13), para o backup antigo ser corrigido de novo quando abrir.
     Isso só acontece depois que os dados importados foram gravados: se faltar
@@ -533,8 +535,8 @@ Importar Dados:
     foi possível salvar: o espaço do navegador acabou. Baixe uma cópia de
     segurança e libere espaço." (uma vez por página aberta) e a tela não
     quebra. Se a gravação falhar no meio (várias chaves salvas de uma vez), o
-    que já tinha sido gravado volta ao valor anterior, para não ficar nada pela
-    metade. Nos botões que salvam e recarregam (baixas, estornos, exclusões,
+    sistema devolve ao valor anterior o que conseguir do que já tinha sido
+    gravado e a tela recarrega com o que ficou salvo. Nos botões que salvam e recarregam (baixas, estornos, exclusões,
     cadastros), o aviso aparece a cada tentativa e, depois do OK, a página
     recarrega com os dados salvos de antes. O aviso das outras gravações
     continua uma vez por página, sem recarregar
@@ -1030,8 +1032,8 @@ Formulário — Lançar Conta a Pagar:
   - Valor R$ (campo de texto decimal): aceita "1.250,50", "1250.5" e "12,5";
     valor zero, negativo ou inválido dá "Informe o valor."
   - Vencimento (date, obrigatório)
-  - Categoria (select): Tecido/Material | Instalador | Costureira | Aluguel |
-    Salário | Conta (luz, internet…) | Comissão RT | Outro
+  - Categoria (select): Tecido / Material | Instalador | Costureira | Aluguel |
+    Salário | Conta (luz, internet…) | Comissão RT | Imposto | Outro
   - Vincular a Pedido (select opcional, lista pedidos em aberto)
   - Botão "Lançar Conta a Pagar"
   - Botão "🔁 Gerar Despesas Fixas do Mês": cria lançamentos das despesas fixas
@@ -1117,8 +1119,9 @@ De onde vem o percentual de entrada:
   - Com 100% de entrada, o pedido gera uma parcela única (à vista).
   - Ao aprovar de novo um pedido que já tem valor pago, a descrição da parcela
     "Entrada (X%)" mostra o que falta (50% de R$ 1.000 com R$ 200 já pagos vira
-    "Entrada (30%)"; o decimal usa vírgula). O sistema também reconhece "Entrada
-    de 30%", "entrada 40%" e "Entrada de 12,5%" em parcelas antigas
+    "Entrada (30%)"; o decimal usa vírgula). No nome do plano de pagamento, o
+    sistema também reconhece "Entrada de 30%", "entrada 40%" e "Entrada de
+    12,5%" como o % de entrada
   - Cada parcela guarda cliente, pedido, vencimento e descrição.
 
 O que não muda:
@@ -1195,7 +1198,9 @@ Voltar o pedido para Orçamento:
   - Comissão antiga já paga, sem conta no A Pagar, também tem o botão Estornar
     no histórico (pede permissão completa do A Pagar e confirmação): desmarca o
     pago no pedido, a comissão volta a Pendentes e gera a conta no próximo
-    Pagar. Se existir conta paga, o estorno é o mesmo da conta
+    Pagar. Se existir conta paga, o estorno é o mesmo da conta (vale também
+    para a comissão antiga de arquiteto paga como "Comissão RT": a conta volta
+    a ficar em aberto, o movimento sai e a comissão pode ser paga de novo)
 
 ── 10.10 DRE POR PEDIDO: COMO O RESULTADO É CALCULADO ──────────────────────────
 
@@ -1477,9 +1482,10 @@ Agora o Financeiro tem 7 abas e a primeira, aberta por padrão, é "Hoje".
     (padrão)". Vale para todos os meses. Vazio ou 0 = sem meta
   - Ajuste do mês: na Visão Geral (card "Meta de Faturamento") ou na aba
     Resultado do mês (botão ✏️). Vale só para aquele mês e vence a meta padrão.
-    Salvar vazio ou 0 apaga o ajuste e o mês volta à meta padrão. O campo do
-    ajuste mostra a meta padrão (formatada, ex.: 50.000,00) como sugestão cinza
-    (placeholder), sem preencher
+    Salvar vazio ou 0 apaga o ajuste e o mês volta à meta padrão. Sem ajuste no
+    mês, o campo (na Visão Geral e no Resultado do mês) mostra a meta padrão
+    (formatada, ex.: 50.000) como sugestão cinza (placeholder), sem preencher;
+    sem meta padrão, a Visão Geral mostra "Ex: 15000"
   - A meta é comparada com o faturamento líquido do mês (o que entrou menos as
     taxas de cartão), a mesma conta do Resultado do mês
   - Orçamento padrão: em Empresa, um limite mensal por grupo de saída (campo
@@ -1655,8 +1661,9 @@ Nova aba (8ª) que mostra se o mês fechou no azul. Escolha o mês no campo "Mê
   - Conta sem data de saldo inicial também entra na conferência: o saldo
     esperado é o saldo inicial mais todos os movimentos até o último dia do mês
   - A sugestão de alta de grupo (para o próximo mês) não inclui o Imposto
-  - Quando a diferença do resumo (passo 3) é zero, aparece "igual ao mês anterior"
-    (o mesmo texto vale no alerta de tendência da Visão Geral)
+  - Quando a diferença do resumo (passo 3) é zero ou a porcentagem arredondada
+    daria 0% (ex.: R$ 10.040 × R$ 10.000), aparece "igual ao mês anterior", nunca
+    "+0%" (o mesmo vale no alerta de tendência da Visão Geral: nunca "+0.0%")
   - Depois desta atualização, um mês que já estava fechado pode mostrar "mudou
     depois do fechamento" uma única vez: recebimentos de cartão sem conta
     agora caem nas datas de repasse, e contas sem data de saldo inicial

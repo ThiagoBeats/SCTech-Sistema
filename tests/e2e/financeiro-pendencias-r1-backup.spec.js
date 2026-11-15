@@ -29,15 +29,19 @@ test('syncDB sem espaco: avisa uma vez, nao quebra', async ({ page }) => {
     await expect(page.locator('#sc-modal-overlay'), 'segundo erro nao reabre o aviso').toBeHidden();
 });
 
-test('importar com navegador cheio depois de gravar: limpa as chaves da Fase 0 e nao some em silencio', async ({ page }) => {
-    await entrar(page, BASE, { sc_fin_backup_fase0: { x: 1 }, sc_fin_revisar: [{ a: 1 }] });
+test('importar sem espaco para a empresa: nada e gravado (dados, metas, marca e copia da Fase 0 ficam como estavam)', async ({ page }) => {
+    await entrar(page, BASE, { sc_cli: [{ id: 1, nome: 'Velho' }], sc_fin_metas: { '2026-10': 9000 }, sc_fin_backup_fase0: { x: 1 }, sc_fin_revisar: [{ a: 1 }] });
+    await page.evaluate(() => localStorage.setItem('sc_fin_migracao', '1'));
     await falharChave(page, 'sc_empresa');
     await page.goto(BASE + '/index.html');
+    await page.evaluate(() => { window.__marca = 1; });
     await page.evaluate(json => importarDados({ target: { files: [new File([json], 'b.json')], value: '' } }),
-        JSON.stringify({ clientes: [], catalogo: [], pedidos: [], empresa: { nome: 'X' } }));
+        JSON.stringify({ clientes: [{ id: 7, nome: 'Bia' }], catalogo: [], pedidos: [], fin_metas: { '2026-11': 1 }, empresa: { nome: 'X' } }));
     await page.locator('#sc-modal-ok').click();
-    await expect(page.locator('#sc-modal-msg')).toContainText('A importação não foi concluída. ' + MSG);
-    expect(await page.evaluate(() => [localStorage.getItem('sc_fin_backup_fase0'), localStorage.getItem('sc_fin_revisar')])).toEqual([null, null]);
+    await expect(page.locator('#sc-modal-msg')).toHaveText('A importação não foi concluída. ' + MSG);
+    expect(await page.evaluate(() => window.__marca), 'so recarrega depois do OK').toBe(1);
+    expect(await page.evaluate(() => ['sc_cli', 'sc_fin_metas', 'sc_fin_migracao', 'sc_fin_backup_fase0', 'sc_fin_revisar'].map(k => localStorage.getItem(k))))
+        .toEqual([JSON.stringify([{ id: 1, nome: 'Velho' }]), JSON.stringify({ '2026-10': 9000 }), '1', JSON.stringify({ x: 1 }), JSON.stringify([{ a: 1 }])]);
 });
 
 test('importar sem espaco para os dados: a marca da Fase 0 e a copia continuam', async ({ page }) => {

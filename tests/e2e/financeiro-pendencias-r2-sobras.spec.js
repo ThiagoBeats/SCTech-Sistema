@@ -64,6 +64,21 @@ test('previsao do Hoje: fixa antiga e a mesma conta lancada a mao contam uma vez
     expect(semana).toBe(2000);
 });
 
+test('tela Hoje: a falta prevista conta a fixa antiga e a mesma conta lancada a mao uma vez so', async ({ page }) => {
+    // Saldo de hoje R$ 1.500 e uma saida de R$ 2.000 (fixa antiga + a mesma conta a mao):
+    // contada uma vez falta R$ 500; contada duas vezes faltaria R$ 2.500.
+    await abrir(page, {
+        sc_contas_fin: [{ ...BANCO, saldo_inicial: 1500 }],
+        sc_df: [{ id: 3, descricao: 'Aluguel', valor: 2000, dia_vencimento: 20, ativo: true, categoria: 'aluguel' }],
+        sc_cp: [{ id: 50, tipo: 'variavel', categoria: 'aluguel', descricao: 'Aluguel', valor: 2000, status: 'Pendente', data_vencimento: '2026-11-20' }]
+    });
+    await page.locator('.fin-tab-btn[data-tab="hoje"]').click();
+    await expect(page.locator('#hoje-total')).toHaveText('R$ 1.500,00');
+    await expect(page.locator('#hoje-previsao-aviso')).toContainText('falta R$ 500,00');
+    // Primeira semana negativa do grafico (a de 20/11); a fixa de 20/12 vem depois
+    await expect.poll(() => page.evaluate(() => Chart.getChart('chart-hoje-previsao').data.datasets[0].data.find(v => v < 0))).toBe(-500);
+});
+
 // ---- Contas recorrentes com a regra das parcelas ----
 test('contas recorrentes: dia que nao existe vira o ultimo dia do mes, contando da data inicial', async ({ page }) => {
     await abrir(page, {});

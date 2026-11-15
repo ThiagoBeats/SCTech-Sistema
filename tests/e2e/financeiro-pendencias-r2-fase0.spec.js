@@ -108,10 +108,13 @@ test('"Entrada de 30%" no nome da forma vale 30%', async ({ page }) => {
     expect(r).toEqual([30, 40, 30, 50, 100, 50, 12.5]);
 });
 
+// A janela de confirmar o pagamento do pedido deixa confirmar sem nada marcado
+// (ver financeiro-pendencias-r2r3-final.spec.js); as baixas do A Pagar/A Receber nao.
 test('desmarcar o unico item da baixa desabilita Confirmar e avisa', async ({ page }) => {
-    await entrar(page, BASE, { sc_cli: CLI, sc_ped: [ped({ status: 'Aguardando Financeiro' })], sc_cr: [cr(601, 'Pendente', { valor: 1000 })] });
-    await page.goto(BASE + '/pcp.html');
-    await page.evaluate(() => { confirmarPagamentoPedido(26500); });
+    await entrar(page, BASE, { sc_cp: [{ id: 801, descricao: 'Conta 801', credor_nome: 'Forn', valor: 50, data_vencimento: '2026-10-01',
+        data_pagamento: null, status: 'Pendente', tipo: 'variavel', categoria: 'outro' }] });
+    await page.goto(BASE + '/financeiro.html');
+    await page.evaluate(() => { marcarCPPago(801); });
     const modal = page.locator('#baixa-modal');
     await expect(modal.locator('#baixa-ok')).toBeEnabled();
     await expect(modal.locator('#baixa-erro-nenhum')).toBeHidden();
