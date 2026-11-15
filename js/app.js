@@ -325,11 +325,30 @@ function garantirKitsFixacaoPadrao() {
 }
 garantirKitsFixacaoPadrao();
 
+// Maior sequencial ja usado no formato ano + sequencial (ex.: 26001 -> 1).
+// O prefixo do ano e ignorado (conta so o sequencial), de proposito: o contador nao
+// zera na virada do ano. Ids antigos (Date.now()) e de outro formato nao entram na conta.
+function _maiorSeqExistente(lista) {
+    let maior = 0;
+    (lista || []).forEach(p => {
+        const s = String(p && p.id);
+        if (/^\d{5,6}$/.test(s)) maior = Math.max(maior, parseInt(s.slice(2)));
+    });
+    return maior;
+}
+
+// O proximo numero e sempre maior que qualquer pedido existente, mesmo que o
+// contador salvo esteja atrasado (backup antigo, dados importados).
 function gerarNumeroPedido() {
-    const seq = (parseInt(localStorage.getItem('sc_ped_seq') || '0') + 1);
-    localStorage.setItem('sc_ped_seq', String(seq));
     const yy = String(new Date().getFullYear()).slice(-2);
-    return parseInt(yy + String(seq).padStart(3, '0'));
+    let seq = Math.max(parseInt(localStorage.getItem('sc_ped_seq') || '0') || 0, _maiorSeqExistente(db.pedidos));
+    let id;
+    do {
+        seq += 1;
+        id = parseInt(yy + String(seq).padStart(3, '0'));
+    } while (db.pedidos.some(p => p.id === id));
+    localStorage.setItem('sc_ped_seq', String(seq));
+    return id;
 }
 
 // O pedido de compra tem sequencia propria: usar a dos pedidos faria uma
@@ -337,7 +356,7 @@ function gerarNumeroPedido() {
 // pula numero ja ocupado, porque as compras antigas nasceram com Date.now().
 function gerarNumeroPedidoCompra() {
     const yy = String(new Date().getFullYear()).slice(-2);
-    let seq = parseInt(localStorage.getItem('sc_pc_seq') || '0');
+    let seq = Math.max(parseInt(localStorage.getItem('sc_pc_seq') || '0') || 0, _maiorSeqExistente(db.pedidos_compra));
     let id;
     do {
         seq += 1;
@@ -1489,7 +1508,11 @@ function getUsuarioLogado() {
     let sess;
     try { sess = JSON.parse(sessionStorage.getItem('sc_user') || 'null'); } catch { return null; }
     if (!sess) return null;
-    return db.usuarios.find(u => u.id === sess.id) || null;
+    const u = db.usuarios.find(x => x.id === sess.id);
+    // A sessao guarda o e-mail de quem entrou: se o usuario com esse id agora tem outro
+    // e-mail (ex.: outra aba importou um backup com outros usuarios), a sessao nao vale.
+    if (!u || String(u.email || '').toLowerCase() !== String(sess.email || '').toLowerCase()) return null;
+    return u;
 }
 
 // Resolução: permissão específica do usuário sobrescreve o papel quando presente.
@@ -2038,7 +2061,16 @@ async function salvarUsuario(id) {
             await showAlert('Este é o único Administrador ativo. Defina outro Administrador antes de mudar o papel dele.', '🛡️');
             return;
         }
+        const eraEu = getUsuarioLogado() === u;
         u.nome = nome; u.email = email; u.papel_id = papelId; u.permissoes_extras = permissoes_extras;
+        // Mudou o proprio e-mail: a sessao acompanha (ela confere o e-mail a cada tela).
+        if (eraEu) {
+            try {
+                const sess = JSON.parse(sessionStorage.getItem('sc_user') || '{}');
+                sess.email = email;
+                sessionStorage.setItem('sc_user', JSON.stringify(sess));
+            } catch (e) {}
+        }
         const ativoEl = document.getElementById('usr-ativo');
         if (ativoEl) u.ativo = ativoEl.checked;
         if (senha) u.senha_hash = await hashSenha(senha);
@@ -3635,7 +3667,8 @@ function renderMetrics() {
     const fatMes = instaladosMes.reduce((s, p) => s + (p.valor || 0), 0);
     const emProducao = db.pedidos.filter(p => { const s = normalizarStatus(p.status); return s !== 'Orçamento' && s !== 'Instalado'; }).length;
     const orcamentos = db.pedidos.filter(p => normalizarStatus(p.status) === 'Orçamento').length;
-    const aprovados  = db.pedidos.filter(p => normalizarStatus(p.status) !== 'Orçamento' && (p.valor || 0) > 0);
+    // Ticket Medio: so pedidos ja instalados (Aguardando Financeiro = instalado, falta o pagamento).
+    const aprovados  = db.pedidos.filter(p => ['Instalado', 'Aguardando Financeiro'].includes(normalizarStatus(p.status)) && (p.valor || 0) > 0);
     const ticketMedio = aprovados.length ? aprovados.reduce((s, p) => s + p.valor, 0) / aprovados.length : 0;
     const estoqueCritico = db.catalogo.filter(c => !temEstoqueInfinito(c) && c.min_estoque > 0 && estoqueDisponivel(c.id) < c.min_estoque).length
         + db.materiais.filter(m => !temEstoqueInfinito(m) && m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque).length;
@@ -3696,7 +3729,8 @@ function renderChartStatus() {
     const pedidosFiltrados = db.pedidos.filter(p => {
         if (filtro === 'todos') return true;
         const [ano, mes] = filtro.split('-').map(Number);
-        const d = new Date(p.data_criacao || p.id);
+        // id so vale como data quando e um carimbo de tempo (pedido antigo sem data_criacao)
+        const d = new Date(p.data_criacao || (typeof p.id === 'number' && p.id > 1e11 ? p.id : NaN));
         return d.getFullYear() === ano && d.getMonth() === mes - 1;
     });
 
@@ -4978,17 +5012,23 @@ async function salvarEntradaEstoque() {
     const precoVendaConf = custo > 0 ? (custo * (1 + markup / 100)).toFixed(2) : null;
     const linhaPreco = custo > 0 ? `\nCusto: R$ ${custo.toFixed(2)}/m  →  Venda: R$ ${precoVendaConf}/m` : '';
     if (!await showConfirm(`Confirmar entrada de rolo?\n\nTecido: ${nomeTecConf}\nCódigo: ${referencia}\nMetragem: ${metros} m${linhaPreco}`, '📦', 'Confirmar Entrada', 'Cancelar')) return;
-    db.estoque.push({ id: Date.now(), tecido_id: tecidoId, lote: referencia, metragem_inicial: metros, metragem_atual: metros, data_entrada: data });
-    if (custo > 0) {
-        const tec = db.catalogo.find(t => t.id === tecidoId);
-        if (tec) {
-            tec.preco_custo = custo;
-            tec.preco = Math.round(custo * (1 + markup / 100) * 100) / 100;
-        }
-    }
-    const nomeTec = db.catalogo.find(t => t.id === tecidoId)?.nome || 'Tecido';
-    registrarMovimento('Entrada', `${nomeTec} — Código ${referencia}`, 'tecido', metros, 'm', referencia);
+    _aplicarEntradaTecido({ tecidoId, lote: referencia, metros, data, custo, markup });
     salvarERecarregar('Entrada registrada!');
+}
+
+// Grava a entrada de um rolo: rolo no estoque, custo/preco do tecido e o
+// movimento "Entrada". Usada pela entrada manual e pela entrada que abre quando
+// o pedido de compra e marcado Recebido. markup null = nao mexe no preco de venda.
+function _aplicarEntradaTecido({ tecidoId, lote, metros, data, custo, markup }) {
+    let id = Date.now();
+    while (db.estoque.some(r => r.id === id)) id++;
+    db.estoque.push({ id, tecido_id: tecidoId, lote, metragem_inicial: metros, metragem_atual: metros, data_entrada: data });
+    const tec = db.catalogo.find(t => t.id === tecidoId);
+    if (custo > 0 && tec) {
+        tec.preco_custo = custo;
+        if (markup !== null) tec.preco = Math.round(custo * (1 + markup / 100) * 100) / 100;
+    }
+    registrarMovimento('Entrada', `${tec?.nome || 'Tecido'} — Código ${lote}`, 'tecido', metros, 'm', lote);
 }
 
 function autoFillTecidoNoAmbiente(ambId, tidx) {
@@ -6061,7 +6101,10 @@ function renderEstoqueFuturo() {
     const statusAtivos = ['Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Financeiro'];
     const pedAtivos = db.pedidos.filter(p => statusAtivos.includes(normalizarStatus(p.status)));
     const consumoPorTecido = {};
+    const pedComTecido = new Set();   // so os que ainda tem tecido a baixar
     for (const ped of pedAtivos) {
+        // Tecido ja baixado do rolo: ja saiu do estoque, nao conta de novo.
+        if (ped.baixa_tecido_realizada || ped.baixa_realizada) continue;
         for (const amb of normalizarAmbientes(ped)) {
             for (const t of (amb.tecidos || [])) {
                 if (!t.tecidoId || !(t.consumo_linear > 0)) continue;
@@ -6069,6 +6112,7 @@ function renderEstoqueFuturo() {
                 if (!consumoPorTecido[key]) consumoPorTecido[key] = { total: 0, pedidoIds: new Set() };
                 consumoPorTecido[key].total += t.consumo_linear;
                 consumoPorTecido[key].pedidoIds.add(ped.id);
+                pedComTecido.add(ped.id);
             }
         }
     }
@@ -6091,7 +6135,7 @@ function renderEstoqueFuturo() {
     }).filter(Boolean).join('');
     el.innerHTML = `<div class="card">
         <h3 style="margin-bottom:4px">Consumo Previsto — Pedidos em Produção</h3>
-        <p style="font-size:13px;color:#8F8F8F;margin-bottom:16px">${pedAtivos.length} pedido(s) em produção considerados. Saldo negativo indica necessidade de reposição.</p>
+        <p style="font-size:13px;color:#8F8F8F;margin-bottom:16px">${pedComTecido.size} pedido(s) em produção com tecido a baixar. Saldo negativo indica necessidade de reposição.</p>
         <table>
             <thead><tr>
                 <th>Tecido</th>
@@ -7145,7 +7189,8 @@ function renderKanban() {
                     </div>`;
                 }
                 let badgeEst = '';
-                for (const a of ambientes) {
+                const tecidoJaBaixado = p.baixa_tecido_realizada || p.baixa_realizada;
+                for (const a of (tecidoJaBaixado ? [] : ambientes)) {
                     for (const t of (a.tecidos||[])) {
                         if (!t.tecidoId) continue;
                         if (tecidoTemEstoqueInfinito(t.tecidoId)) continue;
@@ -7877,6 +7922,17 @@ function renderProposta() {
 function _lerObjetoLS(chave) {
     try { const o = JSON.parse(localStorage.getItem(chave) || '{}'); return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {}; } catch (e) { return {}; }
 }
+// Configuracoes que moram em chave propria do navegador e entram no backup (texto
+// cru de cada chave). Ficam de fora o que e so do navegador/aba (sessao, tema,
+// menu lateral, ordenacao, filtros, avisos ja vistos, cache de enderecos, passagem
+// de dados entre telas e a copia de desfazer do importador).
+const CHAVES_CONFIG_BACKUP = ['sc_doc_layouts', 'sc_cond_gerais', 'sc_etiqueta_cfg', 'sc_mostruario',
+    'sc_alertas_cfg', 'sc_dashcards_cfg', 'sc_agd_cfg', 'sc_kits_fixacao_padrao', 'sc_papel_gerente'];
+function _configsLS() {
+    const o = {};
+    CHAVES_CONFIG_BACKUP.forEach(k => { try { const v = localStorage.getItem(k); if (v !== null) o[k] = v; } catch (e) { /* sem storage */ } });
+    return o;
+}
 function _dadosExportacao(marcaFase0) {
     const dados = {
         versao: '1.0', exportado_em: new Date().toISOString(),
@@ -7888,8 +7944,16 @@ function _dadosExportacao(marcaFase0) {
         contas_fin: db.contas_fin, meios_pag: db.meios_pag, movimentos_fin: db.movimentos_fin, fechamentos_fin: db.fechamentos_fin,
         medicoes: db.medicoes, rotas: db.rotas || [],
         fin_metas: _lerObjetoLS('sc_fin_metas'), fin_orcamento_mes: _lerObjetoLS('sc_fin_orcamento_mes'),
-        empresa: getEmpresa(), formas_pag: getFormasPagamentoCfg()
+        empresa: getEmpresa(), formas_pag: getFormasPagamentoCfg(),
+        import_perfis: db.import_perfis || [],
+        config_ls: _configsLS(),
+        ped_seq: parseInt(localStorage.getItem('sc_ped_seq') || '0') || 0,
+        pc_seq: parseInt(localStorage.getItem('sc_pc_seq') || '0') || 0
     };
+    // Acesso: usuarios (com senha ja em hash e preferencias) e papeis so entram no arquivo
+    // quando quem exporta e o Administrador (a aba Backup tambem e do Gerente/Financeiro).
+    // A sessao de quem esta logado fica so na aba e nunca entra no arquivo.
+    if (ehAdministrador()) { dados.usuarios = db.usuarios; dados.papeis = db.papeis; }
     if (marcaFase0) dados.fin_fase0 = 1;
     return dados;
 }
@@ -7945,6 +8009,71 @@ function importarDados(event) {
                 const o = dados[k];
                 extras.push(['sc_' + k, JSON.stringify(o && typeof o === 'object' && !Array.isArray(o) ? o : {})]);
             });
+            // Acesso e numeracao. Backup antigo (sem usuarios/papeis) deixa os atuais como estao.
+            // Com usuarios no arquivo: quem importou continua entrando pelo mesmo e-mail; se o
+            // arquivo nao tem administrador ativo, quem importou vira administrador (ativo) para
+            // ninguem ficar trancado fora. Se nao ha como manter a sessao, ela e encerrada
+            // depois da gravacao e a pessoa entra pela tela de login (nunca vira outro usuario).
+            // So o Administrador importa usuarios e papeis: para os demais eles ficam como estao.
+            let sessaoNova = null, encerrarSessao = false;
+            const usuariosAtuais = db.usuarios.slice();
+            const importaAcessos = ehAdministrador();
+            const acessosIgnorados = !importaAcessos &&
+                ((Array.isArray(dados.papeis) && dados.papeis.length > 0) || (Array.isArray(dados.usuarios) && dados.usuarios.length > 0));
+            if (importaAcessos && Array.isArray(dados.papeis) && dados.papeis.length) db.papeis = dados.papeis;
+            if (importaAcessos && Array.isArray(dados.usuarios) && dados.usuarios.length) {
+                db.usuarios = dados.usuarios;
+                encerrarSessao = true;
+                const mesmoId = (a, b) => String(a) === String(b);
+                const maiorId = lista => lista.reduce((m, x) => Math.max(m, Number(x.id) || 0), 0);
+                // papeis e usuarios precisam combinar: papel que falta volta do padrao; sem padrao,
+                // o usuario fica com o papel Vendedor/Atendimento (o de menos acesso entre os padroes com login).
+                const padroes = papeisPadrao();
+                db.usuarios.forEach(u => {
+                    if (db.papeis.some(p => mesmoId(p.id, u.papel_id))) return;
+                    let p = padroes.find(x => mesmoId(x.id, u.papel_id)) || padroes.find(x => x.id === 3);
+                    if (!db.papeis.some(x => mesmoId(x.id, p.id))) db.papeis.push(p);
+                    u.papel_id = p.id;
+                });
+                let sess = null;
+                try { sess = JSON.parse(sessionStorage.getItem('sc_user') || 'null'); } catch (e1) { sess = null; }
+                const atual = sess && usuariosAtuais.find(u => mesmoId(u.id, sess.id));
+                if (atual) {
+                    let eu = db.usuarios.find(u => String(u.email || '').toLowerCase() === String(atual.email || '').toLowerCase());
+                    let papelAdmin = db.papeis.find(p => p.nome === 'Administrador');
+                    const temAdmin = () => db.usuarios.some(u => u.ativo && papelAdmin && mesmoId(u.papel_id, papelAdmin.id));
+                    if (!temAdmin()) {
+                        if (!papelAdmin) {
+                            const padrao = padroes.find(p => p.nome === 'Administrador');
+                            papelAdmin = db.papeis.some(p => mesmoId(p.id, padrao.id)) ? Object.assign({}, padrao, { id: maiorId(db.papeis) + 1 }) : padrao;
+                            db.papeis.push(papelAdmin);
+                        }
+                        if (!eu) {
+                            eu = Object.assign({}, atual, { id: maiorId(db.usuarios) + 1 });
+                            db.usuarios.push(eu);
+                        }
+                        eu.ativo = true;
+                        eu.papel_id = papelAdmin.id;
+                    }
+                    if (eu && eu.ativo) { sessaoNova = { id: eu.id, nome: nomeExibicao(eu), email: eu.email }; encerrarSessao = false; }
+                }
+            }
+            // Contadores: o do backup quando existe; sem ele (backup antigo) o proximo numero
+            // sai do maior pedido existente.
+            extras.push(['sc_ped_seq', Number.isFinite(dados.ped_seq) ? String(Math.max(0, Math.floor(dados.ped_seq))) : null]);
+            extras.push(['sc_pc_seq',  Number.isFinite(dados.pc_seq)  ? String(Math.max(0, Math.floor(dados.pc_seq)))  : null]);
+            // Layout dos documentos, etiquetas, galeria, alertas, cards, agenda: com a secao
+            // config_ls no arquivo, o que nao veio volta ao padrao; backup antigo (sem a secao)
+            // mantem os atuais.
+            if (Array.isArray(dados.import_perfis)) db.import_perfis = dados.import_perfis;
+            if (dados.config_ls && typeof dados.config_ls === 'object' && !Array.isArray(dados.config_ls)) {
+                CHAVES_CONFIG_BACKUP.forEach(k => {
+                    // a marca do papel Gerente e parte dos papeis: so o Administrador a troca
+                    if (k === CHAVE_PAPEL_GERENTE && !importaAcessos) return;
+                    const v = dados.config_ls[k];
+                    extras.push([k, typeof v === 'string' ? v : null]);
+                });
+            }
             // Backup antigo (sem empresa/formas) mantem as atuais.
             if (dados.empresa && typeof dados.empresa === 'object') extras.push(['sc_empresa', JSON.stringify(dados.empresa)]);
             if (Array.isArray(dados.formas_pag) && dados.formas_pag.length) extras.push(['sc_formas_pag', JSON.stringify(dados.formas_pag)]);
@@ -7963,6 +8092,9 @@ function importarDados(event) {
             }
             // Gravou: o que era dos dados anteriores (copia, revisao e avisos) sai.
             ['sc_fin_backup_fase0', 'sc_fin_revisar', 'sc_fin_backup_falhou', 'sc_fin_migracao_erro'].forEach(k => localStorage.removeItem(k));
+            if (sessaoNova) sessionStorage.setItem('sc_user', JSON.stringify(sessaoNova));
+            else if (encerrarSessao) sessionStorage.removeItem('sc_user');
+            if (acessosIgnorados) await showAlert('Dados importados. Usuários e acessos não foram importados: só o Administrador importa usuários.', 'ℹ️');
             toastReload('Dados importados com sucesso!', 'info');
             window.location.reload();
         } catch (err) {
@@ -8045,7 +8177,9 @@ function renderRelRecebiveis() {
     }).map(p => {
         const cli   = db.clientes.find(c => c.id == p.clienteId);
         const saldo = (p.valor || 0) - (p.valor_recebido || 0);
-        const dias  = Math.floor((hoje - new Date(p.id)) / (1000 * 60 * 60 * 24));
+        // Data real do pedido (o numero e sequencial, nao e data).
+        const criado = typeof p.data_criacao === 'number' ? p.data_criacao : (typeof p.id === 'number' && p.id > 1e11 ? p.id : Date.now());
+        const dias  = Math.max(0, Math.floor((hoje - new Date(criado)) / (1000 * 60 * 60 * 24)));
         return { ...p, _cli: cli?.nome || '—', _saldo: saldo, _dias: dias };
     }).sort((a, b) => b._dias - a._dias);
     if (!pendentes.length) {
@@ -9379,6 +9513,9 @@ async function atualizarStatusPC(id, status) {
         renderListaPedidosCompra();
         return;
     }
+    // Pedido que ja foi Recebido antes da entrada automatica existir: tem a conta a pagar,
+    // mas nunca passou pela janela de entrada (nem a marca de entrada feita).
+    const recebidoAntes = status === 'Recebido' && !!pc.conta_pagar_gerada && !pc.entrada_estoque_data && !pc.entrada_estoque_vista;
     pc.status = status;
     if (status === 'Enviado') pc.data_envio = hojeLocal();
     else if (status === 'Rascunho') pc.data_envio = null;
@@ -9387,6 +9524,188 @@ async function atualizarStatusPC(id, status) {
     renderListaPedidosCompra();
     // Recebeu a mercadoria: a conta a pagar nasce aqui, uma vez so.
     if (status === 'Recebido' && !pc.conta_pagar_gerada) await abrirModalContaPagarPC(pc);
+    // Depois da conta a pagar: a mercadoria que chegou entra no estoque.
+    if (status === 'Recebido') await abrirEntradaEstoquePC(pc, { perguntarSeJaLancou: recebidoAntes });
+}
+
+// --- ENTRADA NO ESTOQUE AO RECEBER O PEDIDO DE COMPRA ---
+
+// Codigo sugerido para o rolo: o codigo do tecido; se ja existe rolo com ele
+// (ou ja existe o "<codigo>-A"), "<codigo>-A", "<codigo>-B"... o primeiro livre.
+function _sugerirCodigoRolo(tec, usados) {
+    const base = tec.referencia || tec.nome || 'ROLO';
+    const jaTem = new Set((db.estoque || []).filter(r => r.tecido_id == tec.id).map(r => String(r.lote || '').toLowerCase()));
+    usados.forEach(u => jaTem.add(String(u).toLowerCase()));
+    if (!jaTem.has(base.toLowerCase()) && !jaTem.has(`${base}-A`.toLowerCase())) return base;
+    for (let n = 0; n < 26 * 26; n++) {
+        const letra = n < 26 ? String.fromCharCode(65 + n) : String.fromCharCode(65 + Math.floor(n / 26) - 1) + String.fromCharCode(65 + n % 26);
+        if (!jaTem.has(`${base}-${letra}`.toLowerCase())) return `${base}-${letra}`;
+    }
+    return `${base}-${Date.now()}`;
+}
+
+// Monta as linhas da janela a partir dos itens do pedido. Item sem cadastro
+// (texto livre ou cadastro apagado) vira linha "sem cadastro"; item sem controle
+// de estoque (infinito) vira linha desmarcada e travada: nunca entra.
+function _linhasEntradaPC(pc) {
+    const usados = [];
+    return (pc.itens || []).map((it, idx) => {
+        const qtd = Number(it.quantidade) || 0;
+        const custo = Number(it.preco_unit) || 0;
+        if (it.tipo === 'tecido') {
+            const tec = (db.catalogo || []).find(c => c.id == it.item_id);
+            if (!tec) return { idx, nome: it.item_nome, semCadastro: true };
+            if (temEstoqueInfinito(tec)) return { idx, nome: tec.nome, infinito: true };
+            let metros = qtd, custoM = custo;
+            if (it.unidade === 'rolo') {
+                // Pedido em rolos: a metragem vem do ultimo rolo desse tecido, se houver.
+                const ult = (db.estoque || []).filter(r => r.tecido_id == tec.id).sort((a, b) => b.id - a.id)[0];
+                metros = ult ? qtd * (ult.metragem_inicial || 0) : 0;
+                custoM = metros > 0 ? Math.round(custo * qtd / metros * 100) / 100 : 0;
+            }
+            const lote = _sugerirCodigoRolo(tec, usados);
+            usados.push(lote);
+            const margem = tec.preco_custo > 0 && tec.preco > 0 ? Math.round(((tec.preco / tec.preco_custo) - 1) * 100) : '';
+            return { idx, tipo: 'tecido', id: tec.id, nome: tec.nome, lote, metros, custo: custoM, margem, unidadePedido: it.unidade };
+        }
+        if (it.tipo === 'kit') {
+            const kit = (db.kits || []).find(k => k.id == it.item_id);
+            if (!kit) return { idx, nome: it.item_nome, semCadastro: true };
+            if (temEstoqueInfinito(kit)) return { idx, nome: kit.nome, infinito: true };
+            return { idx, tipo: 'kit', id: kit.id, nome: kit.nome, qtd, unidade: 'un' };
+        }
+        const mat = (db.materiais || []).find(m => m.id == it.item_id);
+        if (!mat) return { idx, nome: it.item_nome, semCadastro: true };
+        if (temEstoqueInfinito(mat)) return { idx, nome: mat.nome, infinito: true };
+        const margem = mat.preco_custo > 0 && mat.preco > 0 ? Math.round(((mat.preco / mat.preco_custo) - 1) * 100) : '';
+        return { idx, tipo: 'material', id: mat.id, nome: mat.nome, qtd, unidade: mat.unidade || 'un', custo, margem };
+    });
+}
+
+// Janela "Entrada no estoque — Pedido #N". Resolve quando fecha. "Lançar depois"
+// so fecha (o status ja mudou); "Confirmar entrada" grava como a entrada manual.
+async function abrirEntradaEstoquePC(pc, { perguntarSeJaLancou = false } = {}) {
+    if (pc.entrada_estoque_data) {
+        const d = new Date(pc.entrada_estoque_data + 'T12:00:00').toLocaleDateString('pt-BR');
+        await showAlert(`A entrada deste pedido já foi feita em ${d}.`, 'ℹ️');
+        return;
+    }
+    const linhas = _linhasEntradaPC(pc);
+    if (!linhas.length) return;
+    if (!linhas.some(l => !l.semCadastro && !l.infinito)) {
+        if (linhas.some(l => l.semCadastro)) await showAlert('Os itens deste pedido não têm cadastro no estoque: lance a entrada à mão no Estoque.', 'ℹ️');
+        else await showAlert('Os itens deste pedido não têm controle de estoque: não há entrada a lançar.', 'ℹ️');
+        return;
+    }
+    if (!temAcesso('estoque', 'completo')) {
+        await showAlert('O pedido foi marcado como Recebido. A entrada no estoque precisa de alguém com permissão de Estoque.', 'ℹ️');
+        return;
+    }
+    // Pedido Recebido de antes desta janela existir: a entrada pode ja ter sido feita a mao.
+    if (perguntarSeJaLancou && await showConfirm('Este pedido já estava como Recebido antes. A entrada no estoque já foi lançada à mão?', '📦', 'Sim, já lancei', 'Não, lançar agora')) {
+        pc.entrada_estoque_data = hojeLocal();
+        pc.entrada_estoque_manual = true;
+        syncDB();
+        return;
+    }
+    // A janela ja abriu para este pedido: daqui em diante ele nao e mais "de antes".
+    pc.entrada_estoque_vista = true;
+    syncDB({ silencioso: true });
+    return new Promise(resolve => {
+        if (document.getElementById('pcent-modal')) { resolve(); return; }
+        const o = document.createElement('div');
+        o.id = 'pcent-modal';
+        o.className = 'sc-modal-overlay';
+        o.style.display = 'flex';
+        const inp = 'padding:5px;border:1px solid var(--border-strong);border-radius:4px;width:100%';
+        const campo = (rot, html) => `<div style="flex:1;min-width:90px"><label style="display:block;font-size:11px;color:#8F8F8F;margin-bottom:2px">${rot}</label>${html}</div>`;
+        const num = (cls, v, step) => `<input type="number" class="${cls}" step="${step}" min="0" value="${v === '' ? '' : v}" style="${inp}">`;
+        const html = linhas.map(l => {
+            if (l.semCadastro) {
+                return `<div class="pcent-linha pcent-sem" style="padding:8px 0;border-top:1px solid var(--border-strong);font-size:13px;color:#8F8F8F"><strong>${escapeHtml(l.nome || 'Item')}</strong> — sem cadastro — lance à mão</div>`;
+            }
+            if (l.infinito) {
+                return `<div class="pcent-linha pcent-infinito" style="padding:8px 0;border-top:1px solid var(--border-strong);font-size:13px;color:#8F8F8F"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" class="pcent-marca" disabled><strong>${escapeHtml(l.nome)}</strong> — sem controle de estoque</label></div>`;
+            }
+            let campos;
+            if (l.tipo === 'tecido') {
+                campos = campo('Código do rolo', `<input type="text" class="pcent-lote" value="${escapeHtml(l.lote)}" style="${inp}">`)
+                    + campo('Metragem (m)', num('pcent-metros', l.metros, '0.01'))
+                    + campo('Custo (R$/m)', num('pcent-custo', l.custo, '0.01'))
+                    + campo('Margem (%)', num('pcent-margem', l.margem, '1'));
+            } else if (l.tipo === 'material') {
+                campos = campo(`Quantidade (${escapeHtml(l.unidade)})`, num('pcent-qtd', l.qtd, '0.001'))
+                    + campo('Custo (R$)', num('pcent-custo', l.custo, '0.01'))
+                    + campo('Margem (%)', num('pcent-margem', l.margem, '1'));
+            } else {
+                campos = campo('Quantidade (un)', num('pcent-qtd', l.qtd, '1'));
+            }
+            const rotuloTipo = l.tipo === 'tecido' ? 'Tecido' : l.tipo === 'kit' ? 'Kit pronto' : 'Material';
+            return `<div class="pcent-linha" data-idx="${l.idx}" data-tipo="${l.tipo}" data-id="${l.id}" style="padding:8px 0;border-top:1px solid var(--border-strong)">
+                <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px"><input type="checkbox" class="pcent-marca" checked><strong>${escapeHtml(l.nome)}</strong><span style="color:#8F8F8F">(${rotuloTipo})</span></label>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">${campos}</div></div>`;
+        }).join('');
+        o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:640px;max-height:90vh;overflow:auto">
+            <h3 style="margin:0 0 4px;font-size:16px">Entrada no estoque — Pedido #${formatPedidoId(pc.id)}</h3>
+            <div style="font-size:12px;color:#8F8F8F;margin-bottom:8px">${escapeHtml(pc.fornecedor_nome || '')} · Confira o que chegou e desmarque o que não entra agora.</div>
+            <div style="margin-bottom:8px"><label style="font-size:12px;margin-right:6px">Data da entrada</label><input type="date" id="pcent-data" value="${hojeLocal()}" style="padding:4px;border:1px solid var(--border-strong);border-radius:4px"></div>
+            ${html}
+            <div id="pcent-erro" style="display:none;color:#F43927;font-size:12px;margin:8px 0"></div>
+            <div class="sc-modal-btns" style="margin-top:10px"><button class="btn btn-outline" id="pcent-depois">Lançar depois</button><button class="btn btn-success" id="pcent-ok">Confirmar entrada</button></div>
+        </div>`;
+        document.body.appendChild(o);
+        const fechar = () => { document.removeEventListener('keydown', esc); o.remove(); resolve(); };
+        const esc = e => {
+            const alerta = document.getElementById('sc-modal-overlay');
+            if (e.key === 'Escape' && !(alerta && alerta.style.display !== 'none')) fechar();
+        };
+        document.addEventListener('keydown', esc);
+        const erroEl = o.querySelector('#pcent-erro');
+        const erro = msg => { erroEl.textContent = msg; erroEl.style.display = ''; };
+        o.querySelector('#pcent-depois').onclick = fechar;
+        o.querySelector('#pcent-ok').onclick = async () => {
+            erroEl.style.display = 'none';
+            const data = o.querySelector('#pcent-data').value || hojeLocal();
+            const val = (el, c) => parseFloat(el.querySelector(c)?.value);
+            const marcadas = [...o.querySelectorAll('.pcent-linha[data-idx]')].filter(el => el.querySelector('.pcent-marca').checked);
+            if (!marcadas.length) { erro('Marque pelo menos um item, ou toque em "Lançar depois".'); return; }
+            const entradas = [];
+            for (const el of marcadas) {
+                const tipo = el.dataset.tipo, id = parseInt(el.dataset.id, 10);
+                const nome = el.querySelector('strong').textContent;
+                const custo = val(el, '.pcent-custo') || 0;
+                const margemTxt = el.querySelector('.pcent-margem')?.value;
+                const markup = margemTxt === undefined || margemTxt === '' ? null : parseFloat(margemTxt);
+                if (tipo === 'tecido') {
+                    const lote = el.querySelector('.pcent-lote').value.trim();
+                    const metros = val(el, '.pcent-metros');
+                    if (!lote) { erro(`Informe o código do rolo de ${nome}.`); return; }
+                    if (!metros || metros <= 0) { erro(`Informe a metragem de ${nome}.`); return; }
+                    entradas.push({ tipo, id, lote, metros, custo, markup });
+                } else {
+                    const qtd = val(el, '.pcent-qtd');
+                    if (!qtd || qtd <= 0) { erro(`Informe a quantidade de ${nome}.`); return; }
+                    entradas.push({ tipo, id, qtd, custo, markup });
+                }
+            }
+            entradas.forEach(e => {
+                if (e.tipo === 'tecido') _aplicarEntradaTecido({ tecidoId: e.id, lote: e.lote, metros: e.metros, data, custo: e.custo, markup: e.markup });
+                else if (e.tipo === 'material') _aplicarEntradaMaterial({ mat: db.materiais.find(m => m.id === e.id), qtd: e.qtd, data, custo: e.custo, markup: e.markup });
+                else _aplicarEntradaKit({ kit: db.kits.find(k => k.id === e.id), qtd: e.qtd, data });
+            });
+            pc.entrada_estoque_data = data;
+            // Sem espaco: nada foi gravado. Avisa e recarrega para a tela mostrar o que esta
+            // salvo (a marca de entrada nao fica so na memoria).
+            if (!syncDB({ silencioso: true })) {
+                fechar();
+                await showAlert('A entrada no estoque não foi salva. ' + MSG_SEM_ESPACO, '⚠️');
+                window.location.reload();
+                return;
+            }
+            toast('Entrada no estoque registrada!', 'success', 2000);
+            fechar();
+        };
+    });
 }
 
 // Total do pedido de compra (soma dos subtotais dos itens).
@@ -12344,14 +12663,27 @@ async function salvarEntradaMaterial() {
     const precoVendaMatConf = custo > 0 ? (custo * (1 + markup / 100)).toFixed(2) : null;
     const linhaPrecoMat = custo > 0 ? `\nCusto: R$ ${custo.toFixed(2)}  →  Venda: R$ ${precoVendaMatConf}` : '';
     if (!await showConfirm(`Confirmar entrada de material?\n\nMaterial: ${mat.nome}\nQuantidade: ${qtd} ${mat.unidade}${linhaPrecoMat}`, '📦', 'Confirmar Entrada', 'Cancelar')) return;
+    _aplicarEntradaMaterial({ mat, qtd, data, custo, markup });
+    salvarERecarregar('Entrada de material registrada!');
+}
+
+// Grava a entrada de material: saldo, custo/preco e o movimento "Entrada".
+// Usada pela entrada manual e pela do pedido de compra Recebido.
+function _aplicarEntradaMaterial({ mat, qtd, data, custo, markup }) {
     mat.estoque_atual = Math.round(((mat.estoque_atual || 0) + qtd) * 1000) / 1000;
     if (custo > 0) {
         mat.preco_custo = custo;
-        mat.preco = Math.round(custo * (1 + markup / 100) * 100) / 100;
+        if (markup !== null) mat.preco = Math.round(custo * (1 + markup / 100) * 100) / 100;
     }
     const refData = data ? `Entrada ${new Date(data + 'T12:00:00').toLocaleDateString('pt-BR')}` : 'Entrada manual';
     registrarMovimento('Entrada', mat.nome, 'material', qtd, mat.unidade, refData);
-    salvarERecarregar('Entrada de material registrada!');
+}
+
+// Entrada de kit pronto (so pelo pedido de compra Recebido).
+function _aplicarEntradaKit({ kit, qtd, data }) {
+    kit.estoque_atual = Math.round(((kit.estoque_atual || 0) + qtd) * 1000) / 1000;
+    const refData = data ? `Entrada ${new Date(data + 'T12:00:00').toLocaleDateString('pt-BR')}` : 'Entrada manual';
+    registrarMovimento('Entrada', kit.nome, 'kit', qtd, 'un', refData);
 }
 
 // ─── CONSULTA DE ESTOQUE ─────────────────────────────────────────────────────
@@ -16019,7 +16351,7 @@ function renderDashboardFinanceiro() {
     if (kpis2El) {
         let pmrSoma = 0, pmrN = 0;
         db.pedidos.filter(p=>normalizarStatus(p.status)==='Instalado'&&p.data_instalado).forEach(p => {
-            const criacao = typeof p.data_criacao==='number' ? p.data_criacao : (typeof p.id==='number' ? p.id : 0);
+            const criacao = typeof p.data_criacao==='number' ? p.data_criacao : (typeof p.id==='number' && p.id > 1e11 ? p.id : 0);
             const dias = Math.round((p.data_instalado - criacao) / 86400000);
             if (dias > 0 && dias < 730) { pmrSoma += dias; pmrN++; }
         });
@@ -16528,7 +16860,7 @@ function renderDespesasFixas() {
     tb.innerHTML = db.despesas_fixas.map(df=>`
         <tr>
             <td><strong>${escapeHtml(df.descricao)}</strong></td>
-            <td>${escapeHtml(df.categoria)}</td>
+            <td>${escapeHtml((CATEGORIAS_DESPESA_FIXA.find(c => c[0] === df.categoria) || [, df.categoria])[1])}</td>
             <td>Todo dia ${df.dia_vencimento}</td>
             <td>R$ ${(df.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
             <td>${podeEditar ? `<button class="btn btn-outline btn-sm btn-danger" onclick="excluirDespesaFixa(${df.id})" title="Excluir">🗑️</button>` : ''}</td>

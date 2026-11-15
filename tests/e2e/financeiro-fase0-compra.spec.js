@@ -65,6 +65,8 @@ test('agora nao deixa aviso e permite gerar depois', async ({ page }) => {
     await abrir(page, [pc({ status: 'Rascunho' })]);
     await receber(page);
     await page.locator('#pcp-agora').click();
+    // O catalogo padrao tem o item 1: depois da conta abre a entrada no estoque.
+    await page.locator('#pcent-depois').click();
     await expect(page.locator('#tb-pedidos-compra')).toContainText('sem conta a pagar');
     await page.locator('#tb-pedidos-compra button', { hasText: 'Gerar conta' }).click();
     await page.locator('#pcp-ok').click();

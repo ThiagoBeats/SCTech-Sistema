@@ -8,7 +8,7 @@ async function entrar(page, base, extras) {
             id: 1, nome: 'Teste', email: 'teste@sctech.local',
             papel_id: 1, ativo: true, permissoes_extras: {}, senha_hash: ''
         }]));
-        sessionStorage.setItem('sc_user', JSON.stringify({ id: 1 }));
+        sessionStorage.setItem('sc_user', JSON.stringify({ id: 1, email: 'teste@sctech.local' }));
         // Os kits de fixação padrão nascem na primeira carga do app (a propria
         // login.html ja os criou). Os testes partem sem eles, como antes; quem
         // quer testar a criação apaga esta marca (ver kits-fixacao.spec.js).
