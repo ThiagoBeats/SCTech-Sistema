@@ -3729,7 +3729,8 @@ function renderChartStatus() {
     const pedidosFiltrados = db.pedidos.filter(p => {
         if (filtro === 'todos') return true;
         const [ano, mes] = filtro.split('-').map(Number);
-        const d = new Date(p.data_criacao || p.id);
+        // id so vale como data quando e um carimbo de tempo (pedido antigo sem data_criacao)
+        const d = new Date(p.data_criacao || (typeof p.id === 'number' && p.id > 1e11 ? p.id : NaN));
         return d.getFullYear() === ano && d.getMonth() === mes - 1;
     });
 
@@ -6100,6 +6101,7 @@ function renderEstoqueFuturo() {
     const statusAtivos = ['Medição','Aguardando Tecido','Na Costura','Pronto p/ Instalação','Aguardando Financeiro'];
     const pedAtivos = db.pedidos.filter(p => statusAtivos.includes(normalizarStatus(p.status)));
     const consumoPorTecido = {};
+    const pedComTecido = new Set();   // so os que ainda tem tecido a baixar
     for (const ped of pedAtivos) {
         // Tecido ja baixado do rolo: ja saiu do estoque, nao conta de novo.
         if (ped.baixa_tecido_realizada || ped.baixa_realizada) continue;
@@ -6110,6 +6112,7 @@ function renderEstoqueFuturo() {
                 if (!consumoPorTecido[key]) consumoPorTecido[key] = { total: 0, pedidoIds: new Set() };
                 consumoPorTecido[key].total += t.consumo_linear;
                 consumoPorTecido[key].pedidoIds.add(ped.id);
+                pedComTecido.add(ped.id);
             }
         }
     }
@@ -6132,7 +6135,7 @@ function renderEstoqueFuturo() {
     }).filter(Boolean).join('');
     el.innerHTML = `<div class="card">
         <h3 style="margin-bottom:4px">Consumo Previsto — Pedidos em Produção</h3>
-        <p style="font-size:13px;color:#8F8F8F;margin-bottom:16px">${pedAtivos.length} pedido(s) em produção considerados. Saldo negativo indica necessidade de reposição.</p>
+        <p style="font-size:13px;color:#8F8F8F;margin-bottom:16px">${pedComTecido.size} pedido(s) em produção com tecido a baixar. Saldo negativo indica necessidade de reposição.</p>
         <table>
             <thead><tr>
                 <th>Tecido</th>
@@ -16348,7 +16351,7 @@ function renderDashboardFinanceiro() {
     if (kpis2El) {
         let pmrSoma = 0, pmrN = 0;
         db.pedidos.filter(p=>normalizarStatus(p.status)==='Instalado'&&p.data_instalado).forEach(p => {
-            const criacao = typeof p.data_criacao==='number' ? p.data_criacao : (typeof p.id==='number' ? p.id : 0);
+            const criacao = typeof p.data_criacao==='number' ? p.data_criacao : (typeof p.id==='number' && p.id > 1e11 ? p.id : 0);
             const dias = Math.round((p.data_instalado - criacao) / 86400000);
             if (dias > 0 && dias < 730) { pmrSoma += dias; pmrN++; }
         });

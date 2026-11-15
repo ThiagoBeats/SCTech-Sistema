@@ -152,3 +152,36 @@ test('D4: periodo personalizado: KPIs do gerencial iguais aos da visao geral', a
     await expect(page.locator('.dkpi').filter({ hasText: 'Faturamento' }).locator('.dkpi-value')).toContainText(fmt(vg.recebido));
     await expect(page.locator('.dkpi').filter({ hasText: 'Lucro (Caixa)' }).locator('.dkpi-value')).toContainText(fmt(Math.abs(vg.lucro)));
 });
+
+// Revisao final ----------------------------------------------------------------
+
+test('estoque futuro: o cabecalho conta so os pedidos com tecido a baixar', async ({ page }) => {
+    await entrar(page, BASE, { sc_cat: CAT, sc_est: ROLO, sc_ped: [
+        ped(26001, 'Na Costura', { baixa_tecido_realizada: true }),
+        ped(26002, 'Medição', { ambientes: amb(1) }),
+        ped(26003, 'Medição', { ambientes: [] })
+    ] });
+    await page.goto(BASE + '/estoque.html');
+    await page.evaluate(() => mostrarTabEstoque('futuro'));
+    await expect(page.locator('#tab-futuro p').first()).toContainText('1 pedido(s) em produção com tecido a baixar');
+});
+
+test('aging dos orcamentos: numero do pedido nao vira data', async ({ page }) => {
+    await entrar(page, BASE, { sc_ped: [
+        { id: 26001, clienteId: 1, clienteNome: 'Ana', status: 'Orçamento', valor: 100, ambientes: [], itens: [], timeline: [] }
+    ] });
+    await page.goto(BASE + '/dashboards.html?dash=comercial');
+    await expect(page.locator('.dkpi').filter({ hasText: 'Aging Médio' }).locator('.dkpi-value')).toHaveText('0d');
+});
+
+test('gerencial: categoria do imposto com o mesmo nome do Resultado (estimado)', async ({ page }) => {
+    const hoje = hojeLocal();
+    await entrar(page, BASE, {
+        sc_empresa: { razao_social: 'X', regime_tributario: 'simples', aliquota_estimada: 10 },
+        sc_cr: [{ id: 1, pedido_id: 26001, valor: 440, status: 'Pago', data_pagamento: hoje, data_vencimento: hoje }],
+        sc_cp: [{ id: 1, descricao: 'Tecido', valor: 100, status: 'Pago', categoria: 'tecido', data_pagamento: hoje, data_vencimento: hoje }]
+    });
+    await page.goto(BASE + '/dashboards.html?dash=gerencial');
+    await expect.poll(() => page.evaluate(() => (_dashCharts.find(x => x.canvas.id === 'dc-ger-categ') || { data: { labels: [] } }).data.labels))
+        .toEqual(['Fornecedores e materiais', 'Imposto (estimado)']);
+});

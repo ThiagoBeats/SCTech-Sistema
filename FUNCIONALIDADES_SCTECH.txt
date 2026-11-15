@@ -510,6 +510,7 @@ Projeção de consumo de estoque com base nos pedidos em andamento:
     → Total consumido pelos pedidos em produção (tecido que já foi baixado do rolo
       não conta de novo: já saiu do estoque)
     → Saldo projetado após conclusão dos pedidos
+  - O texto do topo conta só os pedidos em produção que ainda têm tecido a baixar
   - Destaque visual para itens com saldo projetado negativo (falta de estoque)
 
 ── 4.7 ABA: BACKUP ─────────────────────────────────────────────────────────────
@@ -521,6 +522,8 @@ Exportar Dados:
     contas a receber, contas a pagar, despesas fixas, medições,
     usuários e papéis de acesso (senhas já em código, nunca em texto; a sessão
     de quem está logado não vai no arquivo) e a numeração dos pedidos
+  - Usuários e papéis só vão no arquivo quando quem exporta é o Administrador.
+    Gerente e Financeiro (que também veem a aba Backup) exportam todo o resto
   - Nome do arquivo: sctech_backup_YYYY-MM-DD.json
 
 Importar Dados:
@@ -532,6 +535,12 @@ Importar Dados:
     com o mesmo e-mail e senha. Quem importou continua logado (pelo mesmo
     e-mail); se o arquivo não o tem nem traz um administrador ativo, ele é
     mantido. Arquivo antigo, sem usuários, não mexe nos usuários atuais
+  - Só o Administrador importa usuários e papéis. Quando outra pessoa importa um
+    arquivo que os tem, todo o resto entra normalmente, os usuários e papéis
+    atuais ficam como estão (ninguém vira administrador) e aparece o aviso
+    "Usuários e acessos não foram importados: só o Administrador importa usuários."
+  - A sessão confere o e-mail de quem entrou: se outra aba importou um backup e o
+    usuário daquele número agora é outra pessoa, a aba volta para o login
   - Também voltam as configurações: layout dos documentos, etiquetas, galeria/
     mostruário, alertas, cards da página inicial, agenda e perfis do importador.
     Ficam de fora o que é só do navegador (tema, menu lateral, filtros, cache de
@@ -810,15 +819,25 @@ Entrada no estoque ao marcar Recebido:
   - Depois da janela da conta a pagar (seção 10.11), abre "Entrada no estoque —
     Pedido #N" já preenchida com os itens do pedido; vale por qualquer caminho
     de marcar Recebido (select de status, botões)
-  - Tecido: código do rolo (sugerido: código do tecido, ou "-A", "-B"... se já
-    existe rolo com ele), metragem = quantidade do pedido, custo = preço do
+  - Tecido: código do rolo (sugerido: código do tecido, ou "-A", "-B"... o
+    primeiro livre se já existe rolo com ele ou com o "-A"), metragem = quantidade do pedido, custo = preço do
     pedido, margem = a atual do tecido. Material: quantidade, custo e margem.
     Kit pronto: quantidade. Tudo editável; cada linha pode ser desmarcada
   - "Confirmar entrada" registra como a entrada manual do Estoque (rolo/saldo,
-    custo e preço de venda, movimento "Entrada"); data = hoje
+    custo e preço de venda, movimento "Entrada"); data = a escolhida na janela
+    (padrão hoje), que também fica como a data da entrada do pedido. Se faltar
+    espaço no navegador, nada é gravado: aparece o aviso e a tela recarrega
   - "Lançar depois" só muda o status; o lançamento é feito à mão no Estoque
   - Item sem cadastro (texto livre) aparece como "sem cadastro — lance à mão"
     e não entra. Pedido só com itens assim não abre a janela
+  - Tecido, material ou kit sem controle de estoque (estoque infinito) aparece
+    desmarcado e travado, "sem controle de estoque", e nunca entra (o rolo de
+    99999 m e os preços não mudam). Pedido só com itens assim não abre a janela
+  - Pedido que já estava Recebido antes desta janela existir (já tem a conta a
+    pagar, mas nunca passou pela entrada): ao marcar Recebido de novo, pergunta
+    "Este pedido já estava como Recebido antes. A entrada no estoque já foi
+    lançada à mão?" — "Sim, já lancei" só marca a entrada como feita; "Não,
+    lançar agora" abre a janela
   - O pedido guarda a data da entrada: voltar e marcar Recebido de novo avisa
     "A entrada deste pedido já foi feita em dd/mm/aaaa." e não duplica
   - Exige acesso completo ao Estoque; sem ele a janela não abre

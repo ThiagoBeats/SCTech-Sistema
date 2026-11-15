@@ -134,6 +134,13 @@ function _semanas(n) {
     return r;
 }
 
+// Data de criacao do pedido. Sem data_criacao, o id so vale como data quando e um
+// carimbo de tempo (pedido antigo); numero sequencial (ex.: 26001) nao e data.
+function _criacaoPedido(p) {
+    if (p.data_criacao) return p.data_criacao;
+    return typeof p.id === 'number' && p.id > 1e11 ? p.id : null;
+}
+
 function _diasAberto(d) {
     if(!d) return 0;
     return Math.round((Date.now()-new Date(typeof d==='number'?d:d+'T00:00:00').getTime())/86400000);
@@ -185,7 +192,7 @@ function _dashComercial() {
 
     // Aging médio dos orçamentos
     const orcsAbertos = db.pedidos.filter(p=>normalizarStatus(p.status)==='Orçamento');
-    const agingMedio  = orcsAbertos.length ? Math.round(orcsAbertos.reduce((s,p)=>s+_diasAberto(p.data_criacao||p.id),0)/orcsAbertos.length) : 0;
+    const agingMedio  = orcsAbertos.length ? Math.round(orcsAbertos.reduce((s,p)=>s+_diasAberto(_criacaoPedido(p)),0)/orcsAbertos.length) : 0;
 
     const el = document.getElementById('dash-content');
     el.innerHTML = `
@@ -209,8 +216,8 @@ function _dashComercial() {
         <div class="dchart-card">
             <h3>📋 Orçamentos Abertos (${orcsAbertos.length})</h3>
             <table class="dash-table"><thead><tr><th>#</th><th>Cliente</th><th>Valor</th><th>Vendedor</th><th>Dias em Aberto</th></tr></thead><tbody>${
-                orcsAbertos.length ? orcsAbertos.sort((a,b)=>_diasAberto(b.data_criacao||b.id)-_diasAberto(a.data_criacao||a.id)).slice(0,12).map(p=>{
-                    const dias=_diasAberto(p.data_criacao||p.id);
+                orcsAbertos.length ? orcsAbertos.sort((a,b)=>_diasAberto(_criacaoPedido(b))-_diasAberto(_criacaoPedido(a))).slice(0,12).map(p=>{
+                    const dias=_diasAberto(_criacaoPedido(p));
                     return `<tr><td><a href="pedido.html?edit=${p.id}" style="color:var(--primary);font-weight:700">#${formatPedidoId(p.id)}</a></td>
                     <td>${escapeHtml(p.clienteNome||'—')}</td><td>${_fmtR(p.valor)}</td>
                     <td>${escapeHtml(p.vendedor_nome||'—')}</td>
@@ -245,7 +252,7 @@ function _dashComercial() {
     // Aging orçamentos
     const agFaixas = ['0–7 dias','8–15 dias','16–30 dias','+30 dias'];
     const agCount  = [0,0,0,0];
-    orcsAbertos.forEach(p=>{ const d=_diasAberto(p.data_criacao||p.id); if(d<=7)agCount[0]++;else if(d<=15)agCount[1]++;else if(d<=30)agCount[2]++;else agCount[3]++; });
+    orcsAbertos.forEach(p=>{ const d=_diasAberto(_criacaoPedido(p)); if(d<=7)agCount[0]++;else if(d<=15)agCount[1]++;else if(d<=30)agCount[2]++;else agCount[3]++; });
     _mkChart('dc-aging-orc',{type:'doughnut',data:{labels:agFaixas,datasets:[{data:agCount,backgroundColor:['#005D3Bcc','#F2C924cc','#FF7F08cc','#F43927cc'],borderWidth:2,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{font:{size:11,family:'"Nunito",sans-serif'},boxWidth:10}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.raw} orçamento(s)`}}}}});
 
     // Faturamento mensal — aplica filtro de vendedor
@@ -321,8 +328,9 @@ function _dashProducao() {
     const instPer    = db.pedidos.filter(p=>normalizarStatus(p.status)==='Instalado'&&p.data_instalado&&new Date(p.data_instalado).toISOString().split('T')[0]>=ini&&new Date(p.data_instalado).toISOString().split('T')[0]<=fim);
 
     // Tempo médio de produção (criação → instalação)
-    const tempos = db.pedidos.filter(p=>normalizarStatus(p.status)==='Instalado'&&p.data_instalado&&(p.data_criacao||p.id)).map(p=>{
-        const ini2=typeof(p.data_criacao||p.id)==='number'?(p.data_criacao||p.id):new Date((p.data_criacao||p.id)).getTime();
+    const tempos = db.pedidos.filter(p=>normalizarStatus(p.status)==='Instalado'&&p.data_instalado&&_criacaoPedido(p)).map(p=>{
+        const cri=_criacaoPedido(p);
+        const ini2=typeof cri==='number'?cri:new Date(cri).getTime();
         return Math.round((p.data_instalado-ini2)/86400000);
     }).filter(d=>d>0&&d<730);
     const tmpMedio = tempos.length ? Math.round(tempos.reduce((s,d)=>s+d,0)/tempos.length) : 0;
@@ -768,7 +776,8 @@ function _dashGerencial() {
     // Evolução financeira 12 meses
     const mes12=_meses(12);
     // Cada mes pela regra do Resultado do mes (cartao pelo repasse, imposto pela referencia).
-    const resMes12 = mes12.map(m=>ResultadoCore.resultadoDoPeriodo({de:m.key+'-01',ate:_resUltimoDia(m.key),...dadosFinanceirosBase()}));
+    const baseFin12 = dadosFinanceirosBase();
+    const resMes12 = mes12.map(m=>ResultadoCore.resultadoDoPeriodo({de:m.key+'-01',ate:_resUltimoDia(m.key),...baseFin12}));
     const fatMes   = resMes12.map(r=>r.entradas);
     const despMes  = resMes12.map(r=>r.saidas);
     let acc=0;
@@ -786,10 +795,9 @@ function _dashGerencial() {
     _mkChart('dc-ger-pipeline',{type:'bar',data:{labels:allStatus.map(s=>s.length>14?s.slice(0,14)+'…':s),datasets:[{label:'Pedidos',data:cntPip,backgroundColor:coresPip.map(c=>c+'cc'),borderColor:coresPip,borderWidth:1,borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.raw} pedido(s)`}}},scales:{y:{ticks:{font:{size:10}},grid:{display:false}},x:{..._scaleYN}}}});
 
     // Categorias financeiras
-    const recCat={'Pedidos (instalados)':recebido};
+    // Mesmos grupos e rotulos do Resultado (imposto sem guia aparece como estimado).
     const despCat={};
-    const CAT_L={tecido:'Tecido/Mat.',salario:'Salário',comissao_rt:'Comissão RT',aluguel:'Aluguel',conta:'Contas',outro:'Outros',costureira:'Costureira',instalador:'Instalador'};
-    ResultadoCore.GRUPOS.forEach(g=>{ if (resG.porGrupo[g.id]>0) despCat[g.rotulo]=resG.porGrupo[g.id]; });
+    ResultadoCore.GRUPOS.forEach(g=>{ if (resG.porGrupo[g.id]>0) despCat[g.rotulo+(g.id==='imposto'&&resG.imposto&&resG.imposto.estimado?' (estimado)':'')]=resG.porGrupo[g.id]; });
     const dLabels=Object.keys(despCat); const dVals=Object.values(despCat);
     _mkChart('dc-ger-categ',{type:'doughnut',data:{labels:dLabels,datasets:[{data:dVals,backgroundColor:['#9B31C8cc','#F2C924cc','#9B31C8cc','#F43927cc','#2D77C1cc','#8F8F8Fcc','#D70085cc','#FF7F08cc'],borderWidth:2,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${_fmtR(ctx.raw)}`}}}}});
 }
