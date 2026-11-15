@@ -110,3 +110,45 @@ test('D4: gerencial mostra os mesmos numeros da visao geral (recebido e lucro)',
     await expect(luc.locator('.dkpi-value')).toContainText('296');
     await expect(luc.locator('.dkpi-sub')).toContainText('67');
 });
+
+test('D4: graficos do gerencial usam a mesma conta dos KPIs (cartao pelo repasse + imposto)', async ({ page }) => {
+    const hoje = hojeLocal();
+    const prox = new Date(); prox.setDate(1); prox.setMonth(prox.getMonth() + 1);
+    const proxStr = prox.toLocaleDateString('sv-SE');
+    await entrar(page, BASE, {
+        sc_empresa: { razao_social: 'X', regime_tributario: 'simples', aliquota_estimada: 10 },
+        sc_cr: [{ id: 1, pedido_id: 26001, valor: 440, status: 'Pago', data_pagamento: hoje, data_vencimento: hoje,
+            cartao: { tipo: 'credito', vezes: 2, repasses: [{ data: hoje, bruto: 220 }, { data: proxStr, bruto: 220 }] } }],
+        sc_cp: [{ id: 1, descricao: 'Tecido', valor: 100, status: 'Pago', categoria: 'tecido', data_pagamento: hoje, data_vencimento: hoje }]
+    });
+    await page.goto(BASE + '/dashboards.html?dash=gerencial');
+    // Mes atual: entra so o repasse de hoje (220); saidas 100 + imposto estimado 22.
+    await expect(page.locator('.dkpi').filter({ hasText: 'Faturamento' }).locator('.dkpi-value')).toContainText('220');
+    await expect(page.locator('.dkpi').filter({ hasText: 'Lucro (Caixa)' }).locator('.dkpi-value')).toContainText('98');
+    const g = await page.evaluate(() => {
+        const c = _dashCharts.find(x => x.canvas.id === 'dc-ger-fin');
+        const n = c.data.datasets[0].data.length - 1;
+        return { ent: c.data.datasets[0].data[n], sai: c.data.datasets[1].data[n], saldo: c.data.datasets[2].data[n],
+            cat: _dashCharts.find(x => x.canvas.id === 'dc-ger-categ').data.datasets[0].data.reduce((a, b) => a + b, 0) };
+    });
+    expect(g).toEqual({ ent: 220, sai: 122, saldo: 98, cat: 122 });
+});
+
+test('D4: periodo personalizado: KPIs do gerencial iguais aos da visao geral', async ({ page }) => {
+    const hoje = hojeLocal();
+    await entrar(page, BASE, {
+        sc_empresa: { razao_social: 'X', regime_tributario: 'simples', aliquota_estimada: 10 },
+        sc_cr: [{ id: 1, pedido_id: 26001, valor: 440, status: 'Pago', data_pagamento: hoje, data_vencimento: hoje }],
+        sc_cp: [{ id: 1, descricao: 'Tecido', valor: 100, status: 'Pago', categoria: 'tecido', data_pagamento: hoje, data_vencimento: hoje }]
+    });
+    await page.goto(BASE + '/dashboards.html?dash=gerencial');
+    await page.selectOption('#df-periodo', 'custom');
+    await page.fill('#df-ini', hoje);
+    await page.fill('#df-fim', hoje);
+    await page.getByRole('button', { name: 'Aplicar' }).click();
+    const vg = await page.evaluate(([i, f]) => { _finPeriodo = 'custom'; _finDataIni = i; _finDataFim = f; const d = dinheiroDoPeriodoFin(); return { recebido: d.recebido, lucro: d.lucro }; }, [hoje, hoje]);
+    expect(vg.recebido).toBe(440);
+    const fmt = v => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(v);
+    await expect(page.locator('.dkpi').filter({ hasText: 'Faturamento' }).locator('.dkpi-value')).toContainText(fmt(vg.recebido));
+    await expect(page.locator('.dkpi').filter({ hasText: 'Lucro (Caixa)' }).locator('.dkpi-value')).toContainText(fmt(Math.abs(vg.lucro)));
+});

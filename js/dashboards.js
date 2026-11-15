@@ -687,6 +687,14 @@ function _filtersGerencial() {
     return _periodoFiltro();
 }
 
+// Resultado do periodo do filtro, pela mesma regra da Visao Geral (dinheiroDoPeriodoFin):
+// "Este mes" vale o mes inteiro (inclui o cartao a cair).
+function _resultadoDoPeriodoDash(ini, fim) {
+    const per = document.getElementById('df-periodo')?.value || 'mes';
+    const ate = per === 'mes' ? _resUltimoDia(ini.slice(0, 7)) : fim;
+    return ResultadoCore.resultadoDoPeriodo({ de: ini, ate, ...dadosFinanceirosBase() });
+}
+
 function _dashGerencial() {
     const {ini,fim} = _getRange();
     const inR = d => d && d >= ini && d <= fim;
@@ -695,9 +703,7 @@ function _dashGerencial() {
     // Financeiro
     // Mesmas regras da Visao Geral do Financeiro: dinheiro pela data em que entra/sai (cartao pelo repasse),
     // imposto pela referencia. "Este mes" vale o mes inteiro, como la.
-    const _perG = document.getElementById('df-periodo')?.value || 'mes';
-    const ateG = _perG === 'mes' ? _resUltimoDia(ini.slice(0, 7)) : fim;
-    const resG = ResultadoCore.resultadoDoPeriodo({ de: ini, ate: ateG, ...dadosFinanceirosBase() });
+    const resG = _resultadoDoPeriodoDash(ini, fim);
     const recebido  = resG.entradas;
     const totalPago = resG.saidas;
     const aReceber  = db.contas_receber.filter(cr=>cr.status!=='Pago').reduce((s,cr)=>s+cr.valor,0);
@@ -761,8 +767,10 @@ function _dashGerencial() {
 
     // Evolução financeira 12 meses
     const mes12=_meses(12);
-    const fatMes   = mes12.map(m=>db.contas_receber.filter(cr=>cr.status==='Pago'&&(cr.data_pagamento||'').startsWith(m.key)).reduce((s,cr)=>s+cr.valor,0));
-    const despMes  = mes12.map(m=>db.contas_pagar.filter(cp=>cp.status==='Pago'&&(cp.data_pagamento||'').startsWith(m.key)).reduce((s,cp)=>s+cp.valor,0));
+    // Cada mes pela regra do Resultado do mes (cartao pelo repasse, imposto pela referencia).
+    const resMes12 = mes12.map(m=>ResultadoCore.resultadoDoPeriodo({de:m.key+'-01',ate:_resUltimoDia(m.key),...dadosFinanceirosBase()}));
+    const fatMes   = resMes12.map(r=>r.entradas);
+    const despMes  = resMes12.map(r=>r.saidas);
     let acc=0;
     const saldoMes = fatMes.map((f,i)=>{acc+=f-despMes[i];return acc;});
     _mkChart('dc-ger-fin',{data:{labels:mes12.map(m=>m.label),datasets:[
@@ -781,7 +789,7 @@ function _dashGerencial() {
     const recCat={'Pedidos (instalados)':recebido};
     const despCat={};
     const CAT_L={tecido:'Tecido/Mat.',salario:'Salário',comissao_rt:'Comissão RT',aluguel:'Aluguel',conta:'Contas',outro:'Outros',costureira:'Costureira',instalador:'Instalador'};
-    db.contas_pagar.filter(cp=>cp.status==='Pago'&&inR(cp.data_pagamento)).forEach(cp=>{const c=CAT_L[cp.categoria||'outro']||'Outros';despCat[c]=(despCat[c]||0)+cp.valor;});
+    ResultadoCore.GRUPOS.forEach(g=>{ if (resG.porGrupo[g.id]>0) despCat[g.rotulo]=resG.porGrupo[g.id]; });
     const dLabels=Object.keys(despCat); const dVals=Object.values(despCat);
     _mkChart('dc-ger-categ',{type:'doughnut',data:{labels:dLabels,datasets:[{data:dVals,backgroundColor:['#9B31C8cc','#F2C924cc','#9B31C8cc','#F43927cc','#2D77C1cc','#8F8F8Fcc','#D70085cc','#FF7F08cc'],borderWidth:2,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${_fmtR(ctx.raw)}`}}}}});
 }
