@@ -9560,8 +9560,14 @@ async function abrirEntradaEstoquePC(pc) {
     }
     const linhas = _linhasEntradaPC(pc);
     if (!linhas.length) return;
-    if (!linhas.some(l => !l.semCadastro)) return;
-    if (!temAcesso('estoque', 'completo')) { toast('Sem permissão para lançar no estoque: lance depois.', 'info', 3000); return; }
+    if (!linhas.some(l => !l.semCadastro)) {
+        await showAlert('Os itens deste pedido não têm cadastro no estoque: lance a entrada à mão no Estoque.', 'ℹ️');
+        return;
+    }
+    if (!temAcesso('estoque', 'completo')) {
+        await showAlert('O pedido foi marcado como Recebido. A entrada no estoque precisa de alguém com permissão de Estoque.', 'ℹ️');
+        return;
+    }
     return new Promise(resolve => {
         if (document.getElementById('pcent-modal')) { resolve(); return; }
         const o = document.createElement('div');

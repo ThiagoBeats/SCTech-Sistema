@@ -113,10 +113,20 @@ test('conta a pagar continua sendo gerada ao receber', async ({ page }) => {
     await page.locator('#pcent-depois').click();
 });
 
-test('pedido so com itens sem cadastro nao abre a janela', async ({ page }) => {
+test('pedido so com itens sem cadastro avisa para lancar a mao', async ({ page }) => {
     const p = pc({ conta_pagar_gerada: true, itens: [{ tipo: 'material', item_id: null, item_nome: 'FITA LIVRE', unidade: 'un', quantidade: 3, preco_unit: 5, subtotal: 15 }] });
     await abrir(page, [p]);
     await receber(page);
-    await page.waitForTimeout(300);
+    await expect(page.locator('#sc-modal-msg')).toContainText('Os itens deste pedido não têm cadastro no estoque: lance a entrada à mão no Estoque.');
     await expect(page.locator('#pcent-modal')).toHaveCount(0);
+});
+
+test('sem permissao de Estoque avisa e nao abre a janela', async ({ page }) => {
+    await abrir(page, [pc({ conta_pagar_gerada: true })]);
+    await page.evaluate(() => { window.temAcesso = (m) => m !== 'estoque'; });
+    await receber(page);
+    await expect(page.locator('#sc-modal-msg')).toContainText('O pedido foi marcado como Recebido. A entrada no estoque precisa de alguém com permissão de Estoque.');
+    await expect(page.locator('#pcent-modal')).toHaveCount(0);
+    expect((await lerChave(page, 'sc_pc'))[0].status).toBe('Recebido');
+    expect(await lerChave(page, 'sc_est')).toHaveLength(1);
 });
