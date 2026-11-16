@@ -1171,6 +1171,27 @@ function _tabBackBtn(navSel, prevTab, goBackFn) {
     }
 }
 
+// Salvar recarrega a pagina (salvarERecarregar): a aba aberta volta depois do
+// recarregamento. So no recarregar (salvar ou F5); vindo do menu ou de um link,
+// a tela abre na aba padrao (ou na do endereco).
+function _paginaRecarregada() {
+    try {
+        const nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+        if (nav) return nav.type === 'reload';
+        return !!(performance.navigation && performance.navigation.type === 1);
+    } catch (e) { return false; }
+}
+function lembrarAbaAoRecarregar(chave, abaAtual, abrir, valida) {
+    const k = 'sc_aba_' + chave;
+    let salva = null;
+    try { salva = sessionStorage.getItem(k); sessionStorage.removeItem(k); } catch (e) { /* sem sessionStorage */ }
+    window.addEventListener('beforeunload', () => {
+        try { sessionStorage.setItem(k, abaAtual()); } catch (e) { /* sem sessionStorage */ }
+    });
+    if (salva && _paginaRecarregada() && (!valida || valida(salva))) { abrir(salva); return true; }
+    return false;
+}
+
 // --- HISTÓRICO DE NAVEGAÇÃO ENTRE PÁGINAS ---
 const _PAGE_NAMES = {
     'index.html': 'Página Inicial', 'pcp.html': 'Produção',
@@ -12351,6 +12372,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (catFornSel) catFornSel.innerHTML = '<option value="">— Sem fornecedor —</option>' +
             db.fornecedores.map(f => `<option value="${f.id}">${f.nome}</option>`).join('');
         renderCatalogoTecidos();
+        lembrarAbaAoRecarregar('catalogo', () => _curTabCatalogo, mostrarTabCatalogo, t => ['tecidos', 'materiais', 'kits'].includes(t));
     }
 
     if (document.getElementById('tb-clientes')) {
@@ -12481,7 +12503,10 @@ document.addEventListener('DOMContentLoaded', () => {
         _instLimparForm();
         renderAgenda();
     }
-    if (document.getElementById('tb-rel-fat'))         renderRelatorios();
+    if (document.getElementById('tb-rel-fat')) {
+        renderRelatorios();
+        lembrarAbaAoRecarregar('relatorios', () => _curTabRel, mostrarTabRel, t => ['faturamento', 'recebiveis', 'vendedores'].includes(t));
+    }
 
     // Medições
     if (document.getElementById('medicoes-container')) {
@@ -12496,6 +12521,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const params  = new URLSearchParams(window.location.search);
         const urlView = params.get('view');
         if (urlView) mostrarViewPCP(urlView);
+        lembrarAbaAoRecarregar('pcp', () => _curViewPCP, mostrarViewPCP,
+            t => !params.get('pedido') && ['kanban', 'agenda', 'medicoes', 'rotas'].includes(t));
         // Vindo de outra tela com ?pedido=: o pedido ja chega selecionado.
         if (urlView === 'agenda' && params.get('pedido')) irParaAgendaInstalacao(params.get('pedido'));
 
@@ -12567,6 +12594,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             mostrarTabFornecedores(urlTab === 'pedidos' ? 'pedidos' : 'lista');
         }
+        const _abaPronta = !!(urlTab === 'novo' || prefillItem);
+        lembrarAbaAoRecarregar('fornecedores', () => _curTabForn, mostrarTabFornecedores,
+            t => !_abaPronta && ['lista', 'novo', 'pedidos'].includes(t));
     }
 
     if (document.getElementById('pedido-compra-container')) renderPedidoCompraDoc();
@@ -12582,6 +12612,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const abaInicial = abasVisiveis.some(([t]) => t === 'hoje') ? 'hoje' : abasVisiveis.some(([t]) => t === 'dashboard') ? 'dashboard' : (abasVisiveis[0]?.[0] || 'dashboard');
         mostrarTabFinanceiro(abaInicial);
+        lembrarAbaAoRecarregar('financeiro', () => _curTabFin, mostrarTabFinanceiro, t => abasVisiveis.some(([x]) => x === t));
         if (!temAcesso('financeiro.pagar', 'completo')) document.getElementById('cp-toolbar')?.style.setProperty('display', 'none');
         if (!temAcesso('financeiro.fixas', 'completo')) document.getElementById('df-form-card')?.style.setProperty('display', 'none');
     }
