@@ -2581,6 +2581,10 @@ Auto-preenchimentos inteligentes:
 Navegação entre abas com "Voltar":
   - Em módulos com múltiplas abas, ao navegar para uma sub-aba, um botão
     "← Voltar" aparece na barra de abas para retornar à aba anterior
+  - Salvar (ou recarregar a página com F5) mantém a aba que estava aberta,
+    em todas as telas com abas (Catálogo, Estoque, Financeiro, Fornecedores,
+    Produção, Relatórios, Vendedores, Empresa, Configurações). Vindo do menu
+    ou de um link, a tela abre na aba padrão (ou na que o link indica).
 
 Geração de Documentos (PDF/impressão):
   - Modal de preview com conteúdo formatado para impressão
