@@ -29,8 +29,10 @@
         const ne = normalizarEndereco(e), nc = normalizarEndereco(c);
         if (!nc) return e;
         const alnum = ch => /[a-z0-9]/.test(ch || ' ');
+        // So conta como "ja tem a cidade" depois da 1a virgula/hifen: "Rua Curitiba, 5" nao tem.
+        const sep = ne.search(/[,\-\/]/);
         for (let i = ne.indexOf(nc); i >= 0; i = ne.indexOf(nc, i + 1)) {
-            if (!alnum(ne[i - 1]) && !alnum(ne[i + nc.length])) return e;
+            if (sep >= 0 && i > sep && !alnum(ne[i - 1]) && !alnum(ne[i + nc.length])) return e;
         }
         return e.replace(/[\s.,;]+$/, '') + ', ' + c;
     }

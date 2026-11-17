@@ -482,6 +482,7 @@ function salvarEmpresaConfigs() {
         nome_fantasia: (document.getElementById('emp-fantasia')?.value || '').trim().toLocaleUpperCase('pt-BR'),
         cnpj:          (document.getElementById('emp-cnpj')?.value     || '').trim(),
         endereco:      (document.getElementById('emp-end')?.value       || '').trim(),
+        cidade:        (document.getElementById('emp-cidade')?.value    || '').trim(),
         telefone:      (document.getElementById('emp-tel')?.value       || '').trim(),
         email:         (document.getElementById('emp-email')?.value     || '').trim(),
         site:          (document.getElementById('emp-site')?.value      || '').trim(),
@@ -1062,6 +1063,7 @@ function carregarEmpresaConfigs() {
     set('emp-fantasia', (emp.nome_fantasia || '').toLocaleUpperCase('pt-BR'));
     set('emp-cnpj',     emp.cnpj);
     set('emp-end',      emp.endereco);
+    set('emp-cidade',   emp.cidade);
     set('emp-tel',      emp.telefone);
     set('emp-email',    emp.email);
     set('emp-site',     emp.site);
@@ -8748,6 +8750,7 @@ async function empresaCnpjMudou(el) {
         set('emp-razao', String(razao_social || '').toLocaleUpperCase('pt-BR'));
         set('emp-fantasia', String(est.nome_fantasia || '').toLocaleUpperCase('pt-BR'));
         set('emp-end', _empEnderecoCompleto(est));
+        set('emp-cidade', est.cidade?.nome || '');
         if (est.ddd1 && est.telefone1) set('emp-tel', `(${est.ddd1}) ${est.telefone1}`);
         set('emp-email', est.email || '');
         if (statusEl) {
@@ -11950,7 +11953,7 @@ function renderDashboardInstalacoes() {
             <div style="font-weight:700;font-size:14px;color:var(--dark);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(p.clienteNome)}">${escapeHtml(p.clienteNome||'—')}</div>
             <div style="font-size:11px;color:#8F8F8F">#${formatPedidoId(p.id)}</div>
             ${p.inst_hora     ? `<div style="font-size:12px;color:var(--dark);margin-top:2px">🕐 ${p.inst_hora}</div>` : ''}
-            ${p.inst_endereco ? `<div style="font-size:11px;color:#8F8F8F;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(p.inst_endereco)}">📍 ${escapeHtml(p.inst_endereco)}</div>` : ''}
+            ${p.inst_endereco ? `<div style="font-size:11px;color:#8F8F8F;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(_agdEnd(p.inst_endereco, _instCidade(p, db.clientes.find(c => c.id == p.clienteId))))}">📍 ${escapeHtml(_agdEnd(p.inst_endereco, _instCidade(p, db.clientes.find(c => c.id == p.clienteId))))}</div>` : ''}
             ${(() => { const c = db.clientes.find(c => c.id == p.clienteId); return linkIrParaHtml(p.inst_endereco || c?.end, 'agd-ir agd-ir-card', _instCidade(p, c)); })()}
         </div>`;
     }
@@ -12081,7 +12084,14 @@ function _instRenderProntos() {
 }
 
 // Cidade da instalacao: a do pedido ou, sem ela, a do cliente.
-function _instCidade(p, cli) { return (p && p.inst_cidade) || (cli && cli.cidade) || ''; }
+// Sem cidade propria, usa a do cliente so quando o endereco da instalacao e o do cliente
+// (ou esta vazio): outro endereco pode ser de outra cidade.
+function _instCidade(p, cli) {
+    if (p && p.inst_cidade !== undefined && p.inst_cidade !== null) return p.inst_cidade;
+    if (!cli || !cli.cidade) return '';
+    const n = s => (typeof RotasCore !== 'undefined' ? RotasCore.normalizarEndereco(s) : String(s || '').trim().toLowerCase());
+    return (!p || !p.inst_endereco || n(p.inst_endereco) === n(cli.end)) ? cli.cidade : '';
+}
 
 function _instLimparForm() {
     _instSelId = null;

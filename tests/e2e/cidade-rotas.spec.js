@@ -130,3 +130,35 @@ test('backup: exportar e importar mantem a cidade do cliente, da medicao e da in
     expect((await lerLS(page, 'sc_med'))[0].cidade).toBe('Pinhais');
     expect((await lerLS(page, 'sc_ped'))[0].inst_cidade).toBe('Colombo');
 });
+
+test('instalacao em outro endereco nao herda a cidade do cliente (Rotas, Ir e Editar)', async ({ page }) => {
+    const qs = [];
+    await page.route('**/nominatim.openstreetmap.org/**', route => {
+        qs.push(decodeURIComponent(new URL(route.request().url()).searchParams.get('q') || ''));
+        route.fulfill({ contentType: 'application/json', body: JSON.stringify([{ lat: '-25.4', lon: '-49.2' }]) });
+    });
+    await page.route('**/router.project-osrm.org/**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 'Ok', routes: [{ legs: [{ distance: 1000, duration: 300 }] }] }) }));
+    const ped = { id: 26200, clienteId: 1, clienteNome: 'Ana Paula Lima', status: 'Pronto p/ Instalação', inst_agendado: true,
+        data_entrega: DIA, inst_hora: '10:00', inst_duracao: 60, inst_endereco: 'Rua Outra, 99', usuario_instalacao_id: 1, valor: 1, amb: 'S' };
+    await entrar(page, BASE, { sc_cli: CLI(), sc_ped: [ped], sc_empresa: { nome: 'E', endereco: 'Rua Empresa, 1', cidade: 'Pinhais' } });
+    await page.goto(BASE + '/pcp.html?view=rotas');
+    await page.fill('#rota-data', DIA);
+    await page.locator('#rota-data').dispatchEvent('change');
+    await expect(page.locator('#rota-total')).toBeVisible({ timeout: 15000 });
+    expect(qs).toContain('Rua Outra, 99');
+    expect(qs).toContain('Rua Empresa, 1, Pinhais');
+    await expect(page.locator('#rota-lista .rota-item').first().locator('a.agd-ir')).toHaveAttribute('href', /destination=Rua%20Outra%2C%2099$|destination=Rua%20Outra%2C%2099&/);
+    await page.goto(BASE + '/pcp.html?view=agenda');
+    await page.locator('#inst-pend-lista .agd-item', { hasText: 'Ana Paula Lima' }).click();
+    await page.locator('.agd-modal button', { hasText: 'Editar' }).click();
+    await expect(page.locator('#agdf-cidade')).toHaveValue('');
+});
+
+test('empresa: o campo Cidade e salvo', async ({ page }) => {
+    await entrar(page, BASE, { sc_empresa: { razao_social: 'Lírio Cortinas' } });
+    await page.goto(BASE + '/empresa.html');
+    await page.fill('#emp-end', 'Rua Empresa, 1');
+    await page.fill('#emp-cidade', 'Pinhais');
+    await page.evaluate(() => salvarEmpresaConfigs());
+    await expect.poll(async () => (await lerLS(page, 'sc_empresa')).cidade).toBe('Pinhais');
+});

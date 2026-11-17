@@ -70,7 +70,7 @@ function _rotaItens() {
     return _rota.ordem.map(k => porChave.get(k)).filter(Boolean);
 }
 
-function _rotaEmpresaEnd() { return String(getEmpresa().endereco || '').trim(); }
+function _rotaEmpresaEnd() { const e = getEmpresa(); return RotasCore.enderecoCompleto(e.endereco, e.cidade); }
 
 // --- Tela ----------------------------------------------------------------------
 

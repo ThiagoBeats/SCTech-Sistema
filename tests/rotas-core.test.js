@@ -140,4 +140,6 @@ test('enderecoCompleto junta a cidade ao endereco, sem repetir quando ele ja a t
     assert.strictEqual(R.enderecoCompleto('Rua X, 10', undefined), 'Rua X, 10');
     assert.strictEqual(R.enderecoCompleto('', 'Curitiba'), '');
     assert.strictEqual(R.enderecoCompleto('Rua Curitibana, 5', 'Curitiba'), 'Rua Curitibana, 5, Curitiba');
+    assert.strictEqual(R.enderecoCompleto('Rua Curitiba, 5', 'Curitiba'), 'Rua Curitiba, 5, Curitiba');
+    assert.strictEqual(R.enderecoCompleto('Rua Curitiba, 5, Curitiba - PR', 'Curitiba'), 'Rua Curitiba, 5, Curitiba - PR');
 });
