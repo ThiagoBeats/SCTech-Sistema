@@ -20,6 +20,21 @@
         return e ? `${MAPS}&destination=${enc(e)}&travelmode=driving` : '';
     }
 
+    // Endereco + cidade para procurar no mapa: ruas de mesmo nome existem em varias
+    // cidades. Nao repete a cidade quando o endereco ja a traz (sem maiuscula/acento).
+    function enderecoCompleto(end, cidade) {
+        const e = String(end || '').trim();
+        const c = String(cidade || '').trim();
+        if (!e || !c) return e;
+        const ne = normalizarEndereco(e), nc = normalizarEndereco(c);
+        if (!nc) return e;
+        const alnum = ch => /[a-z0-9]/.test(ch || ' ');
+        for (let i = ne.indexOf(nc); i >= 0; i = ne.indexOf(nc, i + 1)) {
+            if (!alnum(ne[i - 1]) && !alnum(ne[i + nc.length])) return e;
+        }
+        return e.replace(/[\s.,;]+$/, '') + ', ' + c;
+    }
+
     function _link(origem, waypoints, destino) {
         let u = MAPS;
         if (origem) u += '&origin=' + enc(origem);
@@ -174,7 +189,7 @@
         return [0].concat(volta.reverse());
     }
 
-    const api = { linkIrPara, linksRota, normalizarEndereco, ordemDoTrip, melhorOrdemAberta, trechosDaRota, calcularChegadas,
+    const api = { linkIrPara, linksRota, enderecoCompleto, normalizarEndereco, ordemDoTrip, melhorOrdemAberta, trechosDaRota, calcularChegadas,
         linhaObsRota, aplicarObsRota, textoWhatsRota, fmtDur, duracaoPorExtenso, fmtKm, hhmm, TOLERANCIA_MIN };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.RotasCore = api;

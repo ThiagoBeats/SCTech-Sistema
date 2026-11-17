@@ -23,7 +23,7 @@ function _rotaVisitasDoDia(data) {
     (db.medicoes || []).forEach(m => {
         if (m.status !== 'Agendado' || m.data !== data) return;
         out.push({ tipo: 'med', id: m.id, prof: _medProf(m), profNome: _medNomeResp(m),
-            cliente: m.clienteNome || '—', tel: m.clienteTel || '', end: (m.endereco || '').trim(),
+            cliente: m.clienteNome || '—', tel: m.clienteTel || '', end: RotasCore.enderecoCompleto(m.endereco, m.cidade),
             hora: m.hora || '', agendadoMin: _agdMin(m.hora), durMin: +m.duracao || _agdDurPadrao('med'),
             rotulo: 'Medição', ico: '📐' });
     });
@@ -31,7 +31,7 @@ function _rotaVisitasDoDia(data) {
         if (!_instPendente(p) || p.data_entrega !== data) return;
         const cli = db.clientes.find(c => c.id == p.clienteId);
         out.push({ tipo: 'inst', id: p.id, prof: _instProf(p), profNome: nomeInstalador(p),
-            cliente: p.clienteNome || '—', tel: cli?.tel || '', end: (p.inst_endereco || cli?.end || '').trim(),
+            cliente: p.clienteNome || '—', tel: cli?.tel || '', end: RotasCore.enderecoCompleto(p.inst_endereco || cli?.end, _instCidade(p, cli)),
             hora: p.inst_hora || '', agendadoMin: _agdMin(p.inst_hora), durMin: _instDur(p),
             rotulo: `Instalação #${formatPedidoId(p.id)}`, ico: '🔧' });
     });

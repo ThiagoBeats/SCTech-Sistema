@@ -107,7 +107,11 @@
                         </div>
                         <div class="form-group agd-span2">
                             <label for="inst-end">Endereço de instalação</label>
-                            <div class="campo-com-botao"><input type="text" id="inst-end" placeholder="Rua, nº, bairro, cidade..."><button type="button" class="btn btn-outline btn-ir-end" onclick="irParaEndereco('inst-end')" title="Abrir o caminho no Google Maps">📍 Ir para endereço</button></div>
+                            <div class="campo-com-botao"><input type="text" id="inst-end" placeholder="Rua, nº, bairro, cidade..."><button type="button" class="btn btn-outline btn-ir-end" onclick="irParaEndereco('inst-end', 'inst-cidade')" title="Abrir o caminho no Google Maps">📍 Ir para endereço</button></div>
+                        </div>
+                        <div class="form-group">
+                            <label for="inst-cidade">Cidade</label>
+                            <input type="text" id="inst-cidade" placeholder="Ex.: Curitiba">
                         </div>
                         <div class="form-group agd-span4">
                             <label for="inst-obs">Observações</label>
@@ -207,7 +211,11 @@
                     </div>
                     <div class="form-group agd-span2">
                         <label for="med-end">Endereço da visita <span style="color:var(--danger)">*</span></label>
-                        <div class="campo-com-botao"><input type="text" id="med-end" placeholder="Rua, nº, bairro, cidade…"><button type="button" class="btn btn-outline btn-ir-end" onclick="irParaEndereco('med-end')" title="Abrir o caminho no Google Maps">📍 Ir para endereço</button></div>
+                        <div class="campo-com-botao"><input type="text" id="med-end" placeholder="Rua, nº, bairro, cidade…"><button type="button" class="btn btn-outline btn-ir-end" onclick="irParaEndereco('med-end', 'med-cidade')" title="Abrir o caminho no Google Maps">📍 Ir para endereço</button></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="med-cidade">Cidade</label>
+                        <input type="text" id="med-cidade" placeholder="Ex.: Curitiba">
                     </div>
                     <div class="form-group agd-span2" style="grid-column:1 / -1">
                         <label for="med-obs">Observações</label>

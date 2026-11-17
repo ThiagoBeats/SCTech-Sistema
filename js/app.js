@@ -2363,6 +2363,7 @@ async function salvarCliente() {
     const tel   = document.getElementById('cli-tel')?.value.trim()   || '';
     const email = document.getElementById('cli-email')?.value.trim() || '';
     const end   = document.getElementById('cli-end')?.value.trim()   || '';
+    const cidade = document.getElementById('cli-cidade')?.value.trim() || '';
     if (cpf) {
         const cpfNorm = cpf.replace(/\D/g, '');
         const dup = db.clientes.find(c => c.cpf && c.cpf.replace(/\D/g, '') === cpfNorm && c.id != editandoIdCliente);
@@ -2370,11 +2371,11 @@ async function salvarCliente() {
     }
     if (editandoIdCliente) {
         const idx = db.clientes.findIndex(c => c.id == editandoIdCliente);
-        if (idx !== -1) db.clientes[idx] = { ...db.clientes[idx], nome, tel, email, cpf, end };
+        if (idx !== -1) db.clientes[idx] = { ...db.clientes[idx], nome, tel, email, cpf, end, cidade };
         cancelarEdicaoCliente();
         salvarERecarregar('Cliente atualizado!');
     } else {
-        db.clientes.push({ id: Date.now(), nome, tel, email, cpf, end });
+        db.clientes.push({ id: Date.now(), nome, tel, email, cpf, end, cidade });
         salvarERecarregar('Cliente cadastrado!');
     }
 }
@@ -2387,6 +2388,7 @@ function editarCliente(id) {
     document.getElementById('cli-email').value = c.email || '';
     document.getElementById('cli-cpf').value   = c.cpf   || '';
     document.getElementById('cli-end').value   = c.end   || '';
+    document.getElementById('cli-cidade').value = c.cidade || '';
     const tit = document.getElementById('cli-form-titulo');
     const btn = document.getElementById('cli-btn-salvar');
     const cnc = document.getElementById('cli-btn-cancelar');
@@ -2398,7 +2400,7 @@ function editarCliente(id) {
 }
 function cancelarEdicaoCliente() {
     editandoIdCliente = null;
-    ['cli-nome','cli-tel','cli-email','cli-cpf','cli-end'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['cli-nome','cli-tel','cli-email','cli-cpf','cli-end','cli-cidade'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     const tit = document.getElementById('cli-form-titulo');
     const btn = document.getElementById('cli-btn-salvar');
     const cnc = document.getElementById('cli-btn-cancelar');
@@ -2483,6 +2485,7 @@ function filtrarTabelaClientes() {
         : db.clientes;
     renderTabelaClientes(lista);
 }
+function _clienteEndCidade(c) { return [c.end, c.cidade].filter(Boolean).join(' — '); }
 function renderTabelaClientes(lista) {
     const tb = document.getElementById('tb-clientes');
     if (!tb) return;
@@ -2495,7 +2498,7 @@ function renderTabelaClientes(lista) {
             <td>${escapeHtml(c.tel||'—')}</td>
             <td>${escapeHtml(c.email||'—')}</td>
             <td>${escapeHtml(c.cpf||'—')}</td>
-            <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(c.end||'')}">${escapeHtml(c.end||'—')}</td>
+            <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(_clienteEndCidade(c))}">${escapeHtml(_clienteEndCidade(c) || '—')}</td>
             <td class="td-acoes">${menuAcoesHtml([
                 { icone: '📋', rotulo: `Ver pedidos (${nPed})`, onclick: `mostrarPedidosCliente(${c.id})`, oculto: !(nPed > 0) },
                 { icone: '✏️', rotulo: 'Editar cliente', onclick: `editarCliente(${c.id})`, oculto: !podeEditar },
@@ -10737,6 +10740,8 @@ function onMedClienteChange() {
     if (!cli) return;
     const endEl = document.getElementById('med-end');
     if (endEl && cli.end) endEl.value = cli.end;
+    const cidEl = document.getElementById('med-cidade');
+    if (cidEl) cidEl.value = cli.cidade || '';
 }
 
 // Pedido ligado ao agendamento de medicao. O vinculo vale nos dois sentidos
@@ -10784,6 +10789,7 @@ async function salvarMedicao() {
     const tipo = document.querySelector('input[name="med-tipo"]:checked')?.value || 'existente';
     let clienteId = null, clienteNome = '', clienteTel = '';
     let clienteCpf = '', clienteEmail = '';
+    const cidade = (document.getElementById('med-cidade')?.value || '').trim();
 
     if (tipo === 'existente') {
         clienteId = parseInt(document.getElementById('med-cliente-id')?.value) || null;
@@ -10829,7 +10835,7 @@ async function salvarMedicao() {
 
     // Só depois de tudo validado o novo cliente é cadastrado.
     if (tipo === 'novo') {
-        const novoCli = { id: Date.now(), nome: clienteNome, tel: clienteTel, email: clienteEmail, cpf: clienteCpf, end };
+        const novoCli = { id: Date.now(), nome: clienteNome, tel: clienteTel, email: clienteEmail, cpf: clienteCpf, end, cidade };
         db.clientes.push(novoCli);
         clienteId = novoCli.id;
         const sel = document.getElementById('med-cliente-id');
@@ -10837,7 +10843,7 @@ async function salvarMedicao() {
             db.clientes.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
     }
 
-    const med = { id: Date.now(), clienteId, clienteNome, clienteTel, endereco: end, data, hora, duracao: dur, obs, status: 'Agendado',
+    const med = { id: Date.now(), clienteId, clienteNome, clienteTel, endereco: end, cidade, data, hora, duracao: dur, obs, status: 'Agendado',
         agendado_por: getUsuarioLogado()?.id || null, agendado_em: Date.now() };
     _medDefinirResponsavel(med, prof.pessoa);
     db.medicoes.push(med);
@@ -10849,6 +10855,7 @@ async function salvarMedicao() {
     document.getElementById('med-data').value = _agdHoje();
     document.getElementById('med-hora').value = '';
     document.getElementById('med-end').value  = '';
+    const cidLimpa = document.getElementById('med-cidade'); if (cidLimpa) cidLimpa.value = '';
     document.getElementById('med-obs').value  = '';
     _agdPreencherProf('med-prof', '', '— A definir —');
     _agdPreencherDur('med-dur', 'med');
@@ -11011,16 +11018,20 @@ function _agdLinha(o) {
 
 // "📍 Ir": abre o Google Maps com o caminho ate o endereco, saindo de onde a
 // pessoa esta. Clicar no link nao abre o card em que ele esta.
-function linkIrParaHtml(endereco, classe) {
-    const url = typeof RotasCore !== 'undefined' ? RotasCore.linkIrPara(endereco) : '';
+function _agdEnd(endereco, cidade) {
+    return typeof RotasCore !== 'undefined' ? RotasCore.enderecoCompleto(endereco, cidade) : String(endereco || '').trim();
+}
+function linkIrParaHtml(endereco, classe, cidade) {
+    const url = typeof RotasCore !== 'undefined' ? RotasCore.linkIrPara(_agdEnd(endereco, cidade)) : '';
     if (!url) return '';
     return `<a class="${classe || 'agd-ir'}" href="${escapeHtml(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()" title="Abrir o caminho no Google Maps">📍 Ir</a>`;
 }
 // Botao ao lado de um campo de endereco: le o que esta digitado.
-async function irParaEndereco(campoId) {
+async function irParaEndereco(campoId, cidadeId) {
     const end = (document.getElementById(campoId)?.value || '').trim();
     if (!end) { await showAlert('Digite o endereço primeiro.', '📍'); return; }
-    window.open(RotasCore.linkIrPara(end), '_blank', 'noopener');
+    const cidade = cidadeId ? (document.getElementById(cidadeId)?.value || '') : '';
+    window.open(RotasCore.linkIrPara(_agdEnd(end, cidade)), '_blank', 'noopener');
 }
 
 // unidade: [singular, plural] escreve "4 agendamentos"; sem ela, so o numero.
@@ -11679,7 +11690,7 @@ function renderMedicoes() {
     };
     const linha = m => _agdLinha({
         onclick: `abrirDetalheMedicao(${m.id})`,
-        nome: m.clienteNome, tel: m.clienteTel, end: m.endereco,
+        nome: m.clienteNome, tel: m.clienteTel, end: _agdEnd(m.endereco, m.cidade),
         data: m.data, hora: m.hora, pill: _medPill(m, hoje),
     });
     const pendF = filtra(pend, 'medPend').sort((a, b) => _agdCmp(_agdChave(a.data, a.hora), _agdChave(b.data, b.hora)));
@@ -11702,7 +11713,7 @@ function abrirDetalheMedicao(id) {
     const corpo = `<div class="agd-det-topo">${_agdPill(_medPill(m, _agdHoje()))}</div>` + _agdCampos([
         ['Cliente',     escapeHtml(m.clienteNome || '—')],
         ['Telefone',    tel],
-        ['Endereço',    escapeHtml(m.endereco || '—') + linkIrParaHtml(m.endereco, 'agd-ir agd-ir-det')],
+        ['Endereço',    escapeHtml(_agdEnd(m.endereco, m.cidade) || '—') + linkIrParaHtml(m.endereco, 'agd-ir agd-ir-det', m.cidade)],
         ['Data',        _agdFmtData(m.data)],
         ['Horário',     escapeHtml(m.hora ? _agdPeriodo(m.hora, dur) : '—')],
         ['Duração',     escapeHtml(_agdFmtDur(dur))],
@@ -11737,6 +11748,7 @@ function editarMedicao(id) {
     _agdFormulario('Editar agendamento', [
         { id: 'tel',  label: 'Telefone',    tipo: 'text', valor: m.clienteTel },
         { id: 'end',  label: 'Endereço da visita', tipo: 'text', valor: m.endereco, obrig: true },
+        { id: 'cidade', label: 'Cidade', tipo: 'text', valor: m.cidade },
         { id: 'usu',  label: 'Responsável pela medição', tipo: 'profissional', valor: _medProf(m) },
         { id: 'data', label: 'Data da visita', tipo: 'date', valor: m.data, obrig: true },
         { id: 'hora', label: 'Horário',     tipo: 'time', valor: m.hora },
@@ -11745,7 +11757,7 @@ function editarMedicao(id) {
     ], v => {
         const atual = (db.medicoes || []).find(x => x.id == id);   // relido na validacao
         if (!atual) return;
-        atual.clienteTel = v.tel; atual.endereco = v.end; atual.data = v.data; atual.hora = v.hora;
+        atual.clienteTel = v.tel; atual.endereco = v.end; atual.cidade = v.cidade; atual.data = v.data; atual.hora = v.hora;
         atual.duracao = v.dur; atual.obs = v.obs;
         _medDefinirResponsavel(atual, v.usu.pessoa);
         _medAtualizar();
@@ -11855,7 +11867,7 @@ function renderDashboardMedicoes() {
             <div style="font-weight:700;font-size:14px;color:var(--dark);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(v.clienteNome)}">${escapeHtml(v.clienteNome)}</div>
             ${v.hora ? `<div style="font-size:12px;color:var(--dark)">🕐 ${v.hora}</div>` : ''}
             ${v.clienteTel ? `<div style="font-size:12px;color:#8F8F8F;margin-top:2px">${escapeHtml(v.clienteTel)}</div>` : ''}
-            ${linkIrParaHtml(v.endereco, 'agd-ir agd-ir-card')}
+            ${linkIrParaHtml(v.endereco, 'agd-ir agd-ir-card', v.cidade)}
         </div>`;
     }
 
@@ -11937,7 +11949,7 @@ function renderDashboardInstalacoes() {
             <div style="font-size:11px;color:#8F8F8F">#${formatPedidoId(p.id)}</div>
             ${p.inst_hora     ? `<div style="font-size:12px;color:var(--dark);margin-top:2px">🕐 ${p.inst_hora}</div>` : ''}
             ${p.inst_endereco ? `<div style="font-size:11px;color:#8F8F8F;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(p.inst_endereco)}">📍 ${escapeHtml(p.inst_endereco)}</div>` : ''}
-            ${linkIrParaHtml(p.inst_endereco || db.clientes.find(c => c.id == p.clienteId)?.end, 'agd-ir agd-ir-card')}
+            ${(() => { const c = db.clientes.find(c => c.id == p.clienteId); return linkIrParaHtml(p.inst_endereco || c?.end, 'agd-ir agd-ir-card', _instCidade(p, c)); })()}
         </div>`;
     }
 
@@ -12066,6 +12078,9 @@ function _instRenderProntos() {
     }
 }
 
+// Cidade da instalacao: a do pedido ou, sem ela, a do cliente.
+function _instCidade(p, cli) { return (p && p.inst_cidade) || (cli && cli.cidade) || ''; }
+
 function _instLimparForm() {
     _instSelId = null;
     const set = (id, v) => { const el = document.getElementById(id); if (el) { el.value = v; el.classList.remove('agd-erro'); } };
@@ -12073,6 +12088,7 @@ function _instLimparForm() {
     set('inst-data', _agdHoje());
     set('inst-hora', '');
     set('inst-end', '');
+    set('inst-cidade', '');
     set('inst-obs', '');
     _agdPreencherProf('inst-prof', '', 'Selecione');
     _agdPreencherDur('inst-dur', 'inst');
@@ -12095,6 +12111,7 @@ function selecionarPedidoInstalacao(id) {
     const hoje = _agdHoje();
     const set = (eid, v) => { const el = document.getElementById(eid); if (el) { el.value = v; el.classList.remove('agd-erro'); } };
     set('inst-end', p.inst_endereco || cli?.end || '');
+    set('inst-cidade', _instCidade(p, cli));
     set('inst-obs', p.inst_obs || '');
     set('inst-data', p.data_entrega && p.data_entrega >= hoje ? p.data_entrega : hoje);
     set('inst-hora', '');
@@ -12147,6 +12164,7 @@ async function salvarAgendamentoInstalacao() {
         hora: campos.hora?.value || '',
         dur:  parseInt(document.getElementById('inst-dur')?.value) || _agdDurPadrao('inst'),
         end:  (document.getElementById('inst-end')?.value || '').trim(),
+        cidade: (document.getElementById('inst-cidade')?.value || '').trim(),
         obs:  (document.getElementById('inst-obs')?.value || '').trim(),
     };
     const faltando = [];
@@ -12179,6 +12197,7 @@ async function salvarAgendamentoInstalacao() {
     p.inst_hora      = v.hora;
     p.inst_duracao   = v.dur;
     p.inst_endereco  = v.end;
+    p.inst_cidade    = v.cidade;
     p.inst_obs       = v.obs;
     definirInstalador(p, prof.pessoa);
     p.inst_agendado     = true;
@@ -12211,7 +12230,7 @@ function renderAgenda() {
             nome: p.clienteNome,
             sub:  `Pedido #${formatPedidoId(p.id)}${p.amb ? ' · ' + p.amb : ''}${nomeInstalador(p) ? ' · ' + nomeInstalador(p) : ''}`,
             tel:  cli?.tel,
-            end:  p.inst_endereco || cli?.end,
+            end:  _agdEnd(p.inst_endereco || cli?.end, _instCidade(p, cli)),
             data: realizado ? _instDiaRealizado(p) : p.data_entrega,
             hora: p.inst_hora,
             pill: _instPill(p, hoje),
@@ -12240,7 +12259,7 @@ function abrirDetalheInstalacao(id) {
         ['Pedido',      '#' + formatPedidoId(p.id)],
         ['Cliente',     escapeHtml(p.clienteNome || '—')],
         ['Telefone',    tel],
-        ['Endereço',    escapeHtml(p.inst_endereco || cli?.end || '—') + linkIrParaHtml(p.inst_endereco || cli?.end, 'agd-ir agd-ir-det')],
+        ['Endereço',    escapeHtml(_agdEnd(p.inst_endereco || cli?.end, _instCidade(p, cli)) || '—') + linkIrParaHtml(p.inst_endereco || cli?.end, 'agd-ir agd-ir-det', _instCidade(p, cli))],
         ['Data',        _agdFmtData(p.data_entrega)],
         ['Horário',     escapeHtml(p.inst_hora ? _agdPeriodo(p.inst_hora, _instDur(p)) : '—')],
         ['Duração',     escapeHtml(_agdFmtDur(_instDur(p)))],
@@ -12284,6 +12303,7 @@ async function _instGravarEdicao(id, v, titulo) {
         _agdRegistrar(p.inst_historico, 'reagendado', { de: { data: p.data_entrega || '', hora: p.inst_hora || '' }, para: { data: v.data, hora: v.hora } });
     }
     if (v.end !== undefined) p.inst_endereco = v.end;
+    if (v.cidade !== undefined) p.inst_cidade = v.cidade;
     p.data_entrega = v.data;
     p.inst_hora    = v.hora;
     p.inst_duracao = v.dur || _agdDurPadrao('inst');
@@ -12300,6 +12320,7 @@ function editarInstalacao(id) {
     const cli = db.clientes.find(c => c.id == p.clienteId);
     _agdFormulario('Editar instalação', [
         { id: 'end',  label: 'Endereço da instalação', tipo: 'text', valor: p.inst_endereco, largo: true, placeholder: cli?.end || 'Endereço da instalação…' },
+        { id: 'cidade', label: 'Cidade', tipo: 'text', valor: _instCidade(p, cli), placeholder: 'Ex.: Curitiba' },
         { id: 'usu',  label: 'Profissional', tipo: 'profissional', valor: _instProf(p), obrig: true, vazio: 'Selecione' },
         { id: 'dur',  label: 'Duração do serviço', tipo: 'duracao', valor: p.inst_duracao },
         { id: 'data', label: 'Data de instalação', tipo: 'date', valor: p.data_entrega, obrig: true },

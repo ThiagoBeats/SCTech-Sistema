@@ -130,3 +130,14 @@ test('duracaoPorExtenso: minutos por extenso, com singular e plural', () => {
     assert.strictEqual(R.duracaoPorExtenso(60), '1 hora');
     assert.strictEqual(R.duracaoPorExtenso(0), '0 minutos');
 });
+
+test('enderecoCompleto junta a cidade ao endereco, sem repetir quando ele ja a traz', () => {
+    assert.strictEqual(R.enderecoCompleto('Rua X, 10', 'Curitiba'), 'Rua X, 10, Curitiba');
+    assert.strictEqual(R.enderecoCompleto('Rua X, 10,', ' Curitiba '), 'Rua X, 10, Curitiba');
+    assert.strictEqual(R.enderecoCompleto('Rua X, 10 - Centro, curitiba', 'Curitiba'), 'Rua X, 10 - Centro, curitiba');
+    assert.strictEqual(R.enderecoCompleto('Rua X, 10, Sao Jose', 'São José'), 'Rua X, 10, Sao Jose');
+    assert.strictEqual(R.enderecoCompleto('Rua X, 10', ''), 'Rua X, 10');
+    assert.strictEqual(R.enderecoCompleto('Rua X, 10', undefined), 'Rua X, 10');
+    assert.strictEqual(R.enderecoCompleto('', 'Curitiba'), '');
+    assert.strictEqual(R.enderecoCompleto('Rua Curitibana, 5', 'Curitiba'), 'Rua Curitibana, 5, Curitiba');
+});
