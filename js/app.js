@@ -11104,7 +11104,7 @@ function enderecoPreencher(prefixo, partes) {
     _enderecoBotaoCep(prefixo);
 }
 async function _cepConsulta(url, interpretar, tratar404) {
-    const r = await fetch(url);
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (r.status === 404 && tratar404) return { ok: false, motivo: 'nao-encontrado' };
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return interpretar(await r.json());

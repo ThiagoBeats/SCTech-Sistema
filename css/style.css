@@ -1637,6 +1637,8 @@ html[data-theme="dark"] .pc-num-btn { color: var(--accent, #C9F775); }
 .end-campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; }
 .end-campos .form-group { margin: 0; min-width: 0; }
 .end-campos .end-rua { grid-column: span 2; }
+.end-cep .campo-com-botao { flex-wrap: wrap; }
+.end-cep .campo-com-botao input { flex: 1 1 110px; min-width: 110px; }
 .end-status { min-height: 16px; margin: 4px 0 0; }
 @media (max-width: 600px) { .end-campos .end-rua { grid-column: auto; } }
 /* Rotas do dia */
