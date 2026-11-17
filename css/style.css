@@ -1670,6 +1670,7 @@ html[data-theme="dark"] .pc-num-btn { color: var(--accent, #C9F775); }
     .rota-hora, .rota-km { grid-column: 2; text-align: left; }
     .rota-acoes { grid-column: 2 / -1; }
     .campo-com-botao { flex-direction: column; }
+    .end-cep .campo-com-botao input { flex: 1 1 auto; }
 }
 html[data-theme="dark"] .rota-aviso, html[data-theme="dark"] .rota-atraso { color: #F79B90; }
 .agd-vazio { padding: 28px 16px; text-align: center; color: var(--muted); font-size: 13px; background: var(--white); }

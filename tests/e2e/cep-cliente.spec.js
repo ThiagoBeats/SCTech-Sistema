@@ -124,3 +124,16 @@ test('CEP em branco salva normal', async ({ page }) => {
     expect(c.cep).toBe('');
     expect(c.end).toBe('Rua Z');
 });
+
+test('campo CEP com 8 digitos tem altura normal e mostra o CEP inteiro (celular e desktop)', async ({ page }) => {
+    await abrir(page);
+    for (const w of [360, 1280]) {
+        await page.setViewportSize({ width: w, height: 900 });
+        await page.fill('#cli-cep', '80020310');
+        const cep = await page.locator('#cli-cep').boundingBox();
+        const rua = await page.locator('#cli-numero').boundingBox();
+        expect(Math.abs(cep.height - rua.height)).toBeLessThan(4);
+        expect(cep.width).toBeGreaterThan(100);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    }
+});
