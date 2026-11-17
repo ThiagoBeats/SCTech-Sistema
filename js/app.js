@@ -10752,7 +10752,7 @@ function onMedClienteChange() {
     const sel = document.getElementById('med-cliente-id');
     if (!sel || !sel.value) return;
     const cli = db.clientes.find(c => c.id == sel.value);
-    if (!cli) return;
+    if (!cli || !(cli.end || cli.rua)) return;   // cliente sem endereco nao apaga o que ja foi digitado
     enderecoPreencher('med', _partesDoCliente(cli));
 }
 
@@ -11045,6 +11045,21 @@ function _agdLinha(o) {
 // pessoa esta. Clicar no link nao abre o card em que ele esta.
 function _agdEnd(endereco, cidade) {
     return typeof RotasCore !== 'undefined' ? RotasCore.enderecoCompleto(endereco, cidade) : String(endereco || '').trim();
+}
+// Endereco que vai ao mapa: registro com partes usa as partes; antigo, texto + cidade como sempre.
+function _partesMedMapa(m) { return m && m.rua !== undefined ? m : null; }
+function _partesInstMapa(p, cli) {
+    if (p.inst_rua !== undefined) return _instPartes(p, cli);
+    if (!p.inst_endereco && cli && cli.rua !== undefined) return cli;
+    return null;
+}
+function _endMed(m) {
+    const pt = _partesMedMapa(m);
+    return pt && typeof RotasCore !== 'undefined' ? RotasCore.enderecoDePartes(pt) : _agdEnd(m.endereco, m.cidade);
+}
+function _endInst(p, cli) {
+    const pt = _partesInstMapa(p, cli);
+    return pt && typeof RotasCore !== 'undefined' ? RotasCore.enderecoDePartes(pt) : _agdEnd(p.inst_endereco || cli?.end, _instCidade(p, cli));
 }
 function linkIrParaHtml(endereco, classe, cidade) {
     const url = typeof RotasCore !== 'undefined' ? RotasCore.linkIrPara(_agdEnd(endereco, cidade)) : '';
@@ -11821,7 +11836,7 @@ function renderMedicoes() {
     };
     const linha = m => _agdLinha({
         onclick: `abrirDetalheMedicao(${m.id})`,
-        nome: m.clienteNome, tel: m.clienteTel, end: _agdEnd(m.endereco, m.cidade),
+        nome: m.clienteNome, tel: m.clienteTel, end: _endMed(m),
         data: m.data, hora: m.hora, pill: _medPill(m, hoje),
     });
     const pendF = filtra(pend, 'medPend').sort((a, b) => _agdCmp(_agdChave(a.data, a.hora), _agdChave(b.data, b.hora)));
@@ -11844,7 +11859,7 @@ function abrirDetalheMedicao(id) {
     const corpo = `<div class="agd-det-topo">${_agdPill(_medPill(m, _agdHoje()))}</div>` + _agdCampos([
         ['Cliente',     escapeHtml(m.clienteNome || '—')],
         ['Telefone',    tel],
-        ['Endereço',    escapeHtml(_agdEnd(m.endereco, m.cidade) || '—') + linkIrParaHtml(m.endereco, 'agd-ir agd-ir-det', m.cidade)],
+        ['Endereço',    escapeHtml(_endMed(m) || '—') + linkIrParaHtml(_endMed(m), 'agd-ir agd-ir-det')],
         ['Data',        _agdFmtData(m.data)],
         ['Horário',     escapeHtml(m.hora ? _agdPeriodo(m.hora, dur) : '—')],
         ['Duração',     escapeHtml(_agdFmtDur(dur))],
@@ -11997,7 +12012,7 @@ function renderDashboardMedicoes() {
             <div style="font-weight:700;font-size:14px;color:var(--dark);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(v.clienteNome)}">${escapeHtml(v.clienteNome)}</div>
             ${v.hora ? `<div style="font-size:12px;color:var(--dark)">🕐 ${v.hora}</div>` : ''}
             ${v.clienteTel ? `<div style="font-size:12px;color:#8F8F8F;margin-top:2px">${escapeHtml(v.clienteTel)}</div>` : ''}
-            ${linkIrParaHtml(v.endereco, 'agd-ir agd-ir-card', v.cidade)}
+            ${linkIrParaHtml(_endMed(v), 'agd-ir agd-ir-card')}
         </div>`;
     }
 
@@ -12078,8 +12093,8 @@ function renderDashboardInstalacoes() {
             <div style="font-weight:700;font-size:14px;color:var(--dark);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(p.clienteNome)}">${escapeHtml(p.clienteNome||'—')}</div>
             <div style="font-size:11px;color:#8F8F8F">#${formatPedidoId(p.id)}</div>
             ${p.inst_hora     ? `<div style="font-size:12px;color:var(--dark);margin-top:2px">🕐 ${p.inst_hora}</div>` : ''}
-            ${p.inst_endereco ? `<div style="font-size:11px;color:#8F8F8F;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(_agdEnd(p.inst_endereco, _instCidade(p, db.clientes.find(c => c.id == p.clienteId))))}">📍 ${escapeHtml(_agdEnd(p.inst_endereco, _instCidade(p, db.clientes.find(c => c.id == p.clienteId))))}</div>` : ''}
-            ${(() => { const c = db.clientes.find(c => c.id == p.clienteId); return linkIrParaHtml(p.inst_endereco || c?.end, 'agd-ir agd-ir-card', _instCidade(p, c)); })()}
+            ${(() => { const t = _endInst(p, db.clientes.find(c => c.id == p.clienteId)); return p.inst_endereco ? `<div style="font-size:11px;color:#8F8F8F;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(t)}">📍 ${escapeHtml(t)}</div>` : ''; })()}
+            ${(() => { const c = db.clientes.find(c => c.id == p.clienteId); return linkIrParaHtml(_endInst(p, c), 'agd-ir agd-ir-card'); })()}
         </div>`;
     }
 
@@ -12381,7 +12396,7 @@ function renderAgenda() {
             nome: p.clienteNome,
             sub:  `Pedido #${formatPedidoId(p.id)}${p.amb ? ' · ' + p.amb : ''}${nomeInstalador(p) ? ' · ' + nomeInstalador(p) : ''}`,
             tel:  cli?.tel,
-            end:  _agdEnd(p.inst_endereco || cli?.end, _instCidade(p, cli)),
+            end:  _endInst(p, cli),
             data: realizado ? _instDiaRealizado(p) : p.data_entrega,
             hora: p.inst_hora,
             pill: _instPill(p, hoje),
@@ -12410,7 +12425,7 @@ function abrirDetalheInstalacao(id) {
         ['Pedido',      '#' + formatPedidoId(p.id)],
         ['Cliente',     escapeHtml(p.clienteNome || '—')],
         ['Telefone',    tel],
-        ['Endereço',    escapeHtml(_agdEnd(p.inst_endereco || cli?.end, _instCidade(p, cli)) || '—') + linkIrParaHtml(p.inst_endereco || cli?.end, 'agd-ir agd-ir-det', _instCidade(p, cli))],
+        ['Endereço',    escapeHtml(_endInst(p, cli) || '—') + linkIrParaHtml(_endInst(p, cli), 'agd-ir agd-ir-det')],
         ['Data',        _agdFmtData(p.data_entrega)],
         ['Horário',     escapeHtml(p.inst_hora ? _agdPeriodo(p.inst_hora, _instDur(p)) : '—')],
         ['Duração',     escapeHtml(_agdFmtDur(_instDur(p)))],

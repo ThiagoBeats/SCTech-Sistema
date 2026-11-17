@@ -39,7 +39,7 @@ test('medicao: partes vem do cliente, CEP novo busca e grava na medicao sem muda
     expect((await lerLS(page, 'sc_cli'))[0].rua).toBe('Rua das Flores');
 });
 
-test('medicao: sem rua pede o endereco; cliente antigo vira Rua = texto antigo', async ({ page }) => {
+test('medicao: cliente antigo preenche a Rua com o texto antigo e a cidade, e o agendamento segue com esse endereco', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI_ANTIGO() });
     await page.goto(BASE + '/pcp.html?view=medicoes');
     await page.selectOption('#med-cliente-id', '1');

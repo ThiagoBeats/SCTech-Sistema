@@ -170,3 +170,12 @@ test('consultasGeo vai da consulta completa para a mais simples, sem vazios nem 
         'Rua XV de Novembro, 100, Curitiba - PR']);
     assert.deepStrictEqual(R.consultasGeo({ rua: 'X', cidade: 'Y' }), ['X, Y']);
 });
+
+test('enderecoDePartes nao repete a cidade quando a Rua (texto antigo migrado) ja a traz', () => {
+    const p = { rua: 'Rua das Flores, 10 - Curitiba', cidade: 'Curitiba', uf: 'PR', cep: '80010000' };
+    assert.strictEqual(R.enderecoDePartes(p), 'Rua das Flores, 10 - Curitiba - PR, 80010-000');
+    assert.strictEqual(R.enderecoDePartes({ rua: 'Rua X, 10 - Curitiba', cidade: 'curitiba' }), 'Rua X, 10 - Curitiba');
+    assert.strictEqual(R.enderecoDePartes({ rua: 'Rua X, 10, Curitiba - PR', cidade: 'Curitiba', uf: 'PR' }), 'Rua X, 10, Curitiba - PR');
+    assert.strictEqual(R.enderecoDePartes({ rua: 'Rua Curitiba, 5', cidade: 'Curitiba', uf: 'PR' }), 'Rua Curitiba, 5, Curitiba - PR');
+    assert.deepStrictEqual(R.consultasGeo(p), ['Rua das Flores, 10 - Curitiba - PR, 80010-000', 'Rua das Flores, 10 - Curitiba - PR', '80010-000, Curitiba - PR']);
+});

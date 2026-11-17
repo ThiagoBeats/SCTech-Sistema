@@ -385,6 +385,10 @@ Lista de medições agendadas:
   - O endereço levado ao Maps (e às Rotas do dia) é endereço + ", " + cidade,
     quando há cidade e o endereço ainda não a traz (sem diferenciar maiúscula
     nem acento). Dados antigos sem cidade funcionam como antes.
+  - Registro com endereço em partes (CEP, rua, número, bairro, cidade, estado):
+    o Maps e as Rotas do dia usam "Rua, Número, Bairro, Cidade - UF, CEP" (o
+    complemento fica de fora). Se a Rua veio de um texto antigo que já traz a
+    cidade, a cidade não se repete. Registro antigo (sem partes): como antes.
   - Botão "📍 Ir para endereço" ao lado dos campos de endereço da medição, da
     instalação e do cadastro do cliente.
 
@@ -412,6 +416,12 @@ campo e mandar para ele. Abre também por pcp.html?view=rotas.
   - Cada visita mostra: número na rota, cliente, tipo (Medição / Instalação
     #N), endereço com a cidade (a busca no mapa usa endereço + cidade, para não
     achar a rua de mesmo nome de outra cidade), horário agendado, chegada prevista, km do trecho e "📍 Ir".
+  - Localização de visita com endereço em partes: o OpenStreetMap é consultado
+    em ordem — endereço completo ("Rua, Número, Bairro, Cidade - UF, CEP"), depois
+    "Rua, Número, Cidade - UF", depois "CEP, Cidade - UF" — e a primeira que
+    achar vale. O resultado fica guardado pelo endereço completo (não repete as
+    consultas). Continua no máximo 1 consulta por segundo. Registro antigo: uma
+    consulta só, como antes.
   - Chegada prevista: saída + trajeto + duração de cada visita. Se a 1ª visita
     tem horário, sai a tempo de chegar nele; senão, no início do expediente
     (configuração da agenda). Chegou antes do horário: espera até ele.
