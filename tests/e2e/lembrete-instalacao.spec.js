@@ -174,3 +174,94 @@ test('varios pedidos aparecem numa janela so, cada um com seus botoes', async ({
     await expect(m).toContainText('#26300');
     await expect(page.locator('#aviso-inst-confirmar')).toContainText('⚠ 1 instalação aguardando confirmação');
 });
+
+// --- Rodada final de correcoes ---------------------------------------------
+
+test('editar o orcamento preserva criado_por: o criador continua recebendo o lembrete', async ({ page }) => {
+    const orc = { id: 26310, clienteId: 1, clienteNome: 'Ana Paula Lima', status: 'Orçamento', valor: 900, amb: 'Sala', vendedor_id: 1,
+        criado_por: 3, data_criacao: 1700000000000, ambientes: [{ id: 1, amb: 'Sala', calculado: true, tecidos: [] }], itens: [] };
+    await relogio(page, '2026-11-11T08:00:00');
+    await entrar(page, BASE, { sc_usr: USUARIOS(), sc_cli: CLI(), sc_ped: [orc], sc_vend: [{ id: 1, nome: 'Ana', comissao_pct: 5 }], sc_editando_id: 26310 });
+    await page.evaluate(() => sessionStorage.setItem('sc_user', JSON.stringify({ id: 3, email: 'vera@sctech.local' })));
+    await page.goto(BASE + '/pedido.html');
+    await page.selectOption('#ped-vendedor', '1');
+    await page.evaluate(() => { pedidoDraft.ambientes.forEach(a => { a.calculado = true; }); salvarPedido(); });
+    await page.waitForURL(/index\.html/);
+    const salvo = await lerPed(page, 26310);
+    expect(salvo.criado_por, 'criador mantido apos a edicao').toBe(3);
+    expect(salvo.data_criacao).toBe(1700000000000);
+
+    // Aprovado e agendado no passado: o criador (Vera) ve o lembrete.
+    await page.evaluate(() => {
+        const l = JSON.parse(localStorage.getItem('sc_ped'));
+        Object.assign(l.find(p => p.id === 26310), { status: 'Pronto p/ Instalação', inst_agendado: true, data_entrega: '2026-11-10', inst_hora: '09:00', inst_duracao: 120 });
+        localStorage.setItem('sc_ped', JSON.stringify(l));
+        Object.keys(localStorage).filter(k => k.startsWith('sc_lembrete_inst_')).forEach(k => localStorage.removeItem(k));
+    });
+    await page.goto(BASE + '/pedidos.html');
+    await expect(lembrete(page)).toContainText('O pedido #26310');
+});
+
+for (const pag of ['os.html', 'proposta.html', 'pedido-compra.html']) {
+    test(`pagina de documento (${pag}) nao abre o lembrete`, async ({ page }) => {
+        await relogio(page, '2026-11-11T08:00:00');
+        await entrarComo(page, 2, [agendada()], pag);
+        await page.waitForTimeout(600);
+        await expect(page.locator('.agd-modal-overlay')).toHaveCount(0);
+        expect(await page.evaluate(() => localStorage.getItem('sc_lembrete_inst_2')), 'nao gasta o aviso do dia').toBeNull();
+    });
+}
+
+test('janela do lembrete nao sai na impressao', async ({ page }) => {
+    await relogio(page, '2026-11-11T08:00:00');
+    await entrarComo(page, 2, [agendada()]);
+    await expect(lembrete(page)).toBeVisible();
+    await page.emulateMedia({ media: 'print' });
+    expect(await page.locator('.agd-modal-overlay').evaluate(e => getComputedStyle(e).display)).toBe('none');
+});
+
+test('Reagendar com varios pedidos: depois de salvar, o que falta volta a ser lembrado', async ({ page }) => {
+    await relogio(page, '2026-11-11T08:00:00');
+    await entrarComo(page, 2, [agendada(), agendada({ id: 26301, clienteId: 2, clienteNome: 'Bruno Souza', data_entrega: '2026-11-09', inst_hora: '14:00' })]);
+    const item = id => lembrete(page).locator('.lembrete-inst-item', { hasText: '#' + id });
+    await item(26300).getByRole('button', { name: 'Ainda não' }).click();
+    await item(26300).getByRole('button', { name: 'Reagendar' }).click();
+    await expect(page).toHaveURL(/pcp\.html/);
+    await expect(page.locator('.agd-modal[aria-label="Reagendar instalação"]')).toBeVisible();
+    await expect.poll(() => page.url(), 'reagendar=1 sai da URL').not.toContain('reagendar=1');
+    await page.fill('#agdf-data', '2026-11-20');
+    await page.fill('#agdf-hora', '10:00');
+    await page.click('#agdf-salvar');
+    await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
+    await expect.poll(async () => (await lerPed(page, 26300)).data_entrega).toBe('2026-11-20');
+    await expect(lembrete(page)).toBeVisible();
+    await expect(lembrete(page)).toContainText('#26301');
+    await expect(lembrete(page)).not.toContainText('#26300');
+});
+
+test('Reagendar nao aparece para quem nao tem acesso a Producao', async ({ page }) => {
+    await relogio(page, '2026-11-11T08:00:00');
+    const semProducao = { nivel: 'sem_acesso', acoes_restritas: [] };
+    await entrar(page, BASE, { sc_usr: USUARIOS().map(u => u.id === 2 ? { ...u, permissoes_extras: { producao: semProducao } } : u), sc_cli: CLI(), sc_ped: [agendada()] });
+    await page.evaluate(() => { sessionStorage.setItem('sc_user', JSON.stringify({ id: 2, email: 'carlos@sctech.local' })); });
+    await page.goto(BASE + '/clientes.html');
+    await lembrete(page).getByRole('button', { name: 'Ainda não' }).click();
+    await expect(lembrete(page).getByRole('button', { name: 'Lembrar amanhã' })).toBeVisible();
+    await expect(lembrete(page).getByRole('button', { name: 'Reagendar' })).toHaveCount(0);
+});
+
+test('seta para cima sem item destacado fica com o campo de hora nativo', async ({ page }) => {
+    await entrar(page, BASE, { sc_cli: CLI(), sc_med: [], sc_ped: [] });
+    await page.goto(BASE + '/pcp.html?view=medicoes');
+    await page.fill('#med-data', '2030-01-10');
+    await page.click('#med-hora');
+    await expect(page.locator('.agd-hpick')).toBeVisible();
+    await page.keyboard.type('1030A');
+    await expect(page.locator('#med-hora')).toHaveValue('10:30');
+    await expect(page.locator('.agd-hpick')).toBeVisible();
+    await page.keyboard.press('ArrowUp');
+    expect(await page.locator('#med-hora').inputValue(), 'a seta mexeu no campo nativo').not.toBe('10:30');
+    await expect(page.locator('.agd-hpick-ativo')).toHaveCount(0);
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('.agd-hpick-ativo')).toHaveCount(1);
+});

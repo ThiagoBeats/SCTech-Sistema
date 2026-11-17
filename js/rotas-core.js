@@ -28,11 +28,13 @@
         if (!e || !c) return e;
         const ne = normalizarEndereco(e), nc = normalizarEndereco(c);
         if (!nc) return e;
-        const alnum = ch => /[a-z0-9]/.test(ch || ' ');
-        // So conta como "ja tem a cidade" depois da 1a virgula/hifen: "Rua Curitiba, 5" nao tem.
+        // So conta como "ja tem a cidade" quando ela e um trecho proprio, depois da 1a
+        // virgula/hifen ("Rua Curitiba, 5" nao tem; "Vila Curitiba" tambem nao): comeca
+        // depois de , - ou / e termina o endereco, so seguida de UF e/ou CEP.
         const sep = ne.search(/[,\-\/]/);
+        const depois = /^\s*(?:[,\-\/]\s*)?(?:[a-z]{2})?\s*(?:[,\-]?\s*\d{5}-?\d{3})?\s*$/;
         for (let i = ne.indexOf(nc); i >= 0; i = ne.indexOf(nc, i + 1)) {
-            if (sep >= 0 && i > sep && !alnum(ne[i - 1]) && !alnum(ne[i + nc.length])) return e;
+            if (sep >= 0 && i > sep && /[,\-\/]\s*$/.test(ne.slice(0, i)) && depois.test(ne.slice(i + nc.length))) return e;
         }
         return e.replace(/[\s.,;]+$/, '') + ', ' + c;
     }

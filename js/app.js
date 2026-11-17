@@ -6947,6 +6947,13 @@ Volte o pedido para Orçamento para editar.`, '🔒');
             if (db.pedidos[index].volumes !== undefined) dadosPedido.volumes = db.pedidos[index].volumes;
             if (db.pedidos[index].conferencia !== undefined) dadosPedido.conferencia = db.pedidos[index].conferencia;
             dadosPedido.data_criacao      = db.pedidos[index].data_criacao || db.pedidos[index].id;
+            // Quem criou o pedido (lembrete de instalacao, "pedidos que vejo") nao muda ao editar.
+            dadosPedido.criado_por        = db.pedidos[index].criado_por ?? null;
+            // Agendamento de instalacao e vinculo com o instalador sobrevivem a edicao
+            // (so se ja existiam; o formulario do pedido nao os edita).
+            ['inst_agendado', 'inst_hora', 'inst_duracao', 'inst_obs', 'inst_endereco', 'inst_cidade',
+             'inst_historico', 'inst_confirmada_em', 'usuario_instalacao_id', 'instalador_nome']
+                .forEach(k => { if (db.pedidos[index][k] !== undefined) dadosPedido[k] = db.pedidos[index][k]; });
             dadosPedido.comissao_paga     = db.pedidos[index].comissao_paga     || false;
             dadosPedido.comissao_data_pgto = db.pedidos[index].comissao_data_pgto || null;
             dadosPedido.arq_comissao_paga      = db.pedidos[index].arq_comissao_paga      || false;
@@ -10858,6 +10865,7 @@ async function salvarMedicao() {
     const cpfEl   = document.getElementById('med-novo-cpf');   if (cpfEl)   cpfEl.value   = '';
     const emailEl = document.getElementById('med-novo-email'); if (emailEl) emailEl.value = '';
     document.getElementById('med-data').value = _agdHoje();
+    _agdPickerFechar();
     document.getElementById('med-hora').value = '';
     document.getElementById('med-end').value  = '';
     const cidLimpa = document.getElementById('med-cidade'); if (cidLimpa) cidLimpa.value = '';
@@ -11550,8 +11558,10 @@ let _agdPickerEl = null;
 function _agdPickerFechar() {
     if (_agdPickerEl) { _agdPickerEl.remove(); _agdPickerEl = null; }
 }
+let _agdPickerAbertoEm = 0;
 function _agdPickerAbrir(input, getQ) {
     _agdPickerFechar();
+    _agdPickerAbertoEm = Date.now();
     let q;
     try { q = getQ(); } catch (e) { return; }
     const d = _agdDisponibilidade({ ...q, data: q.data || _agdHoje() });
@@ -11600,6 +11610,9 @@ function _agdPickerAnexar(input, getQ) {
         const at = _agdPickerEl.querySelector('.agd-hpick-ativo');
         let i = itens.indexOf(at);
         if (e.key === 'Enter') { if (at) { e.preventDefault(); at.click(); } return; }
+        // Seta sem item destacado: deixa o campo de hora nativo (digitar 10:30 pelo teclado);
+        // so a 1a seta para baixo passa a navegar na lista.
+        if (!at && e.key === 'ArrowUp') return;
         e.preventDefault();
         if (!itens.length) return;
         i = e.key === 'ArrowDown' ? (i + 1) % itens.length : (i <= 0 ? itens.length - 1 : i - 1);
@@ -11611,8 +11624,10 @@ function _agdPickerAnexar(input, getQ) {
 document.addEventListener('mousedown', e => {
     if (_agdPickerEl && !_agdPickerEl.contains(e.target) && e.target !== _agdPickerEl._input) _agdPickerFechar();
 });
-window.addEventListener('resize', _agdPickerFechar);
-document.addEventListener('scroll', e => { if (_agdPickerEl && !_agdPickerEl.contains(e.target)) _agdPickerFechar(); }, true);
+// No celular o teclado virtual dispara resize/scroll logo ao abrir: ignora esses 300 ms.
+const _agdPickerRecente = () => Date.now() - _agdPickerAbertoEm < 300;
+window.addEventListener('resize', () => { if (!_agdPickerRecente()) _agdPickerFechar(); });
+document.addEventListener('scroll', e => { if (_agdPickerEl && !_agdPickerEl.contains(e.target) && !_agdPickerRecente()) _agdPickerFechar(); }, true);
 
 // Duracao padrao por tipo de servico e expediente usado na grade.
 function abrirConfigAgenda() {
@@ -12095,6 +12110,7 @@ function _instCidade(p, cli) {
 
 function _instLimparForm() {
     _instSelId = null;
+    _agdPickerFechar();
     const set = (id, v) => { const el = document.getElementById(id); if (el) { el.value = v; el.classList.remove('agd-erro'); } };
     set('inst-pedido', '');
     set('inst-data', _agdHoje());
@@ -12323,7 +12339,7 @@ async function _instGravarEdicao(id, v, titulo) {
     definirInstalador(p, v.usu.pessoa);
     _instAtualizar();
     toast(titulo, 'success');
-    abrirDetalheInstalacao(id);
+    _lembreteInstVoltar(() => abrirDetalheInstalacao(id));
 }
 
 function editarInstalacao(id) {
@@ -12350,7 +12366,7 @@ function reagendarInstalacao(id) {
         { id: 'data', label: 'Nova data', tipo: 'date', valor: p.data_entrega, obrig: true },
         { id: 'hora', label: 'Horário', tipo: 'time', valor: p.inst_hora, obrig: true },
         { id: 'obs',  label: 'Observações', tipo: 'textarea', valor: p.inst_obs, largo: true },
-    ], v => _instGravarEdicao(id, v, 'Instalação reagendada!'), () => abrirDetalheInstalacao(id), _instDispOpts(id));
+    ], v => _instGravarEdicao(id, v, 'Instalação reagendada!'), () => _lembreteInstVoltar(() => abrirDetalheInstalacao(id)), _instDispOpts(id));
 }
 
 // Cancela o agendamento: o horario do profissional fica livre e o pedido volta
@@ -12422,7 +12438,14 @@ function _lembreteInstPergunta(p) {
 
 // Ao abrir a pagina (depois do login): mostra a janela se houver o que
 // confirmar e a pessoa ainda nao a viu hoje.
+function _paginaDeDocumento() {
+    const arq = (window.location.pathname.split('/').pop() || '').toLowerCase();
+    return ['os.html', 'proposta.html', 'pedido-compra.html'].includes(arq)
+        || !!document.querySelector('.os-wrapper, .proposta-wrapper, #pedido-compra-container');
+}
+
 function lembrarInstalacoesAoAbrir() {
+    if (_paginaDeDocumento()) return;   // paginas de impressao nao ganham janela
     const u = getUsuarioLogado();
     if (!u || !instalacoesParaConfirmar(u).length) return;
     const hoje = _agdHoje();
@@ -12433,7 +12456,21 @@ function lembrarInstalacoesAoAbrir() {
 
 // "Ainda não" troca os dois botoes do pedido por "Reagendar" / "Lembrar amanhã";
 // "Lembrar amanhã" tira o pedido da janela (ela volta amanha).
+// Reagendar: o que ficou de fora volta a ser lembrado depois de salvar (ou cancelar)
+// o reagendamento, mesmo em outra pagina -- por isso o estado vai no sessionStorage.
 let _lembreteInstAdiados = [];
+const _LEMBRETE_VOLTAR = 'sc_lembrete_inst_voltar';
+// Depois do reagendamento: reabre a janela com o que resta; sem pendencia, segue o fluxo normal.
+function _lembreteInstVoltar(fallback) {
+    let fila = null;
+    try { fila = sessionStorage.getItem(_LEMBRETE_VOLTAR); sessionStorage.removeItem(_LEMBRETE_VOLTAR); } catch (e) {}
+    if (fila === null) { fallback(); return; }
+    let ja = [];
+    try { ja = JSON.parse(fila) || []; } catch (e) {}
+    _lembreteInstAdiados = ja.slice(0, -1);   // o ultimo e o reagendado (ja fora da fila se foi salvo)
+    if (instalacoesParaConfirmar().some(p => !_lembreteInstAdiados.includes(p.id) && p.id !== ja[ja.length - 1])) abrirLembreteInstalacoes();
+    else fallback();
+}
 function abrirLembreteInstalacoes() {
     const lista = instalacoesParaConfirmar().filter(p => !_lembreteInstAdiados.includes(p.id));
     if (!lista.length) { fecharModalAgenda(); return; }
@@ -12461,7 +12498,14 @@ function _lembreteInstAindaNao(id) {
     const btns = document.querySelector(`.lembrete-inst-item[data-id="${id}"] .lembrete-inst-btns`);
     if (!btns) return;
     btns.innerHTML = `<button type="button" class="btn btn-outline btn-sm" onclick="_lembreteInstAmanha(${id})">Lembrar amanhã</button>
-        <button type="button" class="btn btn-sm" onclick="_lembreteInstReagendar(${id})">📅 Reagendar</button>`;
+        ${_lembreteInstPodeReagendar() ? `<button type="button" class="btn btn-sm" onclick="_lembreteInstReagendar(${id})">📅 Reagendar</button>` : ''}`;
+}
+
+// Reagendar abre a agenda de instalacoes (Producao): so para quem tem acesso a essa pagina.
+function _lembreteInstPodeReagendar() {
+    const exigidos = PAGINA_MODULO['pcp.html'];
+    const lista = Array.isArray(exigidos) ? exigidos : [exigidos];
+    return lista.some(m => temAcessoAlgumaSub(m, 'visualizar'));
 }
 
 function _lembreteInstAmanha(id) {
@@ -12472,6 +12516,8 @@ function _lembreteInstAmanha(id) {
 // Reagendar e o da agenda de instalacoes (pcp.html); de outra tela, vai ate la.
 function _lembreteInstReagendar(id) {
     fecharModalAgenda();
+    // Guarda o que ja foi adiado + este pedido (ultimo): ao terminar o reagendamento a janela volta com o resto.
+    try { sessionStorage.setItem(_LEMBRETE_VOLTAR, JSON.stringify(_lembreteInstAdiados.concat([id]))); } catch (e) {}
     if (!document.getElementById('inst-form')) {
         window.location.href = 'pcp.html?view=agenda&pedido=' + encodeURIComponent(id) + '&reagendar=1';
         return;
@@ -12752,6 +12798,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // Vindo do lembrete de confirmar ("Ainda não" > "Reagendar").
             const pReag = params.get('reagendar') && db.pedidos.find(x => x.id == params.get('pedido'));
             if (pReag && _instPendente(pReag)) reagendarInstalacao(pReag.id);
+            // Recarregar a pagina nao reabre o reagendamento.
+            if (params.get('reagendar')) {
+                try { params.delete('reagendar'); const qs = params.toString(); history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash); } catch (e) {}
+            }
         }
 
         // Outra aba/usuario mexeu nas agendas: a disponibilidade se atualiza aqui.

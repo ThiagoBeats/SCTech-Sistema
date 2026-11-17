@@ -339,6 +339,13 @@ Cada card de instalação exibe:
         → "Ainda não": troca por "📅 Reagendar" (abre o "Reagendar instalação" na
           agenda, em pcp.html) ou "Lembrar amanhã" (fecha; volta no dia seguinte)
     - Com vários pedidos, uma janela só lista todos, cada um com seus botões
+    - "Reagendar" só aparece para quem tem acesso à Produção. Com vários pedidos,
+      depois de salvar (ou ao voltar do reagendamento) a janela reabre com os que
+      faltam; a URL perde o "reagendar=1" para recarregar não reabrir o formulário
+    - Páginas de documento/impressão (OS, proposta, pedido de compra) nunca abrem
+      a janela (nem gastam o aviso do dia) e a janela não sai na impressão
+    - O criador do pedido não muda ao editar o orçamento (continua recebendo o
+      lembrete); editar também preserva o agendamento e o instalador do pedido
     - Enquanto não confirmar, a janela volta todo dia e fica o aviso fixo na
       Página Inicial (ver 2.4)
 
@@ -352,7 +359,9 @@ Formulário de agendamento:
   - Horário (time, opcional)
     → Ao clicar no campo abre a lista de horários do expediente; os comprometidos
       do responsável aparecem riscados e não dá para escolher (digitar um horário
-      quebrado, ex.: 10:30, continua valendo; também em editar/reagendar)
+      quebrado, ex.: 10:30, continua valendo; também em editar/reagendar; as setas do
+      teclado só navegam na lista depois da 1ª seta para baixo; no celular a lista
+      não fecha com o teclado virtual)
   - Endereço da visita (text, obrigatório), com o botão "📍 Ir para endereço"
     ao lado (abre o Google Maps com o caminho até o que foi digitado; vazio
     avisa "Digite o endereço primeiro.")

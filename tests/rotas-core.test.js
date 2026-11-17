@@ -142,4 +142,11 @@ test('enderecoCompleto junta a cidade ao endereco, sem repetir quando ele ja a t
     assert.strictEqual(R.enderecoCompleto('Rua Curitibana, 5', 'Curitiba'), 'Rua Curitibana, 5, Curitiba');
     assert.strictEqual(R.enderecoCompleto('Rua Curitiba, 5', 'Curitiba'), 'Rua Curitiba, 5, Curitiba');
     assert.strictEqual(R.enderecoCompleto('Rua Curitiba, 5, Curitiba - PR', 'Curitiba'), 'Rua Curitiba, 5, Curitiba - PR');
+    assert.strictEqual(R.enderecoCompleto('Rua X - Centro, Curitiba/PR', 'Curitiba'), 'Rua X - Centro, Curitiba/PR');
+    assert.strictEqual(R.enderecoCompleto('Rua X, 10 - Vila Curitiba', 'Curitiba'), 'Rua X, 10 - Vila Curitiba, Curitiba');
+    assert.strictEqual(R.enderecoCompleto('Rua A, 10, Jardim Curitiba, Maringa', 'Curitiba'), 'Rua A, 10, Jardim Curitiba, Maringa, Curitiba');
+    assert.strictEqual(R.enderecoCompleto('Rua X, 10, Curitiba PR', 'Curitiba'), 'Rua X, 10, Curitiba PR');
+    assert.strictEqual(R.enderecoCompleto('Rua X, 10, Curitiba - PR, 80000-000', 'Curitiba'), 'Rua X, 10, Curitiba - PR, 80000-000');
+    assert.strictEqual(R.enderecoCompleto('Rua X, 10, Curitiba, 80000-000', 'Curitiba'), 'Rua X, 10, Curitiba, 80000-000');
+    assert.strictEqual(R.enderecoCompleto('Rua X, 10, Curitiba Alta', 'Curitiba'), 'Rua X, 10, Curitiba Alta, Curitiba');
 });
