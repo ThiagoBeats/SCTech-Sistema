@@ -1682,6 +1682,18 @@ html[data-theme="dark"] .rota-aviso, html[data-theme="dark"] .rota-atraso { colo
 .agd-modal-x { background: none; border: 0; font-size: 22px; line-height: 1; padding: 2px 6px; color: var(--muted); cursor: pointer; box-shadow: none; }
 .agd-modal-corpo { padding: 14px 20px; overflow-y: auto; }
 .agd-modal-acoes { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding: 12px 20px 16px; border-top: 1px solid var(--border); }
+/* Lembrete de confirmar a instalacao (janela ao abrir + aviso da Pagina Inicial) */
+.lembrete-inst-modal { max-width: 560px; }
+.lembrete-inst-item { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.lembrete-inst-item:first-child { padding-top: 2px; }
+.lembrete-inst-item:last-child { border-bottom: 0; padding-bottom: 2px; }
+.lembrete-inst-txt { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
+.lembrete-inst-btns { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.aviso-inst-confirmar { background: var(--warn-bg); border: 1px solid #F2C924; border-radius: 6px; padding: 10px 16px; margin-bottom: 16px; font-size: 14px; }
+.aviso-inst-tit { font-weight: 700; margin-bottom: 6px; }
+.aviso-inst-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border-top: 1px solid rgba(0, 0, 0, .08); }
+.aviso-inst-item:first-of-type { border-top: 0; }
+@media (max-width: 600px) { .aviso-inst-item { flex-direction: column; align-items: stretch; } }
 .agd-det-topo { margin-bottom: 10px; }
 .agd-det { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px 12px; margin: 0; font-size: 13px; }
 .agd-det dt { color: var(--muted); font-weight: 600; }

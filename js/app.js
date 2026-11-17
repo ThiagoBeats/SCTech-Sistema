@@ -1590,18 +1590,19 @@ async function exigirPermissao(modulo, nivelMinimo) {
 }
 
 function checkAuth() {
-    if (!sessionStorage.getItem('sc_user')) { window.location.replace('login.html'); return; }
+    if (!sessionStorage.getItem('sc_user')) { window.location.replace('login.html'); return false; }
     migrarPermissoesSalvas();
     migrarArquitetoDosPedidos();
     migrarStatusAguardandoFinanceiro();
     const usuario = getUsuarioLogado();
-    if (!usuario || !usuario.ativo) { logout(); return; }
+    if (!usuario || !usuario.ativo) { logout(); return false; }
     const arquivo  = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
     const exigidos = PAGINA_MODULO[arquivo];
     if (exigidos) {
         const lista = Array.isArray(exigidos) ? exigidos : [exigidos];
-        if (!lista.some(m => temAcessoAlgumaSub(m, 'visualizar', usuario))) { window.location.replace('index.html'); return; }
+        if (!lista.some(m => temAcessoAlgumaSub(m, 'visualizar', usuario))) { window.location.replace('index.html'); return false; }
     }
+    return true;
 }
 
 async function realizarLogin() {
@@ -3962,6 +3963,7 @@ function renderDashboard() {
     renderDashboardMedicoes();
     renderDashboardInstalacoes();
     renderDashboardAlertas();
+    renderAvisoInstConfirmar();
     aplicarDashCardsVisibilidade();
     const thead = document.getElementById('thead-pedidos');
     const tbody = document.getElementById('tb-pedidos');
@@ -12362,15 +12364,131 @@ async function cancelarAgendamentoInstalacao(id) {
 // Mesmo desfecho do Kanban: pago ou com saldo, o pedido vai para Aguardando
 // Financeiro (com saldo, marcado como pendente). A instalacao foi feita: vai
 // para Realizados.
-function confirmarInstalacao(id) {
+// aoTerminar(confirmou): quem chama de fora da agenda (o lembrete de confirmar)
+// segue dali; sem ele, desistir volta para o detalhe da instalacao.
+function confirmarInstalacao(id, aoTerminar) {
     const p = db.pedidos.find(x => x.id == id);
-    if (!p || !_instPendente(p)) return;
+    if (!p || !_instPendente(p)) { if (aoTerminar) aoTerminar(false); return; }
     fecharModalAgenda();
     mostrarModalPagamento(p, resultado => {
-        if (!resultado) { abrirDetalheInstalacao(id); return; }
+        if (!resultado) { if (aoTerminar) aoTerminar(false); else abrirDetalheInstalacao(id); return; }
         aplicarConfirmacaoEntrega(p, resultado);
         _instAtualizar();
         toast(resultado === 'pago' ? 'Instalação confirmada. Pedido em Aguardando Financeiro.' : 'Instalação confirmada. Pedido em Aguardando Financeiro, com pagamento pendente.', 'info');
+        if (aoTerminar) aoTerminar(true);
+    });
+}
+
+// --- LEMBRETE DE CONFIRMAR A INSTALACAO ----------------------------------------
+// Passou o fim de uma instalacao agendada (data + horario + duracao; sem
+// horario, o fim do expediente) e ninguem confirmou: o instalador designado e
+// quem criou o pedido sao lembrados. Ao abrir o sistema aparece uma janela,
+// uma vez por dia por pessoa (sc_lembrete_inst_<id> = dia em que viu); na
+// Pagina Inicial fica um aviso fixo enquanto houver o que confirmar.
+function _instFimMs(p) {
+    const [a, m, d] = String(p.data_entrega).split('-').map(Number);
+    const ini = _agdMin(p.inst_hora);
+    const fim = ini !== null ? ini + _instDur(p) : (_agdMin(getAgendaConfig().fim) ?? 18 * 60);
+    return new Date(a, m - 1, d, 0, fim).getTime();
+}
+
+function instalacoesParaConfirmar(usuario) {
+    const u = usuario === undefined ? getUsuarioLogado() : usuario;
+    if (!u) return [];
+    const agora = Date.now();
+    return (db.pedidos || [])
+        .filter(p => _instPendente(p) && p.data_entrega
+            && (p.usuario_instalacao_id == u.id || p.criado_por == u.id)
+            && agora > _instFimMs(p))
+        .sort((a, b) => _instFimMs(a) - _instFimMs(b) || a.id - b.id);
+}
+
+function _lembreteInstChave(u) { return 'sc_lembrete_inst_' + u.id; }
+
+function _lembreteInstPergunta(p) {
+    const [, m, d] = String(p.data_entrega).split('-');
+    return `O pedido #${formatPedidoId(p.id)} (${p.clienteNome || '—'}) devia ter sido instalado em ${d}/${m}${p.inst_hora ? ' às ' + p.inst_hora : ''}. Foi instalado?`;
+}
+
+// Ao abrir a pagina (depois do login): mostra a janela se houver o que
+// confirmar e a pessoa ainda nao a viu hoje.
+function lembrarInstalacoesAoAbrir() {
+    const u = getUsuarioLogado();
+    if (!u || !instalacoesParaConfirmar(u).length) return;
+    const hoje = _agdHoje();
+    try { if (localStorage.getItem(_lembreteInstChave(u)) === hoje) return; } catch (e) {}
+    try { localStorage.setItem(_lembreteInstChave(u), hoje); } catch (e) {}
+    abrirLembreteInstalacoes();
+}
+
+// "Ainda não" troca os dois botoes do pedido por "Reagendar" / "Lembrar amanhã";
+// "Lembrar amanhã" tira o pedido da janela (ela volta amanha).
+let _lembreteInstAdiados = [];
+function abrirLembreteInstalacoes() {
+    const lista = instalacoesParaConfirmar().filter(p => !_lembreteInstAdiados.includes(p.id));
+    if (!lista.length) { fecharModalAgenda(); return; }
+    const corpo = lista.map(p => `<div class="lembrete-inst-item" data-id="${p.id}">
+            <p class="lembrete-inst-txt">${escapeHtml(_lembreteInstPergunta(p))}</p>
+            <div class="lembrete-inst-btns">
+                <button type="button" class="btn btn-outline btn-sm" onclick="_lembreteInstAindaNao(${p.id})">Ainda não</button>
+                <button type="button" class="btn btn-success btn-sm" onclick="_lembreteInstSim(${p.id})">Sim, foi instalado</button>
+            </div>
+        </div>`).join('');
+    const o = _agdAbrirModal(lista.length === 1 ? 'Instalação para confirmar' : 'Instalações para confirmar', corpo, '');
+    o.classList.add('lembrete-inst-overlay');
+    o.querySelector('.agd-modal').classList.add('lembrete-inst-modal');
+}
+
+function _lembreteInstSim(id) {
+    confirmarInstalacao(id, () => {
+        renderAvisoInstConfirmar();
+        if (document.getElementById('tb-pedidos')) renderDashboard();
+        abrirLembreteInstalacoes();
+    });
+}
+
+function _lembreteInstAindaNao(id) {
+    const btns = document.querySelector(`.lembrete-inst-item[data-id="${id}"] .lembrete-inst-btns`);
+    if (!btns) return;
+    btns.innerHTML = `<button type="button" class="btn btn-outline btn-sm" onclick="_lembreteInstAmanha(${id})">Lembrar amanhã</button>
+        <button type="button" class="btn btn-sm" onclick="_lembreteInstReagendar(${id})">📅 Reagendar</button>`;
+}
+
+function _lembreteInstAmanha(id) {
+    _lembreteInstAdiados.push(id);
+    abrirLembreteInstalacoes();
+}
+
+// Reagendar e o da agenda de instalacoes (pcp.html); de outra tela, vai ate la.
+function _lembreteInstReagendar(id) {
+    fecharModalAgenda();
+    if (!document.getElementById('inst-form')) {
+        window.location.href = 'pcp.html?view=agenda&pedido=' + encodeURIComponent(id) + '&reagendar=1';
+        return;
+    }
+    mostrarViewPCP('agenda');
+    reagendarInstalacao(id);
+}
+
+// Pagina Inicial: aviso fixo (toda vez, enquanto houver o que confirmar).
+function renderAvisoInstConfirmar() {
+    const el = document.getElementById('aviso-inst-confirmar');
+    if (!el) return;
+    const lista = instalacoesParaConfirmar();
+    if (!lista.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    const n = lista.length;
+    el.innerHTML = `<div class="aviso-inst-tit">⚠ ${n} ${n === 1 ? 'instalação' : 'instalações'} aguardando confirmação</div>` +
+        lista.map(p => `<div class="aviso-inst-item">
+            <span>${escapeHtml(_lembreteInstPergunta(p))}</span>
+            <button type="button" class="btn btn-success btn-sm" onclick="_lembreteInstConfirmarAviso(${p.id})">Confirmar</button>
+        </div>`).join('');
+    el.style.display = '';
+}
+
+function _lembreteInstConfirmarAviso(id) {
+    confirmarInstalacao(id, () => {
+        renderAvisoInstConfirmar();
+        if (document.getElementById('tb-pedidos')) renderDashboard();
     });
 }
 
@@ -12436,7 +12554,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) { console.error('Migração do Financeiro falhou:', e); }
 
     if (!document.getElementById('login-usuario')) {
-        checkAuth();
+        // Lembrete de confirmar instalacao: depois de a pagina montar.
+        if (checkAuth()) setTimeout(() => { try { lembrarInstalacoesAoAbrir(); } catch (e) { console.error(e); } }, 0);
         carregarTema();
         renderDashboardsButton();
         renderMenuExtrasEstoque();
@@ -12618,7 +12737,12 @@ document.addEventListener('DOMContentLoaded', () => {
         lembrarAbaAoRecarregar('pcp', () => _curViewPCP, mostrarViewPCP,
             t => !params.get('pedido') && ['kanban', 'agenda', 'medicoes', 'rotas'].includes(t));
         // Vindo de outra tela com ?pedido=: o pedido ja chega selecionado.
-        if (urlView === 'agenda' && params.get('pedido')) irParaAgendaInstalacao(params.get('pedido'));
+        if (urlView === 'agenda' && params.get('pedido')) {
+            irParaAgendaInstalacao(params.get('pedido'));
+            // Vindo do lembrete de confirmar ("Ainda não" > "Reagendar").
+            const pReag = params.get('reagendar') && db.pedidos.find(x => x.id == params.get('pedido'));
+            if (pReag && _instPendente(pReag)) reagendarInstalacao(pReag.id);
+        }
 
         // Outra aba/usuario mexeu nas agendas: a disponibilidade se atualiza aqui.
         window.addEventListener('storage', e => {

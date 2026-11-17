@@ -154,6 +154,16 @@ Mini-painel exibido no dashboard quando há pedidos aguardando instalação:
   - Botão "Ver agenda completa" no cabeçalho do painel
   - Exibe até 6 próximos e todos os atrasados; até 3 sem data
 
+Aviso fixo "⚠ N instalação(ões) aguardando confirmação" (topo da página, acima dos
+cards de métricas), para o instalador designado e para quem criou o pedido,
+enquanto houver instalação vencida para confirmar (ver 3.2, "Lembrete de
+confirmar a instalação"):
+  - Lista cada pedido: "O pedido #N (Cliente) devia ter sido instalado em dd/mm às
+    HH:MM. Foi instalado?" com o botão "Confirmar" (mesmo fluxo do "✓ Confirmar
+    instalação" da agenda, com a pergunta do pagamento)
+  - Aparece toda vez que a página abre (não é limitado a uma vez por dia) e some
+    quando não houver mais nada para confirmar
+
 ── 2.5 AGENDA DE MEDIÇÕES (resumo) ─────────────────────────────────────────────
 
 Mini-painel exibido no dashboard quando há medições pendentes:
@@ -310,6 +320,24 @@ Cada card de instalação exibe:
     - Badge de status do pedido
     - "📱 WhatsApp": link direto para WhatsApp do cliente (se telefone cadastrado)
     - "📋 OS": abre modal da Ordem de Serviço para impressão
+
+  Lembrete de confirmar a instalação:
+    - Uma instalação agendada fica "para confirmar" quando passou o horário de
+      término (data + horário + duração; sem horário, o fim do expediente da
+      Configuração da agenda) e ela continua em "Pronto p/ Instalação"
+    - Quem é lembrado: o instalador designado (se for usuário do sistema) e o
+      usuário que criou o pedido. Instalador só com nome digitado não entra no
+      sistema: só quem criou o pedido é lembrado
+    - Ao abrir qualquer página do sistema (depois do login), uma janela aparece
+      uma vez por dia por pessoa: "O pedido #N (Cliente) devia ter sido instalado
+      em dd/mm às HH:MM. Foi instalado?"
+        → "Sim, foi instalado": segue o fluxo do "✓ Confirmar instalação" (pergunta
+          do pagamento; o pedido vai para Aguardando Financeiro e para Realizados)
+        → "Ainda não": troca por "📅 Reagendar" (abre o "Reagendar instalação" na
+          agenda, em pcp.html) ou "Lembrar amanhã" (fecha; volta no dia seguinte)
+    - Com vários pedidos, uma janela só lista todos, cada um com seus botões
+    - Enquanto não confirmar, a janela volta todo dia e fica o aviso fixo na
+      Página Inicial (ver 2.4)
 
 ── 3.3 ABA: AGENDAMENTO DE MEDIÇÕES ────────────────────────────────────────────
 
