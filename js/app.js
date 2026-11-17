@@ -11044,6 +11044,7 @@ function buscarAgenda(chave, valor) {
 let _agdModalEl = null;
 function _agdEsc(e) { if (e.key === 'Escape') fecharModalAgenda(); }
 function fecharModalAgenda() {
+    _agdPickerFechar();
     if (!_agdModalEl) return;
     _agdModalEl.remove();
     _agdModalEl = null;
@@ -11154,6 +11155,7 @@ function _agdFormulario(titulo, campos, onSalvar, voltar, opts) {
         _agdRenderDisp('agdf-disp', consulta());
     };
     if (disp) {
+        _agdPickerAnexar(document.getElementById('agdf-hora'), () => { const { hora, ...q } = consulta(); return q; });
         const prof = document.getElementById('agdf-usu');
         if (prof) prof.addEventListener('change', () => { _agdProfMudou('agdf-usu'); atualizarDisp(); });
         document.getElementById('agdf-usu-outro')?.addEventListener('input', atualizarDisp);
@@ -11525,6 +11527,77 @@ function _agdRenderDisp(elId, q) {
         ${lista}`;
 }
 
+// --- Lista de horarios no campo Horario (medicao e instalacao) ---------------
+// Reusa _agdDisponibilidade: livres clicaveis; ocupados e indisponiveis riscados.
+// O campo continua digitavel (ex.: 10:30). getQ() devolve {tipo, prof, data, dur, ignorar}.
+let _agdPickerEl = null;
+function _agdPickerFechar() {
+    if (_agdPickerEl) { _agdPickerEl.remove(); _agdPickerEl = null; }
+}
+function _agdPickerAbrir(input, getQ) {
+    _agdPickerFechar();
+    let q;
+    try { q = getQ(); } catch (e) { return; }
+    const d = _agdDisponibilidade({ ...q, data: q.data || _agdHoje() });
+    const pop = document.createElement('div');
+    pop.className = 'agd-hpick';
+    pop.setAttribute('role', 'listbox');
+    pop.innerHTML = d.slots.map(s => {
+        const tit = escapeHtml(`${s.hora} · ${s.motivo}`);
+        return s.estado === 'livre'
+            ? `<button type="button" class="agd-hpick-item agd-hpick-livre" data-hora="${s.hora}" role="option" title="${tit}">${s.hora}</button>`
+            : `<span class="agd-hpick-item agd-hpick-${s.estado}" data-hora="${s.hora}" role="option" aria-disabled="true" title="${tit}">${s.hora}</span>`;
+    }).join('') || '<span class="agd-hpick-vazio">Sem horários no expediente.</span>';
+    pop.addEventListener('mousedown', e => e.preventDefault());   // mantem o foco no campo
+    pop.addEventListener('click', e => {
+        const b = e.target.closest('.agd-hpick-livre');
+        if (!b) return;
+        input.value = b.dataset.hora;
+        input.classList.remove('agd-erro');
+        _agdPickerFechar();
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    document.body.appendChild(pop);
+    const r = input.getBoundingClientRect();
+    pop.style.left = r.left + 'px';
+    pop.style.minWidth = Math.max(r.width, 200) + 'px';
+    const alt = pop.offsetHeight;
+    const abaixo = window.innerHeight - r.bottom;
+    pop.style.top = (abaixo >= Math.min(alt, 240) || r.top < alt ? r.bottom + 4 : r.top - alt - 4) + 'px';
+    pop._input = input;
+    _agdPickerEl = pop;
+}
+function _agdPickerAnexar(input, getQ) {
+    if (!input || input.dataset.agdPicker) return;
+    input.dataset.agdPicker = '1';
+    const abrir = () => _agdPickerAbrir(input, getQ);
+    input.addEventListener('focus', abrir);
+    input.addEventListener('click', abrir);
+    input.addEventListener('blur', () => setTimeout(() => { if (_agdPickerEl && _agdPickerEl._input === input) _agdPickerFechar(); }, 120));
+    ['input', 'change'].forEach(ev => input.addEventListener(ev, () => { if (_agdPickerEl && _agdPickerEl._input === input) _agdPickerAbrir(input, getQ); }));
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Escape') { if (_agdPickerEl) { _agdPickerFechar(); e.stopPropagation(); } return; }
+        if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(e.key)) return;
+        if (!_agdPickerEl) { if (e.key === 'ArrowDown') { abrir(); e.preventDefault(); } return; }
+        const itens = [..._agdPickerEl.querySelectorAll('.agd-hpick-livre')];
+        const at = _agdPickerEl.querySelector('.agd-hpick-ativo');
+        let i = itens.indexOf(at);
+        if (e.key === 'Enter') { if (at) { e.preventDefault(); at.click(); } return; }
+        e.preventDefault();
+        if (!itens.length) return;
+        i = e.key === 'ArrowDown' ? (i + 1) % itens.length : (i <= 0 ? itens.length - 1 : i - 1);
+        at && at.classList.remove('agd-hpick-ativo');
+        itens[i].classList.add('agd-hpick-ativo');
+        itens[i].scrollIntoView({ block: 'nearest' });
+    });
+}
+document.addEventListener('mousedown', e => {
+    if (_agdPickerEl && !_agdPickerEl.contains(e.target) && e.target !== _agdPickerEl._input) _agdPickerFechar();
+});
+window.addEventListener('resize', _agdPickerFechar);
+document.addEventListener('scroll', e => { if (_agdPickerEl && !_agdPickerEl.contains(e.target)) _agdPickerFechar(); }, true);
+
 // Duracao padrao por tipo de servico e expediente usado na grade.
 function abrirConfigAgenda() {
     const c = getAgendaConfig();
@@ -11580,6 +11653,11 @@ function _medAtualizarDisp() {
         _medAtualizarDisp();
     } });
     const prof = _agdLerProf('med-prof');
+    _agdPickerAnexar(document.getElementById('med-hora'), () => {
+        const p = _agdLerProf('med-prof');
+        return { tipo: 'med', prof: p.chave, profNome: p.pessoa.nome, data: document.getElementById('med-data')?.value || '',
+            dur: parseInt(document.getElementById('med-dur')?.value) || _agdDurPadrao('med') };
+    });
     _agdDispCtx['med-disp'].onProf = ch => { _agdPreencherProf('med-prof', ch, '— A definir —'); _medAtualizarDisp(); };
     _agdRenderDisp('med-disp', {
         tipo: 'med', prof: prof.chave, profNome: prof.pessoa.nome,
@@ -12040,6 +12118,11 @@ function _instAtualizarDisp() {
         _instAtualizarDisp();
     } });
     const prof = _agdLerProf('inst-prof');
+    _agdPickerAnexar(document.getElementById('inst-hora'), () => {
+        const p = _agdLerProf('inst-prof');
+        return { tipo: 'inst', prof: p.chave, profNome: p.pessoa.nome, data: document.getElementById('inst-data')?.value || '',
+            dur: parseInt(document.getElementById('inst-dur')?.value) || _agdDurPadrao('inst') };
+    });
     _agdDispCtx['inst-disp'].onProf = ch => { _agdPreencherProf('inst-prof', ch, 'Selecione'); _instAtualizarDisp(); };
     _agdRenderDisp('inst-disp', {
         tipo: 'inst', prof: prof.chave, profNome: prof.pessoa.nome,

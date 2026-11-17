@@ -294,6 +294,12 @@ Cada card de instalação exibe:
        - Input text pré-preenchido; placeholder = endereço do cliente cadastrado
     c) Horário:
        - Input time
+       - Ao clicar no campo abre a lista dos horários do expediente (passo da
+         Configuração da agenda): os já comprometidos do responsável (medições +
+         instalações) e os que não cabem na duração aparecem riscados e não dá
+         para escolher; os livres preenchem o campo. Dá para digitar um horário
+         quebrado (ex.: 10:30). Sem responsável, todos aparecem livres. Vale também
+         nas janelas de editar/reagendar.
     d) Informações Gerais / Observações:
        - Textarea (2 linhas), redimensionável
 
@@ -311,6 +317,9 @@ Formulário de agendamento:
     → Se "novo": campos nome (text) e telefone/WhatsApp (text)
   - Data da visita (date, obrigatório)
   - Horário (time, opcional)
+    → Ao clicar no campo abre a lista de horários do expediente; os comprometidos
+      do responsável aparecem riscados e não dá para escolher (digitar um horário
+      quebrado, ex.: 10:30, continua valendo; também em editar/reagendar)
   - Endereço da visita (text, obrigatório), com o botão "📍 Ir para endereço"
     ao lado (abre o Google Maps com o caminho até o que foi digitado; vazio
     avisa "Digite o endereço primeiro.")

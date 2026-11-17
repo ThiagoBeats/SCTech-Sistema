@@ -1753,6 +1753,13 @@ html[data-theme="dark"] .rota-aviso, html[data-theme="dark"] .rota-atraso { colo
 .agd-slot-livre:hover { background: #CDEFCB; transform: none; }
 .agd-slot-ocupado { background: var(--danger-bg); color: var(--danger-text); border-color: #F7B9B1; cursor: not-allowed; }
 .agd-slot-indisp  { background: var(--surface-3); color: #8F8F8F; cursor: not-allowed; }
+/* Lista de horarios do campo Horario (medicao/instalacao) */
+.agd-hpick { position: fixed; z-index: 10001; max-height: 240px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; padding: 8px; background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, .18); }
+.agd-hpick-item { display: inline-flex; align-items: center; justify-content: center; padding: 6px 0; margin: 0; border-radius: 8px; font-size: 13px; font-weight: 600; border: 1px solid var(--border); background: var(--white); color: var(--dark); box-shadow: none; font-family: inherit; line-height: 1.2; }
+.agd-hpick-livre { cursor: pointer; }
+.agd-hpick-livre:hover, .agd-hpick-ativo { background: var(--ok-bg); color: var(--ok-text); transform: none; }
+.agd-hpick-ocupado, .agd-hpick-indisp { text-decoration: line-through; color: var(--muted); opacity: .75; cursor: not-allowed; }
+.agd-hpick-vazio { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
 .agd-slot-sel { outline: 2px solid var(--primary); outline-offset: 1px; }
 .agd-disp-sub { font-weight: 700; color: var(--primary); font-size: 12.5px; }
 .agd-disp-nota { font-size: 12px; color: var(--muted); }
