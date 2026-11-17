@@ -150,3 +150,23 @@ test('enderecoCompleto junta a cidade ao endereco, sem repetir quando ele ja a t
     assert.strictEqual(R.enderecoCompleto('Rua X, 10, Curitiba, 80000-000', 'Curitiba'), 'Rua X, 10, Curitiba, 80000-000');
     assert.strictEqual(R.enderecoCompleto('Rua X, 10, Curitiba Alta', 'Curitiba'), 'Rua X, 10, Curitiba Alta, Curitiba');
 });
+
+test('enderecoDePartes monta o texto para o mapa sem o complemento', () => {
+    const p = { rua: 'Rua XV de Novembro', numero: '100', complemento: 'ap 3', bairro: 'Centro', cidade: 'Curitiba', uf: 'PR', cep: '80020310' };
+    assert.strictEqual(R.enderecoDePartes(p), 'Rua XV de Novembro, 100, Centro, Curitiba - PR, 80020-310');
+    assert.strictEqual(R.enderecoDePartes({ rua: 'X', cidade: 'Y' }), 'X, Y');
+    assert.strictEqual(R.enderecoDePartes({ rua: 'X', uf: 'PR' }), 'X, PR');
+    assert.strictEqual(R.enderecoDePartes({}), '');
+});
+
+test('consultasGeo vai da consulta completa para a mais simples, sem vazios nem repetidos', () => {
+    const p = { rua: 'Rua XV de Novembro', numero: '100', complemento: 'ap 3', bairro: 'Centro', cidade: 'Curitiba', uf: 'PR', cep: '80020310' };
+    assert.deepStrictEqual(R.consultasGeo(p), [
+        'Rua XV de Novembro, 100, Centro, Curitiba - PR, 80020-310',
+        'Rua XV de Novembro, 100, Curitiba - PR',
+        '80020-310, Curitiba - PR']);
+    assert.deepStrictEqual(R.consultasGeo({ ...p, cep: '' }), [
+        'Rua XV de Novembro, 100, Centro, Curitiba - PR',
+        'Rua XV de Novembro, 100, Curitiba - PR']);
+    assert.deepStrictEqual(R.consultasGeo({ rua: 'X', cidade: 'Y' }), ['X, Y']);
+});

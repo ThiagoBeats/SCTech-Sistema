@@ -193,7 +193,32 @@
         return [0].concat(volta.reverse());
     }
 
-    const api = { linkIrPara, linksRota, enderecoCompleto, normalizarEndereco, ordemDoTrip, melhorOrdemAberta, trechosDaRota, calcularChegadas,
+    // Endereco em partes -> texto para o mapa: "Rua, Numero, Bairro, Cidade - UF, CEP"
+    // (complemento fica de fora; vazios somem).
+    function _mascCep(c) {
+        const d = String(c || '').replace(/\D/g, '').slice(0, 8);
+        return d.length > 5 ? d.slice(0, 5) + '-' + d.slice(5) : d;
+    }
+    function _cidadeUf(p) {
+        const c = String(p.cidade || '').trim(), u = String(p.uf || '').trim();
+        return c && u ? c + ' - ' + u : c || u;
+    }
+    function enderecoDePartes(p) {
+        p = p || {};
+        return [p.rua, p.numero, p.bairro, _cidadeUf(p), _mascCep(p.cep)]
+            .map(x => String(x || '').trim()).filter(Boolean).join(', ');
+    }
+    // Consultas ao Nominatim, da mais completa para a mais simples.
+    function consultasGeo(p) {
+        p = p || {};
+        const cu = _cidadeUf(p), cep = _mascCep(p.cep);
+        const lista = [enderecoDePartes(p),
+            [p.rua, p.numero, cu].map(x => String(x || '').trim()).filter(Boolean).join(', '),
+            cep ? [cep, cu].filter(Boolean).join(', ') : ''];
+        return lista.filter((x, i) => x && lista.indexOf(x) === i);
+    }
+
+    const api = { enderecoDePartes, consultasGeo, linkIrPara, linksRota, enderecoCompleto, normalizarEndereco, ordemDoTrip, melhorOrdemAberta, trechosDaRota, calcularChegadas,
         linhaObsRota, aplicarObsRota, textoWhatsRota, fmtDur, duracaoPorExtenso, fmtKm, hhmm, TOLERANCIA_MIN };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.RotasCore = api;
