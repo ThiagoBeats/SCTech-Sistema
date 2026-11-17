@@ -229,7 +229,11 @@ Cada card no kanban exibe:
   - Status de pagamento (badge)
   - Aviso "⚠ Sem estoque" quando o tecido do pedido não cobre o consumo; depois que o
     tecido do pedido foi baixado, o aviso some (o tecido já saiu do estoque)
-  - Botões: avançar status (→), retroceder status (←), editar (✏️)
+  - Menu "⋮" no canto do card (e na linha da visualização em lista) com as ações:
+    "Ver Ordem de Serviço", "Imprimir etiquetas" (travada até "Pronto p/ Instalação"),
+    "Ver timeline", "Voltar etapa" e "Avançar etapa" (as duas últimas só quando a
+    etapa permite). O card não tem mais ícones de ação soltos; "Agendar instalação" e
+    "Confirmar pagamento" continuam como botões. Clicar no número do pedido edita.
 
 Avanço de status com comportamentos automáticos:
   - Orçamento → Medição: gera lançamentos em Contas a Receber automaticamente
@@ -351,7 +355,7 @@ campo e mandar para ele. Abre também por pcp.html?view=rotas.
   - Chegada prevista: saída + trajeto + duração de cada visita. Se a 1ª visita
     tem horário, sai a tempo de chegar nele; senão, no início do expediente
     (configuração da agenda). Chegou antes do horário: espera até ele.
-    Chegada mais de 10 min depois do agendado: "⚠ N min depois do agendado".
+    Chegada mais de 10 min depois do agendado: "⚠ 10 horas e 7 minutos depois do agendado" (atraso por extenso).
     Não impede nada.
   - Total: km e tempo de trajeto (com a volta) e horário de saída.
   - "💾 Salvar rota": grava a ordem e, para cada visita com horário que não

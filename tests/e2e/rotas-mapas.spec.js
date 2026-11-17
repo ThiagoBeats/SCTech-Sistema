@@ -89,7 +89,7 @@ test('lista as visitas do tecnico no dia, por horario, com chegada, km e aviso d
     // saida 08:50; Maria 09:00; Pedro chega 10:10 (agendado 09:50); Ana 12:20
     await expect(itens(page).nth(0)).toContainText('Chega 09:00');
     await expect(itens(page).nth(1)).toContainText('Chega 10:10');
-    await expect(itens(page).nth(1).locator('.rota-atraso')).toHaveText('⚠ 20 min depois do agendado');
+    await expect(itens(page).nth(1).locator('.rota-atraso')).toHaveText('⚠ 20 minutos depois do agendado');
     await expect(itens(page).nth(0).locator('.rota-atraso')).toHaveCount(0);
     await expect(itens(page).nth(2)).toContainText('Sem horário');
     await expect(itens(page).nth(2)).toContainText('Chega 12:20');
@@ -168,7 +168,7 @@ test('Enviar ao tecnico abre o WhatsApp com a lista e o link, e salva a rota', a
     expect(t).toContain(`Rota de ${DIA_BR} — Teste`);
     expect(t).toContain('1. 09:00 · Medição · Maria Silva');
     expect(t).toContain('2. 10:10 · Instalação #26300 · Pedro Souza');
-    expect(t).toContain('⚠ 20 min depois do agendado (09:50)');
+    expect(t).toContain('⚠ 20 minutos depois do agendado (09:50)');
     expect(t).toContain('📞 (41) 98888-1111');
     expect(t).toContain('Rota no Google Maps: https://www.google.com/maps/dir/');
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('sc_rotas')).length)).toBe(1);

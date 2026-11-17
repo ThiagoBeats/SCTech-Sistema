@@ -112,6 +112,13 @@
         const h = Math.floor(min / 60), m = min % 60;
         return h ? h + 'h' + String(m).padStart(2, '0') : m + ' min';
     }
+    // Minutos por extenso: 607 -> "10 horas e 7 minutos", 61 -> "1 hora e 1 minuto".
+    function duracaoPorExtenso(min) {
+        min = Math.max(0, Math.round(+min || 0));
+        const h = Math.floor(min / 60), m = min % 60;
+        const ph = h + (h === 1 ? ' hora' : ' horas'), pm = m + (m === 1 ? ' minuto' : ' minutos');
+        return !h ? pm : !m ? ph : ph + ' e ' + pm;
+    }
     function fmtKm(km) { return (Math.round((+km || 0) * 10) / 10).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' km'; }
 
     function textoWhatsRota({ data, tecnico, saida, itens, links, totalKm, totalMin }) {
@@ -168,7 +175,7 @@
     }
 
     const api = { linkIrPara, linksRota, normalizarEndereco, ordemDoTrip, melhorOrdemAberta, trechosDaRota, calcularChegadas,
-        linhaObsRota, aplicarObsRota, textoWhatsRota, fmtDur, fmtKm, hhmm, TOLERANCIA_MIN };
+        linhaObsRota, aplicarObsRota, textoWhatsRota, fmtDur, duracaoPorExtenso, fmtKm, hhmm, TOLERANCIA_MIN };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.RotasCore = api;
 

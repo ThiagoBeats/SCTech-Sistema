@@ -137,7 +137,7 @@ function _rotaDesenhar() {
         const naoAchado = calc && calc.naoAchados.includes(k);
         const chegada = c && !c.incerto ? `<span class="rota-chega">Chega ${RotasCore.hhmm(c.chegadaMin)}</span>` : '';
         const atraso = c && !c.incerto && c.atrasoMin
-            ? `<span class="rota-atraso">⚠ ${c.atrasoMin} min depois do agendado</span>` : '';
+            ? `<span class="rota-atraso">⚠ ${RotasCore.duracaoPorExtenso(c.atrasoMin)} depois do agendado</span>` : '';
         return `<li class="rota-item" draggable="true" data-i="${i}" ondragstart="_rotaDragIni(event, ${i})" ondragover="event.preventDefault()" ondrop="_rotaDrop(event, ${i})">
             <span class="rota-num">${i + 1}</span>
             <span class="rota-alca" aria-hidden="true" title="Arraste para mudar a ordem">⠿</span>
@@ -422,7 +422,7 @@ async function enviarRotaAoTecnico() {
             const c = cheg && cheg.paradas[i];
             const hora = c && !c.incerto ? RotasCore.hhmm(c.inicioMin) : v.hora;
             return { hora, tipo: v.rotulo, cliente: v.cliente, tel: v.tel, end: v.end,
-                aviso: c && !c.incerto && c.atrasoMin ? `${c.atrasoMin} min depois do agendado (${v.hora})` : '' };
+                aviso: c && !c.incerto && c.atrasoMin ? `${RotasCore.duracaoPorExtenso(c.atrasoMin)} depois do agendado (${v.hora})` : '' };
         }),
         links: _rotaLinks(itens),
         totalKm: trechos ? trechos.reduce((s, t) => s + t.metros, 0) / 1000 : null,

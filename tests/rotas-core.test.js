@@ -105,7 +105,7 @@ test('texto do WhatsApp para o tecnico tem a lista, o aviso e os links', () => {
         data: '2026-11-15', tecnico: 'João', saida: 'Rua X, 100',
         itens: [
             { hora: '09:00', tipo: 'Medição', cliente: 'Maria', tel: '(41) 9999-0000', end: 'Rua A, 1' },
-            { hora: '10:55', tipo: 'Instalação #261', cliente: 'Pedro', tel: '', end: 'Rua B, 2', aviso: '25 min depois do agendado (10:30)' },
+            { hora: '10:55', tipo: 'Instalação #261', cliente: 'Pedro', tel: '', end: 'Rua B, 2', aviso: '25 minutos depois do agendado (10:30)' },
         ],
         links: ['https://l1', 'https://l2'], totalKm: 28.4, totalMin: 70,
     });
@@ -114,9 +114,19 @@ test('texto do WhatsApp para o tecnico tem a lista, o aviso e os links', () => {
     assert.ok(t.includes('1. 09:00 · Medição · Maria'));
     assert.ok(t.includes('📞 (41) 9999-0000'));
     assert.ok(t.includes('📍 Rua B, 2'));
-    assert.ok(t.includes('⚠ 25 min depois do agendado (10:30)'));
+    assert.ok(t.includes('⚠ 25 minutos depois do agendado (10:30)'));
     assert.ok(t.includes('Total: 28,4 km · 1h10 de trajeto'));
     assert.ok(t.includes('Parte 1: https://l1') && t.includes('Parte 2: https://l2'));
     const um = R.textoWhatsRota({ data: '2026-11-15', tecnico: '', itens: [{ hora: '', tipo: 'Medição', cliente: 'A', end: 'X' }], links: ['https://l'] });
     assert.ok(um.includes('Rota no Google Maps: https://l') && um.includes('1. Medição · A'));
+});
+
+test('duracaoPorExtenso: minutos por extenso, com singular e plural', () => {
+    assert.strictEqual(R.duracaoPorExtenso(607), '10 horas e 7 minutos');
+    assert.strictEqual(R.duracaoPorExtenso(61), '1 hora e 1 minuto');
+    assert.strictEqual(R.duracaoPorExtenso(120), '2 horas');
+    assert.strictEqual(R.duracaoPorExtenso(25), '25 minutos');
+    assert.strictEqual(R.duracaoPorExtenso(1), '1 minuto');
+    assert.strictEqual(R.duracaoPorExtenso(60), '1 hora');
+    assert.strictEqual(R.duracaoPorExtenso(0), '0 minutos');
 });
