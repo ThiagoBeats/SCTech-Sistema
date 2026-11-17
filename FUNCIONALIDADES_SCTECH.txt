@@ -2576,7 +2576,10 @@ Fornecedores:
 
 Configurações (configuracoes.html), agora em sub-abas:
   - Meu Perfil: nome de exibição, foto de perfil e telefone/WhatsApp, de
-    cada usuário. O nome e a foto aparecem no menu da logo.
+    cada usuário. O nome e a foto aparecem no menu da logo e na barra
+    superior. Ao escolher a foto abre a janela "Ajustar foto" (arrastar
+    para enquadrar, zoom, prévia redonda); "Salvar foto" grava um quadrado
+    256x256.
   - Preferências do Sistema: tema claro/escuro (agora do usuário, segue
     ele em qualquer computador), notificações (Todas / Só as urgentes /
     Nenhuma — vale para os alertas do painel) e notificações sonoras

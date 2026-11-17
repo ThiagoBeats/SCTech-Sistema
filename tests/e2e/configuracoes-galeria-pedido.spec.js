@@ -58,6 +58,7 @@ test('Meu Perfil grava nome de exibicao, telefone e foto, e o popup mostra', asy
         return c.toDataURL('image/png').split(',')[1];
     });
     await page.setInputFiles('#perfil-foto-input', { name: 'eu.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+    await page.click('#ajuste-foto-salvar');
     await expect(page.locator('#perfil-foto-preview img')).toBeVisible();
     await page.click('button:has-text("Salvar perfil")');
     const u = await page.evaluate(() => JSON.parse(localStorage.getItem('sc_usr'))[0]);

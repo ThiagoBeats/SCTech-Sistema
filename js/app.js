@@ -1792,10 +1792,91 @@ function escolherFotoPerfil(input) {
     input.value = '';
     if (!f) return;
     if (!/^image\//.test(f.type)) { toast('Escolha um arquivo de imagem.', 'warning'); return; }
-    _resizeImageBase64(f, 256).then(b64 => {
+    const url = URL.createObjectURL(f);
+    const img = new Image();
+    img.onload = () => abrirAjusteFotoPerfil(img, url);
+    img.onerror = () => { URL.revokeObjectURL(url); toast('Não foi possível ler essa imagem.', 'warning'); };
+    img.src = url;
+}
+// Janela "Ajustar foto": arrastar para enquadrar + zoom; grava um quadrado 256x256.
+function abrirAjusteFotoPerfil(img, urlObj) {
+    const V = 260, SAIDA = 256, ZMAX = 4;
+    const w = img.naturalWidth, h = img.naturalHeight;
+    const base = V / Math.min(w, h);          // zoom 1 = a imagem cobre o circulo
+    let zoom = 1, ox = 0, oy = 0;             // ox/oy: deslocamento do centro da imagem
+    const o = document.createElement('div');
+    o.className = 'agd-modal-overlay';
+    o.id = 'ajuste-foto-overlay';
+    o.innerHTML = `<div class="agd-modal" role="dialog" aria-label="Ajustar foto" style="max-width:340px">
+        <div class="agd-modal-head"><h3>Ajustar foto</h3></div>
+        <div class="agd-modal-corpo" style="text-align:center">
+            <div id="ajuste-foto-area" style="width:${V}px;height:${V}px;margin:0 auto;border-radius:50%;overflow:hidden;position:relative;background:#222;touch-action:none;cursor:grab;user-select:none">
+                <img id="ajuste-foto-img" alt="" draggable="false" style="position:absolute;left:50%;top:50%;max-width:none;pointer-events:none">
+            </div>
+            <p style="font-size:12px;color:var(--muted);margin:8px 0 4px">Arraste para enquadrar</p>
+            <input type="range" id="ajuste-foto-zoom" min="1" max="${ZMAX}" step="0.01" value="1" aria-label="Zoom" style="width:80%">
+        </div>
+        <div class="agd-modal-acoes">
+            <button type="button" class="btn btn-outline" id="ajuste-foto-cancelar">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="ajuste-foto-salvar">Salvar foto</button>
+        </div></div>`;
+    document.body.appendChild(o);
+    const im = o.querySelector('#ajuste-foto-img');
+    im.src = img.src;
+    const area = o.querySelector('#ajuste-foto-area');
+    const aplicar = () => {
+        const sc = base * zoom;
+        const mx = Math.max(0, (w * sc - V) / 2), my = Math.max(0, (h * sc - V) / 2);
+        ox = Math.max(-mx, Math.min(mx, ox));
+        oy = Math.max(-my, Math.min(my, oy));
+        im.style.width = (w * sc) + 'px';
+        im.style.height = (h * sc) + 'px';
+        im.style.transform = `translate(calc(-50% + ${ox}px), calc(-50% + ${oy}px))`;
+    };
+    aplicar();
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); fechar(); } };
+    const fechar = () => {
+        document.removeEventListener('keydown', onKey, true);
+        o.remove();
+        URL.revokeObjectURL(urlObj);
+    };
+    document.addEventListener('keydown', onKey, true);
+    let arrasto = null;
+    area.addEventListener('pointerdown', e => {
+        arrasto = { x: e.clientX, y: e.clientY, ox, oy };
+        area.setPointerCapture(e.pointerId);
+        area.style.cursor = 'grabbing';
+    });
+    area.addEventListener('pointermove', e => {
+        if (!arrasto) return;
+        ox = arrasto.ox + (e.clientX - arrasto.x);
+        oy = arrasto.oy + (e.clientY - arrasto.y);
+        aplicar();
+    });
+    const soltar = () => { arrasto = null; area.style.cursor = 'grab'; };
+    area.addEventListener('pointerup', soltar);
+    area.addEventListener('pointercancel', soltar);
+    o.querySelector('#ajuste-foto-zoom').addEventListener('input', e => {
+        const antes = base * zoom;
+        zoom = parseFloat(e.target.value) || 1;
+        const k = (base * zoom) / antes;   // mantem o centro do circulo no mesmo ponto da imagem
+        ox *= k; oy *= k;
+        aplicar();
+    });
+    o.querySelector('#ajuste-foto-cancelar').onclick = fechar;
+    o.querySelector('#ajuste-foto-salvar').onclick = () => {
+        const c = document.createElement('canvas');
+        c.width = c.height = SAIDA;
+        const g = c.getContext('2d');
+        const f = SAIDA / V, sc = base * zoom * f;
+        g.fillStyle = '#fff';
+        g.fillRect(0, 0, SAIDA, SAIDA);
+        g.drawImage(img, SAIDA / 2 + ox * f - (w * sc) / 2, SAIDA / 2 + oy * f - (h * sc) / 2, w * sc, h * sc);
+        const b64 = c.toDataURL('image/jpeg', 0.9);
+        fechar();
         _perfilFoto = b64;
         _pintarFotoPerfil(b64, document.getElementById('perfil-nome')?.value);
-    });
+    };
 }
 function removerFotoPerfil() {
     _perfilFoto = '';
