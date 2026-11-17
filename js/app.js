@@ -281,6 +281,7 @@ let db = {
     movimentos_fin:  JSON.parse(localStorage.getItem('sc_mov_fin'))    || [],
     fechamentos_fin: JSON.parse(localStorage.getItem('sc_fin_fech'))   || [],
     medicoes:        JSON.parse(localStorage.getItem('sc_med'))  || [],
+    agenda_eventos:  JSON.parse(localStorage.getItem('sc_agd_ev')) || [],
     rotas:           JSON.parse(localStorage.getItem('sc_rotas')) || [],
     papeis:          JSON.parse(localStorage.getItem('sc_pap'))  || papeisPadrao(),
     usuarios:        JSON.parse(localStorage.getItem('sc_usr'))  || [],
@@ -396,6 +397,7 @@ function _syncDBBruto(extras) {
         ['sc_fin_fech', db.fechamentos_fin],
         ['sc_med', db.medicoes],
         ['sc_rotas', db.rotas || []],
+        ['sc_agd_ev', db.agenda_eventos || []],
         ['sc_pap', db.papeis],
         ['sc_usr', db.usuarios],
         ['sc_imp_perfis', db.import_perfis],
@@ -4530,7 +4532,7 @@ Notif.registrar('estoque-minimo', () => {
 
 // Outra aba gravou: traz para a memoria o que os alertas leem.
 function _notifRecarregarDB(chave) {
-    const mapa = { sc_ped: 'pedidos', sc_med: 'medicoes', sc_cat: 'catalogo', sc_mat: 'materiais', sc_est: 'estoque', sc_mov: 'movimentos', sc_usr: 'usuarios', sc_pap: 'papeis' };
+    const mapa = { sc_ped: 'pedidos', sc_med: 'medicoes', sc_cat: 'catalogo', sc_mat: 'materiais', sc_est: 'estoque', sc_mov: 'movimentos', sc_usr: 'usuarios', sc_pap: 'papeis', sc_agd_ev: 'agenda_eventos' };
     const campo = mapa[chave];
     if (!campo) return;
     try { const v = JSON.parse(localStorage.getItem(chave)); if (Array.isArray(v)) db[campo] = v; } catch (e) { /* mantem */ }
@@ -8152,7 +8154,7 @@ function _dadosExportacao(marcaFase0) {
         fornecedores: db.fornecedores, pedidos_compra: db.pedidos_compra, carrinhos: db.carrinhos,
         contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, despesas_fixas: db.despesas_fixas,
         contas_fin: db.contas_fin, meios_pag: db.meios_pag, movimentos_fin: db.movimentos_fin, fechamentos_fin: db.fechamentos_fin,
-        medicoes: db.medicoes, rotas: db.rotas || [],
+        medicoes: db.medicoes, rotas: db.rotas || [], agenda_eventos: db.agenda_eventos || [],
         fin_metas: _lerObjetoLS('sc_fin_metas'), fin_orcamento_mes: _lerObjetoLS('sc_fin_orcamento_mes'),
         empresa: getEmpresa(), formas_pag: getFormasPagamentoCfg(),
         import_perfis: db.import_perfis || [],
@@ -8204,6 +8206,7 @@ function importarDados(event) {
             db.despesas_fixas = dados.despesas_fixas || [];
             db.medicoes       = dados.medicoes       || [];
             db.rotas          = Array.isArray(dados.rotas) ? dados.rotas : [];
+            db.agenda_eventos = Array.isArray(dados.agenda_eventos) ? dados.agenda_eventos : [];
             db.contas_fin     = dados.contas_fin     || [];
             db.meios_pag      = dados.meios_pag      || [];
             db.movimentos_fin = dados.movimentos_fin || [];
@@ -11647,8 +11650,22 @@ function _agdCompromissos() {
         out.push({ tipo: 'med', id: m.id, prof, data: m.data, ini, fim: ini + (+m.duracao || +cfg.dur_med),
             rotulo: 'Medição', cliente: m.clienteNome || '' });
     });
+    // Compromissos e bloqueios da propria agenda: o rotulo ja vem com a privacidade
+    // aplicada (quem nao e o dono nem Administrador nao ve descricao nem motivo).
+    const uid = getUsuarioLogado()?.id, adm = ehAdministrador();
+    (db.agenda_eventos || []).forEach(ev => {
+        if (!ev || !ev.prof) return;
+        const v = AgendaCore.visivel(ev, uid, adm);
+        const dono = AgendaCore.podeGerenciar(ev.prof, uid, adm);
+        const rotulo = !dono ? v.titulo
+            : ev.tipo === 'compromisso' ? 'Compromisso' + (v.descricao ? ': ' + v.descricao : '')
+            : 'Bloqueio: ' + (v.descricao || _AGD_BLOQ_ROTULOS[ev.bloqueio] || 'Bloqueio');
+        AgendaCore.ocupacoesDoEvento(ev, cfg).forEach(o =>
+            out.push({ tipo: ev.tipo === 'compromisso' ? 'comp' : 'bloq', id: ev.id, prof: ev.prof, data: o.data, ini: o.ini, fim: o.fim, rotulo, cliente: '' }));
+    });
     return out;
 }
+const _AGD_BLOQ_ROTULOS = { horario: 'Horário', dia: 'Dia inteiro', folga: 'Folga', ferias: 'Férias' };
 function _agdDoDia(prof, data, ignorar) {
     return _agdCompromissos()
         .filter(c => c.prof === prof && c.data === data && !(ignorar && c.tipo === ignorar.tipo && c.id == ignorar.id))
@@ -11710,8 +11727,10 @@ function _agdRecarregar() {
     try {
         const ped = JSON.parse(localStorage.getItem('sc_ped'));
         const med = JSON.parse(localStorage.getItem('sc_med'));
+        const agd = JSON.parse(localStorage.getItem('sc_agd_ev'));
         if (Array.isArray(ped)) db.pedidos  = ped;
         if (Array.isArray(med)) db.medicoes = med;
+        if (Array.isArray(agd)) db.agenda_eventos = agd;
     } catch (e) { /* mantem o que esta em memoria */ }
 }
 async function _agdValidarDisp(q) {
@@ -11835,7 +11854,7 @@ function _agdRenderDisp(elId, q) {
 
     const lista = ocupados
         ? `<div class="agd-disp-comp"><div class="agd-disp-sub">Compromissos do dia</div>${d.compromissos.map(c =>
-            `<div class="agd-disp-comp-item"><span class="agd-pill ${c.tipo === 'inst' ? 'agd-pill-azul' : 'agd-pill-amar'}">${c.tipo === 'inst' ? 'Instalação' : 'Medição'}</span><span>${_agdHHMM(c.ini)}–${_agdHHMM(c.fim)}</span><span class="agd-disp-comp-cli">${escapeHtml(c.cliente || c.rotulo)}</span></div>`).join('')}</div>`
+            `<div class="agd-disp-comp-item"><span class="agd-pill ${c.tipo === 'inst' ? 'agd-pill-azul' : c.tipo === 'bloq' ? 'agd-pill-verm' : 'agd-pill-amar'}">${c.tipo === 'inst' ? 'Instalação' : c.tipo === 'bloq' ? 'Bloqueio' : c.tipo === 'comp' ? 'Compromisso' : 'Medição'}</span><span>${_agdHHMM(c.ini)}–${_agdHHMM(c.fim)}</span><span class="agd-disp-comp-cli">${escapeHtml(c.cliente || c.rotulo)}</span></div>`).join('')}</div>`
         : '';
 
     el.innerHTML = cab + `
@@ -12647,9 +12666,13 @@ function _instDispOpts(id) { return { disp: { tipo: 'inst', ignorar: { tipo: 'in
 
 // Grava a edicao/reagendamento: o pedido e relido depois da validacao da agenda.
 async function _instGravarEdicao(id, v, titulo) {
-    const p = db.pedidos.find(x => x.id == id);
+    let p = db.pedidos.find(x => x.id == id);
     if (!p || !_instPendente(p)) { await showAlert('Esta instalação não está mais agendada.', '⚠️'); fecharModalAgenda(); _agdRedesenharAgendas(); return; }
     if (!await _instConfirmarNovaData(p, v.data)) return false;
+    // A confirmacao demorou: relê o gravado e confere o conflito de novo antes de gravar.
+    if (v.usu && v.usu.chave && !await _agdValidarDisp({ prof: v.usu.chave, profNome: v.usu.pessoa.nome, data: v.data, hora: v.hora, dur: v.dur || _agdDurPadrao('inst'), ignorar: { tipo: 'inst', id } })) { _agdRedesenharAgendas(); return false; }
+    p = db.pedidos.find(x => x.id == id);
+    if (!p || !_instPendente(p)) { await showAlert('Esta instalação não está mais agendada.', '⚠️'); fecharModalAgenda(); _agdRedesenharAgendas(); return; }
     if (v.data !== p.data_entrega || v.hora !== (p.inst_hora || '')) {
         if (!p.inst_historico) p.inst_historico = [];
         _agdRegistrar(p.inst_historico, 'reagendado', { de: { data: p.data_entrega || '', hora: p.inst_hora || '' }, para: { data: v.data, hora: v.hora } });
@@ -13133,7 +13156,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Outra aba/usuario mexeu nas agendas: a disponibilidade se atualiza aqui.
         window.addEventListener('storage', e => {
             if (e.key === 'sc_usr' || e.key === 'sc_pap') { _agdAtualizarListaProf(); _agdRedesenharAgendas(); return; }
-            if (e.key !== 'sc_ped' && e.key !== 'sc_med' && e.key !== 'sc_agd_cfg') return;
+            if (e.key !== 'sc_ped' && e.key !== 'sc_med' && e.key !== 'sc_agd_cfg' && e.key !== 'sc_agd_ev') return;
             _agdRecarregar();
             _agdRedesenharAgendas();
             if (document.getElementById('kanban-board')) renderKanban();
