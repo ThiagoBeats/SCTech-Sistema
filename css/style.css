@@ -459,7 +459,8 @@ td:last-child { white-space: nowrap; }
 .kanban-card-age { font-size: 11px; color: #8F8F8F; background: var(--surface-3); padding: 1px 6px; border-radius: 10px; }
 .kanban-card-vendedor { font-size: 11px; color: #8F8F8F; margin-bottom: 4px; }
 .kanban-card-cliente { font-weight: bold; font-size: 14px; color: var(--dark); margin-bottom: 1px; }
-.kanban-card-actions { display: flex; justify-content: space-between; align-items: center; }
+.kanban-card-top .kanban-card-age { margin-left: auto; }
+.kanban-card-top .btn-kebab { width: 26px; height: 26px; font-size: 18px; margin: -3px -4px -3px 4px; }
 .kanban-empty { color: #8F8F8F; font-size: 13px; text-align: center; padding: 24px 8px; font-style: italic; }
 .kanban-nav-ph { display: inline-block; width: 35px; }
 

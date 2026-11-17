@@ -2,7 +2,7 @@
 // que abre e fecha) e a rolagem propria de cada coluna -- no Kanban e nas
 // duas colunas das agendas de Medicoes e Instalacoes.
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirMenuAcoes, acaoMenu } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 
@@ -88,13 +88,17 @@ test('lista: a linha mostra numero, cliente, ambiente, entrega e as acoes', asyn
     await expect(l.locator('.pcp-linha-nome')).toHaveText('Pedro Alves');
     await expect(l.locator('.pcp-linha-amb')).toHaveText('Sala');
     await expect(l.locator('.badge-atrasado')).toHaveText('3d atrasado');
-    await expect(l.locator('button[title="Ver Ordem de Serviço"]')).toBeVisible();
-    await expect(l.locator('button[title="Ver timeline"]')).toBeVisible();
-    await expect(l.locator('button[title="Avançar etapa"]')).toBeVisible();
-    await expect(l.locator('button[title="Voltar etapa"]'), 'primeira etapa nao volta').toHaveCount(0);
+    await expect(l.locator('button[title="Ver Ordem de Serviço"]'), 'sem icones soltos').toHaveCount(0);
+    const menu = await abrirMenuAcoes(page, l);
+    await expect(menu.locator('.menu-acoes-item', { hasText: 'Ver Ordem de Serviço' })).toBeVisible();
+    await expect(menu.locator('.menu-acoes-item', { hasText: 'Ver timeline' })).toBeVisible();
+    await expect(menu.locator('.menu-acoes-item', { hasText: 'Avançar etapa' })).toBeVisible();
+    await expect(menu.locator('.menu-acoes-item', { hasText: 'Voltar etapa' }), 'primeira etapa nao volta').toHaveCount(0);
+    await page.keyboard.press('Escape');
 
     const costura = bloco(page, 'Na Costura').locator('.pcp-linha', { hasText: 'Bruna Costa' });
-    await expect(costura.locator('button[title="Voltar etapa"]')).toBeVisible();
+    await expect((await abrirMenuAcoes(page, costura)).locator('.menu-acoes-item', { hasText: 'Voltar etapa' })).toBeVisible();
+    await page.keyboard.press('Escape');
     await expect(costura.locator('.pcp-linha-obs')).toHaveAttribute('title', 'Portão azul');
 });
 
@@ -103,7 +107,7 @@ test('lista: pronto sem instalacao marcada mostra Agendar no lugar de avancar', 
     await page.click('#pcp-modo-lista');
     const l = bloco(page, 'Pronto p/ Instalação').locator('.pcp-linha').first();
     await expect(l.locator('button', { hasText: 'Agendar' })).toBeVisible();
-    await expect(l.locator('button[title="Avançar etapa"]')).toHaveCount(0);
+    await expect((await abrirMenuAcoes(page, l)).locator('.menu-acoes-item', { hasText: 'Avançar etapa' })).toHaveCount(0);
 });
 
 test('lista: o numero do pedido abre o pedido', async ({ page }) => {
@@ -166,7 +170,7 @@ test('filtros continuam depois de avancar o pedido de etapa', async ({ page }) =
     await page.fill('#kf-cliente', 'Pedro');
     await page.selectOption('#kf-vendedor', 'Julia');
     await expect(page.locator('#kanban-board .kanban-card')).toHaveCount(1);
-    await page.locator('#kanban-board .kanban-card button[title="Avançar etapa"]').click();
+    await acaoMenu(page, page.locator('#kanban-board .kanban-card'), 'Avançar etapa');
     await page.waitForLoadState('load');
     await expect(page.locator('#kanban-board .kanban-col', { hasText: 'Aguardando Tecido' })).toContainText('Pedro Alves');
     await expect(page.locator('#kf-cliente')).toHaveValue('Pedro');

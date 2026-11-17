@@ -9,7 +9,7 @@
 // 4. Menu lateral com alfinete: fixado fica aberto; solto mostra so os
 //    icones e abre ao passar o mouse. Preferencia guardada por usuario.
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirMenuAcoes, acaoMenu } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const lerPed = page => page.evaluate(() => JSON.parse(localStorage.getItem('sc_ped')));
@@ -99,10 +99,10 @@ test('confirmar a entrega no Kanban, pago ou nao, vai para Aguardando Financeiro
         pedBase(26002, 'Pronto p/ Instalação', { inst_agendado: true, clienteNome: 'Bruna Costa' }),
     ] });
     await page.goto(BASE + '/pcp.html?view=kanban');
-    await colunaKanban(page, 'Pronto p/ Instalação').locator('.kanban-card', { hasText: 'Pedro Alves' }).locator('button[title="Avançar etapa"]').click();
+    await acaoMenu(page, colunaKanban(page, 'Pronto p/ Instalação').locator('.kanban-card', { hasText: 'Pedro Alves' }), 'Avançar etapa');
     await page.click('#mpg-sim');
     await expect(colunaKanban(page, 'Aguardando Financeiro')).toContainText('Pedro Alves');
-    await colunaKanban(page, 'Pronto p/ Instalação').locator('.kanban-card', { hasText: 'Bruna Costa' }).locator('button[title="Avançar etapa"]').click();
+    await acaoMenu(page, colunaKanban(page, 'Pronto p/ Instalação').locator('.kanban-card', { hasText: 'Bruna Costa' }), 'Avançar etapa');
     await page.click('#mpg-nao');
     await expect(colunaKanban(page, 'Aguardando Financeiro')).toContainText('Bruna Costa');
     const col = colunaKanban(page, 'Aguardando Financeiro');
@@ -123,7 +123,8 @@ test('card em Aguardando Financeiro mostra forma de pagamento, Pendente e o bota
     await expect(pend.locator('.kanban-fin-forma')).toHaveText('💳 Cartão 3x');
     await expect(pend.locator('.kanban-pag-pendente')).toContainText('Pendente');
     await expect(pend.locator('.kanban-btn-pagamento')).toContainText('Confirmar pagamento');
-    await expect(pend.locator('button[title="Avançar etapa"]')).toHaveCount(0);
+    await expect((await abrirMenuAcoes(page, pend)).locator('.menu-acoes-item', { hasText: 'Avançar etapa' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
     const pago = col.locator('.kanban-card', { hasText: 'Bruna Costa' });
     await expect(pago.locator('.kanban-fin-forma')).toHaveText('💳 Pix');
     await expect(pago.locator('.kanban-pag-pendente')).toHaveCount(0);

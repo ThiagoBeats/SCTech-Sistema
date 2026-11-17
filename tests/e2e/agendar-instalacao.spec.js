@@ -7,7 +7,7 @@
 //     medicoes; a conferencia e refeita contra o que esta gravado ao salvar.
 //   - Um pedido tem no maximo uma instalacao: nada de duplicar.
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirMenuAcoes, acaoMenu } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 
@@ -44,7 +44,7 @@ test('Na Costura -> Pronto nao abre popup e o pedido aparece nos cards da agenda
     await abrir(page, 'kanban', {
         sc_ped: [{ id: 26100, clienteId: 1, clienteNome: 'Costura Sem Item', status: 'Na Costura', valor: 500, amb: 'Sala' }],
     });
-    await page.locator('.kanban-card', { hasText: 'Costura Sem Item' }).locator('button[title="Avançar etapa"]').click();
+    await acaoMenu(page, page.locator('.kanban-card', { hasText: 'Costura Sem Item' }), 'Avançar etapa');
     await expect.poll(async () => (await lerPed(page, 26100)).status).toBe('Pronto p/ Instalação');
     const p = await lerPed(page, 26100);
     expect(p.inst_agendado, 'entra sem agendamento').toBe(false);
@@ -59,7 +59,7 @@ test('Na Costura -> Pronto ainda pede a baixa dos materiais; desistir nao move',
         sc_ped: [{ id: 26101, clienteId: 1, clienteNome: 'Costura Com Item', status: 'Na Costura', valor: 700,
             itens: [{ materialId: 1, nome: 'Trilho', quantidade: 2, unidade: 'un' }] }],
     });
-    await page.locator('.kanban-card', { hasText: 'Costura Com Item' }).locator('button[title="Avançar etapa"]').click();
+    await acaoMenu(page, page.locator('.kanban-card', { hasText: 'Costura Com Item' }), 'Avançar etapa');
     await page.locator('.sc-modal-btns .btn-outline, #sc-modal-cancel').first().click();
     const p = await lerPed(page, 26101);
     expect(p.status).toBe('Na Costura');
@@ -70,7 +70,7 @@ test('Kanban: pedido pronto sem agenda leva para a agenda com o pedido seleciona
     await abrir(page, 'kanban', { sc_ped: [pronto()] });
     const card = colunaKanban(page, 'Pronto p/ Instalação').locator('.kanban-card', { hasText: 'Ana Paula Lima' });
     await expect(card).toContainText('Aguardando agendamento');
-    await expect(card.locator('button[title="Avançar etapa"]'), 'nao confirma sem agendar').toHaveCount(0);
+    await expect((await abrirMenuAcoes(page, card)).locator('.menu-acoes-item', { hasText: 'Avançar etapa' }), 'nao confirma sem agendar').toHaveCount(0);
     await card.locator('button[title="Agendar instalação"]').click();
     await expect(page.locator('#pcp-view-agenda')).toBeVisible();
     await expect(page.locator('#inst-pedido')).toHaveValue('26200');
@@ -417,7 +417,7 @@ test('Kanban: "Agendar instalação" fica embaixo do card, na largura toda', asy
     const card = colunaKanban(page, 'Pronto p/ Instalação').locator('.kanban-card').first();
     const btn = card.locator('button[title="Agendar instalação"]');
     await expect(btn).toHaveText('📅 Agendar instalação');
-    const [c, b, a] = await Promise.all([card.boundingBox(), btn.boundingBox(), card.locator('.kanban-card-actions').boundingBox()]);
-    expect(b.y, 'abaixo das acoes').toBeGreaterThan(a.y + a.height - 1);
+    const [c, b, a] = await Promise.all([card.boundingBox(), btn.boundingBox(), card.locator('.kanban-card-top').boundingBox()]);
+    expect(b.y, 'abaixo do topo do card').toBeGreaterThan(a.y + a.height - 1);
     expect(b.width, 'quase a largura do card').toBeGreaterThan(c.width - 40);
 });

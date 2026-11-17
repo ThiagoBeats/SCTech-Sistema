@@ -3911,7 +3911,7 @@ function menuAcoesHtml(acoes) {
     const lista = (acoes || []).filter(a => a && !a.oculto);
     if (!lista.length) return '';
     const ordenadas = lista.filter(a => !a.perigo).concat(lista.filter(a => a.perigo));
-    const dados = ordenadas.map(a => ({ icone: a.icone || '', rotulo: a.rotulo, onclick: a.onclick, perigo: !!a.perigo }));
+    const dados = ordenadas.map(a => ({ icone: a.icone || '', rotulo: a.rotulo, onclick: a.onclick, perigo: !!a.perigo, bloqueado: !!a.bloqueado, dica: a.dica || '' }));
     return `<button type="button" class="btn-kebab btn-acoes" aria-label="Ações" aria-haspopup="menu" aria-expanded="false" title="Ações" data-acoes="${escapeHtml(JSON.stringify(dados))}">⋮</button>`;
 }
 document.addEventListener('click', e => {
@@ -3923,7 +3923,7 @@ document.addEventListener('click', e => {
     dados.forEach((a, i) => {
         if (a.perigo && i > 0 && !dados[i - 1].perigo) itens.push({ sep: true });
         // roda a string como o onclick inline do botao antigo (escopo global)
-        itens.push({ icone: a.icone, rotulo: a.rotulo, perigo: a.perigo, acao: () => {
+        itens.push({ icone: a.icone, rotulo: a.rotulo, perigo: a.perigo, bloqueado: a.bloqueado, dica: a.dica, acao: () => {
             const b = document.createElement('button');
             b.setAttribute('onclick', a.onclick);
             b.click();
@@ -7196,17 +7196,12 @@ function renderKanban() {
                         <div class="kanban-card-top">
                             <span class="kanban-card-id" style="cursor:pointer;text-decoration:underline" onclick="editarPedido(${p.id})" title="Editar pedido">#${formatPedidoId(p.id)}</span>
                             <span class="kanban-card-age">${dataInst}</span>
+                            ${_menuAcoesCardPedido(p, { podeVoltar })}
                         </div>
                         ${vendedorLinha}
                         <div class="kanban-card-cliente" style="font-size:13px">${escapeHtml(p.clienteNome||'')}${obsBadge}</div>
                         ${_badgeSaldoEmAberto(p)}
                         ${_badgeConferencia(p) ? `<div style="margin-top:4px">${_badgeConferencia(p)}</div>` : ''}
-                        <div class="kanban-card-actions" style="margin-top:6px">
-                            <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})" title="Ver Ordem de Serviço">📋 OS</button>
-                            ${_btnEtiquetas(p)}
-                            <button class="btn btn-outline btn-sm" onclick="verTimeline(${p.id})" title="Ver timeline">⏱</button>
-                            ${podeVoltar ? `<button class="btn btn-outline btn-sm" onclick="moverStatus(${p.id},-1)" title="Voltar status">←</button>` : ''}
-                        </div>
                     </div>`;
                 }
                 let badgeEst = '';
@@ -7233,8 +7228,7 @@ function renderKanban() {
                         : `<div class="kanban-inst">📅 ${_agdFmtData(p.data_entrega)}${p.inst_hora ? ' · ' + escapeHtml(p.inst_hora) : ''}${nomeInstalador(p) ? ' · ' + escapeHtml(nomeInstalador(p)) : ''}</div>`;
                 const agFin = col.status === 'Aguardando Financeiro';
                 const finLinha = agFin ? _kanbanFinanceiroHTML(p) : '';
-                const btnAvancar = prontoSemAgenda || agFin ? ''
-                    : `<button class="btn btn-sm" onclick="moverStatus(${p.id},1)" title="Avançar etapa">→</button>`;
+                const podeAvancarMenu = podeAvancar && !prontoSemAgenda && !agFin;
                 const btnAgendar = prontoSemAgenda
                     ? `<button class="btn btn-sm kanban-btn-agendar" onclick="irParaAgendaInstalacao(${p.id})" title="Agendar instalação">📅 Agendar instalação</button>`
                     : '';
@@ -7242,6 +7236,7 @@ function renderKanban() {
                     <div class="kanban-card-top">
                         <span class="kanban-card-id" style="cursor:pointer;text-decoration:underline" onclick="editarPedido(${p.id})" title="Editar pedido">#${formatPedidoId(p.id)}</span>
                         <span class="kanban-card-age${dias >= 30 ? ' kanban-card-age-critical' : dias >= 14 ? ' kanban-card-age-warning' : ''}">${dias === 0 ? 'hoje' : dias + 'd'}</span>
+                        ${_menuAcoesCardPedido(p, { podeVoltar, podeAvancar: podeAvancarMenu })}
                     </div>
                     ${vendedorLinha}
                     <div class="kanban-card-cliente">${escapeHtml(p.clienteNome||'')}${obsBadge}</div>
@@ -7249,17 +7244,6 @@ function renderKanban() {
                     ${instLinha}
                     ${finLinha}
                     ${badgeEst||badgeBaixa ? `<div style="margin-bottom:6px">${badgeEst}${badgeBaixa}</div>` : ''}
-                    <div class="kanban-card-actions">
-                        <div style="display:flex;gap:4px">
-                            <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})" title="Ver Ordem de Serviço">📋</button>
-                            ${_btnEtiquetas(p)}
-                            <button class="btn btn-outline btn-sm" onclick="verTimeline(${p.id})" title="Ver timeline">⏱</button>
-                        </div>
-                        <div style="display:flex;gap:4px">
-                            ${podeVoltar  ? `<button class="btn btn-outline btn-sm" onclick="moverStatus(${p.id},-1)" title="Voltar etapa">←</button>` : `<span class="kanban-nav-ph"></span>`}
-                            ${podeAvancar ? btnAvancar : ''}
-                        </div>
-                    </div>
                     ${btnAgendar}
                     ${agFin ? _kanbanBtnConfirmarPagamento(p) : ''}
                 </div>`;
@@ -7405,11 +7389,19 @@ function rotuloStatus(status) {
 function msgEtiquetaBloqueada(ped) {
     return `As etiquetas só podem ser impressas quando o pedido chega em "Pronto p/ Instalação". Este pedido está em "${rotuloStatus(normalizarStatus(ped && ped.status))}".`;
 }
-function _btnEtiquetas(p) {
-    if (!podeImprimirEtiquetas(p)) {
-        return `<button type="button" class="btn btn-outline btn-sm btn-bloqueado" aria-disabled="true" onclick="toast(msgEtiquetaBloqueada(db.pedidos.find(x => x.id == ${p.id})), 'warning', 4500)" title="Etiquetas liberadas a partir de &quot;Pronto p/ Instalação&quot;">🏷️</button>`;
-    }
-    return `<button class="btn btn-outline btn-sm" onclick="abrirImpressaoEtiquetas(${p.id})" title="Imprimir etiquetas">🏷️</button>`;
+// Acoes do pedido no Painel de Producao (card do Kanban e linha da Lista), no menu ⋮.
+// Mesmas acoes e ordem dos antigos botoes; voltar/avancar so quando a etapa permite.
+function _menuAcoesCardPedido(p, { podeVoltar, podeAvancar } = {}) {
+    const etiquetaOk = podeImprimirEtiquetas(p);
+    return menuAcoesHtml([
+        { icone: '📋', rotulo: 'Ver Ordem de Serviço', onclick: `abrirOS(${p.id})` },
+        etiquetaOk
+            ? { icone: '🏷️', rotulo: 'Imprimir etiquetas', onclick: `abrirImpressaoEtiquetas(${p.id})` }
+            : { icone: '🏷️', rotulo: 'Imprimir etiquetas', bloqueado: true, dica: 'Liberado a partir de "Pronto p/ Instalação"', onclick: `toast(msgEtiquetaBloqueada(db.pedidos.find(x => x.id == ${p.id})), 'warning', 4500)` },
+        { icone: '⏱', rotulo: 'Ver timeline', onclick: `verTimeline(${p.id})` },
+        { icone: '←', rotulo: 'Voltar etapa', onclick: `moverStatus(${p.id},-1)`, oculto: !podeVoltar },
+        { icone: '→', rotulo: 'Avançar etapa', onclick: `moverStatus(${p.id},1)`, oculto: !podeAvancar }
+    ]);
 }
 function _badgeConferencia(p) {
     const m = (typeof EtiquetasCore !== 'undefined') ? EtiquetasCore.marcacaoConferencia(p) : null;
@@ -7427,7 +7419,8 @@ function _pcpLinhaHTML(p, col, idx) {
         : agFin ? _kanbanBtnConfirmarPagamento(p, true)
         : prontoSemAgenda
             ? `<button class="btn btn-sm kanban-btn-agendar" onclick="irParaAgendaInstalacao(${p.id})" title="Agendar instalação">📅 Agendar</button>`
-            : `<button class="btn btn-sm" onclick="moverStatus(${p.id},1)" title="Avançar etapa">→</button>`;
+            : '';
+    const menu = _menuAcoesCardPedido(p, { podeVoltar, podeAvancar: podeAvancar && !agFin && !prontoSemAgenda });
     return `<div class="pcp-linha">
         <button type="button" class="pcp-linha-num" onclick="editarPedido(${p.id})" title="Abrir pedido">#${formatPedidoId(p.id)}</button>
         <div class="pcp-linha-cli">
@@ -7437,11 +7430,8 @@ function _pcpLinhaHTML(p, col, idx) {
         </div>
         <div class="pcp-linha-entrega">${entrega ? `<span class="${entrega.cls}">${entrega.label}</span>` : ''}</div>
         <div class="pcp-linha-acoes">
-            <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})" title="Ver Ordem de Serviço">📋</button>
-            ${_btnEtiquetas(p)}
-            <button class="btn btn-outline btn-sm" onclick="verTimeline(${p.id})" title="Ver timeline">⏱</button>
-            ${podeVoltar ? `<button class="btn btn-outline btn-sm" onclick="moverStatus(${p.id},-1)" title="Voltar etapa">←</button>` : ''}
             ${avancar}
+            ${menu}
         </div>
     </div>`;
 }
