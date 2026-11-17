@@ -17,7 +17,7 @@ test('cliente: a cidade e salva, aparece na tabela e volta ao editar', async ({ 
     await entrar(page, BASE, {});
     await page.goto(BASE + '/clientes.html');
     await page.fill('#cli-nome', 'Bia Souza');
-    await page.fill('#cli-end', 'Rua das Flores, 5');
+    await page.fill('#cli-rua', 'Rua das Flores, 5');
     await page.fill('#cli-cidade', 'Maringá');
     await page.click('#cli-btn-salvar');
     await expect(page.locator('#tb-clientes')).toContainText('Rua das Flores, 5 — Maringá');

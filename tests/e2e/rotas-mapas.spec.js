@@ -241,5 +241,5 @@ test('📍 Ir para endereço ao lado do campo usa o que foi digitado', async ({ 
     await btn.click();
     expect(decodeURIComponent((await page.evaluate(() => window.__abertos))[0])).toContain('destination=Rua das Flores, 10');
     await page.goto(BASE + '/clientes.html');
-    await expect(page.locator('#cli-end ~ .btn-ir-end')).toHaveCount(1);
+    await expect(page.locator('#cli-rua ~ .btn-ir-end')).toHaveCount(1);
 });

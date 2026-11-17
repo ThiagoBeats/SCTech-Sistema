@@ -2365,8 +2365,9 @@ async function salvarCliente() {
     const cpf   = document.getElementById('cli-cpf')?.value.trim()   || '';
     const tel   = document.getElementById('cli-tel')?.value.trim()   || '';
     const email = document.getElementById('cli-email')?.value.trim() || '';
-    const end   = document.getElementById('cli-end')?.value.trim()   || '';
-    const cidade = document.getElementById('cli-cidade')?.value.trim() || '';
+    const partes = enderecoLer('cli');
+    const end = EnderecoCore.textoEndereco(partes);
+    const campos = { ...partes, end };
     if (cpf) {
         const cpfNorm = cpf.replace(/\D/g, '');
         const dup = db.clientes.find(c => c.cpf && c.cpf.replace(/\D/g, '') === cpfNorm && c.id != editandoIdCliente);
@@ -2374,11 +2375,11 @@ async function salvarCliente() {
     }
     if (editandoIdCliente) {
         const idx = db.clientes.findIndex(c => c.id == editandoIdCliente);
-        if (idx !== -1) db.clientes[idx] = { ...db.clientes[idx], nome, tel, email, cpf, end, cidade };
+        if (idx !== -1) db.clientes[idx] = { ...db.clientes[idx], nome, tel, email, cpf, ...campos };
         cancelarEdicaoCliente();
         salvarERecarregar('Cliente atualizado!');
     } else {
-        db.clientes.push({ id: Date.now(), nome, tel, email, cpf, end, cidade });
+        db.clientes.push({ id: Date.now(), nome, tel, email, cpf, ...campos });
         salvarERecarregar('Cliente cadastrado!');
     }
 }
@@ -2390,8 +2391,8 @@ function editarCliente(id) {
     document.getElementById('cli-tel').value   = c.tel   || '';
     document.getElementById('cli-email').value = c.email || '';
     document.getElementById('cli-cpf').value   = c.cpf   || '';
-    document.getElementById('cli-end').value   = c.end   || '';
-    document.getElementById('cli-cidade').value = c.cidade || '';
+    // Cadastro antigo (texto livre, sem "rua"): o texto inteiro vai para Rua e a cidade antiga continua.
+    enderecoPreencher('cli', c.rua === undefined ? EnderecoCore.partesDeRegistroAntigo(c.end, c.cidade) : c);
     const tit = document.getElementById('cli-form-titulo');
     const btn = document.getElementById('cli-btn-salvar');
     const cnc = document.getElementById('cli-btn-cancelar');
@@ -2403,7 +2404,8 @@ function editarCliente(id) {
 }
 function cancelarEdicaoCliente() {
     editandoIdCliente = null;
-    ['cli-nome','cli-tel','cli-email','cli-cpf','cli-end','cli-cidade'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['cli-nome','cli-tel','cli-email','cli-cpf'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    enderecoPreencher('cli', {});
     const tit = document.getElementById('cli-form-titulo');
     const btn = document.getElementById('cli-btn-salvar');
     const cnc = document.getElementById('cli-btn-cancelar');
@@ -2488,7 +2490,7 @@ function filtrarTabelaClientes() {
         : db.clientes;
     renderTabelaClientes(lista);
 }
-function _clienteEndCidade(c) { return [c.end, c.cidade].filter(Boolean).join(' — '); }
+function _clienteEndCidade(c) { return [c.end, [c.cidade, c.cidade && c.uf].filter(Boolean).join('/')].filter(Boolean).join(' — '); }
 function renderTabelaClientes(lista) {
     const tb = document.getElementById('tb-clientes');
     if (!tb) return;
@@ -11047,6 +11049,96 @@ async function irParaEndereco(campoId, cidadeId) {
     window.open(RotasCore.linkIrPara(_agdEnd(end, cidade)), '_blank', 'noopener');
 }
 
+// --- Endereco em partes (CEP, rua, numero, complemento, bairro, cidade, estado) ---
+// Usado no cliente, na medicao, na instalacao e no formulario da agenda. Tudo pelo prefixo dos ids.
+function enderecoCamposHtml(prefixo, opts) {
+    opts = opts || {};
+    const p = prefixo;
+    const ufs = '<option value=""></option>' + EnderecoCore.UFS.map(u => `<option value="${u}">${u}</option>`).join('');
+    const ir = opts.ir ? `<button type="button" class="btn btn-outline btn-ir-end" id="${p}-ir" onclick="irParaEnderecoPartes('${p}')" title="Abrir o caminho no Google Maps">📍 Ir para endereço</button>` : '';
+    return `<div class="end-campos">
+        <div class="form-group end-cep"><label for="${p}-cep">CEP</label>
+            <div class="campo-com-botao"><input type="text" id="${p}-cep" inputmode="numeric" autocomplete="postal-code" placeholder="00000-000"><button type="button" class="btn btn-outline" id="${p}-buscar-cep" style="display:none" onclick="buscarEnderecoCep('${p}')">Buscar endereço</button></div>
+            <div class="rota-status end-status" id="${p}-cep-status" role="status" aria-live="polite"></div></div>
+        <div class="form-group end-rua"><label for="${p}-rua">Rua${opts.obrigRua ? ' *' : ''}</label><div class="campo-com-botao"><input type="text" id="${p}-rua" placeholder="Ex.: Rua das Flores">${ir}</div></div>
+        <div class="form-group"><label for="${p}-numero">Número</label><input type="text" id="${p}-numero" placeholder="Ex.: 100"></div>
+        <div class="form-group"><label for="${p}-complemento">Complemento</label><input type="text" id="${p}-complemento" placeholder="Ex.: apto 12"></div>
+        <div class="form-group"><label for="${p}-bairro">Bairro</label><input type="text" id="${p}-bairro"></div>
+        <div class="form-group"><label for="${p}-cidade">Cidade</label><input type="text" id="${p}-cidade" placeholder="Ex.: Curitiba"></div>
+        <div class="form-group"><label for="${p}-uf">Estado</label><select id="${p}-uf">${ufs}</select></div>
+    </div>`;
+}
+function _enderecoBotaoCep(p) {
+    const cep = document.getElementById(p + '-cep'), b = document.getElementById(p + '-buscar-cep');
+    if (b && cep) b.style.display = String(cep.value).replace(/\D/g, '').length === 8 ? '' : 'none';
+}
+function enderecoAnexar(prefixo) {
+    const cep = document.getElementById(prefixo + '-cep');
+    if (!cep || cep.dataset.endLigado) return;
+    cep.dataset.endLigado = '1';
+    cep.addEventListener('input', () => {
+        const m = EnderecoCore.mascaraCep(cep.value);
+        if (m !== cep.value) cep.value = m;
+        const st = document.getElementById(prefixo + '-cep-status');
+        if (st) st.textContent = '';
+        _enderecoBotaoCep(prefixo);
+    });
+    cep.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); buscarEnderecoCep(prefixo); }
+    });
+    _enderecoBotaoCep(prefixo);
+}
+function enderecoLer(prefixo) {
+    const v = id => (document.getElementById(prefixo + '-' + id)?.value || '').trim();
+    return { cep: EnderecoCore.soDigitosCep(v('cep')), rua: v('rua'), numero: v('numero'), complemento: v('complemento'),
+        bairro: v('bairro'), cidade: v('cidade'), uf: v('uf').toUpperCase() };
+}
+function enderecoPreencher(prefixo, partes) {
+    partes = partes || {};
+    const set = (id, val) => { const el = document.getElementById(prefixo + '-' + id); if (el) el.value = val == null ? '' : val; };
+    set('cep', EnderecoCore.mascaraCep(partes.cep));
+    ['rua', 'numero', 'complemento', 'bairro', 'cidade'].forEach(k => set(k, partes[k]));
+    set('uf', String(partes.uf || '').toUpperCase());
+    const st = document.getElementById(prefixo + '-cep-status');
+    if (st) st.textContent = '';
+    _enderecoBotaoCep(prefixo);
+}
+async function _cepConsulta(url, interpretar, tratar404) {
+    const r = await fetch(url);
+    if (r.status === 404 && tratar404) return { ok: false, motivo: 'nao-encontrado' };
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return interpretar(await r.json());
+}
+async function buscarEnderecoCep(prefixo) {
+    const cepEl = document.getElementById(prefixo + '-cep'), st = document.getElementById(prefixo + '-cep-status');
+    if (!cepEl) return;
+    const dig = String(cepEl.value).replace(/\D/g, '');
+    if (dig.length !== 8) return;
+    if (st) st.textContent = 'Buscando…';
+    let r;
+    try { r = await _cepConsulta(`https://viacep.com.br/ws/${dig}/json/`, EnderecoCore.interpretarViaCep, false); }
+    catch (e1) {
+        try { r = await _cepConsulta(`https://brasilapi.com.br/api/cep/v1/${dig}`, EnderecoCore.interpretarBrasilApi, true); }
+        catch (e2) { r = null; }
+    }
+    // A pessoa trocou o CEP (ou fechou a tela) enquanto esperava: essa resposta nao vale mais.
+    if (!cepEl.isConnected || String(cepEl.value).replace(/\D/g, '') !== dig) return;
+    const msg = t => { if (st) st.textContent = t; };
+    if (!r) { msg('Não deu para buscar o endereço agora. Preencha à mão.'); return; }
+    if (!r.ok) { msg('CEP não encontrado. Confira os números ou preencha o endereço à mão.'); return; }
+    const set = (id, val) => { const el = document.getElementById(prefixo + '-' + id); if (el && val) el.value = val; };
+    set('rua', r.rua); set('bairro', r.bairro); set('cidade', r.cidade);
+    if (r.uf && EnderecoCore.UFS.includes(r.uf)) set('uf', r.uf);
+    if (r.cidadeToda) { msg('Esse CEP é da cidade toda: preencha a rua e o bairro.'); document.getElementById(prefixo + '-rua')?.focus(); }
+    else { msg(''); document.getElementById(prefixo + '-numero')?.focus(); }
+}
+// Botao "Ir para endereco" ao lado da Rua: usa as partes digitadas.
+async function irParaEnderecoPartes(prefixo) {
+    const p = enderecoLer(prefixo);
+    if (!p.rua && !p.cep) { await showAlert('Digite o endereço primeiro.', '📍'); return; }
+    window.open(RotasCore.linkIrPara(RotasCore.enderecoDePartes(p)), '_blank', 'noopener');
+}
+
 // unidade: [singular, plural] escreve "4 agendamentos"; sem ela, so o numero.
 function _agdPreencher(prefixo, linhas, total, vazio, busca, unidade) {
     const lista = document.getElementById(prefixo + '-lista');
@@ -12646,6 +12738,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (document.getElementById('tb-clientes')) {
         if (!temAcesso('clientes', 'completo')) document.getElementById('cli-form-card')?.style.setProperty('display', 'none');
+        const cliCampos = document.getElementById('cli-end-campos');
+        if (cliCampos) { cliCampos.innerHTML = enderecoCamposHtml('cli', { obrigRua: false, ir: true }); enderecoAnexar('cli'); }
         renderTabelaClientes(db.clientes);
     }
 

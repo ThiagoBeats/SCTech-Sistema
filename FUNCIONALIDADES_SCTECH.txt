@@ -647,10 +647,19 @@ Formulário de cadastro/edição:
   - Telefone / WhatsApp (text)
   - E-mail (email)
   - CPF (text)
-  - Endereço completo (text), com o botão "📍 Ir para endereço" ao lado (abre
-    o Google Maps com o caminho até o endereço digitado e a cidade)
-  - Cidade (text, opcional): mostrada na tabela junto do endereço; as agendas de
-    medição e instalação já vêm com ela
+  - Endereço em partes: CEP, Rua, Número, Complemento, Bairro, Cidade e Estado
+    (lista com as 27 siglas). Com 8 dígitos no CEP aparece o botão "Buscar
+    endereço" (ou Enter no CEP): consulta a ViaCEP e, se ela estiver fora do ar,
+    a BrasilAPI, e preenche Rua, Bairro, Cidade e Estado; o cursor vai para o
+    Número. CEP não encontrado, busca sem internet e CEP "da cidade toda" mostram
+    um aviso e deixam preencher à mão. Nada é obrigatório.
+  - Botão "📍 Ir para endereço" ao lado da Rua (abre o Google Maps com o
+    caminho até o endereço digitado)
+  - O texto do endereço (Rua, Número, Complemento, Bairro) é montado ao salvar;
+    a tabela mostra "endereço — Cidade/UF". Cadastros antigos, de texto livre,
+    abrem para editar com o texto inteiro em Rua e a cidade antiga em Cidade
+    (salvar sem mexer mantém o mesmo endereço). As agendas de medição e
+    instalação já vêm com a cidade
   - Botão "Salvar Cliente" (cria ou atualiza dependendo do modo)
   - Botão "Cancelar" (visível apenas no modo de edição)
 
