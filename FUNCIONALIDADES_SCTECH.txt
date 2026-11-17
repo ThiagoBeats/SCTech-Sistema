@@ -301,12 +301,14 @@ Cada card de instalação exibe:
          data atual e nova data formatadas; ao confirmar, atualiza data_entrega
          no pedido e re-renderiza agenda e painel do dashboard
     b) Endereço da instalação:
-       - Input text pré-preenchido; placeholder = endereço do cliente cadastrado
-       - Cidade (text): vem preenchida com a cidade do pedido ou, sem ela, a do
-         cliente, e pode mudar; grava inst_cidade no pedido (também em Editar).
-         O fallback para a cidade do cliente só vale quando o endereço da
-         instalação é o do cliente (ou está vazio); outro endereço sem cidade
-         fica sem cidade.
+       - Endereço em partes (CEP, Rua, Número, Complemento, Bairro, Cidade,
+         Estado) com "Buscar endereço" pelo CEP e "📍 Ir para endereço". Vem do
+         pedido (inst_cep, inst_rua, inst_numero, inst_complemento, inst_bairro,
+         inst_cidade, inst_uf) ou, sem isso, do cliente. Pedido antigo com
+         endereço de texto diferente do cliente abre com o texto inteiro em Rua e
+         a cidade antiga (não herda a do cliente). Grava as partes e
+         inst_endereco (texto montado); também em Editar instalação. Editar o
+         pedido preserva esses campos.
     c) Horário:
        - Input time
        - Ao clicar no campo abre a lista dos horários do expediente (passo da
@@ -362,12 +364,12 @@ Formulário de agendamento:
       quebrado, ex.: 10:30, continua valendo; também em editar/reagendar; as setas do
       teclado só navegam na lista depois da 1ª seta para baixo; no celular a lista
       não fecha com o teclado virtual)
-  - Endereço da visita (text, obrigatório), com o botão "📍 Ir para endereço"
-    ao lado (abre o Google Maps com o caminho até o que foi digitado; vazio
-    avisa "Digite o endereço primeiro.")
-  - Cidade (text): preenchida com a cidade do cliente escolhido (pode mudar;
-    para cliente novo, digitada à mão); grava cidade na medição e, no cliente
-    novo, no cadastro dele (também em Editar agendamento)
+  - Endereço da visita em partes (CEP, Rua*, Número, Complemento, Bairro,
+    Cidade, Estado), preenchido com o endereço do cliente escolhido (cliente
+    antigo: texto inteiro em Rua) e editável; "Buscar endereço" pelo CEP e
+    botão "📍 Ir para endereço" (vazio avisa "Digite o endereço primeiro.").
+    Rua é obrigatória. Grava as partes e endereco (texto montado) na medição e,
+    no cliente novo, no cadastro dele (também em Editar agendamento)
   - Observações (text, opcional): referências, ponto de encontro, instruções
   - Botão "📐 Agendar Visita"
 

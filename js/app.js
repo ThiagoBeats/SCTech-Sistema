@@ -6954,6 +6954,7 @@ Volte o pedido para Orçamento para editar.`, '🔒');
             // Agendamento de instalacao e vinculo com o instalador sobrevivem a edicao
             // (so se ja existiam; o formulario do pedido nao os edita).
             ['inst_agendado', 'inst_hora', 'inst_duracao', 'inst_obs', 'inst_endereco', 'inst_cidade',
+             'inst_cep', 'inst_rua', 'inst_numero', 'inst_complemento', 'inst_bairro', 'inst_uf',
              'inst_historico', 'inst_confirmada_em', 'usuario_instalacao_id', 'instalador_nome']
                 .forEach(k => { if (db.pedidos[index][k] !== undefined) dadosPedido[k] = db.pedidos[index][k]; });
             dadosPedido.comissao_paga     = db.pedidos[index].comissao_paga     || false;
@@ -10752,10 +10753,20 @@ function onMedClienteChange() {
     if (!sel || !sel.value) return;
     const cli = db.clientes.find(c => c.id == sel.value);
     if (!cli) return;
-    const endEl = document.getElementById('med-end');
-    if (endEl && cli.end) endEl.value = cli.end;
-    const cidEl = document.getElementById('med-cidade');
-    if (cidEl) cidEl.value = cli.cidade || '';
+    enderecoPreencher('med', _partesDoCliente(cli));
+}
+
+// Partes do endereco do cliente; cliente antigo (sem "rua") vira Rua = texto antigo inteiro.
+function _partesDoCliente(cli) {
+    if (!cli) return EnderecoCore.partesDeRegistroAntigo('', '');
+    return cli.rua === undefined ? EnderecoCore.partesDeRegistroAntigo(cli.end, cli.cidade) : cli;
+}
+// Monta os campos de endereco das telas de agendamento (medicao e instalacao).
+function _agdMontarEnderecos() {
+    const m = document.getElementById('med-end-campos');
+    if (m && !document.getElementById('med-rua')) { m.innerHTML = enderecoCamposHtml('med', { obrigRua: true, ir: true }); enderecoAnexar('med'); }
+    const i = document.getElementById('inst-end-campos');
+    if (i && !document.getElementById('inst-rua')) { i.innerHTML = enderecoCamposHtml('inst', { obrigRua: false, ir: true }); enderecoAnexar('inst'); }
 }
 
 // Pedido ligado ao agendamento de medicao. O vinculo vale nos dois sentidos
@@ -10803,7 +10814,6 @@ async function salvarMedicao() {
     const tipo = document.querySelector('input[name="med-tipo"]:checked')?.value || 'existente';
     let clienteId = null, clienteNome = '', clienteTel = '';
     let clienteCpf = '', clienteEmail = '';
-    const cidade = (document.getElementById('med-cidade')?.value || '').trim();
 
     if (tipo === 'existente') {
         clienteId = parseInt(document.getElementById('med-cliente-id')?.value) || null;
@@ -10812,8 +10822,7 @@ async function salvarMedicao() {
         if (cli) {
             clienteNome = cli.nome;
             clienteTel  = cli.tel || '';
-            const endEl = document.getElementById('med-end');
-            if (endEl && !endEl.value.trim() && cli.end) endEl.value = cli.end;
+            if (!enderecoLer('med').rua && cli.end) enderecoPreencher('med', _partesDoCliente(cli));
         }
     } else {
         clienteNome  = (document.getElementById('med-novo-nome')?.value || '').trim();
@@ -10830,12 +10839,14 @@ async function salvarMedicao() {
 
     const data = (document.getElementById('med-data')?.value || '').trim();
     const hora = (document.getElementById('med-hora')?.value || '').trim();
-    const end  = (document.getElementById('med-end')?.value  || '').trim();
+    const partes = enderecoLer('med');
+    const end  = EnderecoCore.textoEndereco(partes);
+    const cidade = partes.cidade;
     const obs  = (document.getElementById('med-obs')?.value  || '').trim();
     const dur  = parseInt(document.getElementById('med-dur')?.value) || _agdDurPadrao('med');
     const prof = _agdLerProf('med-prof');
     if (!data) { await showAlert('Informe a data da visita.', '⚠️'); return; }
-    if (!end)  { await showAlert('Informe o endereço da visita.', '⚠️'); return; }
+    if (!partes.rua) { await showAlert('Informe o endereço da visita.', '⚠️'); return; }
 
     // Com profissional definido a visita ocupa a agenda dele: precisa de
     // horário e é conferida de novo contra instalações e medições já gravadas.
@@ -10849,7 +10860,7 @@ async function salvarMedicao() {
 
     // Só depois de tudo validado o novo cliente é cadastrado.
     if (tipo === 'novo') {
-        const novoCli = { id: Date.now(), nome: clienteNome, tel: clienteTel, email: clienteEmail, cpf: clienteCpf, end, cidade };
+        const novoCli = { id: Date.now(), nome: clienteNome, tel: clienteTel, email: clienteEmail, cpf: clienteCpf, ...partes, end };
         db.clientes.push(novoCli);
         clienteId = novoCli.id;
         const sel = document.getElementById('med-cliente-id');
@@ -10857,7 +10868,7 @@ async function salvarMedicao() {
             db.clientes.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
     }
 
-    const med = { id: Date.now(), clienteId, clienteNome, clienteTel, endereco: end, cidade, data, hora, duracao: dur, obs, status: 'Agendado',
+    const med = { id: Date.now(), clienteId, clienteNome, clienteTel, ...partes, endereco: end, data, hora, duracao: dur, obs, status: 'Agendado',
         agendado_por: getUsuarioLogado()?.id || null, agendado_em: Date.now() };
     _medDefinirResponsavel(med, prof.pessoa);
     db.medicoes.push(med);
@@ -10869,8 +10880,7 @@ async function salvarMedicao() {
     document.getElementById('med-data').value = _agdHoje();
     _agdPickerFechar();
     document.getElementById('med-hora').value = '';
-    document.getElementById('med-end').value  = '';
-    const cidLimpa = document.getElementById('med-cidade'); if (cidLimpa) cidLimpa.value = '';
+    enderecoPreencher('med', {});
     document.getElementById('med-obs').value  = '';
     _agdPreencherProf('med-prof', '', '— A definir —');
     _agdPreencherDur('med-dur', 'med');
@@ -11227,6 +11237,7 @@ function _agdFormulario(titulo, campos, onSalvar, voltar, opts) {
         else if (c.tipo === 'pessoa')       input = htmlCampoPessoa(id, c.valor, 'A definir — selecione ou digite um nome');
         else if (c.tipo === 'profissional') input = `<select id="${id}"></select><input type="text" id="${id}-outro" class="agd-prof-outro" placeholder="Nome do profissional" autocomplete="off" hidden>`;
         else if (c.tipo === 'duracao')      input = `<select id="${id}"></select>`;
+        else if (c.tipo === 'endereco')     return `<div class="agd-form-largo">${enderecoCamposHtml(id, { obrigRua: c.obrig, ir: true })}</div>`;
         else                                input = `<input type="${c.tipo}" id="${id}" value="${escapeHtml(c.valor || '')}"${ph}>`;
         return `<div class="form-group${c.largo ? ' agd-form-largo' : ''}"><label for="${id}">${escapeHtml(c.label)}${req}</label>${input}</div>`;
     }).join('')}</div>${disp ? '<div class="agd-disp agd-disp-modal" id="agdf-disp" aria-live="polite"></div>' : ''}`;
@@ -11240,12 +11251,14 @@ function _agdFormulario(titulo, campos, onSalvar, voltar, opts) {
     });
     campos.filter(c => c.tipo === 'profissional').forEach(c => _agdPreencherProf('agdf-' + c.id, c.valor, c.vazio || '— A definir —'));
     campos.filter(c => c.tipo === 'duracao').forEach(c => _agdPreencherDur('agdf-' + c.id, c.servico || (disp && disp.tipo) || 'inst', c.valor));
+    campos.filter(c => c.tipo === 'endereco').forEach(c => { enderecoPreencher('agdf-' + c.id, c.valor); enderecoAnexar('agdf-' + c.id); });
 
     const lerValores = () => {
         const v = {};
         for (const c of campos) {
             const el = document.getElementById('agdf-' + c.id);
-            if (c.tipo === 'usuario')           v[c.id] = parseInt(el.value) || null;
+            if (c.tipo === 'endereco')          v[c.id] = enderecoLer('agdf-' + c.id);
+            else if (c.tipo === 'usuario')      v[c.id] = parseInt(el.value) || null;
             else if (c.tipo === 'profissional') v[c.id] = _agdLerProf('agdf-' + c.id);
             else if (c.tipo === 'duracao')      v[c.id] = parseInt(el.value) || null;
             else                                v[c.id] = el.value.trim();
@@ -11283,6 +11296,12 @@ function _agdFormulario(titulo, campos, onSalvar, voltar, opts) {
     o.querySelector('#agdf-voltar').onclick = voltar || fecharModalAgenda;
     o.querySelector('#agdf-salvar').onclick = async () => {
         for (const c of campos) {
+            if (c.tipo === 'endereco') {
+                const rua = document.getElementById('agdf-' + c.id + '-rua');
+                rua.classList.remove('agd-erro');
+                if (c.obrig && !rua.value.trim()) { rua.classList.add('agd-erro'); rua.focus(); return; }
+                continue;
+            }
             const el = document.getElementById('agdf-' + c.id);
             el.classList.remove('agd-erro');
             const vazio = c.tipo === 'profissional' ? !_agdLerProf('agdf-' + c.id).chave : !el.value.trim();
@@ -11859,8 +11878,7 @@ function editarMedicao(id) {
     if (!m) return;
     _agdFormulario('Editar agendamento', [
         { id: 'tel',  label: 'Telefone',    tipo: 'text', valor: m.clienteTel },
-        { id: 'end',  label: 'Endereço da visita', tipo: 'text', valor: m.endereco, obrig: true },
-        { id: 'cidade', label: 'Cidade', tipo: 'text', valor: m.cidade },
+        { id: 'end',  tipo: 'endereco', valor: m.rua === undefined ? EnderecoCore.partesDeRegistroAntigo(m.endereco, m.cidade) : m, obrig: true },
         { id: 'usu',  label: 'Responsável pela medição', tipo: 'profissional', valor: _medProf(m) },
         { id: 'data', label: 'Data da visita', tipo: 'date', valor: m.data, obrig: true },
         { id: 'hora', label: 'Horário',     tipo: 'time', valor: m.hora },
@@ -11869,7 +11887,7 @@ function editarMedicao(id) {
     ], v => {
         const atual = (db.medicoes || []).find(x => x.id == id);   // relido na validacao
         if (!atual) return;
-        atual.clienteTel = v.tel; atual.endereco = v.end; atual.cidade = v.cidade; atual.data = v.data; atual.hora = v.hora;
+        atual.clienteTel = v.tel; Object.assign(atual, v.end, { endereco: EnderecoCore.textoEndereco(v.end) }); atual.data = v.data; atual.hora = v.hora;
         atual.duracao = v.dur; atual.obs = v.obs;
         _medDefinirResponsavel(atual, v.usu.pessoa);
         _medAtualizar();
@@ -12200,6 +12218,23 @@ function _instCidade(p, cli) {
     return (!p || !p.inst_endereco || n(p.inst_endereco) === n(cli.end)) ? cli.cidade : '';
 }
 
+// Partes do endereco da instalacao: as do pedido; pedido antigo com endereco proprio vira
+// Rua = texto antigo (cidade nao herdada do cliente); senao, as do cliente.
+function _instPartes(p, cli) {
+    if (p.inst_rua !== undefined) {
+        return { cep: p.inst_cep, rua: p.inst_rua, numero: p.inst_numero, complemento: p.inst_complemento,
+            bairro: p.inst_bairro, cidade: p.inst_cidade, uf: p.inst_uf };
+    }
+    const n = s => RotasCore.normalizarEndereco(s);
+    if (p.inst_endereco && n(p.inst_endereco) !== n(cli?.end)) return EnderecoCore.partesDeRegistroAntigo(p.inst_endereco, _instCidade(p, cli));
+    return _partesDoCliente(cli);
+}
+function _instGravarPartes(p, partes) {
+    p.inst_cep = partes.cep; p.inst_rua = partes.rua; p.inst_numero = partes.numero; p.inst_complemento = partes.complemento;
+    p.inst_bairro = partes.bairro; p.inst_cidade = partes.cidade; p.inst_uf = partes.uf;
+    p.inst_endereco = EnderecoCore.textoEndereco(partes);
+}
+
 function _instLimparForm() {
     _instSelId = null;
     _agdPickerFechar();
@@ -12207,8 +12242,7 @@ function _instLimparForm() {
     set('inst-pedido', '');
     set('inst-data', _agdHoje());
     set('inst-hora', '');
-    set('inst-end', '');
-    set('inst-cidade', '');
+    enderecoPreencher('inst', {});
     set('inst-obs', '');
     _agdPreencherProf('inst-prof', '', 'Selecione');
     _agdPreencherDur('inst-dur', 'inst');
@@ -12230,8 +12264,7 @@ function selecionarPedidoInstalacao(id) {
     const cli = db.clientes.find(c => c.id == p.clienteId);
     const hoje = _agdHoje();
     const set = (eid, v) => { const el = document.getElementById(eid); if (el) { el.value = v; el.classList.remove('agd-erro'); } };
-    set('inst-end', p.inst_endereco || cli?.end || '');
-    set('inst-cidade', _instCidade(p, cli));
+    enderecoPreencher('inst', _instPartes(p, cli));
     set('inst-obs', p.inst_obs || '');
     set('inst-data', p.data_entrega && p.data_entrega >= hoje ? p.data_entrega : hoje);
     set('inst-hora', '');
@@ -12283,8 +12316,7 @@ async function salvarAgendamentoInstalacao() {
         data: campos.data?.value || '',
         hora: campos.hora?.value || '',
         dur:  parseInt(document.getElementById('inst-dur')?.value) || _agdDurPadrao('inst'),
-        end:  (document.getElementById('inst-end')?.value || '').trim(),
-        cidade: (document.getElementById('inst-cidade')?.value || '').trim(),
+        end:  enderecoLer('inst'),
         obs:  (document.getElementById('inst-obs')?.value || '').trim(),
     };
     const faltando = [];
@@ -12316,8 +12348,7 @@ async function salvarAgendamentoInstalacao() {
     p.data_entrega   = v.data;
     p.inst_hora      = v.hora;
     p.inst_duracao   = v.dur;
-    p.inst_endereco  = v.end;
-    p.inst_cidade    = v.cidade;
+    _instGravarPartes(p, v.end);
     p.inst_obs       = v.obs;
     definirInstalador(p, prof.pessoa);
     p.inst_agendado     = true;
@@ -12422,8 +12453,7 @@ async function _instGravarEdicao(id, v, titulo) {
         if (!p.inst_historico) p.inst_historico = [];
         _agdRegistrar(p.inst_historico, 'reagendado', { de: { data: p.data_entrega || '', hora: p.inst_hora || '' }, para: { data: v.data, hora: v.hora } });
     }
-    if (v.end !== undefined) p.inst_endereco = v.end;
-    if (v.cidade !== undefined) p.inst_cidade = v.cidade;
+    if (v.end !== undefined) _instGravarPartes(p, v.end);
     p.data_entrega = v.data;
     p.inst_hora    = v.hora;
     p.inst_duracao = v.dur || _agdDurPadrao('inst');
@@ -12439,8 +12469,7 @@ function editarInstalacao(id) {
     if (!p) return;
     const cli = db.clientes.find(c => c.id == p.clienteId);
     _agdFormulario('Editar instalação', [
-        { id: 'end',  label: 'Endereço da instalação', tipo: 'text', valor: p.inst_endereco, largo: true, placeholder: cli?.end || 'Endereço da instalação…' },
-        { id: 'cidade', label: 'Cidade', tipo: 'text', valor: _instCidade(p, cli), placeholder: 'Ex.: Curitiba' },
+        { id: 'end',  tipo: 'endereco', valor: _instPartes(p, cli) },
         { id: 'usu',  label: 'Profissional', tipo: 'profissional', valor: _instProf(p), obrig: true, vazio: 'Selecione' },
         { id: 'dur',  label: 'Duração do serviço', tipo: 'duracao', valor: p.inst_duracao },
         { id: 'data', label: 'Data de instalação', tipo: 'date', valor: p.data_entrega, obrig: true },
@@ -12878,6 +12907,7 @@ document.addEventListener('DOMContentLoaded', () => {
             db.clientes.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
         const dataEl = document.getElementById('med-data');
         if (dataEl) dataEl.value = _agdHoje();
+        _agdMontarEnderecos();
         _agdPreencherProf('med-prof', '', '— A definir —');
         _agdPreencherDur('med-dur', 'med');
         renderMedicoes();

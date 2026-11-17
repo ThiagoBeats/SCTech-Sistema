@@ -32,7 +32,7 @@ test('medicao: a cidade vem do cliente, pode mudar e e salva na medicao', async 
     await page.goto(BASE + '/pcp.html?view=medicoes');
     await page.selectOption('#med-cliente-id', '1');
     await expect(page.locator('#med-cidade')).toHaveValue('Curitiba');
-    await expect(page.locator('#med-end')).toHaveValue('Rua X, 10');
+    await expect(page.locator('#med-rua')).toHaveValue('Rua X, 10');
     await page.fill('#med-cidade', 'Pinhais');
     await page.fill('#med-data', DIA);
     await page.click('button:has-text("Agendar Visita")');
@@ -47,7 +47,7 @@ test('medicao com cliente novo digitado a mao leva a cidade ao cadastro do clien
     await page.click('input[name="med-tipo"][value="novo"]');
     await page.fill('#med-novo-nome', 'Novo Cliente');
     await page.fill('#med-data', DIA);
-    await page.fill('#med-end', 'Rua Y, 3');
+    await page.fill('#med-rua', 'Rua Y, 3');
     await page.fill('#med-cidade', 'Londrina');
     await page.click('button:has-text("Agendar Visita")');
     await expect(page.locator('#med-pend-lista')).toContainText('Novo Cliente');
@@ -69,8 +69,8 @@ test('instalacao: a cidade vem do cliente e e salva como inst_cidade; editar mud
     await page.locator('#inst-pend-lista .agd-item', { hasText: 'Ana Paula Lima' }).click();
     await expect(page.locator('.agd-modal a.agd-ir')).toHaveAttribute('href', /destination=Rua%20X%2C%2010%2C%20Curitiba/);
     await page.locator('.agd-modal button', { hasText: 'Editar' }).click();
-    await expect(page.locator('#agdf-cidade')).toHaveValue('Curitiba');
-    await page.fill('#agdf-cidade', 'Colombo');
+    await expect(page.locator('#agdf-end-cidade')).toHaveValue('Curitiba');
+    await page.fill('#agdf-end-cidade', 'Colombo');
     await page.click('#agdf-salvar');
     await expect.poll(async () => (await lerLS(page, 'sc_ped'))[0].inst_cidade).toBe('Colombo');
 });
@@ -98,18 +98,18 @@ test('Rotas do dia procura o endereco junto com a cidade', async ({ page }) => {
         .toHaveAttribute('href', /destination=Rua%20X%2C%2010%2C%20Curitiba/);
 });
 
-test('📍 Ir para endereço leva a cidade do campo ao lado, sem repetir', async ({ page }) => {
+test('📍 Ir para endereço leva a cidade e o estado dos campos ao lado', async ({ page }) => {
     await page.addInitScript(() => { window.__abertos = []; window.open = u => { window.__abertos.push(String(u)); return null; }; });
     await entrar(page, BASE, {});
     await page.goto(BASE + '/pcp.html?view=medicoes');
-    await page.fill('#med-end', 'Rua das Flores, 10');
+    await page.fill('#med-rua', 'Rua das Flores, 10');
     await page.fill('#med-cidade', 'Curitiba');
-    await page.locator('#med-end ~ .btn-ir-end').click();
-    await page.fill('#med-end', 'Rua das Flores, 10 - Curitiba');
-    await page.locator('#med-end ~ .btn-ir-end').click();
+    await page.locator('#med-ir').click();
+    await page.selectOption('#med-uf', 'PR');
+    await page.locator('#med-ir').click();
     const ab = (await page.evaluate(() => window.__abertos)).map(decodeURIComponent);
     expect(ab[0]).toContain('destination=Rua das Flores, 10, Curitiba&');
-    expect(ab[1]).toContain('destination=Rua das Flores, 10 - Curitiba&');
+    expect(ab[1]).toContain('destination=Rua das Flores, 10, Curitiba - PR&');
 });
 
 test('backup: exportar e importar mantem a cidade do cliente, da medicao e da instalacao', async ({ page }) => {
@@ -151,7 +151,7 @@ test('instalacao em outro endereco nao herda a cidade do cliente (Rotas, Ir e Ed
     await page.goto(BASE + '/pcp.html?view=agenda');
     await page.locator('#inst-pend-lista .agd-item', { hasText: 'Ana Paula Lima' }).click();
     await page.locator('.agd-modal button', { hasText: 'Editar' }).click();
-    await expect(page.locator('#agdf-cidade')).toHaveValue('');
+    await expect(page.locator('#agdf-end-cidade')).toHaveValue('');
 });
 
 test('empresa: o campo Cidade e salvo', async ({ page }) => {

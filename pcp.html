@@ -105,14 +105,7 @@
                             <label for="inst-dur">Duração do serviço <button type="button" class="agd-cfg-btn" onclick="abrirConfigAgenda()" title="Definir a duração padrão por tipo de serviço" aria-label="Definir a duração padrão por tipo de serviço"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg></button></label>
                             <select id="inst-dur" onchange="_instAtualizarDisp()"></select>
                         </div>
-                        <div class="form-group agd-span2">
-                            <label for="inst-end">Endereço de instalação</label>
-                            <div class="campo-com-botao"><input type="text" id="inst-end" placeholder="Rua, nº, bairro, cidade..."><button type="button" class="btn btn-outline btn-ir-end" onclick="irParaEndereco('inst-end', 'inst-cidade')" title="Abrir o caminho no Google Maps">📍 Ir para endereço</button></div>
-                        </div>
-                        <div class="form-group">
-                            <label for="inst-cidade">Cidade</label>
-                            <input type="text" id="inst-cidade" placeholder="Ex.: Curitiba">
-                        </div>
+                        <div class="form-group agd-span4" id="inst-end-campos"></div>
                         <div class="form-group agd-span4">
                             <label for="inst-obs">Observações</label>
                             <input type="text" id="inst-obs" placeholder="Referências, ponto de encontro, instruções...">
@@ -209,14 +202,7 @@
                         <label for="med-dur">Duração do serviço <button type="button" class="agd-cfg-btn" onclick="abrirConfigAgenda()" title="Definir a duração padrão por tipo de serviço" aria-label="Definir a duração padrão por tipo de serviço"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg></button></label>
                         <select id="med-dur" onchange="_medAtualizarDisp()"></select>
                     </div>
-                    <div class="form-group agd-span2">
-                        <label for="med-end">Endereço da visita <span style="color:var(--danger)">*</span></label>
-                        <div class="campo-com-botao"><input type="text" id="med-end" placeholder="Rua, nº, bairro, cidade…"><button type="button" class="btn btn-outline btn-ir-end" onclick="irParaEndereco('med-end', 'med-cidade')" title="Abrir o caminho no Google Maps">📍 Ir para endereço</button></div>
-                    </div>
-                    <div class="form-group">
-                        <label for="med-cidade">Cidade</label>
-                        <input type="text" id="med-cidade" placeholder="Ex.: Curitiba">
-                    </div>
+                    <div class="form-group" id="med-end-campos" style="grid-column:1 / -1"></div>
                     <div class="form-group agd-span2" style="grid-column:1 / -1">
                         <label for="med-obs">Observações</label>
                         <input type="text" id="med-obs" placeholder="Referências, ponto de encontro, instruções…">
