@@ -491,6 +491,7 @@ function salvarEmpresaConfigs() {
         aliquota_estimada: Number.isFinite(aliq) ? Math.min(100, Math.max(0, aliq)) : 0
     };
     localStorage.setItem('sc_empresa', JSON.stringify(emp));
+    atualizarTopbar();
     toast('Configurações da empresa salvas!', 'success');
     if (typeof atualizarPreviewCabecalho === 'function') atualizarPreviewCabecalho();
 }
@@ -1325,30 +1326,88 @@ function renderSidebar() {
     const foto = usuarioAtual && usuarioAtual.foto_base64;
 
     sidebar.innerHTML = `
-        <div class="logo-popup-wrap" id="logo-popup-wrap">
-            <div class="logo" onclick="toggleLogoPopup(event)" title="${escapeHtml(nomeEmpresa)}">
-                ${logoEmpresa}
-                ${emp.logo_base64 ? '' : `<h2 class="sidebar-nome-empresa">${escapeHtml(nomeEmpresa)}</h2>`}
-                <button type="button" class="sidebar-pin" id="sidebar-pin-btn" onclick="alternarSidebarFixada(event)" aria-label="Fixar menu">📌</button>
-            </div>
-            <div class="logo-popup" id="logo-popup">
-                <div class="logo-popup-header">
-                    <div class="logo-popup-avatar${foto ? ' com-foto' : ''}">${foto ? `<img src="${foto}" alt="">` : navIcon('user', 18)}</div>
-                    <div><div class="logo-popup-name" id="popup-user-name">—</div><div class="logo-popup-role">${escapeHtml(papelAtual?.nome || 'Usuário SCTech')}</div></div>
-                </div>
-                <div class="logo-popup-sep"></div>
-                <a href="configuracoes.html" class="logo-popup-item">${navIcon('user', 16)} Meu perfil</a>
-                <div class="logo-popup-sep"></div>
-                <a href="sobre.html" class="logo-popup-item">${navIcon('info', 16)} Sobre o Sistema</a>
-                ${temAcesso('configuracoes.empresa', 'visualizar')
-                    ? `<a href="empresa.html" class="logo-popup-item">${navIcon('settings', 16)} Configurar Empresa</a>`
-                    : ''}
-                <div class="logo-popup-sep"></div>
-                <button class="logo-popup-item logo-popup-logout" onclick="logout()">${navIcon('logout', 16)} Sair</button>
-            </div>
-        </div>
-        <nav class="nav-rows">${navHTML}</nav>`;
+        <nav class="nav-rows">${navHTML}</nav>
+        <div class="sidebar-rodape">
+            <button type="button" class="nav-item sidebar-sair" id="sidebar-sair" onclick="logout()" title="Sair do sistema">${navIcon('logout')}<span class="nav-text">Sair do sistema</span></button>
+            <button type="button" class="sidebar-pin" id="sidebar-pin-btn" onclick="alternarSidebarFixada(event)" aria-label="Fixar menu">📌</button>
+        </div>`;
     _aplicarSidebarFixada(fixada);
+    atualizarTopbar();
+}
+
+// --- BARRA SUPERIOR (fixa, em todas as paginas com a barra lateral) ---
+function _topbarDataTexto() {
+    const d = new Date();
+    return 'Hoje, ' + d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+function _topbarIniciais(nome) {
+    const p = String(nome || '').trim().split(/\s+/).filter(Boolean);
+    if (!p.length) return '?';
+    return ((p[0][0] || '') + (p.length > 1 ? p[p.length - 1][0] : '')).toLocaleUpperCase('pt-BR');
+}
+function atualizarTopbar() {
+    if (!document.getElementById('main-sidebar')) return;
+    const usuarioAtual = getUsuarioLogado();
+    const papelAtual = usuarioAtual ? db.papeis.find(p => p.id === usuarioAtual.papel_id) : null;
+    const emp = getEmpresa();
+    const nomeEmpresa = emp.nome_fantasia || emp.razao_social || 'SCTech';
+    const logoEmpresa = emp.logo_base64
+        ? `<img src="${emp.logo_base64}" alt="${escapeHtml(nomeEmpresa)}" class="topbar-logo-img sidebar-logo-empresa">`
+        : `<img src="images/logo.png" alt="SCTech" class="topbar-logo-img sidebar-logo-img">`;
+    const foto = usuarioAtual && usuarioAtual.foto_base64;
+    const u = usuarioAtual || JSON.parse(sessionStorage.getItem('sc_user') || '{}');
+    const nomeUsuario = nomeExibicao(u) || u.email || '—';
+    const avatarInterno = foto ? `<img src="${foto}" alt="">` : escapeHtml(_topbarIniciais(nomeUsuario));
+
+    let bar = document.getElementById('topbar');
+    const existia = !!bar;
+    if (!bar) {
+        bar = document.createElement('header');
+        bar.id = 'topbar';
+        bar.className = 'topbar';
+        document.body.insertBefore(bar, document.body.firstChild);
+    }
+    // O sino (#topbar-sino) e preenchido por outro modulo: preserva o conteudo ao redesenhar.
+    const sinoAtual = document.getElementById('topbar-sino');
+    const sinoHTML = sinoAtual ? sinoAtual.innerHTML : '';
+    bar.innerHTML = `
+        <div class="topbar-empresa" id="topbar-empresa" title="${escapeHtml(nomeEmpresa)}">
+            ${logoEmpresa}
+            <span class="topbar-nome-empresa">${escapeHtml(nomeEmpresa)}</span>
+        </div>
+        <div class="topbar-dir">
+            <button type="button" class="topbar-data" id="topbar-data" onclick="if (typeof abrirAgenda === 'function') abrirAgenda()" title="Agenda" aria-label="Agenda">
+                <svg class="nav-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><line x1="3.5" y1="10" x2="20.5" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg>
+                <span class="topbar-data-texto" id="topbar-data-texto">${escapeHtml(_topbarDataTexto())}</span>
+                <span class="topbar-data-seta" aria-hidden="true">▾</span>
+            </button>
+            <div class="topbar-sino" id="topbar-sino">${sinoHTML}</div>
+            <div class="logo-popup-wrap" id="logo-popup-wrap">
+                <button type="button" class="topbar-avatar${foto ? ' com-foto' : ''}" id="topbar-avatar" onclick="toggleLogoPopup(event)" title="${escapeHtml(nomeUsuario)}" aria-label="Menu do perfil">${avatarInterno}</button>
+                <div class="logo-popup" id="logo-popup">
+                    <div class="logo-popup-header">
+                        <div class="logo-popup-avatar${foto ? ' com-foto' : ''}">${foto ? `<img src="${foto}" alt="">` : navIcon('user', 18)}</div>
+                        <div><div class="logo-popup-name" id="popup-user-name">${escapeHtml(nomeUsuario)}</div><div class="logo-popup-role">${escapeHtml(papelAtual?.nome || 'Usuário SCTech')}</div></div>
+                    </div>
+                    <div class="logo-popup-sep"></div>
+                    <a href="configuracoes.html" class="logo-popup-item">${navIcon('user', 16)} Meu perfil</a>
+                    <div class="logo-popup-sep"></div>
+                    <a href="sobre.html" class="logo-popup-item">${navIcon('info', 16)} Sobre o Sistema</a>
+                    ${temAcesso('configuracoes.empresa', 'visualizar')
+                        ? `<a href="empresa.html" class="logo-popup-item">${navIcon('settings', 16)} Configurar Empresa</a>`
+                        : ''}
+                    <div class="logo-popup-sep"></div>
+                    <button class="logo-popup-item logo-popup-logout" onclick="logout()">${navIcon('logout', 16)} Sair</button>
+                </div>
+            </div>
+        </div>`;
+    if (!existia && !window._topbarRelogio) {
+        // A data muda na virada do dia, mesmo com a tela aberta.
+        window._topbarRelogio = setInterval(() => {
+            const el = document.getElementById('topbar-data-texto');
+            if (el) el.textContent = _topbarDataTexto();
+        }, 60000);
+    }
 }
 
 function initPageNavigation() {
@@ -2341,7 +2400,8 @@ function toggleLogoPopup(e) {
         const wrap = document.getElementById('logo-popup-wrap');
         const rect = wrap.getBoundingClientRect();
         popup.style.top  = (rect.bottom + 6) + 'px';
-        popup.style.left = rect.left + 'px';
+        popup.style.left = 'auto';
+        popup.style.right = Math.max(8, window.innerWidth - rect.right) + 'px';
         const u = getUsuarioLogado() || JSON.parse(sessionStorage.getItem('sc_user') || '{}');
         const el = document.getElementById('popup-user-name');
         if (el) el.textContent = nomeExibicao(u) || u.email || '—';

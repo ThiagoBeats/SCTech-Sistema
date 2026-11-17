@@ -66,7 +66,7 @@ test('Meu Perfil grava nome de exibicao, telefone e foto, e o popup mostra', asy
     expect(u.foto_base64).toMatch(/^data:image\//);
     expect(u.nome, 'o nome do cadastro nao muda').toBe('Teste');
     await page.reload();
-    await page.click('#main-sidebar .logo');
+    await page.click('#topbar-avatar');
     await expect(page.locator('#popup-user-name')).toHaveText('Thiago');
     await expect(page.locator('.logo-popup-avatar img')).toHaveCount(1);
 });
@@ -163,13 +163,13 @@ test('razao social e nome fantasia ficam em maiusculas ao digitar e ao salvar', 
     expect(emp.nome_fantasia).toBe('SC DECOR');
 });
 
-test('a barra lateral mostra a logo e o nome da empresa; o clique na logo abre o menu de sempre', async ({ page }) => {
+test('a barra superior mostra a logo e o nome da empresa; o clique na logo abre o menu de sempre', async ({ page }) => {
     await entrar(page, BASE, { sc_empresa: { razao_social: 'X LTDA', nome_fantasia: 'CASA DAS CORTINAS', logo_base64: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' } });
     await page.goto(BASE + '/index.html');
-    await expect(page.locator('#main-sidebar .sidebar-logo-empresa')).toHaveAttribute('src', /^data:image\/png/);
-    await expect(page.locator('#main-sidebar .sidebar-logo-empresa')).toHaveAttribute('alt', 'CASA DAS CORTINAS');
-    await expect(page.locator('#main-sidebar .sidebar-nome-empresa'), 'a logo ja traz o nome').toHaveCount(0);
-    await page.click('#main-sidebar .logo');
+    await expect(page.locator('#topbar .sidebar-logo-empresa')).toHaveAttribute('src', /^data:image\/png/);
+    await expect(page.locator('#topbar .sidebar-logo-empresa')).toHaveAttribute('alt', 'CASA DAS CORTINAS');
+    await expect(page.locator('#topbar .sidebar-nome-empresa'), 'a logo ja traz o nome').toHaveCount(0);
+    await page.click('#topbar-avatar');
     await expect(page.locator('#logo-popup')).toHaveClass(/open/);
     await expect(page.locator('#logo-popup')).toContainText('Sair');
 });
@@ -177,7 +177,7 @@ test('a barra lateral mostra a logo e o nome da empresa; o clique na logo abre o
 test('sem logo cadastrada, continua a do SCTech', async ({ page }) => {
     await entrar(page, BASE);
     await page.goto(BASE + '/index.html');
-    await expect(page.locator('#main-sidebar .sidebar-logo-img')).toHaveAttribute('src', 'images/logo.png');
+    await expect(page.locator('#topbar .sidebar-logo-img')).toHaveAttribute('src', 'images/logo.png');
 });
 
 // --- Pedidos: menu de acoes --------------------------------------------------

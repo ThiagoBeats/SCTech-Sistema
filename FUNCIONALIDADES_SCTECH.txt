@@ -38,9 +38,15 @@ Módulos (telas):
  18. Configurações: Meu Perfil, Preferências, Segurança e Acessos (configuracoes.html)
 
 Elementos globais presentes em todas as telas (exceto Login):
-  - Barra lateral de navegação (sidebar) com links para todos os módulos
-  - Popup de perfil (clique no logo): nome do usuário logado, links para
-    "Sobre" e "Configurar Empresa", botão de Logout
+  - Barra superior fixa (grafite): logo e nome da empresa à esquerda (sem o nome do
+    módulo; o título da página fica no conteúdo); à direita a data de hoje (abre a
+    Agenda, quando existir; no celular fica só o ícone), o sino e o avatar (foto ou
+    iniciais). O avatar abre o menu do perfil: nome do usuário logado, "Meu perfil",
+    "Sobre o Sistema", "Configurar Empresa" e "Sair". Nome/foto/empresa atualizam a
+    barra na hora ao salvar
+  - Barra lateral de navegação (sidebar) cinza-clara, abaixo da barra superior, com
+    ícone + texto, item ativo destacado e links para todos os módulos; no rodapé
+    ficam "Sair do sistema" e o alfinete 📌 (fixar aberta / solta só com ícones)
   - Tema claro/escuro: escolhido em Configurações › Preferências do Sistema
   - Ícone de página (favicon): logo SCTech
   - Indicador de alertas desabilitados: ícone 🔕 no cabeçalho, visível apenas
@@ -67,7 +73,7 @@ Segurança:
   - Sessão armazenada em sessionStorage (chave: sc_user)
   - Todas as outras telas verificam a sessão ao carregar; se não autenticado,
     redirecionam automaticamente para login.html
-  - Logout disponível no popup de perfil da sidebar em todas as telas
+  - Logout disponível no menu do avatar (barra superior) e em "Sair do sistema" (rodapé da lateral) em todas as telas
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
