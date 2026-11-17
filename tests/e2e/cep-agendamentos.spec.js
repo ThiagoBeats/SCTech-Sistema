@@ -39,7 +39,7 @@ test('medicao: partes vem do cliente, CEP novo busca e grava na medicao sem muda
     expect((await lerLS(page, 'sc_cli'))[0].rua).toBe('Rua das Flores');
 });
 
-test('medicao: cliente antigo preenche a Rua com o texto antigo e a cidade, e o agendamento segue com esse endereco', async ({ page }) => {
+test('medicao: cliente antigo preenche Rua (texto antigo) e Cidade; com os dois apagados o agendamento ainda usa o endereco do cliente', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI_ANTIGO() });
     await page.goto(BASE + '/pcp.html?view=medicoes');
     await page.selectOption('#med-cliente-id', '1');
@@ -123,4 +123,66 @@ test('editar o pedido (salvarPedido) mantem inst_cep ate inst_uf', async ({ page
     await page.waitForURL(/index\.html/);
     const p = (await lerLS(page, 'sc_ped'))[0];
     expect(p).toMatchObject({ inst_cep: '80010000', inst_rua: 'Rua das Flores', inst_numero: '10', inst_complemento: 'apto 2', inst_bairro: 'Batel', inst_cidade: 'Curitiba', inst_uf: 'PR' });
+});
+
+test('editar medicao antiga (sem partes) e salvar sem mexer mantem endereco e cidade', async ({ page }) => {
+    const med = { id: 5, clienteId: 1, clienteNome: 'Ana Paula Lima', endereco: 'Rua Velha, 77 - Centro', cidade: 'Maringa', data: dia(2), status: 'Agendado' };
+    await entrar(page, BASE, { sc_cli: CLI_ANTIGO(), sc_med: [med] });
+    await page.goto(BASE + '/pcp.html?view=medicoes');
+    await page.locator('#med-pend-lista .agd-item', { hasText: 'Ana Paula Lima' }).click();
+    await page.click('.agd-modal button:has-text("Editar")');
+    await expect(page.locator('#agdf-end-rua')).toHaveValue('Rua Velha, 77 - Centro');
+    await page.click('#agdf-salvar');
+    await expect.poll(async () => (await lerLS(page, 'sc_med'))[0].rua).toBe('Rua Velha, 77 - Centro');
+    const m = (await lerLS(page, 'sc_med'))[0];
+    expect(m.endereco).toBe('Rua Velha, 77 - Centro');
+    expect(m.cidade).toBe('Maringa');
+});
+
+test('instalacao sem endereco proprio segue o cliente: cartao, rota e Ir usam o endereco novo do cliente', async ({ page }) => {
+    const cli = [{ id: 1, nome: 'Ana Paula Lima', tel: '44991234567' }];
+    await entrar(page, BASE, { sc_cli: cli, sc_ped: [PED()] });
+    await page.goto(BASE + '/pcp.html?view=agenda');
+    await page.locator('#inst-prontos-lista .agd-pronto', { hasText: '#26200' }).click();
+    await page.selectOption('#inst-prof', 'u:1');
+    await page.fill('#inst-data', dia(2));
+    await page.fill('#inst-hora', '10:00');
+    await page.click('#inst-btn-agendar');
+    await expect.poll(async () => (await lerLS(page, 'sc_ped'))[0].inst_agendado).toBe(true);
+    // o cliente ganha um endereco depois
+    await page.evaluate(() => {
+        const c = JSON.parse(localStorage.getItem('sc_cli'));
+        Object.assign(c[0], { cep: '80010000', rua: 'Rua Nova', numero: '5', complemento: '', bairro: 'Batel', cidade: 'Curitiba', uf: 'PR', end: 'Rua Nova, 5, Batel' });
+        localStorage.setItem('sc_cli', JSON.stringify(c));
+    });
+    await page.goto(BASE + '/pcp.html?view=agenda');
+    const item = page.locator('#inst-pend-lista .agd-item', { hasText: 'Ana Paula Lima' });
+    await expect(item).toContainText('Rua Nova, 5, Batel');
+    const href = await item.locator('a.agd-ir').getAttribute('href');
+    expect(decodeURIComponent(href)).toContain('Rua Nova');
+    await item.click();
+    await expect(page.locator('.agd-modal')).toContainText('Rua Nova, 5, Batel');
+});
+
+test('documentos: endereco do cliente com partes mostra Cidade/UF e CEP; cliente antigo fica igual; etiqueta tambem', async ({ page }) => {
+    await entrar(page, BASE, { sc_cli: CLI_NOVO() });
+    await page.goto(BASE + '/pcp.html');
+    const r = await page.evaluate(() => {
+        const novo = db.clientes[0];
+        const antigo = { id: 2, nome: 'Velho', end: 'Rua X, 10', cidade: 'Curitiba' };
+        const ped = { id: 1, clienteId: 1, valor: 10, ambientes: [], itens: [] };
+        return {
+            novo: _endImpCliente(novo), antigo: _endImpCliente(antigo),
+            propostaNovo: _htmlProposta(ped, novo, 7, null), propostaAntigo: _htmlProposta(ped, antigo, 7, null),
+            etqNovo: EtiquetasCore.valoresEtiquetaPedido(ped, novo, 1, 1, '').endereco,
+            etqAntigo: EtiquetasCore.valoresEtiquetaPedido(ped, antigo, 1, 1, '').endereco,
+        };
+    });
+    expect(r.novo).toBe('Rua das Flores, 10, apto 2, Batel — Curitiba/PR, CEP 80010-000');
+    expect(r.antigo).toBe('Rua X, 10');
+    expect(r.propostaNovo).toContain('Curitiba/PR, CEP 80010-000');
+    expect(r.propostaAntigo).toContain('<p>Rua X, 10</p>');
+    expect(r.propostaAntigo).not.toContain('Curitiba');
+    expect(r.etqNovo).toContain('Curitiba/PR');
+    expect(r.etqAntigo).toBe('Rua X, 10');
 });

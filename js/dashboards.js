@@ -572,7 +572,7 @@ function _dashInstalacoes() {
             <td>${escapeHtml(p.clienteNome||'—')}</td>
             <td>${p.data_entrega?_fmtDate(p.data_entrega):'—'}</td>
             <td>${prazoBadge}</td>
-            <td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(p.inst_endereco||'—')}</td>
+            <td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(p.inst_endereco ? EnderecoCore.textoComCidade(p.inst_endereco, p.inst_rua !== undefined ? { rua: p.inst_rua, cep: p.inst_cep, cidade: p.inst_cidade, uf: p.inst_uf } : null) : '—')}</td>
             <td>${pagBadge}</td></tr>`;
         }).join('') : `<tr><td colspan="6" class="dash-empty">Nenhuma instalação com os filtros selecionados</td></tr>`}</tbody></table>
     </div>`;

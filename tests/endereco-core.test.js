@@ -50,3 +50,13 @@ test('UFS tem as 27 siglas em ordem alfabetica', () => {
     assert.strictEqual(new Set(E.UFS).size, 27);
     assert.deepStrictEqual(E.UFS, E.UFS.slice().sort());
 });
+
+test('textoComCidade acrescenta Cidade/UF e CEP so quando o registro tem partes', () => {
+    const t = 'Rua A, 10, Centro';
+    assert.strictEqual(E.textoComCidade(t, { rua: 'Rua A', cidade: 'Curitiba', uf: 'PR', cep: '80010000' }), t + ' — Curitiba/PR, CEP 80010-000');
+    assert.strictEqual(E.textoComCidade(t, { rua: 'Rua A', cidade: 'Curitiba', uf: '', cep: '' }), t + ' — Curitiba');
+    assert.strictEqual(E.textoComCidade(t, { rua: 'Rua A', cidade: '', uf: 'PR', cep: '123' }), t);
+    assert.strictEqual(E.textoComCidade('', { rua: '', cidade: 'Curitiba', uf: 'PR', cep: '' }), 'Curitiba/PR');
+    assert.strictEqual(E.textoComCidade(t, { cidade: 'Curitiba', uf: 'PR' }), t);
+    assert.strictEqual(E.textoComCidade(t, null), t);
+});

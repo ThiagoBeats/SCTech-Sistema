@@ -309,6 +309,11 @@ Cada card de instalação exibe:
          a cidade antiga (não herda a do cliente). Grava as partes e
          inst_endereco (texto montado); também em Editar instalação. Editar o
          pedido preserva esses campos.
+         Instalação sem rua, número e CEP segue o endereço do cliente (mesmo se o
+         cliente ganhar o endereço depois).
+    Nos documentos (proposta, ordem de serviço, ficha de visita, etiqueta de
+    expedição) o endereço de quem tem partes sai com "— Cidade/UF, CEP
+    00000-000"; cadastro antigo sai exatamente como antes.
     c) Horário:
        - Input time
        - Ao clicar no campo abre a lista dos horários do expediente (passo da

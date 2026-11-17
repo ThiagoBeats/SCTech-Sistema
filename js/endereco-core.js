@@ -20,6 +20,16 @@
         return [p.rua, p.numero, p.complemento, p.bairro].map(t).filter(Boolean).join(', ');
     }
 
+    // Texto para documentos e telas: "<texto> — Cidade/UF, CEP 00000-000". Registro sem partes
+    // (rua === undefined) imprime o texto como sempre; pecas vazias ficam de fora.
+    function textoComCidade(texto, p) {
+        texto = t(texto);
+        if (!p || p.rua === undefined) return texto;
+        const cid = t(p.cidade), uf = t(p.uf), cep = soDigitosCep(p.cep);
+        const local = [cid ? (uf ? cid + '/' + uf : cid) : '', cep.length === 8 ? 'CEP ' + mascaraCep(cep) : ''].filter(Boolean).join(', ');
+        return [texto, local].filter(Boolean).join(' — ');
+    }
+
     function partesDeRegistroAntigo(texto, cidade) {
         return { cep: '', rua: texto || '', numero: '', complemento: '', bairro: '', cidade: cidade || '', uf: '' };
     }
@@ -37,7 +47,7 @@
         return _resultado(j.street, j.neighborhood, j.city, j.state);
     }
 
-    const api = { soDigitosCep, mascaraCep, cepCompleto, textoEndereco, partesDeRegistroAntigo,
+    const api = { soDigitosCep, mascaraCep, cepCompleto, textoEndereco, textoComCidade, partesDeRegistroAntigo,
         interpretarViaCep, interpretarBrasilApi, UFS };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.EnderecoCore = api;

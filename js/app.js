@@ -2490,6 +2490,9 @@ function filtrarTabelaClientes() {
         : db.clientes;
     renderTabelaClientes(lista);
 }
+// Endereco para documentos e telas: texto cadastrado + Cidade/UF e CEP quando o registro tem partes.
+function _endImpCliente(c) { return c ? EnderecoCore.textoComCidade(c.end, c) : ''; }
+function _endImpMed(m) { return m ? EnderecoCore.textoComCidade(m.endereco, m) : ''; }
 function _clienteEndCidade(c) { return [c.end, [c.cidade, c.cidade && c.uf].filter(Boolean).join('/')].filter(Boolean).join(' — '); }
 function renderTabelaClientes(lista) {
     const tb = document.getElementById('tb-clientes');
@@ -7852,7 +7855,7 @@ function _htmlProposta(ped, cliente, diasValidade, layout) {
     const entrega = ped.data_entrega ? new Date(ped.data_entrega + 'T12:00:00').toLocaleDateString('pt-BR') : '';
     const valores = Object.assign(valoresComunsEmpresa(), {
         cliente: cliente ? cliente.nome : (ped.clienteNome || ''),
-        cliente_telefone: cliente?.tel || '', cliente_email: cliente?.email || '', cliente_endereco: cliente?.end || '',
+        cliente_telefone: cliente?.tel || '', cliente_email: cliente?.email || '', cliente_endereco: cliente ? _endImpCliente(cliente) : '',
         numero: formatPedidoId(ped.id), data_emissao: hoje, validade, diasValidade,
         total: 'R$ ' + (ped.valor || 0).toFixed(2), previsao_entrega: entrega,
         vendedor: ped.vendedor_nome || '', forma_pagamento: formaPagamentoDoPedido(ped)
@@ -7900,7 +7903,7 @@ function _htmlProposta(ped, cliente, diasValidade, layout) {
             ${cliente&&cliente.cpf   ? `<p>CPF: ${escapeHtml(cliente.cpf)}</p>`     : ''}
             ${cliente&&cliente.tel   ? `<p>Tel: ${escapeHtml(cliente.tel)}</p>`     : ''}
             ${cliente&&cliente.email ? `<p>${escapeHtml(cliente.email)}</p>`        : ''}
-            ${cliente&&cliente.end   ? `<p>${escapeHtml(cliente.end)}</p>`          : ''}
+            ${cliente&&cliente.end   ? `<p>${escapeHtml(_endImpCliente(cliente))}</p>`  : ''}
         </div>`,
         ambientes: `
         <table class="proposta-tabela">
@@ -10762,9 +10765,11 @@ function _partesDoCliente(cli) {
     return cli.rua === undefined ? EnderecoCore.partesDeRegistroAntigo(cli.end, cli.cidade) : cli;
 }
 // Monta os campos de endereco das telas de agendamento (medicao e instalacao).
-function _agdMontarEnderecos() {
+function _agdMontarEnderecosMed() {
     const m = document.getElementById('med-end-campos');
     if (m && !document.getElementById('med-rua')) { m.innerHTML = enderecoCamposHtml('med', { obrigRua: true, ir: true }); enderecoAnexar('med'); }
+}
+function _agdMontarEnderecosInst() {
     const i = document.getElementById('inst-end-campos');
     if (i && !document.getElementById('inst-rua')) { i.innerHTML = enderecoCamposHtml('inst', { obrigRua: false, ir: true }); enderecoAnexar('inst'); }
 }
@@ -10926,7 +10931,7 @@ function gerarHTMLAgendamentoMedicao(v, layout) {
     const valores = Object.assign(valoresComunsEmpresa(), {
         cliente: v.clienteNome || '', cliente_telefone: v.clienteTel || '',
         data_visita: d.toLocaleDateString('pt-BR'), horario: v.hora ? horaFmt : '',
-        responsavel: _medNomeResp(v), endereco_visita: v.endereco || '', id: v.id
+        responsavel: _medNomeResp(v), endereco_visita: _endImpMed(v), id: v.id
     });
     const secTitle = id => {
         const t = blocoDoLayout(layout, id).titulo;
@@ -10952,13 +10957,13 @@ function gerarHTMLAgendamentoMedicao(v, layout) {
             ['Telefone / WhatsApp', escapeHtml(v.clienteTel || '')],
             ['E-mail', escapeHtml(cli?.email || '')],
             ['CPF / CNPJ', escapeHtml(cli?.cpf || '')],
-            ['Endereço cadastrado', escapeHtml(cli?.end || '')]
+            ['Endereço cadastrado', escapeHtml(cli ? _endImpCliente(cli) : '')]
         ]),
         agendamento: dados('agendamento', [
             ['Data da visita', dataFmt],
             ['Horário', horaFmt],
             ['Responsável', escapeHtml(_medNomeResp(v))],
-            ['Endereço da visita', escapeHtml(v.endereco || '')],
+            ['Endereço da visita', escapeHtml(_endImpMed(v))],
             ['Observações', escapeHtml(v.obs || '')]
         ]),
         assinatura: `
@@ -11049,6 +11054,7 @@ function _agdEnd(endereco, cidade) {
 // Endereco que vai ao mapa: registro com partes usa as partes; antigo, texto + cidade como sempre.
 function _partesMedMapa(m) { return m && m.rua !== undefined ? m : null; }
 function _partesInstMapa(p, cli) {
+    if (_instVazia(p)) return cli && cli.rua !== undefined ? cli : null;
     if (p.inst_rua !== undefined) return _instPartes(p, cli);
     if (!p.inst_endereco && cli && cli.rua !== undefined) return cli;
     return null;
@@ -11058,22 +11064,18 @@ function _endMed(m) {
     return pt && typeof RotasCore !== 'undefined' ? RotasCore.enderecoDePartes(pt) : _agdEnd(m.endereco, m.cidade);
 }
 function _endInst(p, cli) {
+    if (_instVazia(p)) return cli ? _endCliente(cli) : '';
     const pt = _partesInstMapa(p, cli);
     return pt && typeof RotasCore !== 'undefined' ? RotasCore.enderecoDePartes(pt) : _agdEnd(p.inst_endereco || cli?.end, _instCidade(p, cli));
 }
-function linkIrParaHtml(endereco, classe, cidade) {
-    const url = typeof RotasCore !== 'undefined' ? RotasCore.linkIrPara(_agdEnd(endereco, cidade)) : '';
+function _endCliente(cli) {
+    return cli.rua !== undefined && typeof RotasCore !== 'undefined' ? RotasCore.enderecoDePartes(cli) : _agdEnd(cli.end, cli.cidade);
+}
+function linkIrParaHtml(endereco, classe) {
+    const url = typeof RotasCore !== 'undefined' ? RotasCore.linkIrPara(_agdEnd(endereco)) : '';
     if (!url) return '';
     return `<a class="${classe || 'agd-ir'}" href="${escapeHtml(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()" title="Abrir o caminho no Google Maps">📍 Ir</a>`;
 }
-// Botao ao lado de um campo de endereco: le o que esta digitado.
-async function irParaEndereco(campoId, cidadeId) {
-    const end = (document.getElementById(campoId)?.value || '').trim();
-    if (!end) { await showAlert('Digite o endereço primeiro.', '📍'); return; }
-    const cidade = cidadeId ? (document.getElementById(cidadeId)?.value || '') : '';
-    window.open(RotasCore.linkIrPara(_agdEnd(end, cidade)), '_blank', 'noopener');
-}
-
 // --- Endereco em partes (CEP, rua, numero, complemento, bairro, cidade, estado) ---
 // Usado no cliente, na medicao, na instalacao e no formulario da agenda. Tudo pelo prefixo dos ids.
 function enderecoCamposHtml(prefixo, opts) {
@@ -12093,7 +12095,7 @@ function renderDashboardInstalacoes() {
             <div style="font-weight:700;font-size:14px;color:var(--dark);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(p.clienteNome)}">${escapeHtml(p.clienteNome||'—')}</div>
             <div style="font-size:11px;color:#8F8F8F">#${formatPedidoId(p.id)}</div>
             ${p.inst_hora     ? `<div style="font-size:12px;color:var(--dark);margin-top:2px">🕐 ${p.inst_hora}</div>` : ''}
-            ${(() => { const t = _endInst(p, db.clientes.find(c => c.id == p.clienteId)); return p.inst_endereco ? `<div style="font-size:11px;color:#8F8F8F;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(t)}">📍 ${escapeHtml(t)}</div>` : ''; })()}
+            ${(() => { const t = _endInst(p, db.clientes.find(c => c.id == p.clienteId)); return (p.inst_endereco || _instVazia(p)) && t ? `<div style="font-size:11px;color:#8F8F8F;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(t)}">📍 ${escapeHtml(t)}</div>` : ''; })()}
             ${(() => { const c = db.clientes.find(c => c.id == p.clienteId); return linkIrParaHtml(_endInst(p, c), 'agd-ir agd-ir-card'); })()}
         </div>`;
     }
@@ -12235,7 +12237,12 @@ function _instCidade(p, cli) {
 
 // Partes do endereco da instalacao: as do pedido; pedido antigo com endereco proprio vira
 // Rua = texto antigo (cidade nao herdada do cliente); senao, as do cliente.
+// Instalacao com partes mas sem rua, numero e CEP nao tem endereco proprio: segue o cliente.
+function _instVazia(p) {
+    return p.inst_rua !== undefined && !['inst_rua', 'inst_numero', 'inst_cep'].some(k => String(p[k] == null ? '' : p[k]).trim());
+}
 function _instPartes(p, cli) {
+    if (_instVazia(p)) return _partesDoCliente(cli);
     if (p.inst_rua !== undefined) {
         return { cep: p.inst_cep, rua: p.inst_rua, numero: p.inst_numero, complemento: p.inst_complemento,
             bairro: p.inst_bairro, cidade: p.inst_cidade, uf: p.inst_uf };
@@ -12907,6 +12914,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (document.getElementById('os-container'))       renderOS();
     if (document.getElementById('agenda-container')) {
+        _agdMontarEnderecosInst();
         _instLimparForm();
         renderAgenda();
     }
@@ -12922,7 +12930,7 @@ document.addEventListener('DOMContentLoaded', () => {
             db.clientes.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
         const dataEl = document.getElementById('med-data');
         if (dataEl) dataEl.value = _agdHoje();
-        _agdMontarEnderecos();
+        _agdMontarEnderecosMed();
         _agdPreencherProf('med-prof', '', '— A definir —');
         _agdPreencherDur('med-dur', 'med');
         renderMedicoes();
