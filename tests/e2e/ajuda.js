@@ -18,4 +18,17 @@ async function entrar(page, base, extras) {
     }, extras || {});
 }
 
-module.exports = { entrar };
+// Menu "⋮" (menuAcoesHtml) dentro de um card/linha: abre e devolve o menu flutuante.
+async function abrirMenuAcoes(page, escopo) {
+    await escopo.locator('.btn-kebab').first().click();
+    const menu = page.locator('#menu-acoes-flutuante');
+    await menu.waitFor();
+    return menu;
+}
+// Abre o menu do card/linha e clica na acao pelo rotulo.
+async function acaoMenu(page, escopo, rotulo) {
+    const menu = await abrirMenuAcoes(page, escopo);
+    await menu.locator('.menu-acoes-item', { hasText: rotulo }).click();
+}
+
+module.exports = { entrar, abrirMenuAcoes, acaoMenu };

@@ -459,9 +459,9 @@ td:last-child { white-space: nowrap; }
 .kanban-card-age { font-size: 11px; color: #8F8F8F; background: var(--surface-3); padding: 1px 6px; border-radius: 10px; }
 .kanban-card-vendedor { font-size: 11px; color: #8F8F8F; margin-bottom: 4px; }
 .kanban-card-cliente { font-weight: bold; font-size: 14px; color: var(--dark); margin-bottom: 1px; }
-.kanban-card-actions { display: flex; justify-content: space-between; align-items: center; }
+.kanban-card-top .kanban-card-age { margin-left: auto; }
+.kanban-card-top .btn-kebab { width: 26px; height: 26px; font-size: 18px; margin: -3px -4px -3px 4px; }
 .kanban-empty { color: #8F8F8F; font-size: 13px; text-align: center; padding: 24px 8px; font-style: italic; }
-.kanban-nav-ph { display: inline-block; width: 35px; }
 
 /* ── ORDEM DE SERVIÇO ──────────────────────────────────────────────── */
 .os-wrapper { max-width: 800px; margin: 30px auto; background: white; padding: 40px; box-shadow: 0 2px 20px rgba(0,0,0,0.12); border-radius: 4px; }
@@ -854,7 +854,7 @@ body.login-page {
 .doc-modal-btn-close:hover { background: #5A5A5A; }
 
 @media print {
-    .no-print { display: none !important; }
+    .no-print, .agd-modal-overlay { display: none !important; }
     body { background: white; }
     .proposta-wrapper, .os-wrapper { box-shadow: none; margin: 0; padding: 22px; }
     body.doc-modal-printing > * { display: none !important; }
@@ -1591,7 +1591,7 @@ html[data-theme="dark"] .pc-num-btn { color: var(--accent, #C9F775); }
 .agd-form-card h3 { color: var(--primary); margin: 0 0 12px; font-size: 16px; }
 .agd-tipo { display: flex; gap: 22px; margin-bottom: 12px; font-size: 13px; }
 .agd-tipo label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; }
-.agd-form-grid { display: grid; grid-template-columns: 1.4fr .9fr .7fr 1.4fr; gap: 10px 14px; align-items: start; }
+.agd-form-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, .9fr) minmax(0, .7fr) minmax(0, 1.4fr); gap: 10px 14px; align-items: start; }
 .agd-form-grid .form-group { margin-bottom: 0; }
 .agd-form-grid .agd-span2 { grid-column: span 2; }
 .agd-form-dica { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; }
@@ -1681,6 +1681,18 @@ html[data-theme="dark"] .rota-aviso, html[data-theme="dark"] .rota-atraso { colo
 .agd-modal-x { background: none; border: 0; font-size: 22px; line-height: 1; padding: 2px 6px; color: var(--muted); cursor: pointer; box-shadow: none; }
 .agd-modal-corpo { padding: 14px 20px; overflow-y: auto; }
 .agd-modal-acoes { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding: 12px 20px 16px; border-top: 1px solid var(--border); }
+/* Lembrete de confirmar a instalacao (janela ao abrir + aviso da Pagina Inicial) */
+.lembrete-inst-modal { max-width: 560px; }
+.lembrete-inst-item { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.lembrete-inst-item:first-child { padding-top: 2px; }
+.lembrete-inst-item:last-child { border-bottom: 0; padding-bottom: 2px; }
+.lembrete-inst-txt { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
+.lembrete-inst-btns { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.aviso-inst-confirmar { background: var(--warn-bg); border: 1px solid #F2C924; border-radius: 6px; padding: 10px 16px; margin-bottom: 16px; font-size: 14px; }
+.aviso-inst-tit { font-weight: 700; margin-bottom: 6px; }
+.aviso-inst-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border-top: 1px solid rgba(0, 0, 0, .08); }
+.aviso-inst-item:first-of-type { border-top: 0; }
+@media (max-width: 600px) { .aviso-inst-item { flex-direction: column; align-items: stretch; } }
 .agd-det-topo { margin-bottom: 10px; }
 .agd-det { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px 12px; margin: 0; font-size: 13px; }
 .agd-det dt { color: var(--muted); font-weight: 600; }
@@ -1752,6 +1764,13 @@ html[data-theme="dark"] .rota-aviso, html[data-theme="dark"] .rota-atraso { colo
 .agd-slot-livre:hover { background: #CDEFCB; transform: none; }
 .agd-slot-ocupado { background: var(--danger-bg); color: var(--danger-text); border-color: #F7B9B1; cursor: not-allowed; }
 .agd-slot-indisp  { background: var(--surface-3); color: #8F8F8F; cursor: not-allowed; }
+/* Lista de horarios do campo Horario (medicao/instalacao) */
+.agd-hpick { position: fixed; z-index: 10001; max-height: 240px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; padding: 8px; background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, .18); }
+.agd-hpick-item { display: inline-flex; align-items: center; justify-content: center; padding: 6px 0; margin: 0; border-radius: 8px; font-size: 13px; font-weight: 600; border: 1px solid var(--border); background: var(--white); color: var(--dark); box-shadow: none; font-family: inherit; line-height: 1.2; }
+.agd-hpick-livre { cursor: pointer; }
+.agd-hpick-livre:hover, .agd-hpick-ativo { background: var(--ok-bg); color: var(--ok-text); transform: none; }
+.agd-hpick-ocupado, .agd-hpick-indisp { text-decoration: line-through; color: var(--muted); opacity: .75; cursor: not-allowed; }
+.agd-hpick-vazio { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
 .agd-slot-sel { outline: 2px solid var(--primary); outline-offset: 1px; }
 .agd-disp-sub { font-weight: 700; color: var(--primary); font-size: 12.5px; }
 .agd-disp-nota { font-size: 12px; color: var(--muted); }

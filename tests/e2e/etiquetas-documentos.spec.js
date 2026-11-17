@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, acaoMenu } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const MSG = 'Não foi possível carregar o gerador de códigos. Verifique a conexão com a internet e tente novamente.';
@@ -18,7 +18,7 @@ async function abrir(page, url) {
 
 test('OS mostra o codigo de barras do pedido', async ({ page }) => {
     await abrir(page, '/pcp.html');
-    await page.locator('.kanban-card', { hasText: '26001' }).locator('button[title="Ver Ordem de Serviço"]').first().click();
+    await acaoMenu(page, page.locator('.kanban-card', { hasText: '26001' }), 'Ver Ordem de Serviço');
     const cod = page.locator('#doc-modal-paper .sc-codigo-doc[data-status="ok"]');
     await expect(cod.locator('svg').first()).toBeVisible({ timeout: 20000 });
     await expect(cod).toContainText('26001');
@@ -37,7 +37,7 @@ test('sem internet: mensagem de conexao e nao imprime', async ({ page }) => {
     await page.route('**/cdn.jsdelivr.net/**', r => r.abort());
     await page.addInitScript(() => { window.print = () => { window.__imprimiu = true; }; });
     await abrir(page, '/pcp.html');
-    await page.locator('.kanban-card', { hasText: '26001' }).locator('button[title="Ver Ordem de Serviço"]').first().click();
+    await acaoMenu(page, page.locator('.kanban-card', { hasText: '26001' }), 'Ver Ordem de Serviço');
     await expect(page.locator('#doc-modal-paper .sc-codigo-falha')).toContainText(MSG, { timeout: 20000 });
     await page.click('text=🖨️ Imprimir / PDF');
     await expect(page.locator('#sc-modal-msg')).toContainText(MSG);

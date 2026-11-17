@@ -23,7 +23,7 @@ function _rotaVisitasDoDia(data) {
     (db.medicoes || []).forEach(m => {
         if (m.status !== 'Agendado' || m.data !== data) return;
         out.push({ tipo: 'med', id: m.id, prof: _medProf(m), profNome: _medNomeResp(m),
-            cliente: m.clienteNome || '—', tel: m.clienteTel || '', end: (m.endereco || '').trim(),
+            cliente: m.clienteNome || '—', tel: m.clienteTel || '', end: RotasCore.enderecoCompleto(m.endereco, m.cidade),
             hora: m.hora || '', agendadoMin: _agdMin(m.hora), durMin: +m.duracao || _agdDurPadrao('med'),
             rotulo: 'Medição', ico: '📐' });
     });
@@ -31,7 +31,7 @@ function _rotaVisitasDoDia(data) {
         if (!_instPendente(p) || p.data_entrega !== data) return;
         const cli = db.clientes.find(c => c.id == p.clienteId);
         out.push({ tipo: 'inst', id: p.id, prof: _instProf(p), profNome: nomeInstalador(p),
-            cliente: p.clienteNome || '—', tel: cli?.tel || '', end: (p.inst_endereco || cli?.end || '').trim(),
+            cliente: p.clienteNome || '—', tel: cli?.tel || '', end: RotasCore.enderecoCompleto(p.inst_endereco || cli?.end, _instCidade(p, cli)),
             hora: p.inst_hora || '', agendadoMin: _agdMin(p.inst_hora), durMin: _instDur(p),
             rotulo: `Instalação #${formatPedidoId(p.id)}`, ico: '🔧' });
     });
@@ -70,7 +70,7 @@ function _rotaItens() {
     return _rota.ordem.map(k => porChave.get(k)).filter(Boolean);
 }
 
-function _rotaEmpresaEnd() { return String(getEmpresa().endereco || '').trim(); }
+function _rotaEmpresaEnd() { const e = getEmpresa(); return RotasCore.enderecoCompleto(e.endereco, e.cidade); }
 
 // --- Tela ----------------------------------------------------------------------
 
@@ -137,7 +137,7 @@ function _rotaDesenhar() {
         const naoAchado = calc && calc.naoAchados.includes(k);
         const chegada = c && !c.incerto ? `<span class="rota-chega">Chega ${RotasCore.hhmm(c.chegadaMin)}</span>` : '';
         const atraso = c && !c.incerto && c.atrasoMin
-            ? `<span class="rota-atraso">⚠ ${c.atrasoMin} min depois do agendado</span>` : '';
+            ? `<span class="rota-atraso">⚠ ${RotasCore.duracaoPorExtenso(c.atrasoMin)} depois do agendado</span>` : '';
         return `<li class="rota-item" draggable="true" data-i="${i}" ondragstart="_rotaDragIni(event, ${i})" ondragover="event.preventDefault()" ondrop="_rotaDrop(event, ${i})">
             <span class="rota-num">${i + 1}</span>
             <span class="rota-alca" aria-hidden="true" title="Arraste para mudar a ordem">⠿</span>
@@ -422,7 +422,7 @@ async function enviarRotaAoTecnico() {
             const c = cheg && cheg.paradas[i];
             const hora = c && !c.incerto ? RotasCore.hhmm(c.inicioMin) : v.hora;
             return { hora, tipo: v.rotulo, cliente: v.cliente, tel: v.tel, end: v.end,
-                aviso: c && !c.incerto && c.atrasoMin ? `${c.atrasoMin} min depois do agendado (${v.hora})` : '' };
+                aviso: c && !c.incerto && c.atrasoMin ? `${RotasCore.duracaoPorExtenso(c.atrasoMin)} depois do agendado (${v.hora})` : '' };
         }),
         links: _rotaLinks(itens),
         totalKm: trechos ? trechos.reduce((s, t) => s + t.metros, 0) / 1000 : null,

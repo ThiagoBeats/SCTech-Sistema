@@ -154,6 +154,16 @@ Mini-painel exibido no dashboard quando há pedidos aguardando instalação:
   - Botão "Ver agenda completa" no cabeçalho do painel
   - Exibe até 6 próximos e todos os atrasados; até 3 sem data
 
+Aviso fixo "⚠ N instalação(ões) aguardando confirmação" (topo da página, acima dos
+cards de métricas), para o instalador designado e para quem criou o pedido,
+enquanto houver instalação vencida para confirmar (ver 3.2, "Lembrete de
+confirmar a instalação"):
+  - Lista cada pedido: "O pedido #N (Cliente) devia ter sido instalado em dd/mm às
+    HH:MM. Foi instalado?" com o botão "Confirmar" (mesmo fluxo do "✓ Confirmar
+    instalação" da agenda, com a pergunta do pagamento)
+  - Aparece toda vez que a página abre (não é limitado a uma vez por dia) e some
+    quando não houver mais nada para confirmar
+
 ── 2.5 AGENDA DE MEDIÇÕES (resumo) ─────────────────────────────────────────────
 
 Mini-painel exibido no dashboard quando há medições pendentes:
@@ -229,7 +239,11 @@ Cada card no kanban exibe:
   - Status de pagamento (badge)
   - Aviso "⚠ Sem estoque" quando o tecido do pedido não cobre o consumo; depois que o
     tecido do pedido foi baixado, o aviso some (o tecido já saiu do estoque)
-  - Botões: avançar status (→), retroceder status (←), editar (✏️)
+  - Menu "⋮" no canto do card (e na linha da visualização em lista) com as ações:
+    "Ver Ordem de Serviço", "Imprimir etiquetas" (travada até "Pronto p/ Instalação"),
+    "Ver timeline", "Voltar etapa" e "Avançar etapa" (as duas últimas só quando a
+    etapa permite). O card não tem mais ícones de ação soltos; "Agendar instalação" e
+    "Confirmar pagamento" continuam como botões. Clicar no número do pedido edita.
 
 Avanço de status com comportamentos automáticos:
   - Orçamento → Medição: gera lançamentos em Contas a Receber automaticamente
@@ -288,8 +302,19 @@ Cada card de instalação exibe:
          no pedido e re-renderiza agenda e painel do dashboard
     b) Endereço da instalação:
        - Input text pré-preenchido; placeholder = endereço do cliente cadastrado
+       - Cidade (text): vem preenchida com a cidade do pedido ou, sem ela, a do
+         cliente, e pode mudar; grava inst_cidade no pedido (também em Editar).
+         O fallback para a cidade do cliente só vale quando o endereço da
+         instalação é o do cliente (ou está vazio); outro endereço sem cidade
+         fica sem cidade.
     c) Horário:
        - Input time
+       - Ao clicar no campo abre a lista dos horários do expediente (passo da
+         Configuração da agenda): os já comprometidos do responsável (medições +
+         instalações) e os que não cabem na duração aparecem riscados e não dá
+         para escolher; os livres preenchem o campo. Dá para digitar um horário
+         quebrado (ex.: 10:30). Sem responsável, todos aparecem livres. Vale também
+         nas janelas de editar/reagendar.
     d) Informações Gerais / Observações:
        - Textarea (2 linhas), redimensionável
 
@@ -299,6 +324,31 @@ Cada card de instalação exibe:
     - "📱 WhatsApp": link direto para WhatsApp do cliente (se telefone cadastrado)
     - "📋 OS": abre modal da Ordem de Serviço para impressão
 
+  Lembrete de confirmar a instalação:
+    - Uma instalação agendada fica "para confirmar" quando passou o horário de
+      término (data + horário + duração; sem horário, o fim do expediente da
+      Configuração da agenda) e ela continua em "Pronto p/ Instalação"
+    - Quem é lembrado: o instalador designado (se for usuário do sistema) e o
+      usuário que criou o pedido. Instalador só com nome digitado não entra no
+      sistema: só quem criou o pedido é lembrado
+    - Ao abrir qualquer página do sistema (depois do login), uma janela aparece
+      uma vez por dia por pessoa: "O pedido #N (Cliente) devia ter sido instalado
+      em dd/mm às HH:MM. Foi instalado?"
+        → "Sim, foi instalado": segue o fluxo do "✓ Confirmar instalação" (pergunta
+          do pagamento; o pedido vai para Aguardando Financeiro e para Realizados)
+        → "Ainda não": troca por "📅 Reagendar" (abre o "Reagendar instalação" na
+          agenda, em pcp.html) ou "Lembrar amanhã" (fecha; volta no dia seguinte)
+    - Com vários pedidos, uma janela só lista todos, cada um com seus botões
+    - "Reagendar" só aparece para quem tem acesso à Produção. Com vários pedidos,
+      depois de salvar (ou ao voltar do reagendamento) a janela reabre com os que
+      faltam; a URL perde o "reagendar=1" para recarregar não reabrir o formulário
+    - Páginas de documento/impressão (OS, proposta, pedido de compra) nunca abrem
+      a janela (nem gastam o aviso do dia) e a janela não sai na impressão
+    - O criador do pedido não muda ao editar o orçamento (continua recebendo o
+      lembrete); editar também preserva o agendamento e o instalador do pedido
+    - Enquanto não confirmar, a janela volta todo dia e fica o aviso fixo na
+      Página Inicial (ver 2.4)
+
 ── 3.3 ABA: AGENDAMENTO DE MEDIÇÕES ────────────────────────────────────────────
 
 Formulário de agendamento:
@@ -307,9 +357,17 @@ Formulário de agendamento:
     → Se "novo": campos nome (text) e telefone/WhatsApp (text)
   - Data da visita (date, obrigatório)
   - Horário (time, opcional)
+    → Ao clicar no campo abre a lista de horários do expediente; os comprometidos
+      do responsável aparecem riscados e não dá para escolher (digitar um horário
+      quebrado, ex.: 10:30, continua valendo; também em editar/reagendar; as setas do
+      teclado só navegam na lista depois da 1ª seta para baixo; no celular a lista
+      não fecha com o teclado virtual)
   - Endereço da visita (text, obrigatório), com o botão "📍 Ir para endereço"
     ao lado (abre o Google Maps com o caminho até o que foi digitado; vazio
     avisa "Digite o endereço primeiro.")
+  - Cidade (text): preenchida com a cidade do cliente escolhido (pode mudar;
+    para cliente novo, digitada à mão); grava cidade na medição e, no cliente
+    novo, no cadastro dele (também em Editar agendamento)
   - Observações (text, opcional): referências, ponto de encontro, instruções
   - Botão "📐 Agendar Visita"
 
@@ -322,6 +380,9 @@ Lista de medições agendadas:
   - Nos cards das agendas de Medições e de Instalações (ao lado do status) e no
     endereço dos detalhes: abre o Google Maps com o caminho até o endereço,
     saindo de onde a pessoa está. Clicar no "📍 Ir" não abre o card.
+  - O endereço levado ao Maps (e às Rotas do dia) é endereço + ", " + cidade,
+    quando há cidade e o endereço ainda não a traz (sem diferenciar maiúscula
+    nem acento). Dados antigos sem cidade funcionam como antes.
   - Botão "📍 Ir para endereço" ao lado dos campos de endereço da medição, da
     instalação e do cadastro do cliente.
 
@@ -347,11 +408,12 @@ campo e mandar para ele. Abre também por pcp.html?view=rotas.
     km e chegada, as outras continuam com a conta.
   - Ajuste à mão: arrastar (⠿) ou os botões ↑ e ↓.
   - Cada visita mostra: número na rota, cliente, tipo (Medição / Instalação
-    #N), endereço, horário agendado, chegada prevista, km do trecho e "📍 Ir".
+    #N), endereço com a cidade (a busca no mapa usa endereço + cidade, para não
+    achar a rua de mesmo nome de outra cidade), horário agendado, chegada prevista, km do trecho e "📍 Ir".
   - Chegada prevista: saída + trajeto + duração de cada visita. Se a 1ª visita
     tem horário, sai a tempo de chegar nele; senão, no início do expediente
     (configuração da agenda). Chegou antes do horário: espera até ele.
-    Chegada mais de 10 min depois do agendado: "⚠ N min depois do agendado".
+    Chegada mais de 10 min depois do agendado: "⚠ 10 horas e 7 minutos depois do agendado" (atraso por extenso).
     Não impede nada.
   - Total: km e tempo de trajeto (com a volta) e horário de saída.
   - "💾 Salvar rota": grava a ordem e, para cada visita com horário que não
@@ -586,7 +648,9 @@ Formulário de cadastro/edição:
   - E-mail (email)
   - CPF (text)
   - Endereço completo (text), com o botão "📍 Ir para endereço" ao lado (abre
-    o Google Maps com o caminho até o endereço digitado)
+    o Google Maps com o caminho até o endereço digitado e a cidade)
+  - Cidade (text, opcional): mostrada na tabela junto do endereço; as agendas de
+    medição e instalação já vêm com ela
   - Botão "Salvar Cliente" (cria ou atualiza dependendo do modo)
   - Botão "Cancelar" (visível apenas no modo de edição)
 
@@ -2035,6 +2099,8 @@ Campos:
   - Nome Fantasia (text)
   - CNPJ (text com máscara automática: 00.000.000/0000-00)
   - Endereço Completo (text)
+  - Cidade (text): vem da consulta de CNPJ; só é guardada (cidade em sc_empresa)
+    e usada na saída/volta das Rotas do dia, junto do endereço, sem repetir
   - Telefone / WhatsApp (text)
   - E-mail (email)
   - Site (text)

@@ -482,6 +482,7 @@ function salvarEmpresaConfigs() {
         nome_fantasia: (document.getElementById('emp-fantasia')?.value || '').trim().toLocaleUpperCase('pt-BR'),
         cnpj:          (document.getElementById('emp-cnpj')?.value     || '').trim(),
         endereco:      (document.getElementById('emp-end')?.value       || '').trim(),
+        cidade:        (document.getElementById('emp-cidade')?.value    || '').trim(),
         telefone:      (document.getElementById('emp-tel')?.value       || '').trim(),
         email:         (document.getElementById('emp-email')?.value     || '').trim(),
         site:          (document.getElementById('emp-site')?.value      || '').trim(),
@@ -1062,6 +1063,7 @@ function carregarEmpresaConfigs() {
     set('emp-fantasia', (emp.nome_fantasia || '').toLocaleUpperCase('pt-BR'));
     set('emp-cnpj',     emp.cnpj);
     set('emp-end',      emp.endereco);
+    set('emp-cidade',   emp.cidade);
     set('emp-tel',      emp.telefone);
     set('emp-email',    emp.email);
     set('emp-site',     emp.site);
@@ -1590,18 +1592,19 @@ async function exigirPermissao(modulo, nivelMinimo) {
 }
 
 function checkAuth() {
-    if (!sessionStorage.getItem('sc_user')) { window.location.replace('login.html'); return; }
+    if (!sessionStorage.getItem('sc_user')) { window.location.replace('login.html'); return false; }
     migrarPermissoesSalvas();
     migrarArquitetoDosPedidos();
     migrarStatusAguardandoFinanceiro();
     const usuario = getUsuarioLogado();
-    if (!usuario || !usuario.ativo) { logout(); return; }
+    if (!usuario || !usuario.ativo) { logout(); return false; }
     const arquivo  = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
     const exigidos = PAGINA_MODULO[arquivo];
     if (exigidos) {
         const lista = Array.isArray(exigidos) ? exigidos : [exigidos];
-        if (!lista.some(m => temAcessoAlgumaSub(m, 'visualizar', usuario))) { window.location.replace('index.html'); return; }
+        if (!lista.some(m => temAcessoAlgumaSub(m, 'visualizar', usuario))) { window.location.replace('index.html'); return false; }
     }
+    return true;
 }
 
 async function realizarLogin() {
@@ -2363,6 +2366,7 @@ async function salvarCliente() {
     const tel   = document.getElementById('cli-tel')?.value.trim()   || '';
     const email = document.getElementById('cli-email')?.value.trim() || '';
     const end   = document.getElementById('cli-end')?.value.trim()   || '';
+    const cidade = document.getElementById('cli-cidade')?.value.trim() || '';
     if (cpf) {
         const cpfNorm = cpf.replace(/\D/g, '');
         const dup = db.clientes.find(c => c.cpf && c.cpf.replace(/\D/g, '') === cpfNorm && c.id != editandoIdCliente);
@@ -2370,11 +2374,11 @@ async function salvarCliente() {
     }
     if (editandoIdCliente) {
         const idx = db.clientes.findIndex(c => c.id == editandoIdCliente);
-        if (idx !== -1) db.clientes[idx] = { ...db.clientes[idx], nome, tel, email, cpf, end };
+        if (idx !== -1) db.clientes[idx] = { ...db.clientes[idx], nome, tel, email, cpf, end, cidade };
         cancelarEdicaoCliente();
         salvarERecarregar('Cliente atualizado!');
     } else {
-        db.clientes.push({ id: Date.now(), nome, tel, email, cpf, end });
+        db.clientes.push({ id: Date.now(), nome, tel, email, cpf, end, cidade });
         salvarERecarregar('Cliente cadastrado!');
     }
 }
@@ -2387,6 +2391,7 @@ function editarCliente(id) {
     document.getElementById('cli-email').value = c.email || '';
     document.getElementById('cli-cpf').value   = c.cpf   || '';
     document.getElementById('cli-end').value   = c.end   || '';
+    document.getElementById('cli-cidade').value = c.cidade || '';
     const tit = document.getElementById('cli-form-titulo');
     const btn = document.getElementById('cli-btn-salvar');
     const cnc = document.getElementById('cli-btn-cancelar');
@@ -2398,7 +2403,7 @@ function editarCliente(id) {
 }
 function cancelarEdicaoCliente() {
     editandoIdCliente = null;
-    ['cli-nome','cli-tel','cli-email','cli-cpf','cli-end'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['cli-nome','cli-tel','cli-email','cli-cpf','cli-end','cli-cidade'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     const tit = document.getElementById('cli-form-titulo');
     const btn = document.getElementById('cli-btn-salvar');
     const cnc = document.getElementById('cli-btn-cancelar');
@@ -2483,6 +2488,7 @@ function filtrarTabelaClientes() {
         : db.clientes;
     renderTabelaClientes(lista);
 }
+function _clienteEndCidade(c) { return [c.end, c.cidade].filter(Boolean).join(' — '); }
 function renderTabelaClientes(lista) {
     const tb = document.getElementById('tb-clientes');
     if (!tb) return;
@@ -2495,7 +2501,7 @@ function renderTabelaClientes(lista) {
             <td>${escapeHtml(c.tel||'—')}</td>
             <td>${escapeHtml(c.email||'—')}</td>
             <td>${escapeHtml(c.cpf||'—')}</td>
-            <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(c.end||'')}">${escapeHtml(c.end||'—')}</td>
+            <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(_clienteEndCidade(c))}">${escapeHtml(_clienteEndCidade(c) || '—')}</td>
             <td class="td-acoes">${menuAcoesHtml([
                 { icone: '📋', rotulo: `Ver pedidos (${nPed})`, onclick: `mostrarPedidosCliente(${c.id})`, oculto: !(nPed > 0) },
                 { icone: '✏️', rotulo: 'Editar cliente', onclick: `editarCliente(${c.id})`, oculto: !podeEditar },
@@ -3911,7 +3917,7 @@ function menuAcoesHtml(acoes) {
     const lista = (acoes || []).filter(a => a && !a.oculto);
     if (!lista.length) return '';
     const ordenadas = lista.filter(a => !a.perigo).concat(lista.filter(a => a.perigo));
-    const dados = ordenadas.map(a => ({ icone: a.icone || '', rotulo: a.rotulo, onclick: a.onclick, perigo: !!a.perigo }));
+    const dados = ordenadas.map(a => ({ icone: a.icone || '', rotulo: a.rotulo, onclick: a.onclick, perigo: !!a.perigo, bloqueado: !!a.bloqueado, dica: a.dica || '' }));
     return `<button type="button" class="btn-kebab btn-acoes" aria-label="Ações" aria-haspopup="menu" aria-expanded="false" title="Ações" data-acoes="${escapeHtml(JSON.stringify(dados))}">⋮</button>`;
 }
 document.addEventListener('click', e => {
@@ -3923,7 +3929,7 @@ document.addEventListener('click', e => {
     dados.forEach((a, i) => {
         if (a.perigo && i > 0 && !dados[i - 1].perigo) itens.push({ sep: true });
         // roda a string como o onclick inline do botao antigo (escopo global)
-        itens.push({ icone: a.icone, rotulo: a.rotulo, perigo: a.perigo, acao: () => {
+        itens.push({ icone: a.icone, rotulo: a.rotulo, perigo: a.perigo, bloqueado: a.bloqueado, dica: a.dica, acao: () => {
             const b = document.createElement('button');
             b.setAttribute('onclick', a.onclick);
             b.click();
@@ -3959,6 +3965,7 @@ function renderDashboard() {
     renderDashboardMedicoes();
     renderDashboardInstalacoes();
     renderDashboardAlertas();
+    renderAvisoInstConfirmar();
     aplicarDashCardsVisibilidade();
     const thead = document.getElementById('thead-pedidos');
     const tbody = document.getElementById('tb-pedidos');
@@ -6940,6 +6947,13 @@ Volte o pedido para Orçamento para editar.`, '🔒');
             if (db.pedidos[index].volumes !== undefined) dadosPedido.volumes = db.pedidos[index].volumes;
             if (db.pedidos[index].conferencia !== undefined) dadosPedido.conferencia = db.pedidos[index].conferencia;
             dadosPedido.data_criacao      = db.pedidos[index].data_criacao || db.pedidos[index].id;
+            // Quem criou o pedido (lembrete de instalacao, "pedidos que vejo") nao muda ao editar.
+            dadosPedido.criado_por        = db.pedidos[index].criado_por ?? null;
+            // Agendamento de instalacao e vinculo com o instalador sobrevivem a edicao
+            // (so se ja existiam; o formulario do pedido nao os edita).
+            ['inst_agendado', 'inst_hora', 'inst_duracao', 'inst_obs', 'inst_endereco', 'inst_cidade',
+             'inst_historico', 'inst_confirmada_em', 'usuario_instalacao_id', 'instalador_nome']
+                .forEach(k => { if (db.pedidos[index][k] !== undefined) dadosPedido[k] = db.pedidos[index][k]; });
             dadosPedido.comissao_paga     = db.pedidos[index].comissao_paga     || false;
             dadosPedido.comissao_data_pgto = db.pedidos[index].comissao_data_pgto || null;
             dadosPedido.arq_comissao_paga      = db.pedidos[index].arq_comissao_paga      || false;
@@ -7196,17 +7210,12 @@ function renderKanban() {
                         <div class="kanban-card-top">
                             <span class="kanban-card-id" style="cursor:pointer;text-decoration:underline" onclick="editarPedido(${p.id})" title="Editar pedido">#${formatPedidoId(p.id)}</span>
                             <span class="kanban-card-age">${dataInst}</span>
+                            ${_menuAcoesCardPedido(p, { podeVoltar })}
                         </div>
                         ${vendedorLinha}
                         <div class="kanban-card-cliente" style="font-size:13px">${escapeHtml(p.clienteNome||'')}${obsBadge}</div>
                         ${_badgeSaldoEmAberto(p)}
                         ${_badgeConferencia(p) ? `<div style="margin-top:4px">${_badgeConferencia(p)}</div>` : ''}
-                        <div class="kanban-card-actions" style="margin-top:6px">
-                            <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})" title="Ver Ordem de Serviço">📋 OS</button>
-                            ${_btnEtiquetas(p)}
-                            <button class="btn btn-outline btn-sm" onclick="verTimeline(${p.id})" title="Ver timeline">⏱</button>
-                            ${podeVoltar ? `<button class="btn btn-outline btn-sm" onclick="moverStatus(${p.id},-1)" title="Voltar status">←</button>` : ''}
-                        </div>
                     </div>`;
                 }
                 let badgeEst = '';
@@ -7233,8 +7242,7 @@ function renderKanban() {
                         : `<div class="kanban-inst">📅 ${_agdFmtData(p.data_entrega)}${p.inst_hora ? ' · ' + escapeHtml(p.inst_hora) : ''}${nomeInstalador(p) ? ' · ' + escapeHtml(nomeInstalador(p)) : ''}</div>`;
                 const agFin = col.status === 'Aguardando Financeiro';
                 const finLinha = agFin ? _kanbanFinanceiroHTML(p) : '';
-                const btnAvancar = prontoSemAgenda || agFin ? ''
-                    : `<button class="btn btn-sm" onclick="moverStatus(${p.id},1)" title="Avançar etapa">→</button>`;
+                const podeAvancarMenu = podeAvancar && !prontoSemAgenda && !agFin;
                 const btnAgendar = prontoSemAgenda
                     ? `<button class="btn btn-sm kanban-btn-agendar" onclick="irParaAgendaInstalacao(${p.id})" title="Agendar instalação">📅 Agendar instalação</button>`
                     : '';
@@ -7242,6 +7250,7 @@ function renderKanban() {
                     <div class="kanban-card-top">
                         <span class="kanban-card-id" style="cursor:pointer;text-decoration:underline" onclick="editarPedido(${p.id})" title="Editar pedido">#${formatPedidoId(p.id)}</span>
                         <span class="kanban-card-age${dias >= 30 ? ' kanban-card-age-critical' : dias >= 14 ? ' kanban-card-age-warning' : ''}">${dias === 0 ? 'hoje' : dias + 'd'}</span>
+                        ${_menuAcoesCardPedido(p, { podeVoltar, podeAvancar: podeAvancarMenu })}
                     </div>
                     ${vendedorLinha}
                     <div class="kanban-card-cliente">${escapeHtml(p.clienteNome||'')}${obsBadge}</div>
@@ -7249,17 +7258,6 @@ function renderKanban() {
                     ${instLinha}
                     ${finLinha}
                     ${badgeEst||badgeBaixa ? `<div style="margin-bottom:6px">${badgeEst}${badgeBaixa}</div>` : ''}
-                    <div class="kanban-card-actions">
-                        <div style="display:flex;gap:4px">
-                            <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})" title="Ver Ordem de Serviço">📋</button>
-                            ${_btnEtiquetas(p)}
-                            <button class="btn btn-outline btn-sm" onclick="verTimeline(${p.id})" title="Ver timeline">⏱</button>
-                        </div>
-                        <div style="display:flex;gap:4px">
-                            ${podeVoltar  ? `<button class="btn btn-outline btn-sm" onclick="moverStatus(${p.id},-1)" title="Voltar etapa">←</button>` : `<span class="kanban-nav-ph"></span>`}
-                            ${podeAvancar ? btnAvancar : ''}
-                        </div>
-                    </div>
                     ${btnAgendar}
                     ${agFin ? _kanbanBtnConfirmarPagamento(p) : ''}
                 </div>`;
@@ -7405,11 +7403,19 @@ function rotuloStatus(status) {
 function msgEtiquetaBloqueada(ped) {
     return `As etiquetas só podem ser impressas quando o pedido chega em "Pronto p/ Instalação". Este pedido está em "${rotuloStatus(normalizarStatus(ped && ped.status))}".`;
 }
-function _btnEtiquetas(p) {
-    if (!podeImprimirEtiquetas(p)) {
-        return `<button type="button" class="btn btn-outline btn-sm btn-bloqueado" aria-disabled="true" onclick="toast(msgEtiquetaBloqueada(db.pedidos.find(x => x.id == ${p.id})), 'warning', 4500)" title="Etiquetas liberadas a partir de &quot;Pronto p/ Instalação&quot;">🏷️</button>`;
-    }
-    return `<button class="btn btn-outline btn-sm" onclick="abrirImpressaoEtiquetas(${p.id})" title="Imprimir etiquetas">🏷️</button>`;
+// Acoes do pedido no Painel de Producao (card do Kanban e linha da Lista), no menu ⋮.
+// Mesmas acoes e ordem dos antigos botoes; voltar/avancar so quando a etapa permite.
+function _menuAcoesCardPedido(p, { podeVoltar, podeAvancar } = {}) {
+    const etiquetaOk = podeImprimirEtiquetas(p);
+    return menuAcoesHtml([
+        { icone: '📋', rotulo: 'Ver Ordem de Serviço', onclick: `abrirOS(${p.id})` },
+        etiquetaOk
+            ? { icone: '🏷️', rotulo: 'Imprimir etiquetas', onclick: `abrirImpressaoEtiquetas(${p.id})` }
+            : { icone: '🏷️', rotulo: 'Imprimir etiquetas', bloqueado: true, dica: 'Liberado a partir de "Pronto p/ Instalação"', onclick: `toast(msgEtiquetaBloqueada(db.pedidos.find(x => x.id == ${p.id})), 'warning', 4500)` },
+        { icone: '⏱', rotulo: 'Ver timeline', onclick: `verTimeline(${p.id})` },
+        { icone: '←', rotulo: 'Voltar etapa', onclick: `moverStatus(${p.id},-1)`, oculto: !podeVoltar },
+        { icone: '→', rotulo: 'Avançar etapa', onclick: `moverStatus(${p.id},1)`, oculto: !podeAvancar }
+    ]);
 }
 function _badgeConferencia(p) {
     const m = (typeof EtiquetasCore !== 'undefined') ? EtiquetasCore.marcacaoConferencia(p) : null;
@@ -7427,7 +7433,8 @@ function _pcpLinhaHTML(p, col, idx) {
         : agFin ? _kanbanBtnConfirmarPagamento(p, true)
         : prontoSemAgenda
             ? `<button class="btn btn-sm kanban-btn-agendar" onclick="irParaAgendaInstalacao(${p.id})" title="Agendar instalação">📅 Agendar</button>`
-            : `<button class="btn btn-sm" onclick="moverStatus(${p.id},1)" title="Avançar etapa">→</button>`;
+            : '';
+    const menu = _menuAcoesCardPedido(p, { podeVoltar, podeAvancar: podeAvancar && !agFin && !prontoSemAgenda });
     return `<div class="pcp-linha">
         <button type="button" class="pcp-linha-num" onclick="editarPedido(${p.id})" title="Abrir pedido">#${formatPedidoId(p.id)}</button>
         <div class="pcp-linha-cli">
@@ -7437,11 +7444,8 @@ function _pcpLinhaHTML(p, col, idx) {
         </div>
         <div class="pcp-linha-entrega">${entrega ? `<span class="${entrega.cls}">${entrega.label}</span>` : ''}</div>
         <div class="pcp-linha-acoes">
-            <button class="btn btn-outline btn-sm" onclick="abrirOS(${p.id})" title="Ver Ordem de Serviço">📋</button>
-            ${_btnEtiquetas(p)}
-            <button class="btn btn-outline btn-sm" onclick="verTimeline(${p.id})" title="Ver timeline">⏱</button>
-            ${podeVoltar ? `<button class="btn btn-outline btn-sm" onclick="moverStatus(${p.id},-1)" title="Voltar etapa">←</button>` : ''}
             ${avancar}
+            ${menu}
         </div>
     </div>`;
 }
@@ -8753,6 +8757,7 @@ async function empresaCnpjMudou(el) {
         set('emp-razao', String(razao_social || '').toLocaleUpperCase('pt-BR'));
         set('emp-fantasia', String(est.nome_fantasia || '').toLocaleUpperCase('pt-BR'));
         set('emp-end', _empEnderecoCompleto(est));
+        set('emp-cidade', est.cidade?.nome || '');
         if (est.ddd1 && est.telefone1) set('emp-tel', `(${est.ddd1}) ${est.telefone1}`);
         set('emp-email', est.email || '');
         if (statusEl) {
@@ -10747,6 +10752,8 @@ function onMedClienteChange() {
     if (!cli) return;
     const endEl = document.getElementById('med-end');
     if (endEl && cli.end) endEl.value = cli.end;
+    const cidEl = document.getElementById('med-cidade');
+    if (cidEl) cidEl.value = cli.cidade || '';
 }
 
 // Pedido ligado ao agendamento de medicao. O vinculo vale nos dois sentidos
@@ -10794,6 +10801,7 @@ async function salvarMedicao() {
     const tipo = document.querySelector('input[name="med-tipo"]:checked')?.value || 'existente';
     let clienteId = null, clienteNome = '', clienteTel = '';
     let clienteCpf = '', clienteEmail = '';
+    const cidade = (document.getElementById('med-cidade')?.value || '').trim();
 
     if (tipo === 'existente') {
         clienteId = parseInt(document.getElementById('med-cliente-id')?.value) || null;
@@ -10839,7 +10847,7 @@ async function salvarMedicao() {
 
     // Só depois de tudo validado o novo cliente é cadastrado.
     if (tipo === 'novo') {
-        const novoCli = { id: Date.now(), nome: clienteNome, tel: clienteTel, email: clienteEmail, cpf: clienteCpf, end };
+        const novoCli = { id: Date.now(), nome: clienteNome, tel: clienteTel, email: clienteEmail, cpf: clienteCpf, end, cidade };
         db.clientes.push(novoCli);
         clienteId = novoCli.id;
         const sel = document.getElementById('med-cliente-id');
@@ -10847,7 +10855,7 @@ async function salvarMedicao() {
             db.clientes.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
     }
 
-    const med = { id: Date.now(), clienteId, clienteNome, clienteTel, endereco: end, data, hora, duracao: dur, obs, status: 'Agendado',
+    const med = { id: Date.now(), clienteId, clienteNome, clienteTel, endereco: end, cidade, data, hora, duracao: dur, obs, status: 'Agendado',
         agendado_por: getUsuarioLogado()?.id || null, agendado_em: Date.now() };
     _medDefinirResponsavel(med, prof.pessoa);
     db.medicoes.push(med);
@@ -10857,8 +10865,10 @@ async function salvarMedicao() {
     const cpfEl   = document.getElementById('med-novo-cpf');   if (cpfEl)   cpfEl.value   = '';
     const emailEl = document.getElementById('med-novo-email'); if (emailEl) emailEl.value = '';
     document.getElementById('med-data').value = _agdHoje();
+    _agdPickerFechar();
     document.getElementById('med-hora').value = '';
     document.getElementById('med-end').value  = '';
+    const cidLimpa = document.getElementById('med-cidade'); if (cidLimpa) cidLimpa.value = '';
     document.getElementById('med-obs').value  = '';
     _agdPreencherProf('med-prof', '', '— A definir —');
     _agdPreencherDur('med-dur', 'med');
@@ -11021,16 +11031,20 @@ function _agdLinha(o) {
 
 // "📍 Ir": abre o Google Maps com o caminho ate o endereco, saindo de onde a
 // pessoa esta. Clicar no link nao abre o card em que ele esta.
-function linkIrParaHtml(endereco, classe) {
-    const url = typeof RotasCore !== 'undefined' ? RotasCore.linkIrPara(endereco) : '';
+function _agdEnd(endereco, cidade) {
+    return typeof RotasCore !== 'undefined' ? RotasCore.enderecoCompleto(endereco, cidade) : String(endereco || '').trim();
+}
+function linkIrParaHtml(endereco, classe, cidade) {
+    const url = typeof RotasCore !== 'undefined' ? RotasCore.linkIrPara(_agdEnd(endereco, cidade)) : '';
     if (!url) return '';
     return `<a class="${classe || 'agd-ir'}" href="${escapeHtml(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()" title="Abrir o caminho no Google Maps">📍 Ir</a>`;
 }
 // Botao ao lado de um campo de endereco: le o que esta digitado.
-async function irParaEndereco(campoId) {
+async function irParaEndereco(campoId, cidadeId) {
     const end = (document.getElementById(campoId)?.value || '').trim();
     if (!end) { await showAlert('Digite o endereço primeiro.', '📍'); return; }
-    window.open(RotasCore.linkIrPara(end), '_blank', 'noopener');
+    const cidade = cidadeId ? (document.getElementById(cidadeId)?.value || '') : '';
+    window.open(RotasCore.linkIrPara(_agdEnd(end, cidade)), '_blank', 'noopener');
 }
 
 // unidade: [singular, plural] escreve "4 agendamentos"; sem ela, so o numero.
@@ -11054,6 +11068,7 @@ function buscarAgenda(chave, valor) {
 let _agdModalEl = null;
 function _agdEsc(e) { if (e.key === 'Escape') fecharModalAgenda(); }
 function fecharModalAgenda() {
+    _agdPickerFechar();
     if (!_agdModalEl) return;
     _agdModalEl.remove();
     _agdModalEl = null;
@@ -11164,6 +11179,7 @@ function _agdFormulario(titulo, campos, onSalvar, voltar, opts) {
         _agdRenderDisp('agdf-disp', consulta());
     };
     if (disp) {
+        _agdPickerAnexar(document.getElementById('agdf-hora'), () => { const { hora, ...q } = consulta(); return q; });
         const prof = document.getElementById('agdf-usu');
         if (prof) prof.addEventListener('change', () => { _agdProfMudou('agdf-usu'); atualizarDisp(); });
         document.getElementById('agdf-usu-outro')?.addEventListener('input', atualizarDisp);
@@ -11535,6 +11551,84 @@ function _agdRenderDisp(elId, q) {
         ${lista}`;
 }
 
+// --- Lista de horarios no campo Horario (medicao e instalacao) ---------------
+// Reusa _agdDisponibilidade: livres clicaveis; ocupados e indisponiveis riscados.
+// O campo continua digitavel (ex.: 10:30). getQ() devolve {tipo, prof, data, dur, ignorar}.
+let _agdPickerEl = null;
+function _agdPickerFechar() {
+    if (_agdPickerEl) { _agdPickerEl.remove(); _agdPickerEl = null; }
+}
+let _agdPickerAbertoEm = 0;
+function _agdPickerAbrir(input, getQ) {
+    _agdPickerFechar();
+    _agdPickerAbertoEm = Date.now();
+    let q;
+    try { q = getQ(); } catch (e) { return; }
+    const d = _agdDisponibilidade({ ...q, data: q.data || _agdHoje() });
+    const pop = document.createElement('div');
+    pop.className = 'agd-hpick';
+    pop.setAttribute('role', 'listbox');
+    pop.innerHTML = d.slots.map(s => {
+        const tit = escapeHtml(`${s.hora} · ${s.motivo}`);
+        return s.estado === 'livre'
+            ? `<button type="button" class="agd-hpick-item agd-hpick-livre" data-hora="${s.hora}" role="option" title="${tit}">${s.hora}</button>`
+            : `<span class="agd-hpick-item agd-hpick-${s.estado}" data-hora="${s.hora}" role="option" aria-disabled="true" title="${tit}">${s.hora}</span>`;
+    }).join('') || '<span class="agd-hpick-vazio">Sem horários no expediente.</span>';
+    pop.addEventListener('mousedown', e => e.preventDefault());   // mantem o foco no campo
+    pop.addEventListener('click', e => {
+        const b = e.target.closest('.agd-hpick-livre');
+        if (!b) return;
+        input.value = b.dataset.hora;
+        input.classList.remove('agd-erro');
+        _agdPickerFechar();
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    document.body.appendChild(pop);
+    const r = input.getBoundingClientRect();
+    pop.style.left = r.left + 'px';
+    pop.style.minWidth = Math.max(r.width, 200) + 'px';
+    const alt = pop.offsetHeight;
+    const abaixo = window.innerHeight - r.bottom;
+    pop.style.top = (abaixo >= Math.min(alt, 240) || r.top < alt ? r.bottom + 4 : r.top - alt - 4) + 'px';
+    pop._input = input;
+    _agdPickerEl = pop;
+}
+function _agdPickerAnexar(input, getQ) {
+    if (!input || input.dataset.agdPicker) return;
+    input.dataset.agdPicker = '1';
+    const abrir = () => _agdPickerAbrir(input, getQ);
+    input.addEventListener('focus', abrir);
+    input.addEventListener('click', abrir);
+    input.addEventListener('blur', () => setTimeout(() => { if (_agdPickerEl && _agdPickerEl._input === input) _agdPickerFechar(); }, 120));
+    ['input', 'change'].forEach(ev => input.addEventListener(ev, () => { if (_agdPickerEl && _agdPickerEl._input === input) _agdPickerAbrir(input, getQ); }));
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Escape') { if (_agdPickerEl) { _agdPickerFechar(); e.stopPropagation(); } return; }
+        if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(e.key)) return;
+        if (!_agdPickerEl) { if (e.key === 'ArrowDown') { abrir(); e.preventDefault(); } return; }
+        const itens = [..._agdPickerEl.querySelectorAll('.agd-hpick-livre')];
+        const at = _agdPickerEl.querySelector('.agd-hpick-ativo');
+        let i = itens.indexOf(at);
+        if (e.key === 'Enter') { if (at) { e.preventDefault(); at.click(); } return; }
+        // Seta sem item destacado: deixa o campo de hora nativo (digitar 10:30 pelo teclado);
+        // so a 1a seta para baixo passa a navegar na lista.
+        if (!at && e.key === 'ArrowUp') return;
+        e.preventDefault();
+        if (!itens.length) return;
+        i = e.key === 'ArrowDown' ? (i + 1) % itens.length : (i <= 0 ? itens.length - 1 : i - 1);
+        at && at.classList.remove('agd-hpick-ativo');
+        itens[i].classList.add('agd-hpick-ativo');
+        itens[i].scrollIntoView({ block: 'nearest' });
+    });
+}
+document.addEventListener('mousedown', e => {
+    if (_agdPickerEl && !_agdPickerEl.contains(e.target) && e.target !== _agdPickerEl._input) _agdPickerFechar();
+});
+// No celular o teclado virtual dispara resize/scroll logo ao abrir: ignora esses 300 ms.
+const _agdPickerRecente = () => Date.now() - _agdPickerAbertoEm < 300;
+window.addEventListener('resize', () => { if (!_agdPickerRecente()) _agdPickerFechar(); });
+document.addEventListener('scroll', e => { if (_agdPickerEl && !_agdPickerEl.contains(e.target) && !_agdPickerRecente()) _agdPickerFechar(); }, true);
+
 // Duracao padrao por tipo de servico e expediente usado na grade.
 function abrirConfigAgenda() {
     const c = getAgendaConfig();
@@ -11590,6 +11684,11 @@ function _medAtualizarDisp() {
         _medAtualizarDisp();
     } });
     const prof = _agdLerProf('med-prof');
+    _agdPickerAnexar(document.getElementById('med-hora'), () => {
+        const p = _agdLerProf('med-prof');
+        return { tipo: 'med', prof: p.chave, profNome: p.pessoa.nome, data: document.getElementById('med-data')?.value || '',
+            dur: parseInt(document.getElementById('med-dur')?.value) || _agdDurPadrao('med') };
+    });
     _agdDispCtx['med-disp'].onProf = ch => { _agdPreencherProf('med-prof', ch, '— A definir —'); _medAtualizarDisp(); };
     _agdRenderDisp('med-disp', {
         tipo: 'med', prof: prof.chave, profNome: prof.pessoa.nome,
@@ -11611,7 +11710,7 @@ function renderMedicoes() {
     };
     const linha = m => _agdLinha({
         onclick: `abrirDetalheMedicao(${m.id})`,
-        nome: m.clienteNome, tel: m.clienteTel, end: m.endereco,
+        nome: m.clienteNome, tel: m.clienteTel, end: _agdEnd(m.endereco, m.cidade),
         data: m.data, hora: m.hora, pill: _medPill(m, hoje),
     });
     const pendF = filtra(pend, 'medPend').sort((a, b) => _agdCmp(_agdChave(a.data, a.hora), _agdChave(b.data, b.hora)));
@@ -11634,7 +11733,7 @@ function abrirDetalheMedicao(id) {
     const corpo = `<div class="agd-det-topo">${_agdPill(_medPill(m, _agdHoje()))}</div>` + _agdCampos([
         ['Cliente',     escapeHtml(m.clienteNome || '—')],
         ['Telefone',    tel],
-        ['Endereço',    escapeHtml(m.endereco || '—') + linkIrParaHtml(m.endereco, 'agd-ir agd-ir-det')],
+        ['Endereço',    escapeHtml(_agdEnd(m.endereco, m.cidade) || '—') + linkIrParaHtml(m.endereco, 'agd-ir agd-ir-det', m.cidade)],
         ['Data',        _agdFmtData(m.data)],
         ['Horário',     escapeHtml(m.hora ? _agdPeriodo(m.hora, dur) : '—')],
         ['Duração',     escapeHtml(_agdFmtDur(dur))],
@@ -11669,6 +11768,7 @@ function editarMedicao(id) {
     _agdFormulario('Editar agendamento', [
         { id: 'tel',  label: 'Telefone',    tipo: 'text', valor: m.clienteTel },
         { id: 'end',  label: 'Endereço da visita', tipo: 'text', valor: m.endereco, obrig: true },
+        { id: 'cidade', label: 'Cidade', tipo: 'text', valor: m.cidade },
         { id: 'usu',  label: 'Responsável pela medição', tipo: 'profissional', valor: _medProf(m) },
         { id: 'data', label: 'Data da visita', tipo: 'date', valor: m.data, obrig: true },
         { id: 'hora', label: 'Horário',     tipo: 'time', valor: m.hora },
@@ -11677,7 +11777,7 @@ function editarMedicao(id) {
     ], v => {
         const atual = (db.medicoes || []).find(x => x.id == id);   // relido na validacao
         if (!atual) return;
-        atual.clienteTel = v.tel; atual.endereco = v.end; atual.data = v.data; atual.hora = v.hora;
+        atual.clienteTel = v.tel; atual.endereco = v.end; atual.cidade = v.cidade; atual.data = v.data; atual.hora = v.hora;
         atual.duracao = v.dur; atual.obs = v.obs;
         _medDefinirResponsavel(atual, v.usu.pessoa);
         _medAtualizar();
@@ -11787,7 +11887,7 @@ function renderDashboardMedicoes() {
             <div style="font-weight:700;font-size:14px;color:var(--dark);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(v.clienteNome)}">${escapeHtml(v.clienteNome)}</div>
             ${v.hora ? `<div style="font-size:12px;color:var(--dark)">🕐 ${v.hora}</div>` : ''}
             ${v.clienteTel ? `<div style="font-size:12px;color:#8F8F8F;margin-top:2px">${escapeHtml(v.clienteTel)}</div>` : ''}
-            ${linkIrParaHtml(v.endereco, 'agd-ir agd-ir-card')}
+            ${linkIrParaHtml(v.endereco, 'agd-ir agd-ir-card', v.cidade)}
         </div>`;
     }
 
@@ -11868,8 +11968,8 @@ function renderDashboardInstalacoes() {
             <div style="font-weight:700;font-size:14px;color:var(--dark);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(p.clienteNome)}">${escapeHtml(p.clienteNome||'—')}</div>
             <div style="font-size:11px;color:#8F8F8F">#${formatPedidoId(p.id)}</div>
             ${p.inst_hora     ? `<div style="font-size:12px;color:var(--dark);margin-top:2px">🕐 ${p.inst_hora}</div>` : ''}
-            ${p.inst_endereco ? `<div style="font-size:11px;color:#8F8F8F;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(p.inst_endereco)}">📍 ${escapeHtml(p.inst_endereco)}</div>` : ''}
-            ${linkIrParaHtml(p.inst_endereco || db.clientes.find(c => c.id == p.clienteId)?.end, 'agd-ir agd-ir-card')}
+            ${p.inst_endereco ? `<div style="font-size:11px;color:#8F8F8F;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(_agdEnd(p.inst_endereco, _instCidade(p, db.clientes.find(c => c.id == p.clienteId))))}">📍 ${escapeHtml(_agdEnd(p.inst_endereco, _instCidade(p, db.clientes.find(c => c.id == p.clienteId))))}</div>` : ''}
+            ${(() => { const c = db.clientes.find(c => c.id == p.clienteId); return linkIrParaHtml(p.inst_endereco || c?.end, 'agd-ir agd-ir-card', _instCidade(p, c)); })()}
         </div>`;
     }
 
@@ -11998,13 +12098,25 @@ function _instRenderProntos() {
     }
 }
 
+// Cidade da instalacao: a do pedido ou, sem ela, a do cliente.
+// Sem cidade propria, usa a do cliente so quando o endereco da instalacao e o do cliente
+// (ou esta vazio): outro endereco pode ser de outra cidade.
+function _instCidade(p, cli) {
+    if (p && p.inst_cidade !== undefined && p.inst_cidade !== null) return p.inst_cidade;
+    if (!cli || !cli.cidade) return '';
+    const n = s => (typeof RotasCore !== 'undefined' ? RotasCore.normalizarEndereco(s) : String(s || '').trim().toLowerCase());
+    return (!p || !p.inst_endereco || n(p.inst_endereco) === n(cli.end)) ? cli.cidade : '';
+}
+
 function _instLimparForm() {
     _instSelId = null;
+    _agdPickerFechar();
     const set = (id, v) => { const el = document.getElementById(id); if (el) { el.value = v; el.classList.remove('agd-erro'); } };
     set('inst-pedido', '');
     set('inst-data', _agdHoje());
     set('inst-hora', '');
     set('inst-end', '');
+    set('inst-cidade', '');
     set('inst-obs', '');
     _agdPreencherProf('inst-prof', '', 'Selecione');
     _agdPreencherDur('inst-dur', 'inst');
@@ -12027,6 +12139,7 @@ function selecionarPedidoInstalacao(id) {
     const hoje = _agdHoje();
     const set = (eid, v) => { const el = document.getElementById(eid); if (el) { el.value = v; el.classList.remove('agd-erro'); } };
     set('inst-end', p.inst_endereco || cli?.end || '');
+    set('inst-cidade', _instCidade(p, cli));
     set('inst-obs', p.inst_obs || '');
     set('inst-data', p.data_entrega && p.data_entrega >= hoje ? p.data_entrega : hoje);
     set('inst-hora', '');
@@ -12050,6 +12163,11 @@ function _instAtualizarDisp() {
         _instAtualizarDisp();
     } });
     const prof = _agdLerProf('inst-prof');
+    _agdPickerAnexar(document.getElementById('inst-hora'), () => {
+        const p = _agdLerProf('inst-prof');
+        return { tipo: 'inst', prof: p.chave, profNome: p.pessoa.nome, data: document.getElementById('inst-data')?.value || '',
+            dur: parseInt(document.getElementById('inst-dur')?.value) || _agdDurPadrao('inst') };
+    });
     _agdDispCtx['inst-disp'].onProf = ch => { _agdPreencherProf('inst-prof', ch, 'Selecione'); _instAtualizarDisp(); };
     _agdRenderDisp('inst-disp', {
         tipo: 'inst', prof: prof.chave, profNome: prof.pessoa.nome,
@@ -12074,6 +12192,7 @@ async function salvarAgendamentoInstalacao() {
         hora: campos.hora?.value || '',
         dur:  parseInt(document.getElementById('inst-dur')?.value) || _agdDurPadrao('inst'),
         end:  (document.getElementById('inst-end')?.value || '').trim(),
+        cidade: (document.getElementById('inst-cidade')?.value || '').trim(),
         obs:  (document.getElementById('inst-obs')?.value || '').trim(),
     };
     const faltando = [];
@@ -12106,6 +12225,7 @@ async function salvarAgendamentoInstalacao() {
     p.inst_hora      = v.hora;
     p.inst_duracao   = v.dur;
     p.inst_endereco  = v.end;
+    p.inst_cidade    = v.cidade;
     p.inst_obs       = v.obs;
     definirInstalador(p, prof.pessoa);
     p.inst_agendado     = true;
@@ -12138,7 +12258,7 @@ function renderAgenda() {
             nome: p.clienteNome,
             sub:  `Pedido #${formatPedidoId(p.id)}${p.amb ? ' · ' + p.amb : ''}${nomeInstalador(p) ? ' · ' + nomeInstalador(p) : ''}`,
             tel:  cli?.tel,
-            end:  p.inst_endereco || cli?.end,
+            end:  _agdEnd(p.inst_endereco || cli?.end, _instCidade(p, cli)),
             data: realizado ? _instDiaRealizado(p) : p.data_entrega,
             hora: p.inst_hora,
             pill: _instPill(p, hoje),
@@ -12167,7 +12287,7 @@ function abrirDetalheInstalacao(id) {
         ['Pedido',      '#' + formatPedidoId(p.id)],
         ['Cliente',     escapeHtml(p.clienteNome || '—')],
         ['Telefone',    tel],
-        ['Endereço',    escapeHtml(p.inst_endereco || cli?.end || '—') + linkIrParaHtml(p.inst_endereco || cli?.end, 'agd-ir agd-ir-det')],
+        ['Endereço',    escapeHtml(_agdEnd(p.inst_endereco || cli?.end, _instCidade(p, cli)) || '—') + linkIrParaHtml(p.inst_endereco || cli?.end, 'agd-ir agd-ir-det', _instCidade(p, cli))],
         ['Data',        _agdFmtData(p.data_entrega)],
         ['Horário',     escapeHtml(p.inst_hora ? _agdPeriodo(p.inst_hora, _instDur(p)) : '—')],
         ['Duração',     escapeHtml(_agdFmtDur(_instDur(p)))],
@@ -12211,6 +12331,7 @@ async function _instGravarEdicao(id, v, titulo) {
         _agdRegistrar(p.inst_historico, 'reagendado', { de: { data: p.data_entrega || '', hora: p.inst_hora || '' }, para: { data: v.data, hora: v.hora } });
     }
     if (v.end !== undefined) p.inst_endereco = v.end;
+    if (v.cidade !== undefined) p.inst_cidade = v.cidade;
     p.data_entrega = v.data;
     p.inst_hora    = v.hora;
     p.inst_duracao = v.dur || _agdDurPadrao('inst');
@@ -12218,7 +12339,7 @@ async function _instGravarEdicao(id, v, titulo) {
     definirInstalador(p, v.usu.pessoa);
     _instAtualizar();
     toast(titulo, 'success');
-    abrirDetalheInstalacao(id);
+    _lembreteInstVoltar(() => abrirDetalheInstalacao(id));
 }
 
 function editarInstalacao(id) {
@@ -12227,6 +12348,7 @@ function editarInstalacao(id) {
     const cli = db.clientes.find(c => c.id == p.clienteId);
     _agdFormulario('Editar instalação', [
         { id: 'end',  label: 'Endereço da instalação', tipo: 'text', valor: p.inst_endereco, largo: true, placeholder: cli?.end || 'Endereço da instalação…' },
+        { id: 'cidade', label: 'Cidade', tipo: 'text', valor: _instCidade(p, cli), placeholder: 'Ex.: Curitiba' },
         { id: 'usu',  label: 'Profissional', tipo: 'profissional', valor: _instProf(p), obrig: true, vazio: 'Selecione' },
         { id: 'dur',  label: 'Duração do serviço', tipo: 'duracao', valor: p.inst_duracao },
         { id: 'data', label: 'Data de instalação', tipo: 'date', valor: p.data_entrega, obrig: true },
@@ -12244,7 +12366,7 @@ function reagendarInstalacao(id) {
         { id: 'data', label: 'Nova data', tipo: 'date', valor: p.data_entrega, obrig: true },
         { id: 'hora', label: 'Horário', tipo: 'time', valor: p.inst_hora, obrig: true },
         { id: 'obs',  label: 'Observações', tipo: 'textarea', valor: p.inst_obs, largo: true },
-    ], v => _instGravarEdicao(id, v, 'Instalação reagendada!'), () => abrirDetalheInstalacao(id), _instDispOpts(id));
+    ], v => _instGravarEdicao(id, v, 'Instalação reagendada!'), () => _lembreteInstVoltar(() => abrirDetalheInstalacao(id)), _instDispOpts(id));
 }
 
 // Cancela o agendamento: o horario do profissional fica livre e o pedido volta
@@ -12268,15 +12390,161 @@ async function cancelarAgendamentoInstalacao(id) {
 // Mesmo desfecho do Kanban: pago ou com saldo, o pedido vai para Aguardando
 // Financeiro (com saldo, marcado como pendente). A instalacao foi feita: vai
 // para Realizados.
-function confirmarInstalacao(id) {
+// aoTerminar(confirmou): quem chama de fora da agenda (o lembrete de confirmar)
+// segue dali; sem ele, desistir volta para o detalhe da instalacao.
+function confirmarInstalacao(id, aoTerminar) {
     const p = db.pedidos.find(x => x.id == id);
-    if (!p || !_instPendente(p)) return;
+    if (!p || !_instPendente(p)) { if (aoTerminar) aoTerminar(false); return; }
     fecharModalAgenda();
     mostrarModalPagamento(p, resultado => {
-        if (!resultado) { abrirDetalheInstalacao(id); return; }
+        if (!resultado) { if (aoTerminar) aoTerminar(false); else abrirDetalheInstalacao(id); return; }
         aplicarConfirmacaoEntrega(p, resultado);
         _instAtualizar();
         toast(resultado === 'pago' ? 'Instalação confirmada. Pedido em Aguardando Financeiro.' : 'Instalação confirmada. Pedido em Aguardando Financeiro, com pagamento pendente.', 'info');
+        if (aoTerminar) aoTerminar(true);
+    });
+}
+
+// --- LEMBRETE DE CONFIRMAR A INSTALACAO ----------------------------------------
+// Passou o fim de uma instalacao agendada (data + horario + duracao; sem
+// horario, o fim do expediente) e ninguem confirmou: o instalador designado e
+// quem criou o pedido sao lembrados. Ao abrir o sistema aparece uma janela,
+// uma vez por dia por pessoa (sc_lembrete_inst_<id> = dia em que viu); na
+// Pagina Inicial fica um aviso fixo enquanto houver o que confirmar.
+function _instFimMs(p) {
+    const [a, m, d] = String(p.data_entrega).split('-').map(Number);
+    const ini = _agdMin(p.inst_hora);
+    const fim = ini !== null ? ini + _instDur(p) : (_agdMin(getAgendaConfig().fim) ?? 18 * 60);
+    return new Date(a, m - 1, d, 0, fim).getTime();
+}
+
+function instalacoesParaConfirmar(usuario) {
+    const u = usuario === undefined ? getUsuarioLogado() : usuario;
+    if (!u) return [];
+    const agora = Date.now();
+    return (db.pedidos || [])
+        .filter(p => _instPendente(p) && p.data_entrega
+            && (p.usuario_instalacao_id == u.id || p.criado_por == u.id)
+            && agora > _instFimMs(p))
+        .sort((a, b) => _instFimMs(a) - _instFimMs(b) || a.id - b.id);
+}
+
+function _lembreteInstChave(u) { return 'sc_lembrete_inst_' + u.id; }
+
+function _lembreteInstPergunta(p) {
+    const [, m, d] = String(p.data_entrega).split('-');
+    return `O pedido #${formatPedidoId(p.id)} (${p.clienteNome || '—'}) devia ter sido instalado em ${d}/${m}${p.inst_hora ? ' às ' + p.inst_hora : ''}. Foi instalado?`;
+}
+
+// Ao abrir a pagina (depois do login): mostra a janela se houver o que
+// confirmar e a pessoa ainda nao a viu hoje.
+function _paginaDeDocumento() {
+    const arq = (window.location.pathname.split('/').pop() || '').toLowerCase();
+    return ['os.html', 'proposta.html', 'pedido-compra.html'].includes(arq)
+        || !!document.querySelector('.os-wrapper, .proposta-wrapper, #pedido-compra-container');
+}
+
+function lembrarInstalacoesAoAbrir() {
+    if (_paginaDeDocumento()) return;   // paginas de impressao nao ganham janela
+    const u = getUsuarioLogado();
+    if (!u || !instalacoesParaConfirmar(u).length) return;
+    const hoje = _agdHoje();
+    try { if (localStorage.getItem(_lembreteInstChave(u)) === hoje) return; } catch (e) {}
+    try { localStorage.setItem(_lembreteInstChave(u), hoje); } catch (e) {}
+    abrirLembreteInstalacoes();
+}
+
+// "Ainda não" troca os dois botoes do pedido por "Reagendar" / "Lembrar amanhã";
+// "Lembrar amanhã" tira o pedido da janela (ela volta amanha).
+// Reagendar: o que ficou de fora volta a ser lembrado depois de salvar (ou cancelar)
+// o reagendamento, mesmo em outra pagina -- por isso o estado vai no sessionStorage.
+let _lembreteInstAdiados = [];
+const _LEMBRETE_VOLTAR = 'sc_lembrete_inst_voltar';
+// Depois do reagendamento: reabre a janela com o que resta; sem pendencia, segue o fluxo normal.
+function _lembreteInstVoltar(fallback) {
+    let fila = null;
+    try { fila = sessionStorage.getItem(_LEMBRETE_VOLTAR); sessionStorage.removeItem(_LEMBRETE_VOLTAR); } catch (e) {}
+    if (fila === null) { fallback(); return; }
+    let ja = [];
+    try { ja = JSON.parse(fila) || []; } catch (e) {}
+    _lembreteInstAdiados = ja.slice(0, -1);   // o ultimo e o reagendado (ja fora da fila se foi salvo)
+    if (instalacoesParaConfirmar().some(p => !_lembreteInstAdiados.includes(p.id) && p.id !== ja[ja.length - 1])) abrirLembreteInstalacoes();
+    else fallback();
+}
+function abrirLembreteInstalacoes() {
+    const lista = instalacoesParaConfirmar().filter(p => !_lembreteInstAdiados.includes(p.id));
+    if (!lista.length) { fecharModalAgenda(); return; }
+    const corpo = lista.map(p => `<div class="lembrete-inst-item" data-id="${p.id}">
+            <p class="lembrete-inst-txt">${escapeHtml(_lembreteInstPergunta(p))}</p>
+            <div class="lembrete-inst-btns">
+                <button type="button" class="btn btn-outline btn-sm" onclick="_lembreteInstAindaNao(${p.id})">Ainda não</button>
+                <button type="button" class="btn btn-success btn-sm" onclick="_lembreteInstSim(${p.id})">Sim, foi instalado</button>
+            </div>
+        </div>`).join('');
+    const o = _agdAbrirModal(lista.length === 1 ? 'Instalação para confirmar' : 'Instalações para confirmar', corpo, '');
+    o.classList.add('lembrete-inst-overlay');
+    o.querySelector('.agd-modal').classList.add('lembrete-inst-modal');
+}
+
+function _lembreteInstSim(id) {
+    confirmarInstalacao(id, () => {
+        renderAvisoInstConfirmar();
+        if (document.getElementById('tb-pedidos')) renderDashboard();
+        abrirLembreteInstalacoes();
+    });
+}
+
+function _lembreteInstAindaNao(id) {
+    const btns = document.querySelector(`.lembrete-inst-item[data-id="${id}"] .lembrete-inst-btns`);
+    if (!btns) return;
+    btns.innerHTML = `<button type="button" class="btn btn-outline btn-sm" onclick="_lembreteInstAmanha(${id})">Lembrar amanhã</button>
+        ${_lembreteInstPodeReagendar() ? `<button type="button" class="btn btn-sm" onclick="_lembreteInstReagendar(${id})">📅 Reagendar</button>` : ''}`;
+}
+
+// Reagendar abre a agenda de instalacoes (Producao): so para quem tem acesso a essa pagina.
+function _lembreteInstPodeReagendar() {
+    const exigidos = PAGINA_MODULO['pcp.html'];
+    const lista = Array.isArray(exigidos) ? exigidos : [exigidos];
+    return lista.some(m => temAcessoAlgumaSub(m, 'visualizar'));
+}
+
+function _lembreteInstAmanha(id) {
+    _lembreteInstAdiados.push(id);
+    abrirLembreteInstalacoes();
+}
+
+// Reagendar e o da agenda de instalacoes (pcp.html); de outra tela, vai ate la.
+function _lembreteInstReagendar(id) {
+    fecharModalAgenda();
+    // Guarda o que ja foi adiado + este pedido (ultimo): ao terminar o reagendamento a janela volta com o resto.
+    try { sessionStorage.setItem(_LEMBRETE_VOLTAR, JSON.stringify(_lembreteInstAdiados.concat([id]))); } catch (e) {}
+    if (!document.getElementById('inst-form')) {
+        window.location.href = 'pcp.html?view=agenda&pedido=' + encodeURIComponent(id) + '&reagendar=1';
+        return;
+    }
+    mostrarViewPCP('agenda');
+    reagendarInstalacao(id);
+}
+
+// Pagina Inicial: aviso fixo (toda vez, enquanto houver o que confirmar).
+function renderAvisoInstConfirmar() {
+    const el = document.getElementById('aviso-inst-confirmar');
+    if (!el) return;
+    const lista = instalacoesParaConfirmar();
+    if (!lista.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    const n = lista.length;
+    el.innerHTML = `<div class="aviso-inst-tit">⚠ ${n} ${n === 1 ? 'instalação' : 'instalações'} aguardando confirmação</div>` +
+        lista.map(p => `<div class="aviso-inst-item">
+            <span>${escapeHtml(_lembreteInstPergunta(p))}</span>
+            <button type="button" class="btn btn-success btn-sm" onclick="_lembreteInstConfirmarAviso(${p.id})">Confirmar</button>
+        </div>`).join('');
+    el.style.display = '';
+}
+
+function _lembreteInstConfirmarAviso(id) {
+    confirmarInstalacao(id, () => {
+        renderAvisoInstConfirmar();
+        if (document.getElementById('tb-pedidos')) renderDashboard();
     });
 }
 
@@ -12342,7 +12610,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) { console.error('Migração do Financeiro falhou:', e); }
 
     if (!document.getElementById('login-usuario')) {
-        checkAuth();
+        // Lembrete de confirmar instalacao: depois de a pagina montar.
+        if (checkAuth()) setTimeout(() => { try { lembrarInstalacoesAoAbrir(); } catch (e) { console.error(e); } }, 0);
         carregarTema();
         renderDashboardsButton();
         renderMenuExtrasEstoque();
@@ -12524,7 +12793,16 @@ document.addEventListener('DOMContentLoaded', () => {
         lembrarAbaAoRecarregar('pcp', () => _curViewPCP, mostrarViewPCP,
             t => !params.get('pedido') && ['kanban', 'agenda', 'medicoes', 'rotas'].includes(t));
         // Vindo de outra tela com ?pedido=: o pedido ja chega selecionado.
-        if (urlView === 'agenda' && params.get('pedido')) irParaAgendaInstalacao(params.get('pedido'));
+        if (urlView === 'agenda' && params.get('pedido')) {
+            irParaAgendaInstalacao(params.get('pedido'));
+            // Vindo do lembrete de confirmar ("Ainda não" > "Reagendar").
+            const pReag = params.get('reagendar') && db.pedidos.find(x => x.id == params.get('pedido'));
+            if (pReag && _instPendente(pReag)) reagendarInstalacao(pReag.id);
+            // Recarregar a pagina nao reabre o reagendamento.
+            if (params.get('reagendar')) {
+                try { params.delete('reagendar'); const qs = params.toString(); history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash); } catch (e) {}
+            }
+        }
 
         // Outra aba/usuario mexeu nas agendas: a disponibilidade se atualiza aqui.
         window.addEventListener('storage', e => {

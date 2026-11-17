@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirMenuAcoes, acaoMenu } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const MSG = 'Não foi possível carregar o gerador de códigos. Verifique a conexão com a internet e tente novamente.';
@@ -22,7 +22,7 @@ async function abrir(page, pedidos, pagina) {
 
 test('imprime 3 volumes e salva a quantidade', async ({ page }) => {
     await abrir(page, [ped()]);
-    await page.locator('button[title="Imprimir etiquetas"]').first().click();
+    await acaoMenu(page, page.locator('.kanban-card').first(), 'Imprimir etiquetas');
     await page.fill('#etq-qtd-volumes', '3');
     await page.click('#etq-btn-imprimir');
     await page.waitForFunction(() => window.__etq && window.__etq.length === 3, null, { timeout: 15000 });
@@ -39,7 +39,7 @@ test('imprime 3 volumes e salva a quantidade', async ({ page }) => {
 
 test('reimprimir so um volume', async ({ page }) => {
     await abrir(page, [ped({ volumes: 3 })]);
-    await page.locator('button[title="Imprimir etiquetas"]').first().click();
+    await acaoMenu(page, page.locator('.kanban-card').first(), 'Imprimir etiquetas');
     await page.check('#etq-modo-um');
     await page.fill('#etq-so-volume', '2');
     await page.click('#etq-btn-imprimir');
@@ -49,7 +49,7 @@ test('reimprimir so um volume', async ({ page }) => {
 
 test('mudar volumes com conferencia iniciada pede confirmacao e zera', async ({ page }) => {
     await abrir(page, [ped({ volumes: 3, conferencia: { volumes_conferidos: [1], concluida_em: null, conferido_por: 'Ana' } })]);
-    await page.locator('button[title="Imprimir etiquetas"]').first().click();
+    await acaoMenu(page, page.locator('.kanban-card').first(), 'Imprimir etiquetas');
     await page.fill('#etq-qtd-volumes', '4');
     await page.click('#etq-btn-imprimir');
     await page.locator('#sc-modal-btns #sc-modal-ok').waitFor({ timeout: 5000 });
@@ -98,16 +98,25 @@ test('no menu de acoes, a etiqueta aparece travada antes de Pronto p/ Instalacao
     }
 });
 
-test('no Kanban o botao de etiqueta aparece, mas travado, antes de Pronto', async ({ page }) => {
+test('no Kanban a acao de etiqueta aparece no menu, mas travada, antes de Pronto', async ({ page }) => {
     await abrir(page, [ped({ id: 26011, status: 'Na Costura' }), ped({ id: 26012, status: 'Aguardando Tecido' }), ped({ id: 26021 })]);
     const card = id => page.locator('.kanban-card', { hasText: String(id) });
-    await expect(card(26011).locator('.btn-bloqueado[aria-disabled="true"]')).toHaveCount(1);
-    await expect(card(26012).locator('.btn-bloqueado[aria-disabled="true"]')).toHaveCount(1);
+    const item = () => page.locator('#menu-acoes-flutuante .menu-acoes-item', { hasText: 'Imprimir etiquetas' });
+    await abrirMenuAcoes(page, card(26011));
+    await expect(item()).toHaveClass(/bloqueado/);
+    await expect(item()).toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Escape');
+    await abrirMenuAcoes(page, card(26012));
+    await expect(item()).toHaveClass(/bloqueado/);
+    await page.keyboard.press('Escape');
     // aria-disabled: o Playwright nao clica, mas o usuario clica e recebe o aviso
-    await card(26011).locator('.btn-bloqueado').dispatchEvent('click');
+    await abrirMenuAcoes(page, card(26011));
+    await item().dispatchEvent('click');
     await expect(page.locator('.sc-toast').last()).toContainText('Na Costura');
     await expect(page.locator('#etq-modal-volumes')).toHaveCount(0);
-    await expect(card(26021).locator('button[title="Imprimir etiquetas"]')).toHaveCount(1);
+    await abrirMenuAcoes(page, card(26021));
+    await expect(item()).not.toHaveClass(/bloqueado/);
+    await page.keyboard.press('Escape');
 });
 
 test('chamar a impressao direto num pedido na costura e recusado', async ({ page }) => {
@@ -122,7 +131,7 @@ test('sem internet nao imprime', async ({ page }) => {
     await page.route(/jsdelivr/, r => r.abort());
     const conf = { volumes_conferidos: [1], concluida_em: null, conferido_por: null };
     await abrir(page, [ped({ volumes: 3, conferencia: conf })]);
-    await page.locator('button[title="Imprimir etiquetas"]').first().click();
+    await acaoMenu(page, page.locator('.kanban-card').first(), 'Imprimir etiquetas');
     await page.fill('#etq-qtd-volumes', '5');
     await page.click('#etq-btn-imprimir');
     // sem gerador de codigos: avisa antes de perguntar sobre zerar a conferencia
@@ -139,7 +148,7 @@ test('modelo sem codigo de barras nem QR nao imprime', async ({ page }) => {
     ] };
     await page.addInitScript(m => localStorage.setItem('sc_etiqueta_cfg', JSON.stringify({ modelos: { pedido: m } })), modelo);
     await abrir(page, [ped({ volumes: 2 })]);
-    await page.locator('button[title="Imprimir etiquetas"]').first().click();
+    await acaoMenu(page, page.locator('.kanban-card').first(), 'Imprimir etiquetas');
     await page.click('#etq-btn-imprimir');
     await expect(page.locator('#sc-modal-msg')).toHaveText('A etiqueta precisa ter pelo menos um código de barras ou QR Code.', { timeout: 15000 });
     expect(await page.evaluate(() => window.__etq)).toBeUndefined();

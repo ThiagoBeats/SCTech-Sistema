@@ -20,6 +20,25 @@
         return e ? `${MAPS}&destination=${enc(e)}&travelmode=driving` : '';
     }
 
+    // Endereco + cidade para procurar no mapa: ruas de mesmo nome existem em varias
+    // cidades. Nao repete a cidade quando o endereco ja a traz (sem maiuscula/acento).
+    function enderecoCompleto(end, cidade) {
+        const e = String(end || '').trim();
+        const c = String(cidade || '').trim();
+        if (!e || !c) return e;
+        const ne = normalizarEndereco(e), nc = normalizarEndereco(c);
+        if (!nc) return e;
+        // So conta como "ja tem a cidade" quando ela e um trecho proprio, depois da 1a
+        // virgula/hifen ("Rua Curitiba, 5" nao tem; "Vila Curitiba" tambem nao): comeca
+        // depois de , - ou / e termina o endereco, so seguida de UF e/ou CEP.
+        const sep = ne.search(/[,\-\/]/);
+        const depois = /^\s*(?:[,\-\/]\s*)?(?:[a-z]{2})?\s*(?:[,\-]?\s*\d{5}-?\d{3})?\s*$/;
+        for (let i = ne.indexOf(nc); i >= 0; i = ne.indexOf(nc, i + 1)) {
+            if (sep >= 0 && i > sep && /[,\-\/]\s*$/.test(ne.slice(0, i)) && depois.test(ne.slice(i + nc.length))) return e;
+        }
+        return e.replace(/[\s.,;]+$/, '') + ', ' + c;
+    }
+
     function _link(origem, waypoints, destino) {
         let u = MAPS;
         if (origem) u += '&origin=' + enc(origem);
@@ -112,6 +131,13 @@
         const h = Math.floor(min / 60), m = min % 60;
         return h ? h + 'h' + String(m).padStart(2, '0') : m + ' min';
     }
+    // Minutos por extenso: 607 -> "10 horas e 7 minutos", 61 -> "1 hora e 1 minuto".
+    function duracaoPorExtenso(min) {
+        min = Math.max(0, Math.round(+min || 0));
+        const h = Math.floor(min / 60), m = min % 60;
+        const ph = h + (h === 1 ? ' hora' : ' horas'), pm = m + (m === 1 ? ' minuto' : ' minutos');
+        return !h ? pm : !m ? ph : ph + ' e ' + pm;
+    }
     function fmtKm(km) { return (Math.round((+km || 0) * 10) / 10).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' km'; }
 
     function textoWhatsRota({ data, tecnico, saida, itens, links, totalKm, totalMin }) {
@@ -167,8 +193,8 @@
         return [0].concat(volta.reverse());
     }
 
-    const api = { linkIrPara, linksRota, normalizarEndereco, ordemDoTrip, melhorOrdemAberta, trechosDaRota, calcularChegadas,
-        linhaObsRota, aplicarObsRota, textoWhatsRota, fmtDur, fmtKm, hhmm, TOLERANCIA_MIN };
+    const api = { linkIrPara, linksRota, enderecoCompleto, normalizarEndereco, ordemDoTrip, melhorOrdemAberta, trechosDaRota, calcularChegadas,
+        linhaObsRota, aplicarObsRota, textoWhatsRota, fmtDur, duracaoPorExtenso, fmtKm, hhmm, TOLERANCIA_MIN };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.RotasCore = api;
 
