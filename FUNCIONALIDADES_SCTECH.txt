@@ -85,6 +85,20 @@ Botão de acesso rápido:
 
 ── 2.1 PAINEL DE ALERTAS ───────────────────────────────────────────────────────
 
+Sino de notificações (barra superior, em todas as telas):
+  - Mostra a mesma lista do card "Alertas do Sistema"; cada tipo de alerta é um
+    coletor registrado em js/notificacoes.js (Notif.registrar), usado pelo card e pelo sino
+  - Selo com o número de alertas que o usuário ainda não abriu (some em 0)
+  - Passar o mouse (ou tocar, no celular) abre a mini-janela: não lidos primeiro, em destaque
+  - Clicar num item marca como visto e leva ao lugar do alerta; abrir o alerta no card do
+    Painel também marca; "Marcar todas como lidas" zera a contagem
+  - "Vistos" ficam por usuário (sc_notif_vistos_<id>); a chave do alerta inclui os ids dos
+    itens, então um item novo conta de novo; chaves que não existem mais são descartadas
+  - Itens podem ter botão de ação e ficar na lista até serem resolvidos (persistente)
+  - Respeita os tipos desligados em Configurar Empresa e a preferência de notificações;
+    com tipo desligado, o rodapé do sino mostra "Alertas desabilitados"
+  - Atualiza sozinho ao gravar e quando outra aba grava (evento storage)
+
 Tipo "Entrega hoje":
   - Lista pedidos (não instalados) com data_entrega = hoje
   - Exibe: nomes dos clientes com links para edição do pedido

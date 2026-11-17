@@ -429,7 +429,7 @@ let _avisoSemEspacoMostrado = false;
 // { silencioso: true } nao abre o aviso (quem chama ja mostra o seu, como o
 // desfazer do importador de catalogo).
 function syncDB({ silencioso = false } = {}) {
-    try { _syncDBBruto(); return true; }
+    try { _syncDBBruto(); Notif.atualizarDepois(); return true; }
     catch (e) {
         if (!_erroDeEspaco(e)) throw e;
         console.warn('Sem espaço no navegador para salvar.', e);
@@ -1333,6 +1333,7 @@ function renderSidebar() {
         </div>`;
     _aplicarSidebarFixada(fixada);
     atualizarTopbar();
+    Notif.atualizar();
 }
 
 // --- BARRA SUPERIOR (fixa, em todas as paginas com a barra lateral) ---
@@ -4154,6 +4155,7 @@ function toggleAlertaTipo(tipo) {
     cfg[tipo] = !alertaAtivo(tipo);
     localStorage.setItem('sc_alertas_cfg', JSON.stringify(cfg));
     renderBellIndicator();
+    Notif.atualizar();
     renderEmpresaAlertasCfg();
 }
 function renderEmpresaAlertasCfg() {
@@ -4343,112 +4345,148 @@ document.addEventListener('click', () => {
     if (m) m.style.display = 'none';
 });
 
+// ── ALERTAS DO SISTEMA (coletores do sino e do card do Painel) ──
+// Cada tipo de banner e um coletor registrado em Notif (js/notificacoes.js):
+// o card do Painel e o sino da barra superior leem a mesma lista, em qualquer pagina.
+const _ALERTA_CORES = {
+    danger: ['var(--danger-bg)', '#F79B90', 'var(--danger-text)'],
+    warn:   ['var(--warn-bg)',   '#F2C924', 'var(--warn-text)'],
+    info:   ['var(--info-bg)',   '#9FC4E5', 'var(--info-text)']
+};
+const _ALERTA_SEP = ' &nbsp;·&nbsp; ';
+const _alertaHoje = () => new Date().toISOString().split('T')[0];
+const _alertaDataBR = d => d.split('-').reverse().join('/');
+const _alertaIds = lista => lista.map(x => x.id).join(',');
+const _alertaLinkPedido = (p, cor, extra) =>
+    `<span style="cursor:pointer;color:${cor};font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}${extra || ''}</span>`;
+
+Notif.registrar('entregas-atrasadas', () => {
+    if (!alertaAtivo('entrega')) return [];
+    const hojeStr = _alertaHoje(), hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const lista = filtrarPedidosVisiveis(db.pedidos).filter(p =>
+        p.data_entrega && normalizarStatus(p.status) !== 'Instalado' && p.data_entrega < hojeStr);
+    if (!lista.length) return [];
+    const itens = lista.sort((a, b) => a.data_entrega.localeCompare(b.data_entrega)).map(p => {
+        const diasAtraso = Math.round((hoje - new Date(p.data_entrega + 'T00:00:00')) / 86400000);
+        return `<span style="cursor:pointer;color:var(--danger-text);font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})" title="${diasAtraso}d de atraso">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')} (${_alertaDataBR(p.data_entrega)})</span>`;
+    }).join(_ALERTA_SEP);
+    return [{ chave: 'entregas-atrasadas:' + _alertaIds(lista), icone: '🚨', cor: 'danger', urgente: true, href: 'pedidos.html',
+        titulo: `<strong>${lista.length} entrega(s) atrasada(s):</strong>`, texto: itens }];
+});
+
+Notif.registrar('entregas-hoje', () => {
+    if (!alertaAtivo('entrega')) return [];
+    const hojeStr = _alertaHoje();
+    const lista = filtrarPedidosVisiveis(db.pedidos).filter(p =>
+        p.data_entrega && normalizarStatus(p.status) !== 'Instalado' && p.data_entrega === hojeStr);
+    if (!lista.length) return [];
+    return [{ chave: 'entregas-hoje:' + _alertaIds(lista), icone: '🔔', cor: 'warn', urgente: false, href: 'pedidos.html',
+        titulo: `<strong>${lista.length} pedido(s)</strong> com entrega prevista para hoje:`,
+        texto: lista.map(p => _alertaLinkPedido(p, 'var(--warn-text)')).join(_ALERTA_SEP) }];
+});
+
+Notif.registrar('medicoes-atrasadas', () => {
+    if (!alertaAtivo('medicao')) return [];
+    const hojeStr = _alertaHoje();
+    const lista = filtrarMedicoesVisiveis(db.medicoes).filter(m => m.status === 'Agendado' && m.data < hojeStr);
+    if (!lista.length) return [];
+    const itens = lista.map(m =>
+        `<span style="cursor:pointer;color:var(--danger-text);font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')} (${_alertaDataBR(m.data)})</span>`
+    ).join(_ALERTA_SEP);
+    return [{ chave: 'medicoes-atrasadas:' + _alertaIds(lista), icone: '📐', cor: 'danger', urgente: true, href: 'pcp.html?view=medicoes',
+        titulo: `<strong>${lista.length} medição(ões)</strong> atrasada(s):`, texto: itens }];
+});
+
+Notif.registrar('medicoes-hoje', () => {
+    if (!alertaAtivo('medicao')) return [];
+    const hojeStr = _alertaHoje();
+    const lista = filtrarMedicoesVisiveis(db.medicoes).filter(m => m.status === 'Agendado' && m.data === hojeStr);
+    if (!lista.length) return [];
+    const itens = lista.map(m =>
+        `<span style="cursor:pointer;color:#2D77C1;font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')}${m.hora ? ' às ' + m.hora : ''}</span>`
+    ).join(_ALERTA_SEP);
+    return [{ chave: 'medicoes-hoje:' + _alertaIds(lista), icone: '📐', cor: 'info', urgente: false, href: 'pcp.html?view=medicoes',
+        titulo: `<strong>${lista.length} medição(ões)</strong> agendada(s) para hoje:`, texto: itens }];
+});
+
+const _ALERTA_INST_STATUS = ['Pronto p/ Instalação', 'Aguardando Financeiro'];
+Notif.registrar('instalacoes-atrasadas', () => {
+    if (!alertaAtivo('instalacao')) return [];
+    const hojeStr = _alertaHoje();
+    const lista = filtrarPedidosVisiveis(db.pedidos).filter(p =>
+        _ALERTA_INST_STATUS.includes(normalizarStatus(p.status)) && p.data_entrega && p.data_entrega < hojeStr);
+    if (!lista.length) return [];
+    const itens = lista.map(p => _alertaLinkPedido(p, 'var(--danger-text)', ` (${_alertaDataBR(p.data_entrega)})`)).join(_ALERTA_SEP);
+    return [{ chave: 'instalacoes-atrasadas:' + _alertaIds(lista), icone: '🔧', cor: 'danger', urgente: true, href: 'pedidos.html',
+        titulo: `<strong>${lista.length} instalação(ões)</strong> atrasada(s):`, texto: itens }];
+});
+
+Notif.registrar('instalacoes-hoje', () => {
+    if (!alertaAtivo('instalacao')) return [];
+    const hojeStr = _alertaHoje();
+    const lista = filtrarPedidosVisiveis(db.pedidos).filter(p =>
+        _ALERTA_INST_STATUS.includes(normalizarStatus(p.status)) && p.data_entrega === hojeStr);
+    if (!lista.length) return [];
+    const itens = lista.map(p => _alertaLinkPedido(p, '#2D77C1', p.inst_hora ? ' às ' + p.inst_hora : '')).join(_ALERTA_SEP);
+    return [{ chave: 'instalacoes-hoje:' + _alertaIds(lista), icone: '🔧', cor: 'info', urgente: false, href: 'pedidos.html',
+        titulo: `<strong>${lista.length} instalação(ões)</strong> agendada(s) para hoje:`, texto: itens }];
+});
+
+Notif.registrar('estoque-minimo', () => {
+    if (!alertaAtivo('estoque')) return [];
+    const tecidos = db.catalogo.filter(c => !temEstoqueInfinito(c) && c.min_estoque > 0 && estoqueDisponivel(c.id) < c.min_estoque);
+    const mats    = db.materiais.filter(m => !temEstoqueInfinito(m) && m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque);
+    const total = tecidos.length + mats.length;
+    if (!total) return [];
+    const itens = [
+        ...tecidos.map(c => `<span style="cursor:pointer;color:var(--warn-text);font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(c.nome)}: ${estoqueDisponivel(c.id).toFixed(2)} m (mín. ${c.min_estoque} m)</span>`),
+        ...mats.map(m => `<span style="cursor:pointer;color:var(--warn-text);font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(m.nome)}: ${(m.estoque_atual||0).toFixed(2)} ${m.unidade||''} (mín. ${m.min_estoque})</span>`)
+    ].join(_ALERTA_SEP);
+    return [{ chave: 'estoque-minimo:' + tecidos.map(c => 't' + c.id).concat(mats.map(m => 'm' + m.id)).join(','),
+        icone: '⚠️', cor: 'warn', urgente: false, href: 'estoque.html',
+        titulo: `<strong>${total} item(ns)</strong> com estoque abaixo do mínimo:`, texto: itens }];
+});
+
+// Outra aba gravou: traz para a memoria o que os alertas leem.
+function _notifRecarregarDB(chave) {
+    const mapa = { sc_ped: 'pedidos', sc_med: 'medicoes', sc_cat: 'catalogo', sc_mat: 'materiais', sc_est: 'estoque', sc_mov: 'movimentos', sc_usr: 'usuarios', sc_pap: 'papeis' };
+    const campo = mapa[chave];
+    if (!campo) return;
+    try { const v = JSON.parse(localStorage.getItem(chave)); if (Array.isArray(v)) db[campo] = v; } catch (e) { /* mantem */ }
+}
+
+function _alertaBannerHTML(it) {
+    const [bg, bord, txt] = _ALERTA_CORES[it.cor] || _ALERTA_CORES[it.urgente ? 'danger' : 'warn'];
+    const acao = it.acao && it.acao.fn
+        ? `<button type="button" class="btn btn-primary btn-sm" data-alerta-acao="${escapeHtml(it.acao.fn)}">${escapeHtml(it.acao.rotulo)}</button>` : '';
+    return `<div data-urgente="${it.urgente ? 1 : 0}" data-chave="${escapeHtml(it.chave)}" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:${bg};border:1px solid ${bord};border-radius:8px;padding:10px 16px;font-size:13px">
+            <span style="font-size:17px;flex-shrink:0">${it.icone || '🔔'}</span>
+            <span style="color:${txt}">${it.titulo || ''}</span>
+            <span>${it.texto || ''}</span>${acao}
+        </div>`;
+}
+
 function renderDashboardAlertas() {
+    Notif.desenharSino();
+    _renderCardAlertas();
+}
+
+function _renderCardAlertas() {
     const el = document.getElementById('dashboard-alertas');
     if (!el) return;
-    const hojeStr = new Date().toISOString().split('T')[0];
-    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    const banners = [];
-
-    // vermelho = atrasado (urgente): a preferencia "so as urgentes" mantem so estes
-    const mkBanner = (icon, bg, bord, textClr, titulo, itens) =>
-        `<div data-urgente="${bg === 'var(--danger-bg)' ? 1 : 0}" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:${bg};border:1px solid ${bord};border-radius:8px;padding:10px 16px;font-size:13px">
-            <span style="font-size:17px;flex-shrink:0">${icon}</span>
-            <span style="color:${textClr}">${titulo}</span>
-            <span>${itens}</span>
-        </div>`;
-
-    // Pedidos com entrega atrasada ou hoje
-    if (alertaAtivo('entrega')) {
-        const entregasAtrasadas = filtrarPedidosVisiveis(db.pedidos).filter(p => {
-            if (!p.data_entrega || normalizarStatus(p.status) === 'Instalado') return false;
-            return p.data_entrega < hojeStr;
+    if (!el._notifClique) {
+        // Abrir um alerta no card tambem o marca como visto no sino.
+        el._notifClique = true;
+        el.addEventListener('click', e => {
+            const b = e.target.closest('[data-chave]');
+            if (!b || !el.contains(b)) return;
+            const ac = e.target.closest('[data-alerta-acao]');
+            Notif.marcarVisto(b.dataset.chave);
+            if (ac) { try { new Function(ac.dataset.alertaAcao)(); } catch (err) { console.error(err); } }
         });
-        if (entregasAtrasadas.length) {
-            const itens = entregasAtrasadas
-                .sort((a, b) => a.data_entrega.localeCompare(b.data_entrega))
-                .map(p => {
-                    const diasAtraso = Math.round((hoje - new Date(p.data_entrega + 'T00:00:00')) / 86400000);
-                    return `<span style="cursor:pointer;color:var(--danger-text);font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})" title="${diasAtraso}d de atraso">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')} (${p.data_entrega.split('-').reverse().join('/')})</span>`;
-                }).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('🚨', 'var(--danger-bg)', '#F79B90', 'var(--danger-text)',
-                `<strong>${entregasAtrasadas.length} entrega(s) atrasada(s):</strong>`, itens));
-        }
-
-        const entregasHoje = filtrarPedidosVisiveis(db.pedidos).filter(p => {
-            if (!p.data_entrega || normalizarStatus(p.status) === 'Instalado') return false;
-            return p.data_entrega === hojeStr;
-        });
-        if (entregasHoje.length) {
-            const itens = entregasHoje.map(p =>
-                `<span style="cursor:pointer;color:var(--warn-text);font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}</span>`
-            ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('🔔', 'var(--warn-bg)', '#F2C924', 'var(--warn-text)',
-                `<strong>${entregasHoje.length} pedido(s)</strong> com entrega prevista para hoje:`, itens));
-        }
     }
-
-    // Medições atrasadas + hoje
-    if (alertaAtivo('medicao')) {
-        const medicAtrasadas = filtrarMedicoesVisiveis(db.medicoes).filter(m => m.status === 'Agendado' && m.data < hojeStr);
-        if (medicAtrasadas.length) {
-            const itens = medicAtrasadas.map(m =>
-                `<span style="cursor:pointer;color:var(--danger-text);font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')} (${m.data.split('-').reverse().join('/')})</span>`
-            ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('📐', 'var(--danger-bg)', '#F79B90', 'var(--danger-text)',
-                `<strong>${medicAtrasadas.length} medição(ões)</strong> atrasada(s):`, itens));
-        }
-        const medicHoje = filtrarMedicoesVisiveis(db.medicoes).filter(m => m.status === 'Agendado' && m.data === hojeStr);
-        if (medicHoje.length) {
-            const itens = medicHoje.map(m =>
-                `<span style="cursor:pointer;color:#2D77C1;font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')}${m.hora ? ' às ' + m.hora : ''}</span>`
-            ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('📐', 'var(--info-bg)', '#9FC4E5', 'var(--info-text)',
-                `<strong>${medicHoje.length} medição(ões)</strong> agendada(s) para hoje:`, itens));
-        }
-    }
-
-    // Instalações atrasadas + hoje
-    if (alertaAtivo('instalacao')) {
-        const instStatus = ['Pronto p/ Instalação', 'Aguardando Financeiro'];
-        const instAtrasadas = filtrarPedidosVisiveis(db.pedidos).filter(p =>
-            instStatus.includes(normalizarStatus(p.status)) && p.data_entrega && p.data_entrega < hojeStr);
-        if (instAtrasadas.length) {
-            const itens = instAtrasadas.map(p =>
-                `<span style="cursor:pointer;color:var(--danger-text);font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')} (${p.data_entrega.split('-').reverse().join('/')})</span>`
-            ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('🔧', 'var(--danger-bg)', '#F79B90', 'var(--danger-text)',
-                `<strong>${instAtrasadas.length} instalação(ões)</strong> atrasada(s):`, itens));
-        }
-        const instHoje = filtrarPedidosVisiveis(db.pedidos).filter(p =>
-            instStatus.includes(normalizarStatus(p.status)) && p.data_entrega === hojeStr);
-        if (instHoje.length) {
-            const itens = instHoje.map(p =>
-                `<span style="cursor:pointer;color:#2D77C1;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}${p.inst_hora ? ' às ' + p.inst_hora : ''}</span>`
-            ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('🔧', 'var(--info-bg)', '#9FC4E5', 'var(--info-text)',
-                `<strong>${instHoje.length} instalação(ões)</strong> agendada(s) para hoje:`, itens));
-        }
-    }
-
-    // Estoque crítico (tecidos + materiais)
-    if (alertaAtivo('estoque')) {
-        const tecidosCriticos = db.catalogo.filter(c => !temEstoqueInfinito(c) && c.min_estoque > 0 && estoqueDisponivel(c.id) < c.min_estoque);
-        const matCriticos     = db.materiais.filter(m => !temEstoqueInfinito(m) && m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque);
-        const totalCriticos   = tecidosCriticos.length + matCriticos.length;
-        if (totalCriticos) {
-            const itens = [
-                ...tecidosCriticos.map(c => `<span style="cursor:pointer;color:var(--warn-text);font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(c.nome)}: ${estoqueDisponivel(c.id).toFixed(2)} m (mín. ${c.min_estoque} m)</span>`),
-                ...matCriticos.map(m => `<span style="cursor:pointer;color:var(--warn-text);font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(m.nome)}: ${(m.estoque_atual||0).toFixed(2)} ${m.unidade||''} (mín. ${m.min_estoque})</span>`)
-            ].join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('⚠️', 'var(--warn-bg)', '#F2C924', 'var(--warn-text)',
-                `<strong>${totalCriticos} item(ns)</strong> com estoque abaixo do mínimo:`, itens));
-        }
-    }
-
     const prefNotif = prefsUsuario().notificacoes;
-    if (prefNotif === 'urgentes') banners.splice(0, banners.length, ...banners.filter(b => b.includes('data-urgente="1"')));
-    else if (prefNotif === 'nenhuma') banners.length = 0;
+    const banners = Notif.listar().map(_alertaBannerHTML);
 
     // Contador no cabeçalho do card
     const countEl = document.getElementById('dash-alertas-count');
@@ -4490,7 +4528,7 @@ function renderDashboardAlertas() {
                     el.scrollTo({ top: 0, behavior: 'smooth' });
                     setTimeout(() => {
                         if (document.getElementById('dashboard-alertas') === el) {
-                            renderDashboardAlertas();
+                            _renderCardAlertas();
                         }
                     }, 800);
                 }, 2000);
