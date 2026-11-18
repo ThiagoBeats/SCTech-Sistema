@@ -20,22 +20,29 @@
         return e ? `${MAPS}&destination=${enc(e)}&travelmode=driving` : '';
     }
 
-    // Endereco + cidade para procurar no mapa: ruas de mesmo nome existem em varias
-    // cidades. Nao repete a cidade quando o endereco ja a traz (sem maiuscula/acento).
-    function enderecoCompleto(end, cidade) {
-        const e = String(end || '').trim();
-        const c = String(cidade || '').trim();
-        if (!e || !c) return e;
+    function _temCidade(e, c) {
+        e = String(e || '').trim(); c = String(c || '').trim();
+        if (!e || !c) return false;
         const ne = normalizarEndereco(e), nc = normalizarEndereco(c);
-        if (!nc) return e;
+        if (!nc) return false;
         // So conta como "ja tem a cidade" quando ela e um trecho proprio, depois da 1a
         // virgula/hifen ("Rua Curitiba, 5" nao tem; "Vila Curitiba" tambem nao): comeca
         // depois de , - ou / e termina o endereco, so seguida de UF e/ou CEP.
         const sep = ne.search(/[,\-\/]/);
         const depois = /^\s*(?:[,\-\/]\s*)?(?:[a-z]{2})?\s*(?:[,\-]?\s*\d{5}-?\d{3})?\s*$/;
         for (let i = ne.indexOf(nc); i >= 0; i = ne.indexOf(nc, i + 1)) {
-            if (sep >= 0 && i > sep && /[,\-\/]\s*$/.test(ne.slice(0, i)) && depois.test(ne.slice(i + nc.length))) return e;
+            if (sep >= 0 && i > sep && /[,\-\/]\s*$/.test(ne.slice(0, i)) && depois.test(ne.slice(i + nc.length))) return true;
         }
+        return false;
+    }
+
+    // Endereco + cidade para procurar no mapa: ruas de mesmo nome existem em varias
+    // cidades. Nao repete a cidade quando o endereco ja a traz (sem maiuscula/acento).
+    function enderecoCompleto(end, cidade) {
+        const e = String(end || '').trim();
+        const c = String(cidade || '').trim();
+        if (!e || !c) return e;
+        if (_temCidade(e, c)) return e;
         return e.replace(/[\s.,;]+$/, '') + ', ' + c;
     }
 
@@ -193,7 +200,43 @@
         return [0].concat(volta.reverse());
     }
 
-    const api = { linkIrPara, linksRota, enderecoCompleto, normalizarEndereco, ordemDoTrip, melhorOrdemAberta, trechosDaRota, calcularChegadas,
+    // Endereco em partes -> texto para o mapa: "Rua, Numero, Bairro, Cidade - UF, CEP"
+    // (complemento fica de fora; vazios somem).
+    function _mascCep(c) {
+        const d = String(c || '').replace(/\D/g, '').slice(0, 8);
+        return d.length > 5 ? d.slice(0, 5) + '-' + d.slice(5) : d;
+    }
+    function _cidadeUf(p) {
+        const c = String(p.cidade || '').trim(), u = String(p.uf || '').trim();
+        return c && u ? c + ' - ' + u : c || u;
+    }
+    // Registro migrado do texto antigo: a Rua pode ja trazer a cidade ("Rua X, 10 - Curitiba");
+    // ai a cidade nao repete e a UF (se ainda nao estiver no texto) vai ao fim dele.
+    function _montar(p, comBairro, comCep) {
+        p = p || {};
+        const t = x => String(x || '').trim();
+        const cep = comCep ? _mascCep(p.cep) : '';
+        const base = [p.rua, p.numero, comBairro ? p.bairro : ''].map(t).filter(Boolean);
+        if (_temCidade(p.rua, p.cidade)) {
+            const u = t(p.uf);
+            if (u && base.length && !new RegExp('(^|[^a-z])' + u.toLowerCase() + '$').test(normalizarEndereco(base[base.length - 1]))) {
+                base[base.length - 1] += ' - ' + u;
+            }
+            return base.concat(cep ? [cep] : []).join(', ');
+        }
+        return base.concat([_cidadeUf(p), cep]).map(t).filter(Boolean).join(', ');
+    }
+    function enderecoDePartes(p) { return _montar(p, true, true); }
+    // Consultas ao Nominatim, da mais completa para a mais simples.
+    function consultasGeo(p) {
+        p = p || {};
+        const cep = _mascCep(p.cep);
+        const lista = [enderecoDePartes(p), _montar(p, false, false),
+            cep ? [cep, _cidadeUf(p)].filter(Boolean).join(', ') : ''];
+        return lista.filter((x, i) => x && lista.indexOf(x) === i);
+    }
+
+    const api = { enderecoDePartes, consultasGeo, linkIrPara, linksRota, enderecoCompleto, normalizarEndereco, ordemDoTrip, melhorOrdemAberta, trechosDaRota, calcularChegadas,
         linhaObsRota, aplicarObsRota, textoWhatsRota, fmtDur, duracaoPorExtenso, fmtKm, hhmm, TOLERANCIA_MIN };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.RotasCore = api;

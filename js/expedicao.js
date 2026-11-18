@@ -113,12 +113,8 @@ function _expAposImprimirEtiquetas() {
 
 // Outra aba pode ter mudado pedidos/clientes: rele o que esta gravado antes de cada leitura
 function _expRecarregar() {
-    try {
-        const ped = JSON.parse(localStorage.getItem('sc_ped'));
-        const cli = JSON.parse(localStorage.getItem('sc_cli'));
-        if (Array.isArray(ped)) db.pedidos = ped;
-        if (Array.isArray(cli)) db.clientes = cli;
-    } catch (e) { /* mantem o que esta em memoria */ }
+    _dbRecarregarChave('sc_ped');
+    _dbRecarregarChave('sc_cli');
 }
 
 function processarLeituraExpedicao(texto) {
@@ -161,7 +157,7 @@ function processarLeituraExpedicao(texto) {
             const nome = (getUsuarioLogado() && getUsuarioLogado().nome) || 'Usuário';
             const m = EtiquetasCore.marcarVolume(ped, r.volume, nome, Date.now());
             // grava so os pedidos: syncDB() reescreveria as demais chaves com dados desta aba
-            localStorage.setItem('sc_ped', JSON.stringify(db.pedidos));
+            _gravarChaves(['sc_ped']);
             _expRenderPedido(ped.id, true);
             _expResultado(m.concluiu
                 ? `✅ Pedido #${ped.id} conferido: ${ped.volumes} volume(s).`

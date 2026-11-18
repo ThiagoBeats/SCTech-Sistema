@@ -80,7 +80,7 @@ test('medicoes: agendar uma visita a coloca na coluna da esquerda, sem recarrega
     await page.fill('#med-novo-nome', 'Euclides Genésio');
     await page.fill('#med-data', dia(2));
     await page.fill('#med-hora', '18:50');
-    await page.fill('#med-end', 'Rua Laura, 139');
+    await page.fill('#med-rua', 'Rua Laura, 139');
     await page.click('button:has-text("Agendar Visita")');
     await expect(page.locator('#med-pend-lista')).toContainText('Euclides Genésio');
     await expect(page.locator('#med-pend-count')).toHaveText('4 agendamentos');
@@ -141,7 +141,7 @@ test('medicoes: editar corrige o registro sem criar outro', async ({ page }) => 
     await abrir(page, 'medicoes');
     await page.locator('#med-pend-lista .agd-item', { hasText: 'Ana Paula Lima' }).click();
     await page.click('.agd-modal button:has-text("Editar")');
-    await page.fill('#agdf-end', 'Av. das Palmeiras, 1001');
+    await page.fill('#agdf-end-rua', 'Av. das Palmeiras, 1001');
     await page.click('#agdf-salvar');
     await expect(page.locator('#med-pend-lista')).toContainText('Av. das Palmeiras, 1001');
     const med = await lerMed(page);
@@ -153,9 +153,9 @@ test('medicoes: editar exige endereco e data', async ({ page }) => {
     await abrir(page, 'medicoes');
     await page.locator('#med-pend-lista .agd-item', { hasText: 'Ana Paula Lima' }).click();
     await page.click('.agd-modal button:has-text("Editar")');
-    await page.fill('#agdf-end', '');
+    await page.fill('#agdf-end-rua', '');
     await page.click('#agdf-salvar');
-    await expect(page.locator('#agdf-end')).toHaveClass(/agd-erro/);
+    await expect(page.locator('#agdf-end-rua')).toHaveClass(/agd-erro/);
     expect((await lerMed(page)).find(m => m.id === 2).endereco).toBe('Av. das Palmeiras, 1000');
 });
 
@@ -373,7 +373,7 @@ test('instalacoes: editar grava endereco e observacoes no pedido', async ({ page
     await abrir(page, 'agenda');
     await page.locator('#inst-pend-lista .agd-item', { hasText: 'Pedro Alves' }).click();
     await page.click('.agd-modal button:has-text("Editar")');
-    await page.fill('#agdf-end', 'Rua Nova, 77');
+    await page.fill('#agdf-end-rua', 'Rua Nova, 77');
     await page.fill('#agdf-obs', 'Levar escada');
     await page.click('#agdf-salvar');
     await expect(page.locator('#inst-pend-lista')).toContainText('Rua Nova, 77');

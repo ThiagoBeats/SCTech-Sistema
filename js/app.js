@@ -281,11 +281,38 @@ let db = {
     movimentos_fin:  JSON.parse(localStorage.getItem('sc_mov_fin'))    || [],
     fechamentos_fin: JSON.parse(localStorage.getItem('sc_fin_fech'))   || [],
     medicoes:        JSON.parse(localStorage.getItem('sc_med'))  || [],
+    agenda_eventos:  JSON.parse(localStorage.getItem('sc_agd_ev')) || [],
     rotas:           JSON.parse(localStorage.getItem('sc_rotas')) || [],
     papeis:          JSON.parse(localStorage.getItem('sc_pap'))  || papeisPadrao(),
     usuarios:        JSON.parse(localStorage.getItem('sc_usr'))  || [],
     import_perfis:   JSON.parse(localStorage.getItem('sc_imp_perfis')) || []
 };
+
+// Chave do localStorage -> array de db (as que sao relidas quando outra aba grava).
+const _DB_CHAVE_CAMPO = {
+    sc_cli: 'clientes', sc_cat: 'catalogo', sc_ped: 'pedidos', sc_est: 'estoque', sc_mat: 'materiais',
+    sc_mov: 'movimentos', sc_med: 'medicoes', sc_agd_ev: 'agenda_eventos', sc_usr: 'usuarios', sc_pap: 'papeis',
+};
+// Texto de cada chave como esta aba leu ou gravou por ultimo. Reler so troca o array
+// quando o texto gravado mudou (outra aba gravou): um fluxo no meio de uma confirmacao
+// (ex.: aprovar pedido) continua mexendo nos mesmos objetos que serao gravados.
+const _dbTextoCarregado = {};
+Object.keys(_DB_CHAVE_CAMPO).forEach(k => { try { _dbTextoCarregado[k] = localStorage.getItem(k); } catch (e) { /* sem storage */ } });
+function _dbMarcarGravado(chave, texto) { if (chave in _DB_CHAVE_CAMPO) _dbTextoCarregado[chave] = texto; }
+// Rele uma chave se o texto gravado mudou. Devolve true quando trocou o array.
+function _dbRecarregarChave(chave) {
+    const campo = _DB_CHAVE_CAMPO[chave];
+    if (!campo) return false;
+    let texto;
+    try { texto = localStorage.getItem(chave); } catch (e) { return false; }
+    if (texto === null || texto === _dbTextoCarregado[chave]) return false;
+    let v;
+    try { v = JSON.parse(texto); } catch (e) { return false; }
+    if (!Array.isArray(v)) return false;
+    db[campo] = v;
+    _dbTextoCarregado[chave] = texto;
+    return true;
+}
 
 // ─── Kits de fixação padrão ──────────────────────────────────────────────
 // Os tipos de instalação que antes eram fixos no pedido nascem como kits de
@@ -374,8 +401,8 @@ function formatPedidoId(id) {
 // algo em caso de falha, como a migracao e o importador, usa esta).
 // `extras`: outras chaves gravadas junto, com a mesma volta ao anterior,
 // como [chave, texto]; texto null apaga a chave.
-function _syncDBBruto(extras) {
-    const pares = [
+function _dbPares() {
+    return [
         ['sc_cli', db.clientes],
         ['sc_cat', db.catalogo],
         ['sc_ped', db.pedidos],
@@ -396,10 +423,15 @@ function _syncDBBruto(extras) {
         ['sc_fin_fech', db.fechamentos_fin],
         ['sc_med', db.medicoes],
         ['sc_rotas', db.rotas || []],
+        ['sc_agd_ev', db.agenda_eventos || []],
         ['sc_pap', db.papeis],
         ['sc_usr', db.usuarios],
         ['sc_imp_perfis', db.import_perfis],
     ];
+}
+function _syncDBBruto(extras, soChaves) {
+    let pares = _dbPares();
+    if (soChaves) pares = pares.filter(([chave]) => soChaves.includes(chave));
     // Se faltar espaco no meio, as chaves ja gravadas voltam (no que der) ao valor anterior,
     // para o navegador ficar com os dados antigos, e o erro sobe.
     const textos = pares.map(([chave, valor]) => [chave, JSON.stringify(valor)]).concat(extras || []);
@@ -417,6 +449,7 @@ function _syncDBBruto(extras) {
         });
         throw e;
     }
+    textos.forEach(([chave, texto]) => _dbMarcarGravado(chave, texto));
 }
 
 function _erroDeEspaco(e) {
@@ -428,8 +461,12 @@ let _avisoSemEspacoMostrado = false;
 // Salva sem quebrar a tela: se o espaco do navegador acabou, avisa uma vez e segue.
 // { silencioso: true } nao abre o aviso (quem chama ja mostra o seu, como o
 // desfazer do importador de catalogo).
-function syncDB({ silencioso = false } = {}) {
-    try { _syncDBBruto(); return true; }
+function syncDB({ silencioso = false } = {}) { return _gravarDB(null, silencioso); }
+// Grava so as chaves indicadas (ex.: ['sc_med']): as demais ficam como estao no
+// navegador, sem voltar ao que esta aba tinha em memoria (outra aba pode ter gravado).
+function _gravarChaves(chaves, { silencioso = false } = {}) { return _gravarDB(chaves, silencioso); }
+function _gravarDB(chaves, silencioso) {
+    try { _syncDBBruto(null, chaves); Notif.atualizarDepois(); if (typeof _agendaRedesenhar === 'function') _agendaRedesenhar(); return true; }
     catch (e) {
         if (!_erroDeEspaco(e)) throw e;
         console.warn('Sem espaço no navegador para salvar.', e);
@@ -491,6 +528,7 @@ function salvarEmpresaConfigs() {
         aliquota_estimada: Number.isFinite(aliq) ? Math.min(100, Math.max(0, aliq)) : 0
     };
     localStorage.setItem('sc_empresa', JSON.stringify(emp));
+    atualizarTopbar();
     toast('Configurações da empresa salvas!', 'success');
     if (typeof atualizarPreviewCabecalho === 'function') atualizarPreviewCabecalho();
 }
@@ -1325,30 +1363,89 @@ function renderSidebar() {
     const foto = usuarioAtual && usuarioAtual.foto_base64;
 
     sidebar.innerHTML = `
-        <div class="logo-popup-wrap" id="logo-popup-wrap">
-            <div class="logo" onclick="toggleLogoPopup(event)" title="${escapeHtml(nomeEmpresa)}">
-                ${logoEmpresa}
-                ${emp.logo_base64 ? '' : `<h2 class="sidebar-nome-empresa">${escapeHtml(nomeEmpresa)}</h2>`}
-                <button type="button" class="sidebar-pin" id="sidebar-pin-btn" onclick="alternarSidebarFixada(event)" aria-label="Fixar menu">📌</button>
-            </div>
-            <div class="logo-popup" id="logo-popup">
-                <div class="logo-popup-header">
-                    <div class="logo-popup-avatar${foto ? ' com-foto' : ''}">${foto ? `<img src="${foto}" alt="">` : navIcon('user', 18)}</div>
-                    <div><div class="logo-popup-name" id="popup-user-name">—</div><div class="logo-popup-role">${escapeHtml(papelAtual?.nome || 'Usuário SCTech')}</div></div>
-                </div>
-                <div class="logo-popup-sep"></div>
-                <a href="configuracoes.html" class="logo-popup-item">${navIcon('user', 16)} Meu perfil</a>
-                <div class="logo-popup-sep"></div>
-                <a href="sobre.html" class="logo-popup-item">${navIcon('info', 16)} Sobre o Sistema</a>
-                ${temAcesso('configuracoes.empresa', 'visualizar')
-                    ? `<a href="empresa.html" class="logo-popup-item">${navIcon('settings', 16)} Configurar Empresa</a>`
-                    : ''}
-                <div class="logo-popup-sep"></div>
-                <button class="logo-popup-item logo-popup-logout" onclick="logout()">${navIcon('logout', 16)} Sair</button>
-            </div>
-        </div>
-        <nav class="nav-rows">${navHTML}</nav>`;
+        <nav class="nav-rows">${navHTML}</nav>
+        <div class="sidebar-rodape">
+            <button type="button" class="nav-item sidebar-sair" id="sidebar-sair" onclick="logout()" title="Sair do sistema">${navIcon('logout')}<span class="nav-text">Sair do sistema</span></button>
+            <button type="button" class="sidebar-pin" id="sidebar-pin-btn" onclick="alternarSidebarFixada(event)" aria-label="Fixar menu">📌</button>
+        </div>`;
     _aplicarSidebarFixada(fixada);
+    atualizarTopbar();
+    Notif.atualizar();
+}
+
+// --- BARRA SUPERIOR (fixa, em todas as paginas com a barra lateral) ---
+function _topbarDataTexto() {
+    const d = new Date();
+    return 'Hoje, ' + d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+function _topbarIniciais(nome) {
+    const p = String(nome || '').trim().split(/\s+/).filter(Boolean);
+    if (!p.length) return '?';
+    return ((p[0][0] || '') + (p.length > 1 ? p[p.length - 1][0] : '')).toLocaleUpperCase('pt-BR');
+}
+function atualizarTopbar() {
+    if (!document.getElementById('main-sidebar')) return;
+    const usuarioAtual = getUsuarioLogado();
+    const papelAtual = usuarioAtual ? db.papeis.find(p => p.id === usuarioAtual.papel_id) : null;
+    const emp = getEmpresa();
+    const nomeEmpresa = emp.nome_fantasia || emp.razao_social || 'SCTech';
+    const logoEmpresa = emp.logo_base64
+        ? `<img src="${emp.logo_base64}" alt="${escapeHtml(nomeEmpresa)}" class="topbar-logo-img sidebar-logo-empresa">`
+        : `<img src="images/logo.png" alt="SCTech" class="topbar-logo-img sidebar-logo-img">`;
+    const foto = usuarioAtual && usuarioAtual.foto_base64;
+    const u = usuarioAtual || JSON.parse(sessionStorage.getItem('sc_user') || '{}');
+    const nomeUsuario = nomeExibicao(u) || u.email || '—';
+    const avatarInterno = foto ? `<img src="${foto}" alt="">` : escapeHtml(_topbarIniciais(nomeUsuario));
+
+    let bar = document.getElementById('topbar');
+    const existia = !!bar;
+    if (!bar) {
+        bar = document.createElement('header');
+        bar.id = 'topbar';
+        bar.className = 'topbar';
+        document.body.insertBefore(bar, document.body.firstChild);
+    }
+    // O sino (#topbar-sino) e preenchido por outro modulo: preserva o conteudo ao redesenhar.
+    const sinoAtual = document.getElementById('topbar-sino');
+    const sinoHTML = sinoAtual ? sinoAtual.innerHTML : '';
+    bar.innerHTML = `
+        <div class="topbar-empresa" id="topbar-empresa" title="${escapeHtml(nomeEmpresa)}">
+            ${logoEmpresa}
+            <span class="topbar-nome-empresa">${escapeHtml(nomeEmpresa)}</span>
+        </div>
+        <div class="topbar-dir">
+            <button type="button" class="topbar-data" id="topbar-data" onclick="if (typeof abrirAgenda === 'function') abrirAgenda()" title="Agenda" aria-label="Agenda">
+                <svg class="nav-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><line x1="3.5" y1="10" x2="20.5" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg>
+                <span class="topbar-data-texto" id="topbar-data-texto">${escapeHtml(_topbarDataTexto())}</span>
+                <span class="topbar-data-seta" aria-hidden="true">▾</span>
+            </button>
+            <div class="topbar-sino" id="topbar-sino">${sinoHTML}</div>
+            <div class="logo-popup-wrap" id="logo-popup-wrap">
+                <button type="button" class="topbar-avatar${foto ? ' com-foto' : ''}" id="topbar-avatar" onclick="toggleLogoPopup(event)" title="${escapeHtml(nomeUsuario)}" aria-label="Menu do perfil">${avatarInterno}</button>
+                <div class="logo-popup" id="logo-popup">
+                    <div class="logo-popup-header">
+                        <div class="logo-popup-avatar${foto ? ' com-foto' : ''}">${foto ? `<img src="${foto}" alt="">` : navIcon('user', 18)}</div>
+                        <div><div class="logo-popup-name" id="popup-user-name">${escapeHtml(nomeUsuario)}</div><div class="logo-popup-role">${escapeHtml(papelAtual?.nome || 'Usuário SCTech')}</div></div>
+                    </div>
+                    <div class="logo-popup-sep"></div>
+                    <a href="configuracoes.html" class="logo-popup-item">${navIcon('user', 16)} Meu perfil</a>
+                    <div class="logo-popup-sep"></div>
+                    <a href="sobre.html" class="logo-popup-item">${navIcon('info', 16)} Sobre o Sistema</a>
+                    ${temAcesso('configuracoes.empresa', 'visualizar')
+                        ? `<a href="empresa.html" class="logo-popup-item">${navIcon('settings', 16)} Configurar Empresa</a>`
+                        : ''}
+                    <div class="logo-popup-sep"></div>
+                    <button class="logo-popup-item logo-popup-logout" onclick="logout()">${navIcon('logout', 16)} Sair</button>
+                </div>
+            </div>
+        </div>`;
+    if (!existia && !window._topbarRelogio) {
+        // A data muda na virada do dia, mesmo com a tela aberta.
+        window._topbarRelogio = setInterval(() => {
+            const el = document.getElementById('topbar-data-texto');
+            if (el) el.textContent = _topbarDataTexto();
+        }, 60000);
+    }
 }
 
 function initPageNavigation() {
@@ -1508,6 +1605,23 @@ const PAGINA_MODULO = {
     'empresa.html':       'configuracoes.empresa',
 };
 
+// O usuario logado pode abrir este link (ex.: 'pcp.html?view=medicoes')? Usa a mesma
+// regra do checkAuth para a pagina e, na Producao, a da sub-aba indicada em ?view=.
+const _PCP_VIEW_SUB = { kanban: 'producao.kanban', agenda: 'producao.agenda', medicoes: 'producao.medicoes' };
+function _hrefPermitido(href) {
+    const [caminho, qs] = String(href || '').split('#')[0].split('?');
+    const arquivo = (caminho.split('/').pop() || 'index.html').toLowerCase();
+    const exigidos = PAGINA_MODULO[arquivo];
+    if (!exigidos) return true;
+    const lista = Array.isArray(exigidos) ? exigidos : [exigidos];
+    if (!lista.some(m => temAcessoAlgumaSub(m, 'visualizar'))) return false;
+    if (arquivo === 'pcp.html') {
+        const sub = _PCP_VIEW_SUB[new URLSearchParams(qs || '').get('view')];
+        if (sub && !temAcesso(sub, 'visualizar')) return false;
+    }
+    return true;
+}
+
 async function hashSenha(senha) {
     const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(senha));
     return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -1662,14 +1776,11 @@ function prefsUsuario(u) {
 function _gravarMeuUsuario(alterar) {
     const eu = getUsuarioLogado();
     if (!eu) return null;
-    try {
-        const salvos = JSON.parse(localStorage.getItem('sc_usr'));
-        if (Array.isArray(salvos)) db.usuarios = salvos;
-    } catch (e) { /* fica com o que esta em memoria */ }
+    _dbRecarregarChave('sc_usr');
     const u = db.usuarios.find(x => x.id === eu.id);
     if (!u) return null;
     alterar(u);
-    try { localStorage.setItem('sc_usr', JSON.stringify(db.usuarios)); }
+    try { const t = JSON.stringify(db.usuarios); localStorage.setItem('sc_usr', t); _dbMarcarGravado('sc_usr', t); }
     catch (e) { toast('Não foi possível salvar (armazenamento cheio). Tente uma foto menor.', 'error', 5000); return null; }
     return u;
 }
@@ -1732,10 +1843,91 @@ function escolherFotoPerfil(input) {
     input.value = '';
     if (!f) return;
     if (!/^image\//.test(f.type)) { toast('Escolha um arquivo de imagem.', 'warning'); return; }
-    _resizeImageBase64(f, 256).then(b64 => {
+    const url = URL.createObjectURL(f);
+    const img = new Image();
+    img.onload = () => abrirAjusteFotoPerfil(img, url);
+    img.onerror = () => { URL.revokeObjectURL(url); toast('Não foi possível ler essa imagem.', 'warning'); };
+    img.src = url;
+}
+// Janela "Ajustar foto": arrastar para enquadrar + zoom; grava um quadrado 256x256.
+function abrirAjusteFotoPerfil(img, urlObj) {
+    const V = 260, SAIDA = 256, ZMAX = 4;
+    const w = img.naturalWidth, h = img.naturalHeight;
+    const base = V / Math.min(w, h);          // zoom 1 = a imagem cobre o circulo
+    let zoom = 1, ox = 0, oy = 0;             // ox/oy: deslocamento do centro da imagem
+    const o = document.createElement('div');
+    o.className = 'agd-modal-overlay';
+    o.id = 'ajuste-foto-overlay';
+    o.innerHTML = `<div class="agd-modal" role="dialog" aria-label="Ajustar foto" style="max-width:340px">
+        <div class="agd-modal-head"><h3>Ajustar foto</h3></div>
+        <div class="agd-modal-corpo" style="text-align:center">
+            <div id="ajuste-foto-area" style="width:${V}px;height:${V}px;margin:0 auto;border-radius:50%;overflow:hidden;position:relative;background:#222;touch-action:none;cursor:grab;user-select:none">
+                <img id="ajuste-foto-img" alt="" draggable="false" style="position:absolute;left:50%;top:50%;max-width:none;pointer-events:none">
+            </div>
+            <p style="font-size:12px;color:var(--muted);margin:8px 0 4px">Arraste para enquadrar</p>
+            <input type="range" id="ajuste-foto-zoom" min="1" max="${ZMAX}" step="0.01" value="1" aria-label="Zoom" style="width:80%">
+        </div>
+        <div class="agd-modal-acoes">
+            <button type="button" class="btn btn-outline" id="ajuste-foto-cancelar">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="ajuste-foto-salvar">Salvar foto</button>
+        </div></div>`;
+    document.body.appendChild(o);
+    const im = o.querySelector('#ajuste-foto-img');
+    im.src = img.src;
+    const area = o.querySelector('#ajuste-foto-area');
+    const aplicar = () => {
+        const sc = base * zoom;
+        const mx = Math.max(0, (w * sc - V) / 2), my = Math.max(0, (h * sc - V) / 2);
+        ox = Math.max(-mx, Math.min(mx, ox));
+        oy = Math.max(-my, Math.min(my, oy));
+        im.style.width = (w * sc) + 'px';
+        im.style.height = (h * sc) + 'px';
+        im.style.transform = `translate(calc(-50% + ${ox}px), calc(-50% + ${oy}px))`;
+    };
+    aplicar();
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); fechar(); } };
+    const fechar = () => {
+        document.removeEventListener('keydown', onKey, true);
+        o.remove();
+        URL.revokeObjectURL(urlObj);
+    };
+    document.addEventListener('keydown', onKey, true);
+    let arrasto = null;
+    area.addEventListener('pointerdown', e => {
+        arrasto = { x: e.clientX, y: e.clientY, ox, oy };
+        area.setPointerCapture(e.pointerId);
+        area.style.cursor = 'grabbing';
+    });
+    area.addEventListener('pointermove', e => {
+        if (!arrasto) return;
+        ox = arrasto.ox + (e.clientX - arrasto.x);
+        oy = arrasto.oy + (e.clientY - arrasto.y);
+        aplicar();
+    });
+    const soltar = () => { arrasto = null; area.style.cursor = 'grab'; };
+    area.addEventListener('pointerup', soltar);
+    area.addEventListener('pointercancel', soltar);
+    o.querySelector('#ajuste-foto-zoom').addEventListener('input', e => {
+        const antes = base * zoom;
+        zoom = parseFloat(e.target.value) || 1;
+        const k = (base * zoom) / antes;   // mantem o centro do circulo no mesmo ponto da imagem
+        ox *= k; oy *= k;
+        aplicar();
+    });
+    o.querySelector('#ajuste-foto-cancelar').onclick = fechar;
+    o.querySelector('#ajuste-foto-salvar').onclick = () => {
+        const c = document.createElement('canvas');
+        c.width = c.height = SAIDA;
+        const g = c.getContext('2d');
+        const f = SAIDA / V, sc = base * zoom * f;
+        g.fillStyle = '#fff';
+        g.fillRect(0, 0, SAIDA, SAIDA);
+        g.drawImage(img, SAIDA / 2 + ox * f - (w * sc) / 2, SAIDA / 2 + oy * f - (h * sc) / 2, w * sc, h * sc);
+        const b64 = c.toDataURL('image/jpeg', 0.9);
+        fechar();
         _perfilFoto = b64;
         _pintarFotoPerfil(b64, document.getElementById('perfil-nome')?.value);
-    });
+    };
 }
 function removerFotoPerfil() {
     _perfilFoto = '';
@@ -2249,8 +2441,13 @@ async function excluirUsuario(id) {
         return;
     }
 
-    if (!await showConfirm(`Excluir definitivamente o usuário "${u.nome}"?\n\nEsta ação não pode ser desfeita.`, '🗑️', 'Excluir')) return;
+    // Compromissos e bloqueios da agenda dele vao junto (nao ficam orfaos).
+    const prof = 'u:' + id;
+    const nAgenda = (db.agenda_eventos || []).filter(ev => ev && ev.prof === prof).length;
+    const agendaTxt = nAgenda ? ` e ${nAgenda} item(ns) da agenda dele` : '';
+    if (!await showConfirm(`Excluir definitivamente o usuário "${u.nome}"${agendaTxt}?\n\nEsta ação não pode ser desfeita.`, '🗑️', 'Excluir')) return;
     db.usuarios = db.usuarios.filter(x => x.id !== id);
+    if (nAgenda) db.agenda_eventos = db.agenda_eventos.filter(ev => !ev || ev.prof !== prof);
     salvarERecarregar('Usuário excluído.');
 }
 
@@ -2341,7 +2538,8 @@ function toggleLogoPopup(e) {
         const wrap = document.getElementById('logo-popup-wrap');
         const rect = wrap.getBoundingClientRect();
         popup.style.top  = (rect.bottom + 6) + 'px';
-        popup.style.left = rect.left + 'px';
+        popup.style.left = 'auto';
+        popup.style.right = Math.max(8, window.innerWidth - rect.right) + 'px';
         const u = getUsuarioLogado() || JSON.parse(sessionStorage.getItem('sc_user') || '{}');
         const el = document.getElementById('popup-user-name');
         if (el) el.textContent = nomeExibicao(u) || u.email || '—';
@@ -2365,8 +2563,9 @@ async function salvarCliente() {
     const cpf   = document.getElementById('cli-cpf')?.value.trim()   || '';
     const tel   = document.getElementById('cli-tel')?.value.trim()   || '';
     const email = document.getElementById('cli-email')?.value.trim() || '';
-    const end   = document.getElementById('cli-end')?.value.trim()   || '';
-    const cidade = document.getElementById('cli-cidade')?.value.trim() || '';
+    const partes = enderecoLer('cli');
+    const end = EnderecoCore.textoEndereco(partes);
+    const campos = { ...partes, end };
     if (cpf) {
         const cpfNorm = cpf.replace(/\D/g, '');
         const dup = db.clientes.find(c => c.cpf && c.cpf.replace(/\D/g, '') === cpfNorm && c.id != editandoIdCliente);
@@ -2374,11 +2573,11 @@ async function salvarCliente() {
     }
     if (editandoIdCliente) {
         const idx = db.clientes.findIndex(c => c.id == editandoIdCliente);
-        if (idx !== -1) db.clientes[idx] = { ...db.clientes[idx], nome, tel, email, cpf, end, cidade };
+        if (idx !== -1) db.clientes[idx] = { ...db.clientes[idx], nome, tel, email, cpf, ...campos };
         cancelarEdicaoCliente();
         salvarERecarregar('Cliente atualizado!');
     } else {
-        db.clientes.push({ id: Date.now(), nome, tel, email, cpf, end, cidade });
+        db.clientes.push({ id: Date.now(), nome, tel, email, cpf, ...campos });
         salvarERecarregar('Cliente cadastrado!');
     }
 }
@@ -2390,8 +2589,8 @@ function editarCliente(id) {
     document.getElementById('cli-tel').value   = c.tel   || '';
     document.getElementById('cli-email').value = c.email || '';
     document.getElementById('cli-cpf').value   = c.cpf   || '';
-    document.getElementById('cli-end').value   = c.end   || '';
-    document.getElementById('cli-cidade').value = c.cidade || '';
+    // Cadastro antigo (texto livre, sem "rua"): o texto inteiro vai para Rua e a cidade antiga continua.
+    enderecoPreencher('cli', c.rua === undefined ? EnderecoCore.partesDeRegistroAntigo(c.end, c.cidade) : c);
     const tit = document.getElementById('cli-form-titulo');
     const btn = document.getElementById('cli-btn-salvar');
     const cnc = document.getElementById('cli-btn-cancelar');
@@ -2403,7 +2602,8 @@ function editarCliente(id) {
 }
 function cancelarEdicaoCliente() {
     editandoIdCliente = null;
-    ['cli-nome','cli-tel','cli-email','cli-cpf','cli-end','cli-cidade'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['cli-nome','cli-tel','cli-email','cli-cpf'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    enderecoPreencher('cli', {});
     const tit = document.getElementById('cli-form-titulo');
     const btn = document.getElementById('cli-btn-salvar');
     const cnc = document.getElementById('cli-btn-cancelar');
@@ -2488,7 +2688,10 @@ function filtrarTabelaClientes() {
         : db.clientes;
     renderTabelaClientes(lista);
 }
-function _clienteEndCidade(c) { return [c.end, c.cidade].filter(Boolean).join(' — '); }
+// Endereco para documentos e telas: texto cadastrado + Cidade/UF e CEP quando o registro tem partes.
+function _endImpCliente(c) { return c ? EnderecoCore.textoComCidade(c.end, c) : ''; }
+function _endImpMed(m) { return m ? EnderecoCore.textoComCidade(m.endereco, m) : ''; }
+function _clienteEndCidade(c) { return [c.end, [c.cidade, c.cidade && c.uf].filter(Boolean).join('/')].filter(Boolean).join(' — '); }
 function renderTabelaClientes(lista) {
     const tb = document.getElementById('tb-clientes');
     if (!tb) return;
@@ -3843,6 +4046,45 @@ function salvarFiltroVendedorTela() {
     toast('Filtro de vendedor salvo!', 'success', 1800);
 }
 
+// Acao da lista de Pedidos (aprovar, mudar status, excluir...) recarrega a pagina:
+// so nesse recarregamento a lista volta com a mesma rolagem, busca, filtros e
+// ordem. Vindo do menu ou de um link, abre limpa e no topo. Devolve a funcao que
+// repoe a rolagem (chamar depois de desenhar a tabela) ou null.
+function _rolagemPedidosEl() { return document.querySelector('.main'); }
+function lembrarListaPedidosAoRecarregar(tela) {
+    const k = 'sc_lista_' + tela;
+    let salvo = null;
+    try { salvo = JSON.parse(sessionStorage.getItem(k) || 'null'); sessionStorage.removeItem(k); } catch (e) { /* sem sessionStorage */ }
+    window.addEventListener('beforeunload', () => {
+        try {
+            const main = _rolagemPedidosEl();
+            sessionStorage.setItem(k, JSON.stringify({
+                y: window.scrollY || 0, m: main ? main.scrollTop : 0,
+                texto: document.getElementById('filtro-texto')?.value || '',
+                status: document.getElementById('filtro-status')?.value || '',
+                vendedor: document.getElementById('filtro-vendedor')?.value || '',
+                col: dashboardState.col, dir: dashboardState.dir,
+            }));
+        } catch (e) { /* sem sessionStorage */ }
+    });
+    if (!salvo || !_paginaRecarregada()) return null;
+    const defTexto = document.getElementById('filtro-texto');
+    if (defTexto) defTexto.value = salvo.texto || '';
+    const selSt = document.getElementById('filtro-status');
+    if (selSt && [...selSt.options].some(o => o.value === salvo.status)) selSt.value = salvo.status;
+    const selVend = document.getElementById('filtro-vendedor');
+    if (selVend && [...selVend.options].some(o => o.value === salvo.vendedor)) selVend.value = salvo.vendedor;
+    if (salvo.col) { dashboardState.col = salvo.col; dashboardState.dir = salvo.dir === 1 ? 1 : -1; }
+    const aplicar = () => {
+        const main = _rolagemPedidosEl();
+        if (main) main.scrollTop = salvo.m || 0;
+        window.scrollTo(0, salvo.y || 0);
+    };
+    // antes de pintar a primeira vez (sem piscar no topo) e de novo quando tudo carregou
+    window.addEventListener('load', aplicar);
+    return aplicar;
+}
+
 // --- MENU DE ACOES (tres pontos) ---
 // Um menu flutuante so, reaproveitado por todas as linhas: abre junto do botao
 // (posicao fixa, para nao ser cortado pela tabela) e fecha no clique fora, no
@@ -3850,8 +4092,10 @@ function salvarFiltroVendedorTela() {
 // Se a lista do botao e redesenhada com o menu aberto (o botao sai da pagina), o
 // menu fecha: as acoes dele apontam para os ids de antes do redesenho.
 let _menuAcoesObservador = null;
+let _menuAcoesBotao = null;
 function _menuAcoesFechar() {
     if (_menuAcoesObservador) { _menuAcoesObservador.disconnect(); _menuAcoesObservador = null; }
+    _menuAcoesBotao = null;
     const m = document.getElementById('menu-acoes-flutuante');
     if (m) m.remove();
     document.querySelectorAll('.btn-kebab[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
@@ -3879,6 +4123,7 @@ function abrirMenuAcoes(ev, itens, botaoAlvo) {
     });
     document.body.appendChild(menu);
     botao.setAttribute('aria-expanded', 'true');
+    _menuAcoesBotao = botao;
     if (typeof MutationObserver === 'function') {
         _menuAcoesObservador = new MutationObserver(() => { if (!botao.isConnected) _menuAcoesFechar(); });
         _menuAcoesObservador.observe(document.body, { childList: true, subtree: true });
@@ -3894,8 +4139,12 @@ function abrirMenuAcoes(ev, itens, botaoAlvo) {
 }
 let _menuAcoesAbertoEm = 0;
 // rolagem que chega junto do clique (a tela trazendo o botao para a vista) nao fecha o menu
+// So fecha quando o que rolou leva o botao junto (a pagina ou a lista dele): outros
+// elementos rolando sozinhos (ex.: o card de Alertas do Painel) nao fecham o menu.
 function _menuAcoesAoRolar(e) {
     if (e && e.target && e.target.closest && e.target.closest('#menu-acoes-flutuante')) return;
+    const alvo = e && e.target;
+    if (_menuAcoesBotao && alvo && alvo.nodeType === 1 && !alvo.contains(_menuAcoesBotao)) return;
     if (performance.now() - _menuAcoesAbertoEm < 250) return;
     _menuAcoesFechar();
 }
@@ -4076,6 +4325,7 @@ const ALERTAS_TIPOS = {
     fin_gap:        { label: 'Gap de caixa (7 dias)',             icon: '⚠️' },
     fin_meta:       { label: 'Progresso da meta de faturamento',  icon: '🎯' },
     fin_tendencia:  { label: 'Tendência de faturamento mensal',   icon: '📈' },
+    compromisso:    { label: 'Lembretes de compromisso',          icon: '📌' },
 };
 
 function getAlertasCfg() {
@@ -4089,6 +4339,7 @@ function toggleAlertaTipo(tipo) {
     cfg[tipo] = !alertaAtivo(tipo);
     localStorage.setItem('sc_alertas_cfg', JSON.stringify(cfg));
     renderBellIndicator();
+    Notif.atualizar();
     renderEmpresaAlertasCfg();
 }
 function renderEmpresaAlertasCfg() {
@@ -4230,6 +4481,15 @@ function renderDashboardsButton() {
         ${DASH_LIST.map(([id,ic,lb])=>`<a href="dashboards.html?dash=${id}" style="display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;font-weight:500;color:var(--dark);text-decoration:none;white-space:nowrap" onmouseover="this.style.background='var(--light)'" onmouseout="this.style.background=''">${ic} <span>${lb}</span></a>`).join('<div style="height:1px;background:var(--border)"></div>')}
     </div>`;
     grp.insertBefore(wrap, grp.firstChild);
+    // Painel: o botao Agenda fica logo a esquerda de Dashboards.
+    if (document.getElementById('card-fat-mes') && !document.getElementById('btn-agenda')) {
+        const ag = document.createElement('button');
+        ag.type = 'button'; ag.id = 'btn-agenda'; ag.className = 'btn btn-outline btn-sm';
+        ag.style.cssText = 'display:flex;align-items:center;gap:5px;font-weight:600';
+        ag.setAttribute('onclick', 'abrirAgenda()');
+        ag.textContent = '📅 Agenda';
+        grp.insertBefore(ag, wrap);
+    }
 }
 
 // Abas menos usadas do Estoque, fora da barra principal: ficam num menu de
@@ -4278,112 +4538,221 @@ document.addEventListener('click', () => {
     if (m) m.style.display = 'none';
 });
 
+// ── ALERTAS DO SISTEMA (coletores do sino e do card do Painel) ──
+// Cada tipo de banner e um coletor registrado em Notif (js/notificacoes.js):
+// o card do Painel e o sino da barra superior leem a mesma lista, em qualquer pagina.
+const _ALERTA_CORES = {
+    danger: ['var(--danger-bg)', '#F79B90', 'var(--danger-text)'],
+    warn:   ['var(--warn-bg)',   '#F2C924', 'var(--warn-text)'],
+    info:   ['var(--info-bg)',   '#9FC4E5', 'var(--info-text)']
+};
+const _ALERTA_SEP = ' &nbsp;·&nbsp; ';
+const _alertaHoje = () => new Date().toISOString().split('T')[0];
+const _alertaDataBR = d => d.split('-').reverse().join('/');
+const _alertaIds = lista => lista.map(x => x.id).join(',');
+const _alertaLinkPedido = (p, cor, extra) =>
+    `<span style="cursor:pointer;color:${cor};font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}${extra || ''}</span>`;
+
+Notif.registrar('entregas-atrasadas', () => {
+    if (!alertaAtivo('entrega')) return [];
+    const hojeStr = _alertaHoje(), hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const lista = filtrarPedidosVisiveis(db.pedidos).filter(p =>
+        p.data_entrega && normalizarStatus(p.status) !== 'Instalado' && p.data_entrega < hojeStr);
+    if (!lista.length) return [];
+    const itens = lista.sort((a, b) => a.data_entrega.localeCompare(b.data_entrega)).map(p => {
+        const diasAtraso = Math.round((hoje - new Date(p.data_entrega + 'T00:00:00')) / 86400000);
+        return `<span style="cursor:pointer;color:var(--danger-text);font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})" title="${diasAtraso}d de atraso">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')} (${_alertaDataBR(p.data_entrega)})</span>`;
+    }).join(_ALERTA_SEP);
+    return [{ chave: 'entregas-atrasadas:' + _alertaIds(lista), icone: '🚨', cor: 'danger', urgente: true, href: 'pedidos.html',
+        titulo: `<strong>${lista.length} entrega(s) atrasada(s):</strong>`, texto: itens }];
+});
+
+Notif.registrar('entregas-hoje', () => {
+    if (!alertaAtivo('entrega')) return [];
+    const hojeStr = _alertaHoje();
+    const lista = filtrarPedidosVisiveis(db.pedidos).filter(p =>
+        p.data_entrega && normalizarStatus(p.status) !== 'Instalado' && p.data_entrega === hojeStr);
+    if (!lista.length) return [];
+    return [{ chave: 'entregas-hoje:' + _alertaIds(lista), icone: '🔔', cor: 'warn', urgente: false, href: 'pedidos.html',
+        titulo: `<strong>${lista.length} pedido(s)</strong> com entrega prevista para hoje:`,
+        texto: lista.map(p => _alertaLinkPedido(p, 'var(--warn-text)')).join(_ALERTA_SEP) }];
+});
+
+Notif.registrar('medicoes-atrasadas', () => {
+    if (!alertaAtivo('medicao')) return [];
+    const hojeStr = _alertaHoje();
+    const lista = filtrarMedicoesVisiveis(db.medicoes).filter(m => m.status === 'Agendado' && m.data < hojeStr);
+    if (!lista.length) return [];
+    const itens = lista.map(m =>
+        `<span style="cursor:pointer;color:var(--danger-text);font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')} (${_alertaDataBR(m.data)})</span>`
+    ).join(_ALERTA_SEP);
+    return [{ chave: 'medicoes-atrasadas:' + _alertaIds(lista), icone: '📐', cor: 'danger', urgente: true, href: 'pcp.html?view=medicoes',
+        titulo: `<strong>${lista.length} medição(ões)</strong> atrasada(s):`, texto: itens }];
+});
+
+Notif.registrar('medicoes-hoje', () => {
+    if (!alertaAtivo('medicao')) return [];
+    const hojeStr = _alertaHoje();
+    const lista = filtrarMedicoesVisiveis(db.medicoes).filter(m => m.status === 'Agendado' && m.data === hojeStr);
+    if (!lista.length) return [];
+    const itens = lista.map(m =>
+        `<span style="cursor:pointer;color:#2D77C1;font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')}${m.hora ? ' às ' + m.hora : ''}</span>`
+    ).join(_ALERTA_SEP);
+    return [{ chave: 'medicoes-hoje:' + _alertaIds(lista), icone: '📐', cor: 'info', urgente: false, href: 'pcp.html?view=medicoes',
+        titulo: `<strong>${lista.length} medição(ões)</strong> agendada(s) para hoje:`, texto: itens }];
+});
+
+const _ALERTA_INST_STATUS = ['Pronto p/ Instalação', 'Aguardando Financeiro'];
+Notif.registrar('instalacoes-atrasadas', () => {
+    if (!alertaAtivo('instalacao')) return [];
+    const hojeStr = _alertaHoje();
+    const lista = filtrarPedidosVisiveis(db.pedidos).filter(p =>
+        _ALERTA_INST_STATUS.includes(normalizarStatus(p.status)) && p.data_entrega && p.data_entrega < hojeStr);
+    if (!lista.length) return [];
+    const itens = lista.map(p => _alertaLinkPedido(p, 'var(--danger-text)', ` (${_alertaDataBR(p.data_entrega)})`)).join(_ALERTA_SEP);
+    return [{ chave: 'instalacoes-atrasadas:' + _alertaIds(lista), icone: '🔧', cor: 'danger', urgente: true, href: 'pedidos.html',
+        titulo: `<strong>${lista.length} instalação(ões)</strong> atrasada(s):`, texto: itens }];
+});
+
+Notif.registrar('instalacoes-hoje', () => {
+    if (!alertaAtivo('instalacao')) return [];
+    const hojeStr = _alertaHoje();
+    const lista = filtrarPedidosVisiveis(db.pedidos).filter(p =>
+        _ALERTA_INST_STATUS.includes(normalizarStatus(p.status)) && p.data_entrega === hojeStr);
+    if (!lista.length) return [];
+    const itens = lista.map(p => _alertaLinkPedido(p, '#2D77C1', p.inst_hora ? ' às ' + p.inst_hora : '')).join(_ALERTA_SEP);
+    return [{ chave: 'instalacoes-hoje:' + _alertaIds(lista), icone: '🔧', cor: 'info', urgente: false, href: 'pedidos.html',
+        titulo: `<strong>${lista.length} instalação(ões)</strong> agendada(s) para hoje:`, texto: itens }];
+});
+
+Notif.registrar('estoque-minimo', () => {
+    if (!alertaAtivo('estoque')) return [];
+    const tecidos = db.catalogo.filter(c => !temEstoqueInfinito(c) && c.min_estoque > 0 && estoqueDisponivel(c.id) < c.min_estoque);
+    const mats    = db.materiais.filter(m => !temEstoqueInfinito(m) && m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque);
+    const total = tecidos.length + mats.length;
+    if (!total) return [];
+    const itens = [
+        ...tecidos.map(c => `<span style="cursor:pointer;color:var(--warn-text);font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(c.nome)}: ${estoqueDisponivel(c.id).toFixed(2)} m (mín. ${c.min_estoque} m)</span>`),
+        ...mats.map(m => `<span style="cursor:pointer;color:var(--warn-text);font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(m.nome)}: ${(m.estoque_atual||0).toFixed(2)} ${m.unidade||''} (mín. ${m.min_estoque})</span>`)
+    ].join(_ALERTA_SEP);
+    return [{ chave: 'estoque-minimo:' + tecidos.map(c => 't' + c.id).concat(mats.map(m => 'm' + m.id)).join(','),
+        icone: '⚠️', cor: 'warn', urgente: false, href: 'estoque.html',
+        titulo: `<strong>${total} item(ns)</strong> com estoque abaixo do mínimo:`, texto: itens }];
+});
+
+// Aceite de medicao/instalacao destinada a outro usuario (ver "ACEITE" mais abaixo).
+// Quem recebeu: pedido persistente, com Aceitar e Recusar, ate responder.
+Notif.registrar('aceite-recebidos', () => {
+    const u = getUsuarioLogado();
+    if (!u) return [];
+    const out = [];
+    (db.medicoes || []).forEach(m => {
+        if (m.status !== 'Agendado' || !_aceitePend(m.aceite) || m.usuario_id !== u.id || _aceiteVencido(m.data, m.hora)) return;
+        out.push({ chave: 'aceite-med:' + m.id + ':' + m.aceite.em, icone: '📐', cor: 'warn', urgente: true, persistente: true,
+            href: 'pcp.html?view=medicoes', titulo: '',
+            texto: escapeHtml(`Você recebeu a medição de ${m.clienteNome || 'cliente'} em ${_aceiteQuando(m.data, m.hora)}.`),
+            acoes: _aceiteAcoes('med', m.id) });
+    });
+    (db.pedidos || []).forEach(p => {
+        if (!_instPendente(p) || !_aceitePend(p.inst_aceite) || p.usuario_instalacao_id !== u.id || _aceiteVencido(p.data_entrega, p.inst_hora)) return;
+        out.push({ chave: 'aceite-inst:' + p.id + ':' + p.inst_aceite.em, icone: '🔧', cor: 'warn', urgente: true, persistente: true,
+            href: 'pcp.html?view=agenda', titulo: '',
+            texto: escapeHtml(`Você recebeu a instalação do pedido #${formatPedidoId(p.id)} (${p.clienteNome || 'cliente'}) em ${_aceiteQuando(p.data_entrega, p.inst_hora)}.`),
+            acoes: _aceiteAcoes('inst', p.id) });
+    });
+    return out;
+});
+
+// Quem destinou: "aceitou" (some 7 dias depois da resposta) e "recusou" (fica ate reagendar,
+// com o botao Reagendar).
+const _ACEITE_DIAS_AVISO = 7;
+Notif.registrar('aceite-respostas', () => {
+    const u = getUsuarioLogado();
+    if (!u) return [];
+    const out = [];
+    const limite = Date.now() - _ACEITE_DIAS_AVISO * 86400000;
+    (db.medicoes || []).forEach(m => {
+        if (m.status === 'Agendado' && m.aceite && m.aceite.status === 'aceito' && m.aceite.por === u.id && m.aceite.resp_em && m.aceite.resp_em > limite) {
+            out.push({ chave: 'aceite-ok-med:' + m.id + ':' + m.aceite.resp_em, icone: '✅', cor: 'info', urgente: false, titulo: '',
+                href: 'pcp.html?view=medicoes',
+                texto: escapeHtml(`${nomeUsuario(m.usuario_id)} aceitou a medição de ${m.clienteNome || 'cliente'} (${_aceiteQuando(m.data, m.hora, true)}).`) });
+        }
+        // Pedido de aceite vencido sem resposta: quem destinou e avisado para reagendar.
+        if (m.status === 'Agendado' && _aceitePend(m.aceite) && m.aceite.por === u.id && _aceiteVencido(m.data, m.hora)) {
+            out.push({ chave: 'aceite-vencido-med:' + m.id + ':' + m.aceite.em, icone: '⏰', cor: 'danger', urgente: true, titulo: '',
+                href: 'pcp.html?view=medicoes',
+                texto: escapeHtml(`${nomeUsuario(m.usuario_id)} não respondeu à medição de ${m.clienteNome || 'cliente'} (${_aceiteQuando(m.data, m.hora, true)}). Reagende.`),
+                acoes: [{ rotulo: 'Reagendar', fn: `aceiteReagendar('med',${m.id})` }] });
+        }
+        if (m.status === 'A reagendar' && m.recusa && m.recusa.para === u.id) {
+            out.push({ chave: 'aceite-recusa-med:' + m.id + ':' + m.recusa.em, icone: '⚠️', cor: 'danger', urgente: true, titulo: '',
+                href: 'pcp.html?view=medicoes',
+                texto: escapeHtml(`${nomeUsuario(m.recusa.por)} recusou a medição de ${m.clienteNome || 'cliente'}: ${m.recusa.motivo}`),
+                acoes: [{ rotulo: 'Reagendar', fn: `aceiteReagendar('med',${m.id})` }] });
+        }
+    });
+    (db.pedidos || []).forEach(p => {
+        const a = p.inst_aceite, r = p.inst_recusa;
+        if (_instPendente(p) && a && a.status === 'aceito' && a.por === u.id && a.resp_em && a.resp_em > limite) {
+            out.push({ chave: 'aceite-ok-inst:' + p.id + ':' + a.resp_em, icone: '✅', cor: 'info', urgente: false, titulo: '',
+                href: 'pcp.html?view=agenda',
+                texto: escapeHtml(`${nomeUsuario(p.usuario_instalacao_id)} aceitou a instalação do pedido #${formatPedidoId(p.id)} (${_aceiteQuando(p.data_entrega, p.inst_hora, true)}).`) });
+        }
+        if (_instPendente(p) && _aceitePend(a) && a.por === u.id && _aceiteVencido(p.data_entrega, p.inst_hora)) {
+            out.push({ chave: 'aceite-vencido-inst:' + p.id + ':' + a.em, icone: '⏰', cor: 'danger', urgente: true, titulo: '',
+                href: 'pcp.html?view=agenda',
+                texto: escapeHtml(`${nomeUsuario(p.usuario_instalacao_id)} não respondeu à instalação do pedido #${formatPedidoId(p.id)} (${_aceiteQuando(p.data_entrega, p.inst_hora, true)}). Reagende.`),
+                acoes: [{ rotulo: 'Reagendar', fn: `aceiteReagendar('inst',${p.id})` }] });
+        }
+        if (r && r.para === u.id && normalizarStatus(p.status) === 'Pronto p/ Instalação' && !_instAgendada(p)) {
+            out.push({ chave: 'aceite-recusa-inst:' + p.id + ':' + r.em, icone: '⚠️', cor: 'danger', urgente: true, titulo: '',
+                href: 'pcp.html?view=agenda',
+                texto: escapeHtml(`${nomeUsuario(r.por)} recusou a instalação do pedido #${formatPedidoId(p.id)}: ${r.motivo}`),
+                acoes: [{ rotulo: 'Reagendar', fn: `aceiteReagendar('inst',${p.id})` }] });
+        }
+    });
+    return out;
+});
+
+// Outra aba gravou: traz para a memoria o que os alertas leem.
+// So troca o array quando o texto gravado mudou (ver _dbRecarregarChave).
+const _NOTIF_CHAVES_DB = ['sc_ped', 'sc_med', 'sc_cat', 'sc_mat', 'sc_est', 'sc_mov', 'sc_usr', 'sc_pap', 'sc_agd_ev'];
+function _notifRecarregarDB(chave) {
+    if (_NOTIF_CHAVES_DB.includes(chave)) _dbRecarregarChave(chave);
+}
+
+function _alertaBannerHTML(it) {
+    const [bg, bord, txt] = _ALERTA_CORES[it.cor] || _ALERTA_CORES[it.urgente ? 'danger' : 'warn'];
+    const acao = Notif.acoesDe(it)
+        .map(a => `<button type="button" class="btn ${a.sec ? 'btn-outline' : 'btn-primary'} btn-sm" data-alerta-acao="${escapeHtml(a.fn)}">${escapeHtml(a.rotulo)}</button>`).join('');
+    return `<div data-urgente="${it.urgente ? 1 : 0}" data-chave="${escapeHtml(it.chave)}" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:${bg};border:1px solid ${bord};border-radius:8px;padding:10px 16px;font-size:13px">
+            <span style="font-size:17px;flex-shrink:0">${it.icone || '🔔'}</span>
+            <span style="color:${txt}">${it.titulo || ''}</span>
+            <span>${it.texto || ''}</span>${acao}
+        </div>`;
+}
+
 function renderDashboardAlertas() {
+    Notif.desenharSino();
+    _renderCardAlertas();
+}
+
+function _renderCardAlertas() {
     const el = document.getElementById('dashboard-alertas');
     if (!el) return;
-    const hojeStr = new Date().toISOString().split('T')[0];
-    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    const banners = [];
-
-    // vermelho = atrasado (urgente): a preferencia "so as urgentes" mantem so estes
-    const mkBanner = (icon, bg, bord, textClr, titulo, itens) =>
-        `<div data-urgente="${bg === 'var(--danger-bg)' ? 1 : 0}" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:${bg};border:1px solid ${bord};border-radius:8px;padding:10px 16px;font-size:13px">
-            <span style="font-size:17px;flex-shrink:0">${icon}</span>
-            <span style="color:${textClr}">${titulo}</span>
-            <span>${itens}</span>
-        </div>`;
-
-    // Pedidos com entrega atrasada ou hoje
-    if (alertaAtivo('entrega')) {
-        const entregasAtrasadas = filtrarPedidosVisiveis(db.pedidos).filter(p => {
-            if (!p.data_entrega || normalizarStatus(p.status) === 'Instalado') return false;
-            return p.data_entrega < hojeStr;
+    if (!el._notifClique) {
+        // Abrir um alerta no card tambem o marca como visto no sino.
+        el._notifClique = true;
+        el.addEventListener('click', e => {
+            const b = e.target.closest('[data-chave]');
+            if (!b || !el.contains(b)) return;
+            const ac = e.target.closest('[data-alerta-acao]');
+            Notif.marcarVisto(b.dataset.chave);
+            if (ac) { try { new Function(ac.dataset.alertaAcao)(); } catch (err) { console.error(err); } }
         });
-        if (entregasAtrasadas.length) {
-            const itens = entregasAtrasadas
-                .sort((a, b) => a.data_entrega.localeCompare(b.data_entrega))
-                .map(p => {
-                    const diasAtraso = Math.round((hoje - new Date(p.data_entrega + 'T00:00:00')) / 86400000);
-                    return `<span style="cursor:pointer;color:var(--danger-text);font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})" title="${diasAtraso}d de atraso">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')} (${p.data_entrega.split('-').reverse().join('/')})</span>`;
-                }).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('🚨', 'var(--danger-bg)', '#F79B90', 'var(--danger-text)',
-                `<strong>${entregasAtrasadas.length} entrega(s) atrasada(s):</strong>`, itens));
-        }
-
-        const entregasHoje = filtrarPedidosVisiveis(db.pedidos).filter(p => {
-            if (!p.data_entrega || normalizarStatus(p.status) === 'Instalado') return false;
-            return p.data_entrega === hojeStr;
-        });
-        if (entregasHoje.length) {
-            const itens = entregasHoje.map(p =>
-                `<span style="cursor:pointer;color:var(--warn-text);font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}</span>`
-            ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('🔔', 'var(--warn-bg)', '#F2C924', 'var(--warn-text)',
-                `<strong>${entregasHoje.length} pedido(s)</strong> com entrega prevista para hoje:`, itens));
-        }
     }
-
-    // Medições atrasadas + hoje
-    if (alertaAtivo('medicao')) {
-        const medicAtrasadas = filtrarMedicoesVisiveis(db.medicoes).filter(m => m.status === 'Agendado' && m.data < hojeStr);
-        if (medicAtrasadas.length) {
-            const itens = medicAtrasadas.map(m =>
-                `<span style="cursor:pointer;color:var(--danger-text);font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')} (${m.data.split('-').reverse().join('/')})</span>`
-            ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('📐', 'var(--danger-bg)', '#F79B90', 'var(--danger-text)',
-                `<strong>${medicAtrasadas.length} medição(ões)</strong> atrasada(s):`, itens));
-        }
-        const medicHoje = filtrarMedicoesVisiveis(db.medicoes).filter(m => m.status === 'Agendado' && m.data === hojeStr);
-        if (medicHoje.length) {
-            const itens = medicHoje.map(m =>
-                `<span style="cursor:pointer;color:#2D77C1;font-weight:600;text-decoration:underline" onclick="location.href='pcp.html?view=medicoes'">${escapeHtml(m.clienteNome||'—')}${m.hora ? ' às ' + m.hora : ''}</span>`
-            ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('📐', 'var(--info-bg)', '#9FC4E5', 'var(--info-text)',
-                `<strong>${medicHoje.length} medição(ões)</strong> agendada(s) para hoje:`, itens));
-        }
-    }
-
-    // Instalações atrasadas + hoje
-    if (alertaAtivo('instalacao')) {
-        const instStatus = ['Pronto p/ Instalação', 'Aguardando Financeiro'];
-        const instAtrasadas = filtrarPedidosVisiveis(db.pedidos).filter(p =>
-            instStatus.includes(normalizarStatus(p.status)) && p.data_entrega && p.data_entrega < hojeStr);
-        if (instAtrasadas.length) {
-            const itens = instAtrasadas.map(p =>
-                `<span style="cursor:pointer;color:var(--danger-text);font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')} (${p.data_entrega.split('-').reverse().join('/')})</span>`
-            ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('🔧', 'var(--danger-bg)', '#F79B90', 'var(--danger-text)',
-                `<strong>${instAtrasadas.length} instalação(ões)</strong> atrasada(s):`, itens));
-        }
-        const instHoje = filtrarPedidosVisiveis(db.pedidos).filter(p =>
-            instStatus.includes(normalizarStatus(p.status)) && p.data_entrega === hojeStr);
-        if (instHoje.length) {
-            const itens = instHoje.map(p =>
-                `<span style="cursor:pointer;color:#2D77C1;font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}${p.inst_hora ? ' às ' + p.inst_hora : ''}</span>`
-            ).join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('🔧', 'var(--info-bg)', '#9FC4E5', 'var(--info-text)',
-                `<strong>${instHoje.length} instalação(ões)</strong> agendada(s) para hoje:`, itens));
-        }
-    }
-
-    // Estoque crítico (tecidos + materiais)
-    if (alertaAtivo('estoque')) {
-        const tecidosCriticos = db.catalogo.filter(c => !temEstoqueInfinito(c) && c.min_estoque > 0 && estoqueDisponivel(c.id) < c.min_estoque);
-        const matCriticos     = db.materiais.filter(m => !temEstoqueInfinito(m) && m.min_estoque > 0 && (m.estoque_atual || 0) < m.min_estoque);
-        const totalCriticos   = tecidosCriticos.length + matCriticos.length;
-        if (totalCriticos) {
-            const itens = [
-                ...tecidosCriticos.map(c => `<span style="cursor:pointer;color:var(--warn-text);font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(c.nome)}: ${estoqueDisponivel(c.id).toFixed(2)} m (mín. ${c.min_estoque} m)</span>`),
-                ...matCriticos.map(m => `<span style="cursor:pointer;color:var(--warn-text);font-weight:600;text-decoration:underline" onclick="location.href='estoque.html'">${escapeHtml(m.nome)}: ${(m.estoque_atual||0).toFixed(2)} ${m.unidade||''} (mín. ${m.min_estoque})</span>`)
-            ].join(' &nbsp;·&nbsp; ');
-            banners.push(mkBanner('⚠️', 'var(--warn-bg)', '#F2C924', 'var(--warn-text)',
-                `<strong>${totalCriticos} item(ns)</strong> com estoque abaixo do mínimo:`, itens));
-        }
-    }
-
     const prefNotif = prefsUsuario().notificacoes;
-    if (prefNotif === 'urgentes') banners.splice(0, banners.length, ...banners.filter(b => b.includes('data-urgente="1"')));
-    else if (prefNotif === 'nenhuma') banners.length = 0;
+    const banners = Notif.listar().map(_alertaBannerHTML);
 
     // Contador no cabeçalho do card
     const countEl = document.getElementById('dash-alertas-count');
@@ -4425,7 +4794,7 @@ function renderDashboardAlertas() {
                     el.scrollTo({ top: 0, behavior: 'smooth' });
                     setTimeout(() => {
                         if (document.getElementById('dashboard-alertas') === el) {
-                            renderDashboardAlertas();
+                            _renderCardAlertas();
                         }
                     }, 800);
                 }, 2000);
@@ -6952,7 +7321,8 @@ Volte o pedido para Orçamento para editar.`, '🔒');
             // Agendamento de instalacao e vinculo com o instalador sobrevivem a edicao
             // (so se ja existiam; o formulario do pedido nao os edita).
             ['inst_agendado', 'inst_hora', 'inst_duracao', 'inst_obs', 'inst_endereco', 'inst_cidade',
-             'inst_historico', 'inst_confirmada_em', 'usuario_instalacao_id', 'instalador_nome']
+             'inst_cep', 'inst_rua', 'inst_numero', 'inst_complemento', 'inst_bairro', 'inst_uf',
+             'inst_historico', 'inst_confirmada_em', 'usuario_instalacao_id', 'instalador_nome', 'inst_aceite', 'inst_recusa']
                 .forEach(k => { if (db.pedidos[index][k] !== undefined) dadosPedido[k] = db.pedidos[index][k]; });
             dadosPedido.comissao_paga     = db.pedidos[index].comissao_paga     || false;
             dadosPedido.comissao_data_pgto = db.pedidos[index].comissao_data_pgto || null;
@@ -7849,7 +8219,7 @@ function _htmlProposta(ped, cliente, diasValidade, layout) {
     const entrega = ped.data_entrega ? new Date(ped.data_entrega + 'T12:00:00').toLocaleDateString('pt-BR') : '';
     const valores = Object.assign(valoresComunsEmpresa(), {
         cliente: cliente ? cliente.nome : (ped.clienteNome || ''),
-        cliente_telefone: cliente?.tel || '', cliente_email: cliente?.email || '', cliente_endereco: cliente?.end || '',
+        cliente_telefone: cliente?.tel || '', cliente_email: cliente?.email || '', cliente_endereco: cliente ? _endImpCliente(cliente) : '',
         numero: formatPedidoId(ped.id), data_emissao: hoje, validade, diasValidade,
         total: 'R$ ' + (ped.valor || 0).toFixed(2), previsao_entrega: entrega,
         vendedor: ped.vendedor_nome || '', forma_pagamento: formaPagamentoDoPedido(ped)
@@ -7897,7 +8267,7 @@ function _htmlProposta(ped, cliente, diasValidade, layout) {
             ${cliente&&cliente.cpf   ? `<p>CPF: ${escapeHtml(cliente.cpf)}</p>`     : ''}
             ${cliente&&cliente.tel   ? `<p>Tel: ${escapeHtml(cliente.tel)}</p>`     : ''}
             ${cliente&&cliente.email ? `<p>${escapeHtml(cliente.email)}</p>`        : ''}
-            ${cliente&&cliente.end   ? `<p>${escapeHtml(cliente.end)}</p>`          : ''}
+            ${cliente&&cliente.end   ? `<p>${escapeHtml(_endImpCliente(cliente))}</p>`  : ''}
         </div>`,
         ambientes: `
         <table class="proposta-tabela">
@@ -7967,7 +8337,7 @@ function _dadosExportacao(marcaFase0) {
         fornecedores: db.fornecedores, pedidos_compra: db.pedidos_compra, carrinhos: db.carrinhos,
         contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, despesas_fixas: db.despesas_fixas,
         contas_fin: db.contas_fin, meios_pag: db.meios_pag, movimentos_fin: db.movimentos_fin, fechamentos_fin: db.fechamentos_fin,
-        medicoes: db.medicoes, rotas: db.rotas || [],
+        medicoes: db.medicoes, rotas: db.rotas || [], agenda_eventos: db.agenda_eventos || [],
         fin_metas: _lerObjetoLS('sc_fin_metas'), fin_orcamento_mes: _lerObjetoLS('sc_fin_orcamento_mes'),
         empresa: getEmpresa(), formas_pag: getFormasPagamentoCfg(),
         import_perfis: db.import_perfis || [],
@@ -8019,6 +8389,7 @@ function importarDados(event) {
             db.despesas_fixas = dados.despesas_fixas || [];
             db.medicoes       = dados.medicoes       || [];
             db.rotas          = Array.isArray(dados.rotas) ? dados.rotas : [];
+            db.agenda_eventos = Array.isArray(dados.agenda_eventos) ? dados.agenda_eventos : [];
             db.contas_fin     = dados.contas_fin     || [];
             db.meios_pag      = dados.meios_pag      || [];
             db.movimentos_fin = dados.movimentos_fin || [];
@@ -10749,11 +11120,23 @@ function onMedClienteChange() {
     const sel = document.getElementById('med-cliente-id');
     if (!sel || !sel.value) return;
     const cli = db.clientes.find(c => c.id == sel.value);
-    if (!cli) return;
-    const endEl = document.getElementById('med-end');
-    if (endEl && cli.end) endEl.value = cli.end;
-    const cidEl = document.getElementById('med-cidade');
-    if (cidEl) cidEl.value = cli.cidade || '';
+    if (!cli || !(cli.end || cli.rua)) return;   // cliente sem endereco nao apaga o que ja foi digitado
+    enderecoPreencher('med', _partesDoCliente(cli));
+}
+
+// Partes do endereco do cliente; cliente antigo (sem "rua") vira Rua = texto antigo inteiro.
+function _partesDoCliente(cli) {
+    if (!cli) return EnderecoCore.partesDeRegistroAntigo('', '');
+    return cli.rua === undefined ? EnderecoCore.partesDeRegistroAntigo(cli.end, cli.cidade) : cli;
+}
+// Monta os campos de endereco das telas de agendamento (medicao e instalacao).
+function _agdMontarEnderecosMed() {
+    const m = document.getElementById('med-end-campos');
+    if (m && !document.getElementById('med-rua')) { m.innerHTML = enderecoCamposHtml('med', { obrigRua: true, ir: true }); enderecoAnexar('med'); }
+}
+function _agdMontarEnderecosInst() {
+    const i = document.getElementById('inst-end-campos');
+    if (i && !document.getElementById('inst-rua')) { i.innerHTML = enderecoCamposHtml('inst', { obrigRua: false, ir: true }); enderecoAnexar('inst'); }
 }
 
 // Pedido ligado ao agendamento de medicao. O vinculo vale nos dois sentidos
@@ -10801,7 +11184,6 @@ async function salvarMedicao() {
     const tipo = document.querySelector('input[name="med-tipo"]:checked')?.value || 'existente';
     let clienteId = null, clienteNome = '', clienteTel = '';
     let clienteCpf = '', clienteEmail = '';
-    const cidade = (document.getElementById('med-cidade')?.value || '').trim();
 
     if (tipo === 'existente') {
         clienteId = parseInt(document.getElementById('med-cliente-id')?.value) || null;
@@ -10810,8 +11192,7 @@ async function salvarMedicao() {
         if (cli) {
             clienteNome = cli.nome;
             clienteTel  = cli.tel || '';
-            const endEl = document.getElementById('med-end');
-            if (endEl && !endEl.value.trim() && cli.end) endEl.value = cli.end;
+            if (!enderecoLer('med').rua && cli.end) enderecoPreencher('med', _partesDoCliente(cli));
         }
     } else {
         clienteNome  = (document.getElementById('med-novo-nome')?.value || '').trim();
@@ -10828,12 +11209,14 @@ async function salvarMedicao() {
 
     const data = (document.getElementById('med-data')?.value || '').trim();
     const hora = (document.getElementById('med-hora')?.value || '').trim();
-    const end  = (document.getElementById('med-end')?.value  || '').trim();
+    const partes = enderecoLer('med');
+    const end  = EnderecoCore.textoEndereco(partes);
+    const cidade = partes.cidade;
     const obs  = (document.getElementById('med-obs')?.value  || '').trim();
     const dur  = parseInt(document.getElementById('med-dur')?.value) || _agdDurPadrao('med');
     const prof = _agdLerProf('med-prof');
     if (!data) { await showAlert('Informe a data da visita.', '⚠️'); return; }
-    if (!end)  { await showAlert('Informe o endereço da visita.', '⚠️'); return; }
+    if (!partes.rua) { await showAlert('Informe o endereço da visita.', '⚠️'); return; }
 
     // Com profissional definido a visita ocupa a agenda dele: precisa de
     // horário e é conferida de novo contra instalações e medições já gravadas.
@@ -10847,7 +11230,7 @@ async function salvarMedicao() {
 
     // Só depois de tudo validado o novo cliente é cadastrado.
     if (tipo === 'novo') {
-        const novoCli = { id: Date.now(), nome: clienteNome, tel: clienteTel, email: clienteEmail, cpf: clienteCpf, end, cidade };
+        const novoCli = { id: Date.now(), nome: clienteNome, tel: clienteTel, email: clienteEmail, cpf: clienteCpf, ...partes, end };
         db.clientes.push(novoCli);
         clienteId = novoCli.id;
         const sel = document.getElementById('med-cliente-id');
@@ -10855,9 +11238,10 @@ async function salvarMedicao() {
             db.clientes.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
     }
 
-    const med = { id: Date.now(), clienteId, clienteNome, clienteTel, endereco: end, cidade, data, hora, duracao: dur, obs, status: 'Agendado',
+    const med = { id: Date.now(), clienteId, clienteNome, clienteTel, ...partes, endereco: end, data, hora, duracao: dur, obs, status: 'Agendado',
         agendado_por: getUsuarioLogado()?.id || null, agendado_em: Date.now() };
     _medDefinirResponsavel(med, prof.pessoa);
+    _aceiteAplicar(med, 'aceite', null, med.usuario_id, data, hora);
     db.medicoes.push(med);
 
     const nomeEl  = document.getElementById('med-novo-nome');  if (nomeEl)  nomeEl.value  = '';
@@ -10867,8 +11251,7 @@ async function salvarMedicao() {
     document.getElementById('med-data').value = _agdHoje();
     _agdPickerFechar();
     document.getElementById('med-hora').value = '';
-    document.getElementById('med-end').value  = '';
-    const cidLimpa = document.getElementById('med-cidade'); if (cidLimpa) cidLimpa.value = '';
+    enderecoPreencher('med', {});
     document.getElementById('med-obs').value  = '';
     _agdPreencherProf('med-prof', '', '— A definir —');
     _agdPreencherDur('med-dur', 'med');
@@ -10914,7 +11297,7 @@ function gerarHTMLAgendamentoMedicao(v, layout) {
     const valores = Object.assign(valoresComunsEmpresa(), {
         cliente: v.clienteNome || '', cliente_telefone: v.clienteTel || '',
         data_visita: d.toLocaleDateString('pt-BR'), horario: v.hora ? horaFmt : '',
-        responsavel: _medNomeResp(v), endereco_visita: v.endereco || '', id: v.id
+        responsavel: _medNomeResp(v), endereco_visita: _endImpMed(v), id: v.id
     });
     const secTitle = id => {
         const t = blocoDoLayout(layout, id).titulo;
@@ -10940,13 +11323,13 @@ function gerarHTMLAgendamentoMedicao(v, layout) {
             ['Telefone / WhatsApp', escapeHtml(v.clienteTel || '')],
             ['E-mail', escapeHtml(cli?.email || '')],
             ['CPF / CNPJ', escapeHtml(cli?.cpf || '')],
-            ['Endereço cadastrado', escapeHtml(cli?.end || '')]
+            ['Endereço cadastrado', escapeHtml(cli ? _endImpCliente(cli) : '')]
         ]),
         agendamento: dados('agendamento', [
             ['Data da visita', dataFmt],
             ['Horário', horaFmt],
             ['Responsável', escapeHtml(_medNomeResp(v))],
-            ['Endereço da visita', escapeHtml(v.endereco || '')],
+            ['Endereço da visita', escapeHtml(_endImpMed(v))],
             ['Observações', escapeHtml(v.obs || '')]
         ]),
         assinatura: `
@@ -11003,6 +11386,8 @@ const _AGD_PILLS = {
     instalado: ['Instalado',         'agd-pill-verde'],
     pagamento: ['Aguard. financeiro', 'agd-pill-amar'],
     semdata:   ['Sem data',          'agd-pill-cinza'],
+    aceite:    ['Aguardando aceite', 'agd-pill-amar'],
+    reagendar: ['A reagendar',       'agd-pill-verm'],
 };
 function _agdPill(tipo) {
     const [txt, cls] = _AGD_PILLS[tipo] || _AGD_PILLS.agendado;
@@ -11034,17 +11419,119 @@ function _agdLinha(o) {
 function _agdEnd(endereco, cidade) {
     return typeof RotasCore !== 'undefined' ? RotasCore.enderecoCompleto(endereco, cidade) : String(endereco || '').trim();
 }
-function linkIrParaHtml(endereco, classe, cidade) {
-    const url = typeof RotasCore !== 'undefined' ? RotasCore.linkIrPara(_agdEnd(endereco, cidade)) : '';
+// Endereco que vai ao mapa: registro com partes usa as partes; antigo, texto + cidade como sempre.
+function _partesMedMapa(m) { return m && m.rua !== undefined ? m : null; }
+function _partesInstMapa(p, cli) {
+    if (_instVazia(p)) return cli && cli.rua !== undefined ? cli : null;
+    if (p.inst_rua !== undefined) return _instPartes(p, cli);
+    if (!p.inst_endereco && cli && cli.rua !== undefined) return cli;
+    return null;
+}
+function _endMed(m) {
+    const pt = _partesMedMapa(m);
+    return pt && typeof RotasCore !== 'undefined' ? RotasCore.enderecoDePartes(pt) : _agdEnd(m.endereco, m.cidade);
+}
+function _endInst(p, cli) {
+    if (_instVazia(p)) return cli ? _endCliente(cli) : '';
+    const pt = _partesInstMapa(p, cli);
+    return pt && typeof RotasCore !== 'undefined' ? RotasCore.enderecoDePartes(pt) : _agdEnd(p.inst_endereco || cli?.end, _instCidade(p, cli));
+}
+function _endCliente(cli) {
+    return cli.rua !== undefined && typeof RotasCore !== 'undefined' ? RotasCore.enderecoDePartes(cli) : _agdEnd(cli.end, cli.cidade);
+}
+function linkIrParaHtml(endereco, classe) {
+    const url = typeof RotasCore !== 'undefined' ? RotasCore.linkIrPara(_agdEnd(endereco)) : '';
     if (!url) return '';
     return `<a class="${classe || 'agd-ir'}" href="${escapeHtml(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()" title="Abrir o caminho no Google Maps">📍 Ir</a>`;
 }
-// Botao ao lado de um campo de endereco: le o que esta digitado.
-async function irParaEndereco(campoId, cidadeId) {
-    const end = (document.getElementById(campoId)?.value || '').trim();
-    if (!end) { await showAlert('Digite o endereço primeiro.', '📍'); return; }
-    const cidade = cidadeId ? (document.getElementById(cidadeId)?.value || '') : '';
-    window.open(RotasCore.linkIrPara(_agdEnd(end, cidade)), '_blank', 'noopener');
+// --- Endereco em partes (CEP, rua, numero, complemento, bairro, cidade, estado) ---
+// Usado no cliente, na medicao, na instalacao e no formulario da agenda. Tudo pelo prefixo dos ids.
+function enderecoCamposHtml(prefixo, opts) {
+    opts = opts || {};
+    const p = prefixo;
+    const ufs = '<option value=""></option>' + EnderecoCore.UFS.map(u => `<option value="${u}">${u}</option>`).join('');
+    const ir = opts.ir ? `<button type="button" class="btn btn-outline btn-ir-end" id="${p}-ir" onclick="irParaEnderecoPartes('${p}')" title="Abrir o caminho no Google Maps">📍 Ir para endereço</button>` : '';
+    return `<div class="end-campos">
+        <div class="form-group end-cep"><label for="${p}-cep">CEP</label>
+            <div class="campo-com-botao"><input type="text" id="${p}-cep" inputmode="numeric" autocomplete="postal-code" placeholder="00000-000"><button type="button" class="btn btn-outline" id="${p}-buscar-cep" style="display:none" onclick="buscarEnderecoCep('${p}')">Buscar endereço</button></div>
+            <div class="rota-status end-status" id="${p}-cep-status" role="status" aria-live="polite"></div></div>
+        <div class="form-group end-rua"><label for="${p}-rua">Rua${opts.obrigRua ? ' *' : ''}</label><div class="campo-com-botao"><input type="text" id="${p}-rua" placeholder="Ex.: Rua das Flores">${ir}</div></div>
+        <div class="form-group"><label for="${p}-numero">Número</label><input type="text" id="${p}-numero" placeholder="Ex.: 100"></div>
+        <div class="form-group"><label for="${p}-complemento">Complemento</label><input type="text" id="${p}-complemento" placeholder="Ex.: apto 12"></div>
+        <div class="form-group"><label for="${p}-bairro">Bairro</label><input type="text" id="${p}-bairro"></div>
+        <div class="form-group"><label for="${p}-cidade">Cidade</label><input type="text" id="${p}-cidade" placeholder="Ex.: Curitiba"></div>
+        <div class="form-group"><label for="${p}-uf">Estado</label><select id="${p}-uf">${ufs}</select></div>
+    </div>`;
+}
+function _enderecoBotaoCep(p) {
+    const cep = document.getElementById(p + '-cep'), b = document.getElementById(p + '-buscar-cep');
+    if (b && cep) b.style.display = String(cep.value).replace(/\D/g, '').length === 8 ? '' : 'none';
+}
+function enderecoAnexar(prefixo) {
+    const cep = document.getElementById(prefixo + '-cep');
+    if (!cep || cep.dataset.endLigado) return;
+    cep.dataset.endLigado = '1';
+    cep.addEventListener('input', () => {
+        const m = EnderecoCore.mascaraCep(cep.value);
+        if (m !== cep.value) cep.value = m;
+        const st = document.getElementById(prefixo + '-cep-status');
+        if (st) st.textContent = '';
+        _enderecoBotaoCep(prefixo);
+    });
+    cep.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); buscarEnderecoCep(prefixo); }
+    });
+    _enderecoBotaoCep(prefixo);
+}
+function enderecoLer(prefixo) {
+    const v = id => (document.getElementById(prefixo + '-' + id)?.value || '').trim();
+    return { cep: EnderecoCore.soDigitosCep(v('cep')), rua: v('rua'), numero: v('numero'), complemento: v('complemento'),
+        bairro: v('bairro'), cidade: v('cidade'), uf: v('uf').toUpperCase() };
+}
+function enderecoPreencher(prefixo, partes) {
+    partes = partes || {};
+    const set = (id, val) => { const el = document.getElementById(prefixo + '-' + id); if (el) el.value = val == null ? '' : val; };
+    set('cep', EnderecoCore.mascaraCep(partes.cep));
+    ['rua', 'numero', 'complemento', 'bairro', 'cidade'].forEach(k => set(k, partes[k]));
+    set('uf', String(partes.uf || '').toUpperCase());
+    const st = document.getElementById(prefixo + '-cep-status');
+    if (st) st.textContent = '';
+    _enderecoBotaoCep(prefixo);
+}
+async function _cepConsulta(url, interpretar, tratar404) {
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (r.status === 404 && tratar404) return { ok: false, motivo: 'nao-encontrado' };
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return interpretar(await r.json());
+}
+async function buscarEnderecoCep(prefixo) {
+    const cepEl = document.getElementById(prefixo + '-cep'), st = document.getElementById(prefixo + '-cep-status');
+    if (!cepEl) return;
+    const dig = String(cepEl.value).replace(/\D/g, '');
+    if (dig.length !== 8) return;
+    if (st) st.textContent = 'Buscando…';
+    let r;
+    try { r = await _cepConsulta(`https://viacep.com.br/ws/${dig}/json/`, EnderecoCore.interpretarViaCep, false); }
+    catch (e1) {
+        try { r = await _cepConsulta(`https://brasilapi.com.br/api/cep/v1/${dig}`, EnderecoCore.interpretarBrasilApi, true); }
+        catch (e2) { r = null; }
+    }
+    // A pessoa trocou o CEP (ou fechou a tela) enquanto esperava: essa resposta nao vale mais.
+    if (!cepEl.isConnected || String(cepEl.value).replace(/\D/g, '') !== dig) return;
+    const msg = t => { if (st) st.textContent = t; };
+    if (!r) { msg('Não deu para buscar o endereço agora. Preencha à mão.'); return; }
+    if (!r.ok) { msg('CEP não encontrado. Confira os números ou preencha o endereço à mão.'); return; }
+    const set = (id, val) => { const el = document.getElementById(prefixo + '-' + id); if (el && val) el.value = val; };
+    set('rua', r.rua); set('bairro', r.bairro); set('cidade', r.cidade);
+    if (r.uf && EnderecoCore.UFS.includes(r.uf)) set('uf', r.uf);
+    if (r.cidadeToda) { msg('Esse CEP é da cidade toda: preencha a rua e o bairro.'); document.getElementById(prefixo + '-rua')?.focus(); }
+    else { msg(''); document.getElementById(prefixo + '-numero')?.focus(); }
+}
+// Botao "Ir para endereco" ao lado da Rua: usa as partes digitadas.
+async function irParaEnderecoPartes(prefixo) {
+    const p = enderecoLer(prefixo);
+    if (!p.rua && !p.cep) { await showAlert('Digite o endereço primeiro.', '📍'); return; }
+    window.open(RotasCore.linkIrPara(RotasCore.enderecoDePartes(p)), '_blank', 'noopener');
 }
 
 // unidade: [singular, plural] escreve "4 agendamentos"; sem ela, so o numero.
@@ -11073,6 +11560,7 @@ function fecharModalAgenda() {
     _agdModalEl.remove();
     _agdModalEl = null;
     document.removeEventListener('keydown', _agdEsc);
+    if (typeof _agendaRedesenhar === 'function') _agendaRedesenhar();   // a Agenda aberta por baixo mostra o que mudou
 }
 function _agdAbrirModal(titulo, corpo, rodape) {
     fecharModalAgenda();
@@ -11106,6 +11594,8 @@ function _agdDescHist(x) {
     if (x.acao === 'reagendado') return `${quando}: reagendado de ${fmt(x.de)} para ${fmt(x.para)}${por}`;
     if (x.acao === 'desmarcado') return `${quando}: data desmarcada, era ${fmt(x.de)}${por}`;
     if (x.acao === 'cancelado')  return `${quando}: agendamento cancelado${x.de ? ', era ' + fmt(x.de) : ''}${por}`;
+    if (x.acao === 'aceito')     return `${quando}: aceito${por}`;
+    if (x.acao === 'recusado')   return `${quando}: recusado${x.motivo ? ' — ' + x.motivo : ''}${x.de && x.de.data ? ', era ' + fmt(x.de) : ''}${por}`;
     if (x.acao === 'pedido')     return `${quando}: pedido #${formatPedidoId(x.pedido)} criado a partir deste agendamento${por}`;
     return `${quando}: ${x.acao}${por}`;
 }
@@ -11135,6 +11625,7 @@ function _agdFormulario(titulo, campos, onSalvar, voltar, opts) {
         else if (c.tipo === 'pessoa')       input = htmlCampoPessoa(id, c.valor, 'A definir — selecione ou digite um nome');
         else if (c.tipo === 'profissional') input = `<select id="${id}"></select><input type="text" id="${id}-outro" class="agd-prof-outro" placeholder="Nome do profissional" autocomplete="off" hidden>`;
         else if (c.tipo === 'duracao')      input = `<select id="${id}"></select>`;
+        else if (c.tipo === 'endereco')     return `<div class="agd-form-largo">${enderecoCamposHtml(id, { obrigRua: c.obrig, ir: true })}</div>`;
         else                                input = `<input type="${c.tipo}" id="${id}" value="${escapeHtml(c.valor || '')}"${ph}>`;
         return `<div class="form-group${c.largo ? ' agd-form-largo' : ''}"><label for="${id}">${escapeHtml(c.label)}${req}</label>${input}</div>`;
     }).join('')}</div>${disp ? '<div class="agd-disp agd-disp-modal" id="agdf-disp" aria-live="polite"></div>' : ''}`;
@@ -11148,12 +11639,14 @@ function _agdFormulario(titulo, campos, onSalvar, voltar, opts) {
     });
     campos.filter(c => c.tipo === 'profissional').forEach(c => _agdPreencherProf('agdf-' + c.id, c.valor, c.vazio || '— A definir —'));
     campos.filter(c => c.tipo === 'duracao').forEach(c => _agdPreencherDur('agdf-' + c.id, c.servico || (disp && disp.tipo) || 'inst', c.valor));
+    campos.filter(c => c.tipo === 'endereco').forEach(c => { enderecoPreencher('agdf-' + c.id, c.valor); enderecoAnexar('agdf-' + c.id); });
 
     const lerValores = () => {
         const v = {};
         for (const c of campos) {
             const el = document.getElementById('agdf-' + c.id);
-            if (c.tipo === 'usuario')           v[c.id] = parseInt(el.value) || null;
+            if (c.tipo === 'endereco')          v[c.id] = enderecoLer('agdf-' + c.id);
+            else if (c.tipo === 'usuario')      v[c.id] = parseInt(el.value) || null;
             else if (c.tipo === 'profissional') v[c.id] = _agdLerProf('agdf-' + c.id);
             else if (c.tipo === 'duracao')      v[c.id] = parseInt(el.value) || null;
             else                                v[c.id] = el.value.trim();
@@ -11191,6 +11684,12 @@ function _agdFormulario(titulo, campos, onSalvar, voltar, opts) {
     o.querySelector('#agdf-voltar').onclick = voltar || fecharModalAgenda;
     o.querySelector('#agdf-salvar').onclick = async () => {
         for (const c of campos) {
+            if (c.tipo === 'endereco') {
+                const rua = document.getElementById('agdf-' + c.id + '-rua');
+                rua.classList.remove('agd-erro');
+                if (c.obrig && !rua.value.trim()) { rua.classList.add('agd-erro'); rua.focus(); return; }
+                continue;
+            }
             const el = document.getElementById('agdf-' + c.id);
             el.classList.remove('agd-erro');
             const vazio = c.tipo === 'profissional' ? !_agdLerProf('agdf-' + c.id).chave : !el.value.trim();
@@ -11251,6 +11750,146 @@ function _medNomeResp(m) { return nomeUsuario(m.usuario_id) || m.responsavel_nom
 function _medDefinirResponsavel(m, pessoa) {
     m.usuario_id = pessoa.id || null;
     m.responsavel_nome = pessoa.id ? '' : (pessoa.nome || '');
+}
+
+// --- ACEITE de medicao/instalacao destinada a outro usuario ---------------------------
+// Dados: medicao.aceite / pedido.inst_aceite = { status: 'pendente'|'aceito', por: quem destinou,
+// em, resp_em }; recusa: medicao.recusa / pedido.inst_recusa = { por: quem recusou, para: quem
+// destinou, motivo, em }. Pendente reserva o horario (tracejado na agenda). Responsavel que e o
+// proprio usuario ou profissional externo (sem usuario) vale direto: sem campo de aceite.
+function _aceitePend(a) { return !!a && a.status === 'pendente'; }
+// Pedido de aceite vencido: o horario marcado ja chegou sem resposta (sem hora: o fim do dia).
+function _aceiteVencido(data, hora) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(data || ''));
+    if (!m) return false;
+    const ini = _agdMin(hora);
+    return Date.now() >= new Date(+m[1], +m[2] - 1, +m[3], 0, ini === null ? 1440 : ini).getTime();
+}
+function _aceiteQuando(data, hora, curto) {
+    const [, m, d] = String(data || '').split('-');
+    const dm = d ? `${d}/${m}` : 'sem data';
+    return hora ? dm + (curto ? ' ' : ' às ') + hora : dm;
+}
+function _aceiteAcoes(tipo, id) {
+    return [{ rotulo: 'Aceitar', fn: `aceitarAgendamento('${tipo}',${id})` },
+            { rotulo: 'Recusar', fn: `recusarAgendamento('${tipo}',${id})`, sec: true }];
+}
+// antes: { uid, data, hora } gravados antes da edicao (null = registro novo ou refeito).
+// So pede aceite quando o responsavel e outro usuario e algo mudou (responsavel, data ou hora).
+// O proprio destinado editando um pedido de aceite ainda pendente = aceitou (quem destinou
+// recebe "aceitou"), em vez de o pedido sumir sem resposta.
+function _aceiteAplicar(reg, campo, antes, uid, data, hora) {
+    const eu = getUsuarioLogado()?.id || null;
+    uid = uid || null; hora = hora || '';
+    if (uid && uid !== eu) {
+        const mudou = !antes || antes.uid !== uid || antes.data !== data || (antes.hora || '') !== hora;
+        if (mudou) reg[campo] = { status: 'pendente', por: eu, em: Date.now() };
+    } else if (uid && antes && antes.uid === eu && _aceitePend(reg[campo])) {
+        reg[campo].status = 'aceito';
+        reg[campo].resp_em = Date.now();
+        const hist = campo === 'aceite' ? 'historico' : 'inst_historico';
+        if (!reg[hist]) reg[hist] = [];
+        _agdRegistrar(reg[hist], 'aceito');
+    } else delete reg[campo];
+}
+function _aceiteBuscar(tipo, id) {
+    _agdRecarregar();
+    const eu = getUsuarioLogado();
+    const med = tipo === 'med';
+    const reg = med ? (db.medicoes || []).find(x => x.id == id) : db.pedidos.find(x => x.id == id);
+    const campo = med ? 'aceite' : 'inst_aceite';
+    const ativo = reg && (med ? reg.status === 'Agendado' : _instPendente(reg));
+    const dest = reg && (med ? reg.usuario_id : reg.usuario_instalacao_id);
+    if (!eu || !ativo || !_aceitePend(reg[campo]) || dest !== eu.id) {
+        toast('Este pedido de aceite já foi respondido ou mudou.', 'info');
+        Notif.atualizar();
+        return null;
+    }
+    if (med ? _aceiteVencido(reg.data, reg.hora) : _aceiteVencido(reg.data_entrega, reg.inst_hora)) {
+        toast('O horário deste agendamento já passou. Quem destinou vai reagendar.', 'info');
+        Notif.atualizar();
+        return null;
+    }
+    return { reg, campo, med, eu, hist: med ? 'historico' : 'inst_historico' };
+}
+// Grava so a chave tocada (sc_med ou sc_ped): o aceite pode vir do sino em qualquer
+// pagina, aberta ha tempo -- syncDB() regravaria clientes, financeiro etc. velhos.
+function _aceiteRedesenhar(med) {
+    _gravarChaves([med ? 'sc_med' : 'sc_ped']);
+    renderMedicoes();
+    renderAgenda();
+    if (med) renderDashboardMedicoes();
+    else {
+        if (document.getElementById('kanban-board')) renderKanban();
+        renderDashboardInstalacoes();
+    }
+    Notif.atualizar();
+}
+function aceitarAgendamento(tipo, id) {
+    const r = _aceiteBuscar(tipo, id);
+    if (!r) return;
+    const a = r.reg[r.campo];
+    a.status = 'aceito'; a.resp_em = Date.now();
+    if (!r.reg[r.hist]) r.reg[r.hist] = [];
+    _agdRegistrar(r.reg[r.hist], 'aceito');
+    _aceiteRedesenhar(r.med);
+    toast('Agendamento aceito.', 'success');
+}
+function recusarAgendamento(tipo, id) {
+    const r = _aceiteBuscar(tipo, id);
+    if (!r) return;
+    const m = r.reg;
+    const quando = r.med ? _aceiteQuando(m.data, m.hora) : _aceiteQuando(m.data_entrega, m.inst_hora);
+    const titulo = r.med ? `a medição de ${m.clienteNome || 'cliente'}` : `a instalação do pedido #${formatPedidoId(m.id)} (${m.clienteNome || 'cliente'})`;
+    const corpo = `<p style="margin:0 0 12px">Recusar ${escapeHtml(titulo)} em ${escapeHtml(quando)}?</p>
+        <div class="form-group"><label for="aceite-motivo">Motivo <span style="color:var(--danger)">*</span></label>
+        <textarea id="aceite-motivo" rows="3" placeholder="Diga por que não dá para atender"></textarea></div>`;
+    _agdAbrirModal('Recusar agendamento', corpo,
+        `<button type="button" class="btn btn-outline btn-sm" onclick="fecharModalAgenda()">Voltar</button>
+         <button type="button" class="btn btn-outline btn-sm btn-danger" id="aceite-confirmar" disabled>Recusar</button>`);
+    const txt = document.getElementById('aceite-motivo'), ok = document.getElementById('aceite-confirmar');
+    txt.addEventListener('input', () => { ok.disabled = !txt.value.trim(); });
+    ok.addEventListener('click', () => _aceiteConfirmarRecusa(tipo, id, txt.value.trim()));
+    txt.focus();
+}
+function _aceiteConfirmarRecusa(tipo, id, motivo) {
+    if (!motivo) return;
+    fecharModalAgenda();
+    const r = _aceiteBuscar(tipo, id);   // relido: outro usuario/aba pode ter mexido enquanto digitava
+    if (!r) return;
+    const m = r.reg, agora = Date.now();
+    if (!m[r.hist]) m[r.hist] = [];
+    if (r.med) {
+        _agdRegistrar(m.historico, 'recusado', { motivo, de: { data: m.data, hora: m.hora || '' } });
+        m.recusa = { por: r.eu.id, para: m.aceite.por, motivo, em: agora };
+        m.status = 'A reagendar';
+        delete m.aceite;
+        m.usuario_id = null; m.responsavel_nome = '';
+        m.data = ''; m.hora = '';
+    } else {
+        _agdRegistrar(m.inst_historico, 'recusado', { motivo, de: { data: m.data_entrega || '', hora: m.inst_hora || '' } });
+        m.inst_recusa = { por: r.eu.id, para: m.inst_aceite.por, motivo, em: agora };
+        delete m.inst_aceite;
+        m.inst_agendado = false;
+        m.data_entrega = null;
+        m.inst_hora = '';
+        definirInstalador(m, { id: null, nome: '' });
+    }
+    _aceiteRedesenhar(r.med);
+    toast('Agendamento recusado. Quem destinou foi avisado.', 'info');
+}
+// "Reagendar" do aviso de recusa: abre o formulario com os dados que ficaram.
+function aceiteReagendar(tipo, id) {
+    if (tipo === 'med') {
+        if (document.getElementById('medicoes-container')) { mostrarViewPCP('medicoes'); editarMedicao(id); }
+        else window.location.href = 'pcp.html?view=medicoes&reagendarmed=' + encodeURIComponent(id);
+        return;
+    }
+    // Instalacao ainda agendada (aceite vencido): abre o reagendamento dela.
+    const p = db.pedidos.find(x => x.id == id);
+    if (!p || !_instPendente(p)) { irParaAgendaInstalacao(id); return; }
+    if (document.getElementById('inst-form')) { mostrarViewPCP('agenda'); reagendarInstalacao(id); }
+    else window.location.href = 'pcp.html?view=agenda&pedido=' + encodeURIComponent(id) + '&reagendar=1';
 }
 
 // Usuarios ativos e os nomes avulsos ja usados em instalacoes e medicoes.
@@ -11322,26 +11961,53 @@ function _agdPreencherDur(id, tipo, valor) {
     sel.value = String(valor || padrao);
 }
 
+// Acesso a agenda de medicoes ('med') ou de instalacoes ('inst') na Producao (pcp.html):
+// o mesmo que da acesso a essa agenda la.
+function _agdTemAcessoProducao(tipo) {
+    return temAcesso(tipo === 'med' ? 'producao.medicoes' : 'producao.agenda', 'visualizar');
+}
+
 // Tudo o que ocupa a agenda de algum profissional.
+// Medicao/instalacao que o usuario nao veria hoje (sem acesso a agenda dela na Producao,
+// sem o painel completo e sem ser dele) vem `restrito`: so "Medicao"/"Instalacao", sem cliente.
 function _agdCompromissos() {
     const cfg = getAgendaConfig();
     const out = [];
+    const painel = vePainelCompleto();
+    const veInst = painel || _agdTemAcessoProducao('inst'), veMed = painel || _agdTemAcessoProducao('med');
     db.pedidos.forEach(p => {
         if (normalizarStatus(p.status) !== 'Pronto p/ Instalação' || !_instAgendada(p)) return;
         const ini = _agdMin(p.inst_hora), prof = _instProf(p);
         if (!p.data_entrega || ini === null || !prof) return;
+        const restrito = !veInst && !pedidoEhMeu(p);
         out.push({ tipo: 'inst', id: p.id, prof, data: p.data_entrega, ini, fim: ini + (+p.inst_duracao || +cfg.dur_inst),
-            rotulo: `Instalação #${formatPedidoId(p.id)}`, cliente: p.clienteNome || '' });
+            rotulo: restrito ? 'Instalação' : `Instalação #${formatPedidoId(p.id)}`, cliente: restrito ? '' : p.clienteNome || '',
+            pendente: _aceitePend(p.inst_aceite), restrito });
     });
     (db.medicoes || []).forEach(m => {
         if (m.status !== 'Agendado') return;
         const ini = _agdMin(m.hora), prof = _medProf(m);
         if (!m.data || ini === null || !prof) return;
+        const restrito = !veMed && !medicaoEhMinha(m);
         out.push({ tipo: 'med', id: m.id, prof, data: m.data, ini, fim: ini + (+m.duracao || +cfg.dur_med),
-            rotulo: 'Medição', cliente: m.clienteNome || '' });
+            rotulo: 'Medição', cliente: restrito ? '' : m.clienteNome || '', pendente: _aceitePend(m.aceite), restrito });
+    });
+    // Compromissos e bloqueios da propria agenda: o rotulo ja vem com a privacidade
+    // aplicada (quem nao e o dono nem Administrador nao ve descricao nem motivo).
+    const uid = getUsuarioLogado()?.id, adm = ehAdministrador();
+    (db.agenda_eventos || []).forEach(ev => {
+        if (!ev || !ev.prof) return;
+        const v = AgendaCore.visivel(ev, uid, adm);
+        const dono = AgendaCore.podeGerenciar(ev.prof, uid, adm);
+        const rotulo = !dono ? v.titulo
+            : ev.tipo === 'compromisso' ? 'Compromisso' + (v.descricao ? ': ' + v.descricao : '')
+            : 'Bloqueio: ' + (v.descricao || _AGD_BLOQ_ROTULOS[ev.bloqueio] || 'Bloqueio');
+        AgendaCore.ocupacoesDoEvento(ev, cfg).forEach(o =>
+            out.push({ tipo: ev.tipo === 'compromisso' ? 'comp' : 'bloq', id: ev.id, prof: ev.prof, data: o.data, ini: o.ini, fim: o.fim, rotulo, cliente: '' }));
     });
     return out;
 }
+const _AGD_BLOQ_ROTULOS = { horario: 'Horário', dia: 'Dia inteiro', folga: 'Folga', ferias: 'Férias' };
 function _agdDoDia(prof, data, ignorar) {
     return _agdCompromissos()
         .filter(c => c.prof === prof && c.data === data && !(ignorar && c.tipo === ignorar.tipo && c.id == ignorar.id))
@@ -11399,13 +12065,9 @@ function _agdProximoDiaLivre(q) {
 
 // Releitura do que esta gravado (outra aba/usuario pode ter agendado) e
 // conferencia final. Devolve false e avisa quando ha conflito.
+// So troca um array quando o texto gravado mudou desde a ultima leitura/gravacao desta aba.
 function _agdRecarregar() {
-    try {
-        const ped = JSON.parse(localStorage.getItem('sc_ped'));
-        const med = JSON.parse(localStorage.getItem('sc_med'));
-        if (Array.isArray(ped)) db.pedidos  = ped;
-        if (Array.isArray(med)) db.medicoes = med;
-    } catch (e) { /* mantem o que esta em memoria */ }
+    ['sc_ped', 'sc_med', 'sc_agd_ev'].forEach(_dbRecarregarChave);
 }
 async function _agdValidarDisp(q) {
     if (!q.prof || !q.data || !q.hora) return true;
@@ -11467,11 +12129,8 @@ function _agdDispEscolherProf(elId, chave) {
 // Recarrega usuarios/papeis (cadastro feito em outra aba) e atualiza os
 // seletores de profissional sem perder o que ja estava escolhido.
 function _agdAtualizarListaProf() {
-    try {
-        const u = JSON.parse(localStorage.getItem('sc_usr')), p = JSON.parse(localStorage.getItem('sc_pap'));
-        if (Array.isArray(u)) db.usuarios = u;
-        if (Array.isArray(p)) db.papeis = p;
-    } catch (e) { /* mantem o que esta em memoria */ }
+    _dbRecarregarChave('sc_usr');
+    _dbRecarregarChave('sc_pap');
     [['inst-prof', 'Selecione'], ['med-prof', '— A definir —'], ['agdf-usu', '— A definir —']].forEach(([id, vazio]) => {
         const sel = document.getElementById(id);
         if (!sel || sel.value === '__outro') return;
@@ -11528,7 +12187,7 @@ function _agdRenderDisp(elId, q) {
 
     const lista = ocupados
         ? `<div class="agd-disp-comp"><div class="agd-disp-sub">Compromissos do dia</div>${d.compromissos.map(c =>
-            `<div class="agd-disp-comp-item"><span class="agd-pill ${c.tipo === 'inst' ? 'agd-pill-azul' : 'agd-pill-amar'}">${c.tipo === 'inst' ? 'Instalação' : 'Medição'}</span><span>${_agdHHMM(c.ini)}–${_agdHHMM(c.fim)}</span><span class="agd-disp-comp-cli">${escapeHtml(c.cliente || c.rotulo)}</span></div>`).join('')}</div>`
+            `<div class="agd-disp-comp-item"><span class="agd-pill ${c.tipo === 'inst' ? 'agd-pill-azul' : c.tipo === 'bloq' ? 'agd-pill-verm' : 'agd-pill-amar'}">${c.tipo === 'inst' ? 'Instalação' : c.tipo === 'bloq' ? 'Bloqueio' : c.tipo === 'comp' ? 'Compromisso' : 'Medição'}</span><span>${_agdHHMM(c.ini)}–${_agdHHMM(c.fim)}</span><span class="agd-disp-comp-cli">${escapeHtml(c.cliente || c.rotulo)}</span></div>`).join('')}</div>`
         : '';
 
     el.innerHTML = cab + `
@@ -11665,7 +12324,9 @@ function abrirConfigAgenda() {
 // --- MEDICOES ---------------------------------------------------------------
 function _medPill(m, hoje) {
     if (m.status === 'Realizado') return 'realizado';
-    return m.data && m.data < hoje ? 'atrasado' : 'agendado';
+    if (m.status === 'A reagendar') return 'reagendar';
+    if (m.data && m.data < hoje) return 'atrasado';
+    return _aceitePend(m.aceite) ? 'aceite' : 'agendado';
 }
 
 function _medAtualizar() {
@@ -11702,7 +12363,7 @@ function renderMedicoes() {
     if (!document.getElementById('med-pend-lista')) return;
     const hoje  = _agdHoje();
     const todas = db.medicoes || [];
-    const pend  = todas.filter(m => m.status === 'Agendado');
+    const pend  = todas.filter(m => m.status === 'Agendado' || m.status === 'A reagendar');   // recusadas ficam no topo, "A reagendar"
     const real  = todas.filter(m => m.status === 'Realizado');
     const filtra = (lista, chave) => {
         const b = _agdNorm(_agdBusca[chave]);
@@ -11710,10 +12371,11 @@ function renderMedicoes() {
     };
     const linha = m => _agdLinha({
         onclick: `abrirDetalheMedicao(${m.id})`,
-        nome: m.clienteNome, tel: m.clienteTel, end: _agdEnd(m.endereco, m.cidade),
+        nome: m.clienteNome, tel: m.clienteTel, end: _endMed(m),
         data: m.data, hora: m.hora, pill: _medPill(m, hoje),
     });
-    const pendF = filtra(pend, 'medPend').sort((a, b) => _agdCmp(_agdChave(a.data, a.hora), _agdChave(b.data, b.hora)));
+    const pendF = filtra(pend, 'medPend').sort((a, b) => (b.status === 'A reagendar') - (a.status === 'A reagendar')
+        || _agdCmp(_agdChave(a.data, a.hora), _agdChave(b.data, b.hora)));
     const realF = filtra(real, 'medReal').sort((a, b) =>
         _agdCmp(_agdChave(b.data, b.hora), _agdChave(a.data, a.hora)) || (b.realizado_em || 0) - (a.realizado_em || 0));
     _agdPreencher('med-pend', pendF.map(linha), pend.length, 'Nenhuma visita agendada. Use o formulário acima para agendar.', _agdBusca.medPend, ['agendamento', 'agendamentos']);
@@ -11721,10 +12383,22 @@ function renderMedicoes() {
     _medAtualizarDisp();
 }
 
-function abrirDetalheMedicao(id) {
+function _aceiteLinhasDetalhe(aceite, recusa) {
+    const l = [];
+    if (_aceitePend(aceite)) l.push(['Aceite', 'Aguardando aceite']);
+    else if (aceite && aceite.status === 'aceito') l.push(['Aceite', 'Aceito' + (aceite.resp_em ? ' em ' + _agdFmtMomento(aceite.resp_em) : '')]);
+    if (recusa) l.push(['Recusada', escapeHtml(`${nomeUsuario(recusa.por)}: ${recusa.motivo}`)]);
+    return l;
+}
+
+// opts.soLeitura: so os dados, sem botoes de acao (aberto pela Agenda por quem nao
+// tem acesso a agenda de medicoes da Producao).
+function abrirDetalheMedicao(id, opts) {
+    const soLeitura = !!(opts && opts.soLeitura);
     const m = (db.medicoes || []).find(x => x.id == id);
     if (!m) return;
     const pend = m.status === 'Agendado';
+    const reag = m.status === 'A reagendar';
     const ped  = _medPedidoVinculado(m);
     const tel  = m.clienteTel
         ? `<a href="https://wa.me/55${m.clienteTel.replace(/\D/g, '')}" target="_blank" rel="noopener">${escapeHtml(m.clienteTel)}</a>`
@@ -11733,11 +12407,12 @@ function abrirDetalheMedicao(id) {
     const corpo = `<div class="agd-det-topo">${_agdPill(_medPill(m, _agdHoje()))}</div>` + _agdCampos([
         ['Cliente',     escapeHtml(m.clienteNome || '—')],
         ['Telefone',    tel],
-        ['Endereço',    escapeHtml(_agdEnd(m.endereco, m.cidade) || '—') + linkIrParaHtml(m.endereco, 'agd-ir agd-ir-det', m.cidade)],
+        ['Endereço',    escapeHtml(_endMed(m) || '—') + linkIrParaHtml(_endMed(m), 'agd-ir agd-ir-det')],
         ['Data',        _agdFmtData(m.data)],
         ['Horário',     escapeHtml(m.hora ? _agdPeriodo(m.hora, dur) : '—')],
         ['Duração',     escapeHtml(_agdFmtDur(dur))],
         ['Responsável', escapeHtml(_medNomeResp(m) || 'A definir')],
+        ..._aceiteLinhasDetalhe(m.aceite, m.recusa),
         m.agendado_por ? ['Agendado por', escapeHtml(nomeUsuario(m.agendado_por))] : null,
         ['Observações', escapeHtml(m.obs || '—')],
         m.realizado_em ? ['Confirmada em', _agdFmtMomento(m.realizado_em) + (m.realizado_via === 'pedido' ? ' (ao salvar o pedido)' : '')] : null,
@@ -11747,7 +12422,11 @@ function abrirDetalheMedicao(id) {
     const btnPedido = ped
         ? `<button class="btn btn-outline btn-sm" onclick="criarPedidoDaMedicao(${m.id})" title="Abre o pedido criado a partir deste agendamento">📄 Abrir Pedido #${formatPedidoId(ped.id)}</button>`
         : (pend ? `<button class="btn btn-sm" onclick="criarPedidoDaMedicao(${m.id})" title="Abre o formulário de pedido com o cliente já preenchido. Ao salvar, a medição vai para Realizados.">+ Criar Pedido</button>` : '');
-    const rodape = pend
+    const rodape = soLeitura ? ''
+        : reag
+        ? `<button class="btn btn-outline btn-sm btn-danger" onclick="excluirMedicao(${m.id})">🗑️ Excluir</button>
+           <button class="btn btn-success btn-sm" onclick="editarMedicao(${m.id})">📅 Reagendar</button>`
+        : pend
         ? `<button class="btn btn-outline btn-sm btn-danger" onclick="cancelarMedicao(${m.id})">✕ Cancelar agendamento</button>
            <button class="btn btn-outline btn-sm" onclick="fecharModalAgenda();imprimirAgendamentoMedicao(${m.id})">🖨️ Documento</button>
            <button class="btn btn-outline btn-sm" onclick="editarMedicao(${m.id})">✏️ Editar</button>
@@ -11760,6 +12439,17 @@ function abrirDetalheMedicao(id) {
     _agdAbrirModal('Visita de medição', corpo, rodape);
 }
 
+// Estado de responsavel/data/hora antes de editar (medicao recusada conta como nova).
+function _medAntesAceite(m) {
+    return m.status === 'A reagendar' ? null : { uid: m.usuario_id || null, data: m.data, hora: m.hora || '' };
+}
+// Medicao recusada que recebe novo horario volta para Agendado.
+function _medFecharReagendar(m) {
+    if (m.status !== 'A reagendar') return;
+    m.status = 'Agendado';
+    delete m.recusa;
+}
+
 function _medDisp(id) { return { disp: { tipo: 'med', ignorar: { tipo: 'med', id } } }; }
 
 function editarMedicao(id) {
@@ -11767,8 +12457,7 @@ function editarMedicao(id) {
     if (!m) return;
     _agdFormulario('Editar agendamento', [
         { id: 'tel',  label: 'Telefone',    tipo: 'text', valor: m.clienteTel },
-        { id: 'end',  label: 'Endereço da visita', tipo: 'text', valor: m.endereco, obrig: true },
-        { id: 'cidade', label: 'Cidade', tipo: 'text', valor: m.cidade },
+        { id: 'end',  tipo: 'endereco', valor: m.rua === undefined ? EnderecoCore.partesDeRegistroAntigo(m.endereco, m.cidade) : m, obrig: true },
         { id: 'usu',  label: 'Responsável pela medição', tipo: 'profissional', valor: _medProf(m) },
         { id: 'data', label: 'Data da visita', tipo: 'date', valor: m.data, obrig: true },
         { id: 'hora', label: 'Horário',     tipo: 'time', valor: m.hora },
@@ -11777,9 +12466,12 @@ function editarMedicao(id) {
     ], v => {
         const atual = (db.medicoes || []).find(x => x.id == id);   // relido na validacao
         if (!atual) return;
-        atual.clienteTel = v.tel; atual.endereco = v.end; atual.cidade = v.cidade; atual.data = v.data; atual.hora = v.hora;
+        const antes = _medAntesAceite(atual);
+        atual.clienteTel = v.tel; Object.assign(atual, v.end, { endereco: EnderecoCore.textoEndereco(v.end) }); atual.data = v.data; atual.hora = v.hora;
         atual.duracao = v.dur; atual.obs = v.obs;
         _medDefinirResponsavel(atual, v.usu.pessoa);
+        _medFecharReagendar(atual);
+        _aceiteAplicar(atual, 'aceite', antes, atual.usuario_id, atual.data, atual.hora);
         _medAtualizar();
         toast('Agendamento atualizado!', 'success');
         abrirDetalheMedicao(id);
@@ -11798,12 +12490,15 @@ function reagendarMedicao(id) {
     ], v => {
         const atual = (db.medicoes || []).find(x => x.id == id);
         if (!atual) return;
+        const antes = _medAntesAceite(atual);
         if (v.data !== atual.data || v.hora !== (atual.hora || '')) {
             if (!atual.historico) atual.historico = [];
             _agdRegistrar(atual.historico, 'reagendado', { de: { data: atual.data, hora: atual.hora || '' }, para: { data: v.data, hora: v.hora } });
         }
         atual.data = v.data; atual.hora = v.hora; atual.duracao = v.dur; atual.obs = v.obs;
         _medDefinirResponsavel(atual, v.usu.pessoa);
+        _medFecharReagendar(atual);
+        _aceiteAplicar(atual, 'aceite', antes, atual.usuario_id, atual.data, atual.hora);
         _medAtualizar();
         toast('Visita reagendada!', 'success');
         abrirDetalheMedicao(id);
@@ -11887,7 +12582,7 @@ function renderDashboardMedicoes() {
             <div style="font-weight:700;font-size:14px;color:var(--dark);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(v.clienteNome)}">${escapeHtml(v.clienteNome)}</div>
             ${v.hora ? `<div style="font-size:12px;color:var(--dark)">🕐 ${v.hora}</div>` : ''}
             ${v.clienteTel ? `<div style="font-size:12px;color:#8F8F8F;margin-top:2px">${escapeHtml(v.clienteTel)}</div>` : ''}
-            ${linkIrParaHtml(v.endereco, 'agd-ir agd-ir-card', v.cidade)}
+            ${linkIrParaHtml(_endMed(v), 'agd-ir agd-ir-card')}
         </div>`;
     }
 
@@ -11968,8 +12663,8 @@ function renderDashboardInstalacoes() {
             <div style="font-weight:700;font-size:14px;color:var(--dark);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(p.clienteNome)}">${escapeHtml(p.clienteNome||'—')}</div>
             <div style="font-size:11px;color:#8F8F8F">#${formatPedidoId(p.id)}</div>
             ${p.inst_hora     ? `<div style="font-size:12px;color:var(--dark);margin-top:2px">🕐 ${p.inst_hora}</div>` : ''}
-            ${p.inst_endereco ? `<div style="font-size:11px;color:#8F8F8F;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(_agdEnd(p.inst_endereco, _instCidade(p, db.clientes.find(c => c.id == p.clienteId))))}">📍 ${escapeHtml(_agdEnd(p.inst_endereco, _instCidade(p, db.clientes.find(c => c.id == p.clienteId))))}</div>` : ''}
-            ${(() => { const c = db.clientes.find(c => c.id == p.clienteId); return linkIrParaHtml(p.inst_endereco || c?.end, 'agd-ir agd-ir-card', _instCidade(p, c)); })()}
+            ${(() => { const t = _endInst(p, db.clientes.find(c => c.id == p.clienteId)); return (p.inst_endereco || _instVazia(p)) && t ? `<div style="font-size:11px;color:#8F8F8F;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(t)}">📍 ${escapeHtml(t)}</div>` : ''; })()}
+            ${(() => { const c = db.clientes.find(c => c.id == p.clienteId); return linkIrParaHtml(_endInst(p, c), 'agd-ir agd-ir-card'); })()}
         </div>`;
     }
 
@@ -12033,7 +12728,8 @@ function _instPill(p, hoje) {
     if (s === 'Instalado') return 'instalado';
     if (s === 'Aguardando Financeiro') return 'pagamento';
     if (!p.data_entrega) return 'semdata';
-    return p.data_entrega < hoje ? 'atrasado' : 'agendado';
+    if (p.data_entrega < hoje) return 'atrasado';
+    return _aceitePend(p.inst_aceite) ? 'aceite' : 'agendado';
 }
 
 // Data mostrada no Realizado: o dia em que foi confirmada; pedido antigo sem
@@ -12081,7 +12777,7 @@ function _instRenderProntos() {
         <button type="button" class="agd-pronto${p.id == _instSelId ? ' agd-pronto-sel' : ''}" onclick="selecionarPedidoInstalacao(${p.id})" title="Agendar a instalação deste pedido">
             <span class="agd-pronto-ico">${_agdIco('caixa', 18)}</span>
             <span class="agd-pronto-info">
-                <span class="agd-pronto-top"><strong>#${formatPedidoId(p.id)}</strong><span class="agd-pill agd-pill-verde">Pronto para Instalação</span></span>
+                <span class="agd-pronto-top"><strong>#${formatPedidoId(p.id)}</strong><span class="agd-pill agd-pill-verde">Pronto para Instalação</span>${p.inst_recusa ? '<span class="agd-pill agd-pill-verm" title="' + escapeHtml('Recusada: ' + p.inst_recusa.motivo) + '">A reagendar</span>' : ''}</span>
                 <span class="agd-pronto-linha"><em>Cliente:</em> ${escapeHtml(p.clienteNome || '—')}</span>
                 <span class="agd-pronto-linha"><em>Produto:</em> ${escapeHtml(p.amb || '—')}</span>
                 <span class="agd-pronto-linha"><em>Entrega:</em> ${p.data_entrega ? _agdFmtData(p.data_entrega) : 'a definir'}</span>
@@ -12108,6 +12804,28 @@ function _instCidade(p, cli) {
     return (!p || !p.inst_endereco || n(p.inst_endereco) === n(cli.end)) ? cli.cidade : '';
 }
 
+// Partes do endereco da instalacao: as do pedido; pedido antigo com endereco proprio vira
+// Rua = texto antigo (cidade nao herdada do cliente); senao, as do cliente.
+// Instalacao com partes mas sem rua, numero e CEP nao tem endereco proprio: segue o cliente.
+function _instVazia(p) {
+    return p.inst_rua !== undefined && !['inst_rua', 'inst_numero', 'inst_cep'].some(k => String(p[k] == null ? '' : p[k]).trim());
+}
+function _instPartes(p, cli) {
+    if (_instVazia(p)) return _partesDoCliente(cli);
+    if (p.inst_rua !== undefined) {
+        return { cep: p.inst_cep, rua: p.inst_rua, numero: p.inst_numero, complemento: p.inst_complemento,
+            bairro: p.inst_bairro, cidade: p.inst_cidade, uf: p.inst_uf };
+    }
+    const n = s => RotasCore.normalizarEndereco(s);
+    if (p.inst_endereco && n(p.inst_endereco) !== n(cli?.end)) return EnderecoCore.partesDeRegistroAntigo(p.inst_endereco, _instCidade(p, cli));
+    return _partesDoCliente(cli);
+}
+function _instGravarPartes(p, partes) {
+    p.inst_cep = partes.cep; p.inst_rua = partes.rua; p.inst_numero = partes.numero; p.inst_complemento = partes.complemento;
+    p.inst_bairro = partes.bairro; p.inst_cidade = partes.cidade; p.inst_uf = partes.uf;
+    p.inst_endereco = EnderecoCore.textoEndereco(partes);
+}
+
 function _instLimparForm() {
     _instSelId = null;
     _agdPickerFechar();
@@ -12115,8 +12833,7 @@ function _instLimparForm() {
     set('inst-pedido', '');
     set('inst-data', _agdHoje());
     set('inst-hora', '');
-    set('inst-end', '');
-    set('inst-cidade', '');
+    enderecoPreencher('inst', {});
     set('inst-obs', '');
     _agdPreencherProf('inst-prof', '', 'Selecione');
     _agdPreencherDur('inst-dur', 'inst');
@@ -12138,15 +12855,14 @@ function selecionarPedidoInstalacao(id) {
     const cli = db.clientes.find(c => c.id == p.clienteId);
     const hoje = _agdHoje();
     const set = (eid, v) => { const el = document.getElementById(eid); if (el) { el.value = v; el.classList.remove('agd-erro'); } };
-    set('inst-end', p.inst_endereco || cli?.end || '');
-    set('inst-cidade', _instCidade(p, cli));
+    enderecoPreencher('inst', _instPartes(p, cli));
     set('inst-obs', p.inst_obs || '');
     set('inst-data', p.data_entrega && p.data_entrega >= hoje ? p.data_entrega : hoje);
     set('inst-hora', '');
     _agdPreencherProf('inst-prof', _instProf(p), 'Selecione');
     _agdPreencherDur('inst-dur', 'inst', p.inst_duracao);
     const sub = document.getElementById('inst-pedido-sub');
-    if (sub) sub.innerHTML = `<span class="agd-pill agd-pill-verde">Pronto para Instalação</span><span>Produto: ${escapeHtml(p.amb || '—')}</span>`;
+    if (sub) sub.innerHTML = `<span class="agd-pill agd-pill-verde">Pronto para Instalação</span>${p.inst_recusa ? `<span class="agd-pill agd-pill-verm">A reagendar</span><span>Recusada por ${escapeHtml(nomeUsuario(p.inst_recusa.por))}: ${escapeHtml(p.inst_recusa.motivo)}</span>` : ''}<span>Produto: ${escapeHtml(p.amb || '—')}</span>`;
     const box = document.getElementById('inst-cliente');
     if (box) box.innerHTML = `<strong>${escapeHtml(p.clienteNome || '—')}</strong>` +
         (cli?.tel ? `<span class="agd-linha">${_agdIco('tel', 12)}${escapeHtml(cli.tel)}</span>` : '');
@@ -12191,8 +12907,7 @@ async function salvarAgendamentoInstalacao() {
         data: campos.data?.value || '',
         hora: campos.hora?.value || '',
         dur:  parseInt(document.getElementById('inst-dur')?.value) || _agdDurPadrao('inst'),
-        end:  (document.getElementById('inst-end')?.value || '').trim(),
-        cidade: (document.getElementById('inst-cidade')?.value || '').trim(),
+        end:  enderecoLer('inst'),
         obs:  (document.getElementById('inst-obs')?.value || '').trim(),
     };
     const faltando = [];
@@ -12224,10 +12939,11 @@ async function salvarAgendamentoInstalacao() {
     p.data_entrega   = v.data;
     p.inst_hora      = v.hora;
     p.inst_duracao   = v.dur;
-    p.inst_endereco  = v.end;
-    p.inst_cidade    = v.cidade;
+    _instGravarPartes(p, v.end);
     p.inst_obs       = v.obs;
     definirInstalador(p, prof.pessoa);
+    _aceiteAplicar(p, 'inst_aceite', null, p.usuario_instalacao_id, v.data, v.hora);
+    delete p.inst_recusa;   // ja ficou no historico
     p.inst_agendado     = true;
     p.inst_agendado_por = getUsuarioLogado()?.id || null;
     p.inst_agendado_em  = Date.now();
@@ -12258,7 +12974,7 @@ function renderAgenda() {
             nome: p.clienteNome,
             sub:  `Pedido #${formatPedidoId(p.id)}${p.amb ? ' · ' + p.amb : ''}${nomeInstalador(p) ? ' · ' + nomeInstalador(p) : ''}`,
             tel:  cli?.tel,
-            end:  _agdEnd(p.inst_endereco || cli?.end, _instCidade(p, cli)),
+            end:  _endInst(p, cli),
             data: realizado ? _instDiaRealizado(p) : p.data_entrega,
             hora: p.inst_hora,
             pill: _instPill(p, hoje),
@@ -12274,7 +12990,10 @@ function renderAgenda() {
     _instAtualizarDisp();
 }
 
-function abrirDetalheInstalacao(id) {
+// opts.soLeitura: so os dados, sem botoes de acao (aberto pela Agenda por quem nao
+// tem acesso a agenda de instalacoes da Producao).
+function abrirDetalheInstalacao(id, opts) {
+    const soLeitura = !!(opts && opts.soLeitura);
     const p = db.pedidos.find(x => x.id == id);
     if (!p) return;
     const cli   = db.clientes.find(c => c.id == p.clienteId);
@@ -12287,11 +13006,12 @@ function abrirDetalheInstalacao(id) {
         ['Pedido',      '#' + formatPedidoId(p.id)],
         ['Cliente',     escapeHtml(p.clienteNome || '—')],
         ['Telefone',    tel],
-        ['Endereço',    escapeHtml(_agdEnd(p.inst_endereco || cli?.end, _instCidade(p, cli)) || '—') + linkIrParaHtml(p.inst_endereco || cli?.end, 'agd-ir agd-ir-det', _instCidade(p, cli))],
+        ['Endereço',    escapeHtml(_endInst(p, cli) || '—') + linkIrParaHtml(_endInst(p, cli), 'agd-ir agd-ir-det')],
         ['Data',        _agdFmtData(p.data_entrega)],
         ['Horário',     escapeHtml(p.inst_hora ? _agdPeriodo(p.inst_hora, _instDur(p)) : '—')],
         ['Duração',     escapeHtml(_agdFmtDur(_instDur(p)))],
         ['Instalador',  escapeHtml(nomeInstalador(p) || 'A definir')],
+        ..._aceiteLinhasDetalhe(p.inst_aceite, p.inst_recusa),
         p.inst_agendado_por ? ['Agendado por', escapeHtml(nomeUsuario(p.inst_agendado_por))] : null,
         p.vendedor_nome ? ['Vendedor', escapeHtml(p.vendedor_nome)] : null,
         ['Ambientes',   escapeHtml(p.amb || '—')],
@@ -12301,7 +13021,8 @@ function abrirDetalheInstalacao(id) {
         p.inst_confirmada_em ? ['Confirmada em', _agdFmtMomento(p.inst_confirmada_em)] : null,
         p.data_instalado ? ['Instalado em', _agdFmtMomento(p.data_instalado)] : null,
     ]) + _agdHistorico(p.inst_historico);
-    const rodape = pend
+    const rodape = soLeitura ? ''
+        : pend
         ? `<button class="btn btn-outline btn-sm btn-danger" onclick="cancelarAgendamentoInstalacao(${p.id})">✕ Cancelar agendamento</button>
            <button class="btn btn-outline btn-sm" onclick="fecharModalAgenda();abrirOS(${p.id})">📋 OS</button>
            <button class="btn btn-outline btn-sm" onclick="editarInstalacao(${p.id})">✏️ Editar</button>
@@ -12323,20 +13044,25 @@ function _instDispOpts(id) { return { disp: { tipo: 'inst', ignorar: { tipo: 'in
 
 // Grava a edicao/reagendamento: o pedido e relido depois da validacao da agenda.
 async function _instGravarEdicao(id, v, titulo) {
-    const p = db.pedidos.find(x => x.id == id);
+    let p = db.pedidos.find(x => x.id == id);
     if (!p || !_instPendente(p)) { await showAlert('Esta instalação não está mais agendada.', '⚠️'); fecharModalAgenda(); _agdRedesenharAgendas(); return; }
     if (!await _instConfirmarNovaData(p, v.data)) return false;
+    // A confirmacao demorou: relê o gravado e confere o conflito de novo antes de gravar.
+    if (v.usu && v.usu.chave && !await _agdValidarDisp({ prof: v.usu.chave, profNome: v.usu.pessoa.nome, data: v.data, hora: v.hora, dur: v.dur || _agdDurPadrao('inst'), ignorar: { tipo: 'inst', id } })) { _agdRedesenharAgendas(); return false; }
+    p = db.pedidos.find(x => x.id == id);
+    if (!p || !_instPendente(p)) { await showAlert('Esta instalação não está mais agendada.', '⚠️'); fecharModalAgenda(); _agdRedesenharAgendas(); return; }
+    const antes = { uid: p.usuario_instalacao_id || null, data: p.data_entrega, hora: p.inst_hora || '' };
     if (v.data !== p.data_entrega || v.hora !== (p.inst_hora || '')) {
         if (!p.inst_historico) p.inst_historico = [];
         _agdRegistrar(p.inst_historico, 'reagendado', { de: { data: p.data_entrega || '', hora: p.inst_hora || '' }, para: { data: v.data, hora: v.hora } });
     }
-    if (v.end !== undefined) p.inst_endereco = v.end;
-    if (v.cidade !== undefined) p.inst_cidade = v.cidade;
+    if (v.end !== undefined) _instGravarPartes(p, v.end);
     p.data_entrega = v.data;
     p.inst_hora    = v.hora;
     p.inst_duracao = v.dur || _agdDurPadrao('inst');
     p.inst_obs     = v.obs;
     definirInstalador(p, v.usu.pessoa);
+    _aceiteAplicar(p, 'inst_aceite', antes, p.usuario_instalacao_id, v.data, v.hora);
     _instAtualizar();
     toast(titulo, 'success');
     _lembreteInstVoltar(() => abrirDetalheInstalacao(id));
@@ -12347,8 +13073,7 @@ function editarInstalacao(id) {
     if (!p) return;
     const cli = db.clientes.find(c => c.id == p.clienteId);
     _agdFormulario('Editar instalação', [
-        { id: 'end',  label: 'Endereço da instalação', tipo: 'text', valor: p.inst_endereco, largo: true, placeholder: cli?.end || 'Endereço da instalação…' },
-        { id: 'cidade', label: 'Cidade', tipo: 'text', valor: _instCidade(p, cli), placeholder: 'Ex.: Curitiba' },
+        { id: 'end',  tipo: 'endereco', valor: _instPartes(p, cli) },
         { id: 'usu',  label: 'Profissional', tipo: 'profissional', valor: _instProf(p), obrig: true, vazio: 'Selecione' },
         { id: 'dur',  label: 'Duração do serviço', tipo: 'duracao', valor: p.inst_duracao },
         { id: 'data', label: 'Data de instalação', tipo: 'date', valor: p.data_entrega, obrig: true },
@@ -12383,6 +13108,7 @@ async function cancelarAgendamentoInstalacao(id) {
     p.inst_agendado = false;
     p.data_entrega  = null;
     p.inst_hora     = '';
+    delete p.inst_aceite;
     _instAtualizar();
     toast('Agendamento cancelado. O pedido voltou para os prontos.', 'info');
 }
@@ -12424,7 +13150,8 @@ function instalacoesParaConfirmar(usuario) {
     const agora = Date.now();
     return (db.pedidos || [])
         .filter(p => _instPendente(p) && p.data_entrega
-            && (p.usuario_instalacao_id == u.id || p.criado_por == u.id)
+            // o instalador que nunca aceitou nao e perguntado "Foi instalado?"; quem criou o pedido, sim
+            && (p.criado_por == u.id || (p.usuario_instalacao_id == u.id && !_aceitePend(p.inst_aceite)))
             && agora > _instFimMs(p))
         .sort((a, b) => _instFimMs(a) - _instFimMs(b) || a.id - b.id);
 }
@@ -12617,6 +13344,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderMenuExtrasEstoque();
         renderBellIndicator();
         initPageNavigation();
+        if (typeof iniciarLembretesAgenda === 'function') iniciarLembretesAgenda();
         const popupUserEl = document.getElementById('popup-user-name');
         if (popupUserEl) {
             const u = getUsuarioLogado() || JSON.parse(sessionStorage.getItem('sc_user') || '{}');
@@ -12633,7 +13361,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const arquivoAtual = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
         const telaFiltro = arquivoAtual === 'pedidos.html' ? 'pedidos' : 'painel_acompanhamento';
         inicializarFiltroVendedorTela(telaFiltro);
+        const rolagemPedidos = lembrarListaPedidosAoRecarregar(telaFiltro);
         renderDashboard();
+        if (rolagemPedidos) rolagemPedidos();
     }
 
     if (document.getElementById('tb-catalogo')) {
@@ -12646,6 +13376,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (document.getElementById('tb-clientes')) {
         if (!temAcesso('clientes', 'completo')) document.getElementById('cli-form-card')?.style.setProperty('display', 'none');
+        const cliCampos = document.getElementById('cli-end-campos');
+        if (cliCampos) { cliCampos.innerHTML = enderecoCamposHtml('cli', { obrigRua: false, ir: true }); enderecoAnexar('cli'); }
         renderTabelaClientes(db.clientes);
     }
 
@@ -12769,6 +13501,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (document.getElementById('os-container'))       renderOS();
     if (document.getElementById('agenda-container')) {
+        _agdMontarEnderecosInst();
         _instLimparForm();
         renderAgenda();
     }
@@ -12784,6 +13517,7 @@ document.addEventListener('DOMContentLoaded', () => {
             db.clientes.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
         const dataEl = document.getElementById('med-data');
         if (dataEl) dataEl.value = _agdHoje();
+        _agdMontarEnderecosMed();
         _agdPreencherProf('med-prof', '', '— A definir —');
         _agdPreencherDur('med-dur', 'med');
         renderMedicoes();
@@ -12792,6 +13526,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (urlView) mostrarViewPCP(urlView);
         lembrarAbaAoRecarregar('pcp', () => _curViewPCP, mostrarViewPCP,
             t => !params.get('pedido') && ['kanban', 'agenda', 'medicoes', 'rotas'].includes(t));
+        // Vindo do aviso de recusa de medicao ("Reagendar"): abre o formulario de editar.
+        if (urlView === 'medicoes' && params.get('reagendarmed')) {
+            editarMedicao(params.get('reagendarmed'));
+            try { params.delete('reagendarmed'); const qs = params.toString(); history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash); } catch (e) {}
+        }
         // Vindo de outra tela com ?pedido=: o pedido ja chega selecionado.
         if (urlView === 'agenda' && params.get('pedido')) {
             irParaAgendaInstalacao(params.get('pedido'));
@@ -12807,7 +13546,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Outra aba/usuario mexeu nas agendas: a disponibilidade se atualiza aqui.
         window.addEventListener('storage', e => {
             if (e.key === 'sc_usr' || e.key === 'sc_pap') { _agdAtualizarListaProf(); _agdRedesenharAgendas(); return; }
-            if (e.key !== 'sc_ped' && e.key !== 'sc_med' && e.key !== 'sc_agd_cfg') return;
+            if (e.key !== 'sc_ped' && e.key !== 'sc_med' && e.key !== 'sc_agd_cfg' && e.key !== 'sc_agd_ev') return;
             _agdRecarregar();
             _agdRedesenharAgendas();
             if (document.getElementById('kanban-board')) renderKanban();

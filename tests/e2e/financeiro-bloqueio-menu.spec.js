@@ -189,11 +189,11 @@ test('papel Financeiro confirma o pagamento', async ({ page }) => {
 
 // --- 4. Menu lateral com alfinete -------------------------------------------------
 
-test('o alfinete substitui o "Recolher menu" e fica ao lado da logo', async ({ page }) => {
+test('o alfinete substitui o "Recolher menu" e fica no rodape da barra lateral', async ({ page }) => {
     await entrar(page, BASE);
     await page.goto(BASE + '/index.html');
     await expect(page.locator('#main-sidebar')).not.toContainText('Recolher menu');
-    await expect(page.locator('.sidebar .logo #sidebar-pin-btn')).toHaveText('📌');
+    await expect(page.locator('#main-sidebar #sidebar-pin-btn')).toHaveText('📌');
     await expect(page.locator('#sidebar-pin-btn')).toHaveClass(/fixado/);
 });
 

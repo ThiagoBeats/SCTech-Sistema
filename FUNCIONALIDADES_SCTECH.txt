@@ -38,9 +38,15 @@ Módulos (telas):
  18. Configurações: Meu Perfil, Preferências, Segurança e Acessos (configuracoes.html)
 
 Elementos globais presentes em todas as telas (exceto Login):
-  - Barra lateral de navegação (sidebar) com links para todos os módulos
-  - Popup de perfil (clique no logo): nome do usuário logado, links para
-    "Sobre" e "Configurar Empresa", botão de Logout
+  - Barra superior fixa (grafite): logo e nome da empresa à esquerda (sem o nome do
+    módulo; o título da página fica no conteúdo); à direita a data de hoje (abre a
+    Agenda; no celular fica só o ícone), o sino e o avatar (foto ou
+    iniciais). O avatar abre o menu do perfil: nome do usuário logado, "Meu perfil",
+    "Sobre o Sistema", "Configurar Empresa" e "Sair". Nome/foto/empresa atualizam a
+    barra na hora ao salvar
+  - Barra lateral de navegação (sidebar) cinza-clara, abaixo da barra superior, com
+    ícone + texto, item ativo destacado e links para todos os módulos; no rodapé
+    ficam "Sair do sistema" e o alfinete 📌 (fixar aberta / solta só com ícones)
   - Tema claro/escuro: escolhido em Configurações › Preferências do Sistema
   - Ícone de página (favicon): logo SCTech
   - Indicador de alertas desabilitados: ícone 🔕 no cabeçalho, visível apenas
@@ -67,7 +73,7 @@ Segurança:
   - Sessão armazenada em sessionStorage (chave: sc_user)
   - Todas as outras telas verificam a sessão ao carregar; se não autenticado,
     redirecionam automaticamente para login.html
-  - Logout disponível no popup de perfil da sidebar em todas as telas
+  - Logout disponível no menu do avatar (barra superior) e em "Sair do sistema" (rodapé da lateral) em todas as telas
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -78,6 +84,24 @@ Botão de acesso rápido:
   - "+ Novo Pedido" no cabeçalho → navega para pedido.html
 
 ── 2.1 PAINEL DE ALERTAS ───────────────────────────────────────────────────────
+
+Sino de notificações (barra superior, em todas as telas):
+  - Mostra a mesma lista do card "Alertas do Sistema"; cada tipo de alerta é um
+    coletor registrado em js/notificacoes.js (Notif.registrar), usado pelo card e pelo sino
+  - Selo com o número de alertas que o usuário ainda não abriu (some em 0)
+  - Passar o mouse (ou tocar, no celular) abre a mini-janela: não lidos primeiro, em destaque
+  - Clicar num item marca como visto e leva ao lugar do alerta; abrir o alerta no card do
+    Painel também marca; "Marcar todas como lidas" zera a contagem
+  - "Vistos" ficam por usuário (sc_notif_vistos_<id>); a chave do alerta inclui os ids dos
+    itens, então um item novo conta de novo; chaves que não existem mais são descartadas
+  - Itens podem ter botão de ação e ficar na lista até serem resolvidos (persistente)
+  - Respeita os tipos desligados em Configurar Empresa e a preferência de notificações;
+    com tipo desligado, o rodapé do sino mostra "Alertas desabilitados"
+  - Atualiza sozinho ao gravar e quando outra aba grava (evento storage). Os dados
+    só são relidos quando o que está gravado mudou: uma confirmação aberta (ex.:
+    aprovar pedido) não perde o que está fazendo com a conferência de cada minuto
+  - Item que leva a uma página (ou aba da Produção) que o usuário não pode abrir
+    fica sem link: clicar só marca como visto
 
 Tipo "Entrega hoje":
   - Lista pedidos (não instalados) com data_entrega = hoje
@@ -170,6 +194,101 @@ Mini-painel exibido no dashboard quando há medições pendentes:
   - Agrupa em: "Atrasadas" e "Próximas"
   - Cada item mostra: cliente, data, horário, endereço
   - Botão "📍 Ir" no card: abre o Google Maps com o caminho até o endereço
+
+── 2.5.1 AGENDA (janela sobre o Painel) ───────────────────────────────────────────
+
+Abre pelo botão "📅 Agenda" no cabeçalho do Painel de Acompanhamento ou pela data
+da barra superior (em qualquer página). É uma janela grande sobre a tela atual
+(sem sair dela); Esc, ✕ ou clicar fora fecham. Cabeçalho na cor principal do
+sistema.
+  - Lateral "Profissionais": a mesma lista do campo Responsável dos agendamentos
+    (usuários ativos + profissionais externos). Abre em "Minha agenda" (no topo);
+    clicar em outro mostra a agenda dele. A bolinha verde indica quem tem algo hoje
+  - Visões: Semana (padrão), Dia e Mês; setas ‹ › e o período por extenso
+    ("16 a 22 de nov de 2026"); botão "Hoje". As linhas seguem o expediente e o
+    passo da Configuração da agenda; cada item ocupa todo o intervalo
+    início–fim (fora do expediente fica cortado na grade). No Mês: até 3 itens
+    por dia + "+N" (abre o dia)
+  - Cores/legenda: Medição (verde), Instalação (azul), Bloqueado (vermelho),
+    Compromisso (roxo), Aguardando aceite (tracejado na cor do tipo)
+  - Medição e instalação vêm dos próprios agendamentos (nada é copiado: reagendar
+    ou cancelar reflete sozinho); clicar abre o detalhe de cada uma, com as ações
+    de sempre para quem tem acesso à agenda dela na Produção (Agenda de Medições /
+    Agenda de Instalações). Sem esse acesso o detalhe abre só para leitura, sem
+    botões de ação
+  - Quem não vê o painel completo nem tem acesso à agenda na Produção vê as
+    medições e instalações dos outros (que não são dele) só como "Medição" /
+    "Instalação", sem cliente nem número do pedido; clicar não abre o detalhe
+  - "+ Novo compromisso": data, hora início e fim, descrição e aviso (15 min /
+    30 min / 1 h / 1 dia antes; padrão 30 min)
+  - "⛔ Bloquear horário": tipo Horário, Dia inteiro, Folga ou Férias; data início
+    (e data fim, opcional, para vários dias), hora início/fim (só no Horário) e
+    motivo opcional. Dia inteiro/Folga/Férias ocupam o dia todo (00:00 a 24:00) de
+    cada dia: nada pode ser marcado nesses dias, nem antes ou depois do expediente
+    (a grade mostra só o expediente)
+  - Clicar num horário vazio da própria agenda oferece "Novo compromisso" ou
+    "Bloquear horário" já com a data e a hora; clicar no próprio compromisso ou
+    bloqueio edita ou exclui
+  - Permissões: todos veem todas as agendas; criar, editar e excluir só na própria
+    agenda; o Administrador em todas (inclusive de profissionais externos)
+  - Privacidade: quem não é o dono nem Administrador vê só "Compromisso" e
+    "Indisponível" (sem descrição nem motivo, nem ao passar o mouse)
+  - Regra única de ocupação: compromissos e bloqueios entram na mesma lista das
+    medições e instalações. Aparecem riscados no horário dos agendamentos, na
+    Disponibilidade do profissional e na conferência de conflito
+  - Conflitos: nunca dois itens ao mesmo tempo para o mesmo profissional. Ao salvar
+    compromisso, bloqueio, medição ou instalação o sistema relê o que está gravado
+    (outra aba pode ter gravado) e, havendo conflito, avisa com o que conflita
+    (sem expor motivos privados) e não salva. Um bloqueio sobre uma medição ou
+    instalação também é conflito
+  - Atualização automática: gravar em outra aba redesenha a Agenda aberta sem
+    recarregar
+  - Lembretes de compromisso: a partir de (início − aviso) até o fim do compromisso
+    o lembrete "Compromisso às HH:MM: <descrição>" (📌) aparece no sino e nos Alertas
+    do dono da agenda, com o botão "Abrir agenda" (abre no dia). Quando o momento
+    chega com o sistema aberto, também sai um aviso na tela, uma vez só (não repete
+    ao recarregar). Conferência a cada minuto em todas as páginas do sistema.
+    Compromisso de dia inteiro vale durante os dias dele. Pode ser desligado em
+    Configurar Empresa > Alertas ("Lembretes de compromisso")
+  - Excluir um usuário (Configurações > Acessos) exclui junto os compromissos e
+    bloqueios da agenda dele; a confirmação diz "Excluir definitivamente o usuário
+    "<Nome>" e N item(ns) da agenda dele?"
+
+── 2.5.2 ACEITE DE MEDIÇÃO E INSTALAÇÃO ───────────────────────────────────────────
+
+Agendar (novo, editar ou reagendar) uma medição ou instalação para OUTRO usuário
+do sistema deixa o agendamento "aguardando aceite" quando mudou o responsável, a
+data ou o horário. Agendar para si mesmo, para profissional externo (sem usuário)
+ou o próprio responsável mexer no seu agendamento vale direto, sem aceite. Se o
+agendamento dele ainda aguardava aceite, editar/reagendar conta como aceite: quem
+destinou recebe "<Nome> aceitou...".
+  - Enquanto aguarda: o horário já fica reservado para o destinado (tracejado na
+    Agenda, riscado ao agendar) e os cards mostram "Aguardando aceite"
+  - O destinado vê, no sino e nos Alertas, com os botões Aceitar e Recusar (o
+    aviso fica até ele responder): "Você recebeu a medição de <cliente> em dd/mm
+    às HH:MM." ou "Você recebeu a instalação do pedido #N (<cliente>) em dd/mm às
+    HH:MM." Só o destinado responde; o Administrador continua podendo editar
+  - Aceitar: quem destinou recebe "<Nome> aceitou a medição de <cliente> (dd/mm
+    HH:MM)." (a instalação: "...a instalação do pedido #N (dd/mm HH:MM)."). O aviso
+    some 7 dias depois da resposta
+  - Recusar: pede o motivo (obrigatório; sem texto o botão não habilita). A medição
+    vira "A reagendar" (fica no topo de Agendamentos de Medição, sem profissional,
+    data e hora, e não conta como atrasada nem ocupa horário); a instalação volta
+    para "Pedidos Prontos para Instalação" com a marca "A reagendar". Cliente,
+    endereço e observações ficam. O horário é liberado e o motivo vai para o
+    histórico
+  - Quem destinou recebe "<Nome> recusou a medição de <cliente>: <motivo>" (ou "a
+    instalação do pedido #N: <motivo>") com o botão "Reagendar", que abre o
+    formulário de editar (medição) ou de agendar (instalação) já com os dados. O
+    aviso fica até reagendar
+  - Pedido de aceite vencido (chegou a data e hora marcadas sem resposta): some o
+    Aceitar/Recusar do destinado, e quem destinou recebe "<Nome> não respondeu à
+    medição de <cliente> (dd/mm HH:MM). Reagende." (ou "...à instalação do pedido
+    #N (dd/mm HH:MM). Reagende.") com o botão "Reagendar"
+  - A instalação que ainda aguarda aceite não entra no lembrete "Foi instalado?"
+    do instalador (só no de quem criou o pedido)
+  - Aceitar e recusar (pelo sino ou pelos Alertas) gravam só o agendamento: o que
+    outra aba gravou nesse meio-tempo (clientes, financeiro...) não é desfeito
 
 ── 2.6 TABELA DE PEDIDOS ───────────────────────────────────────────────────────
 
@@ -301,12 +420,19 @@ Cada card de instalação exibe:
          data atual e nova data formatadas; ao confirmar, atualiza data_entrega
          no pedido e re-renderiza agenda e painel do dashboard
     b) Endereço da instalação:
-       - Input text pré-preenchido; placeholder = endereço do cliente cadastrado
-       - Cidade (text): vem preenchida com a cidade do pedido ou, sem ela, a do
-         cliente, e pode mudar; grava inst_cidade no pedido (também em Editar).
-         O fallback para a cidade do cliente só vale quando o endereço da
-         instalação é o do cliente (ou está vazio); outro endereço sem cidade
-         fica sem cidade.
+       - Endereço em partes (CEP, Rua, Número, Complemento, Bairro, Cidade,
+         Estado) com "Buscar endereço" pelo CEP e "📍 Ir para endereço". Vem do
+         pedido (inst_cep, inst_rua, inst_numero, inst_complemento, inst_bairro,
+         inst_cidade, inst_uf) ou, sem isso, do cliente. Pedido antigo com
+         endereço de texto diferente do cliente abre com o texto inteiro em Rua e
+         a cidade antiga (não herda a do cliente). Grava as partes e
+         inst_endereco (texto montado); também em Editar instalação. Editar o
+         pedido preserva esses campos.
+         Instalação sem rua, número e CEP segue o endereço do cliente (mesmo se o
+         cliente ganhar o endereço depois).
+    Nos documentos (proposta, ordem de serviço, ficha de visita, etiqueta de
+    expedição) o endereço de quem tem partes sai com "— Cidade/UF, CEP
+    00000-000"; cadastro antigo sai exatamente como antes.
     c) Horário:
        - Input time
        - Ao clicar no campo abre a lista dos horários do expediente (passo da
@@ -330,7 +456,8 @@ Cada card de instalação exibe:
       Configuração da agenda) e ela continua em "Pronto p/ Instalação"
     - Quem é lembrado: o instalador designado (se for usuário do sistema) e o
       usuário que criou o pedido. Instalador só com nome digitado não entra no
-      sistema: só quem criou o pedido é lembrado
+      sistema: só quem criou o pedido é lembrado. Instalador que ainda não aceitou
+      a instalação também não é perguntado
     - Ao abrir qualquer página do sistema (depois do login), uma janela aparece
       uma vez por dia por pessoa: "O pedido #N (Cliente) devia ter sido instalado
       em dd/mm às HH:MM. Foi instalado?"
@@ -362,12 +489,12 @@ Formulário de agendamento:
       quebrado, ex.: 10:30, continua valendo; também em editar/reagendar; as setas do
       teclado só navegam na lista depois da 1ª seta para baixo; no celular a lista
       não fecha com o teclado virtual)
-  - Endereço da visita (text, obrigatório), com o botão "📍 Ir para endereço"
-    ao lado (abre o Google Maps com o caminho até o que foi digitado; vazio
-    avisa "Digite o endereço primeiro.")
-  - Cidade (text): preenchida com a cidade do cliente escolhido (pode mudar;
-    para cliente novo, digitada à mão); grava cidade na medição e, no cliente
-    novo, no cadastro dele (também em Editar agendamento)
+  - Endereço da visita em partes (CEP, Rua*, Número, Complemento, Bairro,
+    Cidade, Estado), preenchido com o endereço do cliente escolhido (cliente
+    antigo: texto inteiro em Rua) e editável; "Buscar endereço" pelo CEP e
+    botão "📍 Ir para endereço" (vazio avisa "Digite o endereço primeiro.").
+    Rua é obrigatória. Grava as partes e endereco (texto montado) na medição e,
+    no cliente novo, no cadastro dele (também em Editar agendamento)
   - Observações (text, opcional): referências, ponto de encontro, instruções
   - Botão "📐 Agendar Visita"
 
@@ -383,6 +510,10 @@ Lista de medições agendadas:
   - O endereço levado ao Maps (e às Rotas do dia) é endereço + ", " + cidade,
     quando há cidade e o endereço ainda não a traz (sem diferenciar maiúscula
     nem acento). Dados antigos sem cidade funcionam como antes.
+  - Registro com endereço em partes (CEP, rua, número, bairro, cidade, estado):
+    o Maps e as Rotas do dia usam "Rua, Número, Bairro, Cidade - UF, CEP" (o
+    complemento fica de fora). Se a Rua veio de um texto antigo que já traz a
+    cidade, a cidade não se repete. Registro antigo (sem partes): como antes.
   - Botão "📍 Ir para endereço" ao lado dos campos de endereço da medição, da
     instalação e do cadastro do cliente.
 
@@ -410,6 +541,12 @@ campo e mandar para ele. Abre também por pcp.html?view=rotas.
   - Cada visita mostra: número na rota, cliente, tipo (Medição / Instalação
     #N), endereço com a cidade (a busca no mapa usa endereço + cidade, para não
     achar a rua de mesmo nome de outra cidade), horário agendado, chegada prevista, km do trecho e "📍 Ir".
+  - Localização de visita com endereço em partes: o OpenStreetMap é consultado
+    em ordem — endereço completo ("Rua, Número, Bairro, Cidade - UF, CEP"), depois
+    "Rua, Número, Cidade - UF", depois "CEP, Cidade - UF" — e a primeira que
+    achar vale. O resultado fica guardado pelo endereço completo (não repete as
+    consultas). Continua no máximo 1 consulta por segundo. Registro antigo: uma
+    consulta só, como antes.
   - Chegada prevista: saída + trajeto + duração de cada visita. Se a 1ª visita
     tem horário, sai a tempo de chegar nele; senão, no início do expediente
     (configuração da agenda). Chegou antes do horário: espera até ele.
@@ -647,10 +784,19 @@ Formulário de cadastro/edição:
   - Telefone / WhatsApp (text)
   - E-mail (email)
   - CPF (text)
-  - Endereço completo (text), com o botão "📍 Ir para endereço" ao lado (abre
-    o Google Maps com o caminho até o endereço digitado e a cidade)
-  - Cidade (text, opcional): mostrada na tabela junto do endereço; as agendas de
-    medição e instalação já vêm com ela
+  - Endereço em partes: CEP, Rua, Número, Complemento, Bairro, Cidade e Estado
+    (lista com as 27 siglas). Com 8 dígitos no CEP aparece o botão "Buscar
+    endereço" (ou Enter no CEP): consulta a ViaCEP e, se ela estiver fora do ar,
+    a BrasilAPI, e preenche Rua, Bairro, Cidade e Estado; o cursor vai para o
+    Número. CEP não encontrado, busca sem internet e CEP "da cidade toda" mostram
+    um aviso e deixam preencher à mão. Nada é obrigatório.
+  - Botão "📍 Ir para endereço" ao lado da Rua (abre o Google Maps com o
+    caminho até o endereço digitado)
+  - O texto do endereço (Rua, Número, Complemento, Bairro) é montado ao salvar;
+    a tabela mostra "endereço — Cidade/UF". Cadastros antigos, de texto livre,
+    abrem para editar com o texto inteiro em Rua e a cidade antiga em Cidade
+    (salvar sem mexer mantém o mesmo endereço). As agendas de medição e
+    instalação já vêm com a cidade
   - Botão "Salvar Cliente" (cria ou atualiza dependendo do modo)
   - Botão "Cancelar" (visível apenas no modo de edição)
 
@@ -2512,6 +2658,10 @@ Pedidos (pedidos.html e Página Inicial):
     (só em Orçamento), Editar, Gerar proposta, Ver OS, Imprimir etiquetas
     (travada antes de Pronto), Ver timeline e Excluir. Fecha no clique fora,
     no Esc e ao rolar a tela.
+  - Depois de uma ação que recarrega a página (aprovar, excluir, mudar status...),
+    a lista volta como estava: mesma rolagem, busca, filtro de status, vendedor e
+    ordem da coluna. Só no recarregamento; abrindo a tela pelo menu ela começa
+    no topo e sem filtros (o "Salvar filtro" de vendedor continua valendo).
 
 Barra lateral:
   - A logo do topo é a logotipo importada em Configurar Empresa (sobre um
@@ -2530,7 +2680,10 @@ Fornecedores:
 
 Configurações (configuracoes.html), agora em sub-abas:
   - Meu Perfil: nome de exibição, foto de perfil e telefone/WhatsApp, de
-    cada usuário. O nome e a foto aparecem no menu da logo.
+    cada usuário. O nome e a foto aparecem no menu da logo e na barra
+    superior. Ao escolher a foto abre a janela "Ajustar foto" (arrastar
+    para enquadrar, zoom, prévia redonda); "Salvar foto" grava um quadrado
+    256x256.
   - Preferências do Sistema: tema claro/escuro (agora do usuário, segue
     ele em qualquer computador), notificações (Todas / Só as urgentes /
     Nenhuma — vale para os alertas do painel) e notificações sonoras

@@ -23,7 +23,7 @@ function _rotaVisitasDoDia(data) {
     (db.medicoes || []).forEach(m => {
         if (m.status !== 'Agendado' || m.data !== data) return;
         out.push({ tipo: 'med', id: m.id, prof: _medProf(m), profNome: _medNomeResp(m),
-            cliente: m.clienteNome || '—', tel: m.clienteTel || '', end: RotasCore.enderecoCompleto(m.endereco, m.cidade),
+            cliente: m.clienteNome || '—', tel: m.clienteTel || '', end: _endMed(m), partes: _partesMedMapa(m),
             hora: m.hora || '', agendadoMin: _agdMin(m.hora), durMin: +m.duracao || _agdDurPadrao('med'),
             rotulo: 'Medição', ico: '📐' });
     });
@@ -31,7 +31,7 @@ function _rotaVisitasDoDia(data) {
         if (!_instPendente(p) || p.data_entrega !== data) return;
         const cli = db.clientes.find(c => c.id == p.clienteId);
         out.push({ tipo: 'inst', id: p.id, prof: _instProf(p), profNome: nomeInstalador(p),
-            cliente: p.clienteNome || '—', tel: cli?.tel || '', end: RotasCore.enderecoCompleto(p.inst_endereco || cli?.end, _instCidade(p, cli)),
+            cliente: p.clienteNome || '—', tel: cli?.tel || '', end: _endInst(p, cli), partes: _partesInstMapa(p, cli),
             hora: p.inst_hora || '', agendadoMin: _agdMin(p.inst_hora), durMin: _instDur(p),
             rotulo: `Instalação #${formatPedidoId(p.id)}`, ico: '🔧' });
     });
@@ -222,27 +222,35 @@ function _rotaGeoDoCache(chave) {
 // {lat, lon} ou null (nao encontrado). Erro de rede lanca (e nao fica guardado).
 // Todas as consultas passam por uma fila: uma por vez, com 1,1 s entre elas, e
 // o mesmo endereco pedido duas vezes ao mesmo tempo vira uma consulta so'.
-function _rotaGeo(end) {
+// Com partes (CEP/rua/...), tenta as consultas de RotasCore.consultasGeo na ordem e
+// a primeira que achar vale; o resultado fica guardado pelo texto completo.
+function _rotaGeo(end, partes) {
     const chave = RotasCore.normalizarEndereco(end);
     if (!chave) return Promise.resolve(null);
     const doCache = _rotaGeoDoCache(chave);
     if (doCache !== undefined) return Promise.resolve(doCache);
     if (_rotaGeoEmCurso.has(chave)) return _rotaGeoEmCurso.get(chave);
-    const p = _rotaFilaGeo.then(async () => {
-        const deNovo = _rotaGeoDoCache(chave);
-        if (deNovo !== undefined) return deNovo;
+    const consultas = partes ? RotasCore.consultasGeo(partes) : [end];
+    if (!consultas.length) consultas.push(end);
+    const consultar = async q => {
         try {
-            const resp = await fetch(ROTA_NOMINATIM + encodeURIComponent(end), { headers: { 'Accept-Language': 'pt-BR' } });
+            const resp = await fetch(ROTA_NOMINATIM + encodeURIComponent(q), { headers: { 'Accept-Language': 'pt-BR' } });
             if (!resp.ok) throw new Error('nominatim ' + resp.status);
             const lista = await resp.json();
-            const achou = Array.isArray(lista) && lista[0] ? { lat: +lista[0].lat, lon: +lista[0].lon } : null;
-            const c2 = _rotaCacheGeo();
-            c2[chave] = achou || { nao: true, em: Date.now() };
-            try { localStorage.setItem('sc_geo', JSON.stringify(c2)); } catch (e) {}
-            return achou;
+            return Array.isArray(lista) && lista[0] ? { lat: +lista[0].lat, lon: +lista[0].lon } : null;
         } finally {
             await new Promise(r => setTimeout(r, 1100));   // no maximo 1 consulta por segundo
         }
+    };
+    const p = _rotaFilaGeo.then(async () => {
+        const deNovo = _rotaGeoDoCache(chave);
+        if (deNovo !== undefined) return deNovo;
+        let achou = null;
+        for (const q of consultas) { achou = await consultar(q); if (achou) break; }
+        const c2 = _rotaCacheGeo();
+        c2[chave] = achou || { nao: true, em: Date.now() };
+        try { localStorage.setItem('sc_geo', JSON.stringify(c2)); } catch (e) {}
+        return achou;
     });
     _rotaFilaGeo = p.catch(() => {});
     _rotaGeoEmCurso.set(chave, p);
@@ -265,7 +273,7 @@ async function _rotaLocalizar(itens, seq) {
     const empGeo = emp ? await _rotaGeo(emp) : null;
     conferir();
     const geos = [];
-    for (const v of itens) { geos.push(v.end ? await _rotaGeo(v.end) : null); conferir(); }
+    for (const v of itens) { geos.push(v.end ? await _rotaGeo(v.end, v.partes) : null); conferir(); }
     return { empGeo, geos };
 }
 

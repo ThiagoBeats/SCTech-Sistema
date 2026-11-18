@@ -213,7 +213,7 @@
         return {
             numero: txt(p.id),
             cliente: txt((c && c.nome) || p.clienteNome),
-            endereco: txt(c && c.end),
+            endereco: txt(c && (typeof EnderecoCore !== 'undefined' ? EnderecoCore.textoComCidade(c.end, c) : c.end)),
             telefone: txt(c && c.tel),
             entrega: formatarDataBR(p.data_entrega),
             vendedor: txt(p.vendedor_nome || p.arq_nome),

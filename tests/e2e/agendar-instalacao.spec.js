@@ -76,7 +76,7 @@ test('Kanban: pedido pronto sem agenda leva para a agenda com o pedido seleciona
     await expect(page.locator('#inst-pedido')).toHaveValue('26200');
     await expect(page.locator('#inst-cliente')).toContainText('Ana Paula Lima');
     await expect(page.locator('#inst-cliente')).toContainText('44991234567');
-    await expect(page.locator('#inst-end')).toHaveValue('Av. das Palmeiras, 1000');
+    await expect(page.locator('#inst-rua')).toHaveValue('Av. das Palmeiras, 1000');
     await expect(page.locator('#inst-pedido-sub')).toContainText('Cortina Sala');
     await expect(page.locator('#inst-prontos-lista .agd-pronto-sel')).toContainText('#26200');
     expect((await lerPed(page, 26200)).inst_agendado, 'nada agendado automaticamente').toBe(false);
@@ -214,7 +214,7 @@ test('a agenda de medicoes enxerga as instalacoes do profissional', async ({ pag
     await expect(page.locator('#med-disp .agd-slot', { hasText: '15:00' })).toHaveClass(/agd-slot-ocupado/);
     await expect(page.locator('#med-disp')).toContainText('Instalação');
     await page.fill('#med-hora', '15:00');
-    await page.fill('#med-end', 'Rua A, 1');
+    await page.fill('#med-rua', 'Rua A, 1');
     await page.click('button:has-text("Agendar Visita")');
     await expect(page.locator('body')).toContainText('já tem compromisso');
     await page.locator('#sc-modal-ok').click();
@@ -233,7 +233,7 @@ test('medicao com responsavel exige horario', async ({ page }) => {
     await page.selectOption('#med-cliente-id', '1');
     await page.selectOption('#med-prof', 'u:1');
     await page.fill('#med-data', dia(3));
-    await page.fill('#med-end', 'Rua A, 1');
+    await page.fill('#med-rua', 'Rua A, 1');
     await page.click('button:has-text("Agendar Visita")');
     await expect(page.locator('#med-hora')).toHaveClass(/agd-erro/);
     await page.locator('#sc-modal-ok').click();

@@ -39,7 +39,7 @@ async function semear(page) {
 test('o painel da logo nao tem mais o Tema', async ({ page }) => {
     await entrar(page, BASE);
     await page.goto(BASE + '/index.html');
-    await page.click('#main-sidebar .logo');
+    await page.click('#topbar-avatar');
     await expect(page.locator('#logo-popup')).toBeVisible();
     await expect(page.locator('#logo-popup')).not.toContainText('Tema');
 });

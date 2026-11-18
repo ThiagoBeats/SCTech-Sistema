@@ -34,7 +34,7 @@ test('menu aberto fecha quando a lista e redesenhada (sem acao em ids velhos)', 
 });
 
 test('menu perto da borda de baixo abre para cima e perto da direita fica dentro da tela', async ({ page }) => {
-    await page.setViewportSize({ width: 700, height: 420 });
+    await page.setViewportSize({ width: 700, height: 500 });
     await entrar(page, BASE, { sc_forn: muitos(40) });
     await page.goto(BASE + '/fornecedores.html');
     const ultimo = page.locator('#tb-fornecedores button[aria-label="Ações"]').last();

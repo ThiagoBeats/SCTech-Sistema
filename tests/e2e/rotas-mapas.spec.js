@@ -233,13 +233,13 @@ test('📍 Ir nos cards e nos detalhes da agenda abre o Maps sem abrir o card', 
 
 test('📍 Ir para endereço ao lado do campo usa o que foi digitado', async ({ page }) => {
     await abrir(page, { view: 'medicoes' });
-    const btn = page.locator('#med-end ~ .btn-ir-end');
+    const btn = page.locator('#med-ir');
     await btn.click();
     await expect(page.locator('#sc-modal-msg')).toContainText('Digite o endereço primeiro');
     await page.click('#sc-modal-ok');
-    await page.fill('#med-end', 'Rua das Flores, 10');
+    await page.fill('#med-rua', 'Rua das Flores, 10');
     await btn.click();
     expect(decodeURIComponent((await page.evaluate(() => window.__abertos))[0])).toContain('destination=Rua das Flores, 10');
     await page.goto(BASE + '/clientes.html');
-    await expect(page.locator('#cli-end ~ .btn-ir-end')).toHaveCount(1);
+    await expect(page.locator('#cli-rua ~ .btn-ir-end')).toHaveCount(1);
 });
