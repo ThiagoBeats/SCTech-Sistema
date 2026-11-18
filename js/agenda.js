@@ -73,8 +73,17 @@ function _agGradeHtml(dias, itens, pode) {
         }).join('');
         return `<div class="ag-col${d === hoje ? ' ag-hoje' : ''}" style="height:${altura}px">${slots}${evs}</div>`;
     }).join('');
-    const cab = dias.map(d => `<div class="ag-cab${d === hoje ? ' ag-hoje' : ''}"><strong>${_agDiaSemana(d)}</strong><span>${_agDDMM(d)}</span></div>`).join('');
-    return `<div class="ag-grade" style="--ag-cols:${dias.length}">
+    const fora = d => itens.filter(c => c.data === d && !(c.fim > g.ini && c.ini < g.fim));
+    const cab = dias.map(d => {
+        const f = fora(d).length;
+        const marca = f && dias.length > 1
+            ? `<button type="button" class="ag-fora-h" data-fora="${d}" title="Ver o dia: há itens fora do horário do expediente">+${f} fora do horário</button>` : '';
+        return `<div class="ag-cab${d === hoje ? ' ag-hoje' : ''}"><strong>${_agDiaSemana(d)}</strong><span>${_agDDMM(d)}</span>${marca}</div>`;
+    }).join('');
+    const foraDia = dias.length === 1 ? fora(dias[0]) : [];
+    const listaFora = foraDia.length
+        ? `<div class="ag-fora-lista"><strong>Fora do horário do expediente:</strong>${foraDia.map(c => _agEventoHtml(c, '', true)).join('')}</div>` : '';
+    return `${listaFora}<div class="ag-grade" style="--ag-cols:${dias.length}">
         <div class="ag-cabecalho"><div class="ag-cab ag-cab-h"><strong>Horário</strong></div>${cab}</div>
         <div class="ag-corpo"><div class="ag-horas">${horas}</div>${colunas}</div>
     </div>`;
@@ -222,6 +231,7 @@ function _agClique(e) {
     if ((el = bt('[data-visao]'))) { _ag.visao = el.dataset.visao; _agendaRedesenhar(); return; }
     if ((el = bt('[data-nav]'))) { _agNavegar(+el.dataset.nav); _agendaRedesenhar(); return; }
     if ((el = bt('[data-novo]'))) { _agAbrirForm(el.dataset.novo, null, { data: _agdHoje() }); return; }
+    if ((el = bt('[data-fora]'))) { _ag.visao = 'dia'; _ag.ref = el.dataset.fora; _agendaRedesenhar(); return; }
     if ((el = bt('.ag-mais, .ag-mes-num'))) { _ag.visao = 'dia'; _ag.ref = el.dataset.dia; _agendaRedesenhar(); return; }
     if ((el = bt('.ag-ev'))) { _agAbrirEvento(el.dataset.tipo, el.dataset.id); return; }
     if ((el = bt('[data-hora]')) && _agPode(_ag.prof)) { _agEscolha(el.dataset.data, el.dataset.hora); }
@@ -379,6 +389,7 @@ async function _agExcluir(id) {
     if (!await showConfirm('Excluir este item da agenda?', '🗑️', 'Excluir', 'Cancelar')) return;
     _agdRecarregar();
     const ev = (db.agenda_eventos || []).find(x => String(x.id) === String(id));
+    if (!ev) { await showAlert('Este item não existe mais (foi excluído em outra aba).', '⚠️'); fecharModalAgenda(); _agendaRedesenhar(); return; }
     if (ev && !_agPode(ev.prof)) { await showAlert('Você só pode alterar a sua própria agenda.', '⛔'); return; }
     db.agenda_eventos = (db.agenda_eventos || []).filter(x => String(x.id) !== String(id));
     syncDB();

@@ -4380,6 +4380,15 @@ function renderDashboardsButton() {
         ${DASH_LIST.map(([id,ic,lb])=>`<a href="dashboards.html?dash=${id}" style="display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;font-weight:500;color:var(--dark);text-decoration:none;white-space:nowrap" onmouseover="this.style.background='var(--light)'" onmouseout="this.style.background=''">${ic} <span>${lb}</span></a>`).join('<div style="height:1px;background:var(--border)"></div>')}
     </div>`;
     grp.insertBefore(wrap, grp.firstChild);
+    // Painel: o botao Agenda fica logo a esquerda de Dashboards.
+    if (document.getElementById('card-fat-mes') && !document.getElementById('btn-agenda')) {
+        const ag = document.createElement('button');
+        ag.type = 'button'; ag.id = 'btn-agenda'; ag.className = 'btn btn-outline btn-sm';
+        ag.style.cssText = 'display:flex;align-items:center;gap:5px;font-weight:600';
+        ag.setAttribute('onclick', 'abrirAgenda()');
+        ag.textContent = '📅 Agenda';
+        grp.insertBefore(ag, wrap);
+    }
 }
 
 // Abas menos usadas do Estoque, fora da barra principal: ficam num menu de

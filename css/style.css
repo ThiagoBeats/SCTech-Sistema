@@ -3019,3 +3019,6 @@ html[data-theme="dark"] .ag-pend { background-image: repeating-linear-gradient(1
     .ag-rodape { padding: 8px 12px 12px; }
     .ag-form-linha { grid-template-columns: 1fr; }
 }
+.ag-fora-h { margin-top: 3px; border: 0; background: var(--ag-comp-bg); color: var(--ag-comp-fg); border-radius: 6px; font: inherit; font-size: 10px; font-weight: 800; padding: 2px 5px; cursor: pointer; box-shadow: none; }
+.ag-fora-lista { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; font-size: 12px; border-bottom: 1px solid var(--border); }
+.ag-fora-lista .ag-chip { width: auto; max-width: 260px; }

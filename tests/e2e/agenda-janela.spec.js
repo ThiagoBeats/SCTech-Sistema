@@ -5,14 +5,15 @@ const { entrar } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 
+// Data fixa (quarta, 08:00): nenhum dia da semana quebra os testes.
+const BASE_DATA = new Date(2026, 10, 18, 8, 0, 0);
+const fixarRelogio = page => page.clock.setFixedTime(BASE_DATA);
 function dia(offset) {
-    const d = new Date(); d.setDate(d.getDate() + offset);
+    const d = new Date(BASE_DATA); d.setDate(d.getDate() + offset);
     return d.toLocaleDateString('sv-SE');
 }
 const HOJE = dia(0);
-// A instalacao fica amanha (domingo: hoje 17h) para o lembrete de confirmar nao abrir por cima do teste.
-const DOMINGO = (new Date().getDay() === 0);
-const DIA_INST = DOMINGO ? dia(0) : dia(1);
+const DIA_INST = dia(1);
 const USU = () => [
     { id: 1, nome: 'Teste', email: 'teste@sctech.local', papel_id: 1, ativo: true, permissoes_extras: {}, senha_hash: '' },
     { id: 2, nome: 'Maria Souza', email: 'maria@sctech.local', papel_id: 6, ativo: true, permissoes_extras: {}, senha_hash: '' },
@@ -25,11 +26,12 @@ const MED = () => [
     { id: 2, clienteNome: 'Cliente Externo', endereco: 'Y', data: HOJE, hora: '11:00', duracao: 60, status: 'Agendado', responsavel_nome: 'Pedro Terceiro' },
 ];
 const PED = () => [{ id: 26200, clienteId: 1, clienteNome: 'Ana Paula Lima', status: 'Pronto p/ Instalação', inst_agendado: true,
-    valor: 900, amb: 'Cortina Sala', data_entrega: DIA_INST, inst_hora: DOMINGO ? '23:00' : '14:00', inst_duracao: 120, usuario_instalacao_id: 1 }];
+    valor: 900, amb: 'Cortina Sala', data_entrega: DIA_INST, inst_hora: '14:00', inst_duracao: 120, usuario_instalacao_id: 1 }];
 const EV = (extra) => ({ id: 'e1', prof: 'u:1', tipo: 'compromisso', bloqueio: '', data_ini: HOJE, data_fim: HOJE, hora_ini: '12:00', hora_fim: '13:00',
     dia_inteiro: false, descricao: 'Dentista particular', aviso_min: 30, criado_por: 1, ...extra });
 
 async function abrir(page, extras, comoUsuario, pagina) {
+    await fixarRelogio(page);
     await entrar(page, BASE, { sc_usr: USU(), sc_cli: CLI(), sc_med: MED(), sc_ped: PED(), ...(extras || {}) });
     if (comoUsuario) {
         await page.evaluate(([id, email]) => sessionStorage.setItem('sc_user', JSON.stringify({ id, email })), [comoUsuario.id, comoUsuario.email]);
@@ -47,6 +49,8 @@ const ok = page => page.locator('#sc-modal-ok').click();
 test('botao Agenda abre a janela no Painel, em Minha agenda e na Semana', async ({ page }) => {
     await abrir(page);
     expect(page.url()).toContain('index.html');
+    // O botao fica logo a esquerda de Dashboards.
+    expect(await page.evaluate(() => document.getElementById('btn-agenda').nextElementSibling.id)).toBe('dash-nav-btn');
     await expect(J(page).locator('.ag-prof-sel')).toContainText('Minha agenda');
     await expect(J(page).locator('.ag-prof-sel')).toContainText('Teste');
     await expect(J(page).locator('.ag-vis-on')).toHaveText('Semana');
@@ -171,13 +175,17 @@ test('Bloquear horario: Horario, Dia inteiro, Folga e Ferias com data fim', asyn
     const s = await guardados(page);
     expect(s.map(e => e.bloqueio)).toEqual(['horario', 'dia', 'folga', 'ferias']);
     expect(s[3]).toMatchObject({ data_ini: dia(3), data_fim: dia(5), dia_inteiro: true });
-    // Mes mostra um chip em cada dia (7 dias de bloqueio ao todo).
+    // Mes: um chip em cada dia bloqueado (1 + 1 + 1 + 3 dias de ferias = 6).
     await J(page).locator('[data-visao="mes"]').click();
     expect(await J(page).locator('.ag-chip.ag-ev-bloq').count()).toBe(6);
-    // Dia: ferias ocupa todo o expediente.
+    // Dia das ferias (dia 3 a 5): o bloco cobre todo o expediente.
     await J(page).locator('[data-visao="dia"]').click();
-    await J(page).locator('[data-nav="1"]').click();
-    await expect(J(page).locator('.ag-col .ag-ev-bloq')).toHaveCount(1);
+    for (let i = 0; i < 3; i++) await J(page).locator('[data-nav="1"]').click();
+    const bloco = J(page).locator('.ag-col .ag-ev-bloq');
+    await expect(bloco).toHaveCount(1);
+    await expect(bloco).toContainText('Férias');
+    const alt = (await bloco.boundingBox()).height, col = (await J(page).locator('.ag-col').boundingBox()).height;
+    expect(alt).toBeGreaterThan(col - 6);
 });
 
 test('conflito avisa com o que conflita e nao grava; bloqueio sobre medicao tambem', async ({ page }) => {
@@ -298,6 +306,7 @@ test('mes: ate 3 itens por dia e +N', async ({ page }) => {
 });
 
 test('data da barra superior abre a Agenda em outra pagina; Esc e X fecham', async ({ page }) => {
+    await fixarRelogio(page);
     await entrar(page, BASE, { sc_usr: USU(), sc_cli: CLI() });
     await page.goto(BASE + '/pcp.html');
     await page.click('#topbar-data');
@@ -351,4 +360,27 @@ test('evento marcado como pendente (aguardando aceite) aparece tracejado', async
     await expect(med).toHaveClass(/ag-pend/);
     expect(await med.evaluate(e => getComputedStyle(e).borderLeftStyle)).toBe('dashed');
     await expect(med).toContainText('Aguardando aceite');
+});
+
+test('item fora do expediente: marca na coluna do dia e lista no Dia', async ({ page }) => {
+    await abrir(page, { sc_med: [], sc_ped: [], sc_agd_ev: [EV({ hora_ini: '19:00', hora_fim: '20:00', descricao: 'Noite' })] });
+    await expect(J(page).locator('.ag-col .ag-ev')).toHaveCount(0);
+    const marca = J(page).locator('.ag-fora-h');
+    await expect(marca).toHaveText('+1 fora do horário');
+    await marca.click();
+    await expect(J(page).locator('.ag-vis-on')).toHaveText('Dia');
+    await expect(J(page).locator('.ag-fora-lista .ag-chip')).toContainText('Compromisso: Noite');
+    await J(page).locator('.ag-fora-lista .ag-chip').click();
+    await expect(page.locator('.agd-modal')).toContainText('Editar compromisso');
+});
+
+test('excluir um item ja excluido em outra aba avisa em vez de dizer que excluiu', async ({ page }) => {
+    await abrir(page, { sc_med: [], sc_ped: [], sc_agd_ev: [EV()] });
+    await evento(page, 'Dentista').click();
+    await page.evaluate(() => localStorage.setItem('sc_agd_ev', '[]'));
+    await page.click('#ag-f-excluir');
+    await ok(page);   // confirmacao
+    await expect(page.locator('#sc-modal-msg')).toContainText('não existe mais');
+    await ok(page);
+    await expect(page.locator('.sc-toast', { hasText: 'Item excluído' })).toHaveCount(0);
 });
