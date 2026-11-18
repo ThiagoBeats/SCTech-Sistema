@@ -231,7 +231,7 @@ test('agendar para si mesmo ou para profissional externo nao pede aceite', async
     await expect(page.locator('#sino-badge')).toHaveCount(0);
 });
 
-test('Maria reagendando a propria medicao nao pede aceite; mudar o horario de outro usuario pede de novo', async ({ page }) => {
+test('Maria reagendando a propria medicao nao pede aceite (a pendente vira aceita); mudar o horario de outro usuario pede de novo', async ({ page }) => {
     const med = { id: 777, clienteId: 1, clienteNome: 'Ana Paula Lima', endereco: 'Av. das Palmeiras, 1000', rua: 'Av. das Palmeiras', numero: '1000',
         data: DIA, hora: '10:00', duracao: 60, status: 'Agendado', usuario_id: 2, aceite: { status: 'aceito', por: 1, em: 1, resp_em: 2 } };
     await abrir(page, 'medicoes', { sc_med: [med] });
@@ -247,11 +247,17 @@ test('Maria reagendando a propria medicao nao pede aceite; mudar o horario de ou
     await page.click('#agdf-salvar');
     await expect.poll(async () => (await lerMeds(page))[0].hora).toBe('15:00');
     expect((await lerMeds(page))[0].aceite).toMatchObject({ status: 'pendente', por: 1 });
-    // Maria mexe na propria: sem aceite
+    // Maria mexe na propria que aguardava aceite dela: conta como aceite (quem destinou fica sabendo)
     await como(page, 2, 'pcp.html?view=medicoes');
     await page.evaluate(() => reagendarMedicao(777));
     await page.fill('#agdf-hora', '16:00');
     await page.click('#agdf-salvar');
     await expect.poll(async () => (await lerMeds(page))[0].hora).toBe('16:00');
+    expect((await lerMeds(page))[0].aceite).toMatchObject({ status: 'aceito', por: 1 });
+    // ja aceita: mexer de novo nao pede nada (o aceite some, vale direto)
+    await page.evaluate(() => reagendarMedicao(777));
+    await page.fill('#agdf-hora', '17:00');
+    await page.click('#agdf-salvar');
+    await expect.poll(async () => (await lerMeds(page))[0].hora).toBe('17:00');
     expect((await lerMeds(page))[0].aceite).toBeUndefined();
 });

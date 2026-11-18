@@ -5,11 +5,27 @@ const A = require('../js/agenda-core.js');
 
 const cfg = { inicio: '08:00', fim: '18:00', passo: 60 };
 
-test('ferias de 20 a 24 ocupam 5 dias inteiros (expediente)', () => {
+test('ferias de 20 a 24 ocupam 5 dias inteiros (00:00 a 24:00, nao so o expediente)', () => {
     const oc = A.ocupacoesDoEvento({ tipo: 'bloqueio', bloqueio: 'ferias', data_ini: '2025-11-20', data_fim: '2025-11-24' }, cfg);
     assert.strictEqual(oc.length, 5);
-    assert.deepStrictEqual(oc[0], { data: '2025-11-20', ini: 480, fim: 1080 });
+    assert.deepStrictEqual(oc[0], { data: '2025-11-20', ini: 0, fim: 1440 });
     assert.strictEqual(oc[4].data, '2025-11-24');
+    // medicao as 07:00 (antes do expediente) num dia de ferias conflita
+    assert.strictEqual(A.conflitos(oc, { data: '2025-11-22', ini: 420, fim: 480 }).length, 1);
+    // folga, dia inteiro e compromisso de dia inteiro tambem
+    ['folga', 'dia'].forEach(b => assert.deepStrictEqual(
+        A.ocupacoesDoEvento({ tipo: 'bloqueio', bloqueio: b, data_ini: '2025-11-20' }, cfg), [{ data: '2025-11-20', ini: 0, fim: 1440 }]));
+    assert.deepStrictEqual(A.ocupacoesDoEvento({ tipo: 'compromisso', dia_inteiro: true, data_ini: '2025-11-20' }, cfg), [{ data: '2025-11-20', ini: 0, fim: 1440 }]);
+});
+
+test('data invalida nao ocupa nada nem gera lembrete', () => {
+    assert.deepStrictEqual(A.ocupacoesDoEvento({ tipo: 'bloqueio', bloqueio: 'dia', data_ini: "2025-11-20');alert(1);('" }, cfg), []);
+    assert.deepStrictEqual(A.ocupacoesDoEvento({ tipo: 'compromisso', data_ini: 'x', hora_ini: '09:00', hora_fim: '10:00' }, cfg), []);
+    assert.strictEqual(A.janelaLembrete({ tipo: 'compromisso', data_ini: '20/11/2025', hora_ini: '09:00', hora_fim: '10:00' }), null);
+    // data fim invalida: so o dia inicio
+    assert.deepStrictEqual(A.ocupacoesDoEvento({ tipo: 'bloqueio', bloqueio: 'ferias', data_ini: '2025-11-20', data_fim: 'lixo' }, cfg), [{ data: '2025-11-20', ini: 0, fim: 1440 }]);
+    assert.strictEqual(A.dataOk('2025-11-20'), true);
+    assert.strictEqual(A.dataOk('2025-11-20x'), false);
 });
 
 test('bloqueio de horario e compromisso ocupam so hora_ini a hora_fim', () => {

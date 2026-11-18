@@ -26,15 +26,16 @@
         return out;
     }
 
-    // Ocupacoes do evento, em minutos: dia inteiro/folga/ferias = expediente em cada dia.
+    const dataOk = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
+
+    // Ocupacoes do evento, em minutos: dia inteiro/folga/ferias = o dia todo (00:00 a 24:00)
+    // em cada dia -- a grade da agenda ja recorta no expediente. Data invalida nao ocupa nada.
     function ocupacoesDoEvento(ev, cfg) {
-        if (!ev || !ev.data_ini) return [];
-        cfg = cfg || {};
+        if (!ev || !dataOk(ev.data_ini)) return [];
         const diaTodo = ev.dia_inteiro || (ev.tipo === 'bloqueio' && ev.bloqueio && ev.bloqueio !== 'horario');
         if (diaTodo) {
-            const ini = min(cfg.inicio), fim = min(cfg.fim);
-            const i = ini === null ? 480 : ini, f = fim === null ? 1080 : fim;
-            return diasEntre(ev.data_ini, ev.data_fim).map(data => ({ data, ini: i, fim: f }));
+            const fimData = dataOk(ev.data_fim) ? ev.data_fim : ev.data_ini;
+            return diasEntre(ev.data_ini, fimData).map(data => ({ data, ini: 0, fim: 1440 }));
         }
         const ini = min(ev.hora_ini), fim = min(ev.hora_fim);
         if (ini === null || fim === null || fim <= ini) return [];
@@ -84,7 +85,7 @@
 
     // Do inicio menos o aviso ate o fim do compromisso.
     function janelaLembrete(ev, cfg) {
-        if (!ev || ev.tipo !== 'compromisso' || !ev.data_ini) return null;
+        if (!ev || ev.tipo !== 'compromisso' || !dataOk(ev.data_ini)) return null;
         const ini = min(ev.hora_ini), fim = min(ev.hora_fim);
         if (ini === null) return null;
         const { a, m, d } = dm(ev.data_ini);
@@ -95,7 +96,7 @@
         return { de: new Date(inicio.getTime() - aviso * 60000), ate: termino };
     }
 
-    const api = { ocupacoesDoEvento, conflitos, periodo, visivel, podeGerenciar, janelaLembrete, somarDias, diasEntre };
+    const api = { dataOk, ocupacoesDoEvento, conflitos, periodo, visivel, podeGerenciar, janelaLembrete, somarDias, diasEntre };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.AgendaCore = api;
 

@@ -97,7 +97,11 @@ Sino de notificações (barra superior, em todas as telas):
   - Itens podem ter botão de ação e ficar na lista até serem resolvidos (persistente)
   - Respeita os tipos desligados em Configurar Empresa e a preferência de notificações;
     com tipo desligado, o rodapé do sino mostra "Alertas desabilitados"
-  - Atualiza sozinho ao gravar e quando outra aba grava (evento storage)
+  - Atualiza sozinho ao gravar e quando outra aba grava (evento storage). Os dados
+    só são relidos quando o que está gravado mudou: uma confirmação aberta (ex.:
+    aprovar pedido) não perde o que está fazendo com a conferência de cada minuto
+  - Item que leva a uma página (ou aba da Produção) que o usuário não pode abrir
+    fica sem link: clicar só marca como visto
 
 Tipo "Entrega hoje":
   - Lista pedidos (não instalados) com data_entrega = hoje
@@ -209,12 +213,19 @@ sistema.
     Compromisso (roxo), Aguardando aceite (tracejado na cor do tipo)
   - Medição e instalação vêm dos próprios agendamentos (nada é copiado: reagendar
     ou cancelar reflete sozinho); clicar abre o detalhe de cada uma, com as ações
-    de sempre
+    de sempre para quem tem acesso à agenda dela na Produção (Agenda de Medições /
+    Agenda de Instalações). Sem esse acesso o detalhe abre só para leitura, sem
+    botões de ação
+  - Quem não vê o painel completo nem tem acesso à agenda na Produção vê as
+    medições e instalações dos outros (que não são dele) só como "Medição" /
+    "Instalação", sem cliente nem número do pedido; clicar não abre o detalhe
   - "+ Novo compromisso": data, hora início e fim, descrição e aviso (15 min /
     30 min / 1 h / 1 dia antes; padrão 30 min)
   - "⛔ Bloquear horário": tipo Horário, Dia inteiro, Folga ou Férias; data início
     (e data fim, opcional, para vários dias), hora início/fim (só no Horário) e
-    motivo opcional. Dia inteiro/Folga/Férias ocupam todo o expediente de cada dia
+    motivo opcional. Dia inteiro/Folga/Férias ocupam o dia todo (00:00 a 24:00) de
+    cada dia: nada pode ser marcado nesses dias, nem antes ou depois do expediente
+    (a grade mostra só o expediente)
   - Clicar num horário vazio da própria agenda oferece "Novo compromisso" ou
     "Bloquear horário" já com a data e a hora; clicar no próprio compromisso ou
     bloqueio edita ou exclui
@@ -239,13 +250,18 @@ sistema.
     ao recarregar). Conferência a cada minuto em todas as páginas do sistema.
     Compromisso de dia inteiro vale durante os dias dele. Pode ser desligado em
     Configurar Empresa > Alertas ("Lembretes de compromisso")
+  - Excluir um usuário (Configurações > Acessos) exclui junto os compromissos e
+    bloqueios da agenda dele; a confirmação diz "Excluir definitivamente o usuário
+    "<Nome>" e N item(ns) da agenda dele?"
 
 ── 2.5.2 ACEITE DE MEDIÇÃO E INSTALAÇÃO ───────────────────────────────────────────
 
 Agendar (novo, editar ou reagendar) uma medição ou instalação para OUTRO usuário
 do sistema deixa o agendamento "aguardando aceite" quando mudou o responsável, a
 data ou o horário. Agendar para si mesmo, para profissional externo (sem usuário)
-ou o próprio responsável mexer no seu agendamento vale direto, sem aceite.
+ou o próprio responsável mexer no seu agendamento vale direto, sem aceite. Se o
+agendamento dele ainda aguardava aceite, editar/reagendar conta como aceite: quem
+destinou recebe "<Nome> aceitou...".
   - Enquanto aguarda: o horário já fica reservado para o destinado (tracejado na
     Agenda, riscado ao agendar) e os cards mostram "Aguardando aceite"
   - O destinado vê, no sino e nos Alertas, com os botões Aceitar e Recusar (o
@@ -265,6 +281,14 @@ ou o próprio responsável mexer no seu agendamento vale direto, sem aceite.
     instalação do pedido #N: <motivo>") com o botão "Reagendar", que abre o
     formulário de editar (medição) ou de agendar (instalação) já com os dados. O
     aviso fica até reagendar
+  - Pedido de aceite vencido (chegou a data e hora marcadas sem resposta): some o
+    Aceitar/Recusar do destinado, e quem destinou recebe "<Nome> não respondeu à
+    medição de <cliente> (dd/mm HH:MM). Reagende." (ou "...à instalação do pedido
+    #N (dd/mm HH:MM). Reagende.") com o botão "Reagendar"
+  - A instalação que ainda aguarda aceite não entra no lembrete "Foi instalado?"
+    do instalador (só no de quem criou o pedido)
+  - Aceitar e recusar (pelo sino ou pelos Alertas) gravam só o agendamento: o que
+    outra aba gravou nesse meio-tempo (clientes, financeiro...) não é desfeito
 
 ── 2.6 TABELA DE PEDIDOS ───────────────────────────────────────────────────────
 
@@ -432,7 +456,8 @@ Cada card de instalação exibe:
       Configuração da agenda) e ela continua em "Pronto p/ Instalação"
     - Quem é lembrado: o instalador designado (se for usuário do sistema) e o
       usuário que criou o pedido. Instalador só com nome digitado não entra no
-      sistema: só quem criou o pedido é lembrado
+      sistema: só quem criou o pedido é lembrado. Instalador que ainda não aceitou
+      a instalação também não é perguntado
     - Ao abrir qualquer página do sistema (depois do login), uma janela aparece
       uma vez por dia por pessoa: "O pedido #N (Cliente) devia ter sido instalado
       em dd/mm às HH:MM. Foi instalado?"

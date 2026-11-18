@@ -104,9 +104,11 @@ const Notif = (() => {
         const lista = ordenados.length ? ordenados.map(it => {
             const novo = !vistos.has(it.chave);
             const acoes = acoesDe(it);
+            // Link para pagina sem acesso: o item so marca visto.
+            const href = it.href && (typeof _hrefPermitido !== 'function' || _hrefPermitido(it.href)) ? it.href : '';
             const acao = acoes.length
                 ? `<span class="sino-acoes">${acoes.map(a => `<button type="button" class="sino-acao${a.sec ? ' sino-acao-sec' : ''}" data-sino-acao="${esc(a.fn)}" data-chave="${esc(it.chave)}">${esc(a.rotulo)}</button>`).join('')}</span>` : '';
-            return `<div class="sino-item${novo ? ' novo' : ''}" role="button" tabindex="0" data-chave="${esc(it.chave)}" data-href="${esc(it.href || '')}">
+            return `<div class="sino-item${novo ? ' novo' : ''}" role="button" tabindex="0" data-chave="${esc(it.chave)}" data-href="${esc(href)}">
                 <span class="sino-item-icone">${it.icone || '🔔'}</span>
                 <span class="sino-item-corpo"><strong>${esc(_textoPuro(it.titulo))}</strong> <span>${esc(_textoPuro(it.texto))}</span>${acao}</span>
             </div>`;

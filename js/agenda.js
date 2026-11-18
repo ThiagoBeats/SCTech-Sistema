@@ -18,6 +18,7 @@ function _agDDMM(iso) { return iso.slice(8, 10) + '/' + iso.slice(5, 7); }
 function _agDiaSemana(iso) { return _AG_DIAS[(new Date(iso + 'T12:00:00Z').getUTCDay() + 6) % 7]; }
 function _agUid() { const u = getUsuarioLogado(); return u ? u.id : null; }
 function _agPode(chave) { return AgendaCore.podeGerenciar(chave, _agUid(), ehAdministrador()); }
+const _AG_DATA_OK = d => AgendaCore.dataOk(d);
 function _agHM(min) { return _agdHHMM(Math.max(0, Math.min(1439, min))); }
 
 function _agGrade() {
@@ -237,9 +238,17 @@ function _agClique(e) {
     if ((el = bt('[data-hora]')) && _agPode(_ag.prof)) { _agEscolha(el.dataset.data, el.dataset.hora); }
 }
 
+// Medicao/instalacao: abre o detalhe que ja existe. Sem acesso a agenda dela na
+// Producao, so leitura (sem botoes de acao); item que o usuario nao veria hoje
+// (restrito) nao abre nada.
 function _agAbrirEvento(tipo, id) {
-    if (tipo === 'med') { abrirDetalheMedicao(id); return; }
-    if (tipo === 'inst') { abrirDetalheInstalacao(id); return; }
+    if (tipo === 'med' || tipo === 'inst') {
+        const c = _agdCompromissos().find(x => x.tipo === tipo && String(x.id) === String(id));
+        if (c && c.restrito) { toast('Você não tem acesso aos detalhes deste agendamento.', 'info'); return; }
+        const soLeitura = !_agdTemAcessoProducao(tipo);
+        if (tipo === 'med') abrirDetalheMedicao(id, { soLeitura }); else abrirDetalheInstalacao(id, { soLeitura });
+        return;
+    }
     _agdRecarregar();
     const ev = (db.agenda_eventos || []).find(x => String(x.id) === String(id));
     if (!ev) { _agendaRedesenhar(); return; }
@@ -378,7 +387,7 @@ async function _agGravar(novo, id) {
         ev.alterado_em = agora;
         db.agenda_eventos.push(ev);
     }
-    syncDB();
+    _gravarChaves(['sc_agd_ev']);
     if (typeof Notif !== 'undefined') Notif.atualizar();
     toast(id ? 'Agenda atualizada!' : (ev.tipo === 'compromisso' ? 'Compromisso salvo!' : 'Horário bloqueado!'), 'success');
     _agendaRedesenhar();
@@ -392,7 +401,7 @@ async function _agExcluir(id) {
     if (!ev) { await showAlert('Este item não existe mais (foi excluído em outra aba).', '⚠️'); fecharModalAgenda(); _agendaRedesenhar(); return; }
     if (ev && !_agPode(ev.prof)) { await showAlert('Você só pode alterar a sua própria agenda.', '⛔'); return; }
     db.agenda_eventos = (db.agenda_eventos || []).filter(x => String(x.id) !== String(id));
-    syncDB();
+    _gravarChaves(['sc_agd_ev']);
     if (typeof Notif !== 'undefined') Notif.atualizar();
     fecharModalAgenda();
     toast('Item excluído da agenda.', 'success');
@@ -418,7 +427,8 @@ function _agLembretesAtivos(agora) {
     const t = (agora || new Date()).getTime();
     const out = [];
     (db.agenda_eventos || []).forEach(ev => {
-        if (!ev || ev.tipo !== 'compromisso' || ev.prof !== 'u:' + uid || !ev.data_ini) return;
+        if (!ev || ev.tipo !== 'compromisso' || ev.prof !== 'u:' + uid || !_AG_DATA_OK(ev.data_ini)) return;
+        if (ev.data_fim && !_AG_DATA_OK(ev.data_fim)) return;
         let de, ate, quando;
         if (ev.dia_inteiro) {
             const a = +ev.data_ini.slice(0, 4), m = +ev.data_ini.slice(5, 7) - 1, d = +ev.data_ini.slice(8, 10);
@@ -448,14 +458,16 @@ Notif.registrar('compromissos', () => alertaAtivo('compromisso') ? _agLembretesA
 
 function abrirAgendaNoDia(data) {
     abrirAgenda();
-    if (data) { _ag.visao = 'dia'; _ag.ref = data; _agendaRedesenhar(); }
+    if (_AG_DATA_OK(data)) { _ag.visao = 'dia'; _ag.ref = data; _agendaRedesenhar(); }
 }
 
 function _agMostradosChave() { const u = _agUid(); return u === null ? null : 'sc_lembretes_mostrados_' + u; }
 function _agVerificarLembretes() {
     const k = _agMostradosChave();
     if (!k) return;
-    _agdRecarregar();
+    // So os eventos da agenda, e so se outra aba os mudou: trocar pedidos/medicoes
+    // no meio de uma confirmacao aberta perderia a alteracao (ver _dbRecarregarChave).
+    _dbRecarregarChave('sc_agd_ev');
     let ativos = [];
     try { const vis = new Set(Notif.listar().map(i => i.chave)); ativos = _agLembretesAtivos().filter(i => vis.has(i.chave)); } catch (e) { return; }
     let mostrados = [];

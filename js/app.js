@@ -288,6 +288,32 @@ let db = {
     import_perfis:   JSON.parse(localStorage.getItem('sc_imp_perfis')) || []
 };
 
+// Chave do localStorage -> array de db (as que sao relidas quando outra aba grava).
+const _DB_CHAVE_CAMPO = {
+    sc_cli: 'clientes', sc_cat: 'catalogo', sc_ped: 'pedidos', sc_est: 'estoque', sc_mat: 'materiais',
+    sc_mov: 'movimentos', sc_med: 'medicoes', sc_agd_ev: 'agenda_eventos', sc_usr: 'usuarios', sc_pap: 'papeis',
+};
+// Texto de cada chave como esta aba leu ou gravou por ultimo. Reler so troca o array
+// quando o texto gravado mudou (outra aba gravou): um fluxo no meio de uma confirmacao
+// (ex.: aprovar pedido) continua mexendo nos mesmos objetos que serao gravados.
+const _dbTextoCarregado = {};
+Object.keys(_DB_CHAVE_CAMPO).forEach(k => { try { _dbTextoCarregado[k] = localStorage.getItem(k); } catch (e) { /* sem storage */ } });
+function _dbMarcarGravado(chave, texto) { if (chave in _DB_CHAVE_CAMPO) _dbTextoCarregado[chave] = texto; }
+// Rele uma chave se o texto gravado mudou. Devolve true quando trocou o array.
+function _dbRecarregarChave(chave) {
+    const campo = _DB_CHAVE_CAMPO[chave];
+    if (!campo) return false;
+    let texto;
+    try { texto = localStorage.getItem(chave); } catch (e) { return false; }
+    if (texto === null || texto === _dbTextoCarregado[chave]) return false;
+    let v;
+    try { v = JSON.parse(texto); } catch (e) { return false; }
+    if (!Array.isArray(v)) return false;
+    db[campo] = v;
+    _dbTextoCarregado[chave] = texto;
+    return true;
+}
+
 // ─── Kits de fixação padrão ──────────────────────────────────────────────
 // Os tipos de instalação que antes eram fixos no pedido nascem como kits de
 // fixação vazios: cada empresa coloca os materiais dela, ou os exclui. Criados
@@ -375,8 +401,8 @@ function formatPedidoId(id) {
 // algo em caso de falha, como a migracao e o importador, usa esta).
 // `extras`: outras chaves gravadas junto, com a mesma volta ao anterior,
 // como [chave, texto]; texto null apaga a chave.
-function _syncDBBruto(extras) {
-    const pares = [
+function _dbPares() {
+    return [
         ['sc_cli', db.clientes],
         ['sc_cat', db.catalogo],
         ['sc_ped', db.pedidos],
@@ -402,6 +428,10 @@ function _syncDBBruto(extras) {
         ['sc_usr', db.usuarios],
         ['sc_imp_perfis', db.import_perfis],
     ];
+}
+function _syncDBBruto(extras, soChaves) {
+    let pares = _dbPares();
+    if (soChaves) pares = pares.filter(([chave]) => soChaves.includes(chave));
     // Se faltar espaco no meio, as chaves ja gravadas voltam (no que der) ao valor anterior,
     // para o navegador ficar com os dados antigos, e o erro sobe.
     const textos = pares.map(([chave, valor]) => [chave, JSON.stringify(valor)]).concat(extras || []);
@@ -419,6 +449,7 @@ function _syncDBBruto(extras) {
         });
         throw e;
     }
+    textos.forEach(([chave, texto]) => _dbMarcarGravado(chave, texto));
 }
 
 function _erroDeEspaco(e) {
@@ -430,8 +461,12 @@ let _avisoSemEspacoMostrado = false;
 // Salva sem quebrar a tela: se o espaco do navegador acabou, avisa uma vez e segue.
 // { silencioso: true } nao abre o aviso (quem chama ja mostra o seu, como o
 // desfazer do importador de catalogo).
-function syncDB({ silencioso = false } = {}) {
-    try { _syncDBBruto(); Notif.atualizarDepois(); if (typeof _agendaRedesenhar === 'function') _agendaRedesenhar(); return true; }
+function syncDB({ silencioso = false } = {}) { return _gravarDB(null, silencioso); }
+// Grava so as chaves indicadas (ex.: ['sc_med']): as demais ficam como estao no
+// navegador, sem voltar ao que esta aba tinha em memoria (outra aba pode ter gravado).
+function _gravarChaves(chaves, { silencioso = false } = {}) { return _gravarDB(chaves, silencioso); }
+function _gravarDB(chaves, silencioso) {
+    try { _syncDBBruto(null, chaves); Notif.atualizarDepois(); if (typeof _agendaRedesenhar === 'function') _agendaRedesenhar(); return true; }
     catch (e) {
         if (!_erroDeEspaco(e)) throw e;
         console.warn('Sem espaço no navegador para salvar.', e);
@@ -1570,6 +1605,23 @@ const PAGINA_MODULO = {
     'empresa.html':       'configuracoes.empresa',
 };
 
+// O usuario logado pode abrir este link (ex.: 'pcp.html?view=medicoes')? Usa a mesma
+// regra do checkAuth para a pagina e, na Producao, a da sub-aba indicada em ?view=.
+const _PCP_VIEW_SUB = { kanban: 'producao.kanban', agenda: 'producao.agenda', medicoes: 'producao.medicoes' };
+function _hrefPermitido(href) {
+    const [caminho, qs] = String(href || '').split('#')[0].split('?');
+    const arquivo = (caminho.split('/').pop() || 'index.html').toLowerCase();
+    const exigidos = PAGINA_MODULO[arquivo];
+    if (!exigidos) return true;
+    const lista = Array.isArray(exigidos) ? exigidos : [exigidos];
+    if (!lista.some(m => temAcessoAlgumaSub(m, 'visualizar'))) return false;
+    if (arquivo === 'pcp.html') {
+        const sub = _PCP_VIEW_SUB[new URLSearchParams(qs || '').get('view')];
+        if (sub && !temAcesso(sub, 'visualizar')) return false;
+    }
+    return true;
+}
+
 async function hashSenha(senha) {
     const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(senha));
     return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -1724,14 +1776,11 @@ function prefsUsuario(u) {
 function _gravarMeuUsuario(alterar) {
     const eu = getUsuarioLogado();
     if (!eu) return null;
-    try {
-        const salvos = JSON.parse(localStorage.getItem('sc_usr'));
-        if (Array.isArray(salvos)) db.usuarios = salvos;
-    } catch (e) { /* fica com o que esta em memoria */ }
+    _dbRecarregarChave('sc_usr');
     const u = db.usuarios.find(x => x.id === eu.id);
     if (!u) return null;
     alterar(u);
-    try { localStorage.setItem('sc_usr', JSON.stringify(db.usuarios)); }
+    try { const t = JSON.stringify(db.usuarios); localStorage.setItem('sc_usr', t); _dbMarcarGravado('sc_usr', t); }
     catch (e) { toast('Não foi possível salvar (armazenamento cheio). Tente uma foto menor.', 'error', 5000); return null; }
     return u;
 }
@@ -2392,8 +2441,13 @@ async function excluirUsuario(id) {
         return;
     }
 
-    if (!await showConfirm(`Excluir definitivamente o usuário "${u.nome}"?\n\nEsta ação não pode ser desfeita.`, '🗑️', 'Excluir')) return;
+    // Compromissos e bloqueios da agenda dele vao junto (nao ficam orfaos).
+    const prof = 'u:' + id;
+    const nAgenda = (db.agenda_eventos || []).filter(ev => ev && ev.prof === prof).length;
+    const agendaTxt = nAgenda ? ` e ${nAgenda} item(ns) da agenda dele` : '';
+    if (!await showConfirm(`Excluir definitivamente o usuário "${u.nome}"${agendaTxt}?\n\nEsta ação não pode ser desfeita.`, '🗑️', 'Excluir')) return;
     db.usuarios = db.usuarios.filter(x => x.id !== id);
+    if (nAgenda) db.agenda_eventos = db.agenda_eventos.filter(ev => !ev || ev.prof !== prof);
     salvarERecarregar('Usuário excluído.');
 }
 
@@ -4586,14 +4640,14 @@ Notif.registrar('aceite-recebidos', () => {
     if (!u) return [];
     const out = [];
     (db.medicoes || []).forEach(m => {
-        if (m.status !== 'Agendado' || !_aceitePend(m.aceite) || m.usuario_id !== u.id) return;
+        if (m.status !== 'Agendado' || !_aceitePend(m.aceite) || m.usuario_id !== u.id || _aceiteVencido(m.data, m.hora)) return;
         out.push({ chave: 'aceite-med:' + m.id + ':' + m.aceite.em, icone: '📐', cor: 'warn', urgente: true, persistente: true,
             href: 'pcp.html?view=medicoes', titulo: '',
             texto: escapeHtml(`Você recebeu a medição de ${m.clienteNome || 'cliente'} em ${_aceiteQuando(m.data, m.hora)}.`),
             acoes: _aceiteAcoes('med', m.id) });
     });
     (db.pedidos || []).forEach(p => {
-        if (!_instPendente(p) || !_aceitePend(p.inst_aceite) || p.usuario_instalacao_id !== u.id) return;
+        if (!_instPendente(p) || !_aceitePend(p.inst_aceite) || p.usuario_instalacao_id !== u.id || _aceiteVencido(p.data_entrega, p.inst_hora)) return;
         out.push({ chave: 'aceite-inst:' + p.id + ':' + p.inst_aceite.em, icone: '🔧', cor: 'warn', urgente: true, persistente: true,
             href: 'pcp.html?view=agenda', titulo: '',
             texto: escapeHtml(`Você recebeu a instalação do pedido #${formatPedidoId(p.id)} (${p.clienteNome || 'cliente'}) em ${_aceiteQuando(p.data_entrega, p.inst_hora)}.`),
@@ -4616,6 +4670,13 @@ Notif.registrar('aceite-respostas', () => {
                 href: 'pcp.html?view=medicoes',
                 texto: escapeHtml(`${nomeUsuario(m.usuario_id)} aceitou a medição de ${m.clienteNome || 'cliente'} (${_aceiteQuando(m.data, m.hora, true)}).`) });
         }
+        // Pedido de aceite vencido sem resposta: quem destinou e avisado para reagendar.
+        if (m.status === 'Agendado' && _aceitePend(m.aceite) && m.aceite.por === u.id && _aceiteVencido(m.data, m.hora)) {
+            out.push({ chave: 'aceite-vencido-med:' + m.id + ':' + m.aceite.em, icone: '⏰', cor: 'danger', urgente: true, titulo: '',
+                href: 'pcp.html?view=medicoes',
+                texto: escapeHtml(`${nomeUsuario(m.usuario_id)} não respondeu à medição de ${m.clienteNome || 'cliente'} (${_aceiteQuando(m.data, m.hora, true)}). Reagende.`),
+                acoes: [{ rotulo: 'Reagendar', fn: `aceiteReagendar('med',${m.id})` }] });
+        }
         if (m.status === 'A reagendar' && m.recusa && m.recusa.para === u.id) {
             out.push({ chave: 'aceite-recusa-med:' + m.id + ':' + m.recusa.em, icone: '⚠️', cor: 'danger', urgente: true, titulo: '',
                 href: 'pcp.html?view=medicoes',
@@ -4630,6 +4691,12 @@ Notif.registrar('aceite-respostas', () => {
                 href: 'pcp.html?view=agenda',
                 texto: escapeHtml(`${nomeUsuario(p.usuario_instalacao_id)} aceitou a instalação do pedido #${formatPedidoId(p.id)} (${_aceiteQuando(p.data_entrega, p.inst_hora, true)}).`) });
         }
+        if (_instPendente(p) && _aceitePend(a) && a.por === u.id && _aceiteVencido(p.data_entrega, p.inst_hora)) {
+            out.push({ chave: 'aceite-vencido-inst:' + p.id + ':' + a.em, icone: '⏰', cor: 'danger', urgente: true, titulo: '',
+                href: 'pcp.html?view=agenda',
+                texto: escapeHtml(`${nomeUsuario(p.usuario_instalacao_id)} não respondeu à instalação do pedido #${formatPedidoId(p.id)} (${_aceiteQuando(p.data_entrega, p.inst_hora, true)}). Reagende.`),
+                acoes: [{ rotulo: 'Reagendar', fn: `aceiteReagendar('inst',${p.id})` }] });
+        }
         if (r && r.para === u.id && normalizarStatus(p.status) === 'Pronto p/ Instalação' && !_instAgendada(p)) {
             out.push({ chave: 'aceite-recusa-inst:' + p.id + ':' + r.em, icone: '⚠️', cor: 'danger', urgente: true, titulo: '',
                 href: 'pcp.html?view=agenda',
@@ -4641,11 +4708,10 @@ Notif.registrar('aceite-respostas', () => {
 });
 
 // Outra aba gravou: traz para a memoria o que os alertas leem.
+// So troca o array quando o texto gravado mudou (ver _dbRecarregarChave).
+const _NOTIF_CHAVES_DB = ['sc_ped', 'sc_med', 'sc_cat', 'sc_mat', 'sc_est', 'sc_mov', 'sc_usr', 'sc_pap', 'sc_agd_ev'];
 function _notifRecarregarDB(chave) {
-    const mapa = { sc_ped: 'pedidos', sc_med: 'medicoes', sc_cat: 'catalogo', sc_mat: 'materiais', sc_est: 'estoque', sc_mov: 'movimentos', sc_usr: 'usuarios', sc_pap: 'papeis', sc_agd_ev: 'agenda_eventos' };
-    const campo = mapa[chave];
-    if (!campo) return;
-    try { const v = JSON.parse(localStorage.getItem(chave)); if (Array.isArray(v)) db[campo] = v; } catch (e) { /* mantem */ }
+    if (_NOTIF_CHAVES_DB.includes(chave)) _dbRecarregarChave(chave);
 }
 
 function _alertaBannerHTML(it) {
@@ -11685,6 +11751,13 @@ function _medDefinirResponsavel(m, pessoa) {
 // destinou, motivo, em }. Pendente reserva o horario (tracejado na agenda). Responsavel que e o
 // proprio usuario ou profissional externo (sem usuario) vale direto: sem campo de aceite.
 function _aceitePend(a) { return !!a && a.status === 'pendente'; }
+// Pedido de aceite vencido: o horario marcado ja chegou sem resposta (sem hora: o fim do dia).
+function _aceiteVencido(data, hora) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(data || ''));
+    if (!m) return false;
+    const ini = _agdMin(hora);
+    return Date.now() >= new Date(+m[1], +m[2] - 1, +m[3], 0, ini === null ? 1440 : ini).getTime();
+}
 function _aceiteQuando(data, hora, curto) {
     const [, m, d] = String(data || '').split('-');
     const dm = d ? `${d}/${m}` : 'sem data';
@@ -11696,12 +11769,20 @@ function _aceiteAcoes(tipo, id) {
 }
 // antes: { uid, data, hora } gravados antes da edicao (null = registro novo ou refeito).
 // So pede aceite quando o responsavel e outro usuario e algo mudou (responsavel, data ou hora).
+// O proprio destinado editando um pedido de aceite ainda pendente = aceitou (quem destinou
+// recebe "aceitou"), em vez de o pedido sumir sem resposta.
 function _aceiteAplicar(reg, campo, antes, uid, data, hora) {
     const eu = getUsuarioLogado()?.id || null;
     uid = uid || null; hora = hora || '';
     if (uid && uid !== eu) {
         const mudou = !antes || antes.uid !== uid || antes.data !== data || (antes.hora || '') !== hora;
         if (mudou) reg[campo] = { status: 'pendente', por: eu, em: Date.now() };
+    } else if (uid && antes && antes.uid === eu && _aceitePend(reg[campo])) {
+        reg[campo].status = 'aceito';
+        reg[campo].resp_em = Date.now();
+        const hist = campo === 'aceite' ? 'historico' : 'inst_historico';
+        if (!reg[hist]) reg[hist] = [];
+        _agdRegistrar(reg[hist], 'aceito');
     } else delete reg[campo];
 }
 function _aceiteBuscar(tipo, id) {
@@ -11717,10 +11798,24 @@ function _aceiteBuscar(tipo, id) {
         Notif.atualizar();
         return null;
     }
+    if (med ? _aceiteVencido(reg.data, reg.hora) : _aceiteVencido(reg.data_entrega, reg.inst_hora)) {
+        toast('O horário deste agendamento já passou. Quem destinou vai reagendar.', 'info');
+        Notif.atualizar();
+        return null;
+    }
     return { reg, campo, med, eu, hist: med ? 'historico' : 'inst_historico' };
 }
+// Grava so a chave tocada (sc_med ou sc_ped): o aceite pode vir do sino em qualquer
+// pagina, aberta ha tempo -- syncDB() regravaria clientes, financeiro etc. velhos.
 function _aceiteRedesenhar(med) {
-    if (med) _medAtualizar(); else _instAtualizar();
+    _gravarChaves([med ? 'sc_med' : 'sc_ped']);
+    renderMedicoes();
+    renderAgenda();
+    if (med) renderDashboardMedicoes();
+    else {
+        if (document.getElementById('kanban-board')) renderKanban();
+        renderDashboardInstalacoes();
+    }
     Notif.atualizar();
 }
 function aceitarAgendamento(tipo, id) {
@@ -11781,7 +11876,13 @@ function aceiteReagendar(tipo, id) {
     if (tipo === 'med') {
         if (document.getElementById('medicoes-container')) { mostrarViewPCP('medicoes'); editarMedicao(id); }
         else window.location.href = 'pcp.html?view=medicoes&reagendarmed=' + encodeURIComponent(id);
-    } else irParaAgendaInstalacao(id);
+        return;
+    }
+    // Instalacao ainda agendada (aceite vencido): abre o reagendamento dela.
+    const p = db.pedidos.find(x => x.id == id);
+    if (!p || !_instPendente(p)) { irParaAgendaInstalacao(id); return; }
+    if (document.getElementById('inst-form')) { mostrarViewPCP('agenda'); reagendarInstalacao(id); }
+    else window.location.href = 'pcp.html?view=agenda&pedido=' + encodeURIComponent(id) + '&reagendar=1';
 }
 
 // Usuarios ativos e os nomes avulsos ja usados em instalacoes e medicoes.
@@ -11853,23 +11954,36 @@ function _agdPreencherDur(id, tipo, valor) {
     sel.value = String(valor || padrao);
 }
 
+// Acesso a agenda de medicoes ('med') ou de instalacoes ('inst') na Producao (pcp.html):
+// o mesmo que da acesso a essa agenda la.
+function _agdTemAcessoProducao(tipo) {
+    return temAcesso(tipo === 'med' ? 'producao.medicoes' : 'producao.agenda', 'visualizar');
+}
+
 // Tudo o que ocupa a agenda de algum profissional.
+// Medicao/instalacao que o usuario nao veria hoje (sem acesso a agenda dela na Producao,
+// sem o painel completo e sem ser dele) vem `restrito`: so "Medicao"/"Instalacao", sem cliente.
 function _agdCompromissos() {
     const cfg = getAgendaConfig();
     const out = [];
+    const painel = vePainelCompleto();
+    const veInst = painel || _agdTemAcessoProducao('inst'), veMed = painel || _agdTemAcessoProducao('med');
     db.pedidos.forEach(p => {
         if (normalizarStatus(p.status) !== 'Pronto p/ Instalação' || !_instAgendada(p)) return;
         const ini = _agdMin(p.inst_hora), prof = _instProf(p);
         if (!p.data_entrega || ini === null || !prof) return;
+        const restrito = !veInst && !pedidoEhMeu(p);
         out.push({ tipo: 'inst', id: p.id, prof, data: p.data_entrega, ini, fim: ini + (+p.inst_duracao || +cfg.dur_inst),
-            rotulo: `Instalação #${formatPedidoId(p.id)}`, cliente: p.clienteNome || '', pendente: _aceitePend(p.inst_aceite) });
+            rotulo: restrito ? 'Instalação' : `Instalação #${formatPedidoId(p.id)}`, cliente: restrito ? '' : p.clienteNome || '',
+            pendente: _aceitePend(p.inst_aceite), restrito });
     });
     (db.medicoes || []).forEach(m => {
         if (m.status !== 'Agendado') return;
         const ini = _agdMin(m.hora), prof = _medProf(m);
         if (!m.data || ini === null || !prof) return;
+        const restrito = !veMed && !medicaoEhMinha(m);
         out.push({ tipo: 'med', id: m.id, prof, data: m.data, ini, fim: ini + (+m.duracao || +cfg.dur_med),
-            rotulo: 'Medição', cliente: m.clienteNome || '', pendente: _aceitePend(m.aceite) });
+            rotulo: 'Medição', cliente: restrito ? '' : m.clienteNome || '', pendente: _aceitePend(m.aceite), restrito });
     });
     // Compromissos e bloqueios da propria agenda: o rotulo ja vem com a privacidade
     // aplicada (quem nao e o dono nem Administrador nao ve descricao nem motivo).
@@ -11944,15 +12058,9 @@ function _agdProximoDiaLivre(q) {
 
 // Releitura do que esta gravado (outra aba/usuario pode ter agendado) e
 // conferencia final. Devolve false e avisa quando ha conflito.
+// So troca um array quando o texto gravado mudou desde a ultima leitura/gravacao desta aba.
 function _agdRecarregar() {
-    try {
-        const ped = JSON.parse(localStorage.getItem('sc_ped'));
-        const med = JSON.parse(localStorage.getItem('sc_med'));
-        const agd = JSON.parse(localStorage.getItem('sc_agd_ev'));
-        if (Array.isArray(ped)) db.pedidos  = ped;
-        if (Array.isArray(med)) db.medicoes = med;
-        if (Array.isArray(agd)) db.agenda_eventos = agd;
-    } catch (e) { /* mantem o que esta em memoria */ }
+    ['sc_ped', 'sc_med', 'sc_agd_ev'].forEach(_dbRecarregarChave);
 }
 async function _agdValidarDisp(q) {
     if (!q.prof || !q.data || !q.hora) return true;
@@ -12014,11 +12122,8 @@ function _agdDispEscolherProf(elId, chave) {
 // Recarrega usuarios/papeis (cadastro feito em outra aba) e atualiza os
 // seletores de profissional sem perder o que ja estava escolhido.
 function _agdAtualizarListaProf() {
-    try {
-        const u = JSON.parse(localStorage.getItem('sc_usr')), p = JSON.parse(localStorage.getItem('sc_pap'));
-        if (Array.isArray(u)) db.usuarios = u;
-        if (Array.isArray(p)) db.papeis = p;
-    } catch (e) { /* mantem o que esta em memoria */ }
+    _dbRecarregarChave('sc_usr');
+    _dbRecarregarChave('sc_pap');
     [['inst-prof', 'Selecione'], ['med-prof', '— A definir —'], ['agdf-usu', '— A definir —']].forEach(([id, vazio]) => {
         const sel = document.getElementById(id);
         if (!sel || sel.value === '__outro') return;
@@ -12279,7 +12384,10 @@ function _aceiteLinhasDetalhe(aceite, recusa) {
     return l;
 }
 
-function abrirDetalheMedicao(id) {
+// opts.soLeitura: so os dados, sem botoes de acao (aberto pela Agenda por quem nao
+// tem acesso a agenda de medicoes da Producao).
+function abrirDetalheMedicao(id, opts) {
+    const soLeitura = !!(opts && opts.soLeitura);
     const m = (db.medicoes || []).find(x => x.id == id);
     if (!m) return;
     const pend = m.status === 'Agendado';
@@ -12307,7 +12415,8 @@ function abrirDetalheMedicao(id) {
     const btnPedido = ped
         ? `<button class="btn btn-outline btn-sm" onclick="criarPedidoDaMedicao(${m.id})" title="Abre o pedido criado a partir deste agendamento">📄 Abrir Pedido #${formatPedidoId(ped.id)}</button>`
         : (pend ? `<button class="btn btn-sm" onclick="criarPedidoDaMedicao(${m.id})" title="Abre o formulário de pedido com o cliente já preenchido. Ao salvar, a medição vai para Realizados.">+ Criar Pedido</button>` : '');
-    const rodape = reag
+    const rodape = soLeitura ? ''
+        : reag
         ? `<button class="btn btn-outline btn-sm btn-danger" onclick="excluirMedicao(${m.id})">🗑️ Excluir</button>
            <button class="btn btn-success btn-sm" onclick="editarMedicao(${m.id})">📅 Reagendar</button>`
         : pend
@@ -12874,7 +12983,10 @@ function renderAgenda() {
     _instAtualizarDisp();
 }
 
-function abrirDetalheInstalacao(id) {
+// opts.soLeitura: so os dados, sem botoes de acao (aberto pela Agenda por quem nao
+// tem acesso a agenda de instalacoes da Producao).
+function abrirDetalheInstalacao(id, opts) {
+    const soLeitura = !!(opts && opts.soLeitura);
     const p = db.pedidos.find(x => x.id == id);
     if (!p) return;
     const cli   = db.clientes.find(c => c.id == p.clienteId);
@@ -12902,7 +13014,8 @@ function abrirDetalheInstalacao(id) {
         p.inst_confirmada_em ? ['Confirmada em', _agdFmtMomento(p.inst_confirmada_em)] : null,
         p.data_instalado ? ['Instalado em', _agdFmtMomento(p.data_instalado)] : null,
     ]) + _agdHistorico(p.inst_historico);
-    const rodape = pend
+    const rodape = soLeitura ? ''
+        : pend
         ? `<button class="btn btn-outline btn-sm btn-danger" onclick="cancelarAgendamentoInstalacao(${p.id})">✕ Cancelar agendamento</button>
            <button class="btn btn-outline btn-sm" onclick="fecharModalAgenda();abrirOS(${p.id})">📋 OS</button>
            <button class="btn btn-outline btn-sm" onclick="editarInstalacao(${p.id})">✏️ Editar</button>
@@ -13030,7 +13143,8 @@ function instalacoesParaConfirmar(usuario) {
     const agora = Date.now();
     return (db.pedidos || [])
         .filter(p => _instPendente(p) && p.data_entrega
-            && (p.usuario_instalacao_id == u.id || p.criado_por == u.id)
+            // o instalador que nunca aceitou nao e perguntado "Foi instalado?"; quem criou o pedido, sim
+            && (p.criado_por == u.id || (p.usuario_instalacao_id == u.id && !_aceitePend(p.inst_aceite)))
             && agora > _instFimMs(p))
         .sort((a, b) => _instFimMs(a) - _instFimMs(b) || a.id - b.id);
 }
