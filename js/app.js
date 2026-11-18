@@ -4092,8 +4092,10 @@ function lembrarListaPedidosAoRecarregar(tela) {
 // Se a lista do botao e redesenhada com o menu aberto (o botao sai da pagina), o
 // menu fecha: as acoes dele apontam para os ids de antes do redesenho.
 let _menuAcoesObservador = null;
+let _menuAcoesBotao = null;
 function _menuAcoesFechar() {
     if (_menuAcoesObservador) { _menuAcoesObservador.disconnect(); _menuAcoesObservador = null; }
+    _menuAcoesBotao = null;
     const m = document.getElementById('menu-acoes-flutuante');
     if (m) m.remove();
     document.querySelectorAll('.btn-kebab[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
@@ -4121,6 +4123,7 @@ function abrirMenuAcoes(ev, itens, botaoAlvo) {
     });
     document.body.appendChild(menu);
     botao.setAttribute('aria-expanded', 'true');
+    _menuAcoesBotao = botao;
     if (typeof MutationObserver === 'function') {
         _menuAcoesObservador = new MutationObserver(() => { if (!botao.isConnected) _menuAcoesFechar(); });
         _menuAcoesObservador.observe(document.body, { childList: true, subtree: true });
@@ -4136,8 +4139,12 @@ function abrirMenuAcoes(ev, itens, botaoAlvo) {
 }
 let _menuAcoesAbertoEm = 0;
 // rolagem que chega junto do clique (a tela trazendo o botao para a vista) nao fecha o menu
+// So fecha quando o que rolou leva o botao junto (a pagina ou a lista dele): outros
+// elementos rolando sozinhos (ex.: o card de Alertas do Painel) nao fecham o menu.
 function _menuAcoesAoRolar(e) {
     if (e && e.target && e.target.closest && e.target.closest('#menu-acoes-flutuante')) return;
+    const alvo = e && e.target;
+    if (_menuAcoesBotao && alvo && alvo.nodeType === 1 && !alvo.contains(_menuAcoesBotao)) return;
     if (performance.now() - _menuAcoesAbertoEm < 250) return;
     _menuAcoesFechar();
 }
