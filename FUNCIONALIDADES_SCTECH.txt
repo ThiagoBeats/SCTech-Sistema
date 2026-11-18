@@ -40,7 +40,7 @@ Módulos (telas):
 Elementos globais presentes em todas as telas (exceto Login):
   - Barra superior fixa (grafite): logo e nome da empresa à esquerda (sem o nome do
     módulo; o título da página fica no conteúdo); à direita a data de hoje (abre a
-    Agenda, quando existir; no celular fica só o ícone), o sino e o avatar (foto ou
+    Agenda; no celular fica só o ícone), o sino e o avatar (foto ou
     iniciais). O avatar abre o menu do perfil: nome do usuário logado, "Meu perfil",
     "Sobre o Sistema", "Configurar Empresa" e "Sair". Nome/foto/empresa atualizam a
     barra na hora ao salvar
@@ -190,6 +190,48 @@ Mini-painel exibido no dashboard quando há medições pendentes:
   - Agrupa em: "Atrasadas" e "Próximas"
   - Cada item mostra: cliente, data, horário, endereço
   - Botão "📍 Ir" no card: abre o Google Maps com o caminho até o endereço
+
+── 2.5.1 AGENDA (janela sobre o Painel) ───────────────────────────────────────────
+
+Abre pelo botão "📅 Agenda" no cabeçalho do Painel de Acompanhamento ou pela data
+da barra superior (em qualquer página). É uma janela grande sobre a tela atual
+(sem sair dela); Esc, ✕ ou clicar fora fecham. Cabeçalho na cor principal do
+sistema.
+  - Lateral "Profissionais": a mesma lista do campo Responsável dos agendamentos
+    (usuários ativos + profissionais externos). Abre em "Minha agenda" (no topo);
+    clicar em outro mostra a agenda dele. A bolinha verde indica quem tem algo hoje
+  - Visões: Semana (padrão), Dia e Mês; setas ‹ › e o período por extenso
+    ("16 a 22 de nov de 2026"); botão "Hoje". As linhas seguem o expediente e o
+    passo da Configuração da agenda; cada item ocupa todo o intervalo
+    início–fim (fora do expediente fica cortado na grade). No Mês: até 3 itens
+    por dia + "+N" (abre o dia)
+  - Cores/legenda: Medição (verde), Instalação (azul), Bloqueado (vermelho),
+    Compromisso (roxo), Aguardando aceite (tracejado na cor do tipo)
+  - Medição e instalação vêm dos próprios agendamentos (nada é copiado: reagendar
+    ou cancelar reflete sozinho); clicar abre o detalhe de cada uma, com as ações
+    de sempre
+  - "+ Novo compromisso": data, hora início e fim, descrição e aviso (15 min /
+    30 min / 1 h / 1 dia antes; padrão 30 min)
+  - "⛔ Bloquear horário": tipo Horário, Dia inteiro, Folga ou Férias; data início
+    (e data fim, opcional, para vários dias), hora início/fim (só no Horário) e
+    motivo opcional. Dia inteiro/Folga/Férias ocupam todo o expediente de cada dia
+  - Clicar num horário vazio da própria agenda oferece "Novo compromisso" ou
+    "Bloquear horário" já com a data e a hora; clicar no próprio compromisso ou
+    bloqueio edita ou exclui
+  - Permissões: todos veem todas as agendas; criar, editar e excluir só na própria
+    agenda; o Administrador em todas (inclusive de profissionais externos)
+  - Privacidade: quem não é o dono nem Administrador vê só "Compromisso" e
+    "Indisponível" (sem descrição nem motivo, nem ao passar o mouse)
+  - Regra única de ocupação: compromissos e bloqueios entram na mesma lista das
+    medições e instalações. Aparecem riscados no horário dos agendamentos, na
+    Disponibilidade do profissional e na conferência de conflito
+  - Conflitos: nunca dois itens ao mesmo tempo para o mesmo profissional. Ao salvar
+    compromisso, bloqueio, medição ou instalação o sistema relê o que está gravado
+    (outra aba pode ter gravado) e, havendo conflito, avisa com o que conflita
+    (sem expor motivos privados) e não salva. Um bloqueio sobre uma medição ou
+    instalação também é conflito
+  - Atualização automática: gravar em outra aba redesenha a Agenda aberta sem
+    recarregar
 
 ── 2.6 TABELA DE PEDIDOS ───────────────────────────────────────────────────────
 

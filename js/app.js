@@ -431,7 +431,7 @@ let _avisoSemEspacoMostrado = false;
 // { silencioso: true } nao abre o aviso (quem chama ja mostra o seu, como o
 // desfazer do importador de catalogo).
 function syncDB({ silencioso = false } = {}) {
-    try { _syncDBBruto(); Notif.atualizarDepois(); return true; }
+    try { _syncDBBruto(); Notif.atualizarDepois(); if (typeof _agendaRedesenhar === 'function') _agendaRedesenhar(); return true; }
     catch (e) {
         if (!_erroDeEspaco(e)) throw e;
         console.warn('Sem espaço no navegador para salvar.', e);
@@ -11374,6 +11374,7 @@ function fecharModalAgenda() {
     _agdModalEl.remove();
     _agdModalEl = null;
     document.removeEventListener('keydown', _agdEsc);
+    if (typeof _agendaRedesenhar === 'function') _agendaRedesenhar();   // a Agenda aberta por baixo mostra o que mudou
 }
 function _agdAbrirModal(titulo, corpo, rodape) {
     fecharModalAgenda();

@@ -94,12 +94,15 @@ test('trocar o nome da empresa atualiza a barra superior', async ({ page }) => {
     await expect(page.locator('#topbar-empresa')).toContainText('DEPOIS LTDA');
 });
 
-test('clicar na data nao quebra sem a Agenda e chama abrirAgenda quando existe', async ({ page }) => {
+test('clicar na data abre a Agenda e chama abrirAgenda', async ({ page }) => {
     await entrar(page, BASE);
     await page.goto(BASE + '/index.html');
     const erros = [];
     page.on('pageerror', e => erros.push(e.message));
-    await page.click('#topbar-data');
+    await page.click('#topbar-data');   // a Agenda existe: abre a janela
+    await expect(page.locator('#agenda-janela')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#agenda-janela')).toHaveCount(0);
     await page.evaluate(() => { window.__agenda = 0; window.abrirAgenda = () => { window.__agenda++; }; });
     await page.click('#topbar-data');
     expect(await page.evaluate(() => window.__agenda)).toBe(1);
