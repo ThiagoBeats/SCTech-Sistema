@@ -232,6 +232,13 @@ sistema.
     instalação também é conflito
   - Atualização automática: gravar em outra aba redesenha a Agenda aberta sem
     recarregar
+  - Lembretes de compromisso: a partir de (início − aviso) até o fim do compromisso
+    o lembrete "Compromisso às HH:MM: <descrição>" (📌) aparece no sino e nos Alertas
+    do dono da agenda, com o botão "Abrir agenda" (abre no dia). Quando o momento
+    chega com o sistema aberto, também sai um aviso na tela, uma vez só (não repete
+    ao recarregar). Conferência a cada minuto em todas as páginas do sistema.
+    Compromisso de dia inteiro vale durante os dias dele. Pode ser desligado em
+    Configurar Empresa > Alertas ("Lembretes de compromisso")
 
 ── 2.6 TABELA DE PEDIDOS ───────────────────────────────────────────────────────
 

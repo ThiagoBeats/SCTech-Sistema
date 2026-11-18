@@ -408,3 +408,67 @@ window.addEventListener('storage', e => {
     _agdRecarregar();
     _agendaRedesenhar();
 });
+
+// ── Lembretes de compromisso ─────────────────────────────────────
+// De (inicio - aviso) ate o fim do compromisso, o dono ve o lembrete no sino e nos
+// Alertas. Compromisso de dia inteiro vale do comeco do primeiro dia ao fim do ultimo.
+function _agLembretesAtivos(agora) {
+    const uid = _agUid();
+    if (uid === null) return [];
+    const t = (agora || new Date()).getTime();
+    const out = [];
+    (db.agenda_eventos || []).forEach(ev => {
+        if (!ev || ev.tipo !== 'compromisso' || ev.prof !== 'u:' + uid || !ev.data_ini) return;
+        let de, ate, quando;
+        if (ev.dia_inteiro) {
+            const a = +ev.data_ini.slice(0, 4), m = +ev.data_ini.slice(5, 7) - 1, d = +ev.data_ini.slice(8, 10);
+            const f = ev.data_fim || ev.data_ini;
+            de = new Date(a, m, d);
+            ate = new Date(+f.slice(0, 4), +f.slice(5, 7) - 1, +f.slice(8, 10), 23, 59, 59);
+            quando = 'hoje';
+        } else {
+            const j = AgendaCore.janelaLembrete(ev, {});
+            if (!j) return;
+            de = j.de; ate = j.ate;
+            quando = 'às ' + ev.hora_ini;
+        }
+        if (t < de.getTime() || t >= ate.getTime()) return;
+        out.push({
+            chave: 'compromisso:' + ev.id + ':' + ev.data_ini + 'T' + (ev.dia_inteiro ? 'dia' : ev.hora_ini),
+            icone: '📌', cor: 'warn', urgente: true,
+            titulo: '<strong>Compromisso ' + quando + ':</strong>',
+            texto: escapeHtml(ev.descricao || ''),
+            acao: { rotulo: 'Abrir agenda', fn: "abrirAgendaNoDia('" + ev.data_ini + "')" },
+            _ordem: de.getTime(), _desc: ev.descricao || '', _quando: quando
+        });
+    });
+    return out.sort((x, y) => x._ordem - y._ordem);
+}
+Notif.registrar('compromissos', () => alertaAtivo('compromisso') ? _agLembretesAtivos() : []);
+
+function abrirAgendaNoDia(data) {
+    abrirAgenda();
+    if (data) { _ag.visao = 'dia'; _ag.ref = data; _agendaRedesenhar(); }
+}
+
+function _agMostradosChave() { const u = _agUid(); return u === null ? null : 'sc_lembretes_mostrados_' + u; }
+function _agVerificarLembretes() {
+    const k = _agMostradosChave();
+    if (!k) return;
+    _agdRecarregar();
+    let ativos = [];
+    try { const vis = new Set(Notif.listar().map(i => i.chave)); ativos = _agLembretesAtivos().filter(i => vis.has(i.chave)); } catch (e) { return; }
+    let mostrados = [];
+    try { const v = JSON.parse(localStorage.getItem(k)); if (Array.isArray(v)) mostrados = v; } catch (e) { /* vazio */ }
+    const novos = ativos.filter(i => !mostrados.includes(i.chave));
+    const lista = mostrados.filter(c => _agLembretesAtivos().some(i => i.chave === c)).concat(novos.map(i => i.chave));
+    try { localStorage.setItem(k, JSON.stringify(lista)); } catch (e) { /* so nao lembra */ }
+    novos.forEach(i => toast('📌 Compromisso ' + i._quando + ': ' + i._desc, 'warning', 8000));
+    const assinatura = ativos.map(i => i.chave).join('|');
+    if (assinatura !== _ag.assinaturaLembretes) { _ag.assinaturaLembretes = assinatura; Notif.atualizar(); }
+}
+function iniciarLembretesAgenda() {
+    if (window._agLembreteTimer || !document.getElementById('main-sidebar')) return;
+    _agVerificarLembretes();
+    window._agLembreteTimer = setInterval(() => { try { _agVerificarLembretes(); } catch (e) { console.error(e); } }, 60000);
+}

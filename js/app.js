@@ -4225,6 +4225,7 @@ const ALERTAS_TIPOS = {
     fin_gap:        { label: 'Gap de caixa (7 dias)',             icon: '⚠️' },
     fin_meta:       { label: 'Progresso da meta de faturamento',  icon: '🎯' },
     fin_tendencia:  { label: 'Tendência de faturamento mensal',   icon: '📈' },
+    compromisso:    { label: 'Lembretes de compromisso',          icon: '📌' },
 };
 
 function getAlertasCfg() {
@@ -12972,6 +12973,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderMenuExtrasEstoque();
         renderBellIndicator();
         initPageNavigation();
+        if (typeof iniciarLembretesAgenda === 'function') iniciarLembretesAgenda();
         const popupUserEl = document.getElementById('popup-user-name');
         if (popupUserEl) {
             const u = getUsuarioLogado() || JSON.parse(sessionStorage.getItem('sc_user') || '{}');
