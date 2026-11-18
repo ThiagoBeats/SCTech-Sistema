@@ -2633,6 +2633,10 @@ Pedidos (pedidos.html e Página Inicial):
     (só em Orçamento), Editar, Gerar proposta, Ver OS, Imprimir etiquetas
     (travada antes de Pronto), Ver timeline e Excluir. Fecha no clique fora,
     no Esc e ao rolar a tela.
+  - Depois de uma ação que recarrega a página (aprovar, excluir, mudar status...),
+    a lista volta como estava: mesma rolagem, busca, filtro de status, vendedor e
+    ordem da coluna. Só no recarregamento; abrindo a tela pelo menu ela começa
+    no topo e sem filtros (o "Salvar filtro" de vendedor continua valendo).
 
 Barra lateral:
   - A logo do topo é a logotipo importada em Configurar Empresa (sobre um

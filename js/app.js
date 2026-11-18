@@ -3992,6 +3992,45 @@ function salvarFiltroVendedorTela() {
     toast('Filtro de vendedor salvo!', 'success', 1800);
 }
 
+// Acao da lista de Pedidos (aprovar, mudar status, excluir...) recarrega a pagina:
+// so nesse recarregamento a lista volta com a mesma rolagem, busca, filtros e
+// ordem. Vindo do menu ou de um link, abre limpa e no topo. Devolve a funcao que
+// repoe a rolagem (chamar depois de desenhar a tabela) ou null.
+function _rolagemPedidosEl() { return document.querySelector('.main'); }
+function lembrarListaPedidosAoRecarregar(tela) {
+    const k = 'sc_lista_' + tela;
+    let salvo = null;
+    try { salvo = JSON.parse(sessionStorage.getItem(k) || 'null'); sessionStorage.removeItem(k); } catch (e) { /* sem sessionStorage */ }
+    window.addEventListener('beforeunload', () => {
+        try {
+            const main = _rolagemPedidosEl();
+            sessionStorage.setItem(k, JSON.stringify({
+                y: window.scrollY || 0, m: main ? main.scrollTop : 0,
+                texto: document.getElementById('filtro-texto')?.value || '',
+                status: document.getElementById('filtro-status')?.value || '',
+                vendedor: document.getElementById('filtro-vendedor')?.value || '',
+                col: dashboardState.col, dir: dashboardState.dir,
+            }));
+        } catch (e) { /* sem sessionStorage */ }
+    });
+    if (!salvo || !_paginaRecarregada()) return null;
+    const defTexto = document.getElementById('filtro-texto');
+    if (defTexto) defTexto.value = salvo.texto || '';
+    const selSt = document.getElementById('filtro-status');
+    if (selSt && [...selSt.options].some(o => o.value === salvo.status)) selSt.value = salvo.status;
+    const selVend = document.getElementById('filtro-vendedor');
+    if (selVend && [...selVend.options].some(o => o.value === salvo.vendedor)) selVend.value = salvo.vendedor;
+    if (salvo.col) { dashboardState.col = salvo.col; dashboardState.dir = salvo.dir === 1 ? 1 : -1; }
+    const aplicar = () => {
+        const main = _rolagemPedidosEl();
+        if (main) main.scrollTop = salvo.m || 0;
+        window.scrollTo(0, salvo.y || 0);
+    };
+    // antes de pintar a primeira vez (sem piscar no topo) e de novo quando tudo carregou
+    window.addEventListener('load', aplicar);
+    return aplicar;
+}
+
 // --- MENU DE ACOES (tres pontos) ---
 // Um menu flutuante so, reaproveitado por todas as linhas: abre junto do botao
 // (posicao fixa, para nao ser cortado pela tabela) e fecha no clique fora, no
@@ -13201,7 +13240,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const arquivoAtual = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
         const telaFiltro = arquivoAtual === 'pedidos.html' ? 'pedidos' : 'painel_acompanhamento';
         inicializarFiltroVendedorTela(telaFiltro);
+        const rolagemPedidos = lembrarListaPedidosAoRecarregar(telaFiltro);
         renderDashboard();
+        if (rolagemPedidos) rolagemPedidos();
     }
 
     if (document.getElementById('tb-catalogo')) {
