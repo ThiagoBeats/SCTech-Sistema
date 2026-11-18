@@ -1,6 +1,6 @@
 // Notificacoes: o sino da barra superior e o card "Alertas do Sistema" do Painel
 // leem a mesma lista. Cada tipo de alerta e um coletor registrado aqui:
-//   Notif.registrar('nome', () => [{ chave, icone, titulo, texto, urgente, cor?, href?, acao?: { rotulo, fn }, persistente? }])
+//   Notif.registrar('nome', () => [{ chave, icone, titulo, texto, urgente, cor?, href?, acao?: { rotulo, fn }, acoes?: [{ rotulo, fn, sec? }], persistente? }])
 // titulo e texto sao HTML (o coletor escapa o que vem do usuario).
 // A chave identifica o alerta: quando muda (ex.: entra um pedido novo na lista), conta de novo.
 // "Vistos" ficam por usuario em localStorage sc_notif_vistos_<id>.
@@ -27,6 +27,12 @@ const Notif = (() => {
         const k = _chaveVistos();
         if (!k) return;
         try { localStorage.setItem(k, JSON.stringify(lista)); } catch (e) { /* sem espaco: so nao lembra */ }
+    }
+
+    // Botoes do alerta: `acoes: [{ rotulo, fn, sec? }]` (varios) ou `acao: { rotulo, fn }` (um so).
+    function acoesDe(it) {
+        const l = Array.isArray(it.acoes) ? it.acoes : (it.acao ? [it.acao] : []);
+        return l.filter(a => a && a.fn);
     }
 
     function _todos() {
@@ -97,8 +103,9 @@ const Notif = (() => {
         } catch (e) {}
         const lista = ordenados.length ? ordenados.map(it => {
             const novo = !vistos.has(it.chave);
-            const acao = it.acao && it.acao.fn
-                ? `<button type="button" class="sino-acao" data-sino-acao="${esc(it.acao.fn)}" data-chave="${esc(it.chave)}">${esc(it.acao.rotulo)}</button>` : '';
+            const acoes = acoesDe(it);
+            const acao = acoes.length
+                ? `<span class="sino-acoes">${acoes.map(a => `<button type="button" class="sino-acao${a.sec ? ' sino-acao-sec' : ''}" data-sino-acao="${esc(a.fn)}" data-chave="${esc(it.chave)}">${esc(a.rotulo)}</button>`).join('')}</span>` : '';
             return `<div class="sino-item${novo ? ' novo' : ''}" role="button" tabindex="0" data-chave="${esc(it.chave)}" data-href="${esc(it.href || '')}">
                 <span class="sino-item-icone">${it.icone || '🔔'}</span>
                 <span class="sino-item-corpo"><strong>${esc(_textoPuro(it.titulo))}</strong> <span>${esc(_textoPuro(it.texto))}</span>${acao}</span>
@@ -156,5 +163,5 @@ const Notif = (() => {
         atualizarDepois();
     });
 
-    return { registrar, listar, naoVistos, marcarVisto, marcarTodasVistas, atualizar, atualizarDepois, desenharSino };
+    return { registrar, acoesDe, listar, naoVistos, marcarVisto, marcarTodasVistas, atualizar, atualizarDepois, desenharSino };
 })();

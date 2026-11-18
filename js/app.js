@@ -4540,6 +4540,67 @@ Notif.registrar('estoque-minimo', () => {
         titulo: `<strong>${total} item(ns)</strong> com estoque abaixo do mínimo:`, texto: itens }];
 });
 
+// Aceite de medicao/instalacao destinada a outro usuario (ver "ACEITE" mais abaixo).
+// Quem recebeu: pedido persistente, com Aceitar e Recusar, ate responder.
+Notif.registrar('aceite-recebidos', () => {
+    const u = getUsuarioLogado();
+    if (!u) return [];
+    const out = [];
+    (db.medicoes || []).forEach(m => {
+        if (m.status !== 'Agendado' || !_aceitePend(m.aceite) || m.usuario_id !== u.id) return;
+        out.push({ chave: 'aceite-med:' + m.id + ':' + m.aceite.em, icone: '📐', cor: 'warn', urgente: true, persistente: true,
+            href: 'pcp.html?view=medicoes', titulo: '',
+            texto: escapeHtml(`Você recebeu a medição de ${m.clienteNome || 'cliente'} em ${_aceiteQuando(m.data, m.hora)}.`),
+            acoes: _aceiteAcoes('med', m.id) });
+    });
+    (db.pedidos || []).forEach(p => {
+        if (!_instPendente(p) || !_aceitePend(p.inst_aceite) || p.usuario_instalacao_id !== u.id) return;
+        out.push({ chave: 'aceite-inst:' + p.id + ':' + p.inst_aceite.em, icone: '🔧', cor: 'warn', urgente: true, persistente: true,
+            href: 'pcp.html?view=agenda', titulo: '',
+            texto: escapeHtml(`Você recebeu a instalação do pedido #${formatPedidoId(p.id)} (${p.clienteNome || 'cliente'}) em ${_aceiteQuando(p.data_entrega, p.inst_hora)}.`),
+            acoes: _aceiteAcoes('inst', p.id) });
+    });
+    return out;
+});
+
+// Quem destinou: "aceitou" (some 7 dias depois da resposta) e "recusou" (fica ate reagendar,
+// com o botao Reagendar).
+const _ACEITE_DIAS_AVISO = 7;
+Notif.registrar('aceite-respostas', () => {
+    const u = getUsuarioLogado();
+    if (!u) return [];
+    const out = [];
+    const limite = Date.now() - _ACEITE_DIAS_AVISO * 86400000;
+    (db.medicoes || []).forEach(m => {
+        if (m.status === 'Agendado' && m.aceite && m.aceite.status === 'aceito' && m.aceite.por === u.id && m.aceite.resp_em && m.aceite.resp_em > limite) {
+            out.push({ chave: 'aceite-ok-med:' + m.id + ':' + m.aceite.resp_em, icone: '✅', cor: 'info', urgente: false, titulo: '',
+                href: 'pcp.html?view=medicoes',
+                texto: escapeHtml(`${nomeUsuario(m.usuario_id)} aceitou a medição de ${m.clienteNome || 'cliente'} (${_aceiteQuando(m.data, m.hora, true)}).`) });
+        }
+        if (m.status === 'A reagendar' && m.recusa && m.recusa.para === u.id) {
+            out.push({ chave: 'aceite-recusa-med:' + m.id + ':' + m.recusa.em, icone: '⚠️', cor: 'danger', urgente: true, titulo: '',
+                href: 'pcp.html?view=medicoes',
+                texto: escapeHtml(`${nomeUsuario(m.recusa.por)} recusou a medição de ${m.clienteNome || 'cliente'}: ${m.recusa.motivo}`),
+                acoes: [{ rotulo: 'Reagendar', fn: `aceiteReagendar('med',${m.id})` }] });
+        }
+    });
+    (db.pedidos || []).forEach(p => {
+        const a = p.inst_aceite, r = p.inst_recusa;
+        if (_instPendente(p) && a && a.status === 'aceito' && a.por === u.id && a.resp_em && a.resp_em > limite) {
+            out.push({ chave: 'aceite-ok-inst:' + p.id + ':' + a.resp_em, icone: '✅', cor: 'info', urgente: false, titulo: '',
+                href: 'pcp.html?view=agenda',
+                texto: escapeHtml(`${nomeUsuario(p.usuario_instalacao_id)} aceitou a instalação do pedido #${formatPedidoId(p.id)} (${_aceiteQuando(p.data_entrega, p.inst_hora, true)}).`) });
+        }
+        if (r && r.para === u.id && normalizarStatus(p.status) === 'Pronto p/ Instalação' && !_instAgendada(p)) {
+            out.push({ chave: 'aceite-recusa-inst:' + p.id + ':' + r.em, icone: '⚠️', cor: 'danger', urgente: true, titulo: '',
+                href: 'pcp.html?view=agenda',
+                texto: escapeHtml(`${nomeUsuario(r.por)} recusou a instalação do pedido #${formatPedidoId(p.id)}: ${r.motivo}`),
+                acoes: [{ rotulo: 'Reagendar', fn: `aceiteReagendar('inst',${p.id})` }] });
+        }
+    });
+    return out;
+});
+
 // Outra aba gravou: traz para a memoria o que os alertas leem.
 function _notifRecarregarDB(chave) {
     const mapa = { sc_ped: 'pedidos', sc_med: 'medicoes', sc_cat: 'catalogo', sc_mat: 'materiais', sc_est: 'estoque', sc_mov: 'movimentos', sc_usr: 'usuarios', sc_pap: 'papeis', sc_agd_ev: 'agenda_eventos' };
@@ -4550,8 +4611,8 @@ function _notifRecarregarDB(chave) {
 
 function _alertaBannerHTML(it) {
     const [bg, bord, txt] = _ALERTA_CORES[it.cor] || _ALERTA_CORES[it.urgente ? 'danger' : 'warn'];
-    const acao = it.acao && it.acao.fn
-        ? `<button type="button" class="btn btn-primary btn-sm" data-alerta-acao="${escapeHtml(it.acao.fn)}">${escapeHtml(it.acao.rotulo)}</button>` : '';
+    const acao = Notif.acoesDe(it)
+        .map(a => `<button type="button" class="btn ${a.sec ? 'btn-outline' : 'btn-primary'} btn-sm" data-alerta-acao="${escapeHtml(a.fn)}">${escapeHtml(a.rotulo)}</button>`).join('');
     return `<div data-urgente="${it.urgente ? 1 : 0}" data-chave="${escapeHtml(it.chave)}" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:${bg};border:1px solid ${bord};border-radius:8px;padding:10px 16px;font-size:13px">
             <span style="font-size:17px;flex-shrink:0">${it.icone || '🔔'}</span>
             <span style="color:${txt}">${it.titulo || ''}</span>
@@ -7149,7 +7210,7 @@ Volte o pedido para Orçamento para editar.`, '🔒');
             // (so se ja existiam; o formulario do pedido nao os edita).
             ['inst_agendado', 'inst_hora', 'inst_duracao', 'inst_obs', 'inst_endereco', 'inst_cidade',
              'inst_cep', 'inst_rua', 'inst_numero', 'inst_complemento', 'inst_bairro', 'inst_uf',
-             'inst_historico', 'inst_confirmada_em', 'usuario_instalacao_id', 'instalador_nome']
+             'inst_historico', 'inst_confirmada_em', 'usuario_instalacao_id', 'instalador_nome', 'inst_aceite', 'inst_recusa']
                 .forEach(k => { if (db.pedidos[index][k] !== undefined) dadosPedido[k] = db.pedidos[index][k]; });
             dadosPedido.comissao_paga     = db.pedidos[index].comissao_paga     || false;
             dadosPedido.comissao_data_pgto = db.pedidos[index].comissao_data_pgto || null;
@@ -11068,6 +11129,7 @@ async function salvarMedicao() {
     const med = { id: Date.now(), clienteId, clienteNome, clienteTel, ...partes, endereco: end, data, hora, duracao: dur, obs, status: 'Agendado',
         agendado_por: getUsuarioLogado()?.id || null, agendado_em: Date.now() };
     _medDefinirResponsavel(med, prof.pessoa);
+    _aceiteAplicar(med, 'aceite', null, med.usuario_id, data, hora);
     db.medicoes.push(med);
 
     const nomeEl  = document.getElementById('med-novo-nome');  if (nomeEl)  nomeEl.value  = '';
@@ -11212,6 +11274,8 @@ const _AGD_PILLS = {
     instalado: ['Instalado',         'agd-pill-verde'],
     pagamento: ['Aguard. financeiro', 'agd-pill-amar'],
     semdata:   ['Sem data',          'agd-pill-cinza'],
+    aceite:    ['Aguardando aceite', 'agd-pill-amar'],
+    reagendar: ['A reagendar',       'agd-pill-verm'],
 };
 function _agdPill(tipo) {
     const [txt, cls] = _AGD_PILLS[tipo] || _AGD_PILLS.agendado;
@@ -11418,6 +11482,8 @@ function _agdDescHist(x) {
     if (x.acao === 'reagendado') return `${quando}: reagendado de ${fmt(x.de)} para ${fmt(x.para)}${por}`;
     if (x.acao === 'desmarcado') return `${quando}: data desmarcada, era ${fmt(x.de)}${por}`;
     if (x.acao === 'cancelado')  return `${quando}: agendamento cancelado${x.de ? ', era ' + fmt(x.de) : ''}${por}`;
+    if (x.acao === 'aceito')     return `${quando}: aceito${por}`;
+    if (x.acao === 'recusado')   return `${quando}: recusado${x.motivo ? ' — ' + x.motivo : ''}${x.de && x.de.data ? ', era ' + fmt(x.de) : ''}${por}`;
     if (x.acao === 'pedido')     return `${quando}: pedido #${formatPedidoId(x.pedido)} criado a partir deste agendamento${por}`;
     return `${quando}: ${x.acao}${por}`;
 }
@@ -11574,6 +11640,111 @@ function _medDefinirResponsavel(m, pessoa) {
     m.responsavel_nome = pessoa.id ? '' : (pessoa.nome || '');
 }
 
+// --- ACEITE de medicao/instalacao destinada a outro usuario ---------------------------
+// Dados: medicao.aceite / pedido.inst_aceite = { status: 'pendente'|'aceito', por: quem destinou,
+// em, resp_em }; recusa: medicao.recusa / pedido.inst_recusa = { por: quem recusou, para: quem
+// destinou, motivo, em }. Pendente reserva o horario (tracejado na agenda). Responsavel que e o
+// proprio usuario ou profissional externo (sem usuario) vale direto: sem campo de aceite.
+function _aceitePend(a) { return !!a && a.status === 'pendente'; }
+function _aceiteQuando(data, hora, curto) {
+    const [, m, d] = String(data || '').split('-');
+    const dm = d ? `${d}/${m}` : 'sem data';
+    return hora ? dm + (curto ? ' ' : ' às ') + hora : dm;
+}
+function _aceiteAcoes(tipo, id) {
+    return [{ rotulo: 'Aceitar', fn: `aceitarAgendamento('${tipo}',${id})` },
+            { rotulo: 'Recusar', fn: `recusarAgendamento('${tipo}',${id})`, sec: true }];
+}
+// antes: { uid, data, hora } gravados antes da edicao (null = registro novo ou refeito).
+// So pede aceite quando o responsavel e outro usuario e algo mudou (responsavel, data ou hora).
+function _aceiteAplicar(reg, campo, antes, uid, data, hora) {
+    const eu = getUsuarioLogado()?.id || null;
+    uid = uid || null; hora = hora || '';
+    if (uid && uid !== eu) {
+        const mudou = !antes || antes.uid !== uid || antes.data !== data || (antes.hora || '') !== hora;
+        if (mudou) reg[campo] = { status: 'pendente', por: eu, em: Date.now() };
+    } else delete reg[campo];
+}
+function _aceiteBuscar(tipo, id) {
+    _agdRecarregar();
+    const eu = getUsuarioLogado();
+    const med = tipo === 'med';
+    const reg = med ? (db.medicoes || []).find(x => x.id == id) : db.pedidos.find(x => x.id == id);
+    const campo = med ? 'aceite' : 'inst_aceite';
+    const ativo = reg && (med ? reg.status === 'Agendado' : _instPendente(reg));
+    const dest = reg && (med ? reg.usuario_id : reg.usuario_instalacao_id);
+    if (!eu || !ativo || !_aceitePend(reg[campo]) || dest !== eu.id) {
+        toast('Este pedido de aceite já foi respondido ou mudou.', 'info');
+        Notif.atualizar();
+        return null;
+    }
+    return { reg, campo, med, eu, hist: med ? 'historico' : 'inst_historico' };
+}
+function _aceiteRedesenhar(med) {
+    if (med) _medAtualizar(); else _instAtualizar();
+    Notif.atualizar();
+}
+function aceitarAgendamento(tipo, id) {
+    const r = _aceiteBuscar(tipo, id);
+    if (!r) return;
+    const a = r.reg[r.campo];
+    a.status = 'aceito'; a.resp_em = Date.now();
+    if (!r.reg[r.hist]) r.reg[r.hist] = [];
+    _agdRegistrar(r.reg[r.hist], 'aceito');
+    _aceiteRedesenhar(r.med);
+    toast('Agendamento aceito.', 'success');
+}
+function recusarAgendamento(tipo, id) {
+    const r = _aceiteBuscar(tipo, id);
+    if (!r) return;
+    const m = r.reg;
+    const quando = r.med ? _aceiteQuando(m.data, m.hora) : _aceiteQuando(m.data_entrega, m.inst_hora);
+    const titulo = r.med ? `a medição de ${m.clienteNome || 'cliente'}` : `a instalação do pedido #${formatPedidoId(m.id)} (${m.clienteNome || 'cliente'})`;
+    const corpo = `<p style="margin:0 0 12px">Recusar ${escapeHtml(titulo)} em ${escapeHtml(quando)}?</p>
+        <div class="form-group"><label for="aceite-motivo">Motivo <span style="color:var(--danger)">*</span></label>
+        <textarea id="aceite-motivo" rows="3" placeholder="Diga por que não dá para atender"></textarea></div>`;
+    _agdAbrirModal('Recusar agendamento', corpo,
+        `<button type="button" class="btn btn-outline btn-sm" onclick="fecharModalAgenda()">Voltar</button>
+         <button type="button" class="btn btn-outline btn-sm btn-danger" id="aceite-confirmar" disabled>Recusar</button>`);
+    const txt = document.getElementById('aceite-motivo'), ok = document.getElementById('aceite-confirmar');
+    txt.addEventListener('input', () => { ok.disabled = !txt.value.trim(); });
+    ok.addEventListener('click', () => _aceiteConfirmarRecusa(tipo, id, txt.value.trim()));
+    txt.focus();
+}
+function _aceiteConfirmarRecusa(tipo, id, motivo) {
+    if (!motivo) return;
+    fecharModalAgenda();
+    const r = _aceiteBuscar(tipo, id);   // relido: outro usuario/aba pode ter mexido enquanto digitava
+    if (!r) return;
+    const m = r.reg, agora = Date.now();
+    if (!m[r.hist]) m[r.hist] = [];
+    if (r.med) {
+        _agdRegistrar(m.historico, 'recusado', { motivo, de: { data: m.data, hora: m.hora || '' } });
+        m.recusa = { por: r.eu.id, para: m.aceite.por, motivo, em: agora };
+        m.status = 'A reagendar';
+        delete m.aceite;
+        m.usuario_id = null; m.responsavel_nome = '';
+        m.data = ''; m.hora = '';
+    } else {
+        _agdRegistrar(m.inst_historico, 'recusado', { motivo, de: { data: m.data_entrega || '', hora: m.inst_hora || '' } });
+        m.inst_recusa = { por: r.eu.id, para: m.inst_aceite.por, motivo, em: agora };
+        delete m.inst_aceite;
+        m.inst_agendado = false;
+        m.data_entrega = null;
+        m.inst_hora = '';
+        definirInstalador(m, { id: null, nome: '' });
+    }
+    _aceiteRedesenhar(r.med);
+    toast('Agendamento recusado. Quem destinou foi avisado.', 'info');
+}
+// "Reagendar" do aviso de recusa: abre o formulario com os dados que ficaram.
+function aceiteReagendar(tipo, id) {
+    if (tipo === 'med') {
+        if (document.getElementById('medicoes-container')) { mostrarViewPCP('medicoes'); editarMedicao(id); }
+        else window.location.href = 'pcp.html?view=medicoes&reagendarmed=' + encodeURIComponent(id);
+    } else irParaAgendaInstalacao(id);
+}
+
 // Usuarios ativos e os nomes avulsos ja usados em instalacoes e medicoes.
 function _agdProfissionais() {
     const lista = db.usuarios.filter(u => u.ativo).map(u => {
@@ -11652,14 +11823,14 @@ function _agdCompromissos() {
         const ini = _agdMin(p.inst_hora), prof = _instProf(p);
         if (!p.data_entrega || ini === null || !prof) return;
         out.push({ tipo: 'inst', id: p.id, prof, data: p.data_entrega, ini, fim: ini + (+p.inst_duracao || +cfg.dur_inst),
-            rotulo: `Instalação #${formatPedidoId(p.id)}`, cliente: p.clienteNome || '' });
+            rotulo: `Instalação #${formatPedidoId(p.id)}`, cliente: p.clienteNome || '', pendente: _aceitePend(p.inst_aceite) });
     });
     (db.medicoes || []).forEach(m => {
         if (m.status !== 'Agendado') return;
         const ini = _agdMin(m.hora), prof = _medProf(m);
         if (!m.data || ini === null || !prof) return;
         out.push({ tipo: 'med', id: m.id, prof, data: m.data, ini, fim: ini + (+m.duracao || +cfg.dur_med),
-            rotulo: 'Medição', cliente: m.clienteNome || '' });
+            rotulo: 'Medição', cliente: m.clienteNome || '', pendente: _aceitePend(m.aceite) });
     });
     // Compromissos e bloqueios da propria agenda: o rotulo ja vem com a privacidade
     // aplicada (quem nao e o dono nem Administrador nao ve descricao nem motivo).
@@ -12002,7 +12173,9 @@ function abrirConfigAgenda() {
 // --- MEDICOES ---------------------------------------------------------------
 function _medPill(m, hoje) {
     if (m.status === 'Realizado') return 'realizado';
-    return m.data && m.data < hoje ? 'atrasado' : 'agendado';
+    if (m.status === 'A reagendar') return 'reagendar';
+    if (m.data && m.data < hoje) return 'atrasado';
+    return _aceitePend(m.aceite) ? 'aceite' : 'agendado';
 }
 
 function _medAtualizar() {
@@ -12039,7 +12212,7 @@ function renderMedicoes() {
     if (!document.getElementById('med-pend-lista')) return;
     const hoje  = _agdHoje();
     const todas = db.medicoes || [];
-    const pend  = todas.filter(m => m.status === 'Agendado');
+    const pend  = todas.filter(m => m.status === 'Agendado' || m.status === 'A reagendar');   // recusadas ficam no topo, "A reagendar"
     const real  = todas.filter(m => m.status === 'Realizado');
     const filtra = (lista, chave) => {
         const b = _agdNorm(_agdBusca[chave]);
@@ -12050,7 +12223,8 @@ function renderMedicoes() {
         nome: m.clienteNome, tel: m.clienteTel, end: _endMed(m),
         data: m.data, hora: m.hora, pill: _medPill(m, hoje),
     });
-    const pendF = filtra(pend, 'medPend').sort((a, b) => _agdCmp(_agdChave(a.data, a.hora), _agdChave(b.data, b.hora)));
+    const pendF = filtra(pend, 'medPend').sort((a, b) => (b.status === 'A reagendar') - (a.status === 'A reagendar')
+        || _agdCmp(_agdChave(a.data, a.hora), _agdChave(b.data, b.hora)));
     const realF = filtra(real, 'medReal').sort((a, b) =>
         _agdCmp(_agdChave(b.data, b.hora), _agdChave(a.data, a.hora)) || (b.realizado_em || 0) - (a.realizado_em || 0));
     _agdPreencher('med-pend', pendF.map(linha), pend.length, 'Nenhuma visita agendada. Use o formulário acima para agendar.', _agdBusca.medPend, ['agendamento', 'agendamentos']);
@@ -12058,10 +12232,19 @@ function renderMedicoes() {
     _medAtualizarDisp();
 }
 
+function _aceiteLinhasDetalhe(aceite, recusa) {
+    const l = [];
+    if (_aceitePend(aceite)) l.push(['Aceite', 'Aguardando aceite']);
+    else if (aceite && aceite.status === 'aceito') l.push(['Aceite', 'Aceito' + (aceite.resp_em ? ' em ' + _agdFmtMomento(aceite.resp_em) : '')]);
+    if (recusa) l.push(['Recusada', escapeHtml(`${nomeUsuario(recusa.por)}: ${recusa.motivo}`)]);
+    return l;
+}
+
 function abrirDetalheMedicao(id) {
     const m = (db.medicoes || []).find(x => x.id == id);
     if (!m) return;
     const pend = m.status === 'Agendado';
+    const reag = m.status === 'A reagendar';
     const ped  = _medPedidoVinculado(m);
     const tel  = m.clienteTel
         ? `<a href="https://wa.me/55${m.clienteTel.replace(/\D/g, '')}" target="_blank" rel="noopener">${escapeHtml(m.clienteTel)}</a>`
@@ -12075,6 +12258,7 @@ function abrirDetalheMedicao(id) {
         ['Horário',     escapeHtml(m.hora ? _agdPeriodo(m.hora, dur) : '—')],
         ['Duração',     escapeHtml(_agdFmtDur(dur))],
         ['Responsável', escapeHtml(_medNomeResp(m) || 'A definir')],
+        ..._aceiteLinhasDetalhe(m.aceite, m.recusa),
         m.agendado_por ? ['Agendado por', escapeHtml(nomeUsuario(m.agendado_por))] : null,
         ['Observações', escapeHtml(m.obs || '—')],
         m.realizado_em ? ['Confirmada em', _agdFmtMomento(m.realizado_em) + (m.realizado_via === 'pedido' ? ' (ao salvar o pedido)' : '')] : null,
@@ -12084,7 +12268,10 @@ function abrirDetalheMedicao(id) {
     const btnPedido = ped
         ? `<button class="btn btn-outline btn-sm" onclick="criarPedidoDaMedicao(${m.id})" title="Abre o pedido criado a partir deste agendamento">📄 Abrir Pedido #${formatPedidoId(ped.id)}</button>`
         : (pend ? `<button class="btn btn-sm" onclick="criarPedidoDaMedicao(${m.id})" title="Abre o formulário de pedido com o cliente já preenchido. Ao salvar, a medição vai para Realizados.">+ Criar Pedido</button>` : '');
-    const rodape = pend
+    const rodape = reag
+        ? `<button class="btn btn-outline btn-sm btn-danger" onclick="excluirMedicao(${m.id})">🗑️ Excluir</button>
+           <button class="btn btn-success btn-sm" onclick="editarMedicao(${m.id})">📅 Reagendar</button>`
+        : pend
         ? `<button class="btn btn-outline btn-sm btn-danger" onclick="cancelarMedicao(${m.id})">✕ Cancelar agendamento</button>
            <button class="btn btn-outline btn-sm" onclick="fecharModalAgenda();imprimirAgendamentoMedicao(${m.id})">🖨️ Documento</button>
            <button class="btn btn-outline btn-sm" onclick="editarMedicao(${m.id})">✏️ Editar</button>
@@ -12095,6 +12282,17 @@ function abrirDetalheMedicao(id) {
            <button class="btn btn-outline btn-sm" onclick="fecharModalAgenda();imprimirAgendamentoMedicao(${m.id})">🖨️ Documento</button>
            ${btnPedido}`;
     _agdAbrirModal('Visita de medição', corpo, rodape);
+}
+
+// Estado de responsavel/data/hora antes de editar (medicao recusada conta como nova).
+function _medAntesAceite(m) {
+    return m.status === 'A reagendar' ? null : { uid: m.usuario_id || null, data: m.data, hora: m.hora || '' };
+}
+// Medicao recusada que recebe novo horario volta para Agendado.
+function _medFecharReagendar(m) {
+    if (m.status !== 'A reagendar') return;
+    m.status = 'Agendado';
+    delete m.recusa;
 }
 
 function _medDisp(id) { return { disp: { tipo: 'med', ignorar: { tipo: 'med', id } } }; }
@@ -12113,9 +12311,12 @@ function editarMedicao(id) {
     ], v => {
         const atual = (db.medicoes || []).find(x => x.id == id);   // relido na validacao
         if (!atual) return;
+        const antes = _medAntesAceite(atual);
         atual.clienteTel = v.tel; Object.assign(atual, v.end, { endereco: EnderecoCore.textoEndereco(v.end) }); atual.data = v.data; atual.hora = v.hora;
         atual.duracao = v.dur; atual.obs = v.obs;
         _medDefinirResponsavel(atual, v.usu.pessoa);
+        _medFecharReagendar(atual);
+        _aceiteAplicar(atual, 'aceite', antes, atual.usuario_id, atual.data, atual.hora);
         _medAtualizar();
         toast('Agendamento atualizado!', 'success');
         abrirDetalheMedicao(id);
@@ -12134,12 +12335,15 @@ function reagendarMedicao(id) {
     ], v => {
         const atual = (db.medicoes || []).find(x => x.id == id);
         if (!atual) return;
+        const antes = _medAntesAceite(atual);
         if (v.data !== atual.data || v.hora !== (atual.hora || '')) {
             if (!atual.historico) atual.historico = [];
             _agdRegistrar(atual.historico, 'reagendado', { de: { data: atual.data, hora: atual.hora || '' }, para: { data: v.data, hora: v.hora } });
         }
         atual.data = v.data; atual.hora = v.hora; atual.duracao = v.dur; atual.obs = v.obs;
         _medDefinirResponsavel(atual, v.usu.pessoa);
+        _medFecharReagendar(atual);
+        _aceiteAplicar(atual, 'aceite', antes, atual.usuario_id, atual.data, atual.hora);
         _medAtualizar();
         toast('Visita reagendada!', 'success');
         abrirDetalheMedicao(id);
@@ -12369,7 +12573,8 @@ function _instPill(p, hoje) {
     if (s === 'Instalado') return 'instalado';
     if (s === 'Aguardando Financeiro') return 'pagamento';
     if (!p.data_entrega) return 'semdata';
-    return p.data_entrega < hoje ? 'atrasado' : 'agendado';
+    if (p.data_entrega < hoje) return 'atrasado';
+    return _aceitePend(p.inst_aceite) ? 'aceite' : 'agendado';
 }
 
 // Data mostrada no Realizado: o dia em que foi confirmada; pedido antigo sem
@@ -12417,7 +12622,7 @@ function _instRenderProntos() {
         <button type="button" class="agd-pronto${p.id == _instSelId ? ' agd-pronto-sel' : ''}" onclick="selecionarPedidoInstalacao(${p.id})" title="Agendar a instalação deste pedido">
             <span class="agd-pronto-ico">${_agdIco('caixa', 18)}</span>
             <span class="agd-pronto-info">
-                <span class="agd-pronto-top"><strong>#${formatPedidoId(p.id)}</strong><span class="agd-pill agd-pill-verde">Pronto para Instalação</span></span>
+                <span class="agd-pronto-top"><strong>#${formatPedidoId(p.id)}</strong><span class="agd-pill agd-pill-verde">Pronto para Instalação</span>${p.inst_recusa ? '<span class="agd-pill agd-pill-verm" title="' + escapeHtml('Recusada: ' + p.inst_recusa.motivo) + '">A reagendar</span>' : ''}</span>
                 <span class="agd-pronto-linha"><em>Cliente:</em> ${escapeHtml(p.clienteNome || '—')}</span>
                 <span class="agd-pronto-linha"><em>Produto:</em> ${escapeHtml(p.amb || '—')}</span>
                 <span class="agd-pronto-linha"><em>Entrega:</em> ${p.data_entrega ? _agdFmtData(p.data_entrega) : 'a definir'}</span>
@@ -12502,7 +12707,7 @@ function selecionarPedidoInstalacao(id) {
     _agdPreencherProf('inst-prof', _instProf(p), 'Selecione');
     _agdPreencherDur('inst-dur', 'inst', p.inst_duracao);
     const sub = document.getElementById('inst-pedido-sub');
-    if (sub) sub.innerHTML = `<span class="agd-pill agd-pill-verde">Pronto para Instalação</span><span>Produto: ${escapeHtml(p.amb || '—')}</span>`;
+    if (sub) sub.innerHTML = `<span class="agd-pill agd-pill-verde">Pronto para Instalação</span>${p.inst_recusa ? `<span class="agd-pill agd-pill-verm">A reagendar</span><span>Recusada por ${escapeHtml(nomeUsuario(p.inst_recusa.por))}: ${escapeHtml(p.inst_recusa.motivo)}</span>` : ''}<span>Produto: ${escapeHtml(p.amb || '—')}</span>`;
     const box = document.getElementById('inst-cliente');
     if (box) box.innerHTML = `<strong>${escapeHtml(p.clienteNome || '—')}</strong>` +
         (cli?.tel ? `<span class="agd-linha">${_agdIco('tel', 12)}${escapeHtml(cli.tel)}</span>` : '');
@@ -12582,6 +12787,8 @@ async function salvarAgendamentoInstalacao() {
     _instGravarPartes(p, v.end);
     p.inst_obs       = v.obs;
     definirInstalador(p, prof.pessoa);
+    _aceiteAplicar(p, 'inst_aceite', null, p.usuario_instalacao_id, v.data, v.hora);
+    delete p.inst_recusa;   // ja ficou no historico
     p.inst_agendado     = true;
     p.inst_agendado_por = getUsuarioLogado()?.id || null;
     p.inst_agendado_em  = Date.now();
@@ -12646,6 +12853,7 @@ function abrirDetalheInstalacao(id) {
         ['Horário',     escapeHtml(p.inst_hora ? _agdPeriodo(p.inst_hora, _instDur(p)) : '—')],
         ['Duração',     escapeHtml(_agdFmtDur(_instDur(p)))],
         ['Instalador',  escapeHtml(nomeInstalador(p) || 'A definir')],
+        ..._aceiteLinhasDetalhe(p.inst_aceite, p.inst_recusa),
         p.inst_agendado_por ? ['Agendado por', escapeHtml(nomeUsuario(p.inst_agendado_por))] : null,
         p.vendedor_nome ? ['Vendedor', escapeHtml(p.vendedor_nome)] : null,
         ['Ambientes',   escapeHtml(p.amb || '—')],
@@ -12684,6 +12892,7 @@ async function _instGravarEdicao(id, v, titulo) {
     if (v.usu && v.usu.chave && !await _agdValidarDisp({ prof: v.usu.chave, profNome: v.usu.pessoa.nome, data: v.data, hora: v.hora, dur: v.dur || _agdDurPadrao('inst'), ignorar: { tipo: 'inst', id } })) { _agdRedesenharAgendas(); return false; }
     p = db.pedidos.find(x => x.id == id);
     if (!p || !_instPendente(p)) { await showAlert('Esta instalação não está mais agendada.', '⚠️'); fecharModalAgenda(); _agdRedesenharAgendas(); return; }
+    const antes = { uid: p.usuario_instalacao_id || null, data: p.data_entrega, hora: p.inst_hora || '' };
     if (v.data !== p.data_entrega || v.hora !== (p.inst_hora || '')) {
         if (!p.inst_historico) p.inst_historico = [];
         _agdRegistrar(p.inst_historico, 'reagendado', { de: { data: p.data_entrega || '', hora: p.inst_hora || '' }, para: { data: v.data, hora: v.hora } });
@@ -12694,6 +12903,7 @@ async function _instGravarEdicao(id, v, titulo) {
     p.inst_duracao = v.dur || _agdDurPadrao('inst');
     p.inst_obs     = v.obs;
     definirInstalador(p, v.usu.pessoa);
+    _aceiteAplicar(p, 'inst_aceite', antes, p.usuario_instalacao_id, v.data, v.hora);
     _instAtualizar();
     toast(titulo, 'success');
     _lembreteInstVoltar(() => abrirDetalheInstalacao(id));
@@ -12739,6 +12949,7 @@ async function cancelarAgendamentoInstalacao(id) {
     p.inst_agendado = false;
     p.data_entrega  = null;
     p.inst_hora     = '';
+    delete p.inst_aceite;
     _instAtualizar();
     toast('Agendamento cancelado. O pedido voltou para os prontos.', 'info');
 }
@@ -13153,6 +13364,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (urlView) mostrarViewPCP(urlView);
         lembrarAbaAoRecarregar('pcp', () => _curViewPCP, mostrarViewPCP,
             t => !params.get('pedido') && ['kanban', 'agenda', 'medicoes', 'rotas'].includes(t));
+        // Vindo do aviso de recusa de medicao ("Reagendar"): abre o formulario de editar.
+        if (urlView === 'medicoes' && params.get('reagendarmed')) {
+            editarMedicao(params.get('reagendarmed'));
+            try { params.delete('reagendarmed'); const qs = params.toString(); history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash); } catch (e) {}
+        }
         // Vindo de outra tela com ?pedido=: o pedido ja chega selecionado.
         if (urlView === 'agenda' && params.get('pedido')) {
             irParaAgendaInstalacao(params.get('pedido'));

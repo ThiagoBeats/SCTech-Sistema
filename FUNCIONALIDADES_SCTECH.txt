@@ -240,6 +240,32 @@ sistema.
     Compromisso de dia inteiro vale durante os dias dele. Pode ser desligado em
     Configurar Empresa > Alertas ("Lembretes de compromisso")
 
+── 2.5.2 ACEITE DE MEDIÇÃO E INSTALAÇÃO ───────────────────────────────────────────
+
+Agendar (novo, editar ou reagendar) uma medição ou instalação para OUTRO usuário
+do sistema deixa o agendamento "aguardando aceite" quando mudou o responsável, a
+data ou o horário. Agendar para si mesmo, para profissional externo (sem usuário)
+ou o próprio responsável mexer no seu agendamento vale direto, sem aceite.
+  - Enquanto aguarda: o horário já fica reservado para o destinado (tracejado na
+    Agenda, riscado ao agendar) e os cards mostram "Aguardando aceite"
+  - O destinado vê, no sino e nos Alertas, com os botões Aceitar e Recusar (o
+    aviso fica até ele responder): "Você recebeu a medição de <cliente> em dd/mm
+    às HH:MM." ou "Você recebeu a instalação do pedido #N (<cliente>) em dd/mm às
+    HH:MM." Só o destinado responde; o Administrador continua podendo editar
+  - Aceitar: quem destinou recebe "<Nome> aceitou a medição de <cliente> (dd/mm
+    HH:MM)." (a instalação: "...a instalação do pedido #N (dd/mm HH:MM)."). O aviso
+    some 7 dias depois da resposta
+  - Recusar: pede o motivo (obrigatório; sem texto o botão não habilita). A medição
+    vira "A reagendar" (fica no topo de Agendamentos de Medição, sem profissional,
+    data e hora, e não conta como atrasada nem ocupa horário); a instalação volta
+    para "Pedidos Prontos para Instalação" com a marca "A reagendar". Cliente,
+    endereço e observações ficam. O horário é liberado e o motivo vai para o
+    histórico
+  - Quem destinou recebe "<Nome> recusou a medição de <cliente>: <motivo>" (ou "a
+    instalação do pedido #N: <motivo>") com o botão "Reagendar", que abre o
+    formulário de editar (medição) ou de agendar (instalação) já com os dados. O
+    aviso fica até reagendar
+
 ── 2.6 TABELA DE PEDIDOS ───────────────────────────────────────────────────────
 
 Filtros:
