@@ -2900,8 +2900,6 @@ html[data-theme="dark"] #mpg-nao { color: #242424; }
 .topbar-sino:hover .sino-painel, .topbar-sino.aberto .sino-painel { display: block; }
 .sino-painel-caixa { background: var(--white, #fff); color: var(--dark, #242424); border: 1px solid var(--border, #E0E3E8); border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22); overflow: hidden; }
 .sino-cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 14px; font-size: 13px; font-weight: 700; border-bottom: 1px solid var(--border, #E0E3E8); }
-.sino-marcar { font-size: 12px; font-weight: 600; color: var(--primary-text, #2D77C1); text-decoration: none; }
-.sino-marcar:hover { text-decoration: underline; }
 .sino-lista { max-height: 380px; overflow-y: auto; }
 .sino-item { display: flex; gap: 10px; padding: 10px 14px; font-size: 12.5px; line-height: 1.4; cursor: pointer; border-bottom: 1px solid var(--border, #E0E3E8); }
 .sino-item:hover { background: var(--light, #F4F5F7); }

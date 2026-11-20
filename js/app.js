@@ -291,7 +291,7 @@ let db = {
 // Chave do localStorage -> array de db (as que sao relidas quando outra aba grava).
 const _DB_CHAVE_CAMPO = {
     sc_cli: 'clientes', sc_cat: 'catalogo', sc_ped: 'pedidos', sc_est: 'estoque', sc_mat: 'materiais',
-    sc_mov: 'movimentos', sc_med: 'medicoes', sc_agd_ev: 'agenda_eventos', sc_usr: 'usuarios', sc_pap: 'papeis',
+    sc_mov: 'movimentos', sc_cr: 'contas_receber', sc_cp: 'contas_pagar', sc_mov_fin: 'movimentos_fin', sc_med: 'medicoes', sc_agd_ev: 'agenda_eventos', sc_usr: 'usuarios', sc_pap: 'papeis',
 };
 // Texto de cada chave como esta aba leu ou gravou por ultimo. Reler so troca o array
 // quando o texto gravado mudou (outra aba gravou): um fluxo no meio de uma confirmacao
@@ -4598,12 +4598,17 @@ document.addEventListener('click', () => {
 const _ALERTA_CORES = {
     danger: ['var(--danger-bg)', '#F79B90', 'var(--danger-text)'],
     warn:   ['var(--warn-bg)',   '#F2C924', 'var(--warn-text)'],
-    info:   ['var(--info-bg)',   '#9FC4E5', 'var(--info-text)']
+    info:   ['var(--info-bg)',   '#9FC4E5', 'var(--info-text)'],
+    success:['var(--ok-bg)',     '#8FD98D', 'var(--ok-text)']
 };
 const _ALERTA_SEP = ' &nbsp;·&nbsp; ';
 const _alertaHoje = () => new Date().toISOString().split('T')[0];
 const _alertaDataBR = d => d.split('-').reverse().join('/');
 const _alertaIds = lista => lista.map(x => x.id).join(',');
+const _ALERTA_INST_STATUS = ['Pronto p/ Instalação', 'Aguardando Financeiro'];
+// Pedido que ja aparece em "Instalacoes atrasadas / de hoje" nao entra de novo em "Entregas":
+// vale quando o alerta de instalacoes esta ligado (desligado, o pedido ficaria sem aviso nenhum).
+const _alertaEhInstalacao = p => alertaAtivo('instalacao') && _ALERTA_INST_STATUS.includes(normalizarStatus(p.status));
 const _alertaLinkPedido = (p, cor, extra) =>
     `<span style="cursor:pointer;color:${cor};font-weight:600;text-decoration:underline" onclick="editarPedido(${p.id})">#${formatPedidoId(p.id)} ${escapeHtml(p.clienteNome||'')}${extra || ''}</span>`;
 
@@ -4611,7 +4616,7 @@ Notif.registrar('entregas-atrasadas', () => {
     if (!alertaAtivo('entrega')) return [];
     const hojeStr = _alertaHoje(), hoje = new Date(); hoje.setHours(0, 0, 0, 0);
     const lista = filtrarPedidosVisiveis(db.pedidos).filter(p =>
-        p.data_entrega && normalizarStatus(p.status) !== 'Instalado' && p.data_entrega < hojeStr);
+        p.data_entrega && normalizarStatus(p.status) !== 'Instalado' && p.data_entrega < hojeStr && !_alertaEhInstalacao(p));
     if (!lista.length) return [];
     const itens = lista.sort((a, b) => a.data_entrega.localeCompare(b.data_entrega)).map(p => {
         const diasAtraso = Math.round((hoje - new Date(p.data_entrega + 'T00:00:00')) / 86400000);
@@ -4625,7 +4630,7 @@ Notif.registrar('entregas-hoje', () => {
     if (!alertaAtivo('entrega')) return [];
     const hojeStr = _alertaHoje();
     const lista = filtrarPedidosVisiveis(db.pedidos).filter(p =>
-        p.data_entrega && normalizarStatus(p.status) !== 'Instalado' && p.data_entrega === hojeStr);
+        p.data_entrega && normalizarStatus(p.status) !== 'Instalado' && p.data_entrega === hojeStr && !_alertaEhInstalacao(p));
     if (!lista.length) return [];
     return [{ chave: 'entregas-hoje:' + _alertaIds(lista), icone: '🔔', cor: 'warn', urgente: false, href: 'pedidos.html',
         titulo: `<strong>${lista.length} pedido(s)</strong> com entrega prevista para hoje:`,
@@ -4656,7 +4661,6 @@ Notif.registrar('medicoes-hoje', () => {
         titulo: `<strong>${lista.length} medição(ões)</strong> agendada(s) para hoje:`, texto: itens }];
 });
 
-const _ALERTA_INST_STATUS = ['Pronto p/ Instalação', 'Aguardando Financeiro'];
 Notif.registrar('instalacoes-atrasadas', () => {
     if (!alertaAtivo('instalacao')) return [];
     const hojeStr = _alertaHoje();
@@ -4692,6 +4696,17 @@ Notif.registrar('estoque-minimo', () => {
     return [{ chave: 'estoque-minimo:' + tecidos.map(c => 't' + c.id).concat(mats.map(m => 'm' + m.id)).join(','),
         icone: '⚠️', cor: 'warn', urgente: false, href: 'estoque.html',
         titulo: `<strong>${total} item(ns)</strong> com estoque abaixo do mínimo:`, texto: itens }];
+});
+
+// Alertas do Financeiro (mesmos textos e regras da Visao Geral do Financeiro, via finAlertasCalcular):
+// so para quem tem acesso ao Financeiro. Urgente = o que e vermelho la (atrasos e gap de caixa).
+// Clicar abre a aba do Financeiro que trata do assunto (ou a primeira que o usuario pode ver).
+const _ALERTA_FIN_ABAS = { hoje: 'financeiro.hoje', dashboard: 'financeiro.dashboard', receber: 'financeiro.receber', pagar: 'financeiro.pagar' };
+Notif.registrar('financeiro', () => {
+    if (!temAcessoAlgumaSub('financeiro', 'visualizar')) return [];
+    return finAlertasCalcular(hojeLocal()).map(a => ({
+        chave: 'fin:' + a.id, icone: a.icone, cor: a.cor === 'warning' ? 'warn' : a.cor, urgente: a.cor === 'danger',
+        href: 'financeiro.html?aba=' + a.aba, titulo: '', texto: a.html }));
 });
 
 // Aceite de medicao/instalacao destinada a outro usuario (ver "ACEITE" mais abaixo).
@@ -4770,7 +4785,7 @@ Notif.registrar('aceite-respostas', () => {
 
 // Outra aba gravou: traz para a memoria o que os alertas leem.
 // So troca o array quando o texto gravado mudou (ver _dbRecarregarChave).
-const _NOTIF_CHAVES_DB = ['sc_ped', 'sc_med', 'sc_cat', 'sc_mat', 'sc_est', 'sc_mov', 'sc_usr', 'sc_pap', 'sc_agd_ev'];
+const _NOTIF_CHAVES_DB = ['sc_ped', 'sc_med', 'sc_cat', 'sc_mat', 'sc_est', 'sc_mov', 'sc_cr', 'sc_cp', 'sc_mov_fin', 'sc_usr', 'sc_pap', 'sc_agd_ev'];
 function _notifRecarregarDB(chave) {
     if (_NOTIF_CHAVES_DB.includes(chave)) _dbRecarregarChave(chave);
 }
@@ -13685,6 +13700,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const abaInicial = abasVisiveis.some(([t]) => t === 'hoje') ? 'hoje' : abasVisiveis.some(([t]) => t === 'dashboard') ? 'dashboard' : (abasVisiveis[0]?.[0] || 'dashboard');
         mostrarTabFinanceiro(abaInicial);
         lembrarAbaAoRecarregar('financeiro', () => _curTabFin, mostrarTabFinanceiro, t => abasVisiveis.some(([x]) => x === t));
+        // Link de um alerta do sino/card (financeiro.html?aba=receber): abre essa aba, se o usuario pode ve-la.
+        const abaLink = new URLSearchParams(window.location.search).get('aba');
+        if (abaLink && abaLink !== abaInicial && abasVisiveis.some(([x]) => x === abaLink)) mostrarTabFinanceiro(abaLink);
         if (!temAcesso('financeiro.pagar', 'completo')) document.getElementById('cp-toolbar')?.style.setProperty('display', 'none');
         if (!temAcesso('financeiro.fixas', 'completo')) document.getElementById('df-form-card')?.style.setProperty('display', 'none');
     }
@@ -17395,6 +17413,75 @@ async function excluirTransferencia(grupoId) {
     renderExtrato();
 }
 
+// Alertas do Financeiro (vencimento, atraso, tendencia, meta, gap): a Visao Geral do Financeiro,
+// o sino e o card do Painel leem esta mesma lista. Cada item respeita o liga/desliga do seu tipo
+// (ALERTAS_TIPOS: fin_*). cor: danger | warning | success | info; aba: onde abrir no Financeiro;
+// id: muda quando o conteudo do alerta muda de verdade (e o que faz o sino contar de novo).
+function finAlertasCalcular(hojeStr) {
+    const fmt = v => (v||0).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+    const out = [];
+    const add = (tipo, cor, icone, html, aba, id) => out.push({ tipo, cor, icone, html, aba, id });
+    // Conta pendente ja vencida conta como atrasada mesmo antes de a tela do Financeiro marcar o status.
+    const atrasada = c => c.status === 'Atrasado' || (c.status === 'Pendente' && c.data_vencimento && c.data_vencimento < hojeStr);
+
+    if (alertaAtivo('fin_vencimento')) {
+        const venHojeRec = db.contas_receber.filter(cr=>cr.status==='Pendente'&&cr.data_vencimento===hojeStr);
+        const venHojePag = db.contas_pagar.filter(cp=>cp.status==='Pendente'&&cp.data_vencimento===hojeStr);
+        if (venHojeRec.length+venHojePag.length)
+            add('fin_vencimento','warning','⏰',`<strong>${venHojeRec.length+venHojePag.length} conta(s) vencem hoje</strong> — ${venHojeRec.length} a receber (R$ ${fmt(venHojeRec.reduce((s,x)=>s+x.valor,0))}) · ${venHojePag.length} a pagar (R$ ${fmt(venHojePag.reduce((s,x)=>s+x.valor,0))})`,
+                'hoje', 'venc-hoje:' + hojeStr + ':' + venHojeRec.map(x=>x.id).concat(venHojePag.map(x=>'p'+x.id)).join(','));
+    }
+
+    if (alertaAtivo('fin_atraso')) {
+        const atRec = db.contas_receber.filter(atrasada);
+        if (atRec.length)
+            add('fin_atraso','danger','❌',`<strong>${atRec.length} recebimento(s) em atraso</strong> — R$ ${fmt(atRec.reduce((s,x)=>s+x.valor,0))} de ${new Set(atRec.map(x=>x.cliente_nome)).size} cliente(s)`,
+                'receber', 'atraso-rec:' + atRec.map(x=>x.id).join(','));
+        const atPag = db.contas_pagar.filter(atrasada);
+        if (atPag.length)
+            add('fin_atraso','danger','💸',`<strong>${atPag.length} pagamento(s) em atraso</strong> — R$ ${fmt(atPag.reduce((s,x)=>s+x.valor,0))}`,
+                'pagar', 'atraso-pag:' + atPag.map(x=>x.id).join(','));
+    }
+
+    const hoje2 = new Date();
+    const mesAtStr = `${hoje2.getFullYear()}-${String(hoje2.getMonth()+1).padStart(2,'0')}`;
+    const mesAntD  = new Date(hoje2.getFullYear(), hoje2.getMonth()-1, 1);
+    const mesAntStr = `${mesAntD.getFullYear()}-${String(mesAntD.getMonth()+1).padStart(2,'0')}`;
+    const precisaFat = alertaAtivo('fin_tendencia') || alertaAtivo('fin_meta');
+    const fatAt = precisaFat ? resultadoFinanceiroDoMes(mesAtStr).faturamento : 0;
+    const fatAnt = alertaAtivo('fin_tendencia') ? resultadoFinanceiroDoMes(mesAntStr).faturamento : 0;
+    if (alertaAtivo('fin_tendencia') && fatAnt>0) {
+        const pct = ((fatAt-fatAnt)/fatAnt*100).toFixed(1);
+        // Igual tambem quando a porcentagem mostrada arredonda para 0,0% (nunca "+0.0%").
+        const igual = Math.round(fatAt * 100) === Math.round(fatAnt * 100) || Math.abs(Number(pct)) === 0;
+        add('fin_tendencia', fatAt>=fatAnt?'success':'warning', fatAt>=fatAnt?'📈':'📉',
+            `Faturamento deste mês <strong>${igual ? 'igual ao mês anterior' : (fatAt>=fatAnt?'+':'') + pct + '% vs. mês anterior'}</strong> (R$ ${fmt(fatAt)} × R$ ${fmt(fatAnt)})`,
+            'dashboard', 'tendencia:' + mesAtStr + ':' + (fatAt>=fatAnt ? 'alta' : 'queda'));
+    }
+
+    const metaMes = alertaAtivo('fin_meta') ? metaFinanceiraDoMes(mesAtStr) : 0;
+    if (alertaAtivo('fin_meta') && metaMes>0) {
+        const pctMeta = (fatAt/metaMes*100).toFixed(1);
+        if (fatAt>=metaMes)
+            add('fin_meta','success','🏆',`Meta do mês atingida! <strong>${pctMeta}%</strong> — R$ ${fmt(fatAt)} de R$ ${fmt(metaMes)}`, 'dashboard', 'meta:' + mesAtStr + ':atingida');
+        else if (fatAt>=metaMes*0.8)
+            add('fin_meta','info','🎯',`Faltam <strong>R$ ${fmt(metaMes-fatAt)}</strong> para atingir a meta (${pctMeta}% concluído)`, 'dashboard', 'meta:' + mesAtStr + ':perto');
+    }
+
+    const em7 = new Date(hojeStr+'T00:00:00'); em7.setDate(em7.getDate()+7);
+    const em7Str = dataLocal(em7.getTime());
+    const proxVenc = db.contas_receber.filter(cr=>cr.status!=='Pago'&&cr.data_vencimento>hojeStr&&cr.data_vencimento<=em7Str).length
+                   + db.contas_pagar.filter(cp=>cp.status!=='Pago'&&cp.data_vencimento>hojeStr&&cp.data_vencimento<=em7Str).length;
+    if (alertaAtivo('fin_vencimento') && proxVenc>=3)
+        add('fin_vencimento','info','📋',`<strong>${proxVenc} conta(s)</strong> vencem nos próximos 7 dias`, 'hoje', 'venc-7d:' + hojeStr + ':' + proxVenc);
+
+    const _ent7 = db.contas_receber.filter(cr=>cr.status!=='Pago'&&cr.data_vencimento>=hojeStr&&cr.data_vencimento<=em7Str).reduce((s,cr)=>s+cr.valor,0);
+    const _sai7 = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&cp.data_vencimento>=hojeStr&&cp.data_vencimento<=em7Str).reduce((s,cp)=>s+cp.valor,0);
+    if (alertaAtivo('fin_gap') && _sai7 > _ent7 && _sai7 > 0)
+        add('fin_gap','danger','⚠️',`Gap de caixa: saídas superam entradas nos próximos 7 dias em <strong>R$ ${fmt(_sai7-_ent7)}</strong> (entradas: R$ ${fmt(_ent7)} · saídas: R$ ${fmt(_sai7)})`, 'hoje', 'gap:' + hojeStr);
+    return out;
+}
+
 function renderDashboardFinanceiro() {
     renderAvisoCopiaFinanceiro();
     renderAvisoRevisaoFinanceiro();
@@ -17519,65 +17606,11 @@ function renderDashboardFinanceiro() {
         <div class="fp-item"><span class="fp-label">Saldo líquido previsto</span><span class="fp-val" style="color:${projSaldoTotal>=0?'var(--primary-text)':'#F43927'}">${projSaldoTotal>=0?'+':''}R$ ${fmt(projSaldoTotal)}</span></div>`;
 
     // ── ALERTAS ───────────────────────────────────────────────────
+    // Mesma lista que vai para o sino e para o card do Painel (finAlertasCalcular).
     const alertasEl = document.getElementById('fin-alertas');
     if (alertasEl) {
-        const mkA = (tipo, icon, texto) => `<div class="fin-alerta fin-alerta-${tipo}"><span style="font-size:18px;flex-shrink:0">${icon}</span><span>${texto}</span></div>`;
-        const alertas = [];
-
-        if (alertaAtivo('fin_vencimento')) {
-            const venHojeRec = db.contas_receber.filter(cr=>cr.status==='Pendente'&&cr.data_vencimento===hojeStr);
-            const venHojePag = db.contas_pagar.filter(cp=>cp.status==='Pendente'&&cp.data_vencimento===hojeStr);
-            if (venHojeRec.length+venHojePag.length)
-                alertas.push(mkA('warning','⏰',`<strong>${venHojeRec.length+venHojePag.length} conta(s) vencem hoje</strong> — ${venHojeRec.length} a receber (R$ ${fmt(venHojeRec.reduce((s,x)=>s+x.valor,0))}) · ${venHojePag.length} a pagar (R$ ${fmt(venHojePag.reduce((s,x)=>s+x.valor,0))})`));
-        }
-
-        if (alertaAtivo('fin_atraso')) {
-            const atRec = db.contas_receber.filter(cr=>cr.status==='Atrasado');
-            if (atRec.length)
-                alertas.push(mkA('danger','❌',`<strong>${atRec.length} recebimento(s) em atraso</strong> — R$ ${fmt(atRec.reduce((s,x)=>s+x.valor,0))} de ${new Set(atRec.map(x=>x.cliente_nome)).size} cliente(s)`));
-            const atPag = db.contas_pagar.filter(cp=>cp.status==='Atrasado');
-            if (atPag.length)
-                alertas.push(mkA('danger','💸',`<strong>${atPag.length} pagamento(s) em atraso</strong> — R$ ${fmt(atPag.reduce((s,x)=>s+x.valor,0))}`));
-        }
-
-        const hoje2 = new Date();
-        const mesAtStr = `${hoje2.getFullYear()}-${String(hoje2.getMonth()+1).padStart(2,'0')}`;
-        const mesAntD  = new Date(hoje2.getFullYear(), hoje2.getMonth()-1, 1);
-        const mesAntStr = `${mesAntD.getFullYear()}-${String(mesAntD.getMonth()+1).padStart(2,'0')}`;
-        const fatAt = resultadoFinanceiroDoMes(mesAtStr).faturamento;
-        const fatAnt= resultadoFinanceiroDoMes(mesAntStr).faturamento;
-        if (alertaAtivo('fin_tendencia') && fatAnt>0) {
-            const pct = ((fatAt-fatAnt)/fatAnt*100).toFixed(1);
-            // Igual tambem quando a porcentagem mostrada arredonda para 0,0% (nunca "+0.0%").
-            const igual = Math.round(fatAt * 100) === Math.round(fatAnt * 100) || Math.abs(Number(pct)) === 0;
-            alertas.push(mkA(fatAt>=fatAnt?'success':'warning', fatAt>=fatAnt?'📈':'📉',
-                `Faturamento deste mês <strong>${igual ? 'igual ao mês anterior' : (fatAt>=fatAnt?'+':'') + pct + '% vs. mês anterior'}</strong> (R$ ${fmt(fatAt)} × R$ ${fmt(fatAnt)})`));
-        }
-
-        const metaMes = metaFinanceiraDoMes(mesAtStr);
-        if (alertaAtivo('fin_meta') && metaMes>0) {
-            const pctMeta = (fatAt/metaMes*100).toFixed(1);
-            if (fatAt>=metaMes)
-                alertas.push(mkA('success','🏆',`Meta do mês atingida! <strong>${pctMeta}%</strong> — R$ ${fmt(fatAt)} de R$ ${fmt(metaMes)}`));
-            else if (fatAt>=metaMes*0.8)
-                alertas.push(mkA('info','🎯',`Faltam <strong>R$ ${fmt(metaMes-fatAt)}</strong> para atingir a meta (${pctMeta}% concluído)`));
-        }
-
-        const em7 = new Date(hojeStr+'T00:00:00'); em7.setDate(em7.getDate()+7);
-        const em7Str = dataLocal(em7.getTime());
-        const proxVenc = db.contas_receber.filter(cr=>cr.status!=='Pago'&&cr.data_vencimento>hojeStr&&cr.data_vencimento<=em7Str).length
-                       + db.contas_pagar.filter(cp=>cp.status!=='Pago'&&cp.data_vencimento>hojeStr&&cp.data_vencimento<=em7Str).length;
-        if (alertaAtivo('fin_vencimento') && proxVenc>=3)
-            alertas.push(mkA('info','📋',`<strong>${proxVenc} conta(s)</strong> vencem nos próximos 7 dias`));
-
-        const _h7 = new Date(hojeStr+'T00:00:00'); _h7.setDate(_h7.getDate()+7);
-        const _h7s = dataLocal(_h7.getTime());
-        const _ent7 = db.contas_receber.filter(cr=>cr.status!=='Pago'&&cr.data_vencimento>=hojeStr&&cr.data_vencimento<=_h7s).reduce((s,cr)=>s+cr.valor,0);
-        const _sai7 = db.contas_pagar.filter(cp=>cp.status!=='Pago'&&cp.data_vencimento>=hojeStr&&cp.data_vencimento<=_h7s).reduce((s,cp)=>s+cp.valor,0);
-        if (alertaAtivo('fin_gap') && _sai7 > _ent7 && _sai7 > 0)
-            alertas.push(mkA('danger','⚠️',`Gap de caixa: saídas superam entradas nos próximos 7 dias em <strong>R$ ${fmt(_sai7-_ent7)}</strong> (entradas: R$ ${fmt(_ent7)} · saídas: R$ ${fmt(_sai7)})`));
-
-        alertasEl.innerHTML = alertas.join('');
+        alertasEl.innerHTML = finAlertasCalcular(hojeStr).map(a =>
+            `<div class="fin-alerta fin-alerta-${a.cor}"><span style="font-size:18px;flex-shrink:0">${a.icone}</span><span>${a.html}</span></div>`).join('');
     }
 
     // ── META ──────────────────────────────────────────────────────

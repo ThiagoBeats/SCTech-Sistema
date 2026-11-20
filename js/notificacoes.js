@@ -3,7 +3,7 @@
 //   Notif.registrar('nome', () => [{ chave, icone, titulo, texto, urgente, cor?, href?, acao?: { rotulo, fn }, acoes?: [{ rotulo, fn, sec? }], persistente? }])
 // titulo e texto sao HTML (o coletor escapa o que vem do usuario).
 // A chave identifica o alerta: quando muda (ex.: entra um pedido novo na lista), conta de novo.
-// "Vistos" ficam por usuario em localStorage sc_notif_vistos_<id>.
+// "Vistos" ficam por usuario em localStorage sc_notif_vistos_<id>; abrir o sino marca tudo o que ele lista como visto.
 const Notif = (() => {
     const coletores = [];
 
@@ -117,7 +117,7 @@ const Notif = (() => {
         const aberto = el.classList.contains('aberto');
         el.innerHTML = `<button type="button" class="sino-btn" id="sino-btn" aria-label="Notificações" title="Notificações">${SVG_SINO}${badge}</button>
             <div class="sino-painel" id="sino-painel"><div class="sino-painel-caixa">
-                <div class="sino-cab"><span>Notificações</span>${naoV.length ? '<a href="#" class="sino-marcar" id="sino-marcar">Marcar todas como lidas</a>' : ''}</div>
+                <div class="sino-cab"><span>Notificações</span></div>
                 <div class="sino-lista">${lista}</div>${rodape}
             </div></div>`;
         if (aberto) el.classList.add('aberto');
@@ -133,10 +133,17 @@ const Notif = (() => {
         _agendado = setTimeout(() => { try { atualizar(); } catch (e) { console.error(e); } }, 60);
     }
 
+    // Abrir a mini-janela (passar o mouse ou tocar) marca como vistos os itens listados:
+    // a contagem zera e eles continuam na lista, sem o destaque de novo.
+    function _aoAbrir() { if (naoVistos().length) marcarTodasVistas(); }
+    document.addEventListener('mouseover', e => {
+        const sino = document.getElementById('topbar-sino');
+        if (!sino || !sino.contains(e.target) || sino.contains(e.relatedTarget)) return;
+        _aoAbrir();
+    });
     document.addEventListener('click', e => {
         const sino = document.getElementById('topbar-sino');
         if (!sino) return;
-        if (e.target.closest('#sino-marcar')) { e.preventDefault(); e.stopPropagation(); marcarTodasVistas(); return; }
         const ac = e.target.closest('[data-sino-acao]');
         if (ac && sino.contains(ac)) {
             e.stopPropagation();
@@ -151,7 +158,7 @@ const Notif = (() => {
             if (h) window.location.href = h;
             return;
         }
-        if (e.target.closest('#sino-btn')) { sino.classList.toggle('aberto'); return; }
+        if (e.target.closest('#sino-btn')) { sino.classList.toggle('aberto'); if (sino.classList.contains('aberto')) _aoAbrir(); return; }
         if (!sino.contains(e.target)) sino.classList.remove('aberto');
     });
     document.addEventListener('keydown', e => {
