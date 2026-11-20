@@ -19,6 +19,9 @@ const CLI = () => [{ id: 1, nome: 'Ana Paula Lima', tel: '44991234567', end: 'Av
 
 const ler = (page, k) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), k);
 
+// Relogio fixo em todos os testes: as datas (HOJE/AMANHA) nao dependem do dia em que o teste roda.
+test.beforeEach(async ({ page }) => { await page.clock.install({ time: AGORA }); });
+
 async function semear(page, dados, usuario) {
     await entrar(page, BASE, { sc_usr: [ADMIN, MARIA, JOANA], sc_cli: CLI(), ...(dados || {}) });
     await page.evaluate(u => {
@@ -42,7 +45,6 @@ const itemSino = (page, texto) => page.locator('#sino-painel .sino-item', { hasT
 
 // ── 1. Critico: o relogio de lembretes nao troca pedidos/medicoes no meio de um fluxo ──
 test('aprovar pedido com a confirmacao aberta durante a conferencia de 1 minuto: aprova e gera o financeiro uma vez so', async ({ page }) => {
-    await page.clock.install({ time: AGORA });
     const orc = { id: 26500, clienteId: 1, clienteNome: 'Ana Paula Lima', status: 'Orçamento', valor: 1000, vendedor_nome: 'Bruno',
         data_entrega: '2026-12-01', ambientes: [], itens: [] };
     await semear(page, { sc_ped: [orc] });
@@ -65,7 +67,6 @@ test('aprovar pedido com a confirmacao aberta durante a conferencia de 1 minuto:
 });
 
 test('sem nada novo gravado, reler nao troca os arrays (mesmos objetos em memoria)', async ({ page }) => {
-    await page.clock.install({ time: AGORA });
     await semear(page, { sc_ped: [{ id: 26500, clienteId: 1, clienteNome: 'Ana Paula Lima', status: 'Orçamento', valor: 10 }],
         sc_med: [{ id: 5, clienteNome: 'X', data: HOJE, hora: '15:00', status: 'Agendado', usuario_id: 1 }] });
     await page.goto(BASE + '/index.html');
@@ -83,7 +84,6 @@ test('sem nada novo gravado, reler nao troca os arrays (mesmos objetos em memori
 
 // ── 2. Agenda: detalhe so leitura sem acesso a Producao; itens dos outros sem cliente ──
 test('usuario sem acesso a Producao: itens dos outros so "Medicao", sem cliente; os dele abrem so para leitura', async ({ page }) => {
-    await page.clock.install({ time: AGORA });
     const meds = [
         { id: 11, clienteNome: 'Cliente Secreto', endereco: 'X', data: HOJE, hora: '10:00', duracao: 60, status: 'Agendado', usuario_id: 1, agendado_por: 1 },
         { id: 12, clienteNome: 'Cliente da Joana', endereco: 'Y', data: HOJE, hora: '14:00', duracao: 60, status: 'Agendado', usuario_id: 3, agendado_por: 1 },
@@ -146,7 +146,6 @@ test('aba A aceita pelo sino depois que a aba B criou um cliente: o cliente cont
 });
 
 test('Agenda grava so os eventos: o cliente criado em outra aba continua', async ({ page, context }) => {
-    await page.clock.install({ time: AGORA });
     await semear(page, {});
     await page.goto(BASE + '/index.html');
     await page.evaluate(d => abrirAgendaNoDia(d), HOJE);
@@ -166,7 +165,6 @@ test('Agenda grava so os eventos: o cliente criado em outra aba continua', async
 
 // ── 4. Dia inteiro/folga/ferias ocupam o dia todo ──
 test('medicao as 07:00 (antes do expediente) num dia de ferias e recusada', async ({ page }) => {
-    await page.clock.install({ time: AGORA });
     const ferias = [{ id: 'f1', prof: 'u:1', tipo: 'bloqueio', bloqueio: 'ferias', data_ini: AMANHA, data_fim: '2026-11-21', hora_ini: '', hora_fim: '',
         dia_inteiro: true, descricao: 'Férias', criado_por: 1 }];
     await semear(page, { sc_agd_ev: ferias });
@@ -182,7 +180,6 @@ test('medicao as 07:00 (antes do expediente) num dia de ferias e recusada', asyn
 
 // ── 5. Data invalida no evento nao vira codigo nem lembrete ──
 test('evento com data invalida e ignorado pelo lembrete (nada roda no clique)', async ({ page }) => {
-    await page.clock.install({ time: AGORA });
     const mau = [{ id: 'x1', prof: 'u:1', tipo: 'compromisso', bloqueio: '', data_ini: HOJE + "');window.__pwn=1;('", data_fim: '', hora_ini: '', hora_fim: '',
         dia_inteiro: true, descricao: 'Mau', aviso_min: 30, criado_por: 1 }];
     await semear(page, { sc_agd_ev: mau });
@@ -196,7 +193,6 @@ test('evento com data invalida e ignorado pelo lembrete (nada roda no clique)', 
 test('Maria reagenda a propria medicao pendente: vira aceita e o Admin recebe "aceitou"', async ({ page }) => {
     const med = { id: 777, clienteId: 1, clienteNome: 'Ana Paula Lima', endereco: 'Av. das Palmeiras, 1000', rua: 'Av. das Palmeiras', numero: '1000',
         data: AMANHA, hora: '10:00', duracao: 60, status: 'Agendado', usuario_id: 2, agendado_por: 1, aceite: { status: 'pendente', por: 1, em: 1 } };
-    await page.clock.install({ time: AGORA });
     await semear(page, { sc_med: [med] }, MARIA);
     await page.goto(BASE + '/pcp.html?view=medicoes');
     await page.evaluate(() => reagendarMedicao(777));
@@ -214,7 +210,6 @@ test('Maria reagenda a propria medicao pendente: vira aceita e o Admin recebe "a
 
 // ── 7. Pedido de aceite vencido ──
 test('pedido de aceite vencido: Maria nao ve Aceitar/Recusar; o Admin ve "nao respondeu" com Reagendar', async ({ page }) => {
-    await page.clock.install({ time: AGORA });
     const med = { id: 777, clienteId: 1, clienteNome: 'Ana Paula Lima', endereco: 'Av. das Palmeiras, 1000', data: ONTEM, hora: '10:00', duracao: 60,
         status: 'Agendado', usuario_id: 2, agendado_por: 1, aceite: { status: 'pendente', por: 1, em: 1 } };
     await semear(page, { sc_med: [med] }, MARIA);
@@ -234,7 +229,6 @@ test('pedido de aceite vencido: Maria nao ve Aceitar/Recusar; o Admin ve "nao re
 });
 
 test('instalacao vencida sem aceite: o Admin ve "nao respondeu"; o lembrete "Foi instalado?" nao pergunta a Maria', async ({ page }) => {
-    await page.clock.install({ time: AGORA });
     const ped = { id: 26500, clienteId: 1, clienteNome: 'Ana Paula Lima', status: 'Pronto p/ Instalação', inst_agendado: true, valor: 900,
         data_entrega: ONTEM, inst_hora: '09:00', inst_duracao: 60, usuario_instalacao_id: 2, criado_por: 1, inst_aceite: { status: 'pendente', por: 1, em: 1 } };
     await semear(page, { sc_ped: [ped] }, MARIA);
@@ -259,7 +253,6 @@ test('instalacao vencida sem aceite: o Admin ve "nao respondeu"; o lembrete "Foi
 
 // ── 8. Item do sino que leva a pagina sem acesso fica sem link ──
 test('sino: item com link para a Producao fica sem link para quem nao tem acesso', async ({ page }) => {
-    await page.clock.install({ time: AGORA });
     const med = { id: 777, clienteId: 1, clienteNome: 'Ana Paula Lima', endereco: 'X', data: AMANHA, hora: '10:00', duracao: 60,
         status: 'Agendado', usuario_id: 3, agendado_por: 1, aceite: { status: 'pendente', por: 1, em: 1 } };
     await semear(page, { sc_med: [med] }, JOANA);
@@ -296,7 +289,6 @@ test('excluir usuario exclui os itens da agenda dele e a confirmacao avisa', asy
 test('Aceitar pelo card de Alertas do Painel', async ({ page }) => {
     const med = { id: 777, clienteId: 1, clienteNome: 'Ana Paula Lima', endereco: 'X', data: AMANHA, hora: '10:00', duracao: 60,
         status: 'Agendado', usuario_id: 2, agendado_por: 1, aceite: { status: 'pendente', por: 1, em: 1 } };
-    await page.clock.install({ time: AGORA });
     await semear(page, { sc_med: [med] }, MARIA);
     await page.goto(BASE + '/index.html');
     await page.locator('#dashboard-alertas').getByRole('button', { name: 'Aceitar' }).click();
@@ -306,7 +298,6 @@ test('Aceitar pelo card de Alertas do Painel', async ({ page }) => {
 test('Recusar pelo card de Alertas do Painel', async ({ page }) => {
     const med = { id: 777, clienteId: 1, clienteNome: 'Ana Paula Lima', endereco: 'X', data: AMANHA, hora: '10:00', duracao: 60,
         status: 'Agendado', usuario_id: 2, agendado_por: 1, aceite: { status: 'pendente', por: 1, em: 1 } };
-    await page.clock.install({ time: AGORA });
     await semear(page, { sc_med: [med] }, MARIA);
     await page.goto(BASE + '/index.html');
     await page.locator('#dashboard-alertas').getByRole('button', { name: 'Recusar' }).click();
@@ -316,7 +307,6 @@ test('Recusar pelo card de Alertas do Painel', async ({ page }) => {
 });
 
 test('cancelar instalacao pendente de aceite tira o pedido de aceite', async ({ page }) => {
-    await page.clock.install({ time: AGORA });
     const ped = { id: 26500, clienteId: 1, clienteNome: 'Ana Paula Lima', status: 'Pronto p/ Instalação', inst_agendado: true, valor: 900,
         data_entrega: AMANHA, inst_hora: '09:00', inst_duracao: 60, usuario_instalacao_id: 2, criado_por: 1, inst_aceite: { status: 'pendente', por: 1, em: 1 } };
     await semear(page, { sc_ped: [ped] });
