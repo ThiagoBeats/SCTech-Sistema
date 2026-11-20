@@ -210,7 +210,15 @@ sistema.
     início–fim (fora do expediente fica cortado na grade). No Mês: até 3 itens
     por dia + "+N" (abre o dia)
   - Cores/legenda: Medição (verde), Instalação (azul), Bloqueado (vermelho),
-    Compromisso (roxo), Aguardando aceite (tracejado na cor do tipo)
+    Compromisso (roxo), Aguardando aceite (tracejado na cor do tipo), Feriado
+    (âmbar) e Ponto facultativo (âmbar tracejado)
+  - Feriados (visíveis para todos): nacionais (inclusive os móveis, como Sexta-feira
+    Santa, calculados para qualquer ano), pontos facultativos (Carnaval, Quarta de
+    Cinzas, Corpus Christi), estaduais pelo Estado da empresa e municipais de
+    Configurar Empresa. Semana/Dia: faixa "🎉 <nome>" no topo do dia ("— ponto
+    facultativo", "— feriado estadual (SP)", "— feriado municipal") e fundo leve na
+    coluna; Mês: etiqueta no dia. Não ocupam nem riscam horário e não geram
+    conflito: dá para agendar normalmente no feriado
   - Medição e instalação vêm dos próprios agendamentos (nada é copiado: reagendar
     ou cancelar reflete sozinho); clicar abre o detalhe de cada uma, com as ações
     de sempre para quem tem acesso à agenda dela na Produção (Agenda de Medições /
@@ -2247,6 +2255,14 @@ Campos:
   - Endereço Completo (text)
   - Cidade (text): vem da consulta de CNPJ; só é guardada (cidade em sc_empresa)
     e usada na saída/volta das Rotas do dia, junto do endereço, sem repetir
+  - Estado (lista das 27 UFs, ao lado da Cidade): preenchido pela consulta de
+    CNPJ; define os feriados estaduais da Agenda (vazio = só nacionais, pontos
+    facultativos e os da cidade)
+  - Preferências › "🎉 Feriados da cidade": lista de dia + mês + nome (repete todo
+    ano; adicionar/remover) e a caixa "Corpus Christi é feriado na minha cidade"
+    (vira feriado municipal em vez de ponto facultativo). Serve também para
+    qualquer feriado que falte (ex.: um estadual que não apareceu). Botão
+    "💾 Salvar feriados"
   - Telefone / WhatsApp (text)
   - E-mail (email)
   - Site (text)

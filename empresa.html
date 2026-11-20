@@ -89,6 +89,10 @@
                     <label>Cidade</label>
                     <input type="text" id="emp-cidade" placeholder="Ex.: Curitiba">
                 </div>
+                <div class="form-group">
+                    <label for="emp-uf">Estado</label>
+                    <select id="emp-uf"><option value=""></option><option value="AC">AC</option><option value="AL">AL</option><option value="AM">AM</option><option value="AP">AP</option><option value="BA">BA</option><option value="CE">CE</option><option value="DF">DF</option><option value="ES">ES</option><option value="GO">GO</option><option value="MA">MA</option><option value="MG">MG</option><option value="MS">MS</option><option value="MT">MT</option><option value="PA">PA</option><option value="PB">PB</option><option value="PE">PE</option><option value="PI">PI</option><option value="PR">PR</option><option value="RJ">RJ</option><option value="RN">RN</option><option value="RO">RO</option><option value="RR">RR</option><option value="RS">RS</option><option value="SC">SC</option><option value="SE">SE</option><option value="SP">SP</option><option value="TO">TO</option></select>
+                </div>
             </div>
 
             <div class="grid" style="margin-bottom:0">
@@ -193,6 +197,22 @@
             <div class="grid" id="emp-orcamento-campos"></div>
             <div style="display:flex;gap:10px;margin-top:14px;align-items:center">
                 <button class="btn btn-success" onclick="salvarMetaOrcamento()">💾 Salvar meta e orçamento</button>
+            </div>
+        </div>
+
+        <div class="card" style="max-width:860px" id="emp-feriados-card">
+            <h3 style="margin-bottom:6px;color:var(--primary)">🎉 Feriados da cidade</h3>
+            <p style="font-size:12px;color:#8F8F8F;margin-bottom:14px">
+                Os feriados nacionais e os do seu estado aparecem sozinhos na Agenda. Aqui você cadastra os da sua cidade (repetem todo ano).
+                Também serve para qualquer feriado que falte (ex.: um estadual que não apareceu).
+            </p>
+            <div id="emp-feriados-lista"></div>
+            <button type="button" class="btn btn-outline btn-sm" style="margin-top:4px" onclick="adicionarFeriadoCidade()">+ Adicionar feriado</button>
+            <label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:13px">
+                <input type="checkbox" id="emp-corpus-municipal"> Corpus Christi é feriado na minha cidade
+            </label>
+            <div style="display:flex;gap:10px;margin-top:14px;align-items:center">
+                <button class="btn btn-success" onclick="salvarFeriadosCidade()">💾 Salvar feriados</button>
             </div>
         </div>
 

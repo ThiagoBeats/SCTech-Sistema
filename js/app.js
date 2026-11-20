@@ -520,6 +520,7 @@ function salvarEmpresaConfigs() {
         cnpj:          (document.getElementById('emp-cnpj')?.value     || '').trim(),
         endereco:      (document.getElementById('emp-end')?.value       || '').trim(),
         cidade:        (document.getElementById('emp-cidade')?.value    || '').trim(),
+        uf:            document.getElementById('emp-uf')?.value || '',
         telefone:      (document.getElementById('emp-tel')?.value       || '').trim(),
         email:         (document.getElementById('emp-email')?.value     || '').trim(),
         site:          (document.getElementById('emp-site')?.value      || '').trim(),
@@ -1089,6 +1090,57 @@ async function salvarMetaOrcamento() {
     toast('Meta e orçamento salvos!', 'success');
 }
 
+// --- FERIADOS DA CIDADE (Configurar Empresa) ---
+// Lista de {dia, mes, nome} que se repete todo ano; a Agenda junta com os feriados
+// nacionais/estaduais calculados por FeriadosCore. Linhas ficam no DOM ate salvar.
+const _FER_MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+function _feriadoLinhaHtml(f) {
+    const meses = _FER_MESES.map((m, i) => `<option value="${i + 1}"${+f.mes === i + 1 ? ' selected' : ''}>${m}</option>`).join('');
+    return `<div class="emp-fer-linha" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+        <input type="number" class="emp-fer-dia" min="1" max="31" placeholder="Dia" aria-label="Dia" value="${f.dia || ''}" style="width:80px">
+        <select class="emp-fer-mes" aria-label="Mês" style="width:150px">${meses}</select>
+        <input type="text" class="emp-fer-nome" placeholder="Nome (ex.: Aniversário da cidade)" aria-label="Nome do feriado" maxlength="80" value="${escapeHtml(f.nome || '')}" style="flex:1;min-width:180px">
+        <button type="button" class="btn btn-outline btn-sm btn-danger" onclick="this.closest('.emp-fer-linha').remove()" aria-label="Remover feriado">🗑️</button>
+    </div>`;
+}
+
+function renderFeriadosCidade(emp) {
+    const box = document.getElementById('emp-feriados-lista');
+    if (!box) return;
+    const lista = Array.isArray(emp.feriados_municipais) ? emp.feriados_municipais : [];
+    box.innerHTML = lista.map(_feriadoLinhaHtml).join('');
+    const cb = document.getElementById('emp-corpus-municipal');
+    if (cb) cb.checked = !!emp.corpus_municipal;
+}
+
+function adicionarFeriadoCidade() {
+    const box = document.getElementById('emp-feriados-lista');
+    if (!box) return;
+    box.insertAdjacentHTML('beforeend', _feriadoLinhaHtml({ dia: '', mes: 1, nome: '' }));
+    const ult = box.querySelector('.emp-fer-linha:last-child .emp-fer-dia');
+    if (ult) ult.focus();
+}
+
+async function salvarFeriadosCidade() {
+    const lista = [];
+    let invalido = false;
+    document.querySelectorAll('#emp-feriados-lista .emp-fer-linha').forEach(l => {
+        const dia = parseInt(l.querySelector('.emp-fer-dia').value, 10);
+        const mes = parseInt(l.querySelector('.emp-fer-mes').value, 10);
+        const nome = l.querySelector('.emp-fer-nome').value.trim();
+        if (!dia && !nome) return;   // linha em branco: ignora
+        const maxDia = new Date(Date.UTC(2024, mes, 0)).getUTCDate();   // 2024 e bissexto: 29/02 vale
+        if (!nome || !(dia >= 1 && dia <= maxDia)) { invalido = true; return; }
+        lista.push({ dia, mes, nome });
+    });
+    if (invalido) { await showAlert('Informe o dia (válido para o mês) e o nome de cada feriado.', '⚠️'); return; }
+    const emp = { ...getEmpresa(), feriados_municipais: lista, corpus_municipal: !!document.getElementById('emp-corpus-municipal')?.checked };
+    localStorage.setItem('sc_empresa', JSON.stringify(emp));
+    renderFeriadosCidade(emp);
+    toast('Feriados salvos!', 'success');
+}
+
 function restaurarMensagemCobranca() {
     const el = document.getElementById('emp-msg-cobranca');
     if (el) el.value = CaixaCore.MENSAGEM_COBRANCA_PADRAO;
@@ -1102,6 +1154,8 @@ function carregarEmpresaConfigs() {
     set('emp-cnpj',     emp.cnpj);
     set('emp-end',      emp.endereco);
     set('emp-cidade',   emp.cidade);
+    set('emp-uf',       emp.uf);
+    renderFeriadosCidade(emp);
     set('emp-tel',      emp.telefone);
     set('emp-email',    emp.email);
     set('emp-site',     emp.site);
@@ -9129,6 +9183,7 @@ async function empresaCnpjMudou(el) {
         set('emp-fantasia', String(est.nome_fantasia || '').toLocaleUpperCase('pt-BR'));
         set('emp-end', _empEnderecoCompleto(est));
         set('emp-cidade', est.cidade?.nome || '');
+        set('emp-uf', est.estado?.sigla || '');
         if (est.ddd1 && est.telefone1) set('emp-tel', `(${est.ddd1}) ${est.telefone1}`);
         set('emp-email', est.email || '');
         if (statusEl) {

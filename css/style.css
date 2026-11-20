@@ -2926,6 +2926,7 @@ html[data-theme="dark"] #mpg-nao { color: #242424; }
     --ag-bloq-bg: #FBDDDA; --ag-bloq-bd: #F43927; --ag-bloq-fg: #A5190D;
     --ag-comp-bg: #EBDDF5; --ag-comp-bd: #9B31C8; --ag-comp-fg: #6A1E8C;
     --ag-linha: #ECEEF1;
+    --ag-fer-bg: #FFF1C9; --ag-fer-bd: #D9A100; --ag-fer-fg: #6B4E00;
 }
 html[data-theme="dark"] {
     --ag-med-bg: #17391A; --ag-med-bd: #2DD478; --ag-med-fg: #9BE9B8;
@@ -2933,6 +2934,7 @@ html[data-theme="dark"] {
     --ag-bloq-bg: #4A1D19; --ag-bloq-bd: #F0604F; --ag-bloq-fg: #F7B0A8;
     --ag-comp-bg: #35204A; --ag-comp-bd: #B65FE6; --ag-comp-fg: #DDB7F4;
     --ag-linha: #282A2E;
+    --ag-fer-bg: #4A3A0C; --ag-fer-bd: #F2C23E; --ag-fer-fg: #FBE29A;
 }
 .ag-overlay { position: fixed; inset: 0; z-index: 8900; background: rgba(15, 17, 20, .55); display: flex; align-items: center; justify-content: center; padding: 20px; }
 .ag-janela { background: var(--white); color: var(--dark); width: 100%; max-width: 1120px; height: min(760px, calc(100vh - 40px)); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(0, 0, 0, .35); }
@@ -2995,6 +2997,12 @@ html[data-theme="dark"] .ag-pend { background-image: repeating-linear-gradient(1
 .ag-mes-cel.ag-hoje .ag-mes-num { background: var(--primary); color: #fff; }
 .ag-chip { position: static; display: block; width: 100%; padding: 2px 5px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 5px; }
 .ag-ev-h { font-weight: 800; }
+.ag-fer { box-sizing: border-box; width: 100%; margin-top: 3px; padding: 2px 5px; border-radius: 5px; border-left: 3px solid var(--ag-fer-bd); background: var(--ag-fer-bg); color: var(--ag-fer-fg); font-size: 10px; font-weight: 800; line-height: 1.25; text-align: left; cursor: default; }
+.ag-fer-fac { border-left-style: dashed; }
+.ag-fer-chip { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 0; }
+.ag-col-fer { background: color-mix(in srgb, var(--ag-fer-bg) 45%, transparent); }
+.ag-lg-fer { border-radius: 4px; background: var(--ag-fer-bg); border-color: var(--ag-fer-bd); }
+.ag-lg-fac { border-style: dashed; }
 .ag-mais { align-self: flex-start; border: 0; background: none; color: var(--primary); font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; padding: 1px 5px; box-shadow: none; }
 .ag-rodape { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; padding: 12px 22px 16px; }
 .ag-acoes { display: flex; flex-wrap: wrap; gap: 10px; }

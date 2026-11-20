@@ -56,9 +56,41 @@ function _agEventoHtml(c, estilo, chip) {
         ${c.pendente ? '<span class="ag-ev-s">Aguardando aceite</span>' : ''}</button>`;
 }
 
+// Feriados do periodo (nacionais, facultativos, estaduais pelo estado da empresa e
+// municipais cadastrados). So desenho: nao entram em _agdCompromissos, entao nao
+// ocupam, nao riscam horario e nao geram conflito. Mapa data -> lista.
+function _agFeriadosMapa(dias) {
+    const mapa = {};
+    if (typeof FeriadosCore === 'undefined' || !dias.length) return mapa;
+    const emp = getEmpresa();
+    const lista = FeriadosCore.noPeriodo(dias[0], dias[dias.length - 1], {
+        uf: emp.uf || '', municipais: Array.isArray(emp.feriados_municipais) ? emp.feriados_municipais : [], corpusMunicipal: !!emp.corpus_municipal,
+    });
+    lista.forEach(f => {
+        const l = mapa[f.data] || (mapa[f.data] = []);
+        if (!l.some(x => x.nome === f.nome)) l.push(f);
+    });
+    return mapa;
+}
+
+function _agFeriadoTexto(f) {
+    if (f.tipo === 'facultativo') return `${f.nome} — ponto facultativo`;
+    if (f.tipo === 'estadual') return `${f.nome} — feriado estadual (${f.uf})`;
+    if (f.tipo === 'municipal') return `${f.nome} — feriado municipal`;
+    return f.nome;
+}
+
+// Faixa (Semana/Dia) ou etiqueta (Mes). Clicar nao faz nada: e so informacao.
+function _agFeriadoHtml(f, chip) {
+    const txt = escapeHtml(_agFeriadoTexto(f));
+    const tit = escapeHtml(f.obs ? `${_agFeriadoTexto(f)} (${f.obs})` : _agFeriadoTexto(f));
+    return `<div class="ag-fer${f.tipo === 'facultativo' ? ' ag-fer-fac' : ''}${chip ? ' ag-fer-chip' : ''}" data-feriado="${escapeHtml(f.data)}" title="${tit}"><span aria-hidden="true">🎉</span> ${txt}</div>`;
+}
+
 function _agGradeHtml(dias, itens, pode) {
     const g = _agGrade();
     const hoje = _agdHoje();
+    const fer = _agFeriadosMapa(dias);
     const altura = g.linhas * g.alturaLinha;
     const horas = Array.from({ length: g.linhas }, (_, i) =>
         `<div class="ag-hora" style="height:${g.alturaLinha}px">${_agdHHMM(g.ini + i * g.passo)}</div>`).join('');
@@ -72,14 +104,15 @@ function _agGradeHtml(dias, itens, pode) {
             const alt = Math.max(22, (Math.min(c.fim, g.fim) - Math.max(c.ini, g.ini)) * g.pxMin - 2);
             return _agEventoHtml(c, `top:${topo}px;height:${alt}px`);
         }).join('');
-        return `<div class="ag-col${d === hoje ? ' ag-hoje' : ''}" style="height:${altura}px">${slots}${evs}</div>`;
+        return `<div class="ag-col${d === hoje ? ' ag-hoje' : ''}${fer[d] ? ' ag-col-fer' : ''}" style="height:${altura}px">${slots}${evs}</div>`;
     }).join('');
     const fora = d => itens.filter(c => c.data === d && !(c.fim > g.ini && c.ini < g.fim));
     const cab = dias.map(d => {
         const f = fora(d).length;
         const marca = f && dias.length > 1
             ? `<button type="button" class="ag-fora-h" data-fora="${d}" title="Ver o dia: há itens fora do horário do expediente">+${f} fora do horário</button>` : '';
-        return `<div class="ag-cab${d === hoje ? ' ag-hoje' : ''}"><strong>${_agDiaSemana(d)}</strong><span>${_agDDMM(d)}</span>${marca}</div>`;
+        const faixa = (fer[d] || []).map(f => _agFeriadoHtml(f)).join('');
+        return `<div class="ag-cab${d === hoje ? ' ag-hoje' : ''}"><strong>${_agDiaSemana(d)}</strong><span>${_agDDMM(d)}</span>${faixa}${marca}</div>`;
     }).join('');
     const foraDia = dias.length === 1 ? fora(dias[0]) : [];
     const listaFora = foraDia.length
@@ -93,14 +126,16 @@ function _agGradeHtml(dias, itens, pode) {
 function _agMesHtml(per, itens, pode) {
     const hoje = _agdHoje();
     const mesRef = _ag.ref.slice(0, 7);
+    const fer = _agFeriadosMapa(per.dias);
     const cab = _AG_DIAS.map(d => `<div class="ag-mes-cab">${d.slice(0, 3)}</div>`).join('');
     const celulas = per.dias.map(d => {
         const dia = itens.filter(c => c.data === d);
         const chips = dia.slice(0, 3).map(c => _agEventoHtml(c, '', true)).join('');
+        const feriados = (fer[d] || []).map(f => _agFeriadoHtml(f, true)).join('');
         const mais = dia.length > 3
             ? `<button type="button" class="ag-mais" data-dia="${d}" aria-label="Ver os ${dia.length} itens de ${_agDDMM(d)}">+${dia.length - 3}</button>` : '';
         return `<div class="ag-mes-cel${d.slice(0, 7) !== mesRef ? ' ag-fora' : ''}${d === hoje ? ' ag-hoje' : ''}${pode ? ' ag-slot-ok' : ''}" data-data="${d}" data-hora="${getAgendaConfig().inicio || '08:00'}">
-            <button type="button" class="ag-mes-num" data-dia="${d}" aria-label="Abrir o dia ${_agDDMM(d)}">${+d.slice(8, 10)}</button>${chips}${mais}</div>`;
+            <button type="button" class="ag-mes-num" data-dia="${d}" aria-label="Abrir o dia ${_agDDMM(d)}">${+d.slice(8, 10)}</button>${feriados}${chips}${mais}</div>`;
     }).join('');
     return `<div class="ag-mes">${cab}${celulas}</div>`;
 }
@@ -185,6 +220,7 @@ function abrirAgenda(profChave) {
                 <span><i class="ag-lg ag-ev-med"></i>Medição</span><span><i class="ag-lg ag-ev-inst"></i>Instalação</span>
                 <span><i class="ag-lg ag-ev-bloq"></i>Bloqueado</span><span><i class="ag-lg ag-ev-comp"></i>Compromisso</span>
                 <span><i class="ag-lg ag-ev-med ag-pend"></i>Aguardando aceite</span>
+                <span><i class="ag-lg ag-lg-fer"></i>Feriado</span><span><i class="ag-lg ag-lg-fer ag-lg-fac"></i>Ponto facultativo</span>
             </div>
         </div>
     </div>`;
@@ -228,6 +264,7 @@ function _agClique(e) {
     const t = e.target;
     const bt = (sel) => t.closest ? t.closest(sel) : null;
     let el;
+    if (bt('.ag-fer')) return;   // feriado e so informacao
     if ((el = bt('[data-prof]'))) { _ag.prof = el.dataset.prof; _agendaRedesenhar(); return; }
     if ((el = bt('[data-visao]'))) { _ag.visao = el.dataset.visao; _agendaRedesenhar(); return; }
     if ((el = bt('[data-nav]'))) { _agNavegar(+el.dataset.nav); _agendaRedesenhar(); return; }
