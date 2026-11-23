@@ -44,7 +44,7 @@
         .sobre-nav-logo {
             display: flex; flex-direction: column; align-items: center;
             gap: 2px; text-decoration: none; color: var(--dark);
-            transition: opacity 0.2s;
+            transition: opacity .15s ease;
         }
         .sobre-nav-logo:hover { opacity: 0.75; }
         .sobre-nav-logo img { height: 28px; width: auto; object-fit: contain; }
@@ -58,7 +58,7 @@
             font-size: 13px; font-weight: 700;
             background: var(--primary); color: white;
             text-decoration: none;
-            transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+            transition: background-color .15s ease, box-shadow .15s ease, transform .15s ease;
             box-shadow: 0 2px 8px rgba(0,93,59,0.25);
         }
         .sobre-nav-links a:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,93,59,0.35); }
@@ -145,7 +145,7 @@
         }
         .stat-item {
             padding: 24px 28px; display: flex; align-items: center; gap: 14px;
-            border-right: 1px solid var(--border); transition: background 0.2s;
+            border-right: 1px solid var(--border); transition: background-color .15s ease;
         }
         .stat-item:last-child { border-right: none; }
         .stat-item:hover { background: var(--light); }
@@ -180,7 +180,7 @@
             background: var(--white); border: 1px solid var(--border);
             border-radius: 14px; padding: 28px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            transition: box-shadow 0.2s, transform 0.2s;
+            transition: box-shadow .15s ease, transform .15s ease;
         }
         .card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.09); transform: translateY(-2px); }
         .card-header {
@@ -236,7 +236,7 @@
             box-shadow: 0 6px 24px rgba(0,0,0,0.08);
             cursor: default;
             animation: logoFloat 3.5s ease-in-out infinite;
-            transition: box-shadow 0.3s;
+            transition: box-shadow .15s ease;
         }
         .logo-showcase-wrap:hover {
             animation: logoShake 0.55s ease-in-out;
@@ -293,7 +293,7 @@
             display: flex; align-items: center; gap: 6px;
             padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
             background: var(--light); border: 1px solid var(--border);
-            color: var(--text); transition: border-color 0.2s, background 0.2s;
+            color: var(--text); transition: border-color .15s ease, background-color .15s ease, color .15s ease;
         }
         .tech-pill:hover { background: #EDF5FC; border-color: var(--primary); color: var(--primary); }
         .tech-pill span { font-size: 15px; }
