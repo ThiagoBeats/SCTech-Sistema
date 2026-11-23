@@ -4829,7 +4829,7 @@ function _renderCardAlertas() {
         // Abrir um alerta no card tambem o marca como visto no sino.
         el._notifClique = true;
         el.addEventListener('keydown', e => {
-            if (e.key === 'Enter' && e.target.dataset && e.target.dataset.href) e.target.click();
+            if ((e.key === 'Enter' || e.key === ' ') && e.target.dataset && e.target.dataset.href) { e.preventDefault(); e.target.click(); }
         });
         el.addEventListener('click', e => {
             const b = e.target.closest('[data-chave]');
@@ -4837,6 +4837,9 @@ function _renderCardAlertas() {
             const ac = e.target.closest('[data-alerta-acao]');
             Notif.marcarVisto(b.dataset.chave);
             if (ac) { try { new Function(ac.dataset.alertaAcao)(); } catch (err) { console.error(err); } return; }
+            // Link proprio dentro da faixa (ex.: o pedido, com onclick) cuida do clique sozinho.
+            const interno = e.target.closest('[onclick]');
+            if (interno && interno !== b && b.contains(interno)) return;
             if (b.dataset.href && !e.target.closest('button, a')) window.location.href = b.dataset.href;
         });
     }

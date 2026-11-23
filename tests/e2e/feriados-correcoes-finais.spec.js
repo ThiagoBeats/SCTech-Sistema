@@ -163,3 +163,26 @@ test('7b. na faixa da Semana/Dia o clique no feriado nao faz nada', async ({ pag
     await J(page).locator('.ag-cab .ag-fer').first().click();
     await expect(page.locator('.agd-modal-overlay')).toHaveCount(0);
 });
+
+test('8. no card, clicar no nome do pedido abre aquele pedido; clicar no fundo da faixa leva a lista', async ({ page }) => {
+    await abrir(page, { sc_ped: [ped(26030, 'Cliente Atrasado', 'Em Produção', '2026-11-10')] });
+    const faixa = page.locator('#dashboard-alertas [data-chave]', { hasText: 'entrega(s) atrasada(s)' });
+    await expect(faixa).toHaveAttribute('data-href', 'pedidos.html');
+    await faixa.locator('span[onclick^="editarPedido"]').click();
+    await page.waitForURL(/pedido\.html/);
+    await page.waitForTimeout(500);
+    expect(page.url()).toMatch(/pedido\.html/);
+    expect(page.url()).not.toMatch(/pedidos\.html/);
+    expect(await page.evaluate(() => localStorage.getItem('sc_editando_id'))).toBe('26030');
+});
+
+test('8b. clicar no fundo da faixa do pedido (e Espaco com foco) leva a Pedidos', async ({ page }) => {
+    await abrir(page, { sc_ped: [ped(26030, 'Cliente Atrasado', 'Em Produção', '2026-11-10')] });
+    const faixa = page.locator('#dashboard-alertas [data-chave]', { hasText: 'entrega(s) atrasada(s)' });
+    await faixa.click({ position: { x: 4, y: 4 } });
+    await page.waitForURL(/pedidos\.html/);
+    await page.goBack();
+    await page.locator('#dashboard-alertas [data-chave]', { hasText: 'entrega(s) atrasada(s)' }).focus();
+    await page.keyboard.press('Space');
+    await page.waitForURL(/pedidos\.html/);
+});
