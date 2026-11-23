@@ -33,9 +33,9 @@ test('hover abre a mini-janela com os mesmos textos do card; clicar marca como v
     await expect(painel).toBeVisible();
     const itens = painel.locator('.sino-item');
     await expect(itens).toHaveCount(2);
-    // abrir o sino marca o que ele lista como visto: a contagem zera e os itens continuam, sem destaque
+    // abrir o sino marca o que ele lista como visto: a contagem zera e os itens continuam; o destaque dos novos fica ate fechar
     await expect(badge(page)).toHaveCount(0);
-    await expect(painel.locator('.sino-item.novo')).toHaveCount(0);
+    await expect(painel.locator('.sino-item.novo')).toHaveCount(2);
     await expect(painel).toContainText('1 entrega(s) atrasada(s):');
     await expect(painel).toContainText('Joao Atrasado');
     await expect(painel).toContainText('1 medição(ões) atrasada(s):');

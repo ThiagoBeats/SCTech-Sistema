@@ -27,6 +27,9 @@ test('1. abrir o sino zera a contagem e os itens continuam listados, sem destaqu
     await page.hover('#sino-btn');
     await expect(badge(page)).toHaveCount(0);
     await expect(painel(page).locator('.sino-item')).toHaveCount(2);
+    // aberto: a contagem zerou, mas os novos seguem destacados ate o painel fechar
+    await expect(painel(page).locator('.sino-item.novo')).toHaveCount(2);
+    await page.mouse.move(5, 400);
     await expect(painel(page).locator('.sino-item.novo')).toHaveCount(0);
     await expect(page.locator('#sino-marcar')).toHaveCount(0);
     await page.reload();

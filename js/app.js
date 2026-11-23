@@ -512,6 +512,9 @@ function buildEmpresaHeaderHTML(logoHeight) {
 function salvarEmpresaConfigs() {
     const razao = (document.getElementById('emp-razao')?.value || '').trim().toLocaleUpperCase('pt-BR');
     if (!razao) { showAlert('Informe a Razão Social.', '⚠️'); return; }
+    // O Salvar da pagina tambem grava os feriados da cidade (linhas novas nao se perdem).
+    const fer = _lerFeriadosCidadeDaTela();
+    if (fer && fer.invalido) { showAlert('Informe o dia (válido para o mês) e o nome de cada feriado da cidade (aba Preferências).', '⚠️'); return; }
     const aliq = parseFloat(String(document.getElementById('emp-aliquota')?.value || '').replace(',', '.'));
     const emp = {
         ...getEmpresa(),
@@ -528,7 +531,9 @@ function salvarEmpresaConfigs() {
         regime_tributario: document.getElementById('emp-regime')?.value || '',
         aliquota_estimada: Number.isFinite(aliq) ? Math.min(100, Math.max(0, aliq)) : 0
     };
+    if (fer) { emp.feriados_municipais = fer.lista; emp.corpus_municipal = fer.corpus; }
     localStorage.setItem('sc_empresa', JSON.stringify(emp));
+    if (fer) renderFeriadosCidade(emp);
     atualizarTopbar();
     toast('Configurações da empresa salvas!', 'success');
     if (typeof atualizarPreviewCabecalho === 'function') atualizarPreviewCabecalho();
@@ -1122,7 +1127,9 @@ function adicionarFeriadoCidade() {
     if (ult) ult.focus();
 }
 
-async function salvarFeriadosCidade() {
+// Le as linhas da tela. Sem a lista na tela (outra pagina) devolve null: quem chama nao mexe nos feriados.
+function _lerFeriadosCidadeDaTela() {
+    if (!document.getElementById('emp-feriados-lista')) return null;
     const lista = [];
     let invalido = false;
     document.querySelectorAll('#emp-feriados-lista .emp-fer-linha').forEach(l => {
@@ -1134,8 +1141,14 @@ async function salvarFeriadosCidade() {
         if (!nome || !(dia >= 1 && dia <= maxDia)) { invalido = true; return; }
         lista.push({ dia, mes, nome });
     });
-    if (invalido) { await showAlert('Informe o dia (válido para o mês) e o nome de cada feriado.', '⚠️'); return; }
-    const emp = { ...getEmpresa(), feriados_municipais: lista, corpus_municipal: !!document.getElementById('emp-corpus-municipal')?.checked };
+    return { lista, invalido, corpus: !!document.getElementById('emp-corpus-municipal')?.checked };
+}
+
+async function salvarFeriadosCidade() {
+    const f = _lerFeriadosCidadeDaTela();
+    if (!f) return;
+    if (f.invalido) { await showAlert('Informe o dia (válido para o mês) e o nome de cada feriado.', '⚠️'); return; }
+    const emp = { ...getEmpresa(), feriados_municipais: f.lista, corpus_municipal: f.corpus };
     localStorage.setItem('sc_empresa', JSON.stringify(emp));
     renderFeriadosCidade(emp);
     toast('Feriados salvos!', 'success');
@@ -4602,7 +4615,8 @@ const _ALERTA_CORES = {
     success:['var(--ok-bg)',     '#8FD98D', 'var(--ok-text)']
 };
 const _ALERTA_SEP = ' &nbsp;·&nbsp; ';
-const _alertaHoje = () => new Date().toISOString().split('T')[0];
+// Data local (e nao UTC): das 21h a meia-noite o dia ainda e o de hoje.
+const _alertaHoje = () => hojeLocal();
 const _alertaDataBR = d => d.split('-').reverse().join('/');
 const _alertaIds = lista => lista.map(x => x.id).join(',');
 const _ALERTA_INST_STATUS = ['Pronto p/ Instalação', 'Aguardando Financeiro'];
@@ -4700,11 +4714,11 @@ Notif.registrar('estoque-minimo', () => {
 
 // Alertas do Financeiro (mesmos textos e regras da Visao Geral do Financeiro, via finAlertasCalcular):
 // so para quem tem acesso ao Financeiro. Urgente = o que e vermelho la (atrasos e gap de caixa).
-// Clicar abre a aba do Financeiro que trata do assunto (ou a primeira que o usuario pode ver).
-const _ALERTA_FIN_ABAS = { hoje: 'financeiro.hoje', dashboard: 'financeiro.dashboard', receber: 'financeiro.receber', pagar: 'financeiro.pagar' };
+// Cada alerta so aparece para quem pode ver a aba do Financeiro que trata do assunto (a mesma do link);
+// clicar abre essa aba.
 Notif.registrar('financeiro', () => {
     if (!temAcessoAlgumaSub('financeiro', 'visualizar')) return [];
-    return finAlertasCalcular(hojeLocal()).map(a => ({
+    return finAlertasCalcular(hojeLocal()).filter(a => temAcesso(FIN_TAB_MODULO[a.aba] || 'financeiro', 'visualizar')).map(a => ({
         chave: 'fin:' + a.id, icone: a.icone, cor: a.cor === 'warning' ? 'warn' : a.cor, urgente: a.cor === 'danger',
         href: 'financeiro.html?aba=' + a.aba, titulo: '', texto: a.html }));
 });
@@ -4794,7 +4808,9 @@ function _alertaBannerHTML(it) {
     const [bg, bord, txt] = _ALERTA_CORES[it.cor] || _ALERTA_CORES[it.urgente ? 'danger' : 'warn'];
     const acao = Notif.acoesDe(it)
         .map(a => `<button type="button" class="btn ${a.sec ? 'btn-outline' : 'btn-primary'} btn-sm" data-alerta-acao="${escapeHtml(a.fn)}">${escapeHtml(a.rotulo)}</button>`).join('');
-    return `<div data-urgente="${it.urgente ? 1 : 0}" data-chave="${escapeHtml(it.chave)}" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:${bg};border:1px solid ${bord};border-radius:8px;padding:10px 16px;font-size:13px">
+    // Com link (e acesso a pagina), o banner inteiro leva ao destino, como no sino.
+    const href = it.href && (typeof _hrefPermitido !== 'function' || _hrefPermitido(it.href)) ? it.href : '';
+    return `<div data-urgente="${it.urgente ? 1 : 0}" data-chave="${escapeHtml(it.chave)}"${href ? ` data-href="${escapeHtml(href)}" role="link" tabindex="0"` : ''} style="${href ? 'cursor:pointer;' : ''}display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:${bg};border:1px solid ${bord};border-radius:8px;padding:10px 16px;font-size:13px">
             <span style="font-size:17px;flex-shrink:0">${it.icone || '🔔'}</span>
             <span style="color:${txt}">${it.titulo || ''}</span>
             <span>${it.texto || ''}</span>${acao}
@@ -4812,12 +4828,16 @@ function _renderCardAlertas() {
     if (!el._notifClique) {
         // Abrir um alerta no card tambem o marca como visto no sino.
         el._notifClique = true;
+        el.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && e.target.dataset && e.target.dataset.href) e.target.click();
+        });
         el.addEventListener('click', e => {
             const b = e.target.closest('[data-chave]');
             if (!b || !el.contains(b)) return;
             const ac = e.target.closest('[data-alerta-acao]');
             Notif.marcarVisto(b.dataset.chave);
-            if (ac) { try { new Function(ac.dataset.alertaAcao)(); } catch (err) { console.error(err); } }
+            if (ac) { try { new Function(ac.dataset.alertaAcao)(); } catch (err) { console.error(err); } return; }
+            if (b.dataset.href && !e.target.closest('button, a')) window.location.href = b.dataset.href;
         });
     }
     const prefNotif = prefsUsuario().notificacoes;
@@ -13703,6 +13723,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Link de um alerta do sino/card (financeiro.html?aba=receber): abre essa aba, se o usuario pode ve-la.
         const abaLink = new URLSearchParams(window.location.search).get('aba');
         if (abaLink && abaLink !== abaInicial && abasVisiveis.some(([x]) => x === abaLink)) mostrarTabFinanceiro(abaLink);
+        // Usou o link: tira ?aba= do endereco, senao ele ganharia da aba lembrada no F5.
+        if (abaLink) { try { const u = new URL(window.location.href); u.searchParams.delete('aba'); history.replaceState(null, '', u.pathname + u.search + u.hash); } catch (e) {} }
         if (!temAcesso('financeiro.pagar', 'completo')) document.getElementById('cp-toolbar')?.style.setProperty('display', 'none');
         if (!temAcesso('financeiro.fixas', 'completo')) document.getElementById('df-form-card')?.style.setProperty('display', 'none');
     }

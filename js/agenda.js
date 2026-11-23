@@ -264,7 +264,7 @@ function _agClique(e) {
     const t = e.target;
     const bt = (sel) => t.closest ? t.closest(sel) : null;
     let el;
-    if (bt('.ag-fer')) return;   // feriado e so informacao
+    if (bt('.ag-fer') && !bt('.ag-mes-cel')) return;   // faixa de Semana/Dia: so informacao; no Mes o clique cai na celula
     if ((el = bt('[data-prof]'))) { _ag.prof = el.dataset.prof; _agendaRedesenhar(); return; }
     if ((el = bt('[data-visao]'))) { _ag.visao = el.dataset.visao; _agendaRedesenhar(); return; }
     if ((el = bt('[data-nav]'))) { _agNavegar(+el.dataset.nav); _agendaRedesenhar(); return; }

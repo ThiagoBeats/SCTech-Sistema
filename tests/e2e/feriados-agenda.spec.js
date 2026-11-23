@@ -129,7 +129,8 @@ test('usuario comum tambem ve os feriados', async ({ page }) => {
 test('clicar na faixa do feriado nao abre nada; a legenda lista Feriado e Ponto facultativo', async ({ page }) => {
     await abrirAgenda(page, new Date(2026, 11, 23, 8, 0, 0));
     await J(page).locator('.ag-cab .ag-fer').first().click();
-    await expect(page.locator('.sc-modal-overlay[style*="flex"]')).toHaveCount(0);
+    await expect(page.locator('.agd-modal-overlay')).toHaveCount(0);
+    await expect(page.locator('#ag-esc-comp')).toHaveCount(0);
     await expect(J(page).locator('.ag-legenda')).toContainText('Feriado');
     await expect(J(page).locator('.ag-legenda')).toContainText('Ponto facultativo');
 });
