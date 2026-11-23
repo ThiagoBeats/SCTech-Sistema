@@ -497,6 +497,17 @@ Formulário de agendamento:
     no cliente novo, no cadastro dele (também em Editar agendamento)
   - Observações (text, opcional): referências, ponto de encontro, instruções
   - Botão "📐 Agendar Visita"
+  - Aviso de deslocamento: ao salvar (novo, Editar e Reagendar), depois da
+    conferência de horário (que continua bloqueando), confere o tempo de carro
+    (OSRM, com os endereços localizados e guardados) até a visita anterior e a
+    próxima do mesmo profissional no dia, com folga de 10 minutos. Se não der
+    tempo: janela "Não dá tempo de chegar: <anterior> termina HH:MM e o
+    deslocamento até aqui leva ~N min (chegada HH:MM, folga de 10 min)." e/ou
+    o mesmo para a próxima visita, com "Escolher outro horário" (volta ao
+    formulário) e "Agendar mesmo assim" (salva). Sem internet, sem localizar o
+    endereço ou depois de 8 s: salva e o aviso de sucesso diz "Não deu para
+    conferir o deslocamento." Vale também ao agendar/editar/reagendar
+    instalação. Compromissos e bloqueios da agenda não entram na conta.
 
 Lista de medições agendadas:
   - Exibidas em cards agrupados por situação (atrasadas, hoje, próximas)

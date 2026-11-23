@@ -11226,7 +11226,7 @@ async function salvarMedicao() {
         return;
     }
     document.getElementById('med-hora')?.classList.remove('agd-erro');
-    if (!await _agdValidarDisp({ prof: prof.chave, profNome: prof.pessoa.nome, data, hora, dur })) { _medAtualizarDisp(); return; }
+    if (!await _agdValidarDisp({ prof: prof.chave, profNome: prof.pessoa.nome, data, hora, dur, partes })) { _medAtualizarDisp(); return; }
 
     // Só depois de tudo validado o novo cliente é cadastrado.
     if (tipo === 'novo') {
@@ -11259,7 +11259,7 @@ async function salvarMedicao() {
     toggleTipoClienteMedicao();
 
     syncDB();
-    toast(tipo === 'novo' ? 'Cliente cadastrado e visita agendada!' : 'Visita agendada!', 'success');
+    toast(_agdNotaDesloc(tipo === 'novo' ? 'Cliente cadastrado e visita agendada!' : 'Visita agendada!'), 'success');
     renderMedicoes();
     renderDashboardMedicoes();
     renderAgenda();
@@ -11703,6 +11703,7 @@ function _agdFormulario(titulo, campos, onSalvar, voltar, opts) {
                 await showAlert('Informe o horário: ele reserva a agenda do profissional.', '⚠️');
                 return;
             }
+            if (disp.partes) q.partes = disp.partes(lerValores());
             if (!await _agdValidarDisp(q)) { atualizarDisp(); _agdRedesenharAgendas(); return; }
         }
         await onSalvar(lerValores());
@@ -12070,14 +12071,79 @@ function _agdRecarregar() {
     ['sc_ped', 'sc_med', 'sc_agd_ev'].forEach(_dbRecarregarChave);
 }
 async function _agdValidarDisp(q) {
+    _agdDeslocNota = false;
     if (!q.prof || !q.data || !q.hora) return true;
     _agdRecarregar();
     const c = _agdConflitos(q);
-    if (!c.length) return true;
+    if (!c.length) return q.partes ? _agdConferirDeslocamento(q) : true;
     const nome = _agdProfInfo(q.prof, q.profNome)?.nome || 'O profissional';
     await showAlert(`${nome} já tem compromisso nesse período (${_agdFmtData(q.data)}, ${_agdPeriodo(q.hora, q.dur)}):\n\n${
         c.map(x => '• ' + _agdDescComp(x)).join('\n')}\n\nEscolha outro horário — os livres aparecem em verde.`, '⛔');
     return false;
+}
+
+// --- Aviso de deslocamento ao agendar ---------------------------------------
+// Depois da conferencia de sobreposicao (que bloqueia), olha a visita anterior e a
+// proxima do mesmo profissional no dia: da tempo de ir de uma a outra (com a folga)?
+// Se nao der, avisa e deixa escolher; sem rede ou sem localizar, nao avisa nada.
+let _agdDeslocNota = false;   // true: o deslocamento nao pode ser conferido (vira nota no aviso de sucesso)
+function _agdNotaDesloc(msg) { return _agdDeslocNota ? msg + ' Não deu para conferir o deslocamento.' : msg; }
+
+function _agdVisitaEndereco(c) {
+    if (c.tipo === 'med') {
+        const m = (db.medicoes || []).find(x => x.id == c.id);
+        const end = m ? _endMed(m) : '';
+        return end ? { end, partes: _partesMedMapa(m) } : null;
+    }
+    if (c.tipo === 'inst') {
+        const p = db.pedidos.find(x => x.id == c.id);
+        const cli = p ? db.clientes.find(x => x.id == p.clienteId) : null;
+        const end = p ? _endInst(p, cli) : '';
+        return end ? { end, partes: _partesInstMapa(p, cli) } : null;
+    }
+    return null;
+}
+
+async function _agdMinutosEntre(a, b) {
+    const ga = await _rotaGeo(a.end, a.partes), gb = await _rotaGeo(b.end, b.partes);
+    if (!ga || !gb) return null;
+    const t = RotasCore.trechosDaRota(await _rotaOsrm('route', [ga, gb]));
+    return t && t[0] ? Math.round(t[0].segundos / 60) : null;
+}
+
+async function _agdConferirDeslocamento(q) {
+    if (typeof _rotaGeo !== 'function' || typeof _rotaOsrm !== 'function' || typeof RotasCore === 'undefined') return true;   // sem as rotas nesta tela
+    const ini = _agdMin(q.hora), dur = +q.dur || 0, fim = ini + dur;
+    const novo = { end: RotasCore.enderecoDePartes(q.partes), partes: q.partes };
+    if (ini === null || !novo.end) return true;
+    const vizinhos = _agdDoDia(q.prof, q.data, q.ignorar).filter(c => c.tipo === 'med' || c.tipo === 'inst')
+        .map(c => ({ c, e: _agdVisitaEndereco(c) })).filter(x => x.e);
+    const ant = vizinhos.filter(x => x.c.fim <= ini).sort((a, b) => b.c.fim - a.c.fim)[0];
+    const prox = vizinhos.filter(x => x.c.ini >= fim).sort((a, b) => a.c.ini - b.c.ini)[0];
+    if (!ant && !prox) return true;
+
+    let desloc = null;
+    try {
+        desloc = await Promise.race([
+            (async () => ({
+                antesMin: ant ? await _agdMinutosEntre(ant.e, novo) : null,
+                depoisMin: prox ? await _agdMinutosEntre(novo, prox.e) : null,
+            }))(),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('tempo')), 8000)),
+        ]);
+    } catch (e) { desloc = null; }
+    if (!desloc || (ant && desloc.antesMin == null) || (prox && desloc.depoisMin == null)) _agdDeslocNota = true;
+    if (!desloc) return true;
+
+    const sit = RotasCore.situacaoEncaixe({
+        antes: ant ? { fimMin: ant.c.fim } : null, depois: prox ? { agendadoMin: prox.c.ini } : null,
+        novo: { agendadoMin: ini, durMin: dur }, desloc });
+    const nome = c => c.rotulo + (c.cliente ? ' — ' + c.cliente : '');
+    const msgs = [];
+    if (sit.chegaTarde) msgs.push(`Não dá tempo de chegar: ${nome(ant.c)} termina ${RotasCore.hhmm(ant.c.fim)} e o deslocamento até aqui leva ~${desloc.antesMin} min (chegada ${RotasCore.hhmm(sit.chegadaMin)}, folga de ${RotasCore.FOLGA_MIN} min).`);
+    if (sit.atrasaProxima) msgs.push(`Não dá tempo de chegar: esta visita termina ${RotasCore.hhmm(sit.chegadaProximaMin - desloc.depoisMin)} e o deslocamento até ${nome(prox.c)} leva ~${desloc.depoisMin} min (chegada ${RotasCore.hhmm(sit.chegadaProximaMin)}, folga de ${RotasCore.FOLGA_MIN} min).`);
+    if (!msgs.length) return true;
+    return showConfirm(msgs.join('\n\n'), '🚗', 'Agendar mesmo assim', 'Escolher outro horário');
 }
 function _agdRedesenharAgendas() {
     renderAgenda();
@@ -12450,7 +12516,13 @@ function _medFecharReagendar(m) {
     delete m.recusa;
 }
 
-function _medDisp(id) { return { disp: { tipo: 'med', ignorar: { tipo: 'med', id } } }; }
+function _medDisp(id) {
+    return { disp: { tipo: 'med', ignorar: { tipo: 'med', id }, partes: v => {
+        if (v.end) return v.end;
+        const m = (db.medicoes || []).find(x => x.id == id);
+        return m ? _partesMedMapa(m) : null;
+    } } };
+}
 
 function editarMedicao(id) {
     const m = (db.medicoes || []).find(x => x.id == id);
@@ -12473,7 +12545,7 @@ function editarMedicao(id) {
         _medFecharReagendar(atual);
         _aceiteAplicar(atual, 'aceite', antes, atual.usuario_id, atual.data, atual.hora);
         _medAtualizar();
-        toast('Agendamento atualizado!', 'success');
+        toast(_agdNotaDesloc('Agendamento atualizado!'), 'success');
         abrirDetalheMedicao(id);
     }, () => abrirDetalheMedicao(id), _medDisp(id));
 }
@@ -12500,7 +12572,7 @@ function reagendarMedicao(id) {
         _medFecharReagendar(atual);
         _aceiteAplicar(atual, 'aceite', antes, atual.usuario_id, atual.data, atual.hora);
         _medAtualizar();
-        toast('Visita reagendada!', 'success');
+        toast(_agdNotaDesloc('Visita reagendada!'), 'success');
         abrirDetalheMedicao(id);
     }, () => abrirDetalheMedicao(id), _medDisp(id));
 }
@@ -12924,7 +12996,7 @@ async function salvarAgendamentoInstalacao() {
 
     // Confere de novo contra o que esta gravado: outro usuario/aba pode ter
     // agendado o pedido ou ocupado o horario desde que a tela foi aberta.
-    if (!await _agdValidarDisp({ prof: prof.chave, profNome: prof.pessoa.nome, data: v.data, hora: v.hora, dur: v.dur })) { _agdRedesenharAgendas(); return; }
+    if (!await _agdValidarDisp({ prof: prof.chave, profNome: prof.pessoa.nome, data: v.data, hora: v.hora, dur: v.dur, partes: v.end })) { _agdRedesenharAgendas(); return; }
     const p = db.pedidos.find(x => x.id == v.id);
     if (!p || normalizarStatus(p.status) !== 'Pronto p/ Instalação') {
         await showAlert('Este pedido não está mais em "Pronto p/ Instalação".', '⚠️');
@@ -12952,7 +13024,7 @@ async function salvarAgendamentoInstalacao() {
 
     _instLimparForm();
     _instAtualizar();
-    toast(`Instalação do pedido #${formatPedidoId(p.id)} agendada!`, 'success');
+    toast(_agdNotaDesloc(`Instalação do pedido #${formatPedidoId(p.id)} agendada!`), 'success');
 }
 
 function renderAgenda() {
@@ -13048,7 +13120,9 @@ async function _instGravarEdicao(id, v, titulo) {
     if (!p || !_instPendente(p)) { await showAlert('Esta instalação não está mais agendada.', '⚠️'); fecharModalAgenda(); _agdRedesenharAgendas(); return; }
     if (!await _instConfirmarNovaData(p, v.data)) return false;
     // A confirmacao demorou: relê o gravado e confere o conflito de novo antes de gravar.
-    if (v.usu && v.usu.chave && !await _agdValidarDisp({ prof: v.usu.chave, profNome: v.usu.pessoa.nome, data: v.data, hora: v.hora, dur: v.dur || _agdDurPadrao('inst'), ignorar: { tipo: 'inst', id } })) { _agdRedesenharAgendas(); return false; }
+    const cliEd = db.clientes.find(c => c.id == p.clienteId);
+    const partesEd = v.end !== undefined ? v.end : _partesInstMapa(p, cliEd);
+    if (v.usu && v.usu.chave && !await _agdValidarDisp({ prof: v.usu.chave, profNome: v.usu.pessoa.nome, data: v.data, hora: v.hora, dur: v.dur || _agdDurPadrao('inst'), ignorar: { tipo: 'inst', id }, partes: partesEd })) { _agdRedesenharAgendas(); return false; }
     p = db.pedidos.find(x => x.id == id);
     if (!p || !_instPendente(p)) { await showAlert('Esta instalação não está mais agendada.', '⚠️'); fecharModalAgenda(); _agdRedesenharAgendas(); return; }
     const antes = { uid: p.usuario_instalacao_id || null, data: p.data_entrega, hora: p.inst_hora || '' };
@@ -13064,7 +13138,7 @@ async function _instGravarEdicao(id, v, titulo) {
     definirInstalador(p, v.usu.pessoa);
     _aceiteAplicar(p, 'inst_aceite', antes, p.usuario_instalacao_id, v.data, v.hora);
     _instAtualizar();
-    toast(titulo, 'success');
+    toast(_agdNotaDesloc(titulo), 'success');
     _lembreteInstVoltar(() => abrirDetalheInstalacao(id));
 }
 
