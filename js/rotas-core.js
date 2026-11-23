@@ -6,7 +6,7 @@
 
     const MAPS = 'https://www.google.com/maps/dir/?api=1';
     const MAX_WAYPOINTS = 3;     // limite do Google Maps no navegador do celular
-    const TOLERANCIA_MIN = 10;   // atraso ate 10 min nao avisa
+    const FOLGA_MIN = 10;        // folga alem do tempo de carro: menos que isso = apertada
 
     const enc = s => encodeURIComponent(String(s).trim());
     const hhmm = min => {
@@ -100,24 +100,137 @@
         return rota.legs.map(l => ({ metros: +l.distance || 0, segundos: +l.duration || 0 }));
     }
 
-    // paradas: [{agendadoMin|null, durMin}]; trechosMin[i]: trajeto ate a parada i
+    // paradas: [{agendadoMin|null, durMin}]; trechosMin[i]: deslocamento ATE a parada i
     // (da saida ou da parada anterior localizada), null quando nao se sabe:
     // conta zero e so' aquela parada fica incerta.
+    // Situacao: atrasada (chegada depois do agendado, desde 1 min), apertada (sobra
+    // menos de FOLGA_MIN), ok, sem-horario. A saida ja desconta a folga quando ha
+    // deslocamento ate a 1a parada. invadeMin: quanto o servico anterior passa do
+    // horario desta parada, mesmo sem deslocamento.
     function calcularChegadas({ inicioDia, paradas, trechosMin }) {
         const ps = paradas || [], tr = trechosMin || [];
         const t0 = tr[0] == null ? 0 : +tr[0];
-        const saidaMin = ps.length && ps[0].agendadoMin != null ? ps[0].agendadoMin - t0 : (+inicioDia || 0);
+        const saidaMin = ps.length && ps[0].agendadoMin != null
+            ? ps[0].agendadoMin - t0 - (tr[0] == null ? 0 : FOLGA_MIN) : (+inicioDia || 0);
         let t = saidaMin;
         const out = ps.map((p, i) => {
             const incerto = tr[i] == null;
-            const chegadaMin = t + (tr[i] == null ? 0 : +tr[i]);
+            const fimAnt = t;
+            const chegadaMin = t + (incerto ? 0 : +tr[i]);
             const ag = p.agendadoMin;
             const inicioMin = ag != null ? Math.max(chegadaMin, ag) : chegadaMin;
-            const atrasoMin = ag != null && chegadaMin - ag > TOLERANCIA_MIN ? chegadaMin - ag : 0;
+            const atrasoMin = ag != null && chegadaMin > ag ? chegadaMin - ag : 0;
+            const folgaMin = ag != null ? ag - chegadaMin : null;
+            const primeiraSemTrecho = i === 0 && incerto;      // comeca ali: nao ha deslocamento a conferir
+            const situacao = ag == null ? 'sem-horario' : atrasoMin ? 'atrasada'
+                : folgaMin < FOLGA_MIN && !primeiraSemTrecho ? 'apertada' : 'ok';
+            const invadeMin = ag != null && i > 0 && fimAnt > ag ? fimAnt - ag : 0;
             t = inicioMin + (+p.durMin || 0);
-            return { chegadaMin, inicioMin, atrasoMin, incerto };
+            return { chegadaMin, inicioMin, fimMin: t, atrasoMin, folgaMin, situacao, invadeMin, incerto };
         });
         return { saidaMin, paradas: out, fimMin: t };
+    }
+
+    // Custo de uma ordem, na ordem de importancia: [atrasadas, soma do atraso, apertadas, fim do dia].
+    // matrizMin: com empresa, indice 0 = empresa e parada i = i+1; sem empresa, so as paradas.
+    function _custoOrdem(ordem, matrizMin, paradas, comEmpresa, voltaEmpresa, completo) {
+        const off = comEmpresa ? 1 : 0;
+        const d = (a, b) => { const v = matrizMin && matrizMin[a] ? matrizMin[a][b] : 0; return v == null ? 0 : +v; };
+        let atras = 0, soma = 0, apert = 0, t = 0, ancorado = false, prev = -1;
+        for (let k = 0; k < ordem.length; k++) {
+            const p = ordem[k], ps = paradas[p];
+            const desl = k === 0 ? (comEmpresa ? d(0, p + 1) : 0) : d(prev + off, p + off);
+            const ag = ps.agendadoMin;
+            let cheg;
+            if (!ancorado && ag != null) {
+                // a saida e' escolhida para chegar na 1a visita com horario ja com a folga
+                // (sem empresa, a 1a visita da ordem e' onde o dia comeca)
+                const comFolga = k === 0 ? comEmpresa : true;
+                cheg = ag - (comFolga ? FOLGA_MIN : 0);
+                t = cheg; ancorado = true;
+            } else cheg = t + desl;
+            if (ag != null) {
+                if (cheg > ag) { atras++; soma += cheg - ag; }
+                else if (ag - cheg < FOLGA_MIN && !(k === 0 && !comEmpresa)) apert++;
+                t = Math.max(cheg, ag);
+            } else t = cheg;
+            t += +ps.durMin || 0;
+            prev = p;
+        }
+        let fim = t;
+        if (completo && comEmpresa && voltaEmpresa && ordem.length) fim += d(prev + 1, 0);
+        return [atras, soma, apert, completo ? fim : 0];
+    }
+    function _cmpCusto(a, b, n) {
+        for (let i = 0; i < (n || 4); i++) if (a[i] !== b[i]) return a[i] < b[i] ? -1 : 1;
+        return 0;
+    }
+
+    // Ordem das visitas que menos atrasa (nao a de menor caminho). Criterio, em ordem:
+    // menos atrasadas, menor soma de atraso, menos apertadas, menor fim do dia.
+    // Ate 9 paradas: exato (todas as ordens, cortando as que ja perderam); acima:
+    // parte da ordem por horario e melhora por trocas e deslocamentos.
+    function melhorOrdemPorTempo({ matrizMin, paradas, comEmpresa, voltaEmpresa }) {
+        const ps = paradas || [], n = ps.length;
+        const idx = Array.from({ length: n }, (_, i) => i);
+        if (n <= 1) return idx;
+        const custo = (o, completo) => _custoOrdem(o, matrizMin, ps, !!comEmpresa, !!voltaEmpresa, completo);
+        const seed = idx.slice().sort((a, b) => {
+            const x = ps[a].agendadoMin, y = ps[b].agendadoMin;
+            if (x == null || y == null) return x == null && y == null ? a - b : x == null ? 1 : -1;
+            return x - y || a - b;
+        });
+        let melhor = seed, melhorC = custo(seed, true);
+        if (n <= 9) {
+            const atual = [], usado = new Array(n).fill(false);
+            const rec = () => {
+                if (atual.length === n) {
+                    const c = custo(atual, true);
+                    if (_cmpCusto(c, melhorC) < 0) { melhor = atual.slice(); melhorC = c; }
+                    return;
+                }
+                for (let i = 0; i < n; i++) {
+                    if (usado[i]) continue;
+                    atual.push(i); usado[i] = true;
+                    if (_cmpCusto(custo(atual, false), melhorC, 2) <= 0) rec();
+                    atual.pop(); usado[i] = false;
+                }
+            };
+            rec();
+            return melhor;
+        }
+        let melhorou = true, voltas = 0;
+        while (melhorou && voltas++ < 50) {
+            melhorou = false;
+            const tenta = o => { const c = custo(o, true); if (_cmpCusto(c, melhorC) < 0) { melhor = o; melhorC = c; melhorou = true; } };
+            for (let i = 0; i < n - 1; i++) for (let j = i + 1; j < n; j++) {
+                const inv = melhor.slice(0, i).concat(melhor.slice(i, j + 1).reverse(), melhor.slice(j + 1));
+                tenta(inv);
+                const tr = melhor.slice(); tr[i] = melhor[j]; tr[j] = melhor[i];
+                tenta(tr);
+            }
+            for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+                if (i === j) continue;
+                const o = melhor.slice(); const [x] = o.splice(i, 1); o.splice(j, 0, x);
+                tenta(o);
+            }
+        }
+        return melhor;
+    }
+
+    // Agendar: da tempo de chegar depois da visita anterior e de seguir para a proxima?
+    // antes: {fimMin}|null, depois: {agendadoMin}|null, novo: {agendadoMin, durMin},
+    // desloc: {antesMin, depoisMin} (null = nao se sabe: nao avisa). A folga conta nos dois lados.
+    function situacaoEncaixe({ antes, depois, novo, desloc }) {
+        const dl = desloc || {};
+        const chegadaMin = antes && dl.antesMin != null ? antes.fimMin + dl.antesMin : null;
+        const faltaMin = chegadaMin != null ? Math.max(0, chegadaMin + FOLGA_MIN - novo.agendadoMin) : 0;
+        const chegadaProximaMin = depois && dl.depoisMin != null ? novo.agendadoMin + (+novo.durMin || 0) + dl.depoisMin : null;
+        return {
+            chegaTarde: faltaMin > 0, chegadaMin, faltaMin,
+            atrasaProxima: chegadaProximaMin != null && chegadaProximaMin + FOLGA_MIN > depois.agendadoMin,
+            chegadaProximaMin,
+        };
     }
 
     function linhaObsRota(dataISO, chegadaMin, agendadoMin) {
@@ -236,8 +349,8 @@
         return lista.filter((x, i) => x && lista.indexOf(x) === i);
     }
 
-    const api = { enderecoDePartes, consultasGeo, linkIrPara, linksRota, enderecoCompleto, normalizarEndereco, ordemDoTrip, melhorOrdemAberta, trechosDaRota, calcularChegadas,
-        linhaObsRota, aplicarObsRota, textoWhatsRota, fmtDur, duracaoPorExtenso, fmtKm, hhmm, TOLERANCIA_MIN };
+    const api = { enderecoDePartes, consultasGeo, linkIrPara, linksRota, enderecoCompleto, normalizarEndereco, ordemDoTrip, melhorOrdemAberta, trechosDaRota, calcularChegadas, melhorOrdemPorTempo, situacaoEncaixe,
+        linhaObsRota, aplicarObsRota, textoWhatsRota, fmtDur, duracaoPorExtenso, fmtKm, hhmm, FOLGA_MIN };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.RotasCore = api;
 

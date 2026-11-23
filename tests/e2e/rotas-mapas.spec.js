@@ -86,15 +86,15 @@ test('lista as visitas do tecnico no dia, por horario, com chegada, km e aviso d
     expect(await nomes(page)).toEqual([
         expect.stringContaining('Maria Silva'), expect.stringContaining('Pedro Souza'), expect.stringContaining('Ana Costa')]);
     await expect(page.locator('.rota-saida')).toContainText('Rua Empresa, 1');
-    // saida 08:50; Maria 09:00; Pedro chega 10:10 (agendado 09:50); Ana 12:20
-    await expect(itens(page).nth(0)).toContainText('Chega 09:00');
+    // saida 08:40 (08:50 menos 10 de folga); Maria chega 08:50 (agendado 09:00); Pedro chega 10:10 (agendado 09:50); Ana 12:20
+    await expect(itens(page).nth(0)).toContainText('Chega 08:50');
     await expect(itens(page).nth(1)).toContainText('Chega 10:10');
     await expect(itens(page).nth(1).locator('.rota-atraso')).toHaveText('⚠ 20 minutos depois do agendado');
     await expect(itens(page).nth(0).locator('.rota-atraso')).toHaveCount(0);
     await expect(itens(page).nth(2)).toContainText('Sem horário');
     await expect(itens(page).nth(2)).toContainText('Chega 12:20');
     await expect(itens(page).nth(0).locator('.rota-km')).toHaveText('3 km');
-    await expect(page.locator('#rota-total')).toContainText('Total: 12 km · 40 min de trajeto (com a volta) · saída 08:50');
+    await expect(page.locator('#rota-total')).toContainText('Total: 12 km · 40 min de trajeto (com a volta) · saída 08:40');
 });
 
 test('Sugerir melhor ordem aplica a ordem do OpenStreetMap; endereco nao encontrado vai para o fim', async ({ page }) => {
