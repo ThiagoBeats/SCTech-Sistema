@@ -88,10 +88,13 @@ Botão de acesso rápido:
 Sino de notificações (barra superior, em todas as telas):
   - Mostra a mesma lista do card "Alertas do Sistema"; cada tipo de alerta é um
     coletor registrado em js/notificacoes.js (Notif.registrar), usado pelo card e pelo sino
-  - Selo com o número de alertas que o usuário ainda não abriu (some em 0)
-  - Passar o mouse (ou tocar, no celular) abre a mini-janela: não lidos primeiro, em destaque
-  - Clicar num item marca como visto e leva ao lugar do alerta; abrir o alerta no card do
-    Painel também marca; "Marcar todas como lidas" zera a contagem
+  - Selo com o número de alertas que o usuário ainda não viu (some em 0)
+  - Passar o mouse (ou tocar, no celular) abre a mini-janela e marca como vistos os itens
+    listados: o selo zera e os itens continuam na lista; os que eram novos ficam no topo e
+    destacados enquanto a janela estiver aberta e perdem o destaque ao fechar (itens de aceite
+    ficam até serem respondidos, mas deixam de contar); um alerta novo volta a contar
+  - Clicar num item leva ao lugar do alerta; abrir o alerta no card do Painel também marca
+    como visto
   - "Vistos" ficam por usuário (sc_notif_vistos_<id>); a chave do alerta inclui os ids dos
     itens, então um item novo conta de novo; chaves que não existem mais são descartadas
   - Itens podem ter botão de ação e ficar na lista até serem resolvidos (persistente)
@@ -104,7 +107,9 @@ Sino de notificações (barra superior, em todas as telas):
     fica sem link: clicar só marca como visto
 
 Tipo "Entrega hoje":
-  - Lista pedidos (não instalados) com data_entrega = hoje
+  - Lista pedidos (não instalados) com data_entrega = hoje; pedido que já está em
+    "Instalações para hoje" não repete aqui (idem "Entregas atrasadas" x "Instalações
+    atrasadas"), desde que o alerta de instalações esteja ligado
   - Exibe: nomes dos clientes com links para edição do pedido
   - Visível apenas se houver ocorrências
   - Pode ser desativado nas preferências de alertas
@@ -135,6 +140,18 @@ Tipo "Estoque crítico":
   - Lista materiais/acessórios com estoque abaixo do mínimo cadastrado
   - Exibe: nome do item, quantidade atual, quantidade mínima; link para estoque
   - Pode ser desativado nas preferências de alertas
+
+Tipo "Financeiro" (sino e card, só para quem tem acesso ao Financeiro):
+  - Os mesmos alertas da Visão Geral do Financeiro (vencem hoje, recebimentos/pagamentos em
+    atraso, tendência de faturamento, meta do mês, vencem nos próximos 7 dias, gap de caixa),
+    com os mesmos textos e regras; calculados por finAlertasCalcular (app.js), a mesma função
+    da Visão Geral. Cada um respeita o seu liga/desliga em Configurar Empresa
+  - Cada alerta só aparece para quem pode ver a aba que ele abre (A Receber, A Pagar, Hoje ou
+    Visão Geral); no card do Painel a faixa inteira é clicável e leva à mesma aba
+  - Datas dos alertas usam o dia local (não UTC): à noite não adianta para o dia seguinte
+  - Urgentes (aparecem em "Só as urgentes"): os vermelhos, atrasos e gap de caixa
+  - Clicar abre a aba do Financeiro do assunto (financeiro.html?aba=receber | pagar | hoje |
+    dashboard), se o usuário puder vê-la; ao abrir, o ?aba= sai do endereço (o F5 volta à aba que estava aberta)
 
 ── 2.2 CARDS DE MÉTRICAS ───────────────────────────────────────────────────────
 
@@ -210,7 +227,16 @@ sistema.
     início–fim (fora do expediente fica cortado na grade). No Mês: até 3 itens
     por dia + "+N" (abre o dia)
   - Cores/legenda: Medição (verde), Instalação (azul), Bloqueado (vermelho),
-    Compromisso (roxo), Aguardando aceite (tracejado na cor do tipo)
+    Compromisso (roxo), Aguardando aceite (tracejado na cor do tipo), Feriado
+    (âmbar) e Ponto facultativo (âmbar tracejado)
+  - Feriados (visíveis para todos): nacionais (inclusive os móveis, como Sexta-feira
+    Santa, calculados para qualquer ano), pontos facultativos (Carnaval, Quarta de
+    Cinzas, Corpus Christi), estaduais pelo Estado da empresa e municipais de
+    Configurar Empresa. Semana/Dia: faixa "🎉 <nome>" no topo do dia ("— ponto
+    facultativo", "— feriado estadual (SP)", "— feriado municipal") e fundo leve na
+    coluna; Mês: etiqueta no dia (clicar nela age como clicar no dia: abre o agendar; a faixa de
+    Semana/Dia não tem ação). Não ocupam nem riscam horário e não geram
+    conflito: dá para agendar normalmente no feriado
   - Medição e instalação vêm dos próprios agendamentos (nada é copiado: reagendar
     ou cancelar reflete sozinho); clicar abre o detalhe de cada uma, com as ações
     de sempre para quem tem acesso à agenda dela na Produção (Agenda de Medições /
@@ -1183,7 +1209,8 @@ Filtro de período (barra superior):
   - Botão "📄 Exportar Relatório": gera PDF com todos os KPIs, gráficos e tabelas
     do período atual (abre modal de preview para impressão)
 
-Alertas financeiros (filtragem por tipo configurável):
+Alertas financeiros (filtragem por tipo configurável; os mesmos também vão para o sino e o
+card de Alertas do Painel, para quem tem acesso ao Financeiro):
   - Contas que vencem hoje: quantidade e valor total (receber + pagar)
   - Recebimentos em atraso: quantidade, valor total, número de clientes distintos
   - Pagamentos em atraso: quantidade e valor total
@@ -2271,6 +2298,15 @@ Campos:
   - Endereço Completo (text)
   - Cidade (text): vem da consulta de CNPJ; só é guardada (cidade em sc_empresa)
     e usada na saída/volta das Rotas do dia, junto do endereço, sem repetir
+  - Estado (lista das 27 UFs, ao lado da Cidade): preenchido pela consulta de
+    CNPJ; define os feriados estaduais da Agenda (vazio = só nacionais, pontos
+    facultativos e os da cidade)
+  - Preferências › "🎉 Feriados da cidade": lista de dia + mês + nome (repete todo
+    ano; adicionar/remover) e a caixa "Corpus Christi é feriado na minha cidade"
+    (vira feriado municipal em vez de ponto facultativo). Serve também para
+    qualquer feriado que falte (ex.: um estadual que não apareceu). Botão
+    "💾 Salvar feriados" (o "💾 Salvar Configurações" da empresa também grava a lista, então
+    linhas novas não se perdem)
   - Telefone / WhatsApp (text)
   - E-mail (email)
   - Site (text)
@@ -2710,7 +2746,9 @@ Configurações (configuracoes.html), agora em sub-abas:
     256x256.
   - Preferências do Sistema: tema claro/escuro (agora do usuário, segue
     ele em qualquer computador), notificações (Todas / Só as urgentes /
-    Nenhuma — vale para os alertas do painel) e notificações sonoras
+    Nenhuma — vale para os alertas do painel; "Só as urgentes" mostra o que está atrasado,
+    os lembretes de compromisso, os pedidos de aceite, as respostas de recusa ou sem resposta
+    e os alertas financeiros de atraso e de falta de caixa) e notificações sonoras
     (bipes da Expedição e som dos avisos), com botão "Testar som".
   - Segurança: alterar a própria senha (confere a atual; mínimo de 6). Cada
     campo de senha tem um 👁️ para mostrar/esconder o que foi digitado.
