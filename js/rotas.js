@@ -347,6 +347,8 @@ async function sugerirMelhorOrdem() {
     const btn = document.getElementById('rota-btn-sugerir');
     const rotulo = btn ? btn.innerHTML : '';
     if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Calculando…'; }
+    const resumoBtns = [...document.querySelectorAll('#rota-resumo button')];
+    resumoBtns.forEach(b => { b.disabled = true; });
     const seq = ++_rota.seq;
     _rotaStatus('Localizando os endereços…');
     try {
@@ -376,6 +378,7 @@ async function sugerirMelhorOrdem() {
         if (seq === _rota.seq) _rotaStatus(ROTA_ERRO_REDE);
     } finally {
         if (btn) { btn.disabled = !!document.getElementById('rota-prof')?.disabled; btn.innerHTML = rotulo; }
+        resumoBtns.forEach(b => { b.disabled = false; });
     }
 }
 

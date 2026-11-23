@@ -15,7 +15,8 @@ async function simularRede(page, est) {
         const g = GEO[q];
         route.fulfill({ contentType: 'application/json', body: JSON.stringify(g ? [{ lat: String(g[0]), lon: String(g[1]) }] : []) });
     });
-    await page.route('**/router.project-osrm.org/route/**', route => {
+    await page.route('**/router.project-osrm.org/route/**', async route => {
+        if (est.lento) await new Promise(r => setTimeout(r, est.lento));
         if (est.fora) return route.fulfill({ status: 500, body: 'erro' });
         route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 'Ok', routes: [{ legs: [{ distance: 9000, duration: est.min * 60 }] }] }) });
     });
@@ -119,4 +120,53 @@ test('duplo clique em Agendar Visita grava uma vez so', async ({ page }) => {
     await expect.poll(async () => (await lerMeds(page)).length, { timeout: 15000 }).toBe(2);
     await page.waitForTimeout(2500);
     expect(await lerMeds(page)).toHaveLength(2);
+});
+
+// --- Fix wave: valores lidos no clique, registro antigo, sem mudanca ---------------------
+
+const MED2 = () => [...MED(), { id: 2, clienteId: 2, clienteNome: 'Pedro Souza', clienteTel: '1111', endereco: 'Rua B, 2', data: DIA, hora: '16:00', duracao: 60, status: 'Agendado', usuario_id: 1, obs: '' }];
+
+test('conferencia lenta: Salvar fica travado e vale o horario do clique, mesmo mudando o campo no meio', async ({ page }) => {
+    await abrir(page, { min: 5, lento: 1500 }, { sc_med: MED2() });
+    await page.evaluate(() => editarMedicao(2));
+    await page.fill('#agdf-hora', '14:15');
+    await page.click('#agdf-salvar');
+    await expect(page.locator('#agdf-salvar')).toBeDisabled();
+    await expect(page.locator('#agdf-salvar')).toHaveText('Conferindo deslocamento…');
+    await page.fill('#agdf-hora', '17:00');   // mexe durante a conferencia
+    await expect.poll(async () => (await lerMeds(page)).find(m => m.id === 2).hora, { timeout: 20000 }).toBe('14:15');
+    await page.waitForTimeout(500);
+    expect((await lerMeds(page)).find(m => m.id === 2).hora).toBe('14:15');
+});
+
+test('registro antigo (so texto) tambem tem o deslocamento conferido ao reagendar medicao', async ({ page }) => {
+    await abrir(page, { min: 25 }, { sc_med: MED2() });
+    await page.evaluate(() => reagendarMedicao(2));
+    await page.fill('#agdf-hora', '14:15');
+    await page.click('#agdf-salvar');
+    await expect(page.locator('#sc-modal-msg')).toContainText('Não dá tempo de chegar: Medição — Maria Silva termina 14:00', { timeout: 15000 });
+    await page.click('#sc-modal-cancel');
+    expect((await lerMeds(page)).find(m => m.id === 2).hora).toBe('16:00');
+});
+
+test('registro antigo: reagendar instalacao tambem confere o deslocamento', async ({ page }) => {
+    const ped = { id: 26200, clienteId: 2, clienteNome: 'Pedro Souza', status: 'Pronto p/ Instalação', valor: 900, amb: 'Sala',
+        inst_agendado: true, data_entrega: DIA, inst_hora: '16:00', inst_duracao: 60, usuario_instalacao_id: 1 };
+    await abrir(page, { min: 25 }, { sc_ped: [ped] });
+    await page.evaluate(() => reagendarInstalacao(26200));
+    await page.fill('#agdf-hora', '14:15');
+    await page.click('#agdf-salvar');
+    await expect(page.locator('#sc-modal-msg')).toContainText('Não dá tempo de chegar: Medição — Maria Silva termina 14:00', { timeout: 15000 });
+    await page.click('#sc-modal-cancel');
+    expect((await page.evaluate(() => JSON.parse(localStorage.getItem('sc_ped'))))[0].inst_hora).toBe('16:00');
+});
+
+test('editar so o telefone de uma visita apertada nao confere o deslocamento de novo', async ({ page }) => {
+    const apertada = MED2().map(m => m.id === 2 ? { ...m, hora: '14:15' } : m);
+    await abrir(page, { min: 25 }, { sc_med: apertada });
+    await page.evaluate(() => editarMedicao(2));
+    await page.fill('#agdf-tel', '2222');
+    await page.click('#agdf-salvar');
+    await expect.poll(async () => (await lerMeds(page)).find(m => m.id === 2).clienteTel, { timeout: 15000 }).toBe('2222');
+    await expect(page.locator('#sc-modal-msg')).toBeHidden();
 });

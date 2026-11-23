@@ -7771,6 +7771,12 @@ function _kanbanAjustarAltura() {
     board.style.setProperty('--kanban-altura', alt + 'px');
 }
 window.addEventListener('resize', () => _kanbanAjustarAltura());
+// A fonte da pagina (Nunito) chega depois do primeiro desenho e muda a altura do que fica
+// acima do quadro: recalcula quando ela termina de carregar.
+if (document.fonts) {
+    if (document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => _kanbanAjustarAltura());
+    if (document.fonts.ready) document.fonts.ready.then(() => _kanbanAjustarAltura());
+}
 
 // Busca do topo: nome do cliente ou numero do pedido (com ou sem #).
 function _kanbanPassaFiltro(p) {
@@ -11530,6 +11536,14 @@ function _partesInstMapa(p, cli) {
     if (!p.inst_endereco && cli && cli.rua !== undefined) return cli;
     return null;
 }
+// Para conferir o deslocamento: registro antigo (sem partes) usa o texto do endereco + cidade, como as Rotas.
+function _partesMedConferir(m) { return _partesMedMapa(m) || EnderecoCore.partesDeRegistroAntigo(m.endereco, m.cidade); }
+function _partesInstConferir(p, cli) {
+    const pt = _partesInstMapa(p, cli);
+    if (pt) return pt;
+    if (_instVazia(p)) return EnderecoCore.partesDeRegistroAntigo(cli && cli.end, cli && cli.cidade);
+    return EnderecoCore.partesDeRegistroAntigo(p.inst_endereco || (cli && cli.end), _instCidade(p, cli));
+}
 function _endMed(m) {
     const pt = _partesMedMapa(m);
     return pt && typeof RotasCore !== 'undefined' ? RotasCore.enderecoDePartes(pt) : _agdEnd(m.endereco, m.cidade);
@@ -11756,10 +11770,12 @@ function _agdFormulario(titulo, campos, onSalvar, voltar, opts) {
         }
         return v;
     };
-    const consulta = () => {
-        const v = lerValores();
+    const consulta = (v = lerValores()) => {
         return { tipo: disp.tipo, prof: v.usu ? v.usu.chave : '', profNome: v.usu ? v.usu.pessoa.nome : '', data: v.data, hora: v.hora, dur: v.dur || _agdDurPadrao(disp.tipo), ignorar: disp.ignorar };
     };
+    // Editar/Reagendar: o que importa para o deslocamento (profissional, dia, hora, duracao, endereco).
+    const chaveDesloc = v => JSON.stringify([v.usu ? v.usu.chave : '', v.data, v.hora, v.dur || _agdDurPadrao(disp.tipo), v.end || null]);
+    const inicial = disp && disp.ignorar ? chaveDesloc(lerValores()) : null;
     const atualizarDisp = () => {
         if (!disp) return;
         _agdDispCtx['agdf-disp'] = Object.assign(_agdDispCtx['agdf-disp'] || {}, { onHora: (d, h) => {
@@ -11798,18 +11814,22 @@ function _agdFormulario(titulo, campos, onSalvar, voltar, opts) {
             const vazio = c.tipo === 'profissional' ? !_agdLerProf('agdf-' + c.id).chave : !el.value.trim();
             if (c.obrig && vazio) { el.classList.add('agd-erro'); el.focus(); return; }
         }
+        // Os valores sao lidos uma vez, no clique: a conferencia de deslocamento espera a rede
+        // e o que se digita (ou o formulario que se abre) nesse meio-tempo nao muda o que sera salvo.
+        const vals = lerValores();
+        vals._semMudanca = inicial !== null && chaveDesloc(vals) === inicial;
         if (disp) {
-            const q = consulta();
+            const q = consulta(vals);
             const horaEl = document.getElementById('agdf-hora');
             if (q.prof && q.data && !q.hora && horaEl) {
                 horaEl.classList.add('agd-erro'); horaEl.focus();
                 await showAlert('Informe o horário: ele reserva a agenda do profissional.', '⚠️');
                 return;
             }
-            if (disp.partes) q.partes = disp.partes(lerValores());
+            if (disp.partes && !vals._semMudanca) q.partes = disp.partes(vals);
             if (!await _agdValidarDisp(q)) { atualizarDisp(); _agdRedesenharAgendas(); return; }
         }
-        await onSalvar(lerValores());
+        await onSalvar(vals);
     });
     o.querySelector('input:not([hidden]), select, textarea')?.focus();
 }
@@ -12179,7 +12199,7 @@ async function _agdValidarDisp(q) {
     _agdRecarregar();
     let c = _agdConflitos(q);
     if (c.length) return _agdAvisoConflito(q, c);
-    if (q.partes) {
+    if (q.partes !== undefined) {
         if (!await _agdConferirDeslocamento(q)) return false;
         // A conferencia (rede, janela aberta) demorou: outra aba pode ter ocupado o horario.
         _agdRecarregar();
@@ -12201,6 +12221,24 @@ async function _agdAvisoConflito(q, c) {
 // Se nao der, avisa e deixa escolher; sem rede ou sem localizar, nao avisa nada.
 let _agdDeslocNota = false;   // true: o deslocamento nao pode ser conferido (vira nota no aviso de sucesso)
 function _agdNotaDesloc(msg) { return _agdDeslocNota ? msg + ' Não deu para conferir o deslocamento.' : msg; }
+
+// Enquanto a conferencia espera a rede: Salvar/Agendar ficam travados e dizem o que esta acontecendo.
+function _agdConferindo(on) {
+    const modal = document.getElementById('agdf-salvar');
+    const ids = modal ? ['agdf-salvar', 'agdf-voltar'] : ['inst-btn-agendar', 'med-btn-agendar'];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (on) {
+            if (el.dataset.rotulo === undefined) el.dataset.rotulo = el.textContent;
+            el.disabled = true;
+            if (id !== 'agdf-voltar') el.textContent = 'Conferindo deslocamento…';
+        } else {
+            el.disabled = false;
+            if (el.dataset.rotulo !== undefined) { el.textContent = el.dataset.rotulo; delete el.dataset.rotulo; }
+        }
+    });
+}
 
 function _agdVisitaEndereco(c) {
     if (c.tipo === 'med') {
@@ -12233,10 +12271,11 @@ async function _agdConferirDeslocamento(q) {
     const prox = vizinhos.filter(x => x.c.ini >= fim).sort((a, b) => a.c.ini - b.c.ini)[0];
     if (!ant && !prox) return true;   // nada para conferir: sem nota
     // Ha vizinho com endereco mas nao da para conferir (sem rotas.js, sem endereco novo): so a nota.
-    const novo = typeof RotasCore !== 'undefined' ? { end: RotasCore.enderecoDePartes(q.partes), partes: q.partes } : { end: '' };
+    const novo = typeof RotasCore !== 'undefined' && q.partes ? { end: RotasCore.enderecoDePartes(q.partes), partes: q.partes } : { end: '' };
     if (typeof _rotaGeo !== 'function' || typeof _rotaOsrm !== 'function' || !novo.end) { _agdDeslocNota = true; return true; }
 
     let desloc = null, timer;
+    _agdConferindo(true);
     try {
         desloc = await Promise.race([
             (async () => ({
@@ -12245,7 +12284,7 @@ async function _agdConferirDeslocamento(q) {
             }))(),
             new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('tempo')), 8000); }),
         ]);
-    } catch (e) { desloc = null; } finally { clearTimeout(timer); }
+    } catch (e) { desloc = null; } finally { clearTimeout(timer); _agdConferindo(false); }
     if (!desloc || (ant && desloc.antesMin == null) || (prox && desloc.depoisMin == null)) _agdDeslocNota = true;
     if (!desloc) return true;
 
@@ -12634,7 +12673,7 @@ function _medDisp(id) {
     return { disp: { tipo: 'med', ignorar: { tipo: 'med', id }, partes: v => {
         if (v.end) return v.end;
         const m = (db.medicoes || []).find(x => x.id == id);
-        return m ? _partesMedMapa(m) : null;
+        return m ? _partesMedConferir(m) : null;
     } } };
 }
 
@@ -13236,7 +13275,8 @@ async function _instGravarEdicao(id, v, titulo) {
     if (!await _instConfirmarNovaData(p, v.data)) return false;
     // A confirmacao demorou: relê o gravado e confere o conflito de novo antes de gravar.
     const cliEd = db.clientes.find(c => c.id == p.clienteId);
-    const partesEd = v.end !== undefined ? v.end : _partesInstMapa(p, cliEd);
+    // Nada que mude o deslocamento (so telefone/observacao): nao confere de novo.
+    const partesEd = v._semMudanca ? undefined : v.end !== undefined ? v.end : _partesInstConferir(p, cliEd);
     if (v.usu && v.usu.chave && !await _agdValidarDisp({ prof: v.usu.chave, profNome: v.usu.pessoa.nome, data: v.data, hora: v.hora, dur: v.dur || _agdDurPadrao('inst'), ignorar: { tipo: 'inst', id }, partes: partesEd })) { _agdRedesenharAgendas(); return false; }
     p = db.pedidos.find(x => x.id == id);
     if (!p || !_instPendente(p)) { await showAlert('Esta instalação não está mais agendada.', '⚠️'); fecharModalAgenda(); _agdRedesenharAgendas(); return; }

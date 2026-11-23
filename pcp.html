@@ -210,7 +210,7 @@
                 </div>
 
                 <div class="agd-form-rodape">
-                    <button class="btn btn-success" onclick="salvarMedicao()">📐 Agendar Visita</button>
+                    <button class="btn btn-success" id="med-btn-agendar" onclick="salvarMedicao()">📐 Agendar Visita</button>
                 </div>
             </div>
             <aside class="card agd-disp" id="med-disp" aria-live="polite" aria-label="Disponibilidade do profissional"></aside>
@@ -256,7 +256,7 @@
                     <label for="rota-prof">Técnico</label>
                     <select id="rota-prof" onchange="renderRotas()"></select>
                 </div>
-                <button type="button" class="btn" id="rota-btn-sugerir" onclick="sugerirMelhorOrdem()">✨ Sugerir melhor ordem</button>
+                <button type="button" class="btn" id="rota-btn-sugerir" onclick="sugerirMelhorOrdem()">✨ Sugerir ordem</button>
             </section>
             <section class="card rota-corpo" id="rota-corpo" aria-live="polite"></section>
         </div>

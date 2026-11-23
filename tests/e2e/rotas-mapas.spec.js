@@ -29,7 +29,7 @@ const PEDS = () => [{ id: 26300, clienteId: 3, clienteNome: 'Pedro Souza', statu
     data_entrega: DIA, inst_hora: '09:50', inst_duracao: 120, inst_endereco: 'Rua B, 2', usuario_instalacao_id: 1, valor: 900, amb: 'Sala' }];
 
 // Rede simulada: Nominatim pelos enderecos acima; route com trechos de 3 km / 10 min;
-// trip devolve a ordem guardada em window.__trip (posicao de cada ponto).
+// table com o tempo pela distancia entre as longitudes.
 async function simularRede(page, { falhar } = {}) {
     await page.route('**/nominatim.openstreetmap.org/**', route => {
         if (falhar) return route.abort();
@@ -47,10 +47,6 @@ async function simularRede(page, { falhar } = {}) {
         const pts = new URL(route.request().url()).pathname.split('/').pop().split(';').map(c => +c.split(',')[0]);
         const durations = pts.map(a => pts.map(b => Math.round(Math.abs(a - b) * 10000)));
         route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 'Ok', durations }) });
-    });
-    await page.route('**/router.project-osrm.org/trip/**', async route => {
-        const pos = await page.evaluate(() => window.__trip);
-        route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 'Ok', waypoints: pos.map(p => ({ waypoint_index: p })), trips: [{ legs: [] }] }) });
     });
     await page.context().route('**/www.google.com/**', route => route.fulfill({ contentType: 'text/html', body: '<p>maps</p>' }));
 }

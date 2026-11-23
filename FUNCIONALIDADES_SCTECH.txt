@@ -534,6 +534,11 @@ Formulário de agendamento:
     endereço ou depois de 8 s: salva e o aviso de sucesso diz "Não deu para
     conferir o deslocamento." Vale também ao agendar/editar/reagendar
     instalação. Compromissos e bloqueios da agenda não entram na conta.
+    Enquanto confere, o botão de salvar fica travado ("Conferindo
+    deslocamento…") e vale o que estava preenchido no clique. Registros
+    antigos (endereço só em texto) também são conferidos. Editar só o
+    telefone ou as observações (sem mudar profissional, dia, horário,
+    duração ou endereço) não confere o deslocamento de novo.
 
 Lista de medições agendadas:
   - Exibidas em cards agrupados por situação (atrasadas, hoje, próximas)
@@ -566,7 +571,7 @@ campo e mandar para ele. Abre também por pcp.html?view=rotas.
     visita e não volta (aviso no topo).
   - Ordem inicial: a rota salva daquele dia/técnico; sem rota salva, por horário
     (sem horário no fim). Visita nova entra no fim; a que saiu do dia some.
-  - "✨ Sugerir melhor ordem": localiza os endereços no OpenStreetMap
+  - "✨ Sugerir ordem": localiza os endereços no OpenStreetMap
     (gratuito, sem cadastro; cada endereço só uma vez, guardado neste
     navegador; "não encontrado" é tentado de novo depois de 1 dia) e calcula
     a ordem que menos atrasa (otimiza o TEMPO, não o caminho; pode voltar duas
