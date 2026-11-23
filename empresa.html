@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Configurar Empresa - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261128b">
+    <link rel="stylesheet" href="css/style.css?v=20261130a">
     <style>
         .logo-upload-area {
             border: 2px dashed var(--border);
@@ -88,6 +88,10 @@
                 <div class="form-group">
                     <label>Cidade</label>
                     <input type="text" id="emp-cidade" placeholder="Ex.: Curitiba">
+                </div>
+                <div class="form-group">
+                    <label for="emp-uf">Estado</label>
+                    <select id="emp-uf"><option value=""></option><option value="AC">AC</option><option value="AL">AL</option><option value="AM">AM</option><option value="AP">AP</option><option value="BA">BA</option><option value="CE">CE</option><option value="DF">DF</option><option value="ES">ES</option><option value="GO">GO</option><option value="MA">MA</option><option value="MG">MG</option><option value="MS">MS</option><option value="MT">MT</option><option value="PA">PA</option><option value="PB">PB</option><option value="PE">PE</option><option value="PI">PI</option><option value="PR">PR</option><option value="RJ">RJ</option><option value="RN">RN</option><option value="RO">RO</option><option value="RR">RR</option><option value="RS">RS</option><option value="SC">SC</option><option value="SE">SE</option><option value="SP">SP</option><option value="TO">TO</option></select>
                 </div>
             </div>
 
@@ -196,6 +200,22 @@
             </div>
         </div>
 
+        <div class="card" style="max-width:860px" id="emp-feriados-card">
+            <h3 style="margin-bottom:6px;color:var(--primary)">🎉 Feriados da cidade</h3>
+            <p style="font-size:12px;color:#8F8F8F;margin-bottom:14px">
+                Os feriados nacionais e os do seu estado aparecem sozinhos na Agenda. Aqui você cadastra os da sua cidade (repetem todo ano).
+                Também serve para qualquer feriado que falte (ex.: um estadual que não apareceu).
+            </p>
+            <div id="emp-feriados-lista"></div>
+            <button type="button" class="btn btn-outline btn-sm" style="margin-top:4px" onclick="adicionarFeriadoCidade()">+ Adicionar feriado</button>
+            <label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:13px">
+                <input type="checkbox" id="emp-corpus-municipal"> Corpus Christi é feriado na minha cidade
+            </label>
+            <div style="display:flex;gap:10px;margin-top:14px;align-items:center">
+                <button class="btn btn-success" onclick="salvarFeriadosCidade()">💾 Salvar feriados</button>
+            </div>
+        </div>
+
         <div class="card" style="max-width:860px" id="emp-msg-card">
             <h3 style="margin-bottom:6px;color:var(--primary)">💬 Mensagem de cobrança</h3>
             <p style="font-size:12px;color:#8F8F8F;margin-bottom:14px">
@@ -261,28 +281,29 @@
         </div>
 
     </main>
-    <script src="js/etiquetas-core.js?v=20261128b"></script>
-    <script src="js/etiquetas-render.js?v=20261128b"></script>
-    <script src="js/cortina-desenho.js?v=20261128b"></script>
-    <script src="js/docs-layout-core.js?v=20261128b"></script>
-    <script src="js/galeria-core.js?v=20261128b"></script>
-    <script src="js/galeria-imagens.js?v=20261128b"></script>
-    <script src="js/financeiro-core.js?v=20261128b"></script>
-    <script src="js/caixa-core.js?v=20261128b"></script>
-    <script src="js/carrinho-core.js?v=20261128b"></script>
-    <script src="js/resultado-core.js?v=20261128b"></script>
-    <script src="js/fechamento-core.js?v=20261128b"></script>
-    <script src="js/simulador-core.js?v=20261128b"></script>
-    <script src="js/rotas-core.js?v=20261128b"></script>
-    <script src="js/endereco-core.js?v=20261128b"></script>
-    <script src="js/agenda-core.js?v=20261128b"></script>
-    <script src="js/notificacoes.js?v=20261128b"></script>
-    <script src="js/app.js?v=20261128b"></script>
-    <script src="js/agenda.js?v=20261128b"></script>
-    <script src="js/compartilhar-doc.js?v=20261128b"></script>
-    <script src="js/etiquetas-editor.js?v=20261128b"></script>
-    <script src="js/docs-layout-editor.js?v=20261128b"></script>
-    <script src="js/galeria-mostruario.js?v=20261128b"></script>
+    <script src="js/etiquetas-core.js?v=20261130a"></script>
+    <script src="js/etiquetas-render.js?v=20261130a"></script>
+    <script src="js/cortina-desenho.js?v=20261130a"></script>
+    <script src="js/docs-layout-core.js?v=20261130a"></script>
+    <script src="js/galeria-core.js?v=20261130a"></script>
+    <script src="js/galeria-imagens.js?v=20261130a"></script>
+    <script src="js/financeiro-core.js?v=20261130a"></script>
+    <script src="js/caixa-core.js?v=20261130a"></script>
+    <script src="js/carrinho-core.js?v=20261130a"></script>
+    <script src="js/resultado-core.js?v=20261130a"></script>
+    <script src="js/fechamento-core.js?v=20261130a"></script>
+    <script src="js/simulador-core.js?v=20261130a"></script>
+    <script src="js/rotas-core.js?v=20261130a"></script>
+    <script src="js/endereco-core.js?v=20261130a"></script>
+    <script src="js/agenda-core.js?v=20261130a"></script>
+    <script src="js/notificacoes.js?v=20261130a"></script>
+    <script src="js/feriados-core.js?v=20261130a"></script>
+    <script src="js/app.js?v=20261130a"></script>
+    <script src="js/agenda.js?v=20261130a"></script>
+    <script src="js/compartilhar-doc.js?v=20261130a"></script>
+    <script src="js/etiquetas-editor.js?v=20261130a"></script>
+    <script src="js/docs-layout-editor.js?v=20261130a"></script>
+    <script src="js/galeria-mostruario.js?v=20261130a"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             carregarEmpresaConfigs();
