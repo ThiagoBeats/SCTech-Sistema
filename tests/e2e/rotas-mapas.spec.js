@@ -89,24 +89,24 @@ test('lista as visitas do tecnico no dia, por horario, com chegada, km e aviso d
     // saida 08:40 (08:50 menos 10 de folga); Maria chega 08:50 (agendado 09:00); Pedro chega 10:10 (agendado 09:50); Ana 12:20
     await expect(itens(page).nth(0)).toContainText('Chega 08:50');
     await expect(itens(page).nth(1)).toContainText('Chega 10:10');
-    await expect(itens(page).nth(1).locator('.rota-atraso')).toHaveText('⚠ 20 minutos depois do agendado');
-    await expect(itens(page).nth(0).locator('.rota-atraso')).toHaveCount(0);
+    await expect(itens(page).nth(1).locator('.rota-selo-atraso')).toHaveText('Atraso de 20 minutos');
+    await expect(itens(page).nth(0).locator('.rota-selo')).toHaveCount(0);
     await expect(itens(page).nth(2)).toContainText('Sem horário');
     await expect(itens(page).nth(2)).toContainText('Chega 12:20');
     await expect(itens(page).nth(0).locator('.rota-km')).toHaveText('3 km');
-    await expect(page.locator('#rota-total')).toContainText('Total: 12 km · 40 min de trajeto (com a volta) · saída 08:40');
+    await expect(page.locator('#rota-total')).toContainText('Total: 12 km · 40 min de trajeto (com a volta)');
+    await expect(page.locator('#rota-saida-hora')).toHaveText('🚗 Sair às 08:40 para chegar às 08:50 em Maria Silva');
 });
 
-test('Sugerir melhor ordem aplica a ordem do OpenStreetMap; endereco nao encontrado vai para o fim', async ({ page }) => {
+test('Sugerir ordem escolhe a ordem que menos atrasa (tempo do OpenStreetMap); endereco nao encontrado vai para o fim', async ({ page }) => {
     await abrir(page, { dados: { sc_med: [MEDS()[0], { ...MEDS()[1], endereco: 'Rua Inexistente, 99' }] } });
     await abrirDia(page);
     await expect(itens(page).nth(2).locator('.rota-aviso')).toContainText('Endereço não encontrado');
     await expect(page.locator('#rota-status')).toContainText('1 visita ficou sem localização');
-    // pontos enviados: empresa, Maria, Pedro -> a viagem faz Pedro antes de Maria
-    await page.evaluate(() => { window.__trip = [0, 2, 1]; });
+    // Pedro antes de Maria faria a Maria chegar 3 horas atrasada: a ordem por horario e' a que menos atrasa
     await page.click('#rota-btn-sugerir');
     await expect.poll(() => nomes(page)).toEqual([
-        expect.stringContaining('Pedro Souza'), expect.stringContaining('Maria Silva'), expect.stringContaining('Ana Costa')]);
+        expect.stringContaining('Maria Silva'), expect.stringContaining('Pedro Souza'), expect.stringContaining('Ana Costa')]);
     await expect(itens(page).nth(2).locator('.rota-aviso')).toBeVisible();
 });
 
