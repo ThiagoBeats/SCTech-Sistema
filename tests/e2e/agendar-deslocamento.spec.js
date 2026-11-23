@@ -28,10 +28,10 @@ const CLI = () => [
 const MED = () => [{ id: 1, clienteId: 1, clienteNome: 'Maria Silva', clienteTel: '', endereco: 'Rua A, 1', data: DIA, hora: '13:00', duracao: 60, status: 'Agendado', usuario_id: 1, obs: '' }];
 const lerMeds = page => page.evaluate(() => JSON.parse(localStorage.getItem('sc_med')) || []);
 
-async function abrir(page, est) {
+async function abrir(page, est, extras) {
     await page.clock.setFixedTime(new Date(2026, 10, 23, 12, 0, 0));
     await simularRede(page, est);
-    await entrar(page, BASE, { sc_cli: CLI(), sc_med: MED() });
+    await entrar(page, BASE, { sc_cli: CLI(), sc_med: MED(), ...(extras || {}) });
     await page.goto(BASE + '/pcp.html?view=medicoes');
     await page.click('#tab-btn-medicoes');
 }
@@ -93,4 +93,30 @@ test('sobreposicao continua bloqueando como antes', async ({ page }) => {
     await expect(page.locator('#sc-modal-msg')).toContainText('já tem compromisso nesse período');
     await expect(page.locator('#sc-modal-btns button')).toHaveCount(1);
     expect(await lerMeds(page)).toHaveLength(1);
+});
+
+test('editar instalacao: aviso de deslocamento; Escolher outro horario nao grava e Agendar mesmo assim grava', async ({ page }) => {
+    const ped = { id: 26200, clienteId: 2, clienteNome: 'Pedro Souza', status: 'Pronto p/ Instalação', valor: 900, amb: 'Sala',
+        inst_agendado: true, data_entrega: DIA, inst_hora: '16:00', inst_duracao: 60, usuario_instalacao_id: 1 };
+    await abrir(page, { min: 25 }, { sc_ped: [ped] });
+    await page.evaluate(() => editarInstalacao(26200));
+    await page.fill('#agdf-hora', '14:15');
+    await page.click('#agdf-salvar');
+    await expect(page.locator('#sc-modal-msg')).toHaveText('Não dá tempo de chegar: Medição — Maria Silva termina 14:00 e o deslocamento até aqui leva ~25 min (chegada 14:25, folga de 10 min).', { timeout: 15000 });
+    await page.click('#sc-modal-cancel');
+    expect((await page.evaluate(() => JSON.parse(localStorage.getItem('sc_ped'))))[0].inst_hora).toBe('16:00');
+    await expect(page.locator('#agdf-hora')).toHaveValue('14:15');
+    await page.click('#agdf-salvar');
+    await expect(page.locator('#sc-modal-msg')).toContainText('Não dá tempo de chegar', { timeout: 15000 });
+    await page.click('#sc-modal-ok');
+    await expect.poll(async () => (await page.evaluate(() => JSON.parse(localStorage.getItem('sc_ped'))))[0].inst_hora).toBe('14:15');
+});
+
+test('duplo clique em Agendar Visita grava uma vez so', async ({ page }) => {
+    await abrir(page, { min: 5 });
+    await preencher(page, '14:15');
+    await page.evaluate(() => { salvarMedicao(); salvarMedicao(); });
+    await expect.poll(async () => (await lerMeds(page)).length, { timeout: 15000 }).toBe(2);
+    await page.waitForTimeout(2500);
+    expect(await lerMeds(page)).toHaveLength(2);
 });

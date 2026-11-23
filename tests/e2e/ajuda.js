@@ -2,6 +2,8 @@
 // nao ha sessao, entao todo teste de tela precisa disto antes de navegar.
 // Papel 1 = Administrador (vem de papeisPadrao(), com tudo em "completo").
 async function entrar(page, base, extras) {
+    // Nunca usa a rede real: mapas/rotas ficam fora do ar, a menos que o teste simule com page.route (que tem prioridade).
+    await page.context().route(/nominatim\.openstreetmap\.org|router\.project-osrm\.org/, r => r.abort());
     await page.goto(base + '/login.html');
     await page.evaluate(dados => {
         localStorage.setItem('sc_usr', JSON.stringify([{

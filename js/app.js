@@ -11180,7 +11180,17 @@ function _medVincularPedido(m, ped) {
     }
 }
 
-async function salvarMedicao() {
+// Um salvamento por vez: a conferencia de deslocamento demora (rede) e um 2o clique
+// nao pode gravar de novo.
+let _agdSalvando = false;
+async function _agdSemDuplo(fn) {
+    if (_agdSalvando) return;
+    _agdSalvando = true;
+    try { return await fn(); } finally { _agdSalvando = false; }
+}
+
+function salvarMedicao() { return _agdSemDuplo(_salvarMedicao); }
+async function _salvarMedicao() {
     const tipo = document.querySelector('input[name="med-tipo"]:checked')?.value || 'existente';
     let clienteId = null, clienteNome = '', clienteTel = '';
     let clienteCpf = '', clienteEmail = '';
@@ -11682,7 +11692,7 @@ function _agdFormulario(titulo, campos, onSalvar, voltar, opts) {
     }
 
     o.querySelector('#agdf-voltar').onclick = voltar || fecharModalAgenda;
-    o.querySelector('#agdf-salvar').onclick = async () => {
+    o.querySelector('#agdf-salvar').onclick = () => _agdSemDuplo(async () => {
         for (const c of campos) {
             if (c.tipo === 'endereco') {
                 const rua = document.getElementById('agdf-' + c.id + '-rua');
@@ -11707,7 +11717,7 @@ function _agdFormulario(titulo, campos, onSalvar, voltar, opts) {
             if (!await _agdValidarDisp(q)) { atualizarDisp(); _agdRedesenharAgendas(); return; }
         }
         await onSalvar(lerValores());
-    };
+    });
     o.querySelector('input:not([hidden]), select, textarea')?.focus();
 }
 
@@ -12074,8 +12084,18 @@ async function _agdValidarDisp(q) {
     _agdDeslocNota = false;
     if (!q.prof || !q.data || !q.hora) return true;
     _agdRecarregar();
-    const c = _agdConflitos(q);
-    if (!c.length) return q.partes ? _agdConferirDeslocamento(q) : true;
+    let c = _agdConflitos(q);
+    if (c.length) return _agdAvisoConflito(q, c);
+    if (q.partes) {
+        if (!await _agdConferirDeslocamento(q)) return false;
+        // A conferencia (rede, janela aberta) demorou: outra aba pode ter ocupado o horario.
+        _agdRecarregar();
+        c = _agdConflitos(q);
+        if (c.length) return _agdAvisoConflito(q, c);
+    }
+    return true;
+}
+async function _agdAvisoConflito(q, c) {
     const nome = _agdProfInfo(q.prof, q.profNome)?.nome || 'O profissional';
     await showAlert(`${nome} já tem compromisso nesse período (${_agdFmtData(q.data)}, ${_agdPeriodo(q.hora, q.dur)}):\n\n${
         c.map(x => '• ' + _agdDescComp(x)).join('\n')}\n\nEscolha outro horário — os livres aparecem em verde.`, '⛔');
@@ -12112,26 +12132,27 @@ async function _agdMinutosEntre(a, b) {
 }
 
 async function _agdConferirDeslocamento(q) {
-    if (typeof _rotaGeo !== 'function' || typeof _rotaOsrm !== 'function' || typeof RotasCore === 'undefined') return true;   // sem as rotas nesta tela
     const ini = _agdMin(q.hora), dur = +q.dur || 0, fim = ini + dur;
-    const novo = { end: RotasCore.enderecoDePartes(q.partes), partes: q.partes };
-    if (ini === null || !novo.end) return true;
+    if (ini === null) return true;
     const vizinhos = _agdDoDia(q.prof, q.data, q.ignorar).filter(c => c.tipo === 'med' || c.tipo === 'inst')
         .map(c => ({ c, e: _agdVisitaEndereco(c) })).filter(x => x.e);
     const ant = vizinhos.filter(x => x.c.fim <= ini).sort((a, b) => b.c.fim - a.c.fim)[0];
     const prox = vizinhos.filter(x => x.c.ini >= fim).sort((a, b) => a.c.ini - b.c.ini)[0];
-    if (!ant && !prox) return true;
+    if (!ant && !prox) return true;   // nada para conferir: sem nota
+    // Ha vizinho com endereco mas nao da para conferir (sem rotas.js, sem endereco novo): so a nota.
+    const novo = typeof RotasCore !== 'undefined' ? { end: RotasCore.enderecoDePartes(q.partes), partes: q.partes } : { end: '' };
+    if (typeof _rotaGeo !== 'function' || typeof _rotaOsrm !== 'function' || !novo.end) { _agdDeslocNota = true; return true; }
 
-    let desloc = null;
+    let desloc = null, timer;
     try {
         desloc = await Promise.race([
             (async () => ({
                 antesMin: ant ? await _agdMinutosEntre(ant.e, novo) : null,
                 depoisMin: prox ? await _agdMinutosEntre(novo, prox.e) : null,
             }))(),
-            new Promise((_, rej) => setTimeout(() => rej(new Error('tempo')), 8000)),
+            new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('tempo')), 8000); }),
         ]);
-    } catch (e) { desloc = null; }
+    } catch (e) { desloc = null; } finally { clearTimeout(timer); }
     if (!desloc || (ant && desloc.antesMin == null) || (prox && desloc.depoisMin == null)) _agdDeslocNota = true;
     if (!desloc) return true;
 
@@ -12965,7 +12986,8 @@ function _instAtualizarDisp() {
     });
 }
 
-async function salvarAgendamentoInstalacao() {
+function salvarAgendamentoInstalacao() { return _agdSemDuplo(_salvarAgendamentoInstalacao); }
+async function _salvarAgendamentoInstalacao() {
     const campos = {
         pedido: document.getElementById('inst-pedido'),
         prof:   document.getElementById('inst-prof'),
