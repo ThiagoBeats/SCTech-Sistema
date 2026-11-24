@@ -25,7 +25,7 @@ function _rotaVisitasDoDia(data) {
         out.push({ tipo: 'med', id: m.id, prof: _medProf(m), profNome: _medNomeResp(m),
             cliente: m.clienteNome || '—', tel: m.clienteTel || '', end: _endMed(m), partes: _partesMedMapa(m),
             hora: m.hora || '', agendadoMin: _agdMin(m.hora), durMin: +m.duracao || _agdDurPadrao('med'),
-            rotulo: 'Medição', ico: '📐' });
+            rotulo: 'Medição', ico: '📐', aviso: m.aviso_cliente || null });
     });
     db.pedidos.forEach(p => {
         if (!_instPendente(p) || p.data_entrega !== data) return;
@@ -33,7 +33,7 @@ function _rotaVisitasDoDia(data) {
         out.push({ tipo: 'inst', id: p.id, prof: _instProf(p), profNome: nomeInstalador(p),
             cliente: p.clienteNome || '—', tel: cli?.tel || '', end: _endInst(p, cli), partes: _partesInstMapa(p, cli),
             hora: p.inst_hora || '', agendadoMin: _agdMin(p.inst_hora), durMin: _instDur(p),
-            rotulo: `Instalação #${formatPedidoId(p.id)}`, ico: '🔧' });
+            rotulo: `Instalação #${formatPedidoId(p.id)}`, ico: '🔧', aviso: p.inst_aviso_cliente || null });
     });
     return out;
 }
@@ -141,6 +141,7 @@ function _rotaDesenhar() {
     const emp = _rotaEmpresaEnd();
     const cheg = _rotaChegadas(itens);
     const calc = _rota.calc;
+    const data = (_rota.chave || '').split('|')[0];
     const linhas = itens.map((v, i) => {
         const k = _rotaChaveItem(v);
         const c = cheg && cheg.paradas[i];
@@ -180,6 +181,7 @@ function _rotaDesenhar() {
         const metros = trechos.reduce((s, t) => s + t.metros, 0), seg = trechos.reduce((s, t) => s + t.segundos, 0);
         total = `<div class="rota-total" id="rota-total">Total: ${RotasCore.fmtKm(metros / 1000)} · ${RotasCore.fmtDur(seg / 60)} de trajeto${calc.volta ? ' (com a volta)' : ''}</div>`;
     }
+    const avisar = _rotaAvisarHtml(itens, data);
     let saidaTxt = '', resumo = '';
     if (cheg && cheg.primeiro >= 0) {
         const p0 = itens[cheg.primeiro], c0 = cheg.paradas[cheg.primeiro];
@@ -198,11 +200,83 @@ function _rotaDesenhar() {
         <ol class="rota-lista" id="rota-lista">${linhas}</ol>
         <div class="rota-status" id="rota-status">${escapeHtml(_rota.status)}</div>
         ${total}
+        ${avisar}
         <div class="rota-botoes">
             <button type="button" class="btn btn-outline" onclick="salvarRota()">💾 Salvar rota</button>
             <button type="button" class="btn btn-outline" onclick="abrirRotaNoMaps()">🗺️ Abrir no Maps</button>
-            <button type="button" class="btn btn-success" onclick="enviarRotaAoTecnico()">📤 Enviar ao técnico</button>
+            <button type="button" class="btn btn-success btn-whats" onclick="enviarRotaAoTecnico()" title="Enviar por WhatsApp">${iconeWhatsApp(16)}<span>Enviar ao técnico</span></button>
         </div>`;
+}
+
+// --- Avisar clientes (WhatsApp) -------------------------------------------------
+
+// Previsao de chegada so quando a rota calculada mostra a visita atrasada.
+function _rotaPrevistaMin(c) {
+    return c && !c.incerto && c.situacao === 'atrasada' ? c.chegadaMin : null;
+}
+
+function _rotaArgId(id) { return JSON.stringify(id).replace(/"/g, '&quot;'); }
+
+function _rotaAvisarHtml(itens, data) {
+    if (!itens.length) return '';
+    const linhas = itens.map(v => {
+        const nome = escapeHtml(v.cliente);
+        const quando = escapeHtml(_agdFmtData(data)) + ' ' + (v.hora ? escapeHtml(v.hora) : 'sem horário');
+        let acao;
+        if (RotasCore.avisoValido(v.aviso, data, v.hora)) {
+            const a = v.aviso;
+            const hh = a.em ? new Date(a.em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+            acao = `<span class="rota-avisado">✓ Avisado${hh ? ' às ' + escapeHtml(hh) : ''}${a.porNome ? ' por ' + escapeHtml(a.porNome) : ''}</span>
+                <button type="button" class="rota-desfazer" onclick="desfazerAvisoCliente('${v.tipo}', ${_rotaArgId(v.id)})">desfazer</button>`;
+        } else if (!CaixaCore.normalizarTelefone(v.tel)) {
+            acao = `<button type="button" class="btn btn-outline btn-sm" disabled title="Cliente sem telefone no cadastro">Sem telefone</button>`;
+        } else {
+            acao = `<button type="button" class="btn btn-outline btn-sm btn-whats" title="Enviar por WhatsApp" aria-label="Enviar por WhatsApp para ${nome}" onclick="avisarClienteWhats('${v.tipo}', ${_rotaArgId(v.id)})">${iconeWhatsApp(16)}<span>Avisar</span></button>`;
+        }
+        return `<li class="rota-aviso-item"><span class="rota-aviso-info">${v.ico} <strong>${nome}</strong> — ${escapeHtml(v.rotulo)} · ${quando}</span><span class="rota-aviso-acao">${acao}</span></li>`;
+    }).join('');
+    return `<div class="rota-avisar" id="rota-avisar"><h4>Avisar clientes</h4><ul>${linhas}</ul></div>`;
+}
+
+function _rotaAlvoAviso(tipo, id) {
+    return tipo === 'med' ? (db.medicoes || []).find(m => String(m.id) === String(id)) : db.pedidos.find(p => String(p.id) === String(id));
+}
+
+function avisarClienteWhats(tipo, id) {
+    // Sem await antes do window.open: precisa valer como clique do usuario.
+    const itens = _rotaItens();
+    const i = itens.findIndex(x => x.tipo === tipo && String(x.id) === String(id));
+    if (i < 0) return;
+    const v = itens[i];
+    const tel = CaixaCore.normalizarTelefone(v.tel);
+    if (!tel) { showAlert('Cliente sem telefone no cadastro.'); return; }
+    const data = (_rota.chave || '').split('|')[0];
+    const emp = getEmpresa();
+    const cheg = _rotaChegadas(itens);
+    const msg = RotasCore.textoAvisoCliente(emp.mensagem_aviso_visita, {
+        cliente: v.cliente,
+        empresa: emp.nome_fantasia || emp.razao_social || 'nossa empresa',
+        tipo: v.tipo, data, hoje: _agdHoje(), hora: v.hora,
+        previstaMin: _rotaPrevistaMin(cheg && cheg.paradas[i]),
+        tecnico: v.prof ? v.profNome : ''
+    });
+    const janela = window.open(CaixaCore.linkWhatsApp(tel, msg), '_blank');
+    if (!janela) { showAlert('O navegador bloqueou a janela do WhatsApp. Libere os pop-ups e tente de novo.'); return; }
+    const alvo = _rotaAlvoAviso(tipo, id);
+    if (!alvo) return;
+    const u = getUsuarioLogado();
+    const aviso = { data, hora: v.hora || '', em: new Date().toISOString(), por: u ? u.id : null, porNome: u ? u.nome : '' };
+    if (tipo === 'med') alvo.aviso_cliente = aviso; else alvo.inst_aviso_cliente = aviso;
+    syncDB();
+    _rotaDesenhar();
+}
+
+function desfazerAvisoCliente(tipo, id) {
+    const alvo = _rotaAlvoAviso(tipo, id);
+    if (!alvo) return;
+    if (tipo === 'med') delete alvo.aviso_cliente; else delete alvo.inst_aviso_cliente;
+    syncDB();
+    _rotaDesenhar();
 }
 
 function _rotaStatus(txt) {

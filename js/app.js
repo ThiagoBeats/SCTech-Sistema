@@ -17084,7 +17084,7 @@ function renderHoje() {
         <div class="hoje-item-desc">${escapeHtml(cr.cliente_nome || '')}<small>${escapeHtml(cr.descricao || '')} · vence ${fmtData(cr.data_vencimento)}</small></div>
         <div class="hoje-item-valor">${brl(cr.valor)}</div>
         ${cr.ultima_cobranca === hoje ? '<small style="color:var(--muted);white-space:nowrap">cobrado hoje</small>' : ''}
-        ${podeReceber ? `<button class="btn btn-outline btn-sm" onclick='cobrarNoWhatsApp(${jid(cr.id)})'>💬 Cobrar</button>
+        ${podeReceber ? `<button class="btn btn-outline btn-sm btn-whats" onclick='cobrarNoWhatsApp(${jid(cr.id)})' title="Enviar por WhatsApp">${iconeWhatsApp(16)}<span>Cobrar</span></button>
         <button class="btn btn-success btn-sm" onclick='marcarCRPago(${jid(cr.id)})'>✓ Recebi</button>` : ''}</div>`;
     const credorCP = cp => cp.credor_nome || cp.fornecedor || '';
     const linhaCP = cp => `<div class="hoje-item">
@@ -18087,7 +18087,7 @@ function renderContasReceber() {
     tb.innerHTML = lista.map(cr => {
         const at=cr.status==='Atrasado', pago=cr.status==='Pago';
         const cobravel = !pago && !!cr.data_vencimento && cr.data_vencimento <= hoje;
-        const cobrarBtn = cobravel ? `<button class="btn btn-outline btn-sm" onclick="cobrarNoWhatsApp(${cr.id})" title="Cobrar pelo WhatsApp" style="margin-right:4px">💬 Cobrar</button>${cr.ultima_cobranca===hoje?'<span style="font-size:11px;color:#888;margin-right:4px">cobrado hoje</span>':''}` : '';
+        const cobrarBtn = cobravel ? `<button class="btn btn-outline btn-sm btn-whats" onclick="cobrarNoWhatsApp(${cr.id})" title="Enviar por WhatsApp" style="margin-right:4px">${iconeWhatsApp(16)}<span>Cobrar</span></button>${cr.ultima_cobranca===hoje?'<span style="font-size:11px;color:#888;margin-right:4px">cobrado hoje</span>':''}` : '';
         return `<tr class="${at?'fin-atrasado':''}">
             <td>${_fmtVenc(cr.data_vencimento)}</td>
             <td><strong>${escapeHtml(cr.cliente_nome)}</strong></td>

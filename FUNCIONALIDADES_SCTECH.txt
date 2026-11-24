@@ -619,6 +619,22 @@ campo e mandar para ele. Abre também por pcp.html?view=rotas.
     empresa). O Maps aceita poucas paradas por link: com mais de 3 paradas no
     meio, a rota vira "Parte 1, Parte 2…", cada uma começando onde a anterior
     terminou.
+  - "Avisar clientes" (abaixo da lista, mesma ordem da rota): uma linha por
+    visita ("Cliente — Medição|Instalação #N · dia horário") com o botão verde
+    do WhatsApp "Avisar" (ao passar o mouse: "Enviar por WhatsApp"). Abre o
+    WhatsApp (link wa.me) com a mensagem pronta, editável em Empresa
+    (Preferências › "Mensagem de aviso de visita"); o profissional só toca em
+    "Enviar". Horário na mensagem: o agendado; se a rota calculada mostra a
+    visita atrasada, "com chegada prevista por volta de HH:MM" (arredondado
+    para cima de 5 em 5 min). Ao abrir, a linha vira "✓ Avisado às HH:MM por
+    <nome>" (com o link "desfazer") e o botão some, para não avisar duas vezes
+    o mesmo agendamento; se a data ou a hora da visita mudar, o botão volta.
+    Cliente sem telefone: botão desabilitado "Sem telefone". Navegador
+    bloqueou a janela: "O navegador bloqueou a janela do WhatsApp. Libere os
+    pop-ups e tente de novo." e não marca. A marca fica na própria visita
+    (aviso_cliente na medição, inst_aviso_cliente no pedido) e entra no backup.
+  - Os botões "Cobrar" (A Receber e Hoje) e "Enviar ao técnico" usam o mesmo
+    ícone do WhatsApp, com "Enviar por WhatsApp" ao passar o mouse.
   - "📤 Enviar ao técnico": salva a rota e abre o WhatsApp com a lista (ordem,
     horário previsto, tipo, cliente, telefone, endereço, aviso de atraso; só visita atrasada), o
     total e o(s) link(s) do Maps. O técnico é escolhido no próprio WhatsApp.
