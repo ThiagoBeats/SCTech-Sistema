@@ -15,6 +15,7 @@ let _rota = { chave: '', ordem: [], calc: null, seq: 0, status: '', assin: '' };
 let _rotaFilaGeo = Promise.resolve();   // uma consulta ao Nominatim por vez, 1 por segundo
 const _rotaGeoEmCurso = new Map();
 let _rotaArrastando = null;
+let _rotaRedesenharDepois = false;   // outra aba mudou as visitas durante um arraste
 
 // --- Visitas do dia ----------------------------------------------------------
 
@@ -154,7 +155,7 @@ function _rotaDesenhar() {
                 ? `<span class="rota-selo rota-selo-apertado">Apertado: chega ${RotasCore.hhmm(c.chegadaMin)}, sobram ${c.folgaMin} min</span>` : '';
         const invade = c && !c.incerto && c.invadeMin > 0
             ? `<span class="rota-aviso">⚠ O serviço anterior termina ${RotasCore.hhmm(v.agendadoMin + c.invadeMin)}, depois do início desta visita.</span>` : '';
-        return `<li class="rota-item" draggable="true" data-i="${i}" ondragstart="_rotaDragIni(event, ${i})" ondragover="event.preventDefault()" ondrop="_rotaDrop(event, ${i})">
+        return `<li class="rota-item" draggable="true" data-i="${i}" ondragstart="_rotaDragIni(event, ${i})" ondragover="event.preventDefault()" ondrop="_rotaDrop(event, ${i})" ondragend="_rotaDragFim()">
             <span class="rota-num">${i + 1}</span>
             <span class="rota-alca" aria-hidden="true" title="Arraste para mudar a ordem">⠿</span>
             <span class="rota-info">
@@ -303,6 +304,11 @@ function _rotaDrop(ev, i) {
     const [k] = _rota.ordem.splice(de, 1);
     _rota.ordem.splice(i, 0, k);
     _rotaMudouOrdem();
+}
+// Fim do arraste (com ou sem soltar): libera e aplica o que outra aba mudou no meio.
+function _rotaDragFim() {
+    _rotaArrastando = null;
+    if (_rotaRedesenharDepois) { _rotaRedesenharDepois = false; renderRotas(); }
 }
 function _rotaMudouOrdem() {
     _rota.calc = null;
@@ -549,5 +555,6 @@ window.addEventListener('storage', e => {
     const corpo = document.getElementById('rota-corpo');
     if (!corpo || !corpo.offsetParent) return;
     _dbRecarregarChave(e.key);
+    if (_rotaArrastando !== null) { _rotaRedesenharDepois = true; return; }   // redesenha no fim do arraste
     renderRotas();
 });
