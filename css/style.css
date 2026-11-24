@@ -3065,3 +3065,17 @@ td { transition: background-color .15s ease; }
 @media (prefers-reduced-motion: reduce) {
     .metric-card:hover, .kanban-card:hover, .ag-ev:hover, .index-card-3d.index-card-click:hover { transform: none; }
 }
+
+/* Botao de WhatsApp: icone oficial + texto alinhados */
+.btn-whats { display: inline-flex; align-items: center; gap: 6px; }
+.btn-whats .icone-whats { flex: none; display: block; }
+
+/* Rotas do dia: lista Avisar clientes */
+.rota-avisar { margin: 14px 0; }
+.rota-avisar h4 { margin: 0 0 8px; font-size: 14px; }
+.rota-avisar ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 8px; }
+.rota-aviso-item { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--white); }
+.rota-aviso-item:last-child { border-bottom: 0; }
+.rota-aviso-acao { display: flex; gap: 10px; align-items: center; }
+.rota-avisado { font-size: 13px; font-weight: 600; color: var(--primary-text); }
+.rota-desfazer { background: none; border: 0; padding: 0; font-size: 12px; color: var(--muted); text-decoration: underline; cursor: pointer; }

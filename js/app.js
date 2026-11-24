@@ -1053,6 +1053,18 @@ function salvarMeiosCfg() {
     toast('Meios de pagamento salvos!', 'success');
 }
 
+// Icone oficial do WhatsApp (Simple Icons, CC0). Usado em todos os botoes de WhatsApp.
+function iconeWhatsApp(tamPx = 16) {
+    return '<svg class="icone-whats" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="' + tamPx + '" height="' + tamPx + '" fill="#25D366" aria-hidden="true" focusable="false"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>';
+}
+
+function salvarMensagemAviso() {
+    const texto = (document.getElementById('emp-msg-aviso')?.value || '').trim();
+    const emp = { ...getEmpresa(), mensagem_aviso_visita: texto || RotasCore.MENSAGEM_AVISO_PADRAO };
+    localStorage.setItem('sc_empresa', JSON.stringify(emp));
+    toast('Mensagem de aviso salva!', 'success');
+}
+
 function salvarMensagemCobranca() {
     const texto = (document.getElementById('emp-msg-cobranca')?.value || '').trim();
     const emp = { ...getEmpresa(), mensagem_cobranca: texto || CaixaCore.MENSAGEM_COBRANCA_PADRAO };
@@ -1159,6 +1171,11 @@ function restaurarMensagemCobranca() {
     if (el) el.value = CaixaCore.MENSAGEM_COBRANCA_PADRAO;
 }
 
+function restaurarMensagemAviso() {
+    const el = document.getElementById('emp-msg-aviso');
+    if (el) el.value = RotasCore.MENSAGEM_AVISO_PADRAO;
+}
+
 function carregarEmpresaConfigs() {
     const emp = getEmpresa();
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
@@ -1180,6 +1197,7 @@ function carregarEmpresaConfigs() {
     set('emp-meta-padrao', emp.meta_faturamento_padrao);
     renderOrcamentoCfg(emp);
     set('emp-msg-cobranca', emp.mensagem_cobranca || (typeof CaixaCore !== 'undefined' ? CaixaCore.MENSAGEM_COBRANCA_PADRAO : ''));
+    set('emp-msg-aviso', emp.mensagem_aviso_visita || (typeof RotasCore !== 'undefined' ? RotasCore.MENSAGEM_AVISO_PADRAO : ''));
     if (emp.logo_base64) {
         const preview = document.getElementById('emp-logo-preview');
         const removeBtn = document.getElementById('emp-remove-logo');
@@ -11988,12 +12006,14 @@ function _aceiteConfirmarRecusa(tipo, id, motivo) {
         m.recusa = { por: r.eu.id, para: m.aceite.por, motivo, em: agora };
         m.status = 'A reagendar';
         delete m.aceite;
+        delete m.aviso_cliente;
         m.usuario_id = null; m.responsavel_nome = '';
         m.data = ''; m.hora = '';
     } else {
         _agdRegistrar(m.inst_historico, 'recusado', { motivo, de: { data: m.data_entrega || '', hora: m.inst_hora || '' } });
         m.inst_recusa = { por: r.eu.id, para: m.inst_aceite.por, motivo, em: agora };
         delete m.inst_aceite;
+        delete m.inst_aviso_cliente;
         m.inst_agendado = false;
         m.data_entrega = null;
         m.inst_hora = '';
@@ -12755,6 +12775,7 @@ async function cancelarMedicao(id) {
     if (!m.historico) m.historico = [];
     _agdRegistrar(m.historico, 'cancelado');
     m.status = 'Cancelado';
+    delete m.aviso_cliente;
     m.cancelado_em = Date.now();
     _medAtualizar();
     toast('Agendamento cancelado.', 'info');
@@ -13338,6 +13359,7 @@ async function cancelarAgendamentoInstalacao(id) {
     p.data_entrega  = null;
     p.inst_hora     = '';
     delete p.inst_aceite;
+    delete p.inst_aviso_cliente;
     _instAtualizar();
     toast('Agendamento cancelado. O pedido voltou para os prontos.', 'info');
 }
@@ -17066,7 +17088,7 @@ function renderHoje() {
         <div class="hoje-item-desc">${escapeHtml(cr.cliente_nome || '')}<small>${escapeHtml(cr.descricao || '')} · vence ${fmtData(cr.data_vencimento)}</small></div>
         <div class="hoje-item-valor">${brl(cr.valor)}</div>
         ${cr.ultima_cobranca === hoje ? '<small style="color:var(--muted);white-space:nowrap">cobrado hoje</small>' : ''}
-        ${podeReceber ? `<button class="btn btn-outline btn-sm" onclick='cobrarNoWhatsApp(${jid(cr.id)})'>💬 Cobrar</button>
+        ${podeReceber ? `<button class="btn btn-outline btn-sm btn-whats" onclick='cobrarNoWhatsApp(${jid(cr.id)})' title="Enviar por WhatsApp">${iconeWhatsApp(16)}<span>Cobrar</span></button>
         <button class="btn btn-success btn-sm" onclick='marcarCRPago(${jid(cr.id)})'>✓ Recebi</button>` : ''}</div>`;
     const credorCP = cp => cp.credor_nome || cp.fornecedor || '';
     const linhaCP = cp => `<div class="hoje-item">
@@ -18069,7 +18091,7 @@ function renderContasReceber() {
     tb.innerHTML = lista.map(cr => {
         const at=cr.status==='Atrasado', pago=cr.status==='Pago';
         const cobravel = !pago && !!cr.data_vencimento && cr.data_vencimento <= hoje;
-        const cobrarBtn = cobravel ? `<button class="btn btn-outline btn-sm" onclick="cobrarNoWhatsApp(${cr.id})" title="Cobrar pelo WhatsApp" style="margin-right:4px">💬 Cobrar</button>${cr.ultima_cobranca===hoje?'<span style="font-size:11px;color:#888;margin-right:4px">cobrado hoje</span>':''}` : '';
+        const cobrarBtn = cobravel ? `<button class="btn btn-outline btn-sm btn-whats" onclick="cobrarNoWhatsApp(${cr.id})" title="Enviar por WhatsApp" style="margin-right:4px">${iconeWhatsApp(16)}<span>Cobrar</span></button>${cr.ultima_cobranca===hoje?'<span style="font-size:11px;color:#888;margin-right:4px">cobrado hoje</span>':''}` : '';
         return `<tr class="${at?'fin-atrasado':''}">
             <td>${_fmtVenc(cr.data_vencimento)}</td>
             <td><strong>${escapeHtml(cr.cliente_nome)}</strong></td>
@@ -18104,6 +18126,7 @@ async function cobrarNoWhatsApp(crId) {
     const link = tel ? CaixaCore.linkWhatsApp(tel, msg) : 'https://wa.me/?text=' + encodeURIComponent(msg);
     const janela = window.open(link, '_blank');
     if (!janela) { showAlert('O navegador bloqueou a janela do WhatsApp. Libere os pop-ups e tente de novo.'); return; }
+    try { janela.opener = null; } catch (e) {}
     cr.ultima_cobranca = hojeLocal();
     syncDB();
     renderContasReceber();

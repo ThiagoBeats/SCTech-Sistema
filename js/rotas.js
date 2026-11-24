@@ -15,6 +15,7 @@ let _rota = { chave: '', ordem: [], calc: null, seq: 0, status: '', assin: '' };
 let _rotaFilaGeo = Promise.resolve();   // uma consulta ao Nominatim por vez, 1 por segundo
 const _rotaGeoEmCurso = new Map();
 let _rotaArrastando = null;
+let _rotaRedesenharDepois = false;   // outra aba mudou as visitas durante um arraste
 
 // --- Visitas do dia ----------------------------------------------------------
 
@@ -23,9 +24,9 @@ function _rotaVisitasDoDia(data) {
     (db.medicoes || []).forEach(m => {
         if (m.status !== 'Agendado' || m.data !== data) return;
         out.push({ tipo: 'med', id: m.id, prof: _medProf(m), profNome: _medNomeResp(m),
-            cliente: m.clienteNome || '—', tel: m.clienteTel || '', end: _endMed(m), partes: _partesMedMapa(m),
+            cliente: m.clienteNome || '—', tel: m.clienteTel || (db.clientes.find(c => c.id == m.clienteId)?.tel) || '', end: _endMed(m), partes: _partesMedMapa(m),
             hora: m.hora || '', agendadoMin: _agdMin(m.hora), durMin: +m.duracao || _agdDurPadrao('med'),
-            rotulo: 'Medição', ico: '📐' });
+            rotulo: 'Medição', ico: '📐', aviso: m.aviso_cliente || null });
     });
     db.pedidos.forEach(p => {
         if (!_instPendente(p) || p.data_entrega !== data) return;
@@ -33,7 +34,7 @@ function _rotaVisitasDoDia(data) {
         out.push({ tipo: 'inst', id: p.id, prof: _instProf(p), profNome: nomeInstalador(p),
             cliente: p.clienteNome || '—', tel: cli?.tel || '', end: _endInst(p, cli), partes: _partesInstMapa(p, cli),
             hora: p.inst_hora || '', agendadoMin: _agdMin(p.inst_hora), durMin: _instDur(p),
-            rotulo: `Instalação #${formatPedidoId(p.id)}`, ico: '🔧' });
+            rotulo: `Instalação #${formatPedidoId(p.id)}`, ico: '🔧', aviso: p.inst_aviso_cliente || null });
     });
     return out;
 }
@@ -141,6 +142,7 @@ function _rotaDesenhar() {
     const emp = _rotaEmpresaEnd();
     const cheg = _rotaChegadas(itens);
     const calc = _rota.calc;
+    const data = (_rota.chave || '').split('|')[0];
     const linhas = itens.map((v, i) => {
         const k = _rotaChaveItem(v);
         const c = cheg && cheg.paradas[i];
@@ -153,7 +155,7 @@ function _rotaDesenhar() {
                 ? `<span class="rota-selo rota-selo-apertado">Apertado: chega ${RotasCore.hhmm(c.chegadaMin)}, sobram ${c.folgaMin} min</span>` : '';
         const invade = c && !c.incerto && c.invadeMin > 0
             ? `<span class="rota-aviso">⚠ O serviço anterior termina ${RotasCore.hhmm(v.agendadoMin + c.invadeMin)}, depois do início desta visita.</span>` : '';
-        return `<li class="rota-item" draggable="true" data-i="${i}" ondragstart="_rotaDragIni(event, ${i})" ondragover="event.preventDefault()" ondrop="_rotaDrop(event, ${i})">
+        return `<li class="rota-item" draggable="true" data-i="${i}" ondragstart="_rotaDragIni(event, ${i})" ondragover="event.preventDefault()" ondrop="_rotaDrop(event, ${i})" ondragend="_rotaDragFim()">
             <span class="rota-num">${i + 1}</span>
             <span class="rota-alca" aria-hidden="true" title="Arraste para mudar a ordem">⠿</span>
             <span class="rota-info">
@@ -180,6 +182,7 @@ function _rotaDesenhar() {
         const metros = trechos.reduce((s, t) => s + t.metros, 0), seg = trechos.reduce((s, t) => s + t.segundos, 0);
         total = `<div class="rota-total" id="rota-total">Total: ${RotasCore.fmtKm(metros / 1000)} · ${RotasCore.fmtDur(seg / 60)} de trajeto${calc.volta ? ' (com a volta)' : ''}</div>`;
     }
+    const avisar = _rotaAvisarHtml(itens, data);
     let saidaTxt = '', resumo = '';
     if (cheg && cheg.primeiro >= 0) {
         const p0 = itens[cheg.primeiro], c0 = cheg.paradas[cheg.primeiro];
@@ -198,11 +201,85 @@ function _rotaDesenhar() {
         <ol class="rota-lista" id="rota-lista">${linhas}</ol>
         <div class="rota-status" id="rota-status">${escapeHtml(_rota.status)}</div>
         ${total}
+        ${avisar}
         <div class="rota-botoes">
             <button type="button" class="btn btn-outline" onclick="salvarRota()">💾 Salvar rota</button>
             <button type="button" class="btn btn-outline" onclick="abrirRotaNoMaps()">🗺️ Abrir no Maps</button>
-            <button type="button" class="btn btn-success" onclick="enviarRotaAoTecnico()">📤 Enviar ao técnico</button>
+            <button type="button" class="btn btn-success btn-whats" onclick="enviarRotaAoTecnico()" title="Enviar por WhatsApp">${iconeWhatsApp(16)}<span>Enviar ao técnico</span></button>
         </div>`;
+}
+
+// --- Avisar clientes (WhatsApp) -------------------------------------------------
+
+// Previsao de chegada so quando a rota calculada mostra a visita atrasada.
+function _rotaPrevistaMin(c) {
+    return c && !c.incerto && c.situacao === 'atrasada' ? c.chegadaMin : null;
+}
+
+function _rotaArgId(id) { return JSON.stringify(id).replace(/"/g, '&quot;'); }
+
+function _rotaAvisarHtml(itens, data) {
+    if (!itens.length) return '';
+    const linhas = itens.map(v => {
+        const nome = escapeHtml(v.cliente);
+        const quando = escapeHtml(_agdFmtData(data)) + ' ' + (v.hora ? escapeHtml(v.hora) : 'sem horário');
+        let acao;
+        if (RotasCore.avisoValido(v.aviso, data, v.hora)) {
+            const a = v.aviso;
+            const hh = a.em ? new Date(a.em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+            const dia = a.em && _agdDiaLocal(a.em) !== _agdHoje() ? _agdDiaLocal(a.em).split('-').reverse().slice(0, 2).join('/') : '';
+            acao = `<span class="rota-avisado">✓ Avisado${dia ? ' em ' + escapeHtml(dia) : ''}${hh ? ' às ' + escapeHtml(hh) : ''}${a.porNome ? ' por ' + escapeHtml(a.porNome) : ''}</span>
+                <button type="button" class="rota-desfazer" onclick="desfazerAvisoCliente('${v.tipo}', ${_rotaArgId(v.id)})">desfazer</button>`;
+        } else if (!CaixaCore.normalizarTelefone(v.tel)) {
+            acao = `<button type="button" class="btn btn-outline btn-sm" disabled title="Cliente sem telefone no cadastro">Sem telefone</button>`;
+        } else {
+            acao = `<button type="button" class="btn btn-outline btn-sm btn-whats" title="Enviar por WhatsApp" aria-label="Enviar por WhatsApp para ${nome}" onclick="avisarClienteWhats('${v.tipo}', ${_rotaArgId(v.id)})">${iconeWhatsApp(16)}<span>Avisar</span></button>`;
+        }
+        return `<li class="rota-aviso-item"><span class="rota-aviso-info">${v.ico} <strong>${nome}</strong> — ${escapeHtml(v.rotulo)} · ${quando}</span><span class="rota-aviso-acao">${acao}</span></li>`;
+    }).join('');
+    return `<div class="rota-avisar" id="rota-avisar"><h4>Avisar clientes</h4><ul>${linhas}</ul></div>`;
+}
+
+function _rotaAlvoAviso(tipo, id) {
+    return tipo === 'med' ? (db.medicoes || []).find(m => String(m.id) === String(id)) : db.pedidos.find(p => String(p.id) === String(id));
+}
+
+function avisarClienteWhats(tipo, id) {
+    // Sem await antes do window.open: precisa valer como clique do usuario.
+    const itens = _rotaItens();
+    const i = itens.findIndex(x => x.tipo === tipo && String(x.id) === String(id));
+    if (i < 0) { _rotaDesenhar(); return; }
+    const v = itens[i];
+    const tel = CaixaCore.normalizarTelefone(v.tel);
+    if (!tel) { showAlert('Cliente sem telefone no cadastro.'); return; }
+    const data = (_rota.chave || '').split('|')[0];
+    const emp = getEmpresa();
+    const cheg = _rotaChegadas(itens);
+    const msg = RotasCore.textoAvisoCliente(emp.mensagem_aviso_visita, {
+        cliente: v.cliente,
+        empresa: emp.nome_fantasia || emp.razao_social || 'nossa empresa',
+        tipo: v.tipo, data, hoje: _agdHoje(), hora: v.hora,
+        previstaMin: _rotaPrevistaMin(cheg && cheg.paradas[i]),
+        tecnico: v.prof ? v.profNome : ''
+    });
+    const janela = window.open(CaixaCore.linkWhatsApp(tel, msg), '_blank');
+    if (!janela) { showAlert('O navegador bloqueou a janela do WhatsApp. Libere os pop-ups e tente de novo.'); return; }
+    try { janela.opener = null; } catch (e) {}
+    const alvo = _rotaAlvoAviso(tipo, id);
+    if (!alvo) return;
+    const u = getUsuarioLogado();
+    const aviso = { data, hora: v.hora || '', em: new Date().toISOString(), por: u ? u.id : null, porNome: u ? u.nome : '' };
+    if (tipo === 'med') alvo.aviso_cliente = aviso; else alvo.inst_aviso_cliente = aviso;
+    _gravarChaves([tipo === 'med' ? 'sc_med' : 'sc_ped']);
+    _rotaDesenhar();
+}
+
+function desfazerAvisoCliente(tipo, id) {
+    const alvo = _rotaAlvoAviso(tipo, id);
+    if (!alvo) return;
+    if (tipo === 'med') delete alvo.aviso_cliente; else delete alvo.inst_aviso_cliente;
+    _gravarChaves([tipo === 'med' ? 'sc_med' : 'sc_ped']);
+    _rotaDesenhar();
 }
 
 function _rotaStatus(txt) {
@@ -227,6 +304,11 @@ function _rotaDrop(ev, i) {
     const [k] = _rota.ordem.splice(de, 1);
     _rota.ordem.splice(i, 0, k);
     _rotaMudouOrdem();
+}
+// Fim do arraste (com ou sem soltar): libera e aplica o que outra aba mudou no meio.
+function _rotaDragFim() {
+    _rotaArrastando = null;
+    if (_rotaRedesenharDepois) { _rotaRedesenharDepois = false; renderRotas(); }
 }
 function _rotaMudouOrdem() {
     _rota.calc = null;
@@ -466,3 +548,13 @@ async function enviarRotaAoTecnico() {
     });
     window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank', 'noopener');
 }
+
+// Outra aba mexeu nas visitas: recarrega e redesenha as Rotas (se estiverem na tela).
+window.addEventListener('storage', e => {
+    if (e.key !== 'sc_med' && e.key !== 'sc_ped') return;
+    const corpo = document.getElementById('rota-corpo');
+    if (!corpo || !corpo.offsetParent) return;
+    _dbRecarregarChave(e.key);
+    if (_rotaArrastando !== null) { _rotaRedesenharDepois = true; return; }   // redesenha no fim do arraste
+    renderRotas();
+});
