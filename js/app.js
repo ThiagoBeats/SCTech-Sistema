@@ -12802,7 +12802,7 @@ function renderDashboardMedicoes() {
             acc   = diff === 0 ? '#2D77C1' : 'var(--primary-text)';
             clrL  = diff === 0 ? '#2D77C1' : '#8F8F8F';
         }
-        return `<div onclick="location.href='pcp.html?view=medicoes'" style="cursor:pointer;background:${bg};border:1px solid ${bord};border-left:4px solid ${acc};border-radius:8px;padding:12px 16px;min-width:155px;flex:1;max-width:200px;transition:transform .15s ease,box-shadow .15s ease" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+        return `<div class="index-card-3d index-card-click" onclick="location.href='pcp.html?view=medicoes'" style="cursor:pointer;background:${bg};border:1px solid ${acc};border-radius:8px;padding:12px 16px;min-width:155px;flex:1;max-width:200px">
             <div style="font-size:11px;font-weight:700;color:${clrL};text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">${label}</div>
             <div style="font-weight:700;font-size:14px;color:var(--dark);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(v.clienteNome)}">${escapeHtml(v.clienteNome)}</div>
             ${v.hora ? `<div style="font-size:12px;color:var(--dark)">🕐 ${v.hora}</div>` : ''}
@@ -12883,7 +12883,7 @@ function renderDashboardInstalacoes() {
             acc   = diff === 0 ? '#2D77C1' : 'var(--primary-text)';
             clrL  = diff === 0 ? '#2D77C1' : '#8F8F8F';
         }
-        return `<div onclick="location.href='pcp.html?view=agenda'" style="cursor:pointer;background:${bg};border:1px solid ${bord};border-left:4px solid ${acc};border-radius:8px;padding:12px 16px;min-width:155px;flex:1;max-width:200px;transition:transform .15s ease,box-shadow .15s ease" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+        return `<div class="index-card-3d index-card-click" onclick="location.href='pcp.html?view=agenda'" style="cursor:pointer;background:${bg};border:1px solid ${acc};border-radius:8px;padding:12px 16px;min-width:155px;flex:1;max-width:200px">
             <div style="font-size:11px;font-weight:700;color:${clrL};text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">${label}</div>
             <div style="font-weight:700;font-size:14px;color:var(--dark);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(p.clienteNome)}">${escapeHtml(p.clienteNome||'—')}</div>
             <div style="font-size:11px;color:#8F8F8F">#${formatPedidoId(p.id)}</div>
@@ -17016,8 +17016,8 @@ function verFechamentoMes(mes) {
     const html = `<div style="padding:24px;color:#242424">
         <div class="doc-cab">${buildEmpresaHeaderHTML(52)}</div>
         <h2 style="margin:16px 0 4px">Fechamento de ${escapeHtml(rot)}</h2>
-        ${avisos.length ? `<div style="background:#FFF6DB;border-left:4px solid #B26A00;color:#7A4A00;padding:8px 12px;margin:10px 0;font-size:13px">${avisos.map(t => `<div>${escapeHtml(t)}</div>`).join('')}</div>` : ''}
-        ${guia.length ? `<div class="fech-info-doc" style="background:#F0F4F8;border-left:4px solid #8A9BB0;color:#33475B;padding:8px 12px;margin:10px 0;font-size:13px">${guia.map(t => `<div>${escapeHtml(t)}</div>`).join('')}</div>` : ''}
+        ${avisos.length ? `<div class="index-card-3d" style="background:#FFF6DB;border:1px solid #B26A00;border-radius:6px;color:#7A4A00;padding:8px 12px;margin:10px 0;font-size:13px">${avisos.map(t => `<div>${escapeHtml(t)}</div>`).join('')}</div>` : ''}
+        ${guia.length ? `<div class="fech-info-doc index-card-3d" style="background:#F0F4F8;border:1px solid #8A9BB0;border-radius:6px;color:#33475B;padding:8px 12px;margin:10px 0;font-size:13px">${guia.map(t => `<div>${escapeHtml(t)}</div>`).join('')}</div>` : ''}
         <div style="display:flex;gap:32px;margin:12px 0;font-size:14px;flex-wrap:wrap">
             <div>Entradas<br><strong style="font-size:18px">${_resBrl(n.entradas)}</strong></div>
             <div>Saídas<br><strong style="font-size:18px">${_resBrl(n.saidas)}</strong></div>

@@ -37,8 +37,10 @@
     --radius-pill: 9999px;
 
     /* Sombras & Elevações (Soft Diffusion) */
-    --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.04);
-    --shadow-card-hover: 0 14px 34px rgba(0, 0, 0, 0.07);
+    --card-sombra: 0 1px 2px rgba(0,0,0,.06), 0 4px 10px rgba(0,0,0,.08), 0 12px 24px -8px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.6);
+    --card-sombra-hover: 0 2px 3px rgba(0,0,0,.07), 0 8px 18px rgba(0,0,0,.11), 0 20px 34px -10px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.7);
+    --shadow-card: var(--card-sombra);
+    --shadow-card-hover: var(--card-sombra-hover);
     --shadow-lime-glow: 0 0 14px rgba(201, 247, 117, 0.38);
 
     /* Cores Semânticas de Dashboard & Gráficos */
@@ -459,7 +461,7 @@ td:last-child { white-space: nowrap; }
 /* O quadro ocupa a largura toda e a altura que sobra na tela (renderKanban
    calcula a altura): a pagina nao rola, so o interior de cada coluna. */
 .kanban-board { display: flex; gap: 14px; overflow-x: auto; overflow-y: hidden; padding-bottom: 8px; align-items: stretch; height: var(--kanban-altura, auto); }
-.kanban-col { min-width: 200px; flex: 1 1 200px; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+.kanban-col { min-width: 200px; flex: 1 1 200px; border-radius: 8px; overflow: hidden; box-shadow: var(--card-sombra); display: flex; flex-direction: column; }
 .kanban-col-header { flex-shrink: 0; }
 .kanban-col-header { color: white; padding: 10px 14px; font-size: 13px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
 .kanban-count { background: rgba(255,255,255,0.28); border-radius: 12px; padding: 1px 8px; font-size: 12px; }
@@ -478,7 +480,7 @@ td:last-child { white-space: nowrap; }
 
 /* Modo Lista: um bloco por etapa, com a cor da etapa, que abre e fecha */
 .pcp-lista { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 16px; }
-.pcp-bloco { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--white); box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+.pcp-bloco { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--white); box-shadow: var(--card-sombra); }
 .pcp-bloco-head { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0; padding: 10px 14px; border: 0; border-radius: 0; border-left: 5px solid var(--bloco-cor); background: var(--bloco-bg); color: var(--bloco-cor); font: inherit; font-size: 14px; font-weight: 800; text-align: left; cursor: pointer; box-shadow: none; }
 .pcp-bloco-head:hover { filter: brightness(.97); transform: none; }
 .pcp-bloco-head:focus-visible { outline: 2px solid var(--bloco-cor); outline-offset: -2px; }
@@ -503,7 +505,7 @@ td:last-child { white-space: nowrap; }
     .pcp-linha-num { grid-area: num; } .pcp-linha-cli { grid-area: cli; }
     .pcp-linha-entrega { grid-area: ent; } .pcp-linha-acoes { grid-area: aco; justify-content: flex-start; }
 }
-.kanban-card { background: white; border: 1px solid var(--border); border-radius: 6px; padding: 11px 12px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+.kanban-card { background: white; border: 1px solid var(--border); border-radius: 6px; padding: 11px 12px; margin-bottom: 10px; box-shadow: var(--card-sombra); }
 .kanban-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
 .kanban-card-id { font-size: 11px; color: #8F8F8F; font-weight: bold; }
 .kanban-card-age { font-size: 11px; color: #8F8F8F; background: var(--surface-3); padding: 1px 6px; border-radius: 10px; }
@@ -601,10 +603,9 @@ td:last-child { white-space: nowrap; }
 
 /* Dashboard: linhas de tabela com problemas */
 .row-atrasado { background: var(--danger-bg) !important; }
-.row-atrasado td:first-child { border-left: 3px solid #F43927; }
 
 /* Pedido: cards de seção com âncora visual */
-.section-card { border-left: 4px solid var(--primary); }
+.section-card { border-color: var(--primary); }
 
 /* Pedido: box do valor final */
 .valor-final-box { background: linear-gradient(135deg, #F0FBEF, #E3F7E2); border: 2px solid #8FD98D; border-radius: 10px; padding: 14px 22px; text-align: center; }
@@ -644,7 +645,7 @@ td:last-child { white-space: nowrap; }
     transition: background-color .15s ease, transform .15s ease;
 }
 .metric-card-alerta {
-    border-left: 4px solid var(--kpi-red);
+    border-color: var(--kpi-red);
 }
 .metric-card-alerta .metric-icon-wrap {
     background: var(--danger-bg); color: var(--kpi-red);
@@ -683,7 +684,7 @@ td:last-child { white-space: nowrap; }
 #card-a-receber .metric-value { color: var(--kpi-green); }
 
 /* ── FORMULÁRIO MULTI-AMBIENTE ──────────────────────────────────── */
-.ambiente-card { border-left: 3px solid var(--primary); }
+.ambiente-card { border-color: var(--primary); }
 .ambiente-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .tecido-row-compact { display: flex; gap: 6px; align-items: flex-end; margin-bottom: 8px; flex-wrap: wrap; }
 .tecido-row-compact.form-group,
@@ -1082,6 +1083,8 @@ html[data-theme="dark"] {
     --kpi-blue: #4FA0F5;
     --kpi-green: #2DD478;
     --kpi-purple: #B65FE6;
+    --card-sombra: 0 1px 2px rgba(0,0,0,.35), 0 5px 12px rgba(0,0,0,.40), 0 14px 28px -8px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.05);
+    --card-sombra-hover: 0 2px 3px rgba(0,0,0,.40), 0 9px 20px rgba(0,0,0,.50), 0 22px 38px -10px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.08);
 }
 html[data-theme="dark"] body { background: #141518; color: #F5F6F8; }
 html[data-theme="dark"] {
@@ -1140,7 +1143,7 @@ html[data-theme="dark"] .consulta-info-item { background: #16181B; border-color:
 html[data-theme="dark"] .breakdown-box { background: #16181B; border-color: #282A2E; }
 html[data-theme="dark"] .breakdown-row { border-color: #24272D; }
 html[data-theme="dark"] .breakdown-row.destaque { background: rgba(201, 247, 117, 0.08); }
-html[data-theme="dark"] .section-card { border-left-color: var(--secondary); }
+html[data-theme="dark"] .section-card { border-color: var(--secondary); }
 html[data-theme="dark"] .valor-final-box { background: linear-gradient(135deg, #1B3524, #0F2016); border-color: #282A2E; }
 html[data-theme="dark"] .recebido-box { background: #0E291C; border-color: #1A4D35; }
 html[data-theme="dark"] .fin-kpi { opacity: 0.95; }
@@ -2535,18 +2538,18 @@ body.galped-aberta { overflow: hidden; }
 .hoje-col-lado.hoje-sem-lado { display: none; }
 .hoje-grid.hoje-sem-lado-grid { grid-template-columns: 1fr; }
 .hoje-titulo { margin: 0 0 12px; font-size: 16px; }
-.hoje-grupo { border-left: 4px solid var(--muted); padding: 4px 0 4px 12px; margin-bottom: 16px; }
+.hoje-grupo { --hoje-cor: var(--muted); border: 1px solid var(--hoje-cor); border-radius: 8px; padding: 8px 12px; margin-bottom: 16px; background: var(--white); box-shadow: var(--card-sombra); }
 .hoje-grupo h4 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
-.hoje-grupo.hoje-vermelho { border-left-color: var(--danger); }
+.hoje-grupo.hoje-vermelho { --hoje-cor: var(--danger); }
 .hoje-grupo.hoje-vermelho h4 { color: var(--danger); }
-.hoje-grupo.hoje-amarelo { border-left-color: #F2C924; }
-.hoje-grupo.hoje-cinza { border-left-color: var(--muted); }
-.hoje-grupo.hoje-info { border-left-color: #3B82F6; }
-.hoje-orcamento-linha { background: var(--danger-bg); color: var(--danger-text); border-left: 4px solid var(--danger); border-radius: 6px; padding: 8px 12px; margin-bottom: 10px; font-size: 13px; font-weight: 600; }
+.hoje-grupo.hoje-amarelo { --hoje-cor: #F2C924; }
+.hoje-grupo.hoje-cinza { --hoje-cor: var(--muted); }
+.hoje-grupo.hoje-info { --hoje-cor: #3B82F6; }
+.hoje-orcamento-linha { background: var(--danger-bg); color: var(--danger-text); border: 1px solid var(--danger); box-shadow: var(--card-sombra); border-radius: 6px; padding: 8px 12px; margin-bottom: 10px; font-size: 13px; font-weight: 600; }
 html[data-theme="dark"] .hoje-orcamento-linha { background: rgba(244,57,39,0.14); color: #F79B90; }
-.hoje-fechamento-linha { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; background: var(--white); color: var(--dark); border: 1px solid var(--border); border-left: 4px solid var(--primary); border-radius: 6px; padding: 8px 12px; margin-bottom: 10px; font-size: 13px; font-weight: 600; }
-.hoje-fechamento-mudou { border-left-color: var(--danger); }
-.hoje-fechamento-info { border-left-color: var(--border); font-weight: 500; }
+.hoje-fechamento-linha { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; background: var(--white); color: var(--dark); border: 1px solid var(--primary); box-shadow: var(--card-sombra); border-radius: 6px; padding: 8px 12px; margin-bottom: 10px; font-size: 13px; font-weight: 600; }
+.hoje-fechamento-mudou { border-color: var(--danger); }
+.hoje-fechamento-info { border-color: var(--border); font-weight: 500; }
 .hoje-item { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .hoje-item:last-child { border-bottom: 0; }
 .hoje-item-desc { flex: 1; min-width: 140px; }
@@ -2597,10 +2600,10 @@ html[data-theme="dark"] { --dre-selo-aviso: #E8A94A; }
 .fech-card-txt { font-size: 14px; color: var(--muted); }
 .fech-selo { font-weight: 600; font-size: 14px; }
 .fech-card-botoes { display: flex; gap: 8px; flex-wrap: wrap; }
-.fech-mudou { margin-top: 10px; background: var(--warn-bg); color: var(--warn-text); border-left: 4px solid #B26A00; border-radius: 6px; padding: 8px 12px; font-size: 13px; font-weight: 600; }
+.fech-mudou { margin-top: 10px; background: var(--warn-bg); color: var(--warn-text); border: 1px solid #B26A00; box-shadow: var(--card-sombra); border-radius: 6px; padding: 8px 12px; font-size: 13px; font-weight: 600; }
 .fech-mudou div + div { margin-top: 4px; }
 html[data-theme="dark"] .fech-mudou { background: rgba(247,222,134,0.12); color: #F7DE86; }
-.fech-info { margin-top: 10px; background: var(--white); color: var(--dark); border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: 6px; padding: 8px 12px; font-size: 13px; }
+.fech-info { margin-top: 10px; background: var(--white); color: var(--dark); border: 1px solid var(--border); box-shadow: var(--card-sombra); border-radius: 6px; padding: 8px 12px; font-size: 13px; }
 .fech-info div + div { margin-top: 4px; }
 .fech-overlay { z-index: 9500; }
 .fech-box { text-align: left; max-width: 640px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 22px 22px 18px; background: var(--white); color: var(--dark); }
@@ -2983,7 +2986,7 @@ html[data-theme="dark"] {
 .ag-slot { box-sizing: border-box; border-top: 1px solid var(--ag-linha); }
 .ag-slot-ok { cursor: pointer; }
 .ag-slot-ok:hover { background: rgba(0, 93, 59, .08); }
-.ag-ev { position: absolute; left: 3px; right: 3px; z-index: 2; box-sizing: border-box; overflow: hidden; text-align: left; padding: 3px 6px; border-radius: 6px; border: 1px solid; font: inherit; font-size: 11px; line-height: 1.25; cursor: pointer; display: flex; flex-direction: column; box-shadow: none; }
+.ag-ev { box-shadow: var(--card-sombra); position: absolute; left: 3px; right: 3px; z-index: 2; box-sizing: border-box; overflow: hidden; text-align: left; padding: 3px 6px; border-radius: 6px; border: 1px solid; font: inherit; font-size: 11px; line-height: 1.25; cursor: pointer; display: flex; flex-direction: column; }
 .ag-ev-t { font-weight: 800; }
 .ag-ev-s { opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ag-ev-med  { background: var(--ag-med-bg);  border-color: var(--ag-med-bd);  color: var(--ag-med-fg); }
@@ -3054,3 +3057,11 @@ td { transition: background-color .15s ease; }
 .link-galeria { transition: transform .15s ease; }
 .est-tec-linha > td { transition: background-color .15s ease; }
 .carrinhos-lista-item { transition: border-color .15s ease, background-color .15s ease; }
+
+/* ── Cards com profundidade 3D (sombra em camadas + realce no topo) ── */
+.index-card-3d { box-shadow: var(--card-sombra); transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+.kanban-card, .ag-ev { transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+.kanban-card:hover, .ag-ev:hover, .index-card-3d.index-card-click:hover { transform: translateY(-2px); box-shadow: var(--card-sombra-hover); }
+@media (prefers-reduced-motion: reduce) {
+    .metric-card:hover, .kanban-card:hover, .ag-ev:hover, .index-card-3d.index-card-click:hover { transform: none; }
+}

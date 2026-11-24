@@ -1062,7 +1062,7 @@ function _impPainelProblemasHTML() {
             </div>
         </div>`;
     }).join('');
-    return `<div class="card" style="margin-bottom:14px;border-left:4px solid var(--danger)">
+    return `<div class="card" style="margin-bottom:14px;border-color:var(--danger)">
         <h4 style="margin:0 0 4px;color:var(--dark)">Mapeamentos incompletos <span style="color:var(--muted);font-weight:400">(${problemas.length})</span></h4>
         <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Clique num item para ir até a tabela e corrigir ali mesmo. Se a aba não interessa, volte ao passo 2 e marque como "Ignorar".</p>
         <div>${linhas}</div>
@@ -1522,7 +1522,7 @@ function _impPainelDuplicadosHTML() {
     const lista = dups.slice(0, 10)
         .map(d => `${escapeHtml(d.codigo)} (${d.ocorrencias.length}×)`).join(' · ');
     const resto = dups.length > 10 ? ` e mais ${dups.length - 10}` : '';
-    return `<div class="card" style="margin-bottom:14px;border-left:4px solid var(--primary)">
+    return `<div class="card" style="margin-bottom:14px;border-color:var(--primary)">
         <h4 style="margin:0 0 4px;color:var(--dark)">Códigos repetidos nesta importação <span style="color:var(--muted);font-weight:400">(${dups.length})</span></h4>
         <p style="font-size:12px;color:var(--muted);margin:0 0 8px">${lista}${resto}</p>
         <p style="font-size:12px;color:var(--muted);margin:0 0 10px">Código é único no sistema, então a gravação fica bloqueada enquanto houver repetição. A primeira ocorrência de cada código é sempre preservada.</p>
@@ -1588,7 +1588,7 @@ function _impPainelPendenciasHTML() {
             <span style="font-size:13px;color:var(--dark)">${escapeHtml(p.mensagem)}</span>
         </div>`;
     }).join('');
-    return `<div class="card" style="margin-bottom:14px;border-left:4px solid var(--danger)">
+    return `<div class="card" style="margin-bottom:14px;border-color:var(--danger)">
         <h4 style="margin:0 0 4px;color:var(--dark)">Pendências que impedem gravar <span style="color:var(--muted);font-weight:400">(${pendencias.length})</span></h4>
         <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Clique numa pendência para ir até a linha do produto.</p>
         <div>${linhas}</div>
