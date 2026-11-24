@@ -127,8 +127,7 @@ test('sugestoes: valor unico de repasse tem prioridade sobre a soma', () => {
 });
 
 test('lerOfx: linhas identicas sem FITID e FITID repetido ganham sufixo estavel', () => {
-    const t = 'OFXHEADER:100
-<OFX>'
+    const t = 'OFXHEADER:100\n<OFX>'
         + '<STMTTRN><DTPOSTED>20261107<TRNAMT>-10,00<MEMO>PIX X</STMTTRN>'
         + '<STMTTRN><DTPOSTED>20261107<TRNAMT>-10,00<MEMO>PIX X</STMTTRN>'
         + '<STMTTRN><DTPOSTED>20261108<TRNAMT>5<FITID>X1<MEMO>a</STMTTRN>'
