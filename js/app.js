@@ -14557,9 +14557,11 @@ function _migrarFinanceiroV4({ semCopia = false } = {}) {
 // com os anexos) e migra sem a copia no navegador.
 function baixarCopiaEMigrarFinanceiroV4() {
     _baixarJSON(_finCopiaV4(false), `sctech_copia_financeiro_v3_${hojeLocal()}.json`);
-    try { _migrarFinanceiroV4({ semCopia: true }); }
+    let ok = false;
+    try { ok = _migrarFinanceiroV4({ semCopia: true }) !== false; }
     catch (e) { console.error('Migração do Financeiro (v4) falhou:', e); _gravarSemFalhar(CHAVE_FIN_V4_ERRO, String(Date.now())); }
-    _avisoRecarregar('Cópia baixada. Os dados do Financeiro foram atualizados.');
+    _avisoRecarregar(ok ? 'Cópia baixada. Os dados do Financeiro foram atualizados.'
+        : 'Cópia baixada, mas não deu para atualizar os dados: o navegador está sem espaço. Libere espaço e abra de novo.');
     setTimeout(() => window.location.reload(), 1500);
 }
 
