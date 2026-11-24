@@ -138,3 +138,140 @@ test('datas inclusivas, CR cancelada e competência sem data_competencia', () =>
     assert.strictEqual(c.linhas.receitas, 30);
     assert.strictEqual(c.linhas.despesas, 5);
 });
+
+// ---- Tabela por periodos, AV e AH ----
+const crc = (id, v, data, cat) => ({ id, valor: v, status: 'Aberto', categoria_id: cat, data_competencia: data, data_vencimento: data });
+const cpc = (id, v, data, cat) => ({ id, valor: v, status: 'Aberto', categoria_id: cat, data_competencia: data, data_vencimento: data });
+const linha = (t, k) => t.linhas.find(l => l.chave === k);
+const catDre = (id, nome, grupo, tipo, extra) => Object.assign({ id, nome, grupo, tipo, natureza: 'dre', ativo: true }, extra || {});
+
+test('periodos: trimestral, mensal parcial, semestral, anual e personalizado', () => {
+    assert.deepStrictEqual(D.periodos('2026-01-01', '2026-12-31', 'trimestral').map(p => p.rotulo), ['1º tri/26', '2º tri/26', '3º tri/26', '4º tri/26']);
+    const m = D.periodos('2026-01-15', '2026-03-14', 'mensal');
+    assert.strictEqual(m.length, 3);
+    assert.deepStrictEqual(m[0], { de: '2026-01-15', ate: '2026-01-31', rotulo: '15/01–31/01' });
+    assert.strictEqual(m[1].rotulo, 'Fev/26');
+    assert.strictEqual(m[2].ate, '2026-03-14');
+    assert.deepStrictEqual(D.periodos('2026-01-01', '2026-12-31', 'semestral').map(p => p.rotulo), ['1º sem/26', '2º sem/26']);
+    assert.deepStrictEqual(D.periodos('2025-01-01', '2026-12-31', 'anual').map(p => p.rotulo), ['2025', '2026']);
+    assert.deepStrictEqual(D.periodos('2026-01-15', '2026-03-14', 'personalizado'), [{ rotulo: '15/01/26–14/03/26', de: '2026-01-15', ate: '2026-03-14' }]);
+    assert.deepStrictEqual(D.periodos('2026-03-01', '2026-01-01', 'mensal'), []);
+});
+
+test('tabela: ano vazio tem todas as linhas fixas com zeros e AV/AH nulos', () => {
+    const t = D.tabela({ regime: 'competencia', de: '2026-01-01', ate: '2026-12-31', intervalo: 'mensal' });
+    assert.strictEqual(t.periodos.length, 12);
+    const chaves = t.linhas.map(l => l.chave);
+    ['receitas', 'custos', 'margem', 'margem_pct', 'despesas', 'resultadoOperacional', 'investimento', 'financiamento', 'liquido', 'cat:cat_vendas'].forEach(k => assert.ok(chaves.includes(k), k));
+    const ix = k => chaves.indexOf(k);
+    assert.ok(ix('receitas') < ix('custos') && ix('custos') < ix('margem') && ix('margem') < ix('margem_pct') && ix('margem_pct') < ix('despesas')
+        && ix('despesas') < ix('resultadoOperacional') && ix('resultadoOperacional') < ix('investimento') && ix('investimento') < ix('financiamento') && ix('financiamento') < ix('liquido'));
+    t.linhas.filter(l => l.tipo !== 'percentual').forEach(l => { assert.strictEqual(l.total, 0); assert.ok(l.valores.every(v => v === 0)); });
+    assert.ok(D.analiseVertical(t).receitas.every(v => v === null));
+    assert.ok(D.analiseHorizontal(t).receitas.every(x => x.pct === null));
+});
+
+test('AV do PDF: receitas 50.000 e custos 10.000', () => {
+    const t = D.tabela({ regime: 'competencia', de: '2026-01-01', ate: '2026-01-31', intervalo: 'mensal',
+        contas_receber: [crc(1, 15000, '2026-01-10', 'c'), crc(2, 20000, '2026-01-11', 'p'), crc(3, 15000, '2026-01-12', 'i')],
+        contas_pagar: [cpc(1, 10000, '2026-01-13', 'k')],
+        categorias: [catDre('c', 'Cortinas', 'receitas', 'entrada'), catDre('p', 'Persianas', 'receitas', 'entrada'),
+            catDre('i', 'Instalações', 'receitas', 'entrada'), catDre('k', 'Tecido', 'custos', 'saida')] });
+    const av = D.analiseVertical(t);
+    assert.deepStrictEqual([av.receitas[0], av['cat:c'][0], av['cat:p'][0], av['cat:i'][0], av.custos[0], av.margem[0]], [100, 30, 40, 30, 20, 80]);
+    assert.strictEqual(linha(t, 'margem_pct').total, 80);
+});
+
+function dadosAH() {
+    return { regime: 'competencia',
+        categorias: [catDre('c', 'Cortinas', 'receitas', 'entrada'), catDre('p', 'Persianas', 'receitas', 'entrada'), catDre('k', 'Tecido', 'custos', 'saida'),
+            catDre('d', 'Aluguel', 'despesas', 'saida', { subgrupo_id: 'sub_fix' })],
+        contas_receber: [crc(1, 5000, '2026-01-10', 'c'), crc(2, 15000, '2026-01-10', 'p'), crc(3, 15000, '2026-02-10', 'c'), crc(4, 15000, '2026-02-11', 'p')],
+        contas_pagar: [cpc(1, 8000, '2026-01-12', 'k'), cpc(2, 5000, '2026-01-12', 'd'), cpc(3, 12000, '2026-02-12', 'k'), cpc(4, 6000, '2026-02-12', 'd')] };
+}
+
+test('AH do PDF: janeiro para fevereiro', () => {
+    const t = D.tabela(Object.assign(dadosAH(), { de: '2026-01-01', ate: '2026-02-28', intervalo: 'mensal' }));
+    const ah = D.analiseHorizontal(t);
+    assert.deepStrictEqual(ah.receitas[0], { pct: null, acima999: false, seta: null, favoravel: null });
+    assert.deepStrictEqual(ah.receitas[1], { pct: 50, acima999: false, seta: 'up', favoravel: true });
+    assert.strictEqual(ah['cat:c'][1].pct, 200);
+    assert.deepStrictEqual(ah.custos[1], { pct: 50, acima999: false, seta: 'up', favoravel: false });
+    assert.deepStrictEqual(linha(t, 'resultadoOperacional').valores, [7000, 12000]);
+    assert.strictEqual(ah.resultadoOperacional[1].pct, 71.43);
+    assert.strictEqual(linha(t, 'custos').sinal, 'saida');
+});
+
+test('AH: base zero, acima de 999% e resultado negativo', () => {
+    const mk = vals => ({ linhas: [{ chave: 'x', tipo: 'calculada', sinal: 'resultado', valores: vals }] });
+    assert.strictEqual(D.analiseHorizontal(mk([0, 50])).x[1].pct, null);
+    assert.strictEqual(D.analiseHorizontal(mk([100, 1200])).x[1].acima999, true);
+    assert.deepStrictEqual(D.analiseHorizontal(mk([-5000, 2000])).x[1], { pct: 140, acima999: false, seta: 'up', favoravel: true });
+    assert.strictEqual(D.analiseHorizontal(mk([-5000, -7000])).x[1].favoravel, false);
+});
+
+test('tabela: categoria inativa com lançamento aparece e entra no total; sem valor some', () => {
+    const d = dadosAH();
+    d.categorias.push(catDre('z', 'Antiga', 'despesas', 'saida', { ativo: false }), catDre('y', 'Velha sem uso', 'despesas', 'saida', { ativo: false }));
+    d.contas_pagar.push(cpc(9, 700, '2026-01-20', 'z'));
+    const t = D.tabela(Object.assign(d, { de: '2026-01-01', ate: '2026-02-28', intervalo: 'mensal' }));
+    assert.strictEqual(linha(t, 'cat:z').inativa, true);
+    assert.strictEqual(linha(t, 'cat:z').total, 700);
+    assert.strictEqual(linha(t, 'cat:y'), undefined);
+    assert.strictEqual(linha(t, 'despesas').total, 11000 + 700);
+});
+
+test('tabela: valores de cada linha batem com calcular de cada mês', () => {
+    const d = dadosAH();
+    d.contas_pagar.push(cpc(7, 300, '2026-07-04', 'd'), cpc(8, 90, '2026-12-31', 'k'));
+    d.contas_receber.push(crc(9, 100, '2026-06-30', 'c'));
+    const t = D.tabela(Object.assign({}, d, { de: '2026-01-01', ate: '2026-12-31', intervalo: 'mensal' }));
+    assert.strictEqual(t.periodos.length, 12);
+    t.periodos.forEach((per, i) => {
+        const c = D.calcular(Object.assign({}, d, { de: per.de, ate: per.ate }));
+        Object.keys(c.linhas).forEach(k => assert.strictEqual(linha(t, k).valores[i], c.linhas[k], k + ' ' + per.rotulo));
+        Object.keys(c.porCategoria).forEach(k => assert.strictEqual(linha(t, 'cat:' + k).valores[i], c.porCategoria[k]));
+    });
+    const anual = D.calcular(Object.assign({}, d, { de: '2026-01-01', ate: '2026-12-31' }));
+    Object.keys(anual.linhas).forEach(k => assert.strictEqual(linha(t, k).total, anual.linhas[k]));
+});
+
+test('periodos: virada de ano e fevereiro bissexto', () => {
+    const p = D.periodos('2025-12-15', '2026-02-10', 'mensal');
+    assert.deepStrictEqual(p, [
+        { rotulo: '15/12–31/12', de: '2025-12-15', ate: '2025-12-31' },
+        { rotulo: 'Jan/26', de: '2026-01-01', ate: '2026-01-31' },
+        { rotulo: '01/02–10/02', de: '2026-02-01', ate: '2026-02-10' }
+    ]);
+    const b = D.periodos('2028-02-01', '2028-02-29', 'mensal');
+    assert.deepStrictEqual(b, [{ rotulo: 'Fev/28', de: '2028-02-01', ate: '2028-02-29' }]);
+    assert.strictEqual(D.periodos('2028-01-01', '2028-12-31', 'mensal')[1].ate, '2028-02-29');
+});
+
+test('tabela: despesas com categoria em subgrupo e sem subgrupo; margem_pct nula sem receita; AV sem -0', () => {
+    const t = D.tabela({ regime: 'competencia', de: '2026-01-01', ate: '2026-02-28', intervalo: 'mensal',
+        categorias: [catDre('d1', 'Aluguel', 'despesas', 'saida', { subgrupo_id: 'sub_fix' }), catDre('d2', 'Avulsa', 'despesas', 'saida')],
+        contas_pagar: [cpc(1, 100, '2026-01-10', 'd1'), cpc(2, 50, '2026-02-10', 'd2')] });
+    assert.deepStrictEqual([linha(t, 'cat:d1').nivel, linha(t, 'cat:d1').pai], [2, 'sub:sub_fix']);
+    assert.deepStrictEqual([linha(t, 'cat:d2').nivel, linha(t, 'cat:d2').pai], [1, 'despesas']);
+    assert.strictEqual(linha(t, 'sub:sub_fix').total, 100);
+    assert.deepStrictEqual(linha(t, 'margem_pct').valores, [null, null]);
+    assert.strictEqual(linha(t, 'margem_pct').total, null);
+    const av = D.analiseVertical({ linhas: [{ chave: 'receitas', tipo: 'grupo', valores: [100000] }, { chave: 'x', tipo: 'calculada', valores: [-1] }] });
+    assert.ok(Object.is(av.x[0], 0));
+});
+
+test('tabela: subgrupo de custos e de receitas (grupo > subgrupo > categoria; sem subgrupo direto; vazio some)', () => {
+    const t = D.tabela({ regime: 'competencia', de: '2026-01-01', ate: '2026-01-31', intervalo: 'mensal',
+        subgrupos: [{ id: 'sub_mp', nome: 'Matéria-prima', grupo: 'custos' }, { id: 'sub_vz', nome: 'Vazio', grupo: 'custos' }, { id: 'sub_rv', nome: 'Revenda', grupo: 'receitas' }],
+        categorias: [catDre('k', 'Tecido', 'custos', 'saida', { subgrupo_id: 'sub_mp' }), catDre('k2', 'Costureira', 'custos', 'saida'),
+            catDre('r', 'Cortinas', 'receitas', 'entrada', { subgrupo_id: 'sub_rv' })],
+        contas_receber: [crc(1, 900, '2026-01-10', 'r')],
+        contas_pagar: [cpc(1, 100, '2026-01-10', 'k'), cpc(2, 40, '2026-01-10', 'k2')] });
+    assert.deepStrictEqual([linha(t, 'sub:sub_mp').pai, linha(t, 'sub:sub_mp').nivel, linha(t, 'sub:sub_mp').total, linha(t, 'sub:sub_mp').sinal], ['custos', 1, 100, 'saida']);
+    assert.deepStrictEqual([linha(t, 'cat:k').pai, linha(t, 'cat:k').nivel], ['sub:sub_mp', 2]);
+    assert.deepStrictEqual([linha(t, 'cat:k2').pai, linha(t, 'cat:k2').nivel], ['custos', 1]);
+    assert.strictEqual(linha(t, 'sub:sub_vz'), undefined);
+    assert.deepStrictEqual([linha(t, 'sub:sub_rv').pai, linha(t, 'sub:sub_rv').total, linha(t, 'sub:sub_rv').sinal], ['receitas', 900, 'entrada']);
+    assert.strictEqual(linha(t, 'custos').total, 140);
+});

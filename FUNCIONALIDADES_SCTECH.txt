@@ -1224,8 +1224,27 @@ Na janela do carrinho:
     linha destacada. Calculado na hora: some ao pagar, receber ou cancelar.
   - Cadastro de conta (Configurar Empresa › Preferências › Contas): campos novos Banco (lista dos mais comuns +
     Outro), Agência, Número da conta e Tipo da conta (corrente, poupança, caixa, cartão).
-  - Fluxo de caixa mostra o Extrato de sempre (versão provisória) e DRE mostra
-    "Em construção: chega na próxima atualização."
+  - Fluxo de caixa mostra o Extrato de sempre (versão provisória).
+  - DRE — Resultado da empresa: tabela do ano (Jan a Dez + Total), Regime Caixa | Competência e seletor de Ano.
+    Começa recolhida (grupos e linhas calculadas); o + abre os filhos diretos do grupo (subgrupos abrem de novo).
+    Receitas, Custos, Margem de contribuição (+ % margem), Despesas (variáveis, fixas, outras), Resultado
+    operacional, Investimento, Financiamento e RESULTADO LÍQUIDO. Valores inteiros; saídas e resultados negativos
+    ficam entre parênteses em vermelho; a primeira coluna fica fixa ao rolar a tabela.
+  - Clique no valor de uma categoria: janela com os lançamentos do mês (data, descrição, pessoa, valor e total);
+    clicar numa linha abre o lançamento em Lançamentos.
+  - Botão Categorias (só com permissão completa na DRE): renomear, mover de subgrupo, ativar/desativar, excluir
+    (só sem lançamentos), + Nova categoria e + Novo subgrupo. Categoria desativada some dos formulários de
+    lançamento, mas continua na DRE se tiver valor (marcada "(inativa)"). Nome repetido no grupo é recusado.
+  - Relatórios: tela cheia com Análise Vertical | Horizontal. Filtros: Visualizar por (Caixa | Competência),
+    Intervalo (Mensal, Trimestral, Semestral, Anual, Personalizado) e Período de/até (padrão: 1º de janeiro até hoje).
+    Mesmos grupos expansíveis da DRE, com investimento, financiamento e resultado líquido. Vertical: valor + AV%
+    (receitas = 100%; sem receita mostra —). Horizontal: valor + AH% contra o período anterior, com seta ↑/↓,
+    verde (favorável) ou vermelho (desfavorável; custos e despesas ao contrário), — sem base e "> 999%".
+    Período que não começa no dia 1 mostra as datas (ex.: 15/01–31/01). Clique no valor de uma categoria abre os lançamentos.
+  - PDF, Excel e Imprimir (na DRE e nos relatórios): Imprimir abre a janela de impressão (A4 paisagem, documento claro,
+    empresa, título, regime e período, todas as categorias expandidas); PDF é a mesma janela com a dica para escolher
+    "Salvar como PDF" na impressora. Excel baixa DRE_<regime>_<ano>.xlsx ou Analise_<vertical|horizontal>_<de>_<ate>.xlsx,
+    uma aba, números como número (saídas negativas); sem internet avisa para verificar a conexão.
   - Lançamentos: seletor Contas a pagar | Contas a receber (| Recorrências, para quem tem essa permissão), cada
     lado com a permissão de hoje (visualizar para ver; completo para criar, editar, dar baixa, cancelar, excluir).
     * Barra: busca, Status (Todos, Em aberto, Vencido, Pago/Recebido, Cancelado), Cliente/Fornecedor, Categoria,
