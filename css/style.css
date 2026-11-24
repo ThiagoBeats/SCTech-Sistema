@@ -3203,6 +3203,7 @@ html[data-theme="dark"] .dre-tabela td.dre-desfav { color: #FF8A7A; }
 .fluxo-rel-tabela { min-width: 520px; }
 .fluxo-rel-tabela th[scope="row"] { text-align: left; font-weight: inherit; background: transparent; color: inherit; border-radius: 0; }
 .fluxo-rel-forte th, .fluxo-rel-forte td { font-weight: 700; background: var(--surface-2); }
+.fluxo-rel-semi th, .fluxo-rel-semi td { font-weight: 600; }
 .fluxo-rel-vazio th { color: var(--muted); font-style: italic; }
 .fluxo-rel-seg { flex-wrap: wrap; }
 @media (max-width: 900px) { .fluxo-kpis { grid-template-columns: 1fr 1fr; } }

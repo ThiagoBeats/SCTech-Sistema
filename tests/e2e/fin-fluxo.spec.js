@@ -291,10 +291,37 @@ test('relatorio Entradas e saidas por categoria: Aluguel 200, Vendas 500 e expor
     await page.waitForFunction(() => window.__xlsx);
     const x = await page.evaluate(() => window.__xlsx);
     expect(x.nome).toBe('Fluxo_categoria_2026-11-01_2026-11-30.xlsx');
+    expect(x.wb.abas[0].aoa.some(l => String(l[0]).includes('Regime'))).toBe(false);
     const aoa = x.wb.abas[0].aoa;
     expect(aoa.some(l => String(l[0]).trim() === 'Aluguel' && l[1] === 200)).toBe(true);
-    expect(aoa.some(l => String(l[0]).includes('Regime: Caixa'))).toBe(true);
-    expect(aoa.some(l => String(l[0]).includes('Período: 01/11/2026 a 30/11/2026'))).toBe(true);
+    expect(aoa.some(l => String(l[0]).includes('Período: 01/11/2026 a 30/11/2026 · Todas as contas'))).toBe(true);
+    expect(aoa.some(l => String(l[0]).includes('não é a DRE'))).toBe(true);
+});
+
+test('relatorio por categoria fecha com os cartoes: aporte de 10.000 (so caixa) entra, com e sem filtro de conta', async ({ page }) => {
+    const aporte = { id: 3, cliente_nome: 'Socio', descricao: 'Aporte', valor: 10000, status: 'Pago', data_vencimento: '2026-11-08', data_pagamento: '2026-11-08', data_competencia: '2026-11-08', categoria_id: 'cat_aporte', conta_id: 1, historico: hist };
+    const mAporte = { id: 6, conta_id: 1, data: '2026-11-08', sentido: 'entrada', valor: 10000, origem: 'cr', origem_id: 3, grupo_id: null, descricao: 'Aporte' };
+    const ajuste = { id: 7, conta_id: 2, data: '2026-11-15', sentido: 'saida', valor: 20, origem: 'ajuste', origem_id: null, grupo_id: null, descricao: 'Ajuste' };
+    await abrir(page, { ...DADOS, sc_cr: [...CR, aporte], sc_mov_fin: [...MOVS, mAporte, ajuste] });
+    await expect(valor(page, 'entradas')).toHaveText('R$ 10.500,00');
+    await expect(valor(page, 'saidas')).toHaveText('R$ 220,00');
+    await page.locator('#fluxo-btn-relatorios').click();
+    const tr = t => page.locator('#fluxo-rel-tabela tr', { hasText: t });
+    await expect(tr('Total de entradas')).toContainText('10.500,00');
+    await expect(tr('Total de saídas')).toContainText('220,00');
+    await expect(tr('Aporte de capital')).toContainText('10.000,00');
+    await expect(tr('Só caixa').first()).toContainText('10.000,00');
+    await expect(tr('Ajustes de saldo')).toContainText('20,00');
+    await expect(page.locator('#fluxo-rel-tabela')).not.toContainText('Transferências');
+    await page.locator('#fluxo-rel-fechar').click();
+    await page.locator('#fluxo-conta').selectOption('1');
+    await expect(valor(page, 'entradas')).toHaveText('R$ 10.500,00');
+    await expect(valor(page, 'saidas')).toHaveText('R$ 500,00');
+    await page.locator('#fluxo-btn-relatorios').click();
+    await expect(tr('Total de entradas')).toContainText('10.500,00');
+    await expect(tr('Total de saídas')).toContainText('500,00');
+    await expect(tr('Transferências')).toContainText('300,00');
+    await expect(page.locator('#fluxo-rel-meta')).toContainText('· A');
 });
 
 test('relatorio Contas a pagar e a receber por periodo: em aberto e pagas por vencimento', async ({ page }) => {

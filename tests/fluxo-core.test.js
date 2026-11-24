@@ -157,3 +157,26 @@ test('categoria filtra o realizado de CR e CP', () => {
     assert.strictEqual(r.saidas, 0);
     assert.strictEqual(r.previsto.entradas, 400);
 });
+
+test('porCategoria: fecha com resumo, inclui so caixa, ajuste e (com conta) transferencia', () => {
+    const p = base();
+    p.contasReceber.push({ id: 3, valor: 10000, status: 'Pago', data_vencimento: '2026-11-08', categoria_id: 'cat_aporte' });
+    p.movimentos.push({ id: 6, conta_id: 1, data: '2026-11-08', sentido: 'entrada', valor: 10000, origem: 'cr', origem_id: 3 });
+    p.movimentos.push({ id: 7, conta_id: 2, data: '2026-11-15', sentido: 'saida', valor: 20, origem: 'ajuste', origem_id: null });
+    const todas = FluxoCore.porCategoria(p), r = FluxoCore.resumo(p);
+    assert.strictEqual(todas.entradas, r.entradas);
+    assert.strictEqual(todas.saidas, r.saidas);
+    assert.strictEqual(todas.entradas, 10500);
+    const aporte = todas.linhas.find(l => l.id === 'cat_aporte');
+    assert.strictEqual(aporte.valor, 10000);
+    assert.strictEqual(aporte.natureza, 'so_caixa');
+    assert.strictEqual(todas.linhas.find(l => l.id === 'cat_aluguel').valor, 200);
+    assert.strictEqual(todas.linhas.find(l => l.especial === 'ajuste').valor, 20);
+    assert.ok(!todas.linhas.some(l => l.especial === 'transferencia'));
+    const a = Object.assign({}, p, { contaId: 1 });
+    const ra = FluxoCore.resumo(a), pa = FluxoCore.porCategoria(a);
+    assert.strictEqual(pa.entradas, ra.entradas);
+    assert.strictEqual(pa.saidas, ra.saidas);
+    assert.strictEqual(pa.linhas.find(l => l.especial === 'transferencia').valor, 300);
+    assert.strictEqual(pa.linhas.find(l => l.especial === 'transferencia').sentido, 'saida');
+});

@@ -224,7 +224,47 @@
         return linhas;
     }
 
-    const api = { resumo, serie, movimentacoes, pontos };
+    // Realizado do periodo agrupado pela categoria do lancamento (mesmos eventos de resumo: as somas fecham com
+    // entradas/saidas). Inclui categorias "so caixa", ajustes de saldo e (com uma conta filtrada) transferencias.
+    // Devolve { linhas: [{ sentido, chave, nome, grupo, subgrupo_id, natureza, especial, valor }], entradas, saidas, aberturas }.
+    // `especial`: null | 'ajuste' | 'transferencia' | 'sem_categoria'. Ignora categoriaId.
+    function porCategoria(p) {
+        p = p || {};
+        const F = fin();
+        const col = coletar(Object.assign({}, p, { categoriaId: null }));
+        const out = { linhas: [], entradas: 0, saidas: 0, aberturas: 0 };
+        if (!periodoOk(col)) return out;
+        const categorias = (p.categorias && p.categorias.length) ? p.categorias : F.categoriasPadrao().categorias;
+        const porId = new Map(categorias.map(c => [String(c.id), c]));
+        const mapa = new Map();
+        const somar = (sentido, chave, base, valor) => {
+            const k = sentido + '|' + chave;
+            if (!mapa.has(k)) mapa.set(k, Object.assign({ sentido, chave, valor: 0 }, base));
+            mapa.get(k).valor += valor;
+        };
+        col.realizado.forEach(e => {
+            if (e.abertura) { out.aberturas += e.ab; return; }
+            const sentido = e.ent > 0 ? 'entrada' : e.sai > 0 ? 'saida' : null;
+            if (!sentido) return;
+            const valor = sentido === 'entrada' ? e.ent : e.sai;
+            const m = e.mov || {};
+            const vazio = { nome: '', grupo: null, subgrupo_id: null, natureza: 'dre', especial: null };
+            if (m.origem === 'transferencia') return somar(sentido, 'transferencia', Object.assign({}, vazio, { nome: 'Transferências', especial: 'transferencia' }), valor);
+            if (m.origem === 'ajuste') return somar(sentido, 'ajuste', Object.assign({}, vazio, { nome: 'Ajustes de saldo', especial: 'ajuste' }), valor);
+            if (e.reg && (m.origem === 'cr' || m.origem === 'cp')) {
+                const c = porId.get(String(categoriaDe(e.reg, m.origem, porId)));
+                if (c) return somar(sentido, 'cat:' + c.id, { nome: c.nome, grupo: c.grupo || null, subgrupo_id: c.subgrupo_id || null, natureza: c.natureza || 'dre', especial: null, id: c.id }, valor);
+            }
+            somar(sentido, 'sem', Object.assign({}, vazio, { nome: 'Sem categoria', especial: 'sem_categoria' }), valor);
+        });
+        out.linhas = [...mapa.values()].map(l => Object.assign(l, { valor: arredondar(l.valor) }));
+        out.entradas = arredondar(out.linhas.filter(l => l.sentido === 'entrada').reduce((t, l) => t + l.valor, 0));
+        out.saidas = arredondar(out.linhas.filter(l => l.sentido === 'saida').reduce((t, l) => t + l.valor, 0));
+        out.aberturas = arredondar(out.aberturas);
+        return out;
+    }
+
+    const api = { resumo, serie, movimentacoes, pontos, porCategoria };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.FluxoCore = api;
 

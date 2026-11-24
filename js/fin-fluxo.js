@@ -217,27 +217,41 @@ const _fxRelTitulo = () => (_fxRelTipos.find(t => t[0] === finFluxoRel.tipo) || 
 // Cada relatorio devolve { cab: [{ t, num }], linhas: [{ cel: [texto], xl: [valor], forte }], periodoTxt, regime, nota }.
 function _fxRelCategoria() {
     const { de, ate } = finFluxoRel;
-    const calc = DreCore.calcular(_dreParams(de, ate, undefined, 'caixa'));
-    const cats = (db.fin_categorias && db.fin_categorias.categorias) || [];
-    const rot = _finRotulosCategorias(cats);
-    const total = id => CaixaCore.arredondar((calc.lancamentos[id] || []).reduce((s, x) => s + (Number(x.valor) || 0), 0));
-    const lado = tipo => cats.filter(c => c.tipo === tipo && (calc.lancamentos[c.id] || []).length).map(c => ({ nome: rot.get(String(c.id)), v: total(c.id) })).sort((a, b) => b.v - a.v);
-    const ent = lado('entrada'), sai = lado('saida');
-    const soma = l => CaixaCore.arredondar(l.reduce((s, x) => s + x.v, 0));
-    const te = soma(ent), ts = soma(sai);
+    const r = FluxoCore.porCategoria(_fxParams({ de, ate, categoriaId: '' }));
+    const subs = (db.fin_categorias && db.fin_categorias.subgrupos) || [];
+    const subNome = id => (subs.find(s => String(s.id) === String(id)) || {}).nome || '';
+    const ordem = FinCatCore.GRUPOS.slice().sort((a, b) => a.ordem - b.ordem).map(g => ({ id: g.id, rotulo: g.rotulo }))
+        .concat([{ id: 'so_caixa', rotulo: 'Só caixa' }, { id: 'ajuste' }, { id: 'transferencia' }, { id: 'sem' }]);
+    const grupoDe = l => l.especial === 'ajuste' ? 'ajuste' : l.especial === 'transferencia' ? 'transferencia' : l.especial === 'sem_categoria' ? 'sem' : l.natureza === 'so_caixa' ? 'so_caixa' : (l.grupo || 'sem');
+    const soma = l => CaixaCore.arredondar(l.reduce((s, x) => s + x.valor, 0));
     const linhas = [];
-    const bloco = (titulo, l, t, rotuloTotal) => {
-        linhas.push({ cel: [titulo, ''], xl: [titulo, ''], forte: true });
-        if (!l.length) linhas.push({ cel: ['Nenhum lançamento no período', ''], xl: ['Nenhum lançamento no período', ''], vazio: true });
-        l.forEach(x => linhas.push({ cel: [x.nome, _fxNum(x.v)], xl: [x.nome, x.v], nivel: 1 }));
-        linhas.push({ cel: [rotuloTotal, _fxNum(t)], xl: [rotuloTotal, t], forte: true });
+    const add = (nome, v, nivel, extra) => linhas.push(Object.assign({ cel: [nome, _fxNum(v)], xl: [nome, v], nivel }, extra));
+    const bloco = (titulo, sentido, total, rotuloTotal) => {
+        linhas.push({ cel: [titulo, ''], xl: [titulo, ''], forte: true, nivel: 0 });
+        const itens = r.linhas.filter(l => l.sentido === sentido).sort((a, b) => b.valor - a.valor);
+        if (!itens.length) linhas.push({ cel: ['Nenhum movimento no período', ''], xl: ['Nenhum movimento no período', ''], vazio: true, nivel: 1 });
+        ordem.forEach(g => {
+            const its = itens.filter(l => grupoDe(l) === g.id);
+            if (!its.length) return;
+            if (!g.rotulo) { its.forEach(l => add(l.nome, l.valor, 1)); return; }
+            add(g.rotulo, soma(its), 1, { semi: true });
+            its.filter(l => !l.subgrupo_id).forEach(l => add(l.nome, l.valor, 2));
+            [...new Set(its.filter(l => l.subgrupo_id).map(l => l.subgrupo_id))].forEach(sid => {
+                const doSub = its.filter(l => l.subgrupo_id === sid);
+                add(subNome(sid) || 'Outras', soma(doSub), 2, { semi: true });
+                doSub.forEach(l => add(l.nome, l.valor, 3));
+            });
+        });
+        linhas.push({ cel: [rotuloTotal, _fxNum(total)], xl: [rotuloTotal, total], forte: true, nivel: 0 });
     };
-    bloco('Entradas', ent, te, 'Total de entradas');
-    bloco('Saídas', sai, ts, 'Total de saídas');
-    const res = CaixaCore.arredondar(te - ts);
-    linhas.push({ cel: ['Entradas menos saídas', _fxNum(res)], xl: ['Entradas menos saídas', res], forte: true });
-    return { cab: [{ t: 'Categoria' }, { t: 'Valor (R$)', num: true }], linhas, periodoTxt: _fxDataBr(de) + ' a ' + _fxDataBr(ate), regime: 'Caixa',
-        nota: 'Mesma base da DRE no regime Caixa: valores pela data em que o dinheiro entrou ou saiu. Transferências entre contas não entram.' };
+    bloco('Entradas', 'entrada', r.entradas, 'Total de entradas');
+    bloco('Saídas', 'saida', r.saidas, 'Total de saídas');
+    const res = CaixaCore.arredondar(r.entradas - r.saidas);
+    linhas.push({ cel: ['Entradas menos saídas', _fxNum(res)], xl: ['Entradas menos saídas', res], forte: true, nivel: 0 });
+    if (r.aberturas) add('Saldo inicial de contas abertas no período (não é entrada)', r.aberturas, 0);
+    const conta = finFluxo.contaId !== '' ? (getContasFin().find(c => CaixaCore.mesmoId(c.id, finFluxo.contaId)) || {}).nome || 'Conta' : 'Todas as contas';
+    return { cab: [{ t: 'Categoria' }, { t: 'Valor (R$)', num: true }], linhas, periodoTxt: _fxDataBr(de) + ' a ' + _fxDataBr(ate) + ' · ' + conta, regime: '',
+        nota: 'Dinheiro que entrou e saiu das contas no período (não é a DRE).' };
 }
 
 function _fxRelContas() {
@@ -308,8 +322,8 @@ function abrirRelatoriosFluxo() {
             </div></div>
         <div class="lanc-barra dre-barra">
             <div class="form-group fluxo-rel-tipos"><label>Relatório</label><div class="dre-seg fluxo-rel-seg" role="group" aria-label="Relatório">${_fxRelTipos.map(tipo).join('')}</div></div>
-            <div class="form-group" id="fluxo-rel-grupo-de"><label for="fluxo-rel-de">Período de</label><input type="date" id="fluxo-rel-de" value="${finFluxoRel.de}" onchange="finFluxoRelMudar('de', this.value)"></div>
-            <div class="form-group" id="fluxo-rel-grupo-ate"><label for="fluxo-rel-ate">até</label><input type="date" id="fluxo-rel-ate" value="${finFluxoRel.ate}" onchange="finFluxoRelMudar('ate', this.value)"></div>
+            <div class="form-group" id="fluxo-rel-grupo-de"><label for="fluxo-rel-de">Período de</label><input type="date" id="fluxo-rel-de" value="${escapeHtml(finFluxoRel.de)}" onchange="finFluxoRelMudar('de', this.value)"></div>
+            <div class="form-group" id="fluxo-rel-grupo-ate"><label for="fluxo-rel-ate">até</label><input type="date" id="fluxo-rel-ate" value="${escapeHtml(finFluxoRel.ate)}" onchange="finFluxoRelMudar('ate', this.value)"></div>
         </div>
         <div id="fluxo-rel-corpo"></div></div>`;
     document.body.appendChild(o);
@@ -341,7 +355,7 @@ function _fxRelRender() {
     const d = _fxRelDados();
     corpo.innerHTML = `<p class="lanc-sub" id="fluxo-rel-meta">${d.regime ? 'Regime: ' + escapeHtml(d.regime) + ' · ' : ''}Período: ${escapeHtml(d.periodoTxt)}</p>
         <div class="lanc-tabela"><table class="fluxo-tabela fluxo-rel-tabela" id="fluxo-rel-tabela"><thead><tr>${d.cab.map(c => `<th class="${c.num ? 'fluxo-num' : ''}">${escapeHtml(c.t)}</th>`).join('')}</tr></thead>
-        <tbody>${d.linhas.map(l => `<tr class="${l.forte ? 'fluxo-rel-forte' : ''}${l.vazio ? ' fluxo-rel-vazio' : ''}">${l.cel.map((c, i) => `<${i === 0 ? 'th scope="row"' : 'td'} class="${d.cab[i].num ? 'fluxo-num' : ''}"${i === 0 && l.nivel ? ' style="padding-left:24px"' : ''}>${escapeHtml(c)}</${i === 0 ? 'th' : 'td'}>`).join('')}</tr>`).join('')}</tbody></table></div>
+        <tbody>${d.linhas.map(l => `<tr class="${l.forte ? 'fluxo-rel-forte' : ''}${l.semi ? ' fluxo-rel-semi' : ''}${l.vazio ? ' fluxo-rel-vazio' : ''}">${l.cel.map((c, i) => `<${i === 0 ? 'th scope="row"' : 'td'} class="${d.cab[i].num ? 'fluxo-num' : ''}"${i === 0 && l.nivel ? ` style="padding-left:${8 + l.nivel * 16}px"` : ''}>${escapeHtml(c)}</${i === 0 ? 'th' : 'td'}>`).join('')}</tr>`).join('')}</tbody></table></div>
         <p class="lanc-sub" style="margin-top:8px">${escapeHtml(d.nota)}</p>`;
 }
 
@@ -349,7 +363,7 @@ function _fxRelImprimirAgora(dica) {
     if (!_fxRelPeriodoOk()) { toast('Período inválido.', 'info'); return; }
     const d = _fxRelDados();
     const tabela = `<table><thead><tr>${d.cab.map(c => `<th style="text-align:${c.num ? 'right' : 'left'}">${escapeHtml(c.t)}</th>`).join('')}</tr></thead><tbody>${d.linhas.map(l =>
-        `<tr style="${l.forte ? 'font-weight:700;background:#F0F2F5;' : ''}">${l.cel.map((c, i) => `<td style="text-align:${d.cab[i].num ? 'right' : 'left'};${i === 0 && l.nivel ? 'padding-left:20px;' : ''}">${escapeHtml(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>
+        `<tr style="${l.forte ? 'font-weight:700;background:#F0F2F5;' : l.semi ? 'font-weight:600;' : ''}">${l.cel.map((c, i) => `<td style="text-align:${d.cab[i].num ? 'right' : 'left'};${i === 0 && l.nivel ? 'padding-left:' + (6 + l.nivel * 14) + 'px;' : ''}">${escapeHtml(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>
         <p style="color:#555;margin-top:8px">${escapeHtml(d.nota)}</p>`;
     _dreAbrirImpressao(_fxRelTitulo(), `${d.regime ? 'Regime: ' + escapeHtml(d.regime) + ' &nbsp;·&nbsp; ' : ''}Período: ${escapeHtml(d.periodoTxt)}`, tabela, dica);
 }
@@ -362,7 +376,7 @@ function exportarRelatorioFluxoExcel() {
     const aoa = [[emp.nome_fantasia || emp.razao_social || 'SCTech'], [_fxRelTitulo()]];
     if (d.regime) aoa.push(['Regime: ' + d.regime]);
     aoa.push(['Período: ' + d.periodoTxt], [], d.cab.map(c => c.t));
-    d.linhas.forEach(l => aoa.push(l.xl.map((v, i) => (typeof v === 'number' ? v : (i === 0 && l.nivel ? '  ' : '') + v))));
+    d.linhas.forEach(l => aoa.push(l.xl.map((v, i) => (typeof v === 'number' ? v : (i === 0 && l.nivel ? ' '.repeat(2 * l.nivel) : '') + v))));
     aoa.push([], [d.nota]);
     const sufixo = finFluxoRel.tipo === 'evolucao' ? hojeLocal() : finFluxoRel.de + '_' + finFluxoRel.ate;
     return _dreBaixarExcel('Fluxo_' + finFluxoRel.tipo + '_' + sufixo + '.xlsx', _fxRelTitulo().slice(0, 31), aoa);
