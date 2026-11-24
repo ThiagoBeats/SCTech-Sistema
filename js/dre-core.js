@@ -201,7 +201,7 @@
         grupoSimples('custos', 'saida');
         calculada('margem', 'Margem de contribuição');
         const rec = dosGrupo('receitas'), mar = dosGrupo('margem');
-        const pct = (a, b) => b === 0 ? 0 : arredondar(a / b * 100);
+        const pct = (a, b) => b === 0 ? null : arredondar(a / b * 100);
         linhas.push({ chave: 'margem_pct', tipo: 'percentual', nivel: 0, id: 'margem_pct', rotulo: '% margem de contribuição', pai: null, sinal: 'resultado',
             valores: mar.map((v, i) => pct(v, rec[i])), total: pct(soma(mar), soma(rec)) });
 
@@ -225,7 +225,7 @@
         const out = {};
         const rec = ((tab.linhas || []).find(l => l.chave === 'receitas') || { valores: [] }).valores;
         (tab.linhas || []).forEach(l => {
-            out[l.chave] = l.valores.map((v, i) => (l.tipo === 'percentual' || !rec[i]) ? null : Math.round(v / rec[i] * 1000) / 10);
+            out[l.chave] = l.valores.map((v, i) => (l.tipo === 'percentual' || !rec[i]) ? null : (Math.round(v / rec[i] * 1000) / 10) || 0);
         });
         return out;
     }
