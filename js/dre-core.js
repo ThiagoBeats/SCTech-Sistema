@@ -138,7 +138,114 @@
         return arredondar((num(atual) - b) / Math.abs(b) * 100);
     }
 
-    const api = { calcular, calcularMeses, ticketMedio, periodoAnterior, variacao };
+
+    // ---- Tabela por periodos + analises vertical/horizontal (so montagem sobre calcular) ----
+    const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const dm = d => d.slice(8, 10) + '/' + d.slice(5, 7);
+    const dma = d => dm(d) + '/' + d.slice(2, 4);
+
+    function periodos(de, ate, intervalo) {
+        const valido = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d);
+        if (!valido(de) || !valido(ate) || de > ate) return [];
+        de = dia10(de); ate = dia10(ate);
+        const tam = { mensal: 1, trimestral: 3, semestral: 6, anual: 12 }[intervalo];
+        if (!tam) return [{ rotulo: dma(de) + '–' + dma(ate), de, ate }];
+        const out = [];
+        let a = Number(de.slice(0, 4)), m = Math.floor((Number(de.slice(5, 7)) - 1) / tam) * tam + 1;
+        for (;;) {
+            const ini = iso(a, m, 1);
+            if (ini > ate) break;
+            const mf = m + tam - 1;
+            const fim = iso(a, mf, ultimoDia(a, mf));
+            const pde = ini < de ? de : ini, pate = fim > ate ? ate : fim;
+            let rotulo;
+            if (pde !== ini || pate !== fim) rotulo = dm(pde) + '–' + dm(pate);
+            else if (tam === 1) rotulo = MESES[m - 1] + '/' + String(a).slice(2);
+            else if (tam === 3) rotulo = ((m - 1) / 3 + 1) + 'º tri/' + String(a).slice(2);
+            else if (tam === 6) rotulo = ((m - 1) / 6 + 1) + 'º sem/' + String(a).slice(2);
+            else rotulo = String(a);
+            out.push({ rotulo, de: pde, ate: pate });
+            m += tam;
+            if (m > 12) { m = 1; a++; }
+        }
+        return out;
+    }
+
+    function tabela(p) {
+        p = p || {};
+        const F = fin();
+        const padrao = F.categoriasPadrao();
+        const categorias = (p.categorias && p.categorias.length) ? p.categorias : padrao.categorias;
+        const subs = p.subgrupos && p.subgrupos.length ? p.subgrupos : padrao.subgrupos;
+        const pers = periodos(p.de, p.ate, p.intervalo);
+        const calc = pers.map(per => calcular(Object.assign({}, p, { de: per.de, ate: per.ate })));
+        const soma = arr => arredondar(arr.reduce((t, v) => t + v, 0));
+        const linhas = [];
+        const add = (chave, tipo, nivel, id, rotulo, pai, sinal, valores, extra) => {
+            linhas.push(Object.assign({ chave, tipo, nivel, id, rotulo, pai, sinal, valores, total: soma(valores) }, extra || {}));
+        };
+        const dosGrupo = k => calc.map(c => c.linhas[k]);
+        const rotuloGrupo = id => (F.GRUPOS.find(g => g.id === id) || {}).rotulo || id;
+        const catsDe = g => categorias.filter(c => c.grupo === g && c.natureza !== 'so_caixa').map(c => {
+            const valores = calc.map(r => r.porCategoria[c.id] || 0);
+            return { c, valores, visivel: c.ativo !== false || valores.some(v => v !== 0) };
+        }).filter(x => x.visivel);
+        const addCat = (x, nivel, pai, sinal) => add('cat:' + x.c.id, 'categoria', nivel, x.c.id, x.c.nome, pai, sinal, x.valores, x.c.ativo === false ? { inativa: true } : null);
+        const grupoSimples = (g, sinal) => {
+            add(g, 'grupo', 0, g, rotuloGrupo(g), null, sinal === 'entrada' || sinal === 'saida' ? sinal : 'resultado', dosGrupo(g));
+            catsDe(g).forEach(x => addCat(x, 1, g, sinal));
+        };
+        const calculada = (k, rotulo) => add(k, 'calculada', 0, k, rotulo, null, 'resultado', dosGrupo(k));
+
+        grupoSimples('receitas', 'entrada');
+        grupoSimples('custos', 'saida');
+        calculada('margem', 'Margem de contribuição');
+        const rec = dosGrupo('receitas'), mar = dosGrupo('margem');
+        const pct = (a, b) => b === 0 ? 0 : arredondar(a / b * 100);
+        linhas.push({ chave: 'margem_pct', tipo: 'percentual', nivel: 0, id: 'margem_pct', rotulo: '% margem de contribuição', pai: null, sinal: 'resultado',
+            valores: mar.map((v, i) => pct(v, rec[i])), total: pct(soma(mar), soma(rec)) });
+
+        add('despesas', 'grupo', 0, 'despesas', rotuloGrupo('despesas'), null, 'saida', dosGrupo('despesas'));
+        const cd = catsDe('despesas');
+        subs.filter(s => s.grupo === 'despesas').forEach(s => {
+            add('sub:' + s.id, 'subgrupo', 1, s.id, s.nome, 'despesas', 'saida', calc.map(r => r.porSubgrupo[s.id] || 0));
+            cd.filter(x => x.c.subgrupo_id === s.id).forEach(x => addCat(x, 2, 'sub:' + s.id, 'saida'));
+        });
+        const idsSub = new Set(subs.map(s => s.id));
+        cd.filter(x => !x.c.subgrupo_id || !idsSub.has(x.c.subgrupo_id)).forEach(x => addCat(x, 1, 'despesas', 'saida'));
+
+        calculada('resultadoOperacional', 'Resultado operacional');
+        grupoSimples('investimento', 'resultado');
+        grupoSimples('financiamento', 'resultado');
+        calculada('liquido', 'RESULTADO LÍQUIDO');
+        return { periodos: pers, linhas };
+    }
+
+    function analiseVertical(tab) {
+        const out = {};
+        const rec = ((tab.linhas || []).find(l => l.chave === 'receitas') || { valores: [] }).valores;
+        (tab.linhas || []).forEach(l => {
+            out[l.chave] = l.valores.map((v, i) => (l.tipo === 'percentual' || !rec[i]) ? null : Math.round(v / rec[i] * 1000) / 10);
+        });
+        return out;
+    }
+
+    function analiseHorizontal(tab) {
+        const out = {};
+        (tab.linhas || []).forEach(l => {
+            out[l.chave] = l.valores.map((v, i) => {
+                if (i === 0 || l.tipo === 'percentual') return { pct: null, acima999: false, seta: null, favoravel: null };
+                const ant = l.valores[i - 1], dif = v - ant;
+                const pct = variacao(v, ant);
+                const seta = dif > 0 ? 'up' : dif < 0 ? 'down' : null;
+                const favoravel = dif === 0 ? null : (l.sinal === 'saida' ? dif < 0 : dif > 0);
+                return { pct, acima999: pct != null && pct > 999, seta, favoravel };
+            });
+        });
+        return out;
+    }
+
+    const api = { calcular, calcularMeses, ticketMedio, periodoAnterior, variacao, periodos, tabela, analiseVertical, analiseHorizontal };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.DreCore = api;
 
