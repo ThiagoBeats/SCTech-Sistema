@@ -2315,6 +2315,11 @@ Campos:
   - Telefone / WhatsApp (text)
   - E-mail (email)
   - Site (text)
+  - Preferências › "💬 Mensagem de aviso de visita": texto enviado ao cliente pelo
+    WhatsApp nas Rotas do dia. Campos {cliente}, {empresa}, {servico} (medição ou
+    instalação), {dia} (hoje, amanhã ou no dia DD/MM), {horario} (às HH:MM, com
+    chegada prevista por volta de HH:MM, ou em horário a combinar) e {tecnico}.
+    Botões "💾 Salvar mensagem" e "↩ Restaurar padrão" (vazio volta ao padrão)
   - Botão "💾 Salvar Configurações"
   - Nota: "As informações serão aplicadas imediatamente em todos os documentos gerados"
 

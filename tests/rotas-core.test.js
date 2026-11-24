@@ -275,3 +275,34 @@ test('enderecoDePartes nao repete a cidade quando a Rua (texto antigo migrado) j
     assert.strictEqual(R.enderecoDePartes({ rua: 'Rua Curitiba, 5', cidade: 'Curitiba', uf: 'PR' }), 'Rua Curitiba, 5, Curitiba - PR');
     assert.deepStrictEqual(R.consultasGeo(p), ['Rua das Flores, 10 - Curitiba - PR, 80010-000', 'Rua das Flores, 10 - Curitiba - PR', '80010-000, Curitiba - PR']);
 });
+
+const _aviso = (o) => R.textoAvisoCliente('{cliente}|{empresa}|{servico}|{dia}|{horario}|{tecnico}', Object.assign(
+    { cliente: 'Ana', empresa: 'SC', tipo: 'med', data: '2026-11-25', hoje: '2026-11-23', hora: '14:00', previstaMin: null, tecnico: 'Léo' }, o));
+
+test('textoAvisoCliente: dia hoje, amanha ou data, e servico', () => {
+    assert.strictEqual(_aviso({ data: '2026-11-23' }), 'Ana|SC|medição|hoje|às 14:00|Léo');
+    assert.strictEqual(_aviso({ data: '2026-11-24', tipo: 'inst' }), 'Ana|SC|instalação|amanhã|às 14:00|Léo');
+    assert.strictEqual(_aviso({}), 'Ana|SC|medição|no dia 25/11|às 14:00|Léo');
+    assert.strictEqual(_aviso({ data: '2026-12-01', hoje: '2026-11-30' }), 'Ana|SC|medição|amanhã|às 14:00|Léo');
+});
+
+test('textoAvisoCliente: horario agendado, previsao arredondada para cima e sem horario', () => {
+    assert.ok(_aviso({ previstaMin: 14 * 60 + 37 }).includes('com chegada prevista por volta de 14:40'));
+    assert.ok(_aviso({ previstaMin: 14 * 60 + 40 }).includes('com chegada prevista por volta de 14:40'));
+    assert.ok(_aviso({ hora: '', previstaMin: null }).includes('em horário a combinar'));
+});
+
+test('textoAvisoCliente: placeholders desconhecidos ficam, tecnico vazio, padrao', () => {
+    assert.strictEqual(R.textoAvisoCliente('Oi {cliente} {xyz} [{tecnico}]', { cliente: 'Ana', data: '2026-11-25', hoje: '2026-11-23' }), 'Oi Ana {xyz} []');
+    const t = R.textoAvisoCliente(R.MENSAGEM_AVISO_PADRAO, { cliente: 'Ana', empresa: 'SC', tipo: 'med', data: '2026-11-24', hoje: '2026-11-23', hora: '09:30' });
+    assert.strictEqual(t, 'Olá, Ana! Aqui é da SC. Passando para confirmar a sua medição amanhã, às 09:30. Qualquer dúvida, é só responder esta mensagem.');
+});
+
+test('avisoValido: so vale para o mesmo agendamento', () => {
+    const av = { data: '2026-11-25', hora: '14:00' };
+    assert.strictEqual(R.avisoValido(av, '2026-11-25', '14:00'), true);
+    assert.strictEqual(R.avisoValido(av, '2026-11-25', '15:00'), false);
+    assert.strictEqual(R.avisoValido(av, '2026-11-26', '14:00'), false);
+    assert.strictEqual(R.avisoValido(null, '2026-11-25', '14:00'), false);
+    assert.strictEqual(R.avisoValido(undefined, '2026-11-25', ''), false);
+});

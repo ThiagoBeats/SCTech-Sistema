@@ -348,7 +348,36 @@
         return lista.filter((x, i) => x && lista.indexOf(x) === i);
     }
 
-    const api = { enderecoDePartes, consultasGeo, linkIrPara, linksRota, enderecoCompleto, normalizarEndereco, ordemDoTrip, melhorOrdemAberta, trechosDaRota, calcularChegadas, melhorOrdemPorTempo, situacaoEncaixe,
+    // Aviso de visita ao cliente pelo WhatsApp.
+    const MENSAGEM_AVISO_PADRAO = 'Olá, {cliente}! Aqui é da {empresa}. Passando para confirmar a sua {servico} {dia}, {horario}. Qualquer dúvida, é só responder esta mensagem.';
+    function _diasISO(iso) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+        return m ? Math.round(Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000) : NaN;
+    }
+    function textoAvisoCliente(template, d) {
+        d = d || {};
+        const dif = _diasISO(d.data) - _diasISO(d.hoje);
+        const dia = dif === 0 ? 'hoje' : dif === 1 ? 'amanhã'
+            : 'no dia ' + String(d.data || '').slice(8, 10) + '/' + String(d.data || '').slice(5, 7);
+        let horario = 'em horário a combinar';
+        if (d.previstaMin != null && Number.isFinite(+d.previstaMin)) {
+            horario = 'com chegada prevista por volta de ' + hhmm(Math.ceil(+d.previstaMin / 5) * 5);
+        } else if (d.hora) {
+            horario = 'às ' + d.hora;
+        }
+        const v = {
+            cliente: d.cliente || '', empresa: d.empresa || '',
+            servico: d.tipo === 'inst' ? 'instalação' : 'medição',
+            dia, horario, tecnico: d.tecnico || ''
+        };
+        return String(template == null || template === '' ? MENSAGEM_AVISO_PADRAO : template)
+            .replace(/\{(\w+)\}/g, (x, k) => Object.prototype.hasOwnProperty.call(v, k) ? v[k] : x);
+    }
+    function avisoValido(aviso, data, hora) {
+        return !!aviso && aviso.data === data && (aviso.hora || '') === (hora || '');
+    }
+
+    const api = { MENSAGEM_AVISO_PADRAO, textoAvisoCliente, avisoValido, enderecoDePartes, consultasGeo, linkIrPara, linksRota, enderecoCompleto, normalizarEndereco, ordemDoTrip, melhorOrdemAberta, trechosDaRota, calcularChegadas, melhorOrdemPorTempo, situacaoEncaixe,
         linhaObsRota, aplicarObsRota, textoWhatsRota, fmtDur, duracaoPorExtenso, fmtKm, hhmm, FOLGA_MIN };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.RotasCore = api;

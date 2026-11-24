@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Configurar Empresa - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261203a">
+    <link rel="stylesheet" href="css/style.css?v=20261204a">
     <style>
         .logo-upload-area {
             border: 2px dashed var(--border);
@@ -231,6 +231,21 @@
             </div>
         </div>
 
+        <div class="card" style="max-width:860px" id="emp-msg-aviso-card">
+            <h3 style="margin-bottom:6px;color:var(--primary)">💬 Mensagem de aviso de visita</h3>
+            <p style="font-size:12px;color:#8F8F8F;margin-bottom:14px">
+                Texto enviado ao cliente pelo WhatsApp para avisar da medição ou da instalação, nas Rotas do dia.
+                Use <strong>{cliente}</strong>, <strong>{empresa}</strong>, <strong>{servico}</strong> (medição ou instalação), <strong>{dia}</strong> (hoje, amanhã ou no dia DD/MM), <strong>{horario}</strong> e <strong>{tecnico}</strong>; eles são trocados pelos dados da visita.
+            </p>
+            <div class="form-group">
+                <textarea id="emp-msg-aviso" rows="4" aria-label="Mensagem de aviso de visita"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center">
+                <button class="btn btn-success" onclick="salvarMensagemAviso()">💾 Salvar mensagem</button>
+                <button class="btn btn-outline" onclick="restaurarMensagemAviso()">↩ Restaurar padrão</button>
+            </div>
+        </div>
+
         <div class="card" style="max-width:860px">
             <h3 style="margin-bottom:6px;color:var(--primary)">🔔 Preferências de Alertas</h3>
             <p style="font-size:12px;color:#8F8F8F;margin-bottom:16px">Escolha quais alertas devem ser exibidos no sistema. Alertas desabilitados mostrarão um indicador 🔕 no cabeçalho de todas as páginas.</p>
@@ -281,30 +296,30 @@
         </div>
 
     </main>
-    <script src="js/etiquetas-core.js?v=20261203a"></script>
-    <script src="js/etiquetas-render.js?v=20261203a"></script>
-    <script src="js/cortina-desenho.js?v=20261203a"></script>
-    <script src="js/docs-layout-core.js?v=20261203a"></script>
-    <script src="js/galeria-core.js?v=20261203a"></script>
-    <script src="js/galeria-imagens.js?v=20261203a"></script>
-    <script src="js/financeiro-core.js?v=20261203a"></script>
-    <script src="js/caixa-core.js?v=20261203a"></script>
-    <script src="js/carrinho-core.js?v=20261203a"></script>
-    <script src="js/resultado-core.js?v=20261203a"></script>
-    <script src="js/fechamento-core.js?v=20261203a"></script>
-    <script src="js/simulador-core.js?v=20261203a"></script>
-    <script src="js/rotas-core.js?v=20261203a"></script>
-    <script src="js/endereco-core.js?v=20261203a"></script>
-    <script src="js/agenda-core.js?v=20261203a"></script>
-    <script src="js/notificacoes.js?v=20261203a"></script>
-    <script src="js/feriados-core.js?v=20261203a"></script>
-    <script src="js/app.js?v=20261203a"></script>
-    <script src="js/agenda.js?v=20261203a"></script>
-    <script src="js/rotas.js?v=20261203a"></script>
-    <script src="js/compartilhar-doc.js?v=20261203a"></script>
-    <script src="js/etiquetas-editor.js?v=20261203a"></script>
-    <script src="js/docs-layout-editor.js?v=20261203a"></script>
-    <script src="js/galeria-mostruario.js?v=20261203a"></script>
+    <script src="js/etiquetas-core.js?v=20261204a"></script>
+    <script src="js/etiquetas-render.js?v=20261204a"></script>
+    <script src="js/cortina-desenho.js?v=20261204a"></script>
+    <script src="js/docs-layout-core.js?v=20261204a"></script>
+    <script src="js/galeria-core.js?v=20261204a"></script>
+    <script src="js/galeria-imagens.js?v=20261204a"></script>
+    <script src="js/financeiro-core.js?v=20261204a"></script>
+    <script src="js/caixa-core.js?v=20261204a"></script>
+    <script src="js/carrinho-core.js?v=20261204a"></script>
+    <script src="js/resultado-core.js?v=20261204a"></script>
+    <script src="js/fechamento-core.js?v=20261204a"></script>
+    <script src="js/simulador-core.js?v=20261204a"></script>
+    <script src="js/rotas-core.js?v=20261204a"></script>
+    <script src="js/endereco-core.js?v=20261204a"></script>
+    <script src="js/agenda-core.js?v=20261204a"></script>
+    <script src="js/notificacoes.js?v=20261204a"></script>
+    <script src="js/feriados-core.js?v=20261204a"></script>
+    <script src="js/app.js?v=20261204a"></script>
+    <script src="js/agenda.js?v=20261204a"></script>
+    <script src="js/rotas.js?v=20261204a"></script>
+    <script src="js/compartilhar-doc.js?v=20261204a"></script>
+    <script src="js/etiquetas-editor.js?v=20261204a"></script>
+    <script src="js/docs-layout-editor.js?v=20261204a"></script>
+    <script src="js/galeria-mostruario.js?v=20261204a"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             carregarEmpresaConfigs();

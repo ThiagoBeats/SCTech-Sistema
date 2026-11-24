@@ -3065,3 +3065,8 @@ td { transition: background-color .15s ease; }
 @media (prefers-reduced-motion: reduce) {
     .metric-card:hover, .kanban-card:hover, .ag-ev:hover, .index-card-3d.index-card-click:hover { transform: none; }
 }
+
+/* Botao de WhatsApp: icone oficial + texto alinhados */
+.btn-whats { display: inline-flex; align-items: center; gap: 6px; }
+.btn-whats .icone-whats { flex: none; display: block; }
+html[data-theme="dark"] .btn-whats { color: #E0E0E0; }
