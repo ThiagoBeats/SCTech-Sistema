@@ -191,10 +191,21 @@
             return { c, valores, visivel: c.ativo !== false || valores.some(v => v !== 0) };
         }).filter(x => x.visivel);
         const addCat = (x, nivel, pai, sinal) => add('cat:' + x.c.id, 'categoria', nivel, x.c.id, x.c.nome, pai, sinal, x.valores, x.c.ativo === false ? { inativa: true } : null);
-        const grupoSimples = (g, sinal) => {
+        // grupo -> subgrupos (so os que tem categoria visivel) -> categorias; categoria sem subgrupo fica direto no grupo.
+        const grupoComSub = (g, sinal) => {
             add(g, 'grupo', 0, g, rotuloGrupo(g), null, sinal === 'entrada' || sinal === 'saida' ? sinal : 'resultado', dosGrupo(g));
-            catsDe(g).forEach(x => addCat(x, 1, g, sinal));
+            const cg = catsDe(g);
+            const sg = subs.filter(s => s.grupo === g);
+            sg.forEach(s => {
+                const filhas = cg.filter(x => x.c.subgrupo_id === s.id);
+                if (!filhas.length) return;
+                add('sub:' + s.id, 'subgrupo', 1, s.id, s.nome, g, sinal, calc.map(r => r.porSubgrupo[s.id] || 0));
+                filhas.forEach(x => addCat(x, 2, 'sub:' + s.id, sinal));
+            });
+            const ids = new Set(sg.map(s => s.id));
+            cg.filter(x => !x.c.subgrupo_id || !ids.has(x.c.subgrupo_id)).forEach(x => addCat(x, 1, g, sinal));
         };
+        const grupoSimples = (g, sinal) => grupoComSub(g, sinal);
         const calculada = (k, rotulo) => add(k, 'calculada', 0, k, rotulo, null, 'resultado', dosGrupo(k));
 
         grupoSimples('receitas', 'entrada');
@@ -205,14 +216,7 @@
         linhas.push({ chave: 'margem_pct', tipo: 'percentual', nivel: 0, id: 'margem_pct', rotulo: '% margem de contribuição', pai: null, sinal: 'resultado',
             valores: mar.map((v, i) => pct(v, rec[i])), total: pct(soma(mar), soma(rec)) });
 
-        add('despesas', 'grupo', 0, 'despesas', rotuloGrupo('despesas'), null, 'saida', dosGrupo('despesas'));
-        const cd = catsDe('despesas');
-        subs.filter(s => s.grupo === 'despesas').forEach(s => {
-            add('sub:' + s.id, 'subgrupo', 1, s.id, s.nome, 'despesas', 'saida', calc.map(r => r.porSubgrupo[s.id] || 0));
-            cd.filter(x => x.c.subgrupo_id === s.id).forEach(x => addCat(x, 2, 'sub:' + s.id, 'saida'));
-        });
-        const idsSub = new Set(subs.map(s => s.id));
-        cd.filter(x => !x.c.subgrupo_id || !idsSub.has(x.c.subgrupo_id)).forEach(x => addCat(x, 1, 'despesas', 'saida'));
+        grupoComSub('despesas', 'saida');
 
         calculada('resultadoOperacional', 'Resultado operacional');
         grupoSimples('investimento', 'resultado');

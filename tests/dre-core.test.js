@@ -260,3 +260,18 @@ test('tabela: despesas com categoria em subgrupo e sem subgrupo; margem_pct nula
     const av = D.analiseVertical({ linhas: [{ chave: 'receitas', tipo: 'grupo', valores: [100000] }, { chave: 'x', tipo: 'calculada', valores: [-1] }] });
     assert.ok(Object.is(av.x[0], 0));
 });
+
+test('tabela: subgrupo de custos e de receitas (grupo > subgrupo > categoria; sem subgrupo direto; vazio some)', () => {
+    const t = D.tabela({ regime: 'competencia', de: '2026-01-01', ate: '2026-01-31', intervalo: 'mensal',
+        subgrupos: [{ id: 'sub_mp', nome: 'Matéria-prima', grupo: 'custos' }, { id: 'sub_vz', nome: 'Vazio', grupo: 'custos' }, { id: 'sub_rv', nome: 'Revenda', grupo: 'receitas' }],
+        categorias: [catDre('k', 'Tecido', 'custos', 'saida', { subgrupo_id: 'sub_mp' }), catDre('k2', 'Costureira', 'custos', 'saida'),
+            catDre('r', 'Cortinas', 'receitas', 'entrada', { subgrupo_id: 'sub_rv' })],
+        contas_receber: [crc(1, 900, '2026-01-10', 'r')],
+        contas_pagar: [cpc(1, 100, '2026-01-10', 'k'), cpc(2, 40, '2026-01-10', 'k2')] });
+    assert.deepStrictEqual([linha(t, 'sub:sub_mp').pai, linha(t, 'sub:sub_mp').nivel, linha(t, 'sub:sub_mp').total, linha(t, 'sub:sub_mp').sinal], ['custos', 1, 100, 'saida']);
+    assert.deepStrictEqual([linha(t, 'cat:k').pai, linha(t, 'cat:k').nivel], ['sub:sub_mp', 2]);
+    assert.deepStrictEqual([linha(t, 'cat:k2').pai, linha(t, 'cat:k2').nivel], ['custos', 1]);
+    assert.strictEqual(linha(t, 'sub:sub_vz'), undefined);
+    assert.deepStrictEqual([linha(t, 'sub:sub_rv').pai, linha(t, 'sub:sub_rv').total, linha(t, 'sub:sub_rv').sinal], ['receitas', 900, 'entrada']);
+    assert.strictEqual(linha(t, 'custos').total, 140);
+});

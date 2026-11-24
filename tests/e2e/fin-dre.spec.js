@@ -163,7 +163,13 @@ test('Categorias: renomear, mover de subgrupo, novo subgrupo e excluir so sem la
     await page.locator('#dre-btn-nova-cat').click();
     await page.fill('#dre-nc-nome', 'Brinde');
     await page.locator('#dre-nc-salvar').click();
-    await page.locator('.dre-cat-linha', { has: page.locator('input[value="Brinde"]') }).locator('.dre-cat-excluir').click();
+    const excluir = page.locator('.dre-cat-linha', { has: page.locator('input[value="Brinde"]') }).locator('.dre-cat-excluir');
+    await excluir.click();
+    await expect(page.locator('#sc-modal-msg')).toHaveText('Excluir a categoria Brinde?');
+    await page.locator('#sc-modal-cancel').click();
+    expect((await ler(page, 'sc_fin_cat')).categorias.some(x => x.nome === 'Brinde')).toBe(true);
+    await excluir.click();
+    await page.locator('#sc-modal-ok').click();
     expect((await ler(page, 'sc_fin_cat')).categorias.some(x => x.nome === 'Brinde')).toBe(false);
 });
 
@@ -229,4 +235,40 @@ test('celular 390px: sem rolagem horizontal da pagina e primeira coluna fixa; te
     const contraste = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + .05) / (y + .05); };
     expect(contraste(cores.texto, cores.fundo)).toBeGreaterThan(4.5);
     expect(contraste(cores.neg, cores.fundoNeg)).toBeGreaterThan(3);
+});
+
+test('subgrupo em Custos: criar, mover Tecido para ele e ver na tabela sob Custos', async ({ page }) => {
+    const cp = [{ id: 5, tipo: 'variavel', categoria: 'tecido', credor_nome: 'RC', descricao: 'Tecido de marco', valor: 700, status: 'Pago', data_vencimento: '2026-03-12', data_pagamento: '2026-03-12', data_competencia: '2026-03-12', categoria_id: 'cat_tecido', historico: hist }];
+    await abrir(page, { sc_cp: cp });
+    await page.locator('#dre-btn-categorias').click();
+    await page.locator('#dre-btn-novo-sub').click();
+    await page.fill('#dre-ns-nome', 'Matéria-prima');
+    await page.selectOption('#dre-ns-grupo', 'custos');
+    await page.locator('#dre-ns-salvar').click();
+    const mp = (await ler(page, 'sc_fin_cat')).subgrupos.find(x => x.nome === 'Matéria-prima');
+    expect(mp.grupo).toBe('custos');
+    await page.selectOption('.dre-cat-linha[data-id="cat_tecido"] .dre-cat-sub', mp.id);
+    await page.locator('#dre-cat-overlay .modal-close').click();
+    await abrirGrupo(page, 'custos');
+    await expect(linha(page, 'sub:' + mp.id)).toBeVisible();
+    await expect(celulas(page, 'sub:' + mp.id).nth(2)).toHaveText('(700)');
+    await expect(linha(page, 'cat:cat_tecido')).toHaveCount(0);
+    await expect(linha(page, 'cat:cat_costureira')).toBeVisible();
+    await abrirGrupo(page, 'sub:' + mp.id);
+    await expect(linha(page, 'cat:cat_tecido')).toBeVisible();
+});
+
+test('outra aba grava as categorias: a DRE aberta se redesenha', async ({ page }) => {
+    await abrir(page);
+    await abrirGrupo(page, 'despesas');
+    await expect(linha(page, 'sub:sub_fix')).toContainText('Despesas fixas');
+    await page.evaluate(() => {
+        const c = JSON.parse(localStorage.getItem('sc_fin_cat'));
+        c.subgrupos.find(s => s.id === 'sub_fix').nome = 'Fixas da loja';
+        const novo = JSON.stringify(c);
+        const antigo = localStorage.getItem('sc_fin_cat');
+        localStorage.setItem('sc_fin_cat', novo);
+        window.dispatchEvent(new StorageEvent('storage', { key: 'sc_fin_cat', newValue: novo, oldValue: antigo }));
+    });
+    await expect(linha(page, 'sub:sub_fix')).toContainText('Fixas da loja');
 });

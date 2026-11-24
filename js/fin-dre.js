@@ -275,9 +275,10 @@ function finDreAtivar(id) {
     _dreAvisoCat('');
     _dreGravarCat();
 }
-function finDreExcluirCat(id) {
+async function finDreExcluirCat(id) {
     const c = _dreCat(id);
     if (!c || c.padrao || _dreCatUsada(id)) return;
+    if (!await showConfirm('Excluir a categoria ' + c.nome + '?', '🗑️', 'Excluir', 'Cancelar')) return;
     db.fin_categorias.categorias = db.fin_categorias.categorias.filter(x => String(x.id) !== String(id));
     _dreAvisoCat('');
     _dreGravarCat();
@@ -342,3 +343,12 @@ function finDreSalvarSub() {
     _dreAvisoCat('');
     _dreGravarCat();
 }
+
+// Outra aba mexeu nas categorias: a DRE (e a janela de categorias, se aberta) se redesenham.
+window.addEventListener('storage', e => {
+    if (e.key !== 'sc_fin_cat') return;
+    try { _dbRecarregarChave('sc_fin_cat'); } catch (err) { /* sem recarga: segue com o que ha */ }
+    const p = document.getElementById('fin-dre');
+    if (p && p.classList.contains('active')) renderFinDre();
+    _dreCatRender();
+});
