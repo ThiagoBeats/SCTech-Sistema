@@ -311,7 +311,7 @@ test('historico de baixa e estorno com o nome de quem fez; saldo atualizado na b
     expect(c.historico.map(h => h.acao)).toEqual(['criado', 'baixa']);
     expect(c.historico[1]).toEqual(expect.objectContaining({ por: 1, porNome: 'Teste' }));
     expect(c.historico[1].detalhe).toContain('R$ 200,00');
-    expect((await ler(page, 'sc_contas_fin'))[0].saldo_atualizado_em).toBe('2026-11-24');
+    expect((await ler(page, 'sc_contas_fin'))[0].saldo_atualizado_em).toBe('2026-11-24T10:00');
 
     await page.evaluate(() => { estornarCR(621); });
     await page.locator('#sc-modal-ok').click();

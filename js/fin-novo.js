@@ -58,7 +58,7 @@ function _finDescricaoConta(c) {
 function _finAtualizadoEm(v) {
     if (!v) return 'Sem movimentos';
     const s = String(v), dia = s.slice(0, 10).split('-').reverse().slice(0, 2).join('/');
-    const hora = s.length > 10 ? new Date(s).toTimeString().slice(0, 5) : '';
+    const hora = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) ? s.slice(11, 16) : '';
     return 'Atualizado em ' + dia + (hora ? ' ' + hora : '');
 }
 
@@ -79,6 +79,12 @@ function _finResContasHtml(hoje) {
         <div class="res-conta res-total"><div class="res-conta-info"><strong>Saldo total</strong></div><div class="res-conta-dir"><div class="res-conta-saldo ${sd.total < 0 ? 'res-neg' : ''}" id="res-saldo-total">${_finBrl(sd.total)}</div></div></div></div>`;
 }
 
+function _finResVarPP(atual, anterior) {
+    if (atual === null || anterior === null) return '<div class="res-var res-var-sem">sem base de comparação</div>';
+    const d = Math.round((atual - anterior) * 10) / 10, sobe = d >= 0;
+    return `<div class="res-var ${sobe ? 'res-var-up' : 'res-var-down'}">${sobe ? '↑' : '↓'} ${Math.abs(d).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} p.p.</div>`;
+}
+
 function _finResVar(atual, anterior, base) {
     if (base === false) return '<div class="res-var res-var-sem">sem base de comparação</div>';
     const v = DreCore.variacao(atual, anterior);
@@ -92,7 +98,7 @@ function _finResIndicadoresHtml(hoje) {
     const opc = [['mes', 'Este mês'], ['passado', 'Mês passado'], ['trimestre', 'Trimestre'], ['ano', 'Ano'], ['custom', 'Personalizado']];
     const barra = `<div class="lanc-barra res-barra">
         <div class="form-group"><label>Período</label><select id="res-periodo" onchange="finResMudar()">${opc.map(([v, t]) => `<option value="${v}"${_finResPeriodo === v ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
-        ${_finResPeriodo === 'custom' ? `<div class="form-group"><label>De</label><input type="date" id="res-de" value="${_finResDe}" onchange="finResMudar()"></div><div class="form-group"><label>Até</label><input type="date" id="res-ate" value="${_finResAte}" onchange="finResMudar()"></div>` : ''}
+        ${_finResPeriodo === 'custom' ? `<div class="form-group"><label>De</label><input type="date" id="res-de" value="${escapeHtml(_finResDe)}" onchange="finResMudar()"></div><div class="form-group"><label>Até</label><input type="date" id="res-ate" value="${escapeHtml(_finResAte)}" onchange="finResMudar()"></div>` : ''}
         <div class="form-group"><label>Regime</label><select id="res-regime" onchange="finResMudar()"><option value="caixa"${_finResRegime === 'caixa' ? ' selected' : ''}>Caixa</option><option value="competencia"${_finResRegime === 'competencia' ? ' selected' : ''}>Competência</option></select></div>
     </div>`;
     if (!iv) return `<div class="card res-card">${barra}<p class="lanc-sub">Escolha as datas De e Até para ver os indicadores.</p></div>`;
@@ -109,7 +115,7 @@ function _finResIndicadoresHtml(hoje) {
     const kpi = (id, rotulo, valor, comp) => `<div class="res-kpi" id="res-kpi-${id}"><div class="res-kpi-rotulo">${rotulo}</div><div class="res-kpi-valor ${id === 'lucro' && L.liquido < 0 ? 'res-neg' : ''}">${valor}</div>${comp}</div>`;
     return `<div class="card res-card">${barra}<div class="res-kpis">
         ${kpi('lucro', 'Lucro líquido', _finBrl(L.liquido), _finResVar(L.liquido, A && A.liquido, !!A))}
-        ${kpi('margem', 'Margem líquida', margem === null ? '—' : pct(margem), _finResVar(margem, margemA, margem !== null && margemA !== null))}
+        ${kpi('margem', 'Margem líquida', margem === null ? '—' : pct(margem), _finResVarPP(margem, margemA))}
         ${kpi('ticket', 'Ticket médio', tk.qtd ? _finBrl(tk.valor) : '—', _finResVar(tk.valor, tkA && tkA.valor, !!tkA && tk.qtd > 0))}
         ${kpi('receita', 'Receita', _finBrl(L.receitas), _finResVar(L.receitas, A && A.receitas, !!A))}
     </div></div>`;
@@ -129,6 +135,7 @@ function _finResAvisosHtml(hoje) {
     const lim = _finSomaDias(hoje, 7);
     const itens = [];
     [['pagar', db.contas_pagar], ['receber', db.contas_receber]].forEach(([lado, lista]) => {
+        if (!temAcesso(FIN_LADOS[lado], 'visualizar')) return;
         (lista || []).forEach(r => {
             const sit = FinCatCore.situacao(r, hoje);
             const d = String(r.data_vencimento || '').slice(0, 10);
@@ -143,7 +150,7 @@ function _finResAvisosHtml(hoje) {
     };
     itens.sort((a, b) => (a.sit === b.sit ? a.d.localeCompare(b.d) : (a.sit === 'vencido' ? -1 : 1)));
     const quando = i => { const n = _finDiasEntre(i.d, hoje); return i.sit === 'vencido' ? `há ${n} ${n === 1 ? 'dia' : 'dias'}` : (n === 0 ? 'vence hoje' : `vence em ${-n} ${n === -1 ? 'dia' : 'dias'}`); };
-    const lista = itens.map(i => `<button type="button" class="res-aviso-item ${i.sit === 'vencido' ? 'res-aviso-venc' : ''}" data-tipo="${i.lado === 'pagar' ? 'cp' : 'cr'}" data-id="${escapeHtml(String(i.r.id))}" onclick="abrirLancamentoNaLista('${i.lado === 'pagar' ? 'cp' : 'cr'}', ${_finIdJs(i.r.id)})">
+    const lista = itens.map(i => `<button type="button" class="res-aviso-item ${i.sit === 'vencido' ? 'res-aviso-venc' : ''}" data-tipo="${i.lado === 'pagar' ? 'cp' : 'cr'}" data-id="${escapeHtml(String(i.r.id))}" onclick="abrirLancamentoNaLista('${i.lado === 'pagar' ? 'cp' : 'cr'}', ${escapeHtml(_finIdJs(i.r.id))})">
         <span class="res-aviso-lado">${i.lado === 'pagar' ? 'Pagar' : 'Receber'}</span>
         <span class="res-aviso-pessoa">${escapeHtml(_finPessoaDe(i.r) || i.r.descricao || '—')}</span>
         <strong>${_finBrl(i.r.valor)}</strong>
@@ -155,6 +162,7 @@ function _finResAvisosHtml(hoje) {
 // Abre o lancamento na tela Lancamentos: lado certo, lista sem periodo, filtrada pela pessoa, linha destacada.
 function abrirLancamentoNaLista(tipo, id) {
     const lado = tipo === 'cp' ? 'pagar' : 'receber';
+    if (!temAcesso(FIN_LADOS[lado], 'visualizar')) return;
     mostrarTabFinanceiro('lancamentos', lado);
     const reg = _finListaLado(lado).find(r => String(r.id) === String(id));
     const el = x => document.getElementById(x);

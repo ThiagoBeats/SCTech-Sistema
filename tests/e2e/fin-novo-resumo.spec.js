@@ -2,6 +2,7 @@
 // e os campos de banco no cadastro de conta. Relogio fixo em todos: 24/11/2026.
 const { test, expect } = require('@playwright/test');
 const { entrar, acaoMenu } = require('./ajuda.js');
+const N = n => ({ nivel: n, acoes_restritas: [] });
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const HOJE = new Date(2026, 10, 24, 10, 0, 0);
@@ -42,6 +43,7 @@ test('Minhas contas: linhas com selo, descricao, Manual, Atualizado em e Saldo t
     await expect(inter).toContainText('R$ 1.700,00');
     await expect(inter).toContainText('Manual');
     await expect(inter).toContainText('Atualizado em 20/11');
+    await expect(inter).not.toContainText(/20\/11 \d/);
     const nu = page.locator('.res-conta', { hasText: 'Roxinho' });
     await expect(nu.locator('.res-selo')).toHaveText('NU');
     await expect(nu).toContainText('Poupança');
@@ -172,4 +174,31 @@ test('tema escuro: textos legiveis; 390px sem rolagem horizontal', async ({ page
     }
     await page.setViewportSize({ width: 390, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+});
+
+test('avisos respeitam a permissao de cada lado: resumo + receber so mostra contas a receber', async ({ page }) => {
+    const papel = { id: 31, nome: 'Resumo e Receber', permissoes: { inicio: N('completo'), financeiro: N('sem_acesso'), 'financeiro.resumo': N('visualizar'), 'financeiro.receber': N('visualizar') } };
+    await page.clock.setFixedTime(HOJE);
+    await entrar(page, BASE, { sc_contas_fin: CONTAS, sc_mov_fin: MOVS, sc_cr: CR, sc_cp: CP, sc_ped: PED, sc_usr: [
+        { id: 1, nome: 'Teste', email: 'teste@sctech.local', papel_id: 1, ativo: true, permissoes_extras: {}, senha_hash: '' },
+        { id: 2, nome: 'Vend', email: 'vend@sctech.local', papel_id: 31, ativo: true, permissoes_extras: {}, senha_hash: '' }] });
+    await page.evaluate(p => { localStorage.setItem('sc_pap', JSON.stringify([...papeisPadrao(), p])); sessionStorage.setItem('sc_user', JSON.stringify({ id: 2, email: 'vend@sctech.local' })); }, papel);
+    await page.goto(BASE + '/financeiro.html');
+    await page.locator('.fin-tab-btn[data-tab="resumo"]').click();
+    const av = page.locator('#res-avisos');
+    await expect(av).toContainText('Ana');
+    await expect(av).not.toContainText('Fornecedor X');
+    await expect(av).not.toContainText('a pagar');
+    await page.evaluate(() => abrirLancamentoNaLista('cp', 2));
+    await expect(page.locator('#fin-resumo')).toHaveClass(/active/);
+});
+
+test('margem liquida compara em pontos percentuais', async ({ page }) => {
+    // outubro: receita 1000 e custo 500 (margem 50%); novembro 70% -> sobe 20,0 p.p.
+    const cr = { id: 3, cliente_nome: 'Cris', descricao: 'Venda de outubro', valor: 1000, status: 'Pago', data_vencimento: '2026-10-10', data_pagamento: '2026-10-10', data_competencia: '2026-10-10', categoria_id: 'cat_vendas', conta_id: 10, historico: hist };
+    const cp = { id: 3, tipo: 'variavel', categoria: 'tecido', credor_nome: 'RC', descricao: 'Tecido', valor: 500, status: 'Pago', data_vencimento: '2026-10-12', data_pagamento: '2026-10-12', data_competencia: '2026-10-12', categoria_id: 'cat_tecido', conta_id: 10, historico: hist };
+    await abrir(page, { sc_cr: CR.concat([cr]), sc_cp: CP.concat([cp]), sc_mov_fin: MOVS.concat([
+        { id: 903, conta_id: 10, data: '2026-10-10', sentido: 'entrada', valor: 1000, origem: 'cr', origem_id: 3, grupo_id: 2, descricao: 'E' },
+        { id: 904, conta_id: 10, data: '2026-10-12', sentido: 'saida', valor: 500, origem: 'cp', origem_id: 3, grupo_id: null, descricao: 'S' }]) });
+    await expect(kpi(page, 'margem').locator('.res-var')).toHaveText('↑ 20,0 p.p.');
 });

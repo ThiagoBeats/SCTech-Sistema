@@ -14579,7 +14579,8 @@ function _finRegistrarExcluidos(tipo, regs) {
 // Saldo da conta bancaria mexido agora (baixa, estorno, ajuste).
 function _finContaTocada(contaId) {
     const c = _contaFinPorId(contaId);
-    if (c) c.saldo_atualizado_em = hojeLocal();
+    // Data e hora locais 'AAAA-MM-DDTHH:MM' (valores antigos so com a data continuam valendo).
+    if (c) { const d = new Date(), z = n => String(n).padStart(2, '0'); c.saldo_atualizado_em = hojeLocal() + 'T' + z(d.getHours()) + ':' + z(d.getMinutes()); }
 }
 
 // Tipo da conta no cadastro novo (corrente/poupanca/caixa/cartao), a partir do tipo
