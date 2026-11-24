@@ -49,15 +49,15 @@ test('trechosDaRota le os trechos de route e de trip', () => {
     assert.strictEqual(R.trechosDaRota({ code: 'Error' }), null);
 });
 
-test('calcularChegadas: sai a tempo da 1a visita, espera quando chega cedo e avisa atraso acima de 10 min', () => {
+test('calcularChegadas: sai a tempo da 1a visita, espera quando chega cedo e avisa atraso desde 1 min', () => {
     const r = R.calcularChegadas({
         inicioDia: 480,
         paradas: [{ agendadoMin: 540, durMin: 60 }, { agendadoMin: 600, durMin: 60 }, { agendadoMin: null, durMin: 30 }, { agendadoMin: 720, durMin: 30 }],
         trechosMin: [20, 25, 10, 5],
     });
-    assert.strictEqual(r.saidaMin, 520);
-    assert.deepStrictEqual(r.paradas.map(p => p.chegadaMin), [540, 625, 695, 730]);
-    assert.deepStrictEqual(r.paradas.map(p => p.atrasoMin), [0, 25, 0, 0]);   // 10 min de folga nao avisa
+    assert.strictEqual(r.saidaMin, 510);   // 09:00 - 20 min de carro - 10 de folga
+    assert.deepStrictEqual(r.paradas.map(p => p.chegadaMin), [530, 625, 695, 730]);
+    assert.deepStrictEqual(r.paradas.map(p => p.atrasoMin), [0, 25, 0, 10]);   // a tolerancia antiga acabou: atraso conta desde 1 min
     const cedo = R.calcularChegadas({ inicioDia: 480, paradas: [{ agendadoMin: null, durMin: 30 }, { agendadoMin: 600, durMin: 30 }], trechosMin: [10, 10] });
     assert.strictEqual(cedo.saidaMin, 480);
     assert.deepStrictEqual(cedo.paradas.map(p => [p.chegadaMin, p.inicioMin]), [[490, 490], [530, 600]]);
@@ -67,6 +67,102 @@ test('calcularChegadas com trecho desconhecido conta zero e so aquela parada fic
     const r = R.calcularChegadas({ inicioDia: 480, paradas: [{ agendadoMin: null, durMin: 60 }, { agendadoMin: null, durMin: 60 }, { agendadoMin: 600, durMin: 30 }], trechosMin: [null, 15, 10] });
     assert.deepStrictEqual(r.paradas.map(p => [p.chegadaMin, p.incerto]), [[480, true], [555, false], [625, false]]);
     assert.strictEqual(r.paradas[2].atrasoMin, 25);
+});
+
+test('calcularChegadas: exemplo do dono, 13:00 + 1h e proxima as 14:15 com 25, 5 e 8 min de deslocamento', () => {
+    const sit = desl => R.calcularChegadas({ inicioDia: 480, paradas: [{ agendadoMin: 780, durMin: 60 }, { agendadoMin: 855, durMin: 30 }], trechosMin: [20, desl] }).paradas[1];
+    const a = sit(25), o = sit(5), ap = sit(8);
+    assert.deepStrictEqual([a.situacao, a.atrasoMin, a.chegadaMin, a.folgaMin], ['atrasada', 10, 865, -10]);
+    assert.deepStrictEqual([o.situacao, o.atrasoMin, o.folgaMin], ['ok', 0, 10]);
+    assert.deepStrictEqual([ap.situacao, ap.atrasoMin, ap.folgaMin], ['apertada', 0, 7]);
+    assert.strictEqual(a.fimMin, 895);
+});
+
+test('calcularChegadas: sem horario, 1a visita sem trecho e servico que invade a proxima', () => {
+    const r = R.calcularChegadas({ inicioDia: 480, paradas: [{ agendadoMin: 540, durMin: 90 }, { agendadoMin: 600, durMin: 30 }, { agendadoMin: null, durMin: 30 }], trechosMin: [null, 0, 10] });
+    assert.deepStrictEqual(r.paradas.map(p => p.situacao), ['ok', 'atrasada', 'sem-horario']);
+    assert.strictEqual(r.saidaMin, 540);   // sem deslocamento ate a 1a: sem folga e sem desconto
+    assert.deepStrictEqual(r.paradas.map(p => p.invadeMin), [0, 30, 0]);
+    assert.strictEqual(r.paradas[2].folgaMin, null);
+});
+
+test('FOLGA_MIN e 10', () => { assert.strictEqual(R.FOLGA_MIN, 10); });
+
+// matriz 4x4: 0 = empresa, p0..p2 = 1..3
+const matriz = linhas => linhas;
+test('melhorOrdemPorTempo escolhe a ordem sem atraso mesmo com mais deslocamento', () => {
+    const m = matriz([[0, 10, 40, 5], [10, 0, 30, 40], [40, 30, 0, 30], [5, 40, 30, 0]]);
+    const paradas = [{ agendadoMin: 600, durMin: 30 }, { agendadoMin: 680, durMin: 30 }, { agendadoMin: 760, durMin: 30 }];
+    assert.deepStrictEqual(R.melhorOrdemAberta(m).slice(1).map(i => i - 1), [2, 1, 0]);   // o menor caminho atrasa
+    const o = R.melhorOrdemPorTempo({ matrizMin: m, paradas, comEmpresa: true, voltaEmpresa: false, inicioDia: 480 });
+    assert.deepStrictEqual(o, [0, 1, 2]);
+    const r = R.calcularChegadas({ inicioDia: 480, paradas: o.map(i => paradas[i]), trechosMin: [10, 30, 30] });
+    assert.deepStrictEqual(r.paradas.map(p => p.situacao), ['ok', 'ok', 'ok']);
+});
+
+test('melhorOrdemPorTempo desempata pelo termino do dia, com a volta a empresa', () => {
+    const m = [[0, 20, 10], [5, 0, 10], [20, 10, 0]];
+    const paradas = [{ agendadoMin: null, durMin: 30 }, { agendadoMin: null, durMin: 30 }];
+    assert.deepStrictEqual(R.melhorOrdemPorTempo({ matrizMin: m, paradas, comEmpresa: true, voltaEmpresa: true, inicioDia: 480 }), [1, 0]);
+});
+
+test('melhorOrdemPorTempo: visita sem horario entra onde atrapalha menos e sem empresa so ha paradas', () => {
+    const m = [[0, 10, 10, 10], [10, 0, 10, 10], [10, 10, 0, 10], [10, 10, 10, 0]];
+    const paradas = [{ agendadoMin: 600, durMin: 60 }, { agendadoMin: null, durMin: 30 }, { agendadoMin: 720, durMin: 30 }];
+    const o = R.melhorOrdemPorTempo({ matrizMin: m, paradas, comEmpresa: true, voltaEmpresa: false, inicioDia: 480 });
+    assert.strictEqual(o[2], 2);
+    assert.strictEqual(o.length, 3);
+    const sem = R.melhorOrdemPorTempo({ matrizMin: [[0, 10], [10, 0]], paradas: [{ agendadoMin: 700, durMin: 30 }, { agendadoMin: 600, durMin: 30 }], comEmpresa: false, voltaEmpresa: false });
+    assert.deepStrictEqual(sem, [1, 0]);
+});
+
+test('melhorOrdemPorTempo com 10 visitas usa a heuristica e nao piora a ordem por horario', () => {
+    let seed = 7; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const n = 10, m = Array.from({ length: n + 1 }, () => Array(n + 1).fill(0));
+    for (let i = 0; i <= n; i++) for (let j = 0; j <= n; j++) if (i !== j) m[i][j] = 5 + Math.floor(rnd() * 40);
+    const paradas = Array.from({ length: n }, (_, i) => ({ agendadoMin: 540 + i * 50 + Math.floor(rnd() * 40), durMin: 30 + Math.floor(rnd() * 20) }));
+    const custo = ordem => {
+        const tr = ordem.map((p, k) => k === 0 ? m[0][p + 1] : m[ordem[k - 1] + 1][p + 1]);
+        const r = R.calcularChegadas({ inicioDia: 480, paradas: ordem.map(i => paradas[i]), trechosMin: tr });
+        return [r.paradas.filter(p => p.situacao === 'atrasada').length, r.paradas.reduce((s, p) => s + p.atrasoMin, 0)];
+    };
+    const o = R.melhorOrdemPorTempo({ matrizMin: m, paradas, comEmpresa: true, voltaEmpresa: true, inicioDia: 480 });
+    assert.deepStrictEqual(o.slice().sort((a, b) => a - b), paradas.map((_, i) => i));
+    const base = custo(paradas.map((_, i) => i).sort((a, b) => paradas[a].agendadoMin - paradas[b].agendadoMin)), novo = custo(o);
+    assert.ok(novo[0] < base[0] || (novo[0] === base[0] && novo[1] <= base[1]), JSON.stringify({ base, novo }));
+});
+
+test('visita sem horario na frente nao e de graca: sai no inicio do expediente, igual a tela', () => {
+    const m = [[0, 30, 30], [30, 0, 30], [30, 30, 0]];
+    const paradas = [{ agendadoMin: null, durMin: 120 }, { agendadoMin: 600, durMin: 30 }];
+    const o = R.melhorOrdemPorTempo({ matrizMin: m, paradas, comEmpresa: true, voltaEmpresa: true, inicioDia: 480 });
+    assert.deepStrictEqual(o, [1, 0]);
+    const r = R.calcularChegadas({ inicioDia: 480, paradas: o.map(i => paradas[i]), trechosMin: [30, 30] });
+    assert.deepStrictEqual(r.paradas.map(p => p.situacao), ['ok', 'sem-horario']);
+    const ruim = R.calcularChegadas({ inicioDia: 480, paradas: [paradas[0], paradas[1]], trechosMin: [30, 30] });
+    assert.strictEqual(ruim.paradas[1].situacao, 'atrasada');
+});
+
+test('folga de exatos 10 min nao avisa em lugar nenhum', () => {
+    const r = R.calcularChegadas({ inicioDia: 480, paradas: [{ agendadoMin: 600, durMin: 30 }, { agendadoMin: 670, durMin: 30 }], trechosMin: [20, 30] });
+    assert.deepStrictEqual(r.paradas.map(p => [p.situacao, p.folgaMin]), [['ok', 10], ['ok', 10]]);
+    const e = R.situacaoEncaixe({ antes: { fimMin: 700 }, depois: { agendadoMin: 800 }, novo: { agendadoMin: 740, durMin: 30 }, desloc: { antesMin: 30, depoisMin: 20 } });
+    assert.deepStrictEqual([e.chegaTarde, e.faltaMin, e.atrasaProxima, e.chegadaProximaMin], [false, 0, false, 790]);
+});
+
+test('situacaoEncaixe: chegando tarde o servico novo comeca depois e empurra a chegada na proxima', () => {
+    const e = R.situacaoEncaixe({ antes: { fimMin: 800 }, depois: { agendadoMin: 890 }, novo: { agendadoMin: 810, durMin: 30 }, desloc: { antesMin: 40, depoisMin: 20 } });
+    assert.deepStrictEqual([e.chegadaMin, e.chegaTarde, e.chegadaProximaMin, e.atrasaProxima], [840, true, 890, true]);
+});
+
+test('situacaoEncaixe: avisa chegada tarde e que atrasa a proxima, ja com a folga', () => {
+    const base = { antes: { fimMin: 780 }, depois: { agendadoMin: 930 }, novo: { agendadoMin: 840, durMin: 60 } };
+    const ok = R.situacaoEncaixe({ ...base, desloc: { antesMin: 20, depoisMin: 20 } });
+    assert.deepStrictEqual([ok.chegaTarde, ok.chegadaMin, ok.faltaMin, ok.atrasaProxima, ok.chegadaProximaMin], [false, 800, 0, false, 920]);
+    const mal = R.situacaoEncaixe({ ...base, desloc: { antesMin: 55, depoisMin: 25 } });
+    assert.deepStrictEqual([mal.chegaTarde, mal.chegadaMin, mal.faltaMin, mal.atrasaProxima, mal.chegadaProximaMin], [true, 835, 5, true, 925]);
+    const solto = R.situacaoEncaixe({ antes: null, depois: null, novo: base.novo, desloc: { antesMin: null, depoisMin: null } });
+    assert.deepStrictEqual([solto.chegaTarde, solto.chegadaMin, solto.atrasaProxima, solto.chegadaProximaMin], [false, null, false, null]);
 });
 
 test('hhmm arredonda antes e da a volta no dia', () => {

@@ -1728,6 +1728,11 @@ html[data-theme="dark"] .pc-num-btn { color: var(--accent, #C9F775); }
 .rota-acoes { display: flex; gap: 4px; align-items: center; }
 .rota-status { font-size: 12px; color: var(--muted); min-height: 16px; margin: 8px 0; }
 .rota-total { font-weight: 600; margin-bottom: 10px; }
+.rota-saida-hora { font-weight: 700; font-size: 15px; background: var(--info-bg); color: var(--info-text); border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; }
+.rota-resumo { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; background: var(--danger-bg); color: var(--danger-text); font-weight: 600; border-radius: 8px; padding: 8px 14px; margin-bottom: 10px; }
+.rota-selo { display: inline-block; align-self: flex-end; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: var(--radius-pill); }
+.rota-selo-atraso { background: var(--danger-bg); color: var(--danger-text); }
+.rota-selo-apertado { background: var(--warn-bg); color: var(--warn-text); }
 .rota-botoes { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 @media (max-width: 720px) {
     .rota-item { grid-template-columns: 28px minmax(0, 1fr) auto; }

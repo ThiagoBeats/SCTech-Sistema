@@ -523,6 +523,22 @@ Formulário de agendamento:
     no cliente novo, no cadastro dele (também em Editar agendamento)
   - Observações (text, opcional): referências, ponto de encontro, instruções
   - Botão "📐 Agendar Visita"
+  - Aviso de deslocamento: ao salvar (novo, Editar e Reagendar), depois da
+    conferência de horário (que continua bloqueando), confere o tempo de carro
+    (OSRM, com os endereços localizados e guardados) até a visita anterior e a
+    próxima do mesmo profissional no dia, com folga de 10 minutos. Se não der
+    tempo: janela "Não dá tempo de chegar: <anterior> termina HH:MM e o
+    deslocamento até aqui leva ~N min (chegada HH:MM, folga de 10 min)." e/ou
+    o mesmo para a próxima visita, com "Escolher outro horário" (volta ao
+    formulário) e "Agendar mesmo assim" (salva). Sem internet, sem localizar o
+    endereço ou depois de 8 s: salva e o aviso de sucesso diz "Não deu para
+    conferir o deslocamento." Vale também ao agendar/editar/reagendar
+    instalação. Compromissos e bloqueios da agenda não entram na conta.
+    Enquanto confere, o botão de salvar fica travado ("Conferindo
+    deslocamento…") e vale o que estava preenchido no clique. Registros
+    antigos (endereço só em texto) também são conferidos. Editar só o
+    telefone ou as observações (sem mudar profissional, dia, horário,
+    duração ou endereço) não confere o deslocamento de novo.
 
 Lista de medições agendadas:
   - Exibidas em cards agrupados por situação (atrasadas, hoje, próximas)
@@ -555,11 +571,15 @@ campo e mandar para ele. Abre também por pcp.html?view=rotas.
     visita e não volta (aviso no topo).
   - Ordem inicial: a rota salva daquele dia/técnico; sem rota salva, por horário
     (sem horário no fim). Visita nova entra no fim; a que saiu do dia some.
-  - "✨ Sugerir melhor ordem": localiza os endereços no OpenStreetMap
+  - "✨ Sugerir ordem": localiza os endereços no OpenStreetMap
     (gratuito, sem cadastro; cada endereço só uma vez, guardado neste
     navegador; "não encontrado" é tentado de novo depois de 1 dia) e calcula
-    a ordem com menos trajeto: com a empresa, saindo e voltando para ela; sem
-    a empresa, saindo da visita com horário mais cedo, sem volta. Endereço não
+    a ordem que menos atrasa (otimiza o TEMPO, não o caminho; pode voltar duas
+    vezes à mesma cidade): usa a tabela de tempos do OSRM entre a empresa e as
+    visitas, e escolhe, nesta ordem: menos visitas atrasadas, menor soma de
+    atraso, menos visitas apertadas, término mais cedo (com a empresa, contando
+    a volta). Com a empresa, sai e volta para ela; sem ela, começa na 1ª
+    visita. Só as visitas localizadas entram na conta. Endereço não
     encontrado (ou visita sem endereço) vai para o fim com o aviso "⚠ Endereço
     não encontrado — confira o endereço e posicione à mão"; só ela fica sem
     km e chegada, as outras continuam com a conta.
@@ -576,11 +596,20 @@ campo e mandar para ele. Abre também por pcp.html?view=rotas.
   - Chegada prevista: saída + trajeto + duração de cada visita. Se a 1ª visita
     tem horário, sai a tempo de chegar nele; senão, no início do expediente
     (configuração da agenda). Chegou antes do horário: espera até ele.
-    Chegada mais de 10 min depois do agendado: "⚠ 10 horas e 7 minutos depois do agendado" (atraso por extenso).
+    Folga de 10 minutos além do tempo de carro (FOLGA_MIN).
     Não impede nada.
-  - Total: km e tempo de trajeto (com a volta) e horário de saída.
-  - "💾 Salvar rota": grava a ordem e, para cada visita com horário que não
-    bate, a linha "Rota de dd/mm/aaaa: chegada prevista HH:MM (agendado HH:MM)"
+  - Linha de saída (destaque no topo): "🚗 Sair às HH:MM para chegar às HH:MM
+    em <1º cliente>"; sem empresa: "Começa em <1º cliente> às HH:MM".
+  - Selos por visita: vermelho "Atraso de X" (chegada depois do agendado, a
+    partir de 1 min; X por extenso, ex.: "2 horas e 15 minutos") e amarelo
+    "Apertado: chega HH:MM, sobram N min" (sobram menos de 10 min). Quando o
+    serviço anterior termina depois do início da visita: "⚠ O serviço
+    anterior termina HH:MM, depois do início desta visita."
+  - Resumo no topo, se houver atraso: "N visita(s) não dá(ão) tempo", com o
+    botão "Sugerir ordem".
+  - Total: km e tempo de trajeto (com a volta).
+  - "💾 Salvar rota": grava a ordem e, para cada visita atrasada
+    (o "Apertado" não vira observação), a linha "Rota de dd/mm/aaaa: chegada prevista HH:MM (agendado HH:MM)"
     na observação da medição/instalação. Salvar de novo substitui a linha
     daquele dia; se deixou de haver atraso, a linha sai. Sem as distâncias
     calculadas, salva só a ordem (e avisa que os horários não foram conferidos).
@@ -591,7 +620,7 @@ campo e mandar para ele. Abre também por pcp.html?view=rotas.
     meio, a rota vira "Parte 1, Parte 2…", cada uma começando onde a anterior
     terminou.
   - "📤 Enviar ao técnico": salva a rota e abre o WhatsApp com a lista (ordem,
-    horário previsto, tipo, cliente, telefone, endereço, aviso de atraso), o
+    horário previsto, tipo, cliente, telefone, endereço, aviso de atraso; só visita atrasada), o
     total e o(s) link(s) do Maps. O técnico é escolhido no próprio WhatsApp.
   - Sem internet ou serviço fora: "Não foi possível calcular as distâncias
     agora. A ordem e o link do Maps continuam funcionando."

@@ -113,14 +113,25 @@ function _rotaAssinatura() {
 }
 
 // Chegadas previstas a partir dos trechos calculados (null = ainda sem trajeto).
+// So as visitas localizadas entram na conta (as outras ficam incertas), a mesma
+// regra do Sugerir ordem; sem empresa, a 1a visita localizada nao tem trecho de chegada.
 function _rotaChegadas(itens) {
-    if (!_rota.calc) return null;
+    const calc = _rota.calc;
+    if (!calc) return null;
     const cfg = getAgendaConfig();
-    return RotasCore.calcularChegadas({
+    const loc = [];
+    itens.forEach((v, i) => { if (calc.porItem[_rotaChaveItem(v)]) loc.push(i); });
+    const core = RotasCore.calcularChegadas({
         inicioDia: _agdMin(cfg.inicio) ?? 480,
-        paradas: itens.map(v => ({ agendadoMin: v.agendadoMin, durMin: v.durMin })),
-        trechosMin: itens.map(v => { const t = _rota.calc.porItem[_rotaChaveItem(v)]; return t ? Math.round(t.segundos / 60) : null; }),
+        paradas: loc.map(i => ({ agendadoMin: itens[i].agendadoMin, durMin: itens[i].durMin })),
+        trechosMin: loc.map((i, j) => (j === 0 && !calc.comEmpresa) ? null : Math.round(calc.porItem[_rotaChaveItem(itens[i])].segundos / 60)),
     });
+    const paradas = itens.map((v, i) => {
+        const j = loc.indexOf(i);
+        return j < 0 ? { incerto: true, atrasoMin: 0, situacao: 'sem-horario', invadeMin: 0, folgaMin: null }
+            : Object.assign({}, core.paradas[j], { incerto: false });
+    });
+    return { saidaMin: core.saidaMin, fimMin: core.fimMin, paradas, primeiro: loc.length ? loc[0] : -1 };
 }
 
 function _rotaDesenhar() {
@@ -136,19 +147,24 @@ function _rotaDesenhar() {
         const trecho = calc && calc.porItem[k];
         const naoAchado = calc && calc.naoAchados.includes(k);
         const chegada = c && !c.incerto ? `<span class="rota-chega">Chega ${RotasCore.hhmm(c.chegadaMin)}</span>` : '';
-        const atraso = c && !c.incerto && c.atrasoMin
-            ? `<span class="rota-atraso">⚠ ${RotasCore.duracaoPorExtenso(c.atrasoMin)} depois do agendado</span>` : '';
+        const selo = !c || c.incerto ? '' : c.situacao === 'atrasada'
+            ? `<span class="rota-selo rota-selo-atraso">Atraso de ${RotasCore.duracaoPorExtenso(c.atrasoMin)}</span>`
+            : c.situacao === 'apertada'
+                ? `<span class="rota-selo rota-selo-apertado">Apertado: chega ${RotasCore.hhmm(c.chegadaMin)}, sobram ${c.folgaMin} min</span>` : '';
+        const invade = c && !c.incerto && c.invadeMin > 0
+            ? `<span class="rota-aviso">⚠ O serviço anterior termina ${RotasCore.hhmm(v.agendadoMin + c.invadeMin)}, depois do início desta visita.</span>` : '';
         return `<li class="rota-item" draggable="true" data-i="${i}" ondragstart="_rotaDragIni(event, ${i})" ondragover="event.preventDefault()" ondrop="_rotaDrop(event, ${i})">
             <span class="rota-num">${i + 1}</span>
             <span class="rota-alca" aria-hidden="true" title="Arraste para mudar a ordem">⠿</span>
             <span class="rota-info">
                 <span class="rota-cli">${v.ico} ${escapeHtml(v.cliente)} <small>${escapeHtml(v.rotulo)}</small></span>
                 <span class="rota-end">${v.end ? escapeHtml(v.end) : 'Sem endereço'}</span>
+                ${invade}
                 ${naoAchado ? `<span class="rota-aviso">⚠ ${v.end ? 'Endereço não encontrado — confira o endereço e posicione à mão' : 'Sem endereço — posicione à mão'}</span>` : ''}
             </span>
             <span class="rota-hora">
                 <span>${v.hora ? 'Agendado ' + escapeHtml(v.hora) : 'Sem horário'}</span>
-                ${chegada}${atraso}
+                ${chegada}${selo}
             </span>
             <span class="rota-km">${trecho ? RotasCore.fmtKm(trecho.metros / 1000) : ''}</span>
             <span class="rota-acoes">
@@ -162,9 +178,22 @@ function _rotaDesenhar() {
     if (calc) {
         const trechos = Object.values(calc.porItem).filter(Boolean).concat(calc.volta ? [calc.volta] : []);
         const metros = trechos.reduce((s, t) => s + t.metros, 0), seg = trechos.reduce((s, t) => s + t.segundos, 0);
-        total = `<div class="rota-total" id="rota-total">Total: ${RotasCore.fmtKm(metros / 1000)} · ${RotasCore.fmtDur(seg / 60)} de trajeto${calc.volta ? ' (com a volta)' : ''}${cheg ? ` · saída ${RotasCore.hhmm(cheg.saidaMin)}` : ''}</div>`;
+        total = `<div class="rota-total" id="rota-total">Total: ${RotasCore.fmtKm(metros / 1000)} · ${RotasCore.fmtDur(seg / 60)} de trajeto${calc.volta ? ' (com a volta)' : ''}</div>`;
+    }
+    let saidaTxt = '', resumo = '';
+    if (cheg && cheg.primeiro >= 0) {
+        const p0 = itens[cheg.primeiro], c0 = cheg.paradas[cheg.primeiro];
+        saidaTxt = calc.comEmpresa
+            ? `🚗 Sair às ${RotasCore.hhmm(cheg.saidaMin)} para chegar às ${RotasCore.hhmm(c0.chegadaMin)} em ${escapeHtml(p0.cliente)}`
+            : `Começa em ${escapeHtml(p0.cliente)} às ${RotasCore.hhmm(c0.inicioMin)}`;
+    }
+    if (cheg) {
+        const n = cheg.paradas.filter(c => !c.incerto && c.situacao === 'atrasada').length;
+        if (n) resumo = `<div class="rota-resumo" id="rota-resumo"><span>⚠ ${n === 1 ? '1 visita não dá tempo' : n + ' visitas não dão tempo'}</span>
+            <button type="button" class="btn btn-outline btn-sm" onclick="sugerirMelhorOrdem()">Sugerir ordem</button></div>`;
     }
     corpo.innerHTML = `
+        ${saidaTxt ? `<div class="rota-saida-hora" id="rota-saida-hora">${saidaTxt}</div>` : ''}${resumo}
         <div class="rota-saida">${emp ? `🏠 Saída e volta: ${escapeHtml(emp)}` : '⚠ Sem endereço da empresa (cadastre em Empresa): a rota sai da 1ª visita e não volta.'}</div>
         <ol class="rota-lista" id="rota-lista">${linhas}</ol>
         <div class="rota-status" id="rota-status">${escapeHtml(_rota.status)}</div>
@@ -288,7 +317,7 @@ async function _rotaAtualizarKm() {
         const { empGeo, geos } = await _rotaLocalizar(itens, seq);
         if (seq !== _rota.seq) return;
         const achados = itens.map((v, i) => ({ k: _rotaChaveItem(v), g: geos[i] })).filter(x => x.g);
-        const calc = { porItem: {}, volta: null, naoAchados: itens.filter((v, i) => !geos[i]).map(_rotaChaveItem) };
+        const calc = { porItem: {}, volta: null, comEmpresa: !!empGeo, naoAchados: itens.filter((v, i) => !geos[i]).map(_rotaChaveItem) };
         const pontos = (empGeo ? [empGeo] : []).concat(achados.map(x => x.g)).concat(empGeo ? [empGeo] : []);
         if (achados.length && pontos.length >= 2) {
             const trechos = RotasCore.trechosDaRota(await _rotaOsrm('route', pontos));
@@ -318,6 +347,8 @@ async function sugerirMelhorOrdem() {
     const btn = document.getElementById('rota-btn-sugerir');
     const rotulo = btn ? btn.innerHTML : '';
     if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Calculando…'; }
+    const resumoBtns = [...document.querySelectorAll('#rota-resumo button')];
+    resumoBtns.forEach(b => { b.disabled = true; });
     const seq = ++_rota.seq;
     _rotaStatus('Localizando os endereços…');
     try {
@@ -325,20 +356,16 @@ async function sugerirMelhorOrdem() {
         const achados = itens.map((v, i) => ({ v, g: geos[i] })).filter(x => x.g);
         const nao = itens.filter((v, i) => !geos[i]);
         let ordemAchados = achados;
-        if (empGeo && achados.length >= 1) {
-            // sai da empresa e volta para ela: viagem circular do OSRM
-            const ordem = RotasCore.ordemDoTrip(await _rotaOsrm('trip', [empGeo].concat(achados.map(x => x.g)), '&source=first&roundtrip=true'), true);
-            if (!ordem) throw new Error('trip');
+        if (achados.length >= 2) {
+            // otimiza o TEMPO (nao o caminho): matriz de tempos do OSRM entre empresa (se achada) e visitas
+            const tab = await _rotaOsrm('table', (empGeo ? [empGeo] : []).concat(achados.map(x => x.g)), '&annotations=duration');
+            if (!tab || tab.code !== 'Ok' || !Array.isArray(tab.durations)) throw new Error('table');
+            const matrizMin = tab.durations.map(l => l.map(sg => Math.round((+sg || 0) / 60)));
+            const ordem = RotasCore.melhorOrdemPorTempo({
+                matrizMin, paradas: achados.map(x => ({ agendadoMin: x.v.agendadoMin, durMin: x.v.durMin })),
+                comEmpresa: !!empGeo, voltaEmpresa: !!empGeo, inicioDia: _agdMin(getAgendaConfig().inicio) ?? 480,
+            });
             ordemAchados = ordem.map(i => achados[i]);
-        } else if (!empGeo) {
-            // sem empresa a rota nao volta: sai da visita com horario mais cedo
-            // e procura o caminho aberto mais curto pela tabela de tempos
-            achados.sort((a, b) => _rotaPorHora(a.v, b.v));
-            if (achados.length >= 3) {
-                const tab = await _rotaOsrm('table', achados.map(x => x.g), '&annotations=duration');
-                if (!tab || tab.code !== 'Ok' || !Array.isArray(tab.durations)) throw new Error('table');
-                ordemAchados = RotasCore.melhorOrdemAberta(tab.durations).map(i => achados[i]);
-            }
         }
         if (seq !== _rota.seq) return;   // trocou de dia ou tecnico no meio
         _rota.ordem = ordemAchados.map(x => _rotaChaveItem(x.v)).concat(nao.map(_rotaChaveItem));
@@ -351,6 +378,7 @@ async function sugerirMelhorOrdem() {
         if (seq === _rota.seq) _rotaStatus(ROTA_ERRO_REDE);
     } finally {
         if (btn) { btn.disabled = !!document.getElementById('rota-prof')?.disabled; btn.innerHTML = rotulo; }
+        resumoBtns.forEach(b => { b.disabled = false; });
     }
 }
 
@@ -370,7 +398,7 @@ async function salvarRota(silencioso) {
     if (cheg) itens.forEach((v, i) => {
         const c = cheg.paradas[i];
         if (c.incerto) { semConferir++; return; }
-        const linha = c.atrasoMin ? RotasCore.linhaObsRota(data, c.chegadaMin, v.agendadoMin) : null;
+        const linha = c.situacao === 'atrasada' ? RotasCore.linhaObsRota(data, c.chegadaMin, v.agendadoMin) : null;
         if (linha) avisos++;
         if (v.tipo === 'med') {
             const m = db.medicoes.find(x => x.id == v.id);
@@ -430,7 +458,7 @@ async function enviarRotaAoTecnico() {
             const c = cheg && cheg.paradas[i];
             const hora = c && !c.incerto ? RotasCore.hhmm(c.inicioMin) : v.hora;
             return { hora, tipo: v.rotulo, cliente: v.cliente, tel: v.tel, end: v.end,
-                aviso: c && !c.incerto && c.atrasoMin ? `${RotasCore.duracaoPorExtenso(c.atrasoMin)} depois do agendado (${v.hora})` : '' };
+                aviso: c && !c.incerto && c.situacao === 'atrasada' ? `${RotasCore.duracaoPorExtenso(c.atrasoMin)} depois do agendado (${v.hora})` : '' };
         }),
         links: _rotaLinks(itens),
         totalKm: trechos ? trechos.reduce((s, t) => s + t.metros, 0) / 1000 : null,
