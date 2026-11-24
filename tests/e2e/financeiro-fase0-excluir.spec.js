@@ -1,5 +1,6 @@
-// Financeiro fase 0 - excluir pedido de venda nao deixa contas orfas nem apaga
-// recebimento; comissao paga de pedido cancelado fica marcada para revisao.
+// Financeiro fase 0 - excluir pedido de venda nao deixa contas em aberto nem apaga
+// recebimento (Financeiro novo: as contas em aberto ficam como Cancelado, motivo
+// "Pedido excluído"); comissao paga de pedido cancelado fica marcada para revisao.
 const { test, expect } = require('@playwright/test');
 const { entrar } = require('./ajuda.js');
 
@@ -12,7 +13,7 @@ const crAberta = { id: 601, pedido_id: 26500, cliente_nome: 'Ana Paula Lima', de
 const crPaga = { id: 602, pedido_id: 26500, cliente_nome: 'Ana Paula Lima', descricao: 'Entrada', valor: 500, data_vencimento: '2026-10-01', data_pagamento: '2026-10-01', status: 'Pago', parcela_tipo: 'entrada' };
 const cpCom = (id, papel, status, extra) => ({ id, pedido_id: 26500, descricao: 'Comissão ' + papel, credor_nome: 'Bruno', valor: 50, categoria: 'comissao', papel_comissao: papel, data_vencimento: '2026-10-20', status, tipo: 'variavel', ...(extra || {}) });
 
-test('sem recebimento: exclui pedido, contas em aberto e comissoes pendentes', async ({ page }) => {
+test('sem recebimento: exclui pedido e cancela contas em aberto e comissoes pendentes', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_ped: [ped(), ped({ id: 26501 })],
         sc_cr: [crAberta, { ...crAberta, id: 603, pedido_id: 26501 }],
         sc_cp: [cpCom(701, 'vendedor', 'Pendente'), cpCom(702, 'arquiteto', 'Pago', { data_pagamento: '2026-10-25' })] });
@@ -22,10 +23,12 @@ test('sem recebimento: exclui pedido, contas em aberto e comissoes pendentes', a
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_ped')).length).toBe(1);
     expect((await lerChave(page, 'sc_ped'))[0].id).toBe(26501);
-    expect((await lerChave(page, 'sc_cr')).map(c => c.id)).toEqual([603]);
+    const crs = await lerChave(page, 'sc_cr');
+    expect(crs.map(c => [c.id, c.status, c.motivo_cancelamento])).toEqual([[601, 'Cancelado', 'Pedido excluído'], [603, 'Pendente', undefined]]);
     const cps = await lerChave(page, 'sc_cp');
-    expect(cps.map(c => c.id)).toEqual([702]);
-    expect(cps[0].pedido_cancelado).toBe(true);
+    expect(cps.map(c => [c.id, c.status])).toEqual([[701, 'Cancelado'], [702, 'Pago']]);
+    expect(cps[0].motivo_cancelamento).toBe('Pedido excluído');
+    expect(cps[1].pedido_cancelado).toBe(true);
 });
 
 test('com recebimento: bloqueia e explica', async ({ page }) => {

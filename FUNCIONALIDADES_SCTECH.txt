@@ -1198,6 +1198,26 @@ Na janela do carrinho:
 8 abas: Hoje | Visão Geral | A Receber | A Pagar | Despesas Fixas | DRE por Pedido | Extrato | Resultado do mês
 (Hoje e Extrato são da Fase 1, seções 10.14 a 10.20; Resultado do mês é da Fase 2, seções 10.21 a 10.25)
 
+Dados do Financeiro novo (atualização automática, uma vez):
+  - Ao abrir o sistema na versão nova, cada conta a receber e a pagar ganha a
+    categoria da DRE (pelo código antigo: aluguel → "Aluguel", tecido → "Tecido /
+    Material", conta a receber de pedido → "Vendas de pedidos" etc.), a data de
+    competência (a receber de pedido: o menor vencimento do pedido; guia de
+    imposto: o 1º dia do mês de referência; o resto: o vencimento), o cliente ou
+    fornecedor do cadastro quando dá para saber (pelo pedido, CNPJ ou nome igual
+    e único) e o histórico "Migrado do financeiro anterior". As contas bancárias
+    ganham banco, agência, número, tipo (corrente, poupança, caixa ou cartão),
+    conexão "manual" e a data do último movimento. Nenhum valor muda.
+  - Antes, o sistema guarda uma cópia de contas a receber, a pagar, despesas
+    fixas, contas bancárias e movimentos neste navegador. Sem espaço para a
+    cópia, nada muda e tenta de novo na próxima abertura.
+  - Daí em diante, toda conta criada (pedido aprovado, pedido de compra,
+    comissão, taxa de cartão, despesa fixa, recorrência, simulador ou lançamento
+    manual) já nasce com categoria, competência e histórico; baixas e estornos
+    entram no histórico com o nome de quem fez.
+  - O backup leva e traz as categorias da DRE; backup antigo passa pela mesma
+    atualização ao ser importado.
+
 Como o dinheiro é controlado (resumo, detalhes nas seções 10.7 a 10.13):
   - Tudo o que o cliente pagou fica nas parcelas do A Receber. O "Valor recebido"
     do pedido é a soma dessas parcelas pagas (não se digita mais).
@@ -1495,13 +1515,20 @@ Valor recebido no pedido:
   - A tela inicial, os relatórios e o Financeiro usam esse mesmo valor
 
 Excluir pedido:
-  - Se não houver nada recebido: exclui o pedido, as contas a receber em aberto
-    e as comissões ainda não pagas (com confirmação)
+  - Se não houver nada recebido: exclui o pedido (com confirmação: "N conta(s)
+    deste pedido no Financeiro serão canceladas."). As contas a receber em
+    aberto e as comissões ainda não pagas não somem: ficam com a situação
+    "Cancelado" e o motivo "Pedido excluído", com quem e quando no histórico.
+    Lançamento cancelado não entra em totais, previsão, avisos, sino nem DRE
   - Se houver qualquer recebimento: a exclusão é bloqueada e o sistema explica
     que é preciso estornar os recebimentos antes
 
 Voltar o pedido para Orçamento:
   - É permitido mesmo com valor recebido
+  - A data da primeira aprovação fica guardada no pedido e não muda: ao aprovar
+    de novo (em outro dia, pelo painel ou pela tela do pedido), as contas a
+    receber refeitas continuam com a receita (competência) no mês da primeira
+    aprovação
   - Saem só as parcelas em aberto e as comissões pendentes; as parcelas já pagas
     ficam no Financeiro
   - A pergunta de confirmação acrescenta "A comissão pendente deste pedido será

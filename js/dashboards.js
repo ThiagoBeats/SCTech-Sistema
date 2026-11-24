@@ -535,7 +535,7 @@ function _dashInstalacoes() {
 
     // Status pagamento das agendadas
     const crMap = {};
-    db.contas_receber.forEach(cr=>{if(cr.pedido_id)crMap[cr.pedido_id]=(crMap[cr.pedido_id]||[]).concat(cr);});
+    db.contas_receber.forEach(cr=>{if(cr.pedido_id&&cr.status!=='Cancelado')crMap[cr.pedido_id]=(crMap[cr.pedido_id]||[]).concat(cr);});
     const pagStatus = p => {
         const crs = crMap[p.id]||[];
         if(!crs.length) return 'pendente';
@@ -714,11 +714,11 @@ function _dashGerencial() {
     const resG = _resultadoDoPeriodoDash(ini, fim);
     const recebido  = resG.entradas;
     const totalPago = resG.saidas;
-    const aReceber  = db.contas_receber.filter(cr=>cr.status!=='Pago').reduce((s,cr)=>s+cr.valor,0);
-    const aPagar    = db.contas_pagar.filter(cp=>cp.status!=='Pago').reduce((s,cp)=>s+cp.valor,0);
+    const aReceber  = db.contas_receber.filter(cr=>finAberta(cr)).reduce((s,cr)=>s+cr.valor,0);
+    const aPagar    = db.contas_pagar.filter(cp=>finAberta(cp)).reduce((s,cp)=>s+cp.valor,0);
     const lucro     = resG.resultado;
     const totalAtras= db.contas_receber.filter(cr=>cr.status==='Atrasado').reduce((s,cr)=>s+cr.valor,0);
-    const totalCR   = db.contas_receber.filter(cr=>cr.status!=='Pago').reduce((s,cr)=>s+cr.valor,0);
+    const totalCR   = db.contas_receber.filter(cr=>finAberta(cr)).reduce((s,cr)=>s+cr.valor,0);
     const inadimpl  = totalCR>0 ? totalAtras/totalCR*100 : 0;
     const margemPct = recebido>0 ? lucro/recebido*100 : 0;
 
