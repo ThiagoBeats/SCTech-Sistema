@@ -33,4 +33,31 @@ async function acaoMenu(page, escopo, rotulo) {
     await menu.locator('.menu-acoes-item', { hasText: rotulo }).click();
 }
 
-module.exports = { entrar, abrirMenuAcoes, acaoMenu };
+// Financeiro novo (Lancamentos): abre a aba e o lado ('pagar' | 'receber') com o periodo vazio, para a lista
+// mostrar tudo (o padrao da tela e o mes atual).
+async function abrirLancamentos(page, lado) {
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click();
+    await page.locator('.fin-lado-btn[data-lado="' + lado + '"]').click();
+    await page.fill('#lanc-de', '');
+    await page.fill('#lanc-ate', '');
+}
+// Linhas do lado que mostram a acao no menu "⋮": Dar baixa (nem paga nem cancelada), Estornar (paga).
+// Qualquer outra acao: todas as linhas (ou as de `linha`, texto da linha).
+function linhasLanc(page, lado, rotulo, linha) {
+    const tr = page.locator('#tb-contas-' + lado + ' tr');
+    const filtro = { 'Dar baixa': { hasNot: page.locator('.fin-badge-green, .fin-badge-gray') }, 'Estornar': { has: page.locator('.fin-badge-green') } }[rotulo] || {};
+    return tr.filter(filtro).filter(linha ? { hasText: linha } : {});
+}
+// Clica numa acao do menu "⋮" da n-esima linha (padrao: a primeira) que a tem.
+async function acaoLanc(page, lado, rotulo, { linha, n = 0 } = {}) {
+    await acaoMenu(page, linhasLanc(page, lado, rotulo, linha).nth(n), rotulo);
+}
+// Nomes das acoes do menu "⋮" de uma linha (abre e fecha).
+async function acoesDaLinha(page, escopo) {
+    const menu = await abrirMenuAcoes(page, escopo);
+    const nomes = (await menu.locator('.menu-acoes-item span:last-child').allTextContents()).map(t => t.trim());
+    await page.keyboard.press('Escape');
+    return nomes;
+}
+
+module.exports = { entrar, abrirMenuAcoes, acaoMenu, abrirLancamentos, linhasLanc, acaoLanc, acoesDaLinha };

@@ -407,3 +407,35 @@ test('recebimento antigo com data futura e sem movimento: fora de "Ate hoje" ate
     assert.strictEqual(R.entradasDoMes({ mes: '2026-11', contasReceber, movimentos: [], ateData: '2026-11-20' }).total, 400);
     assert.strictEqual(R.entradasDoMes({ mes: '2026-11', contasReceber, movimentos: [] }).total, 400);
 });
+
+// Financeiro novo: lancamento Cancelado fica fora do Resultado (guias e despesas fixas).
+test('Cancelado: guia de imposto cancelada nao conta; fixa cancelada nao soma nem volta como estimativa', () => {
+    const R = require('../js/resultado-core.js');
+    const guia = { id: 1, categoria: 'imposto', mes_referencia: '2026-10', valor: 300, data_vencimento: '2026-11-20', status: 'Cancelado' };
+    const imp = R.impostoDoMes({ mes: '2026-10', contasPagar: [guia], faturamento: 1000, aliquota: 6 });
+    assert.deepStrictEqual(imp, { valor: 60, estimado: true, lancado: 0 });
+    const df = { id: 9, descricao: 'Aluguel', valor: 1500, dia_vencimento: 5, categoria: 'aluguel', ativo: true, data_inicio: '2026-01-01' };
+    const canc = { id: 10, tipo: 'fixo', categoria: 'aluguel', descricao: 'Aluguel', despesa_fixa_id: 9, valor: 1500, data_vencimento: '2026-12-05', status: 'Cancelado' };
+    const luz = { id: 11, tipo: 'fixo', categoria: 'conta', descricao: 'Luz', valor: 200, data_vencimento: '2026-12-10', status: 'Pendente' };
+    assert.strictEqual(R.despesasFixasDoMes({ mes: '2026-12', contasPagar: [canc, luz], despesasFixas: [df] }), 200);
+});
+
+test("so_caixa fica fora do Resultado: aporte recebido nao e entrada; pagamento de emprestimo nao e saida", () => {
+    const crs = [
+        { id: 1, status: "Pago", valor: 1000, data_pagamento: "2026-11-05", categoria_id: "cat_vendas" },
+        { id: 2, status: "Pago", valor: 50000, data_pagamento: "2026-11-06", categoria_id: "cat_aporte" }
+    ];
+    const cps = [
+        { id: 1, status: "Pago", valor: 200, data_pagamento: "2026-11-07", categoria: "outro", categoria_id: "cat_outras_desp" },
+        { id: 2, status: "Pago", valor: 8000, data_pagamento: "2026-11-08", categoria: "outro", categoria_id: "cat_emprestimo_out" }
+    ];
+    const m = R.resultadoDoMes({ mes: "2026-11", contasReceber: crs, contasPagar: cps, movimentos: [], aliquota: 0 });
+    assert.strictEqual(m.entradas, 1000);
+    assert.strictEqual(m.saidas, 200);
+    const p = R.resultadoDoPeriodo({ de: "2026-11-01", ate: "2026-11-30", contasReceber: crs, contasPagar: cps, movimentos: [], aliquota: 0 });
+    assert.strictEqual(p.entradas, 1000);
+    assert.strictEqual(p.saidas, 200);
+    // categorias passadas: so as marcadas como so_caixa saem
+    const cats = { categorias: [{ id: "cat_aporte", natureza: "dre" }] };
+    assert.strictEqual(R.resultadoDoMes({ mes: "2026-11", contasReceber: crs, contasPagar: cps, movimentos: [], aliquota: 0, categorias: cats }).entradas, 51000);
+});

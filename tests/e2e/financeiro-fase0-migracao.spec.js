@@ -66,7 +66,7 @@ test('abrir o financeiro migra os dados antigos uma vez, com copia de seguranca'
     // Recarregar nao muda nada.
     const antes = await page.evaluate(() => ['sc_cr', 'sc_cp', 'sc_ped'].map(k => localStorage.getItem(k)));
     await page.reload();
-    await expect(page.locator('#hoje-tarefas')).not.toBeEmpty();
+    await expect(page.locator('#fin-resumo-conteudo')).not.toBeEmpty();
     const depois = await page.evaluate(() => ['sc_cr', 'sc_cp', 'sc_ped'].map(k => localStorage.getItem(k)));
     expect(depois).toEqual(antes);
 });
@@ -83,7 +83,7 @@ test('aviso de revisao na Visao Geral; marcar como revisado limpa', async ({ pag
     await expect(aviso).toBeEmpty();
     expect(await page.evaluate(() => localStorage.getItem('sc_fin_revisar'))).toBeNull();
     await page.reload();
-    await expect(page.locator('#hoje-tarefas')).not.toBeEmpty();
+    await expect(page.locator('#fin-resumo-conteudo')).not.toBeEmpty();
     await expect(page.locator('#fin-revisar')).toBeEmpty();
 });
 
@@ -98,7 +98,7 @@ test('arquiteto gravado no campo de vendedor vira comissao de arquiteto, uma so'
     await page.goto(BASE + '/login.html');   // na login o checkAuth nao roda: a migracao precisa acertar sozinha
     await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
     await page.goto(BASE + '/financeiro.html');
-    await expect(page.locator('#hoje-tarefas')).not.toBeEmpty();
+    await expect(page.locator('#fin-resumo-conteudo')).not.toBeEmpty();
     const cps = (await lerChave(page, 'sc_cp')).filter(c => c.categoria === 'comissao');
     expect(cps).toHaveLength(1);
     expect([cps[0].papel_comissao, cps[0].status, cps[0].valor, cps[0].credor_nome]).toEqual(['arquiteto', 'Pago', 100, 'Studio M']);
@@ -173,7 +173,7 @@ test('exportar leva a marca da Fase 0, a empresa e as formas; importar esse arqu
     await page.waitForLoadState('load');
     await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
     await page.goto(BASE + '/financeiro.html');
-    await expect(page.locator('#hoje-tarefas')).not.toBeEmpty();
+    await expect(page.locator('#fin-resumo-conteudo')).not.toBeEmpty();
     expect((await lerChave(page, 'sc_cr')).find(c => c.id === 811).status, 'nao baixa de novo').toBe('Pendente');
     expect(await page.evaluate(() => [localStorage.getItem('sc_fin_backup_fase0'), localStorage.getItem('sc_fin_revisar')])).toEqual([null, null]);
     expect(await lerChave(page, 'sc_empresa')).toEqual(empresa);
@@ -223,7 +223,7 @@ test('sem espaco para a copia: nao migra, avisa e oferece baixar a copia e corri
     expect(copia.contas_receber.find(c => c.id === 602).status).toBe('Atrasado');
     expect(copia.fin_fase0, 'a copia e de antes da migracao').toBeUndefined();
     await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
-    await expect(page.locator('#hoje-tarefas')).not.toBeEmpty();
+    await expect(page.locator('#fin-resumo-conteudo')).not.toBeEmpty();
     expect((await lerChave(page, 'sc_cr')).find(c => c.id === 602).status).toBe('Pago');
     expect(await page.evaluate(() => [localStorage.getItem('sc_fin_backup_falhou'), localStorage.getItem('sc_fin_backup_fase0')])).toEqual([null, null]);
     await expect(page.locator('#fin-backup')).toBeEmpty();

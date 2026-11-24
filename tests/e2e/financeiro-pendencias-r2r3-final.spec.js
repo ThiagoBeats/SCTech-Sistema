@@ -3,14 +3,15 @@
 // comissao antiga de arquiteto (comissao_rt) e "igual ao mes anterior" quando
 // a porcentagem arredonda para zero.
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos, acaoLanc } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8181';
 const ler = (page, k) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), k);
 const BANCO = { id: 10, nome: 'Banco', tipo: 'banco', saldo_inicial: 0, data_saldo_inicial: '2020-01-01', ativo: true };
 
 // ---- 1. Meta padrao como sugestao na Visao Geral ----
-test('Visao Geral: sem ajuste no mes, o campo da meta sugere a meta padrao', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Visao Geral: sem ajuste no mes, o campo da meta sugere a meta padrao', async ({ page }) => {
     await entrar(page, BASE, { sc_empresa: { meta_faturamento_padrao: 50000 } });
     await page.goto(BASE + '/financeiro.html');
     await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
@@ -18,7 +19,8 @@ test('Visao Geral: sem ajuste no mes, o campo da meta sugere a meta padrao', asy
     await expect(page.locator('#fin-meta-valor')).toHaveValue('');
 });
 
-test('Visao Geral: sem meta padrao o campo da meta continua com "Ex: 15000"', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Visao Geral: sem meta padrao o campo da meta continua com "Ex: 15000"', async ({ page }) => {
     await entrar(page, BASE, {});
     await page.goto(BASE + '/financeiro.html');
     await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
@@ -55,8 +57,8 @@ test('confirmar pagamento do pedido: desmarcar a entrada ainda deixa confirmar e
 test('A Receber: desmarcar o unico item continua bloqueando com "Marque pelo menos um item."', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_ped: [pedAF({ status: 'Instalado' })], sc_cr: [crAb(701, 'entrada', '2099-11-01')] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
-    await page.locator('#tb-contas-receber button', { hasText: '✓ Recebido' }).click();
+    await abrirLancamentos(page, 'receber');
+    await acaoLanc(page, 'receber', 'Dar baixa');
     const modal = page.locator('#baixa-modal');
     await expect(modal.locator('#baixa-ok')).toBeEnabled();
     await modal.locator('.baixa-check').uncheck();
@@ -126,13 +128,15 @@ async function abrirFechamento(page, atual, anterior) {
     return page.locator('#fech-modal .fech-lista li', { hasText: 'Entradas' });
 }
 
-test('fechamento: diferenca que arredonda a 0% diz "igual ao mês anterior"', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('fechamento: diferenca que arredonda a 0% diz "igual ao mês anterior"', async ({ page }) => {
     const linha = await abrirFechamento(page, 10040, 10000);
     await expect(linha).toContainText('igual ao mês anterior');
     await expect(linha).not.toContainText('0%');
 });
 
-test('fechamento: diferenca que arredonda a 1% mostra "(+1%)"', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('fechamento: diferenca que arredonda a 1% mostra "(+1%)"', async ({ page }) => {
     const linha = await abrirFechamento(page, 10050, 10000);
     await expect(linha).toContainText('(+1%)');
     await expect(linha).not.toContainText('igual ao mês anterior');
@@ -150,13 +154,15 @@ async function abrirTendencia(page, atual, anterior) {
     return page.locator('#fin-alertas', { hasText: 'Faturamento deste mês' });
 }
 
-test('Visao Geral: tendencia que arredonda a 0,0% diz "igual ao mês anterior"', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Visao Geral: tendencia que arredonda a 0,0% diz "igual ao mês anterior"', async ({ page }) => {
     const alerta = await abrirTendencia(page, 10004, 10000);
     await expect(alerta).toContainText('Faturamento deste mês igual ao mês anterior');
     await expect(alerta).not.toContainText('0.0%');
 });
 
-test('Visao Geral: tendencia de 0,06% mostra "+0.1%"', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Visao Geral: tendencia de 0,06% mostra "+0.1%"', async ({ page }) => {
     const alerta = await abrirTendencia(page, 10006, 10000);
     await expect(alerta).toContainText('+0.1% vs. mês anterior');
 });

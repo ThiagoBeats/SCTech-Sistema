@@ -2,7 +2,7 @@
 // e a soma das parcelas (contas a receber) pagas. A baixa passa por um modal
 // com parcelas, data e forma; o estorno desfaz a baixa.
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos, acaoLanc } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const CLI = [{ id: 1, nome: 'Ana Paula Lima' }];
@@ -55,8 +55,8 @@ test('confirmar sem marcar o saldo leva a Instalado com saldo em aberto', async 
 test('Recebido no A Receber reflete no pedido', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_ped: [pedido({ status: 'Pronto p/ Instalação' })], sc_cr: crs() });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
-    await page.locator('#tb-contas-receber button', { hasText: '✓ Recebido' }).click();
+    await abrirLancamentos(page, 'receber');
+    await acaoLanc(page, 'receber', 'Dar baixa');
     await page.locator('#baixa-modal #baixa-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_ped'))[0].valor_recebido).toBe(1000);
 });
@@ -64,8 +64,8 @@ test('Recebido no A Receber reflete no pedido', async ({ page }) => {
 test('estornar volta a parcela e o pedido', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_ped: [pedido({ status: 'Instalado' })], sc_cr: crs() });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
-    await page.locator('#tb-contas-receber button', { hasText: 'Estornar' }).click();
+    await abrirLancamentos(page, 'receber');
+    await acaoLanc(page, 'receber', 'Estornar');
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_cr')).find(c => c.id === 501).status).toBe('Pendente');
     const cr = (await lerChave(page, 'sc_cr')).find(c => c.id === 501);
@@ -83,8 +83,8 @@ test('valor recebido do pedido e somente leitura', async ({ page }) => {
 test('estornar recebimento de pedido quitado marca o pagamento como pendente', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_ped: [pedido({ status: 'Instalado', pagamento_pendente: false, pagamento_confirmado_em: Date.now() })], sc_cr: crs() });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
-    await page.locator('#tb-contas-receber button', { hasText: 'Estornar' }).click();
+    await abrirLancamentos(page, 'receber');
+    await acaoLanc(page, 'receber', 'Estornar');
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_ped'))[0].pagamento_pendente).toBe(true);
 });
@@ -93,14 +93,14 @@ test('parcela paga nao pode ser excluida; excluir a ultima em aberto zera o rece
     await entrar(page, BASE, { sc_cli: CLI, sc_ped: [pedido({ status: 'Instalado', valor_recebido: 300 })],
         sc_cr: [{ ...crs()[1], id: 502 }, { ...crs()[0], id: 501 }] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await abrirLancamentos(page, 'receber');
     await page.evaluate(() => { excluirCR(501); });
     await expect(page.locator('#sc-modal-msg')).toContainText('Estorne o recebimento antes de excluir');
     expect((await lerChave(page, 'sc_cr')).map(c => c.id).sort()).toEqual([501, 502]);
     // Sem nenhuma parcela, o pedido que ja teve financeiro fica com recebido zero.
     await page.evaluate(() => { db.contas_receber = db.contas_receber.filter(c => c.id !== 501); syncDB(); });
     await page.reload();
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await abrirLancamentos(page, 'receber');
     await page.evaluate(() => { excluirCR(502); });
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_cr')).length).toBe(0);

@@ -2,7 +2,7 @@
 // "Avisado" que vale so para o mesmo agendamento, e o icone do WhatsApp nos botoes.
 // Relogio fixo em 23/11/2026 12:00; window.open interceptado (nunca abre o WhatsApp real).
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos, abrirMenuAcoes, linhasLanc } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const DIA = '2026-11-23';
@@ -154,8 +154,9 @@ test('Cobrar e Enviar ao tecnico tem o icone e o title', async ({ page }) => {
         sc_cr: [{ id: 1, cliente_nome: 'Pedro Souza', pedido_id: 26300, descricao: 'Parcela', valor: 300, data_vencimento: '2026-11-01', status: 'Pendente' }],
     });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
-    const cob = page.locator('#tb-contas-receber button', { hasText: 'Cobrar' });
+    await abrirLancamentos(page, 'receber');
+    const menu = await abrirMenuAcoes(page, linhasLanc(page, 'receber', 'Cobrar no WhatsApp').first());
+    const cob = menu.locator('.menu-acoes-item', { hasText: 'Cobrar no WhatsApp' });
     await expect(cob).toHaveAttribute('title', 'Enviar por WhatsApp');
     await expect(cob.locator('svg')).toHaveCount(1);
 });

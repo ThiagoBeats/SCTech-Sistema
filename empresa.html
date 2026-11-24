@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Configurar Empresa - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261204a">
+    <link rel="stylesheet" href="css/style.css?v=20261205a">
     <style>
         .logo-upload-area {
             border: 2px dashed var(--border);
@@ -162,6 +162,7 @@
                 Onde o dinheiro da empresa fica: o caixa (dinheiro vivo), os bancos e as maquininhas de cartão.
                 Informe quanto havia em cada uma e em que dia. Na maquininha, ajuste as taxas e os dias que o cartão leva para cair.
             </p>
+            <div id="emp-conectar-nota" class="lanc-aviso" style="display:none"></div>
             <div id="emp-contas"></div>
             <button type="button" class="btn btn-outline btn-sm" style="margin-top:4px" onclick="adicionarContaCfg()">+ Adicionar conta</button>
             <div style="display:flex;gap:10px;margin-top:14px;align-items:center">
@@ -296,30 +297,32 @@
         </div>
 
     </main>
-    <script src="js/etiquetas-core.js?v=20261204a"></script>
-    <script src="js/etiquetas-render.js?v=20261204a"></script>
-    <script src="js/cortina-desenho.js?v=20261204a"></script>
-    <script src="js/docs-layout-core.js?v=20261204a"></script>
-    <script src="js/galeria-core.js?v=20261204a"></script>
-    <script src="js/galeria-imagens.js?v=20261204a"></script>
-    <script src="js/financeiro-core.js?v=20261204a"></script>
-    <script src="js/caixa-core.js?v=20261204a"></script>
-    <script src="js/carrinho-core.js?v=20261204a"></script>
-    <script src="js/resultado-core.js?v=20261204a"></script>
-    <script src="js/fechamento-core.js?v=20261204a"></script>
-    <script src="js/simulador-core.js?v=20261204a"></script>
-    <script src="js/rotas-core.js?v=20261204a"></script>
-    <script src="js/endereco-core.js?v=20261204a"></script>
-    <script src="js/agenda-core.js?v=20261204a"></script>
-    <script src="js/notificacoes.js?v=20261204a"></script>
-    <script src="js/feriados-core.js?v=20261204a"></script>
-    <script src="js/app.js?v=20261204a"></script>
-    <script src="js/agenda.js?v=20261204a"></script>
-    <script src="js/rotas.js?v=20261204a"></script>
-    <script src="js/compartilhar-doc.js?v=20261204a"></script>
-    <script src="js/etiquetas-editor.js?v=20261204a"></script>
-    <script src="js/docs-layout-editor.js?v=20261204a"></script>
-    <script src="js/galeria-mostruario.js?v=20261204a"></script>
+    <script src="js/etiquetas-core.js?v=20261205a"></script>
+    <script src="js/etiquetas-render.js?v=20261205a"></script>
+    <script src="js/cortina-desenho.js?v=20261205a"></script>
+    <script src="js/docs-layout-core.js?v=20261205a"></script>
+    <script src="js/galeria-core.js?v=20261205a"></script>
+    <script src="js/galeria-imagens.js?v=20261205a"></script>
+    <script src="js/financeiro-core.js?v=20261205a"></script>
+    <script src="js/caixa-core.js?v=20261205a"></script>
+    <script src="js/carrinho-core.js?v=20261205a"></script>
+    <script src="js/resultado-core.js?v=20261205a"></script>
+    <script src="js/fechamento-core.js?v=20261205a"></script>
+    <script src="js/simulador-core.js?v=20261205a"></script>
+    <script src="js/rotas-core.js?v=20261205a"></script>
+    <script src="js/endereco-core.js?v=20261205a"></script>
+    <script src="js/agenda-core.js?v=20261205a"></script>
+    <script src="js/notificacoes.js?v=20261205a"></script>
+    <script src="js/feriados-core.js?v=20261205a"></script>
+    <script src="js/fin-cat-core.js?v=20261205a"></script>
+    <script src="js/dre-core.js?v=20261205a"></script>
+    <script src="js/app.js?v=20261205a"></script>
+    <script src="js/agenda.js?v=20261205a"></script>
+    <script src="js/rotas.js?v=20261205a"></script>
+    <script src="js/compartilhar-doc.js?v=20261205a"></script>
+    <script src="js/etiquetas-editor.js?v=20261205a"></script>
+    <script src="js/docs-layout-editor.js?v=20261205a"></script>
+    <script src="js/galeria-mostruario.js?v=20261205a"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             carregarEmpresaConfigs();
@@ -329,6 +332,7 @@
             renderFormasPagamentoCfg();
             renderContasCfg();
             renderMeiosCfg();
+            if (new URLSearchParams(location.search).get('conectar') === '1') abrirConectarConta();
             iniciarEditorEtiquetas();
             iniciarEditorLayouts();
             iniciarEditorMostruario();

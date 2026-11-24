@@ -1,7 +1,7 @@
 // Financeiro fase 0 - pedido de compra recebido gera conta a pagar; nota
 // importada do mesmo fornecedor oferece vincular em vez de duplicar.
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const lerChave = (page, k) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), k);
@@ -88,7 +88,7 @@ test('importar nota do mesmo fornecedor oferece vincular', async ({ page }) => {
         descricao: 'Pedido de compra #5001', valor: 1000, data_vencimento: '2099-01-10', data_pagamento: null, status: 'Pendente', tipo: 'variavel' };
     await entrar(page, BASE, { sc_forn: FORN, sc_pc: [pc({ conta_pagar_gerada: true })], sc_cp: [cp] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="pagar"]').click();
+    await abrirLancamentos(page, 'pagar');
     await page.evaluate(() => {
         abrirModalContaPagar('manual');
         document.getElementById('cpm-descricao').value = 'NF 123';

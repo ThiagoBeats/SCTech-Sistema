@@ -116,15 +116,15 @@ test('exportar e importar levam contas, meios e movimentos', async ({ page }) =>
     expect(await ler(page, 'sc_mov_fin')).toEqual(movs);
 });
 
-test('permissoes Hoje e Extrato aparecem em Configuracoes > Acessos', async ({ page }) => {
+test('permissoes Resumo e Fluxo de caixa aparecem em Configuracoes > Acessos', async ({ page }) => {
     await entrar(page, BASE);
     await page.goto(BASE + '/configuracoes.html#papeis');
     await page.evaluate(() => abrirModalPapel(1));
-    await expect(page.locator('input[name="papel-nivel-financeiro.hoje"]').first()).toBeAttached();
-    await expect(page.locator('input[name="papel-nivel-financeiro.extrato"]').first()).toBeAttached();
+    await expect(page.locator('input[name="papel-nivel-financeiro.resumo"]').first()).toBeAttached();
+    await expect(page.locator('input[name="papel-nivel-financeiro.fluxo"]').first()).toBeAttached();
     const rotulos = await page.locator('.cfg-row-sub .cfg-sub-label').allInnerTexts();
-    expect(rotulos).toContain('Hoje');
-    expect(rotulos).toContain('Extrato');
+    expect(rotulos).toContain('Resumo');
+    expect(rotulos).toContain('Fluxo de caixa');
 });
 
 test('papel Vendedor ja salvo: Hoje e Extrato nao herdam o modulo; Administrador e Financeiro seguem completos', async ({ page }) => {

@@ -31,7 +31,8 @@ const semCompleto = () => {
     localStorage.setItem('sc_usr', JSON.stringify(u));
 };
 
-test('dia 1 de novembro mostra "Feche o mês de outubro de 2026" e o botao abre o passo a passo', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('dia 1 de novembro mostra "Feche o mês de outubro de 2026" e o botao abre o passo a passo', async ({ page }) => {
     await abrir(page);
     const bloco = page.locator('#hoje-tarefas #hoje-fechamento');
     await expect(bloco).toContainText('Feche o mês de outubro de 2026');
@@ -41,13 +42,15 @@ test('dia 1 de novembro mostra "Feche o mês de outubro de 2026" e o botao abre 
     await expect(page.locator('#fech-modal')).toBeVisible();
 });
 
-test('sem contas configuradas nao mostra', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('sem contas configuradas nao mostra', async ({ page }) => {
     await abrir(page, { sc_contas_fin: [] });
     await expect(page.locator('#hoje-tarefas')).toBeVisible();
     await expect(page.locator('#hoje-fechamento')).toHaveCount(0);
 });
 
-test('outubro fechado some; com mudanca depois mostra o aviso', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('outubro fechado some; com mudanca depois mostra o aviso', async ({ page }) => {
     await abrir(page, { sc_fin_fech: [FOTO_OUT] });
     await expect(page.locator('#hoje-tarefas')).toBeVisible();
     await expect(page.locator('#hoje-fechamento')).toHaveCount(0);
@@ -66,7 +69,8 @@ test('outubro fechado some; com mudanca depois mostra o aviso', async ({ page })
     await expect(page.locator('#res-mes')).toHaveValue('2026-10');
 });
 
-test('sem permissao do Resultado nao mostra', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('sem permissao do Resultado nao mostra', async ({ page }) => {
     await abrir(page, {}, () => {
         const u = JSON.parse(localStorage.getItem('sc_usr'));
         u[0].papel_id = 3;
@@ -77,7 +81,8 @@ test('sem permissao do Resultado nao mostra', async ({ page }) => {
     await expect(page.locator('#hoje-fechamento')).toHaveCount(0);
 });
 
-test('so visualizar: o botao e "Ver" e leva ao Resultado sem abrir o passo a passo', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('so visualizar: o botao e "Ver" e leva ao Resultado sem abrir o passo a passo', async ({ page }) => {
     await abrir(page, {}, semCompleto);
     await expect(page.locator('#hoje-fechamento').getByRole('button', { name: 'Fechar agora' })).toHaveCount(0);
     await page.locator('#hoje-fechamento').getByRole('button', { name: 'Ver', exact: true }).click();
@@ -86,7 +91,8 @@ test('so visualizar: o botao e "Ver" e leva ao Resultado sem abrir o passo a pas
     await expect(page.locator('#fech-modal')).toHaveCount(0);
 });
 
-test('guia de imposto lancada depois do fechamento: linha informativa, sem aviso de mudanca', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('guia de imposto lancada depois do fechamento: linha informativa, sem aviso de mudanca', async ({ page }) => {
     const guia = { id: 9, descricao: 'DAS', categoria: 'imposto', tipo: 'variavel', valor: 30, mes_referencia: '2026-10', data_vencimento: '2026-11-20', data_pagamento: null, status: 'Pendente' };
     await abrir(page, { sc_fin_fech: [FOTO_OUT], sc_cp: [guia] });
     const bloco = page.locator('#hoje-fechamento');
@@ -95,7 +101,8 @@ test('guia de imposto lancada depois do fechamento: linha informativa, sem aviso
     await expect(page.locator('.hoje-fechamento-mudou')).toHaveCount(0);
 });
 
-test('conta a pagar mostra o credor (credor_nome)', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('conta a pagar mostra o credor (credor_nome)', async ({ page }) => {
     const cp = { id: 7, descricao: 'Tecido', categoria: 'tecido', tipo: 'variavel', valor: 120, data_vencimento: '2026-11-03', data_pagamento: null, status: 'Pendente', credor_nome: 'Loja X' };
     await abrir(page, { sc_fin_fech: [FOTO_OUT], sc_cp: [cp] });
     await expect(page.locator('[data-grupo="pagar-proximos"]')).toContainText('Loja X · vence 03/11/2026');

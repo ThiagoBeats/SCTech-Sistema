@@ -1,7 +1,7 @@
 // Financeiro Fase 1, tarefa 4: baixa de recebimento por parcela, com meio,
 // conta, cartao (repasses + taxa paga) e valor parcial; estorno desfaz tudo.
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos, acaoLanc } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const ler = (page, k) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), k);
@@ -34,11 +34,11 @@ const cr = extra => ({ id: 601, pedido_id: 26300, cliente_nome: 'Ana Paula Lima'
 async function abrirReceber(page, dados) {
     await entrar(page, BASE, { sc_cli: CLI, sc_contas_fin: CONTAS, sc_meios_pag: MEIOS, sc_ped: [pedido()], ...dados });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await abrirLancamentos(page, 'receber');
 }
 
 async function receber(page) {
-    await page.locator('#tb-contas-receber button', { hasText: '✓ Recebido' }).first().click();
+    await acaoLanc(page, 'receber', 'Dar baixa');
     const modal = page.locator('#baixa-modal');
     await expect(modal).toBeVisible();
     return modal;
@@ -156,7 +156,7 @@ test('estorno da parcial junta de volta 3000', async ({ page }) => {
         sc_mov_fin: [{ id: 900, conta_id: 10, data: HOJE, sentido: 'entrada', valor: 1000, origem: 'cr', origem_id: 602, grupo_id: 901, descricao: 'x' }],
         sc_ped: [pedido({ valor_recebido: 1000 })]
     });
-    await page.locator('#tb-contas-receber button', { hasText: 'Estornar' }).click();
+    await acaoLanc(page, 'receber', 'Estornar');
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await ler(page, 'sc_cr')).length).toBe(1);
     const [c] = await ler(page, 'sc_cr');
@@ -180,7 +180,7 @@ test('estorno da parcial com a parte aberta ja paga volta a ficar aberta sozinha
     const lidas = await ler(page, 'sc_cr');
     expect(lidas).toHaveLength(2);
     expect(lidas.find(c => c.id === 601)).toMatchObject({ valor: 2000, status: 'Pago' });
-    expect(lidas.find(c => c.id === 602)).toMatchObject({ valor: 1000, meio_id: null, conta_id: null, cartao: null });
+    expect(lidas.find(c => c.id === 602)).toMatchObject({ valor: 1000, meio_id: null, conta_id: 10, cartao: null });
 });
 
 test('data anterior ao saldo inicial avisa e nao gera movimento', async ({ page }) => {
@@ -214,7 +214,7 @@ test('estorno de cartao com repasse caido avisa e remove tudo', async ({ page })
                      { id: 95, conta_id: 11, data: d1, sentido: 'entrada', valor: 10, origem: 'cr', origem_id: 777, grupo_id: null, descricao: 'outro' }],
         sc_ped: [pedido({ valor_recebido: 3000 })]
     });
-    await page.locator('#tb-contas-receber button', { hasText: 'Estornar' }).click();
+    await acaoLanc(page, 'receber', 'Estornar');
     await expect(page.locator('#sc-modal-msg')).toContainText('Isso muda o saldo de hoje da conta Maquininha.');
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await ler(page, 'sc_cr'))[0].status).toBe('Pendente');

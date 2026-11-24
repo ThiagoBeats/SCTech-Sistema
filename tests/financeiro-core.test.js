@@ -264,3 +264,18 @@ test('planoMigracaoFase0: valor recebido digitado em pedido sem parcelas vai par
         { pedido_id: 3, motivo: 'valor recebido digitado no pedido sem lançamento no Financeiro', sem_lancamento: true }]);
     assert.deepStrictEqual(plano.baixarCR, []);
 });
+
+// Financeiro novo: Cancelado nao e saldo em aberto, nem custo do pedido, nem duplicidade de nota.
+test('Cancelado fora de saldoEmAberto, resultadoPedido e acharContaDuplicadaNota; migracao Fase 0 nao apaga cancelada', () => {
+    const F = require('../js/financeiro-core.js');
+    const crs = [{ pedido_id: 1, valor: 100, status: 'Pendente' }, { pedido_id: 1, valor: 50, status: 'Cancelado' }, { pedido_id: 1, valor: 30, status: 'Pago' }];
+    assert.strictEqual(F.saldoEmAberto(crs, 1), 100);
+    assert.strictEqual(F.totalRecebido(crs, 1), 30);
+    const cps = [{ pedido_id: 1, categoria: 'comissao', valor: 40, status: 'Cancelado' }, { pedido_id: 1, categoria: 'comissao', valor: 10, status: 'Pendente' }];
+    const r = F.resultadoPedido({ id: 1, valor: 1000, custo_snapshot: { total: 0 } }, cps, {});
+    assert.strictEqual(r.comissoes, 10);
+    const nota = [{ id: 7, pedido_compra_id: 3, cnpj_fornecedor: '11222333000181', valor: 500, status: 'Cancelado' }];
+    assert.strictEqual(F.acharContaDuplicadaNota(nota, { cnpj: '11.222.333/0001-81', valor: 500 }), null);
+    const plano = F.planoMigracaoFase0({ pedidos: [], contas_receber: [{ id: 5, pedido_id: 99, valor: 10, status: 'Cancelado' }], contas_pagar: [], vendedores: [], hoje: '2026-11-24', rotuloPedido: p => '#' + p.id });
+    assert.deepStrictEqual(plano.removerCR, []);
+});

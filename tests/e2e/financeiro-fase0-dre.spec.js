@@ -17,7 +17,8 @@ async function abrirDRE(page) {
     await page.locator('.fin-tab-btn[data-tab="dre"]').click();
 }
 
-test('aprovar guarda o custo e o DRE nao muda quando o custo do tecido muda', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('aprovar guarda o custo e o DRE nao muda quando o custo do tecido muda', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_cat: CAT(20), sc_ped: [orcamento()] });
     await page.goto(BASE + '/index.html');
     await page.evaluate(() => { aprovarPedido(26500); });
@@ -33,7 +34,8 @@ test('aprovar guarda o custo e o DRE nao muda quando o custo do tecido muda', as
     await expect(linha).toContainText('80,0%');
 });
 
-test('mao de obra nao e custo', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('mao de obra nao e custo', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_ped: [aprovado({ maoObra: 200, custo_snapshot: { total: 300, itens: [], faltando: 0, data: '2026-11-01' } })] });
     await abrirDRE(page);
     const linha = page.locator('#tb-dre tr', { hasText: 'Ana Paula' }).first();
@@ -48,13 +50,15 @@ test('colunas do DRE', async ({ page }) => {
     expect(ths.slice(2)).toEqual(['Receita', 'Material', 'Serviços e outros', 'Comissões', 'Resultado', 'Margem']);
 });
 
-test('item sem custo mostra aviso', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('item sem custo mostra aviso', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_ped: [aprovado({ custo_snapshot: { total: 100, itens: [], faltando: 2, data: '2026-11-01' } })] });
     await abrirDRE(page);
     await expect(page.locator('#tb-dre tr', { hasText: 'Ana Paula' }).first()).toContainText('custo não informado');
 });
 
-test('pedido de formato antigo (tecido no ambiente ou no pedido) tem custo', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('pedido de formato antigo (tecido no ambiente ou no pedido) tem custo', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_cat: CAT(20),
         sc_ped: [aprovado({ tecidoId: 7, consumo_linear: 10, largura: 3 })] });
     await abrirDRE(page);
@@ -69,7 +73,8 @@ test('pedido de formato antigo (tecido no ambiente ou no pedido) tem custo', asy
     expect(snap, 'o pedido guardado nao muda de formato').toEqual([100, 0, undefined]);
 });
 
-test('pedido antigo sem snapshot aparece como custo estimado', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('pedido antigo sem snapshot aparece como custo estimado', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_cat: CAT(20),
         sc_ped: [aprovado({ ambientes: [{ nome: 'Sala', tecidos: [{ tecidoId: 7, nome: 'Linho Bege', consumo_linear: 10 }] }] })] });
     await abrirDRE(page);

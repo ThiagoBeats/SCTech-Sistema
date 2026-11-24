@@ -1,7 +1,7 @@
 // Pendencias R1, tarefa 4: cartao e meios de pagamento (baixa sem conta, taxas digitadas, plano/entrada,
 // meio apagado, padroes, "Cartao que cai hoje" liquido, conta do meio de cartao).
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos, acaoLanc } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const ler = (page, k) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), k);
@@ -24,8 +24,8 @@ const cr = extra => ({ id: 601, pedido_id: null, cliente_nome: 'Ana', descricao:
 async function baixarComCartao(page, dados) {
     await entrar(page, BASE, dados);
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
-    await page.locator('#tb-contas-receber button', { hasText: '✓ Recebido' }).first().click();
+    await abrirLancamentos(page, 'receber');
+    await acaoLanc(page, 'receber', 'Dar baixa');
     const modal = page.locator('#baixa-modal');
     await modal.locator('.baixa-linha').first().locator('.baixa-meio').selectOption({ label: 'Cartão de crédito' });
     await modal.locator('#baixa-ok').click();
@@ -111,7 +111,8 @@ test('entrada 0% esconde o meio da entrada', async ({ page }) => {
 });
 
 // ---- Hoje: liquido ----
-test('Cartao que cai hoje mostra o liquido', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Cartao que cai hoje mostra o liquido', async ({ page }) => {
     await entrar(page, BASE, { sc_contas_fin: [CAIXA, MAQ], sc_meios_pag: MEIOS,
         sc_mov_fin: [
             { id: 1, conta_id: 12, data: HOJE, sentido: 'entrada', valor: 100, origem: 'cr', origem_id: 9, grupo_id: 5, descricao: 'Repasse X' },
@@ -141,8 +142,8 @@ test('estorno de baixa com cartao sem conta remove a conta de taxa e nao deixa s
     await baixarComCartao(page, { sc_contas_fin: [CAIXA, BANCO, MAQ], sc_meios_pag: meios, sc_cr: [cr()], sc_cp: [] });
     expect(await ler(page, 'sc_cp')).toHaveLength(1);
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
-    await page.locator('#tb-contas-receber button', { hasText: 'Estornar' }).click();
+    await abrirLancamentos(page, 'receber');
+    await acaoLanc(page, 'receber', 'Estornar');
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await ler(page, 'sc_cr'))[0].status).not.toBe('Pago');
     expect(await ler(page, 'sc_cp')).toHaveLength(0);

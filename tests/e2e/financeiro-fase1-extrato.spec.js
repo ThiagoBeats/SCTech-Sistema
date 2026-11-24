@@ -29,7 +29,7 @@ const MOVS = [
 async function abrir(page, movs, extras) {
     await entrar(page, BASE, { sc_contas_fin: CONTAS, sc_mov_fin: movs || MOVS, ...extras });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="extrato"]').click();
+    await page.locator('.fin-tab-btn[data-tab="fluxo"]').click();
 }
 const txt = async (loc) => (await loc.innerText()).replace(/\s+/g, ' ');
 
@@ -140,11 +140,11 @@ test('sem extrato completo nao ve Transferir', async ({ page }) => {
     await page.evaluate(() => {
         const u = JSON.parse(localStorage.getItem('sc_usr'));
         u[0].papel_id = 4;
-        u[0].permissoes_extras = { 'financeiro.extrato': { nivel: 'visualizar', acoes_restritas: [] } };
+        u[0].permissoes_extras = { 'financeiro.fluxo': { nivel: 'visualizar', acoes_restritas: [] } };
         localStorage.setItem('sc_usr', JSON.stringify(u));
     });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="extrato"]').click();
+    await page.locator('.fin-tab-btn[data-tab="fluxo"]').click();
     await expect(page.locator('#extrato-linhas .extrato-linha')).toHaveCount(3);
     await expect(page.locator('#extrato-btn-transferir')).toBeHidden();
 });

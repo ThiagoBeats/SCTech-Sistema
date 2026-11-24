@@ -39,7 +39,7 @@
     }
 
     function pendenciasDoMes({ mes, contasPagar, contasReceber, impostoEstimado }) {
-        const abertas = lista => (lista || []).filter(x => x.status !== 'Pago' && mesDe(x.data_vencimento) === mes);
+        const abertas = lista => (lista || []).filter(x => x.status !== 'Pago' && x.status !== 'Cancelado' && mesDe(x.data_vencimento) === mes);
         const soma = lista => arredondar(lista.reduce((s, x) => s + (Number(x.valor) || 0), 0));
         const pagar = abertas(contasPagar), receber = abertas(contasReceber);
         return {

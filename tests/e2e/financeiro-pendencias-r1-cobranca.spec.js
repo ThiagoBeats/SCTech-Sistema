@@ -1,6 +1,6 @@
 // Pendencias R1, tarefa 5: cobranca (zero de tronco, cliente por id, popup bloqueado).
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos, acaoLanc } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8155';
 const p2 = n => String(n).padStart(2, '0');
@@ -15,31 +15,31 @@ async function abrir(page, dados, retorno) {
     await entrar(page, BASE, dados);
     await page.goto(BASE + '/financeiro.html');
     await page.evaluate(r => { window.__abertos = []; window.open = u => { window.__abertos.push(u); return r ? {} : null; }; }, retorno);
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await abrirLancamentos(page, 'receber');
 }
 const abertos = page => page.evaluate(() => window.__abertos);
 
 test('telefone com zero de tronco vira 55 + DDD', async ({ page }) => {
     await abrir(page, { sc_cli: [{ id: 2, nome: 'Ana', tel: '041 9999-0000' }], sc_ped: [pedido()], sc_cr: [cr()] }, true);
-    await page.locator('#tb-contas-receber button', { hasText: 'Cobrar' }).click();
+    await acaoLanc(page, 'receber', 'Cobrar no WhatsApp');
     expect((await abertos(page))[0]).toMatch(/^https:\/\/wa\.me\/554199990000\?text=/);
 });
 
 test('homonimos: usa o clienteId do pedido, nao o primeiro do nome', async ({ page }) => {
     await abrir(page, { sc_cli: [{ id: 1, nome: 'Ana', tel: '11 91111-1111' }, { id: 2, nome: 'Ana', tel: '11 92222-2222' }], sc_ped: [pedido()], sc_cr: [cr()] }, true);
-    await page.locator('#tb-contas-receber button', { hasText: 'Cobrar' }).click();
+    await acaoLanc(page, 'receber', 'Cobrar no WhatsApp');
     expect((await abertos(page))[0]).toMatch(/^https:\/\/wa\.me\/5511922222222\?text=/);
 });
 
 test('homonimos sem id: abre o WhatsApp sem numero', async ({ page }) => {
     await abrir(page, { sc_cli: [{ id: 1, nome: 'Ana', tel: '11 91111-1111' }, { id: 2, nome: 'Ana', tel: '11 92222-2222' }], sc_ped: [pedido({ clienteId: undefined })], sc_cr: [cr()] }, true);
-    await page.locator('#tb-contas-receber button', { hasText: 'Cobrar' }).click();
+    await acaoLanc(page, 'receber', 'Cobrar no WhatsApp');
     expect((await abertos(page))[0]).toMatch(/^https:\/\/wa\.me\/\?text=/);
 });
 
 test('popup bloqueado: avisa e nao marca cobrado hoje', async ({ page }) => {
     await abrir(page, { sc_cli: [{ id: 2, nome: 'Ana', tel: '11 92222-2222' }], sc_ped: [pedido()], sc_cr: [cr()] }, false);
-    await page.locator('#tb-contas-receber button', { hasText: 'Cobrar' }).click();
+    await acaoLanc(page, 'receber', 'Cobrar no WhatsApp');
     await expect(page.locator('#sc-modal-msg')).toHaveText('O navegador bloqueou a janela do WhatsApp. Libere os pop-ups e tente de novo.');
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('sc_cr'))[0].ultima_cobranca)).toBeUndefined();
     await page.locator('#sc-modal-ok').click();

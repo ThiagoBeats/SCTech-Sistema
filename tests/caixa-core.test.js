@@ -303,3 +303,27 @@ test('previsao: fixa com periodicidade sem conta pre-gerada no horizonte nao ent
     const l2 = C.lancamentosPrevistos({ hoje, limite: '2027-01-31', movimentos: [], contasReceber: [], contasPagar: [dentro], despesasFixas: dfs, contas: [], meios: [] });
     assert.deepStrictEqual(l2.map(x => [x.data, x.valor]), [['2026-12-20', 1200]]);
 });
+
+// Financeiro novo: lancamento Cancelado sai da previsao e das tarefas do dia.
+test('Cancelado fica fora de lancamentosPrevistos, previsaoSemanal e tarefasHoje', () => {
+    const hoje = '2026-11-24';
+    const cr = (id, venc, status) => ({ id, valor: 100, data_vencimento: venc, status });
+    const contasReceber = [cr(1, '2026-11-20', 'Pendente'), cr(2, '2026-11-20', 'Cancelado'), cr(3, '2026-11-26', 'Cancelado'), cr(4, '2026-11-24', 'Cancelado')];
+    const contasPagar = [{ id: 5, valor: 40, data_vencimento: '2026-11-25', status: 'Cancelado' }, { id: 6, valor: 30, data_vencimento: '2026-11-25', status: 'Pendente' }];
+    const l = C.lancamentosPrevistos({ hoje, limite: '2026-12-31', movimentos: [], contasReceber, contasPagar, despesasFixas: [], contas: [], meios: [] });
+    assert.deepStrictEqual(l.map(x => [x.sentido, x.valor]), [['entrada', 100], ['saida', 30]]);
+    const s = C.previsaoSemanal({ hoje, saldoHoje: 0, movimentos: [], contasReceber, contasPagar, despesasFixas: [], contas: [], meios: [], semanas: 1 });
+    assert.deepStrictEqual([s[0].entradas, s[0].saidas], [100, 30]);
+    const t = C.tarefasHoje({ hoje, contasReceber, contasPagar, movimentos: [], contas: [] });
+    assert.deepStrictEqual(t.receberAtrasados.map(x => x.id), [1]);
+    assert.deepStrictEqual(t.receberHoje.map(x => x.id), []);
+    assert.deepStrictEqual(t.pagarProximos.map(x => x.id), [6]);
+});
+
+test('ocorrencia de despesa fixa cancelada nao soma, mas tambem nao volta como estimativa da fixa', () => {
+    const hoje = '2026-11-24';
+    const df = { id: 9, descricao: 'Aluguel', valor: 1500, dia_vencimento: 5, categoria: 'aluguel', ativo: true, data_inicio: '2026-12-01' };
+    const canc = { id: 10, tipo: 'fixo', categoria: 'aluguel', descricao: 'Aluguel', despesa_fixa_id: 9, valor: 1500, data_vencimento: '2026-12-05', status: 'Cancelado' };
+    const l = C.lancamentosPrevistos({ hoje, limite: '2026-12-31', movimentos: [], contasReceber: [], contasPagar: [canc], despesasFixas: [df], contas: [], meios: [] });
+    assert.deepStrictEqual(l, []);
+});

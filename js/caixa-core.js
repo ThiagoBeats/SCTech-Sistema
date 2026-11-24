@@ -130,7 +130,8 @@
 
     const MENSAGEM_COBRANCA_PADRAO = 'Olá, {cliente}! Aqui é da {empresa}. Passando para lembrar da parcela de {valor} do pedido {pedido}, com vencimento em {vencimento}. Qualquer dúvida, estou à disposição.';
 
-    const aberto = x => x && x.status !== 'Pago';
+    // Em aberto: nem paga, nem cancelada (Cancelado sai da previsao e das tarefas).
+    const aberto = x => x && x.status !== 'Pago' && x.status !== 'Cancelado';
     const maxData = (a, b) => (a > b ? a : b);
 
     // Ocorrencias mensais de uma despesa fixa entre duas datas (dia ajustado ao fim do mes).
