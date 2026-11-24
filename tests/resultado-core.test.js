@@ -419,3 +419,23 @@ test('Cancelado: guia de imposto cancelada nao conta; fixa cancelada nao soma ne
     const luz = { id: 11, tipo: 'fixo', categoria: 'conta', descricao: 'Luz', valor: 200, data_vencimento: '2026-12-10', status: 'Pendente' };
     assert.strictEqual(R.despesasFixasDoMes({ mes: '2026-12', contasPagar: [canc, luz], despesasFixas: [df] }), 200);
 });
+
+test("so_caixa fica fora do Resultado: aporte recebido nao e entrada; pagamento de emprestimo nao e saida", () => {
+    const crs = [
+        { id: 1, status: "Pago", valor: 1000, data_pagamento: "2026-11-05", categoria_id: "cat_vendas" },
+        { id: 2, status: "Pago", valor: 50000, data_pagamento: "2026-11-06", categoria_id: "cat_aporte" }
+    ];
+    const cps = [
+        { id: 1, status: "Pago", valor: 200, data_pagamento: "2026-11-07", categoria: "outro", categoria_id: "cat_outras_desp" },
+        { id: 2, status: "Pago", valor: 8000, data_pagamento: "2026-11-08", categoria: "outro", categoria_id: "cat_emprestimo_out" }
+    ];
+    const m = R.resultadoDoMes({ mes: "2026-11", contasReceber: crs, contasPagar: cps, movimentos: [], aliquota: 0 });
+    assert.strictEqual(m.entradas, 1000);
+    assert.strictEqual(m.saidas, 200);
+    const p = R.resultadoDoPeriodo({ de: "2026-11-01", ate: "2026-11-30", contasReceber: crs, contasPagar: cps, movimentos: [], aliquota: 0 });
+    assert.strictEqual(p.entradas, 1000);
+    assert.strictEqual(p.saidas, 200);
+    // categorias passadas: so as marcadas como so_caixa saem
+    const cats = { categorias: [{ id: "cat_aporte", natureza: "dre" }] };
+    assert.strictEqual(R.resultadoDoMes({ mes: "2026-11", contasReceber: crs, contasPagar: cps, movimentos: [], aliquota: 0, categorias: cats }).entradas, 51000);
+});

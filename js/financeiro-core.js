@@ -224,7 +224,7 @@
         (pedidos || []).forEach(ped => {
             const valor = Number(ped.valor) || 0;
             const recebidoPed = Number(ped.valor_recebido) || 0;
-            const abertas = _doPedido(crs, ped.id).filter(c => c.status !== 'Pago');
+            const abertas = _doPedido(crs, ped.id).filter(c => c.status !== 'Pago' && c.status !== 'Cancelado');
             // Pagamento confirmado no fluxo antigo = tudo recebido. No fluxo novo a
             // confirmacao pode ser parcial (pagamento_pendente): essa nao e baixada.
             const quitado = (ped.pagamento_confirmado_em && !ped.pagamento_pendente) || (valor > 0 && recebidoPed >= valor);

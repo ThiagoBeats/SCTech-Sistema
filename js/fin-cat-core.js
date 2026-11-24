@@ -132,7 +132,7 @@
             if (!c) return;
             if (temVal(c.categoria_id) && temVal(c.data_competencia)) return;
             const set = {};
-            if (!temVal(c.categoria_id)) set.categoria_id = categoriaDoLegado(c, 'receber');
+            if (!temVal(c.categoria_id)) { set.categoria_id = categoriaDoLegado(c, 'receber'); set.categoria_auto = true; }
             if (!temVal(c.data_competencia)) {
                 const comp = c.pedido_id && menorVenc.get(String(c.pedido_id))
                     ? menorVenc.get(String(c.pedido_id))
@@ -158,7 +158,7 @@
             if (!c) return;
             if (temVal(c.categoria_id) && temVal(c.data_competencia)) return;
             const set = {};
-            if (!temVal(c.categoria_id)) set.categoria_id = categoriaDoLegado(c, 'pagar');
+            if (!temVal(c.categoria_id)) { set.categoria_id = categoriaDoLegado(c, 'pagar'); set.categoria_auto = true; }
             if (!temVal(c.data_competencia)) {
                 let comp = null;
                 if (typeof c.mes_referencia === 'string' && /^\d{4}-\d{2}$/.test(c.mes_referencia)) comp = c.mes_referencia + '-01';
@@ -253,18 +253,29 @@
 
     const ehPago = reg => !!reg && (reg.status === 'Pago' || !!reg.data_pagamento);
 
+    // Comissao gerada a partir do pedido (com papel, ou a antiga 'comissao_rt'): ajusta-se no pedido/vendedor.
+    const ehComissao = reg => !!reg && (!!reg.papel_comissao || reg.categoria === 'comissao_rt');
+
     function podeCancelar(reg) {
+        if (ehComissao(reg) && !(reg.status === 'Cancelado')) return { ok: false, motivo: 'Comissão: ajuste no pedido ou no cadastro do vendedor.' };
         if (ehPago(reg)) return { ok: false, motivo: 'Estorne a baixa antes de cancelar.' };
         if (reg && reg.status === 'Cancelado') return { ok: false, motivo: 'Este lançamento já está cancelado.' };
         return { ok: true, motivo: '' };
     }
 
-    function podeExcluir(reg) {
+    // 'receber' | 'pagar'; sem o lado, deduz pelos campos (cliente x fornecedor/categoria antiga).
+    function ehReceber(reg, lado) {
+        if (lado === 'receber' || lado === 'cr') return true;
+        if (lado === 'pagar' || lado === 'cp') return false;
+        return (reg.cliente_id !== undefined || reg.cliente_nome !== undefined) && reg.credor_nome === undefined && reg.fornecedor_id === undefined && reg.categoria === undefined;
+    }
+
+    function podeExcluir(reg, lado) {
         reg = reg || {};
         if (ehPago(reg)) return { ok: false, motivo: 'Estorne a baixa antes de excluir.' };
-        // Automatico: comissao, compra, origem em CR, recorrencia (recorrente ou despesa_fixa_id, gerada todo mes) e parcela de pedido (CR com parcela_tipo).
-        // Parcelado manual (lancamento_pai_id + parcelado) e lancamento manual ligado a pedido podem ser excluidos.
-        if (reg.papel_comissao || reg.pedido_compra_id || reg.origem_cr_id || reg.recorrente || reg.despesa_fixa_id || reg.parcela_tipo) {
+        // Automatico: comissao, compra, origem em CR, recorrencia (recorrente ou despesa_fixa_id, gerada todo mes) e parcela de pedido (CR com pedido_id: o pedido controla o valor, mesmo as antigas sem parcela_tipo).
+        // Parcelado manual (lancamento_pai_id + parcelado) e custo (CP) manual ligado a pedido podem ser excluidos.
+        if (reg.papel_comissao || reg.pedido_compra_id || reg.origem_cr_id || reg.recorrente || reg.despesa_fixa_id || reg.parcela_tipo || (reg.pedido_id != null && reg.pedido_id !== '' && ehReceber(reg, lado))) {
             return { ok: false, motivo: 'Este lançamento foi gerado automaticamente; cancele em vez de excluir.' };
         }
         return { ok: true, motivo: '' };
@@ -284,7 +295,7 @@
     }
 
     const api = { GRUPOS, MAPA_LEGADO, ROTULO_SITUACAO, categoriasPadrao, categoriaDoLegado, planoMigracaoV4,
-        competenciaPadrao, dividirParcelas, acharParecido, situacao, podeCancelar, podeExcluir, registrarHistorico };
+        competenciaPadrao, dividirParcelas, acharParecido, situacao, ehComissao, podeCancelar, podeExcluir, registrarHistorico };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.FinCatCore = api;
 

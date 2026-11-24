@@ -3952,7 +3952,7 @@ async function confirmarPagamentoPedido(id) {
     } else {
         const r = await abrirModalBaixa({
             titulo: `Confirmar pagamento do pedido #${formatPedidoId(ped.id)}`,
-            itens: abertas.map(c => ({ id: c.id, descricao: c.descricao, valor: c.valor, marcado: c !== desmarcar, meio_previsto: c.meio_previsto || null })),
+            itens: abertas.map(c => ({ id: c.id, descricao: c.descricao, valor: c.valor, marcado: c !== desmarcar, meio_previsto: c.meio_previsto || null, conta_prevista: c.conta_id != null ? c.conta_id : null })),
             formaPadrao: formaPagamentoDoPedido(ped),
             permiteParcial: true,
             permiteNenhum: true
@@ -14809,7 +14809,7 @@ function _migrarFinanceiroFase0({ semCopia = false } = {}) {
         });
         plano.baixarCR.forEach(b => {
             const cr = db.contas_receber.find(x => x.id == b.id);
-            if (!cr || cr.status === 'Pago') return;
+            if (!cr || !finAberta(cr)) return;
             Object.assign(cr, { status: 'Pago', data_pagamento: b.data_pagamento, baixado_por: b.baixado_por, baixado_em: agora });
             if (cr.pedido_id) tocados.add(cr.pedido_id);
         });
@@ -15111,6 +15111,8 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
             return (nome && meios.find(m => m.nome.trim().toLowerCase() === nome)) || null;
         };
         const contaDe = m => (m && m.conta_id != null && _contaFinPorId(m.conta_id)) ? String(m.conta_id) : '';
+        // Conta de saida/entrada: a do meio; sem ela, a conta prevista do lancamento (se ainda valer).
+        const contaInicial = (it, m) => contaDe(m) || ((it && it.conta_prevista != null && _contaFinPorId(it.conta_prevista)) ? String(it.conta_prevista) : '');
         const ehCartao = m => !!m && (m.tipo === 'cartao_debito' || m.tipo === 'cartao_credito');
         // Cartao so cai em conta de maquininha.
         const contasDoMeio = m => ehCartao(m) ? contas.filter(c => c.tipo === 'maquininha') : contas;
@@ -15137,7 +15139,7 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
                     <div class="baixa-detalhe" style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0 24px">
                         <input type="text" inputmode="decimal" class="baixa-valor" title="Valor recebido" value="${(Number(it.valor) || 0).toFixed(2).replace('.', ',')}" ${permiteParcial ? '' : 'readonly'} style="${sel};flex:1 1 90px;${permiteParcial ? '' : 'background:var(--surface-3)'}">
                         <select class="baixa-meio" title="Meio" style="${sel};flex:2 1 130px">${m.chave ? '' : '<option value="" selected>Escolha o meio</option>'}${meios.map(x => `<option value="${escapeHtml(x.chave)}" ${x === m ? 'selected' : ''}>${escapeHtml(x.nome)}</option>`).join('')}</select>
-                        <select class="baixa-conta" title="Conta" style="${sel};flex:2 1 130px;${semContas ? 'display:none' : ''}">${opcoesConta(m, contaDe(m))}</select>
+                        <select class="baixa-conta" title="Conta" style="${sel};flex:2 1 130px;${semContas ? 'display:none' : ''}">${opcoesConta(m, contaInicial(it, m))}</select>
                         <div class="baixa-cartao" style="display:none;flex:1 1 100%;gap:10px;align-items:center">
                             <label style="font-size:12px">Vezes <select class="baixa-vezes" style="padding:4px;border:1px solid var(--border-strong);border-radius:4px">${Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}" ${i + 1 === vezes ? 'selected' : ''}>${i + 1}x</option>`).join('')}</select></label>
                             <label style="font-size:12px;cursor:pointer"><input type="checkbox" class="baixa-antecipar" ${mp.antecipar ? 'checked' : ''}> Antecipar</label>
@@ -15200,7 +15202,7 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
         linhas.forEach(l => {
             l.querySelector('.baixa-meio').addEventListener('change', () => {
                 const m = meioDa(l);
-                l.querySelector('.baixa-conta').innerHTML = opcoesConta(m, contaDe(m));
+                l.querySelector('.baixa-conta').innerHTML = opcoesConta(m, contaInicial(itens[Number(l.dataset.idx)], m));
                 atualizar();
             });
             l.querySelectorAll('.baixa-check,.baixa-conta').forEach(x => x.addEventListener('change', atualizar));
@@ -15438,7 +15440,7 @@ async function estornarCP(id) {
     finHist(cp, 'estorno', `Pagamento de ${_finBrl(cp.valor)} em ${_finDataBR(cp.data_pagamento)} estornado`);
     const hoje = hojeLocal();
     cp.status = (cp.data_vencimento && cp.data_vencimento < hoje) ? 'Atrasado' : 'Pendente';
-    ['data_pagamento', 'forma_pagamento', 'meio_id', 'conta_id', 'baixado_por', 'baixado_em'].forEach(k => { cp[k] = null; });
+    ['data_pagamento', 'forma_pagamento', 'meio_id', 'baixado_por', 'baixado_em'].forEach(k => { cp[k] = null; });
     cp.estornado_por = getUsuarioLogado()?.id || null;
     cp.estornado_em = Date.now();
     const papelCom = _papelDaComissao(cp);
@@ -15467,7 +15469,7 @@ async function marcarCRPago(id) {
     const ped = db.pedidos.find(p => p.id == cr.pedido_id);
     const r = await abrirModalBaixa({
         titulo: 'Registrar recebimento',
-        itens: [{ id: cr.id, descricao: cr.descricao, valor: cr.valor, marcado: true, meio_previsto: cr.meio_previsto || null }],
+        itens: [{ id: cr.id, descricao: cr.descricao, valor: cr.valor, marcado: true, meio_previsto: cr.meio_previsto || null, conta_prevista: cr.conta_id != null ? cr.conta_id : null }],
         formaPadrao: formaPagamentoDoPedido(ped) || cr.forma_pagamento || '',
         permiteParcial: true
     });
@@ -15510,7 +15512,6 @@ async function estornarCR(id) {
         cr.data_pagamento = null;
         cr.forma_pagamento = null;
         cr.meio_id = null;
-        cr.conta_id = null;
         cr.cartao = null;
         cr.baixado_por = null;
         cr.baixado_em = null;
@@ -15689,7 +15690,7 @@ async function marcarCPPago(id) {
     if (!finAberta(cp)) return;
     const r = await abrirModalBaixa({
         titulo: 'Registrar pagamento',
-        itens: [{ id: cp.id, descricao: cp.descricao, valor: cp.valor, marcado: true }],
+        itens: [{ id: cp.id, descricao: cp.descricao, valor: cp.valor, marcado: true, conta_prevista: cp.conta_id != null ? cp.conta_id : null }],
         formaPadrao: cp.forma_pagamento || '',
         permiteCartao: false, permiteParcial: false
     });
@@ -16856,7 +16857,7 @@ function _resPedidosFallback() {
 // Dados de entrada do ResultadoCore (os mesmos para Resultado do mes, Visao Geral e Hoje).
 // `contas`: para o recebimento no cartao sem movimento cair nas datas de repasse da maquininha.
 function dadosFinanceirosBase() {
-    return { contasReceber: db.contas_receber, contasPagar: db.contas_pagar, movimentos: db.movimentos_fin, aliquota: getEmpresa().aliquota_estimada, contas: getContasFin() };
+    return { contasReceber: db.contas_receber, contasPagar: db.contas_pagar, movimentos: db.movimentos_fin, aliquota: getEmpresa().aliquota_estimada, contas: getContasFin(), categorias: db.fin_categorias };
 }
 function resultadoFinanceiroDoMes(mes, ateData) {
     return ResultadoCore.resultadoDoMes({ mes, ...dadosFinanceirosBase(), ateData });
@@ -17930,7 +17931,7 @@ function renderExtrato(opts) {
         avSem.style.cssText = 'font-size:13px;color:var(--warn-text);margin-bottom:10px';
         avAb.parentNode.insertBefore(avSem, avAb.nextSibling);
     }
-    const semMov = ResultadoCore.recebimentosSemMovimento({ de: primeiro, ate: ultimo, contasReceber: db.contas_receber, movimentos: movs, contas, contasPagar: db.contas_pagar });
+    const semMov = ResultadoCore.recebimentosSemMovimento({ de: primeiro, ate: ultimo, contasReceber: db.contas_receber, movimentos: movs, contas, contasPagar: db.contas_pagar, categorias: db.fin_categorias });
     avSem.textContent = semMov.qtd === 1 ? `1 recebimento sem conta (${brl(semMov.valor)}) não aparece aqui`
         : semMov.qtd > 1 ? `${semMov.qtd} recebimentos sem conta (${brl(semMov.valor)}) não aparecem aqui` : '';
     avSem.style.display = semMov.qtd > 0 ? '' : 'none';

@@ -386,13 +386,44 @@ test('competencia padrao de imposto e o dia 1 do mes de referencia', async ({ pa
     expect(c).toMatchObject({ data_competencia: '2026-11-01', mes_referencia: '2026-11', categoria_id: 'cat_impostos' });
 });
 
-test('lancamento gerado pelo sistema nao deixa mudar valor nem pedido', async ({ page }) => {
+test('lancamento gerado pelo sistema nao deixa mudar valor e o pedido segue intocado', async ({ page }) => {
     await abrir(page);
     await acaoMenu(page, linha(page, 'receber', 'Entrada do pedido'), 'Editar');
     await expect(page.locator('#lf-valor')).toBeDisabled();
-    await expect(page.locator('#lf-pedido')).toBeDisabled();
+    await expect(page.locator('#lf-pedido')).toHaveCount(0);
     await page.fill('#lf-obs', 'obs nova');
     await page.locator('#lf-salvar').click();
     await expect.poll(async () => (await ler(page, 'sc_cr')).find(c => c.id === 6).observacoes).toBe('obs nova');
     expect((await ler(page, 'sc_cr')).find(c => c.id === 6).pedido_id).toBe(26300);
+});
+
+test('Contas a receber nao oferece Pedido (so o pedido gera receber); Contas a pagar oferece', async ({ page }) => {
+    await abrir(page);
+    await page.locator('#lanc-novo').click();
+    await expect(page.locator('#lf-descricao')).toBeVisible();
+    await expect(page.locator('#lf-pedido')).toHaveCount(0);
+    await page.locator('#lanc-form-overlay .modal-close').click();
+    await abrirLancamentos(page, 'pagar');
+    await page.locator('#lanc-novo').click();
+    await expect(page.locator('#lf-pedido')).toHaveCount(1);
+});
+
+test('parcela antiga de pedido (sem parcela_tipo) nao tem Excluir e o valor fica travado', async ({ page }) => {
+    const velha = { id: 7, pedido_id: 26300, cliente_nome: 'Fabio', descricao: 'Saldo antigo do pedido', valor: 1000, status: 'Pendente', data_vencimento: '2026-11-28', data_competencia: '2026-11-28', categoria_id: 'cat_vendas', data_pagamento: null, historico: hist() };
+    await abrir(page, { sc_cr: CR.concat([velha]) });
+    expect(await acoesDaLinha(page, linha(page, 'receber', 'Saldo antigo do pedido'))).not.toContain('Excluir');
+    await acaoMenu(page, linha(page, 'receber', 'Saldo antigo do pedido'), 'Editar');
+    await expect(page.locator('#lf-valor')).toBeDisabled();
+});
+
+test('comissao gerada nao oferece Cancelar na tela', async ({ page }) => {
+    const com = { id: 14, tipo: 'variavel', categoria: 'comissao', papel_comissao: 'vendedor', pedido_id: 26300, credor_nome: 'Vera', descricao: 'Comissao do pedido', valor: 300, status: 'Pendente', data_vencimento: '2026-11-29', data_competencia: '2026-11-29', categoria_id: 'cat_comissoes', data_pagamento: null, historico: hist() };
+    await abrir(page, { sc_cp: CP.concat([com]) }, 'pagar');
+    const acoes = await acoesDaLinha(page, linha(page, 'pagar', 'Comissao do pedido'));
+    expect(acoes).not.toContain('Cancelar');
+    expect(acoes).not.toContain('Excluir');
+    expect(await acoesDaLinha(page, linha(page, 'pagar', 'Tecido'))).toContain('Cancelar');
+    const r = await page.evaluate(() => cancelarLancamento('cp', 14, 'x'));
+    expect(r).toBe(false);
+    expect((await ler(page, 'sc_cp')).find(c => c.id === 14).status).toBe('Pendente');
 });

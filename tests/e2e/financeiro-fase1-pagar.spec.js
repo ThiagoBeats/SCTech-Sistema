@@ -98,7 +98,7 @@ test('pagar comissao gera saida e estornar devolve a pendente', async ({ page })
     expect(ped.comissao_data_pgto).toBeNull();
     const c = (await ler(page, 'sc_cp')).find(x => x.papel_comissao === 'vendedor');
     expect(c.status).toBe('Atrasado');
-    expect(c).toMatchObject({ data_pagamento: null, forma_pagamento: null, meio_id: null, conta_id: null, baixado_em: null });
+    expect(c).toMatchObject({ data_pagamento: null, forma_pagamento: null, meio_id: null, baixado_em: null });
     expect(c.estornado_em).toBeGreaterThan(0);
     expect(await ler(page, 'sc_mov_fin')).toEqual([]);
     await page.goto(BASE + '/vendedores.html?aba=pendentes');

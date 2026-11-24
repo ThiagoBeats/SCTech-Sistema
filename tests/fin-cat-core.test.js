@@ -158,3 +158,31 @@ test('planoMigracaoV4: pedido que voltou para Orcamento com parcela paga tambem 
     });
     assert.deepStrictEqual(p.pedidos, [{ id: 9, set: { data_aprovacao: '2026-10-05' } }]);
 });
+
+test("podeExcluir: CR com pedido_id e sem parcela_tipo (dado antigo) e automatica; CP manual com pedido pode sair", () => {
+    assert.strictEqual(F.podeExcluir({ pedido_id: 7, cliente_nome: "Ana", status: "Pendente" }).ok, false);
+    assert.strictEqual(F.podeExcluir({ pedido_id: 7, status: "Pendente" }, "receber").ok, false);
+    assert.strictEqual(F.podeExcluir({ pedido_id: 7, credor_nome: "Forn", categoria: "tecido", status: "Pendente" }).ok, true);
+    assert.strictEqual(F.podeExcluir({ pedido_id: 7, status: "Pendente" }, "pagar").ok, true);
+    assert.strictEqual(F.podeExcluir({ cliente_nome: "Ana", status: "Pendente" }, "receber").ok, true);
+});
+
+test("podeCancelar: comissao (papel_comissao ou comissao_rt) nao cancela na tela", () => {
+    const msg = "Comissão: ajuste no pedido ou no cadastro do vendedor.";
+    assert.deepStrictEqual(F.podeCancelar({ papel_comissao: "vendedor", status: "Pendente" }), { ok: false, motivo: msg });
+    assert.deepStrictEqual(F.podeCancelar({ categoria: "comissao_rt", status: "Pendente" }), { ok: false, motivo: msg });
+    assert.strictEqual(F.ehComissao({ papel_comissao: "rt" }), true);
+    assert.strictEqual(F.podeCancelar({ categoria: "outro", status: "Pendente" }).ok, true);
+});
+
+test("planoMigracaoV4: categoria vinda do legado ganha categoria_auto; a ja definida nao", () => {
+    const p = F.planoMigracaoV4({
+        contas_receber: [{ id: 1, pedido_id: 5, data_vencimento: "2026-03-10" }, { id: 2, categoria_id: "cat_aporte", data_vencimento: "2026-03-10" }],
+        contas_pagar: [{ id: 3, categoria: "tecido", data_vencimento: "2026-03-10" }],
+        pedidos: [{ id: 5 }]
+    });
+    assert.strictEqual(p.cr.find(x => x.id === 1).set.categoria_auto, true);
+    assert.strictEqual(p.cp.find(x => x.id === 3).set.categoria_auto, true);
+    const dois = p.cr.find(x => x.id === 2);
+    assert.ok(!dois || dois.set.categoria_auto === undefined);
+});

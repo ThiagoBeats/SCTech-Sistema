@@ -53,6 +53,18 @@
         return null;
     }
 
+    // Categorias 'so caixa' (aporte, emprestimo...) nao sao receita nem despesa: ficam fora do Resultado.
+    // `categorias` = { categorias: [...] } (db.fin_categorias); sem ele, as padrao do FinCatCore (se existir).
+    function idsSoCaixa(categorias) {
+        let cats = categorias;
+        if (!cats) {
+            const fc = (raiz && raiz.FinCatCore) || (typeof require === 'function' ? (() => { try { return require('./fin-cat-core.js'); } catch (e) { return null; } })() : null);
+            cats = fc ? fc.categoriasPadrao() : null;
+        }
+        const lista = cats && Array.isArray(cats.categorias) ? cats.categorias : [];
+        return new Set(lista.filter(c => c && c.natureza === 'so_caixa').map(c => String(c.id)));
+    }
+
     // Recebimento sem movimento: pela data_pagamento, valor da parcela. Se foi no cartao (baixa sem conta ou
     // antes da abertura da conta), cada repasse na sua data (valor bruto), como os que tem movimento; a taxa
     // de cada repasse ja e uma conta paga naquela data. As datas sao as da baixa: os repasses guardados na
@@ -76,8 +88,9 @@
     // sem movimento, a propria parcela pela data_pagamento (no cartao, cada repasse na sua data).
     // Transferencias e CRs nao pagas nao contam. `dentro(data)` diz se a data entra (mes, mes ate hoje ou
     // periodo). `soSemMovimento`: so os recebimentos sem movimento (os que nao passaram por conta nenhuma).
-    function itensEntrada(dentro, contasReceber, movimentos, contas, soSemMovimento, contasPagar) {
+    function itensEntrada(dentro, contasReceber, movimentos, contas, soSemMovimento, contasPagar, categorias) {
         const itens = [];
+        const soCaixa = idsSoCaixa(categorias);
         const porCr = new Map();
         (movimentos || []).forEach(m => {
             if (!m || m.origem !== 'cr' || m.sentido === 'saida' || m.origem_id == null) return;
@@ -85,7 +98,7 @@
             if (!porCr.has(k)) porCr.set(k, []);
             porCr.get(k).push(m);
         });
-        (contasReceber || []).filter(cr => cr && cr.status === 'Pago').forEach(cr => {
+        (contasReceber || []).filter(cr => cr && cr.status === 'Pago' && !(cr.categoria_id != null && soCaixa.has(String(cr.categoria_id)))).forEach(cr => {
             const dela = cr.id == null ? null : porCr.get(String(cr.id));
             if (dela && dela.length) {
                 if (!soSemMovimento) dela.forEach(m => { if (dentro(m.data)) itens.push({ data: m.data, valor: num(m.valor), cr_id: cr.id }); });
@@ -98,22 +111,24 @@
 
     // Recebimentos sem movimento com data em [de, ate]: contam no Resultado e na Visao Geral, mas nao aparecem
     // no Extrato (nao passaram por conta nenhuma). `qtd` = quantas contas a receber, `valor` = soma no periodo.
-    function recebimentosSemMovimento({ de, ate, contasReceber, movimentos, contas, contasPagar }) {
+    function recebimentosSemMovimento({ de, ate, contasReceber, movimentos, contas, contasPagar, categorias }) {
         if (!de || !ate || de > ate) return { qtd: 0, valor: 0 };
-        const itens = itensEntrada(d => !!d && String(d) >= de && String(d) <= ate, contasReceber, movimentos, contas, true, contasPagar);
+        const itens = itensEntrada(d => !!d && String(d) >= de && String(d) <= ate, contasReceber, movimentos, contas, true, contasPagar, categorias);
         return { qtd: new Set(itens.map(i => String(i.cr_id))).size, valor: arredondar(itens.reduce((s, i) => s + i.valor, 0)) };
     }
 
-    function entradasDoMes({ mes, contasReceber, movimentos, ateData, contas, contasPagar }) {
-        const itens = itensEntrada(d => noMes(d, mes, ateData), contasReceber, movimentos, contas, false, contasPagar);
+    function entradasDoMes({ mes, contasReceber, movimentos, ateData, contas, contasPagar, categorias }) {
+        const itens = itensEntrada(d => noMes(d, mes, ateData), contasReceber, movimentos, contas, false, contasPagar, categorias);
         return { total: arredondar(itens.reduce((s, i) => s + i.valor, 0)), itens };
     }
 
     // Saidas de caixa: CPs pagas com data_pagamento aceita por `dentro`, exceto imposto (vem de impostoDoMes).
-    function itensSaida(dentro, contasPagar) {
+    function itensSaida(dentro, contasPagar, categorias) {
         const itens = [];
+        const soCaixa = idsSoCaixa(categorias);
         (contasPagar || []).forEach(cp => {
             if (!cp || cp.status !== 'Pago' || cp.categoria === 'imposto') return;
+            if (cp.categoria_id != null && soCaixa.has(String(cp.categoria_id))) return;
             if (!dentro(cp.data_pagamento)) return;
             itens.push({ data: cp.data_pagamento, valor: num(cp.valor), grupo: grupoDaCategoria(cp.categoria), cp_id: cp.id });
         });
@@ -128,8 +143,8 @@
         return { total: arredondar(total), porGrupo };
     }
 
-    function saidasDoMes({ mes, contasPagar, ateData }) {
-        return somarPorGrupo(itensSaida(d => noMes(d, mes, ateData), contasPagar));
+    function saidasDoMes({ mes, contasPagar, ateData, categorias }) {
+        return somarPorGrupo(itensSaida(d => noMes(d, mes, ateData), contasPagar, categorias));
     }
 
     // Mes de referencia da guia; guia sem o campo usa o mes anterior ao vencimento (mesmo padrao do formulario).
@@ -151,9 +166,9 @@
         return { valor: Math.max(0, arredondar(num(faturamento) * aliq / 100)), estimado: true, lancado: 0 };
     }
 
-    function resultadoDoMes({ mes, contasReceber, contasPagar, movimentos, aliquota, ateData, contas }) {
-        const entradas = entradasDoMes({ mes, contasReceber, movimentos, ateData, contas, contasPagar }).total;
-        const sai = saidasDoMes({ mes, contasPagar, ateData });
+    function resultadoDoMes({ mes, contasReceber, contasPagar, movimentos, aliquota, ateData, contas, categorias }) {
+        const entradas = entradasDoMes({ mes, contasReceber, movimentos, ateData, contas, contasPagar, categorias }).total;
+        const sai = saidasDoMes({ mes, contasPagar, ateData, categorias });
         const taxas = sai.porGrupo.taxas;
         const faturamento = arredondar(entradas - taxas);
         const imposto = impostoDoMes({ mes, contasPagar, faturamento, aliquota });
@@ -170,11 +185,11 @@
     // pedaco de mes: a guia PAGA cuja referencia nao e um mes inteiro do periodo conta pela data de pagamento
     // (se estiver no periodo); nunca conta duas vezes. Devolve tambem os itens (para graficos).
     // `imposto.cortaMes`: o periodo pega so um pedaco de algum mes (a tela avisa que o imposto e dos meses inteiros).
-    function resultadoDoPeriodo({ de, ate, contasReceber, contasPagar, movimentos, aliquota, contas }) {
+    function resultadoDoPeriodo({ de, ate, contasReceber, contasPagar, movimentos, aliquota, contas, categorias }) {
         const dentro = d => !!d && String(d) >= de && String(d) <= ate;
         const ok = !!de && !!ate && de <= ate;
-        const itensE = ok ? itensEntrada(dentro, contasReceber, movimentos, contas, false, contasPagar) : [];
-        const itensS = ok ? itensSaida(dentro, contasPagar) : [];
+        const itensE = ok ? itensEntrada(dentro, contasReceber, movimentos, contas, false, contasPagar, categorias) : [];
+        const itensS = ok ? itensSaida(dentro, contasPagar, categorias) : [];
         const entradas = arredondar(itensE.reduce((s, i) => s + i.valor, 0));
         const sai = somarPorGrupo(itensS);
         const porMes = {};
@@ -182,7 +197,7 @@
         if (ok) {
             for (let mes = mesDe(de); mes <= mesDe(ate); mes = somarMeses(mes, 1)) {
                 if (de > mes + '-01' || ate < ultimoDia(mes)) continue;
-                const imp = resultadoDoMes({ mes, contasReceber, contasPagar, movimentos, aliquota, contas }).imposto;
+                const imp = resultadoDoMes({ mes, contasReceber, contasPagar, movimentos, aliquota, contas, categorias }).imposto;
                 porMes[mes] = imp.valor;
                 impostoTotal += imp.valor;
                 if (imp.estimado && imp.valor > 0) estimado = true;
@@ -201,7 +216,7 @@
         if (ok) {
             for (let mes = mesDe(de); mes <= mesDe(ate) && !foraIncompleto; mes = somarMeses(mes, 1)) {
                 if (Object.prototype.hasOwnProperty.call(porMes, mes)) continue;
-                const devido = resultadoDoMes({ mes, contasReceber, contasPagar, movimentos, aliquota, contas }).imposto.valor;
+                const devido = resultadoDoMes({ mes, contasReceber, contasPagar, movimentos, aliquota, contas, categorias }).imposto.valor;
                 const contado = pagas.reduce((s, i) => s + (referenciaGuia((contasPagar || []).find(cp => cp && mesmoId(cp.id, i.cp_id)) || {}) === mes ? i.valor : 0), 0);
                 if (arredondar(devido - contado) > 0) foraIncompleto = true;
             }
@@ -231,13 +246,13 @@
     // movimentos depois de hoje de conta desativada (ativo === false) nao contam: a entrada vale zero (a conta a
     // receber continua com movimento, nao volta para as datas de repasse) e a conta a pagar paga por esse
     // movimento (a taxa do repasse) sai da conta.
-    function aCairNoMes({ mes, hoje, contasReceber, contasPagar, movimentos, contas }) {
+    function aCairNoMes({ mes, hoje, contasReceber, contasPagar, movimentos, contas, categorias }) {
         const inativa = id => (contas || []).some(c => c && mesmoId(c.id, id) && c.ativo === false);
         const fora = new Set((movimentos || []).filter(m => m && String(m.data) > hoje && inativa(m.conta_id)));
         const movs = fora.size ? (movimentos || []).map(m => (fora.has(m) ? Object.assign({}, m, { valor: 0 }) : m)) : movimentos;
         const cpsFora = new Set([...fora].filter(m => m.origem === 'cp' && m.origem_id != null).map(m => String(m.origem_id)));
         const cps = cpsFora.size ? (contasPagar || []).filter(cp => !(cp && cpsFora.has(String(cp.id)) && String(cp.data_pagamento) > hoje)) : contasPagar;
-        const base = { mes, contasReceber, contasPagar: cps, movimentos: movs, contas, aliquota: 0 };
+        const base = { mes, contasReceber, contasPagar: cps, movimentos: movs, contas, aliquota: 0, categorias };
         const todo = resultadoDoMes(base), ate = resultadoDoMes(Object.assign({}, base, { ateData: hoje }));
         const semImposto = r => r.saidas - r.imposto.valor;
         return {

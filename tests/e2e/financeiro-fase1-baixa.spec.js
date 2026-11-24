@@ -180,7 +180,7 @@ test('estorno da parcial com a parte aberta ja paga volta a ficar aberta sozinha
     const lidas = await ler(page, 'sc_cr');
     expect(lidas).toHaveLength(2);
     expect(lidas.find(c => c.id === 601)).toMatchObject({ valor: 2000, status: 'Pago' });
-    expect(lidas.find(c => c.id === 602)).toMatchObject({ valor: 1000, meio_id: null, conta_id: null, cartao: null });
+    expect(lidas.find(c => c.id === 602)).toMatchObject({ valor: 1000, meio_id: null, conta_id: 10, cartao: null });
 });
 
 test('data anterior ao saldo inicial avisa e nao gera movimento', async ({ page }) => {

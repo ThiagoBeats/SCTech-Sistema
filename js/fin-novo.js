@@ -74,7 +74,7 @@ function _finResContasHtml(hoje) {
         </div>`;
     }).join('') || '<p class="lanc-sub" style="padding:8px 0">Nenhuma conta cadastrada ainda.</p>';
     return `<div class="card res-card"><div class="res-titulo"><h3>Minhas contas</h3>
-            <button class="btn btn-outline btn-sm" id="res-conectar" onclick="window.location.href='empresa.html?conectar=1#preferencias'">+ Conectar conta</button></div>
+            ${temAcesso('configuracoes.empresa', 'visualizar') ? '<button class="btn btn-outline btn-sm" id="res-conectar" onclick="window.location.href=&quot;empresa.html?conectar=1#preferencias&quot;">+ Conectar conta</button>' : ''}</div>
         ${linhas}
         <div class="res-conta res-total"><div class="res-conta-info"><strong>Saldo total</strong></div><div class="res-conta-dir"><div class="res-conta-saldo ${sd.total < 0 ? 'res-neg' : ''}" id="res-saldo-total">${_finBrl(sd.total)}</div></div></div></div>`;
 }
@@ -312,8 +312,8 @@ function _finLancAcoes(lado, r, hoje) {
     A.push({ icone: '🕘', rotulo: 'Histórico', onclick: `abrirHistoricoLancamento('${tipo}', ${id})` });
     if (r.pedido_id != null && r.pedido_id !== '' && db.pedidos.some(p => p.id == r.pedido_id)) A.push({ icone: '📦', rotulo: 'Abrir pedido', onclick: `abrirPedidoDoLancamento(${_finIdJs(r.pedido_id)})` });
     if (r.arquivo_anexo_url) A.push({ icone: '📎', rotulo: 'Ver anexo', onclick: 'verAnexoCP(' + id + ')' });
-    if (completo && sit !== 'cancelado') A.push({ icone: '🚫', rotulo: 'Cancelar', perigo: true, onclick: `cancelarLancamentoTela('${tipo}', ${id})` });
-    if (completo && sit !== 'cancelado' && FinCatCore.podeExcluir(r).ok) {
+    if (completo && sit !== 'cancelado' && !FinCatCore.ehComissao(r)) A.push({ icone: '🚫', rotulo: 'Cancelar', perigo: true, onclick: `cancelarLancamentoTela('${tipo}', ${id})` });
+    if (completo && sit !== 'cancelado' && FinCatCore.podeExcluir(r, lado).ok) {
         A.push({ icone: '🗑️', rotulo: 'Excluir', perigo: true, onclick: (lado === 'pagar' ? 'excluirCP(' : 'excluirCR(') + id + ')' });
         if (lado === 'pagar' && r.parcelado && r.lancamento_pai_id != null) A.push({ icone: '🗑️', rotulo: 'Excluir todas as parcelas', perigo: true, onclick: 'excluirGrupoCP(' + _finIdJs(r.lancamento_pai_id) + ')' });
     }
@@ -462,7 +462,7 @@ async function abrirNovoLancamento(lado, idEditar) {
     if (idEditar != null && !reg) return;
     if (reg && reg.status === 'Cancelado') { await showAlert('Este lançamento está cancelado e não pode ser editado.', '⚠️'); return; }
     const pago = !!reg && FinCatCore.situacao(reg, hojeLocal()) === 'pago';
-    const auto = !!reg && !FinCatCore.podeExcluir(Object.assign({}, reg, { status: 'Pendente', data_pagamento: null })).ok;
+    const auto = !!reg && !FinCatCore.podeExcluir(Object.assign({}, reg, { status: 'Pendente', data_pagamento: null }), lado).ok;
     const travaValor = pago || auto;
     const cats = _finCategoriasDoLado(lado, reg && reg.categoria_id);
     const catPadrao = reg ? reg.categoria_id : (pagar ? 'cat_outras_desp' : 'cat_vendas');
@@ -508,10 +508,10 @@ async function abrirNovoLancamento(lado, idEditar) {
                     <label>Competência <span class="info-tag">mês da receita/despesa</span></label>
                     <input type="date" id="lf-competencia" value="${val(reg && reg.data_competencia)}" oninput="this.dataset.editado='1'" ${reg && reg.data_competencia ? 'data-editado="1"' : ''}>
                 </div>
-                <div class="form-group">
+                ${pagar ? `<div class="form-group">
                     <label>Pedido <span class="info-tag">opcional</span></label>
                     <select id="lf-pedido" ${auto ? 'disabled title="Este lançamento foi gerado pelo sistema"' : ''} onchange="finLancAoEscolherPedido('${lado}')"><option value="">— Sem pedido —</option>${peds.map(p => `<option value="${p.id}"${reg && reg.pedido_id == p.id ? ' selected' : ''}>#${escapeHtml(String(formatPedidoId(p.id)))} ${escapeHtml(p.clienteNome || '')}</option>`).join('')}</select>
-                </div>
+                </div>` : ''}
                 <div class="form-group" style="grid-column:1/-1">
                     <label>Observações</label>
                     <textarea id="lf-obs" rows="2">${val(reg && reg.observacoes)}</textarea>
@@ -525,7 +525,7 @@ async function abrirNovoLancamento(lado, idEditar) {
             </div>`}
         </div>
         <div style="display:flex;gap:10px;padding:16px 24px;border-top:1px solid var(--border)">
-            <button class="btn btn-success" id="lf-salvar" onclick="salvarLancamento('${lado}', ${reg ? _finIdJs(reg.id) : 'null'})">${reg ? 'Salvar alterações' : 'Salvar lançamento'}</button>
+            <button class="btn btn-success" id="lf-salvar" onclick="salvarLancamento('${lado}', ${reg ? escapeHtml(_finIdJs(reg.id)) : 'null'})">${reg ? 'Salvar alterações' : 'Salvar lançamento'}</button>
             <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
         </div></div>`;
     document.body.appendChild(o);
@@ -581,7 +581,7 @@ async function salvarLancamento(lado, idEditar) {
     const categoriaId = g('lf-categoria');
     const competencia = g('lf-competencia') || vencimento;
     const pedEl = document.getElementById('lf-pedido');
-    const pedidoId = pedEl && pedEl.disabled && reg ? (reg.pedido_id == null ? '' : String(reg.pedido_id)) : g('lf-pedido');
+    const pedidoId = !pedEl || (pedEl.disabled && reg) ? (reg && reg.pedido_id != null ? String(reg.pedido_id) : '') : g('lf-pedido');
     const obs = g('lf-obs').trim();
     const contaId = g('lf-conta');
     const pessoa = _finResolverPessoa(lado, g('lf-pessoa'));
@@ -676,6 +676,7 @@ function _finAplicarEdicao(lado, reg, n) {
     if (String(reg.categoria_id) !== String(n.categoriaId)) {
         finHist(reg, 'categoria', `${_finNomeCategoria(reg.categoria_id) || '—'} → ${_finNomeCategoria(n.categoriaId)}`);
         reg.categoria_id = n.categoriaId;
-        if (pagar && FinCatCore.podeExcluir(Object.assign({}, reg, { status: 'Pendente', data_pagamento: null })).ok) reg.categoria = _finLegadoDe(n.categoriaId);
+        delete reg.categoria_auto;
+        if (pagar && FinCatCore.podeExcluir(Object.assign({}, reg, { status: 'Pendente', data_pagamento: null }), lado).ok) reg.categoria = _finLegadoDe(n.categoriaId);
     }
 }
