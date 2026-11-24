@@ -61,13 +61,14 @@
     function _doPedido(lista, pedidoId) {
         return (lista || []).filter(c => c.pedido_id == pedidoId);
     }
+    const _naoCancelado = c => c && c.status !== 'Cancelado';
 
     function totalRecebido(contasReceber, pedidoId) {
         return arredondar(_doPedido(contasReceber, pedidoId).filter(c => c.status === 'Pago').reduce((s, c) => s + (Number(c.valor) || 0), 0));
     }
 
     function saldoEmAberto(contasReceber, pedidoId) {
-        return arredondar(_doPedido(contasReceber, pedidoId).filter(c => c.status !== 'Pago').reduce((s, c) => s + (Number(c.valor) || 0), 0));
+        return arredondar(_doPedido(contasReceber, pedidoId).filter(c => c.status !== 'Pago' && _naoCancelado(c)).reduce((s, c) => s + (Number(c.valor) || 0), 0));
     }
 
     // Tecidos do pedido em qualquer formato: o atual (ambiente.tecidos[]) e os
@@ -129,7 +130,7 @@
             origem_custo = 'estimado';
             itens_sem_custo = s.faltando;
         }
-        const cps = _doPedido(contasPagar, ped.id);
+        const cps = _doPedido(contasPagar, ped.id).filter(_naoCancelado);
         const soma = l => l.reduce((s, c) => s + (Number(c.valor) || 0), 0);
         const ehComissao = c => c.categoria === 'comissao' || c.categoria === 'comissao_rt';
         const comissoes = arredondar(soma(cps.filter(ehComissao)));
@@ -188,11 +189,11 @@
         const dig = s => String(s || '').replace(/\D/g, '');
         const alvo = dig(cnpj);
         const tol = Math.max(0.01, valor * toleranciaPct / 100);
-        const candidatas = (contasPagar || []).filter(c => c.pedido_compra_id && c.status !== 'Pago' && alvo && dig(c.cnpj_fornecedor) === alvo);
+        const candidatas = (contasPagar || []).filter(c => c.pedido_compra_id && c.status !== 'Pago' && _naoCancelado(c) && alvo && dig(c.cnpj_fornecedor) === alvo);
         return candidatas.find(c => {
             if (Math.abs((Number(c.valor) || 0) - valor) <= tol) return true;
             if (c.lancamento_pai_id == null) return false;
-            const grupo = (contasPagar || []).filter(x => x.lancamento_pai_id == c.lancamento_pai_id || x.id == c.lancamento_pai_id);
+            const grupo = (contasPagar || []).filter(x => _naoCancelado(x) && (x.lancamento_pai_id == c.lancamento_pai_id || x.id == c.lancamento_pai_id));
             const soma = grupo.reduce((s, x) => s + (Number(x.valor) || 0), 0);
             return Math.abs(soma - valor) <= tol;
         }) || null;
@@ -277,7 +278,8 @@
         // Conta a receber de pedido que nao existe mais.
         const idsPedidos = new Set((pedidos || []).map(p => String(p.id)));
         crs.forEach(c => {
-            if (c.pedido_id == null || c.pedido_id === '' || idsPedidos.has(String(c.pedido_id))) return;
+            // Cancelada (pedido excluido) fica como registro.
+            if (c.pedido_id == null || c.pedido_id === '' || idsPedidos.has(String(c.pedido_id)) || c.status === 'Cancelado') return;
             if (c.status !== 'Pago') plano.removerCR.push(c.id);
             else if (!c.pedido_excluido) plano.marcarCRPedidoExcluido.push(c.id);
         });

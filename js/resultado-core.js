@@ -141,7 +141,7 @@
 
     // Imposto pela referencia: guias do mes (pagas ou em aberto); sem guia, estimativa pela aliquota.
     function impostoDoMes({ mes, contasPagar, faturamento, aliquota }) {
-        const guias = (contasPagar || []).filter(cp => cp && cp.categoria === 'imposto' && referenciaGuia(cp) === mes);
+        const guias = (contasPagar || []).filter(cp => cp && cp.status !== 'Cancelado' && cp.categoria === 'imposto' && referenciaGuia(cp) === mes);
         if (guias.length) {
             const lancado = arredondar(guias.reduce((s, cp) => s + num(cp.valor), 0));
             return { valor: lancado, estimado: false, lancado };
@@ -293,8 +293,9 @@
     }
 
     // CPs do grupo Despesas fixas (tipo 'fixo' ou categoria do grupo, fora o Imposto) vencendo no mes.
+    // Cancelada nao soma (mas ainda cobre a sua fixa em fixasCobertasNoMes: nao volta como estimativa).
     function contasFixasDoMes(mes, contasPagar) {
-        return (contasPagar || []).filter(cp => cp && mesDe(cp.data_vencimento) === mes
+        return (contasPagar || []).filter(cp => cp && cp.status !== 'Cancelado' && mesDe(cp.data_vencimento) === mes
             && cp.categoria !== 'imposto' && (cp.tipo === 'fixo' || grupoDaCategoria(cp.categoria) === 'fixas'));
     }
 

@@ -98,3 +98,10 @@ test('sugestao de alta no limite: exatamente 30% ou exatamente R$ 100 de aumento
     assert.deepStrictEqual(sug(0, 5000), NADA);
     assert.deepStrictEqual(sug(1000, 500), NADA);
 });
+
+// Financeiro novo: Cancelado nao e pendencia do fechamento.
+test('pendenciasDoMes ignora Cancelado', () => {
+    const F = require('../js/fechamento-core.js');
+    const p = F.pendenciasDoMes({ mes: '2026-11', contasPagar: [{ valor: 10, status: 'Cancelado', data_vencimento: '2026-11-10' }, { valor: 5, status: 'Pendente', data_vencimento: '2026-11-11' }], contasReceber: [{ valor: 7, status: 'Cancelado', data_vencimento: '2026-11-12' }], impostoEstimado: false });
+    assert.deepStrictEqual([p.pagar_qtd, p.pagar_valor, p.receber_qtd, p.receber_valor], [1, 5, 0, 0]);
+});
