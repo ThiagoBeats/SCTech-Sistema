@@ -302,6 +302,7 @@ let db = {
 const _DB_CHAVE_CAMPO = {
     sc_cli: 'clientes', sc_cat: 'catalogo', sc_ped: 'pedidos', sc_est: 'estoque', sc_mat: 'materiais',
     sc_mov: 'movimentos', sc_cr: 'contas_receber', sc_cp: 'contas_pagar', sc_mov_fin: 'movimentos_fin', sc_med: 'medicoes', sc_agd_ev: 'agenda_eventos', sc_usr: 'usuarios', sc_pap: 'papeis',
+    sc_fin_cat: 'fin_categorias', sc_fin_excluidos: 'fin_excluidos',
 };
 // Texto de cada chave como esta aba leu ou gravou por ultimo. Reler so troca o array
 // quando o texto gravado mudou (outra aba gravou): um fluxo no meio de uma confirmacao
@@ -318,7 +319,9 @@ function _dbRecarregarChave(chave) {
     if (texto === null || texto === _dbTextoCarregado[chave]) return false;
     let v;
     try { v = JSON.parse(texto); } catch (e) { return false; }
-    if (!Array.isArray(v)) return false;
+    // fin_categorias e um objeto { subgrupos, categorias }; as demais sao listas.
+    const ok = campo === 'fin_categorias' ? (v && typeof v === 'object' && Array.isArray(v.categorias) && Array.isArray(v.subgrupos)) : Array.isArray(v);
+    if (!ok) return false;
     db[campo] = v;
     _dbTextoCarregado[chave] = texto;
     return true;
@@ -3581,11 +3584,13 @@ function removerFinanceiroAbertoPedido(pedidoId) {
 function cancelarFinanceiroAbertoPedido(pedidoId, motivo) {
     (db.contas_receber || []).forEach(cr => { if (cr.pedido_id == pedidoId && finAberta(cr)) _finMarcarCancelado(cr, motivo); });
     (db.contas_pagar || []).forEach(cp => {
-        if (cp.pedido_id != pedidoId || !cp.papel_comissao) return;
+        if (cp.pedido_id != pedidoId || !_ehComissaoDoPedido(cp)) return;
         if (cp.status === 'Pago') cp.pedido_cancelado = true;
         else if (finAberta(cp)) _finMarcarCancelado(cp, motivo);
     });
 }
+// Comissao do pedido: a de hoje (com papel) ou a antiga 'comissao_rt' (sem papel).
+function _ehComissaoDoPedido(cp) { return !!cp && (!!cp.papel_comissao || cp.categoria === 'comissao_rt'); }
 
 async function excluirPedido(id) {
     if (!await exigirPermissao('pedidos', 'completo')) return;
@@ -3594,7 +3599,7 @@ async function excluirPedido(id) {
         return;
     }
     const nCr = (db.contas_receber || []).filter(cr => cr.pedido_id == id && finAberta(cr)).length;
-    const nCp = (db.contas_pagar || []).filter(cp => cp.pedido_id == id && cp.papel_comissao && finAberta(cp)).length;
+    const nCp = (db.contas_pagar || []).filter(cp => cp.pedido_id == id && _ehComissaoDoPedido(cp) && finAberta(cp)).length;
     const nContas = nCr + nCp;
     const aviso = nContas ? `
 
@@ -4834,7 +4839,7 @@ Notif.registrar('aceite-respostas', () => {
 
 // Outra aba gravou: traz para a memoria o que os alertas leem.
 // So troca o array quando o texto gravado mudou (ver _dbRecarregarChave).
-const _NOTIF_CHAVES_DB = ['sc_ped', 'sc_med', 'sc_cat', 'sc_mat', 'sc_est', 'sc_mov', 'sc_cr', 'sc_cp', 'sc_mov_fin', 'sc_usr', 'sc_pap', 'sc_agd_ev'];
+const _NOTIF_CHAVES_DB = ['sc_ped', 'sc_med', 'sc_cat', 'sc_mat', 'sc_est', 'sc_mov', 'sc_cr', 'sc_cp', 'sc_mov_fin', 'sc_usr', 'sc_pap', 'sc_agd_ev', 'sc_fin_cat', 'sc_fin_excluidos'];
 function _notifRecarregarDB(chave) {
     if (_NOTIF_CHAVES_DB.includes(chave)) _dbRecarregarChave(chave);
 }
@@ -8619,18 +8624,21 @@ function importarDados(event) {
             // Sem espaco, a copia da Fase 0 (a chave grande) sai e tenta de novo; se ainda
             // falhar, ela volta.
             const copiaAntes = localStorage.getItem('sc_fin_backup_fase0');
+            const copiaV3Antes = localStorage.getItem(CHAVE_FIN_BACKUP_V3);
             try { _syncDBBruto(extras); }
             catch (e1) {
-                if (!_erroDeEspaco(e1) || copiaAntes === null) throw e1;
+                if (!_erroDeEspaco(e1) || (copiaAntes === null && copiaV3Antes === null)) throw e1;
                 localStorage.removeItem('sc_fin_backup_fase0');
+                localStorage.removeItem(CHAVE_FIN_BACKUP_V3);
                 try { _syncDBBruto(extras); }
                 catch (e2) {
-                    _gravarSemFalhar('sc_fin_backup_fase0', copiaAntes);
+                    if (copiaAntes !== null) _gravarSemFalhar('sc_fin_backup_fase0', copiaAntes);
+                    if (copiaV3Antes !== null) _gravarSemFalhar(CHAVE_FIN_BACKUP_V3, copiaV3Antes);
                     throw e2;
                 }
             }
             // Gravou: o que era dos dados anteriores (copia, revisao e avisos) sai.
-            ['sc_fin_backup_fase0', 'sc_fin_revisar', 'sc_fin_backup_falhou', 'sc_fin_migracao_erro', CHAVE_FIN_BACKUP_V3].forEach(k => localStorage.removeItem(k));
+            ['sc_fin_backup_fase0', 'sc_fin_revisar', 'sc_fin_backup_falhou', 'sc_fin_migracao_erro', CHAVE_FIN_BACKUP_V3, CHAVE_FIN_V4_FALHOU, CHAVE_FIN_V4_ERRO].forEach(k => localStorage.removeItem(k));
             if (sessaoNova) sessionStorage.setItem('sc_user', JSON.stringify(sessaoNova));
             else if (encerrarSessao) sessionStorage.removeItem('sc_user');
             if (acessosIgnorados) await showAlert('Dados importados. Usuários e acessos não foram importados: só o Administrador importa usuários.', 'ℹ️');
@@ -14423,12 +14431,26 @@ function cancelarLancamento(tipo, id, motivo) {
     return true;
 }
 
-// Lancamento excluido: fica o registro com o lancamento e quem excluiu.
+// Anexo (dataURL) nao vai para copias e registros: fica a marca (nome e tipo do arquivo ficam).
+const MARCA_ANEXO_NAO_COPIADO = '[anexo não copiado]';
+function _finSemAnexos(reg) {
+    if (!reg || typeof reg !== 'object') return reg;
+    let o = reg;
+    Object.keys(reg).forEach(k => {
+        if (typeof reg[k] === 'string' && reg[k].startsWith('data:')) {
+            if (o === reg) o = Object.assign({}, reg);
+            o[k] = MARCA_ANEXO_NAO_COPIADO;
+        }
+    });
+    return o;
+}
+
+// Lancamento excluido: fica o registro com o lancamento (sem o anexo) e quem excluiu.
 function _finRegistrarExcluidos(tipo, regs) {
     if (!Array.isArray(db.fin_excluidos)) db.fin_excluidos = [];
     const q = _finQuem();
     const em = new Date().toISOString();
-    (regs || []).forEach(r => db.fin_excluidos.push({ tipo, em, por: q.por, porNome: q.porNome, lancamento: JSON.parse(JSON.stringify(r)) }));
+    (regs || []).forEach(r => db.fin_excluidos.push({ tipo, em, por: q.por, porNome: q.porNome, lancamento: JSON.parse(JSON.stringify(_finSemAnexos(r))) }));
 }
 
 // Saldo da conta bancaria mexido agora (baixa, estorno, ajuste).
@@ -14462,11 +14484,21 @@ function _finCamposContaPadrao(c, movimentos) {
 // Migracao unica para o Financeiro novo (sc_fin_versao 4): categorias, competencia,
 // cliente/fornecedor, historico, data de aprovacao do pedido e campos da conta
 // bancaria (FinCatCore.planoMigracaoV4). Antes de mexer, guarda copia de sc_cr,
-// sc_cp, sc_df, sc_contas_fin e sc_mov_fin em sc_fin_backup_v3. Sem espaco para a
-// copia ou para salvar, nada muda e tenta de novo na proxima abertura.
+// sc_cp, sc_df, sc_contas_fin e sc_mov_fin em sc_fin_backup_v3 (sem os anexos, que a
+// migracao nao toca). Sem espaco para a copia ou para salvar: a copia sai, nada muda,
+// marca sc_fin_v4_falhou e o aviso no topo do Financeiro oferece baixar a copia e seguir
+// (como na Fase 0). Sem espaco mesmo sem a copia: marca sc_fin_v4_erro.
 const CHAVE_FIN_VERSAO = 'sc_fin_versao';
 const CHAVE_FIN_BACKUP_V3 = 'sc_fin_backup_v3';
-function _migrarFinanceiroV4() {
+const CHAVE_FIN_V4_FALHOU = 'sc_fin_v4_falhou';
+const CHAVE_FIN_V4_ERRO = 'sc_fin_v4_erro';
+function _finCopiaV4(semAnexos) {
+    const l = lista => (lista || []).map(r => (semAnexos ? _finSemAnexos(r) : r));
+    return { em: new Date().toISOString(), sc_cr: l(db.contas_receber), sc_cp: l(db.contas_pagar), sc_df: l(db.despesas_fixas),
+        sc_contas_fin: l(db.contas_fin), sc_mov_fin: l(db.movimentos_fin) };
+}
+function _removerSemFalhar(chave) { try { localStorage.removeItem(chave); } catch (e) { /* sem storage */ } }
+function _migrarFinanceiroV4({ semCopia = false } = {}) {
     if (Number(localStorage.getItem(CHAVE_FIN_VERSAO)) >= 4) return true;
     const plano = FinCatCore.planoMigracaoV4({
         contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, despesas_fixas: db.despesas_fixas,
@@ -14476,13 +14508,15 @@ function _migrarFinanceiroV4() {
     const temDados = plano.cr.length || plano.cp.length || plano.df.length || plano.pedidos.length || contas.length;
     const antes = JSON.stringify({ contas_receber: db.contas_receber, contas_pagar: db.contas_pagar, despesas_fixas: db.despesas_fixas,
         contas_fin: db.contas_fin, pedidos: db.pedidos, fin_categorias: db.fin_categorias });
-    if (temDados && localStorage.getItem(CHAVE_FIN_BACKUP_V3) == null) {
-        const copia = '{"em":' + JSON.stringify(new Date().toISOString())
-            + ',"sc_cr":' + JSON.stringify(db.contas_receber || []) + ',"sc_cp":' + JSON.stringify(db.contas_pagar || [])
-            + ',"sc_df":' + JSON.stringify(db.despesas_fixas || []) + ',"sc_contas_fin":' + JSON.stringify(db.contas_fin || [])
-            + ',"sc_mov_fin":' + JSON.stringify(db.movimentos_fin || []) + '}';
-        try { localStorage.setItem(CHAVE_FIN_BACKUP_V3, copia); }
-        catch (e) { console.warn('Migração do Financeiro (v4) adiada: não foi possível guardar a cópia de segurança.', e); return false; }
+    // semCopia: quem chama ja baixou a copia em arquivo (sem espaco no navegador).
+    if (temDados && !semCopia && localStorage.getItem(CHAVE_FIN_BACKUP_V3) == null) {
+        try { localStorage.setItem(CHAVE_FIN_BACKUP_V3, JSON.stringify(_finCopiaV4(true))); }
+        catch (e) {
+            console.warn('Migração do Financeiro (v4) adiada: não foi possível guardar a cópia de segurança.', e);
+            _removerSemFalhar(CHAVE_FIN_BACKUP_V3);
+            _gravarSemFalhar(CHAVE_FIN_V4_FALHOU, '1');
+            return false;
+        }
     }
     // Aplica cada `set` no registro do mesmo id, na ordem (ids repetidos: um set por registro).
     const aplicar = (lista, itens) => {
@@ -14506,11 +14540,27 @@ function _migrarFinanceiroV4() {
         console.warn('Migração do Financeiro (v4) não pôde ser salva.', e);
         const orig = JSON.parse(antes);
         Object.assign(db, orig);
+        // A copia nao fica ocupando espaco: sai antes de devolver os dados.
+        _removerSemFalhar(CHAVE_FIN_BACKUP_V3);
         [['sc_cr', db.contas_receber], ['sc_cp', db.contas_pagar], ['sc_df', db.despesas_fixas], ['sc_contas_fin', db.contas_fin], ['sc_ped', db.pedidos]]
             .forEach(([k, v]) => _gravarSemFalhar(k, JSON.stringify(v)));
+        if (semCopia) _gravarSemFalhar(CHAVE_FIN_V4_ERRO, String(Date.now()));
+        else _gravarSemFalhar(CHAVE_FIN_V4_FALHOU, '1');
         return false;
     }
+    _removerSemFalhar(CHAVE_FIN_V4_FALHOU);
+    _removerSemFalhar(CHAVE_FIN_V4_ERRO);
     return true;
+}
+
+// Sem espaco para a copia da migracao v4: baixa a copia em arquivo (as mesmas chaves,
+// com os anexos) e migra sem a copia no navegador.
+function baixarCopiaEMigrarFinanceiroV4() {
+    _baixarJSON(_finCopiaV4(false), `sctech_copia_financeiro_v3_${hojeLocal()}.json`);
+    try { _migrarFinanceiroV4({ semCopia: true }); }
+    catch (e) { console.error('Migração do Financeiro (v4) falhou:', e); _gravarSemFalhar(CHAVE_FIN_V4_ERRO, String(Date.now())); }
+    _avisoRecarregar('Cópia baixada. Os dados do Financeiro foram atualizados.');
+    setTimeout(() => window.location.reload(), 1500);
 }
 
 const PLANOS_PAGAMENTO = {
@@ -14684,15 +14734,17 @@ function renderAvisoCopiaFinanceiro() {
     const el = document.getElementById('fin-backup');
     if (!el) return;
     const falhou = localStorage.getItem(CHAVE_FIN_BACKUP_FALHOU) === '1';
-    const erro = localStorage.getItem(CHAVE_FIN_MIGRACAO_ERRO) != null;
-    const temCopia = localStorage.getItem(CHAVE_FIN_BACKUP) != null;
+    // Migracao v4 sem espaco (so quando a Fase 0 ja esta feita: as duas nunca pedem ao mesmo tempo).
+    const falhouV4 = !falhou && localStorage.getItem(CHAVE_FIN_V4_FALHOU) === '1' && Number(localStorage.getItem(CHAVE_FIN_VERSAO)) < 4;
+    const erro = localStorage.getItem(CHAVE_FIN_MIGRACAO_ERRO) != null || localStorage.getItem(CHAVE_FIN_V4_ERRO) != null;
+    const temCopia = localStorage.getItem(CHAVE_FIN_BACKUP) != null || localStorage.getItem(CHAVE_FIN_BACKUP_V3) != null;
     const blocos = [];
-    if (falhou) blocos.push(`<div class="fin-alerta fin-alerta-warning" style="align-items:flex-start">
+    if (falhou || falhouV4) blocos.push(`<div class="fin-alerta fin-alerta-warning" style="align-items:flex-start">
         <span style="font-size:18px;flex-shrink:0">⚠️</span>
         <div style="flex:1">
             <strong>Não foi possível guardar a cópia de segurança no navegador. Baixe a cópia para continuar.</strong>
             Os dados do Financeiro ainda não foram atualizados. A cópia fica salva no seu computador.
-            <div style="margin-top:8px"><button class="btn btn-success btn-sm" onclick="baixarCopiaEMigrarFinanceiro()">Baixar cópia e corrigir dados</button></div>
+            <div style="margin-top:8px"><button class="btn btn-success btn-sm" onclick="${falhou ? 'baixarCopiaEMigrarFinanceiro()' : 'baixarCopiaEMigrarFinanceiroV4()'}">Baixar cópia e corrigir dados</button></div>
         </div>
     </div>`);
     if (erro) blocos.push(`<div class="fin-alerta fin-alerta-warning" style="align-items:flex-start">
@@ -14735,18 +14787,24 @@ function _avisoRecarregar(msg) {
     el.firstChild.textContent = msg + ' A página recarrega em instantes.';
 }
 
+// Copias guardadas no navegador: a da Fase 0 e a da migracao v4 (cada uma no seu arquivo).
 function baixarCopiaFinanceiro() {
-    const copia = localStorage.getItem(CHAVE_FIN_BACKUP);
-    if (copia == null) return;
-    let dados;
-    try { dados = JSON.parse(copia); } catch (e) { dados = copia; }
-    _baixarJSON(dados, `sctech_copia_financeiro_${hojeLocal()}.json`);
-    toast('Esta cópia é parcial: serve para consulta, não para Importar.', 'warning', 6000);
+    let baixou = false;
+    [[CHAVE_FIN_BACKUP, 'sctech_copia_financeiro_'], [CHAVE_FIN_BACKUP_V3, 'sctech_copia_financeiro_v3_']].forEach(([chave, nome]) => {
+        const copia = localStorage.getItem(chave);
+        if (copia == null) return;
+        let dados;
+        try { dados = JSON.parse(copia); } catch (e) { dados = copia; }
+        _baixarJSON(dados, `${nome}${hojeLocal()}.json`);
+        baixou = true;
+    });
+    if (baixou) toast('Esta cópia é parcial: serve para consulta, não para Importar.', 'warning', 6000);
 }
 
 async function descartarCopiaFinanceiro() {
     if (!await showConfirm('Descartar a cópia de segurança de antes da atualização do Financeiro? Baixe a cópia antes se quiser guardá-la.', '🗑️', 'Descartar', 'Cancelar')) return;
     localStorage.removeItem(CHAVE_FIN_BACKUP);
+    localStorage.removeItem(CHAVE_FIN_BACKUP_V3);
     renderAvisoCopiaFinanceiro();
 }
 
@@ -17192,6 +17250,7 @@ function abrirFechamentoMes(mes) {
                     origem: 'ajuste', origem_id: null, grupo_id: null, fechamento_mes: mes,
                     descricao: `Ajuste da conferência de ${_fechMaiusc(rot)}: ${motivo}`
                 });
+                _finContaTocada(l.conta_id);
             }
             return { conta_id: l.conta_id, nome: l.nome, esperado: l.esperado, extrato: conferida ? CaixaCore.arredondar(extrato) : null, diferenca: dif, acao, motivo };
         });
@@ -17225,6 +17284,7 @@ async function refazerFechamentoMes(mes) {
     const ok = await showConfirm(`Refazer o fechamento de ${FechamentoCore.rotuloMes(mes)}? A foto e os ajustes lançados nele serão apagados.`, '🔒', 'Refazer', 'Cancelar');
     if (!ok) return;
     db.fechamentos_fin = (db.fechamentos_fin || []).filter(f => f && f.mes !== mes);
+    (db.movimentos_fin || []).filter(m => m && m.origem === 'ajuste' && m.fechamento_mes === mes).forEach(m => _finContaTocada(m.conta_id));
     db.movimentos_fin = (db.movimentos_fin || []).filter(m => !(m && m.origem === 'ajuste' && m.fechamento_mes === mes));
     syncDB();
     renderResultadoMes(mes);
@@ -17797,6 +17857,8 @@ async function abrirModalTransferencia() {
             { id: novoId(), conta_id: de.id, data, sentido: 'saida', valor: v, origem: 'transferencia', origem_id: null, grupo_id: grupo, descricao: 'Transferência para ' + (dest.nome || '') },
             { id: novoId(), conta_id: dest.id, data, sentido: 'entrada', valor: v, origem: 'transferencia', origem_id: null, grupo_id: grupo, descricao: 'Transferência de ' + (de.nome || '') }
         );
+        _finContaTocada(de.id);
+        _finContaTocada(dest.id);
         syncDB();
         fechar();
         renderExtrato();
@@ -17809,6 +17871,7 @@ async function excluirTransferencia(grupoId) {
     const lados = (db.movimentos_fin || []).filter(m => m.origem === 'transferencia' && m.grupo_id != null && String(m.grupo_id) === String(grupoId));
     if (!lados.length) return;
     if (!await showConfirm('Excluir esta transferência? Os dois lados saem do extrato e os saldos voltam ao que eram.', '🗑️', 'Excluir')) return;
+    lados.forEach(m => _finContaTocada(m.conta_id));
     db.movimentos_fin = db.movimentos_fin.filter(m => !lados.includes(m));
     syncDB();
     renderExtrato();

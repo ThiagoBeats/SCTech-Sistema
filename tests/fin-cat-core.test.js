@@ -150,3 +150,11 @@ test('situacao: data_pagamento e Atrasado velho', () => {
     assert.strictEqual(F.situacao({ status: 'Pendente', data_pagamento: '2026-05-01', data_vencimento: '2026-04-01' }, '2026-05-10'), 'pago');
     assert.strictEqual(F.situacao({ status: 'Atrasado', data_vencimento: '2026-06-01' }, '2026-05-10'), 'aberto');
 });
+
+test('planoMigracaoV4: pedido que voltou para Orcamento com parcela paga tambem ganha data_aprovacao', () => {
+    const p = F.planoMigracaoV4({
+        contas_receber: [{ id: 1, pedido_id: 9, data_vencimento: '2026-10-05', status: 'Pago', valor: 10 }],
+        pedidos: [{ id: 9, financeiro_gerado: false, status: 'Orçamento' }, { id: 10, financeiro_gerado: false }]
+    });
+    assert.deepStrictEqual(p.pedidos, [{ id: 9, set: { data_aprovacao: '2026-10-05' } }]);
+});

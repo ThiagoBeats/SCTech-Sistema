@@ -29,7 +29,8 @@ const CRS = [
 ];
 const CPS = [
     { id: 701, pedido_id: null, tipo: 'fixo', categoria: 'aluguel', descricao: 'Aluguel', credor_nome: 'Imobiliária Centro',
-      valor: 1500, data_vencimento: '2026-12-05', data_pagamento: null, status: 'Pendente', despesa_fixa_id: 801 },
+      valor: 1500, data_vencimento: '2026-12-05', data_pagamento: null, status: 'Pendente', despesa_fixa_id: 801,
+      arquivo_anexo_url: 'data:application/pdf;base64,JVBERi0xLjQK', arquivo_anexo_nome: 'contrato.pdf', arquivo_anexo_tipo: 'application/pdf' },
     { id: 702, pedido_id: null, tipo: 'variavel', categoria: 'imposto', descricao: 'DAS', credor_nome: 'Receita',
       valor: 120, data_vencimento: '2026-11-20', data_pagamento: '2026-11-20', status: 'Pago', mes_referencia: '2026-10', conta_id: 10 }
 ];
@@ -57,7 +58,9 @@ test('migracao v4: copia antes, categorias, competencia, pessoas, contas bancari
     const copia = await ler(page, 'sc_fin_backup_v3');
     expect(typeof copia.em).toBe('string');
     expect(copia.sc_cr).toEqual(CRS);
-    expect(copia.sc_cp).toEqual(CPS);
+    // A copia nao leva o anexo (a migracao nao mexe nele): fica a marca, com o nome e o tipo.
+    expect(copia.sc_cp).toEqual([{ ...CPS[0], arquivo_anexo_url: '[anexo não copiado]' }, CPS[1]]);
+    expect((await ler(page, 'sc_cp'))[0].arquivo_anexo_url, 'o anexo continua no lancamento').toBe(CPS[0].arquivo_anexo_url);
     expect(copia.sc_df).toEqual(DFS);
     expect(copia.sc_contas_fin).toEqual(CONTAS);
     expect(copia.sc_mov_fin).toEqual(MOVS);
@@ -174,10 +177,11 @@ test('excluir pedido sem recebimento cancela as contas em aberto; Cancelado venc
     const com = { id: 750, pedido_id: 26530, descricao: 'Comissão', credor_nome: 'Carla', valor: 50, categoria: 'comissao',
         papel_comissao: 'vendedor', data_vencimento: '2026-11-01', status: 'Pendente', tipo: 'variavel' };
     await entrar(page, BASE, { sc_cli: CLI, sc_ped: [ped(26530), ped(26531)],
-        sc_cr: [cr(611, 26530, '2026-11-01'), cr(612, 26530, '2026-12-20'), cr(613, 26531, '2026-11-02')], sc_cp: [com] });
+        sc_cr: [cr(611, 26530, '2026-11-01'), cr(612, 26530, '2026-12-20'), cr(613, 26531, '2026-11-02')],
+        sc_cp: [com, { id: 751, pedido_id: 26530, descricao: 'RT antiga', credor_nome: 'Arq', valor: 30, categoria: 'comissao_rt', data_vencimento: '2026-12-01', status: 'Pendente', tipo: 'variavel' }] });
     await page.goto(BASE + '/pcp.html');
     await page.evaluate(() => { excluirPedido(26530); });
-    await expect(page.locator('#sc-modal-msg')).toContainText('3 conta(s) deste pedido no Financeiro serão canceladas');
+    await expect(page.locator('#sc-modal-msg')).toContainText('4 conta(s) deste pedido no Financeiro serão canceladas');
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await ler(page, 'sc_ped')).length).toBe(1);
 
@@ -193,6 +197,8 @@ test('excluir pedido sem recebimento cancela as contas em aberto; Cancelado venc
     const c750 = (await ler(page, 'sc_cp'))[0];
     expect(c750.status).toBe('Cancelado');
     expect(c750.motivo_cancelamento).toBe('Pedido excluído');
+    const rt = (await ler(page, 'sc_cp'))[1];
+    expect([rt.status, rt.motivo_cancelamento], 'comissao RT antiga tambem').toEqual(['Cancelado', 'Pedido excluído']);
 
     // Abrir o Financeiro marca os vencidos como Atrasado: o cancelado fica como esta.
     await page.goto(BASE + '/financeiro.html');
@@ -250,4 +256,76 @@ test('backup: exportar e importar traz as categorias e os campos novos; backup a
     expect(crs.find(c => c.id === 602).categoria_id).toBe('cat_vendas');
     expect((await ler(page, 'sc_fin_cat')).categorias.find(c => c.id === 'cat_aluguel').nome, 'sem categorias no arquivo: as padrao').toBe('Aluguel');
     expect((await ler(page, 'sc_fin_backup_v3')).sc_cr).toEqual(CRS);
+});
+
+// Sem espaco: a migracao v4 nao deixa a copia ocupando espaco, nada muda e o aviso oferece baixar e seguir.
+const semEspacoPara = (page, chave) => page.addInitScript(c => {
+    const orig = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (k, v) {
+        if (k === c) throw new DOMException('cheio', 'QuotaExceededError');
+        return orig.call(this, k, v);
+    };
+}, chave);
+
+for (const [chave, caso] of [['sc_fin_backup_v3', 'a copia nao cabe'], ['sc_fin_versao', 'a gravacao final falha']]) {
+    test(`migracao v4 sem espaco (${caso}): dados iguais, sem copia, aviso; baixar a copia e seguir conclui`, async ({ page }) => {
+        await semearAntigos(page);
+        await semEspacoPara(page, chave);
+        await page.goto(BASE + '/financeiro.html');
+        const aviso = page.locator('#fin-backup');
+        await expect(aviso).toContainText('Não foi possível guardar a cópia de segurança no navegador. Baixe a cópia para continuar.');
+        expect(await texto(page, 'sc_fin_versao')).toBeNull();
+        expect(await texto(page, 'sc_fin_backup_v3'), 'a copia nao fica ocupando espaco').toBeNull();
+        expect(await ler(page, 'sc_cr')).toEqual(CRS);
+        expect(await ler(page, 'sc_cp')).toEqual(CPS);
+        expect(await ler(page, 'sc_contas_fin')).toEqual(CONTAS);
+        expect(await ler(page, 'sc_ped')).toEqual([PED_ANTIGO]);
+        if (chave === 'sc_fin_versao') return;   // sem gravar a versao, a migracao nunca termina (nada a baixar e seguir aqui)
+        const [dl] = await Promise.all([page.waitForEvent('download'), aviso.locator('button', { hasText: 'Baixar cópia e corrigir dados' }).click()]);
+        expect(dl.suggestedFilename()).toMatch(/^sctech_copia_financeiro_v3_\d{4}-\d{2}-\d{2}\.json$/);
+        const baixado = JSON.parse(require('fs').readFileSync(await dl.path(), 'utf8'));
+        expect(baixado.sc_cp, 'o arquivo leva os anexos').toEqual(CPS);
+        await expect.poll(() => texto(page, 'sc_fin_versao')).toBe('4');
+        await page.waitForFunction(() => typeof db !== 'undefined');
+        expect((await ler(page, 'sc_cr')).find(c => c.id === 602).categoria_id).toBe('cat_vendas');
+        expect(await texto(page, 'sc_fin_backup_v3')).toBeNull();
+        expect(await texto(page, 'sc_fin_v4_falhou')).toBeNull();
+        await expect(aviso).not.toContainText('Baixe a cópia para continuar');
+    });
+}
+
+test('historico de baixa e estorno com o nome de quem fez; saldo atualizado na baixa; excluido fica registrado sem o anexo', async ({ page }) => {
+    await page.clock.setFixedTime(HOJE);
+    const conta = { id: 10, nome: 'Banco do Brasil', tipo: 'banco', saldo_inicial: 0, data_saldo_inicial: '2026-01-01', ativo: true,
+        tipo_conta: 'corrente', conexao: 'manual', saldo_atualizado_em: '2026-01-01' };
+    const cr = { id: 621, pedido_id: null, cliente_nome: 'Bruno Costa', descricao: 'Venda', valor: 200, data_vencimento: '2026-11-30',
+        data_pagamento: null, status: 'Pendente', historico: [{ em: '2026-11-01T10:00:00.000Z', por: null, porNome: 'Sistema', acao: 'criado', detalhe: '' }] };
+    const cp = { id: 721, pedido_id: null, tipo: 'variavel', categoria: 'outro', descricao: 'Nota', credor_nome: 'X', valor: 10,
+        data_vencimento: '2026-12-01', data_pagamento: null, status: 'Pendente',
+        arquivo_anexo_url: 'data:application/pdf;base64,JVBERi0xLjQK', arquivo_anexo_nome: 'nota.pdf', arquivo_anexo_tipo: 'application/pdf' };
+    await entrar(page, BASE, { sc_cli: CLI, sc_cr: [cr], sc_cp: [cp], sc_contas_fin: [conta],
+        sc_meios_pag: [{ id: 1, nome: 'PIX', tipo: 'pix', conta_id: 10 }] });
+    await page.goto(BASE + '/financeiro.html');
+    await page.evaluate(() => { baixarContasReceber('2026-11-20', [{ id: 621, valor: null, meio_id: 1, conta_id: 10 }]); syncDB(); });
+    let c = (await ler(page, 'sc_cr'))[0];
+    expect(c.historico.map(h => h.acao)).toEqual(['criado', 'baixa']);
+    expect(c.historico[1]).toEqual(expect.objectContaining({ por: 1, porNome: 'Teste' }));
+    expect(c.historico[1].detalhe).toContain('R$ 200,00');
+    expect((await ler(page, 'sc_contas_fin'))[0].saldo_atualizado_em).toBe('2026-11-24');
+
+    await page.evaluate(() => { estornarCR(621); });
+    await page.locator('#sc-modal-ok').click();
+    await expect.poll(async () => (await ler(page, 'sc_cr'))[0].status).toBe('Pendente');
+    c = (await ler(page, 'sc_cr'))[0];
+    expect(c.historico.map(h => h.acao)).toEqual(['criado', 'baixa', 'estorno']);
+    expect(c.historico[2]).toEqual(expect.objectContaining({ por: 1, porNome: 'Teste' }));
+
+    await page.goto(BASE + '/financeiro.html');
+    await page.evaluate(() => { excluirCP(721); });
+    await page.locator('#sc-modal-ok').click();
+    await expect.poll(async () => (await ler(page, 'sc_cp')).length).toBe(0);
+    const exc = await ler(page, 'sc_fin_excluidos');
+    expect(exc.length).toBe(1);
+    expect(exc[0]).toEqual(expect.objectContaining({ tipo: 'cp', por: 1, porNome: 'Teste' }));
+    expect(exc[0].lancamento).toEqual({ ...cp, arquivo_anexo_url: '[anexo não copiado]' });
 });

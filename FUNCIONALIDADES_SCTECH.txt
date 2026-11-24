@@ -1209,8 +1209,15 @@ Dados do Financeiro novo (atualização automática, uma vez):
     ganham banco, agência, número, tipo (corrente, poupança, caixa ou cartão),
     conexão "manual" e a data do último movimento. Nenhum valor muda.
   - Antes, o sistema guarda uma cópia de contas a receber, a pagar, despesas
-    fixas, contas bancárias e movimentos neste navegador. Sem espaço para a
-    cópia, nada muda e tenta de novo na próxima abertura.
+    fixas, contas bancárias e movimentos neste navegador (sem os anexos, que a
+    atualização não toca: no lugar fica "[anexo não copiado]"). Sem espaço para
+    a cópia ou para salvar, a cópia sai, nada muda e o topo do Financeiro mostra
+    "Não foi possível guardar a cópia de segurança no navegador. Baixe a cópia
+    para continuar." com o botão "Baixar cópia e corrigir dados" (baixa a cópia,
+    com os anexos, e atualiza sem guardar a cópia no navegador). A cópia
+    guardada aparece no aviso "Há uma cópia de segurança..." com Baixar cópia e
+    Descartar cópia.
+  - Lançamento excluído fica registrado (com quem excluiu), sem o anexo.
   - Daí em diante, toda conta criada (pedido aprovado, pedido de compra,
     comissão, taxa de cartão, despesa fixa, recorrência, simulador ou lançamento
     manual) já nasce com categoria, competência e histórico; baixas e estornos

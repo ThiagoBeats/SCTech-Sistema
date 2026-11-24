@@ -184,8 +184,10 @@
             out.df.push({ id: d.id, set: { categoria_id: MAPA_LEGADO[d.categoria] || 'cat_outras_desp' } });
         });
 
+        // Qualquer pedido com contas a receber (pagas ou em aberto), mesmo o que voltou para
+        // Orcamento (financeiro_gerado false): ao aprovar de novo a receita fica no mesmo mes.
         pedidos.forEach(p => {
-            if (!p || !p.financeiro_gerado || temVal(p.data_aprovacao)) return;
+            if (!p || temVal(p.data_aprovacao)) return;
             const m = menorVenc.get(String(p.id));
             if (m) out.pedidos.push({ id: p.id, set: { data_aprovacao: m } });
         });
