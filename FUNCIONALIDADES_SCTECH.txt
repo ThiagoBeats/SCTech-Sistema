@@ -1224,8 +1224,18 @@ Na janela do carrinho:
     linha destacada. Calculado na hora: some ao pagar, receber ou cancelar.
   - Cadastro de conta (Configurar Empresa › Preferências › Contas): campos novos Banco (lista dos mais comuns +
     Outro), Agência, Número da conta e Tipo da conta (corrente, poupança, caixa, cartão).
-  - Fluxo de caixa mostra o Extrato de sempre (versão provisória) e DRE mostra
-    "Em construção: chega na próxima atualização."
+  - Fluxo de caixa mostra o Extrato de sempre (versão provisória).
+  - DRE — Resultado da empresa: tabela do ano (Jan a Dez + Total), Regime Caixa | Competência e seletor de Ano.
+    Começa recolhida (grupos e linhas calculadas); o + abre os filhos diretos do grupo (subgrupos abrem de novo).
+    Receitas, Custos, Margem de contribuição (+ % margem), Despesas (variáveis, fixas, outras), Resultado
+    operacional, Investimento, Financiamento e RESULTADO LÍQUIDO. Valores inteiros; saídas e resultados negativos
+    ficam entre parênteses em vermelho; a primeira coluna fica fixa ao rolar a tabela.
+  - Clique no valor de uma categoria: janela com os lançamentos do mês (data, descrição, pessoa, valor e total);
+    clicar numa linha abre o lançamento em Lançamentos.
+  - Botão Categorias (só com permissão completa na DRE): renomear, mover de subgrupo, ativar/desativar, excluir
+    (só sem lançamentos), + Nova categoria e + Novo subgrupo. Categoria desativada some dos formulários de
+    lançamento, mas continua na DRE se tiver valor (marcada "(inativa)"). Nome repetido no grupo é recusado.
+  - Botões Relatórios, PDF, Excel e Imprimir já aparecem (mostram "Em breve." por enquanto).
   - Lançamentos: seletor Contas a pagar | Contas a receber (| Recorrências, para quem tem essa permissão), cada
     lado com a permissão de hoje (visualizar para ver; completo para criar, editar, dar baixa, cancelar, excluir).
     * Barra: busca, Status (Todos, Em aberto, Vencido, Pago/Recebido, Cancelado), Cliente/Fornecedor, Categoria,

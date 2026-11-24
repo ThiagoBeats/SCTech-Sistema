@@ -16837,7 +16837,7 @@ function mostrarTabFinanceiro(tab, lado) {
     if (tab === 'resumo') renderFinResumo();
     else if (tab === 'lancamentos') renderFinLancamentos(lado);
     else if (tab === 'fluxo')   renderFinFluxoProvisorio();
-    else if (tab === 'dre')     renderFinDreProvisorio();
+    else if (tab === 'dre')     renderFinDre();
     else if (tab === 'dashboard') renderDashboardFinanceiro();
     else if (tab === 'drepedido') renderDRE();
     else if (tab === 'hoje')    renderHoje();

@@ -14,10 +14,6 @@ function renderFinFluxoProvisorio() {
     renderExtrato();
 }
 
-function renderFinDreProvisorio() {
-    _finEmConstrucao('fin-dre-conteudo', 'DRE');
-}
-
 // ===================== RESUMO =====================
 // Minhas contas (saldos), indicadores do periodo com comparacao e avisos de vencimento (calculados na tela).
 let _finResPeriodo = 'mes';
