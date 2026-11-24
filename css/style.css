@@ -3165,3 +3165,13 @@ html[data-theme="dark"] .dre-neg, html[data-theme="dark"] .dre-liquido td.dre-ne
 html[data-theme="dark"] .dre-liquido th, html[data-theme="dark"] .dre-liquido td { background: #16301F; color: #8FE08C; }
 html[data-theme="dark"] .dre-liquido td.dre-neg { color: #FF8A7A; }
 @media (max-width: 600px) { .dre-acoes .btn { flex: 1 1 auto; } .dre-tabela .dre-rot { min-width: 150px; max-width: 170px; } }
+.dre-rel { position: fixed; inset: 0; z-index: 9990; background: var(--white); overflow: auto; padding: 16px; }
+.dre-rel-caixa { max-width: 1400px; margin: 0 auto; min-width: 0; }
+.dre-tabela-rel { min-width: 760px; }
+.dre-tabela-rel thead th { text-align: center; }
+.dre-tabela-rel thead tr:nth-child(2) th { top: 31px; font-weight: 600; }
+.dre-pct { color: var(--muted); font-size: 12px; }
+.dre-tabela td.dre-fav { color: var(--ok-text); font-weight: 600; }
+.dre-tabela td.dre-desfav { color: var(--danger-text, var(--danger)); font-weight: 600; }
+html[data-theme="dark"] .dre-tabela td.dre-fav { color: #8FE08C; }
+html[data-theme="dark"] .dre-tabela td.dre-desfav { color: #FF8A7A; }

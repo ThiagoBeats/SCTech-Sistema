@@ -18,9 +18,9 @@ function _dreAnosComDados() {
     return [...anos].sort((a, b) => a - b);
 }
 
-function _dreParams(de, ate, intervalo) {
+function _dreParams(de, ate, intervalo, regime) {
     const fc = db.fin_categorias || {};
-    return { regime: finDre.regime, de, ate, intervalo, contas_receber: db.contas_receber || [], contas_pagar: db.contas_pagar || [],
+    return { regime: regime || finDre.regime, de, ate, intervalo, contas_receber: db.contas_receber || [], contas_pagar: db.contas_pagar || [],
         movimentos: db.movimentos_fin || [], contas: getContasFin(), categorias: fc.categorias, subgrupos: fc.subgrupos };
 }
 
@@ -118,24 +118,252 @@ function finDreAlternar(chave) {
 function finDreMudarRegime(r) { finDre.regime = r === 'competencia' ? 'competencia' : 'caixa'; renderFinDre(); }
 function finDreMudarAno(a) { finDre.ano = Number(a) || Number(hojeLocal().slice(0, 4)); renderFinDre(); }
 
-// Stubs: a Task 3 (relatorios e exportacao) substitui estas funcoes.
-function abrirRelatoriosDre() { toast('Em breve.', 'info'); }
-function exportarDrePdf() { toast('Em breve.', 'info'); }
-function exportarDreExcel() { toast('Em breve.', 'info'); }
-function imprimirDre() { toast('Em breve.', 'info'); }
+// ===================== RELATORIOS (Analise Vertical / Horizontal) e EXPORTACAO =====================
+const finRel = { tipo: 'vertical', regime: 'caixa', intervalo: 'mensal', de: '', ate: '', abertos: new Set() };
+
+const _dreFmt = (n, dec) => n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: dec });
+const _dreR1 = n => Math.round(n * 10) / 10 || 0;
+const _dreR2 = n => Math.round(n * 100) / 100 || 0;
+const _dreDataBr = d => d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4);
+
+// Monta as celulas (texto, cor e numero para o Excel) de uma tabela, para a tela, a impressao e o Excel.
+// modo: 'dre' (valores + Total) | 'vertical' (valor + AV%) | 'horizontal' (valor + AH% a partir do 2o periodo)
+function _dreCelulas(modo, tab, rotuloTotal) {
+    const av = modo === 'vertical' ? DreCore.analiseVertical(tab) : null;
+    const ah = modo === 'horizontal' ? DreCore.analiseHorizontal(tab) : null;
+    const cab = [];
+    tab.periodos.forEach((p, i) => {
+        cab.push({ grupo: p.rotulo, sub: modo === 'dre' ? '' : 'valor', plano: p.rotulo });
+        if (modo === 'vertical') cab.push({ grupo: p.rotulo, sub: 'AV%', plano: p.rotulo + ' AV%', pct: true });
+        else if (modo === 'horizontal' && i > 0) cab.push({ grupo: p.rotulo, sub: 'AH%', plano: p.rotulo + ' AH%', pct: true });
+    });
+    if (modo === 'dre') cab.push({ grupo: rotuloTotal, sub: '', plano: rotuloTotal, total: true });
+    const valor = (l, v, i, total) => {
+        if (l.tipo === 'percentual') return { txt: v == null ? '—' : _dreFmt(v, 1) + '%', num: v == null ? null : _dreR1(v), pct: true, i };
+        const f = finDreFormatarValor(v, l.sinal);
+        const clicavel = l.tipo === 'categoria' && (Number(v) || 0) !== 0 && !total;
+        return { txt: f.txt, neg: f.neg, num: _dreR2((l.sinal === 'saida' ? -1 : 1) * (Number(v) || 0)), i, clicavel, total };
+    };
+    const linhas = tab.linhas.map(l => {
+        const cel = [];
+        tab.periodos.forEach((p, i) => {
+            cel.push(valor(l, l.valores[i], i));
+            if (av) { const a = av[l.chave][i]; cel.push({ txt: a == null ? '—' : _dreFmt(a, 1) + '%', num: a == null ? null : _dreR1(a), pct: true }); }
+            else if (ah && i > 0) {
+                const a = ah[l.chave][i];
+                const base = a.pct == null ? '—' : a.acima999 ? '> 999%' : (a.pct > 0 ? '+' : '') + _dreFmt(a.pct, 2) + '%';
+                const seta = a.seta === 'up' ? '↑ ' : a.seta === 'down' ? '↓ ' : '';
+                cel.push({ txt: seta + base, num: a.pct == null ? null : _dreR1(a.pct), pct: true, fav: a.favoravel });
+            }
+        });
+        if (modo === 'dre') cel.push(valor(l, l.total, tab.periodos.length, true));
+        return { l, cel };
+    });
+    return { cab, linhas };
+}
+
+// Matriz para o Excel: todas as categorias expandidas, numeros como numero (saidas negativas).
+function _dreMatrizExcel(modo, tab, rotuloTotal) {
+    const { cab, linhas } = _dreCelulas(modo, tab, rotuloTotal);
+    const aoa = [['RESULTADO'].concat(cab.map(c => c.plano))];
+    linhas.forEach(({ l, cel }) => aoa.push([' '.repeat(l.nivel * 2) + l.rotulo + (l.inativa ? ' (inativa)' : '')].concat(cel.map(c => c.num == null ? '' : c.num))));
+    return aoa;
+}
+
+async function _dreBaixarExcel(nome, aba, aoa) {
+    try { await garantirSheetJs('o gerador de planilhas'); }
+    catch (e) { toast(e.message, 'error', 5000); return; }
+    try {
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), aba);
+        XLSX.writeFile(wb, nome);
+    } catch (e) { toast('Não foi possível gerar a planilha.', 'error', 5000); }
+}
+
+// Janela de impressao: documento claro, paisagem, tabela toda expandida.
+function _dreImprimir(titulo, regime, periodoTxt, modo, tab, rotuloTotal, dicaPdf) {
+    const { cab, linhas } = _dreCelulas(modo, tab, rotuloTotal);
+    const emp = getEmpresa();
+    const nomeEmp = emp.nome_fantasia || emp.razao_social || 'SCTech';
+    const dois = modo !== 'dre';
+    const th = (t, extra) => `<th style="text-align:right;${extra || ''}">${escapeHtml(t)}</th>`;
+    let h1 = '<th rowspan="' + (dois ? 2 : 1) + '" style="text-align:left">RESULTADO</th>', h2 = '';
+    if (dois) {
+        const por = []; cab.forEach(c => { if (!por.length || por[por.length - 1].g !== c.grupo) por.push({ g: c.grupo, n: 0 }); por[por.length - 1].n++; });
+        h1 += por.map(g => `<th colspan="${g.n}" style="text-align:center">${escapeHtml(g.g)}</th>`).join('');
+        h2 = '<tr>' + cab.map(c => th(c.sub)).join('') + '</tr>';
+    } else h1 += cab.map(c => th(c.grupo)).join('');
+    const corpo = linhas.map(({ l, cel }) => {
+        const forte = l.tipo === 'grupo' || l.tipo === 'calculada';
+        const tds = cel.map(c => {
+            const cor = c.neg || c.fav === false ? '#C0392B' : c.fav === true ? '#1E8449' : '';
+            return `<td style="text-align:right;white-space:nowrap;${cor ? 'color:' + cor + ';' : ''}">${escapeHtml(c.txt)}</td>`;
+        }).join('');
+        return `<tr style="${forte ? 'font-weight:700;background:#F0F2F5;' : ''}${l.chave === 'liquido' ? 'background:#E3F4E6;' : ''}"><td style="padding-left:${6 + l.nivel * 16}px">${escapeHtml(l.rotulo)}${l.inativa ? ' (inativa)' : ''}</td>${tds}</tr>`;
+    }).join('');
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${escapeHtml(titulo)}</title><style>
+        @page { size: A4 landscape; margin: 12mm; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #1a1a1a; background: #fff; font-size: 11px; margin: 0; padding: 12px; }
+        h1 { font-size: 16px; margin: 0; } h2 { font-size: 14px; margin: 10px 0 2px; }
+        .meta { color: #555; margin-bottom: 8px; }
+        table { border-collapse: collapse; width: 100%; } th, td { border-bottom: 1px solid #ddd; padding: 3px 6px; } thead th { background: #E8EBEF; }
+        .dica { background: #FFF8E1; border: 1px solid #F0D98A; padding: 6px 10px; margin-bottom: 10px; border-radius: 4px; }
+        @media print { .no-print { display: none !important; } }
+    </style></head><body><div class="doc-claro">
+        ${dicaPdf ? `<div class="dica no-print">Escolha 'Salvar como PDF' na impressora.</div>` : ''}
+        <h1>${escapeHtml(nomeEmp)}</h1>
+        <h2>${escapeHtml(titulo)}</h2>
+        <div class="meta">Regime: ${escapeHtml(regime)} &nbsp;·&nbsp; Período: ${escapeHtml(periodoTxt)}</div>
+        <table><thead><tr>${h1}</tr>${h2}</thead><tbody>${corpo}</tbody></table>
+    </div><script>window.onload = function () { window.print(); };<\/script></body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { toast('Permita pop-ups para imprimir.', 'info'); return; }
+    w.document.write(html);
+    w.document.close();
+}
+
+const _dreNomeRegime = r => r === 'competencia' ? 'Competência' : 'Caixa';
+
+// ---- DRE (tela principal): tabela do ano com todas as categorias expandidas ----
+function _dreImprimirAtual(dica) {
+    if (!finDre.ano) finDre.ano = Number(hojeLocal().slice(0, 4));
+    _dreImprimir('DRE — Resultado da empresa', _dreNomeRegime(finDre.regime), '01/01/' + finDre.ano + ' a 31/12/' + finDre.ano, 'dre', finDreTabelaAtual(), 'Total ' + finDre.ano, dica);
+}
+function exportarDrePdf() { _dreImprimirAtual(true); }
+function imprimirDre() { _dreImprimirAtual(false); }
+function exportarDreExcel() {
+    if (!finDre.ano) finDre.ano = Number(hojeLocal().slice(0, 4));
+    return _dreBaixarExcel('DRE_' + finDre.regime + '_' + finDre.ano + '.xlsx', 'DRE', _dreMatrizExcel('dre', finDreTabelaAtual(), 'Total ' + finDre.ano));
+}
+
+// ---- Relatorios ----
+function _dreRelTabela() {
+    return DreCore.tabela(_dreParams(finRel.de, finRel.ate, finRel.intervalo, finRel.regime));
+}
+const _dreRelTitulo = () => finRel.tipo === 'horizontal' ? 'Análise Horizontal' : 'Análise Vertical';
+
+function abrirRelatoriosDre() {
+    const hoje = hojeLocal();
+    Object.assign(finRel, { tipo: 'vertical', regime: finDre.regime, intervalo: 'mensal', de: hoje.slice(0, 4) + '-01-01', ate: hoje, abertos: new Set() });
+    const antigo = document.getElementById('dre-rel-overlay');
+    if (antigo) antigo.remove();
+    const o = document.createElement('div');
+    o.id = 'dre-rel-overlay';
+    o.className = 'dre-rel';
+    const reg = (v, t) => `<button type="button" class="dre-seg-btn" id="dre-rel-regime-${v}" aria-pressed="false" onclick="finRelMudar('regime','${v}')">${t}</button>`;
+    const tip = (v, t) => `<button type="button" class="dre-seg-btn" id="dre-rel-tipo-${v}" aria-pressed="false" onclick="finRelMudar('tipo','${v}')">${t}</button>`;
+    const ints = [['mensal', 'Mensal'], ['trimestral', 'Trimestral'], ['semestral', 'Semestral'], ['anual', 'Anual'], ['personalizado', 'Personalizado']];
+    o.innerHTML = `<div class="dre-rel-caixa">
+        <div class="dre-topo"><h3 id="dre-rel-titulo"></h3>
+            <div class="dre-acoes">
+                <button class="btn btn-outline btn-sm" id="dre-rel-pdf" onclick="exportarRelatorioDrePdf()">PDF</button>
+                <button class="btn btn-outline btn-sm" id="dre-rel-excel" onclick="exportarRelatorioDreExcel()">Excel</button>
+                <button class="btn btn-outline btn-sm" id="dre-rel-imprimir" onclick="imprimirRelatorioDre()">Imprimir</button>
+                <button class="btn btn-outline btn-sm" id="dre-rel-fechar" onclick="document.getElementById('dre-rel-overlay').remove()">Fechar</button>
+            </div></div>
+        <div class="lanc-barra dre-barra">
+            <div class="form-group"><label>Tipo</label><div class="dre-seg" role="group" aria-label="Tipo">${tip('vertical', 'Vertical')}${tip('horizontal', 'Horizontal')}</div></div>
+            <div class="form-group"><label>Visualizar por</label><div class="dre-seg" role="group" aria-label="Visualizar por">${reg('caixa', 'Caixa')}${reg('competencia', 'Competência')}</div></div>
+            <div class="form-group"><label for="dre-rel-intervalo">Intervalo</label><select id="dre-rel-intervalo" onchange="finRelMudar('intervalo',this.value)">${ints.map(i => `<option value="${i[0]}">${i[1]}</option>`).join('')}</select></div>
+            <div class="form-group"><label for="dre-rel-de">Período de</label><input type="date" id="dre-rel-de" value="${finRel.de}" onchange="finRelMudar('de',this.value)"></div>
+            <div class="form-group"><label for="dre-rel-ate">até</label><input type="date" id="dre-rel-ate" value="${finRel.ate}" onchange="finRelMudar('ate',this.value)"></div>
+        </div>
+        <div id="dre-rel-corpo"></div></div>`;
+    document.body.appendChild(o);
+    o.addEventListener('click', e => {
+        const tg = e.target.closest('[data-tg]');
+        if (tg) { finRelAlternar(tg.dataset.tg); return; }
+        const c = e.target.closest('td[data-chave]');
+        if (c) _dreRelDetalhe(c.dataset.chave, Number(c.dataset.i));
+    });
+    o.addEventListener('keydown', e => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const c = e.target.closest('td[data-chave]');
+        if (c) { e.preventDefault(); _dreRelDetalhe(c.dataset.chave, Number(c.dataset.i)); }
+    });
+    _dreRelRender();
+}
+
+function finRelMudar(campo, valor) {
+    if (campo === 'tipo') finRel.tipo = valor === 'horizontal' ? 'horizontal' : 'vertical';
+    else if (campo === 'regime') finRel.regime = valor === 'competencia' ? 'competencia' : 'caixa';
+    else finRel[campo] = valor;
+    _dreRelRender();
+}
+
+function finRelAlternar(chave) {
+    if (finRel.abertos.has(chave)) {
+        const tab = _dreRelTabela();
+        const desc = c => tab.linhas.filter(l => l.pai === c).forEach(l => { finRel.abertos.delete(l.chave); desc(l.chave); });
+        finRel.abertos.delete(chave); desc(chave);
+    } else finRel.abertos.add(chave);
+    _dreRelRender();
+}
+
+function _dreRelDetalhe(chave, indice) {
+    abrirDetalheDre(chave, indice, { tab: _dreRelTabela(), regime: finRel.regime });
+}
+
+function _dreRelRender() {
+    const corpo = document.getElementById('dre-rel-corpo');
+    if (!corpo) return;
+    document.getElementById('dre-rel-titulo').textContent = _dreRelTitulo();
+    ['vertical', 'horizontal'].forEach(t => { const b = document.getElementById('dre-rel-tipo-' + t); b.classList.toggle('active', finRel.tipo === t); b.setAttribute('aria-pressed', String(finRel.tipo === t)); });
+    ['caixa', 'competencia'].forEach(t => { const b = document.getElementById('dre-rel-regime-' + t); b.classList.toggle('active', finRel.regime === t); b.setAttribute('aria-pressed', String(finRel.regime === t)); });
+    const sel = document.getElementById('dre-rel-intervalo'); if (sel) sel.value = finRel.intervalo;
+    const tab = _dreRelTabela();
+    if (!tab.periodos.length) { corpo.innerHTML = '<p class="lanc-sub">Período inválido: a data inicial deve ser anterior à final.</p>'; return; }
+    const { cab, linhas } = _dreCelulas(finRel.tipo, tab);
+    const filhos = new Set(tab.linhas.filter(l => l.pai).map(l => l.pai));
+    const por = []; cab.forEach(c => { if (!por.length || por[por.length - 1].g !== c.grupo) por.push({ g: c.grupo, n: 0 }); por[por.length - 1].n++; });
+    const porChave = new Map(tab.linhas.map(l => [l.chave, l]));
+    const visivel = l => !l.pai || (finRel.abertos.has(l.pai) && visivel(porChave.get(l.pai)));
+    const trs = linhas.filter(x => visivel(x.l)).map(({ l, cel }) => {
+        const aberto = finRel.abertos.has(l.chave);
+        const tg = filhos.has(l.chave)
+            ? `<button type="button" class="dre-tg" data-tg="${escapeHtml(l.chave)}" aria-expanded="${aberto}" aria-label="${aberto ? 'Recolher' : 'Expandir'} ${escapeHtml(l.rotulo)}">${aberto ? '−' : '+'}</button>`
+            : '<span class="dre-tg dre-tg-vazio"></span>';
+        const tds = cel.map(c => {
+            const cls = 'dre-num' + (c.pct ? ' dre-pct' : '') + (c.neg ? ' dre-neg' : '') + (c.fav === true ? ' dre-fav' : c.fav === false ? ' dre-desfav' : '') + (c.clicavel ? ' dre-clicavel' : '');
+            return `<td class="${cls}"${c.clicavel ? ` data-chave="${escapeHtml(l.chave)}" data-i="${c.i}" tabindex="0" role="button"` : ''}>${escapeHtml(c.txt)}</td>`;
+        }).join('');
+        return `<tr class="dre-l dre-${l.tipo}${l.chave === 'liquido' ? ' dre-liquido' : ''}" data-chave="${escapeHtml(l.chave)}"><th scope="row" class="dre-rot" style="padding-left:${8 + l.nivel * 18}px">${tg}${escapeHtml(l.rotulo)}${l.inativa ? ' <span class="lanc-sub">(inativa)</span>' : ''}</th>${tds}</tr>`;
+    }).join('');
+    corpo.innerHTML = `<div class="dre-quadro"><table class="dre-tabela dre-tabela-rel" id="dre-rel-tabela">
+        <thead><tr><th class="dre-rot" rowspan="2">RESULTADO</th>${por.map(g => `<th class="dre-num dre-grupo-cab" colspan="${g.n}">${escapeHtml(g.g)}</th>`).join('')}</tr>
+        <tr>${cab.map(c => `<th class="dre-num dre-sub-cab">${escapeHtml(c.sub)}</th>`).join('')}</tr></thead>
+        <tbody>${trs}</tbody></table></div>
+        <p class="lanc-sub" style="margin-top:8px">Clique em + para abrir o grupo e no valor de uma categoria para ver os lançamentos.</p>`;
+}
+
+function _dreRelPeriodoTxt() { return _dreDataBr(finRel.de) + ' a ' + _dreDataBr(finRel.ate); }
+function _dreRelImprimirAgora(dica) {
+    const tab = _dreRelTabela();
+    if (!tab.periodos.length) { toast('Período inválido.', 'info'); return; }
+    _dreImprimir(_dreRelTitulo(), _dreNomeRegime(finRel.regime), _dreRelPeriodoTxt(), finRel.tipo, tab, '', dica);
+}
+function exportarRelatorioDrePdf() { _dreRelImprimirAgora(true); }
+function imprimirRelatorioDre() { _dreRelImprimirAgora(false); }
+function exportarRelatorioDreExcel() {
+    const tab = _dreRelTabela();
+    if (!tab.periodos.length) { toast('Período inválido.', 'info'); return; }
+    return _dreBaixarExcel('Analise_' + finRel.tipo + '_' + finRel.de + '_' + finRel.ate + '.xlsx', _dreRelTitulo(), _dreMatrizExcel(finRel.tipo, tab, ''));
+}
 
 // ===================== DETALHE (lancamentos de uma categoria num periodo) =====================
-function abrirDetalheDre(chave, indice) {
-    const tab = finDreTabelaAtual();
+// ctx (opcional, vindo dos relatorios): { tab, regime } usa a tabela e o regime do relatorio e o periodo pelo rotulo.
+function abrirDetalheDre(chave, indice, ctx) {
+    const tab = ctx ? ctx.tab : finDreTabelaAtual();
     const linha = tab.linhas.find(l => l.chave === chave);
     if (!linha || linha.tipo !== 'categoria') return;
-    const total = indice < 0 || indice >= tab.periodos.length;
+    const total = !ctx && (indice < 0 || indice >= tab.periodos.length);
     const per = total ? { de: finDre.ano + '-01-01', ate: finDre.ano + '-12-31' } : tab.periodos[indice];
-    const calc = DreCore.calcular(_dreParams(per.de, per.ate));
+    if (!per) return;
+    const calc = DreCore.calcular(_dreParams(per.de, per.ate, undefined, ctx && ctx.regime));
     const itens = (calc.lancamentos[linha.id] || []).slice().sort((a, b) => a.data < b.data ? -1 : a.data > b.data ? 1 : 0);
     const brl = v => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const dataBr = d => d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4);
-    const periodoTxt = total ? String(finDre.ano) : _dreMeses[Number(per.de.slice(5, 7)) - 1] + '/' + per.de.slice(0, 4);
+    const periodoTxt = ctx ? per.rotulo : total ? String(finDre.ano) : _dreMeses[Number(per.de.slice(5, 7)) - 1] + '/' + per.de.slice(0, 4);
     const soma = itens.reduce((t, i) => t + (Number(i.valor) || 0), 0);
     const linhasHtml = itens.map(i => {
         const r = (i.tipo === 'cp' ? db.contas_pagar : db.contas_receber).find(x => String(x.id) === String(i.id)) || {};
