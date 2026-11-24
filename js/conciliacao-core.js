@@ -64,6 +64,7 @@
         const re = /<(\/?)([A-Za-z0-9_.]+)\s*>([^<]*)/g;
         const FIM = new Set(['STMTTRN', 'BANKTRANLIST', 'LEDGERBAL', 'AVAILBAL']);
         let atual = null, m, n = 0;
+        const vistos = Object.create(null);
         const fechar = () => {
             if (!atual) return;
             n++;
@@ -74,8 +75,11 @@
             else {
                 const descricao = (atual.MEMO || atual.NAME || '').replace(/\s+/g, ' ').trim();
                 const v = Math.round(valor * 100) / 100;
-                const fitid = (atual.FITID || '').trim() || (data + '|' + v + '|' + descricao);
-                saida.linhas.push({ fitid, data, valor: v, descricao });
+                const base = (atual.FITID || '').trim() || (data + '|' + v + '|' + descricao);
+                // Id unico no arquivo: repeticao (FITID reaproveitado ou linhas identicas sem FITID) ganha #2, #3...
+                // na ordem do arquivo, entao reler o mesmo arquivo gera os mesmos ids.
+                const k = (vistos[base] = (vistos[base] || 0) + 1);
+                saida.linhas.push({ fitid: k > 1 ? base + '#' + k : base, data, valor: v, descricao });
             }
             atual = null;
         };
@@ -108,18 +112,21 @@
         const entrada = linha.valor > 0;
         const alvo = Math.abs(linha.valor);
         const sentido = entrada ? 'entrada' : 'saida';
+        // jaUsados: Set de chaves ja conciliadas: 'mov:ID', 'cr:ID', 'cp:ID', 'rep:CRID:DATA' (data AAAA-MM-DD do repasse).
+        // Por compatibilidade, o id puro do movimento (sem prefixo) tambem vale.
         const jaUsados = ctx.jaUsados || new Set();
+        const usado = (...chaves) => chaves.some(c => jaUsados.has(c));
         const out = [];
 
         (ctx.movimentos || []).forEach(m => {
-            if (!m || String(m.conta_id) !== String(ctx.contaId) || m.sentido !== sentido || jaUsados.has(m.id)) return;
+            if (!m || String(m.conta_id) !== String(ctx.contaId) || m.sentido !== sentido || usado('mov:' + m.id, m.id)) return;
             const dist = distancia(dia10(m.data), linha.data);
             if (!iguais(m.valor, alvo) || dist > JANELA_DIAS) return;
             out.push({ tipo: 'movimento', ids: [m.id], descricao: m.descricao || m.origem || 'Movimento', valor: alvo, data: dia10(m.data), distanciaDias: dist });
         });
 
         ((entrada ? ctx.contasReceber : ctx.contasPagar) || []).forEach(l => {
-            if (!l || l.status === 'Cancelado' || l.status === 'Pago') return;
+            if (!l || l.status === 'Cancelado' || l.status === 'Pago' || usado((entrada ? 'cr:' : 'cp:') + l.id)) return;
             const dist = distancia(dia10(l.data_vencimento), linha.data);
             if (!iguais(l.valor, alvo) || dist > JANELA_DIAS) return;
             const nome = entrada ? l.cliente_nome : l.credor_nome;
@@ -127,7 +134,7 @@
         });
 
         if (entrada) {
-            const reps = (ctx.repasses || []).filter(r => r && String(r.contaId) === String(ctx.contaId));
+            const reps = (ctx.repasses || []).filter(r => r && String(r.contaId) === String(ctx.contaId) && !usado('rep:' + r.crId + ':' + dia10(r.data)));
             let achou = false;
             reps.forEach(r => {
                 const dist = distancia(dia10(r.data), linha.data);

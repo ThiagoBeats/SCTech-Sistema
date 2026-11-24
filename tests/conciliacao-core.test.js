@@ -125,3 +125,26 @@ test('sugestoes: valor unico de repasse tem prioridade sobre a soma', () => {
     const reps = [{ crId: 'a', data: '2026-11-05', liquido: 100, contaId: 'c1' }, { crId: 'b', data: '2026-11-05', liquido: 60, contaId: 'c1' }, { crId: 'c', data: '2026-11-05', liquido: 40, contaId: 'c1' }];
     assert.deepStrictEqual(C.sugestoes(linha(100), { contaId: 'c1', repasses: reps }).map(x => x.tipo), ['repasse']);
 });
+
+test('lerOfx: linhas identicas sem FITID e FITID repetido ganham sufixo estavel', () => {
+    const t = 'OFXHEADER:100
+<OFX>'
+        + '<STMTTRN><DTPOSTED>20261107<TRNAMT>-10,00<MEMO>PIX X</STMTTRN>'
+        + '<STMTTRN><DTPOSTED>20261107<TRNAMT>-10,00<MEMO>PIX X</STMTTRN>'
+        + '<STMTTRN><DTPOSTED>20261108<TRNAMT>5<FITID>X1<MEMO>a</STMTTRN>'
+        + '<STMTTRN><DTPOSTED>20261109<TRNAMT>6<FITID>X1<MEMO>b</STMTTRN></OFX>';
+    const ids = C.lerOfx(t).linhas.map(l => l.fitid);
+    assert.deepStrictEqual(ids, ['2026-11-07|-10|PIX X', '2026-11-07|-10|PIX X#2', 'X1', 'X1#2']);
+    assert.deepStrictEqual(C.lerOfx(t).linhas.map(l => l.fitid), ids);
+});
+
+test('sugestoes: jaUsados filtra movimento, lancamento e repasse por chave', () => {
+    const mov = { id: 'm1', conta_id: 'c1', data: '2026-11-05', sentido: 'entrada', valor: 500 };
+    const base = { contaId: 'c1', movimentos: [mov], contasReceber: [cr()], repasses: [{ crId: 'r1', data: '2026-11-05', liquido: 500, contaId: 'c1' }] };
+    assert.deepStrictEqual(C.sugestoes(linha(500), base).map(x => x.tipo), ['movimento', 'lancamento', 'repasse']);
+    const s = C.sugestoes(linha(500), Object.assign({}, base, { jaUsados: new Set(['mov:m1', 'cr:cr1', 'rep:r1:2026-11-05']) }));
+    assert.deepStrictEqual(s, []);
+    assert.deepStrictEqual(C.sugestoes(linha(500), Object.assign({}, base, { jaUsados: new Set(['m1']) })).map(x => x.tipo), ['lancamento', 'repasse']);
+    const cp = { id: 'cp1', valor: 200, data_vencimento: '2026-11-04', status: 'Pendente' };
+    assert.deepStrictEqual(C.sugestoes(linha(-200), { contaId: 'c1', contasPagar: [cp], jaUsados: new Set(['cp:cp1']) }), []);
+});
