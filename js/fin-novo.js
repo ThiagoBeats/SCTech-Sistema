@@ -307,7 +307,7 @@ function _finLancAcoes(lado, r, hoje) {
     const A = [];
     if (completo && aberta) A.push({ icone: '✓', rotulo: 'Dar baixa', onclick: (lado === 'pagar' ? 'marcarCPPago(' : 'marcarCRPago(') + id + ')' });
     if (completo && sit === 'pago' && r.categoria !== 'taxa_cartao') A.push({ icone: '↩', rotulo: 'Estornar', onclick: (lado === 'pagar' ? 'estornarCP(' : 'estornarCR(') + id + ')' });
-    if (completo && lado === 'receber' && aberta && r.data_vencimento && r.data_vencimento <= hoje) A.push({ icone: '💬', rotulo: 'Cobrar no WhatsApp', onclick: 'cobrarNoWhatsApp(' + id + ')' });
+    if (completo && lado === 'receber' && aberta && r.data_vencimento && r.data_vencimento <= hoje) A.push({ icone: iconeWhatsApp(16), titulo: 'Enviar por WhatsApp', rotulo: 'Cobrar no WhatsApp', onclick: 'cobrarNoWhatsApp(' + id + ')' });
     if (completo && sit !== 'cancelado') A.push({ icone: '✏️', rotulo: 'Editar', onclick: `abrirNovoLancamento('${lado}', ${id})` });
     A.push({ icone: '🕘', rotulo: 'Histórico', onclick: `abrirHistoricoLancamento('${tipo}', ${id})` });
     if (r.pedido_id != null && r.pedido_id !== '' && db.pedidos.some(p => p.id == r.pedido_id)) A.push({ icone: '📦', rotulo: 'Abrir pedido', onclick: `abrirPedidoDoLancamento(${_finIdJs(r.pedido_id)})` });

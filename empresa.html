@@ -232,6 +232,21 @@
             </div>
         </div>
 
+        <div class="card" style="max-width:860px" id="emp-msg-aviso-card">
+            <h3 style="margin-bottom:6px;color:var(--primary)">💬 Mensagem de aviso de visita</h3>
+            <p style="font-size:12px;color:#8F8F8F;margin-bottom:14px">
+                Texto enviado ao cliente pelo WhatsApp para avisar da medição ou da instalação, nas Rotas do dia.
+                Use <strong>{cliente}</strong>, <strong>{empresa}</strong>, <strong>{servico}</strong> (medição ou instalação), <strong>{dia}</strong> (hoje, amanhã ou no dia DD/MM), <strong>{horario}</strong> e <strong>{tecnico}</strong>; eles são trocados pelos dados da visita.
+            </p>
+            <div class="form-group">
+                <textarea id="emp-msg-aviso" rows="4" aria-label="Mensagem de aviso de visita"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center">
+                <button class="btn btn-success" onclick="salvarMensagemAviso()">💾 Salvar mensagem</button>
+                <button class="btn btn-outline" onclick="restaurarMensagemAviso()">↩ Restaurar padrão</button>
+            </div>
+        </div>
+
         <div class="card" style="max-width:860px">
             <h3 style="margin-bottom:6px;color:var(--primary)">🔔 Preferências de Alertas</h3>
             <p style="font-size:12px;color:#8F8F8F;margin-bottom:16px">Escolha quais alertas devem ser exibidos no sistema. Alertas desabilitados mostrarão um indicador 🔕 no cabeçalho de todas as páginas.</p>
