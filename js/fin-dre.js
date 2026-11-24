@@ -139,7 +139,7 @@ function _dreCelulas(modo, tab, rotuloTotal) {
     });
     if (modo === 'dre') cab.push({ grupo: rotuloTotal, sub: '', plano: rotuloTotal, total: true });
     const valor = (l, v, i, total) => {
-        if (l.tipo === 'percentual') return { txt: v == null ? '—' : _dreFmt(v, 1) + '%', num: v == null ? null : _dreR1(v), pct: true, i };
+        if (l.tipo === 'percentual') return { txt: v == null ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%', num: v == null ? null : _dreR1(v), pct: true, i };
         const f = finDreFormatarValor(v, l.sinal);
         const clicavel = l.tipo === 'categoria' && (Number(v) || 0) !== 0 && !total;
         return { txt: f.txt, neg: f.neg, num: _dreR2((l.sinal === 'saida' ? -1 : 1) * (Number(v) || 0)), i, clicavel, total };
@@ -152,8 +152,8 @@ function _dreCelulas(modo, tab, rotuloTotal) {
             else if (ah && i > 0) {
                 const a = ah[l.chave][i];
                 const base = a.pct == null ? '—' : a.acima999 ? '> 999%' : (a.pct > 0 ? '+' : '') + _dreFmt(a.pct, 2) + '%';
-                const seta = a.seta === 'up' ? '↑ ' : a.seta === 'down' ? '↓ ' : '';
-                cel.push({ txt: seta + base, num: a.pct == null ? null : _dreR1(a.pct), pct: true, fav: a.favoravel });
+                const seta = a.pct == null ? '' : a.seta === 'up' ? '↑ ' : a.seta === 'down' ? '↓ ' : '';
+                cel.push({ txt: seta + base, num: a.pct == null ? null : _dreR1(a.pct), pct: true, fav: a.pct == null ? null : a.favoravel });
             }
         });
         if (modo === 'dre') cel.push(valor(l, l.total, tab.periodos.length, true));
@@ -166,14 +166,20 @@ function _dreCelulas(modo, tab, rotuloTotal) {
 function _dreMatrizExcel(modo, tab, rotuloTotal) {
     const { cab, linhas } = _dreCelulas(modo, tab, rotuloTotal);
     const aoa = [['RESULTADO'].concat(cab.map(c => c.plano))];
-    linhas.forEach(({ l, cel }) => aoa.push([' '.repeat(l.nivel * 2) + l.rotulo + (l.inativa ? ' (inativa)' : '')].concat(cel.map(c => c.num == null ? '' : c.num))));
+    aoa.pctCel = [];
+    linhas.forEach(({ l, cel }) => {
+        cel.forEach((c, j) => { if (c.pct && c.num != null) aoa.pctCel.push([aoa.length, j + 1]); });
+        aoa.push([' '.repeat(l.nivel * 2) + l.rotulo + (l.inativa ? ' (inativa)' : '')].concat(cel.map(c => c.num == null ? '' : c.num)));
+    });
     return aoa;
 }
 
 // Linhas de apresentacao no topo: empresa, titulo, regime, periodo, linha em branco; e a nota no fim.
 function _dreComCabecalhoExcel(aoa, titulo, regime, periodoTxt) {
     const emp = getEmpresa();
-    return [[emp.nome_fantasia || emp.razao_social || 'SCTech'], [titulo], ['Regime: ' + regime], ['Período: ' + periodoTxt], []].concat(aoa, [['Saídas em negativo.']]);
+    const r = [[emp.nome_fantasia || emp.razao_social || 'SCTech'], [titulo], ['Regime: ' + regime], ['Período: ' + periodoTxt], []].concat(aoa, [['Saídas em negativo.']]);
+    r.pctCel = (aoa.pctCel || []).map(([a, b]) => [a + 5, b]);
+    return r;
 }
 
 async function _dreBaixarExcel(nome, aba, aoa) {
@@ -181,7 +187,10 @@ async function _dreBaixarExcel(nome, aba, aoa) {
     catch (e) { toast(e.message, 'error', 5000); return; }
     try {
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), aba);
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        // percentuais com 1 casa decimal no formato da celula
+        if (XLSX.utils.encode_cell) (aoa.pctCel || []).forEach(([r, c]) => { const cel = ws[XLSX.utils.encode_cell({ r, c })]; if (cel) cel.z = '0.0'; });
+        XLSX.utils.book_append_sheet(wb, ws, aba);
         XLSX.writeFile(wb, nome);
     } catch (e) { toast('Não foi possível gerar a planilha.', 'error', 5000); }
 }
@@ -239,7 +248,7 @@ function exportarDrePdf() { _dreImprimirAtual(true); }
 function imprimirDre() { _dreImprimirAtual(false); }
 function exportarDreExcel() {
     if (!finDre.ano) finDre.ano = Number(hojeLocal().slice(0, 4));
-    return _dreBaixarExcel('DRE_' + finDre.regime + '_' + finDre.ano + '.xlsx', 'DRE', _dreComCabecalhoExcel(_dreMatrizExcel('dre', finDreTabelaAtual(), 'Total ' + finDre.ano), 'DRE', _dreNomeRegime(finDre.regime), '01/01/' + finDre.ano + ' a 31/12/' + finDre.ano));
+    return _dreBaixarExcel('DRE_' + finDre.regime + '_' + finDre.ano + '.xlsx', 'DRE', _dreComCabecalhoExcel(_dreMatrizExcel('dre', finDreTabelaAtual(), 'Total ' + finDre.ano), 'DRE — Resultado da empresa', _dreNomeRegime(finDre.regime), '01/01/' + finDre.ano + ' a 31/12/' + finDre.ano));
 }
 
 // ---- Relatorios ----
@@ -353,7 +362,15 @@ function _dreRelRender() {
         <thead><tr><th class="dre-rot" rowspan="2">RESULTADO</th>${por.map(g => `<th class="dre-num dre-grupo-cab" colspan="${g.n}">${escapeHtml(g.g)}</th>`).join('')}</tr>
         <tr>${cab.map(c => `<th class="dre-num dre-sub-cab">${escapeHtml(c.sub)}</th>`).join('')}</tr></thead>
         <tbody>${trs}</tbody></table></div>
+        ${_dreRelNotaParcial(tab)}
         <p class="lanc-sub" style="margin-top:8px">Clique em + para abrir o grupo e no valor de uma categoria para ver os lançamentos.</p>`;
+}
+
+// Horizontal: se a ultima coluna e um periodo parcial, avisa que a comparacao nao e de periodos inteiros.
+function _dreRelNotaParcial(tab) {
+    const ult = tab.periodos[tab.periodos.length - 1];
+    if (finRel.tipo !== 'horizontal' || tab.periodos.length < 2 || !/^\d{2}\/\d{2}/.test(ult.rotulo)) return '';
+    return `<p class="lanc-sub" id="dre-rel-parcial" style="margin-top:8px">A última coluna vai só até ${ult.ate.slice(8, 10)}/${ult.ate.slice(5, 7)}; compare com cuidado.</p>`;
 }
 
 function _dreRelPeriodoTxt() { return _dreDataBr(finRel.de) + ' a ' + _dreDataBr(finRel.ate); }
@@ -385,9 +402,12 @@ function abrirDetalheDre(chave, indice, ctx) {
     const dataBr = d => d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4);
     const periodoTxt = ctx ? per.rotulo : total ? String(finDre.ano) : _dreMeses[Number(per.de.slice(5, 7)) - 1] + '/' + per.de.slice(0, 4);
     const soma = itens.reduce((t, i) => t + (Number(i.valor) || 0), 0);
+    let algumPode = false;
     const linhasHtml = itens.map(i => {
         const r = (i.tipo === 'cp' ? db.contas_pagar : db.contas_receber).find(x => String(x.id) === String(i.id)) || {};
-        return `<tr class="dre-det-linha" data-tipo="${i.tipo}" data-id="${escapeHtml(String(i.id))}" style="cursor:pointer">
+        const pode = temAcesso(i.tipo === 'cp' ? FIN_LADOS.pagar : FIN_LADOS.receber, 'visualizar');
+        if (pode) algumPode = true;
+        return `<tr class="dre-det-linha" data-tipo="${i.tipo}" data-id="${escapeHtml(String(i.id))}"${pode ? ' data-ir="1" style="cursor:pointer"' : ''}>
             <td>${dataBr(i.data)}</td><td>${escapeHtml(r.descricao || '—')}</td><td>${escapeHtml(_finPessoaDe(r) || '—')}</td><td style="text-align:right;white-space:nowrap">R$ ${brl(i.valor)}</td></tr>`;
     }).join('');
     const o = document.createElement('div');
@@ -398,12 +418,12 @@ function abrirDetalheDre(chave, indice, ctx) {
             <button class="modal-close" aria-label="Fechar" onclick="this.closest('.modal-overlay').remove()">×</button></div>
         <div class="modal-body"><div class="lanc-tabela"><table class="table" style="width:100%"><thead><tr><th>Data</th><th>Descrição</th><th>Pessoa</th><th style="text-align:right">Valor</th></tr></thead>
             <tbody id="dre-det-corpo">${linhasHtml || '<tr><td colspan="4" class="lanc-sub">Nenhum lançamento.</td></tr>'}</tbody></table></div>
-            <div class="lanc-rodape"><span class="lanc-sub">Clique numa linha para abrir o lançamento.</span><strong id="dre-det-total">Total: R$ ${brl(soma)}</strong></div></div></div>`;
+            <div class="lanc-rodape"><span class="lanc-sub">${algumPode ? 'Clique numa linha para abrir o lançamento.' : ''}</span><strong id="dre-det-total">Total: R$ ${brl(soma)}</strong></div></div></div>`;
     document.body.appendChild(o);
     o.addEventListener('click', e => {
         if (e.target === o) { o.remove(); return; }
         const tr = e.target.closest('tr.dre-det-linha');
-        if (tr) { const t = tr.dataset.tipo, id = tr.dataset.id; o.remove(); _dreRelFechar(false); abrirLancamentoNaLista(t, id); }
+        if (tr && tr.dataset.ir) { const t = tr.dataset.tipo, id = tr.dataset.id; o.remove(); _dreRelFechar(false); abrirLancamentoNaLista(t, id); }
     });
 }
 
@@ -482,14 +502,23 @@ function _dreCatRender() {
                 ${!usada && !c.padrao ? `<button type="button" class="btn btn-outline btn-sm dre-cat-excluir" data-id="${escapeHtml(String(c.id))}">Excluir</button>` : ''}
             </div>`;
         }).join('') || '<p class="lanc-sub">Nenhuma categoria.</p>';
-        return `<div class="dre-cat-grupo" data-grupo="${g}"><h4>${rotulo}</h4>${linhas}</div>`;
+        const subsHtml = _dreComSub(g) && subs.length ? subs.map(s => {
+            const emUso = fc.categorias.some(c => c.subgrupo_id === s.id);
+            return `<div class="dre-cat-linha dre-sub-linha" data-sid="${escapeHtml(String(s.id))}"><span class="lanc-sub">Subgrupo</span>
+                <input type="text" class="dre-sub-nome" aria-label="Nome do subgrupo" value="${escapeHtml(s.nome)}" data-sid="${escapeHtml(String(s.id))}">
+                ${emUso ? '' : `<button type="button" class="btn btn-outline btn-sm dre-sub-excluir" data-sid="${escapeHtml(String(s.id))}">Excluir</button>`}</div>`;
+        }).join('') : '';
+        return `<div class="dre-cat-grupo" data-grupo="${g}"><h4>${rotulo}</h4>${subsHtml}${linhas}</div>`;
     }).join('');
     el.onchange = e => {
         const t = e.target;
-        if (t.classList.contains('dre-cat-nome')) finDreRenomear(t.dataset.id, t.value, t);
+        if (t.classList.contains('dre-sub-nome')) finDreRenomearSub(t.dataset.sid, t.value, t);
+        else if (t.classList.contains('dre-cat-nome')) finDreRenomear(t.dataset.id, t.value, t);
         else if (t.classList.contains('dre-cat-sub')) finDreMoverSub(t.dataset.id, t.value);
     };
     el.onclick = e => {
+        const sb = e.target.closest('button.dre-sub-excluir');
+        if (sb) { finDreExcluirSub(sb.dataset.sid); return; }
         const b = e.target.closest('button[data-id]');
         if (!b) return;
         if (b.classList.contains('dre-cat-ativo')) finDreAtivar(b.dataset.id);
@@ -507,6 +536,25 @@ function finDreRenomear(id, nome, input) {
     if (_dreNomeRepetido(nome, _dreGrupoDe(c), c.id)) { _dreAvisoCat('Já existe uma categoria com esse nome neste grupo.'); if (input) input.value = c.nome; return; }
     _dreAvisoCat('');
     c.nome = nome;
+    _dreGravarCat();
+}
+function finDreRenomearSub(sid, nome, input) {
+    const s = db.fin_categorias.subgrupos.find(x => String(x.id) === String(sid));
+    nome = String(nome || '').trim();
+    if (!s) return;
+    if (!nome) { _dreAvisoCat('Informe o nome do subgrupo.'); if (input) input.value = s.nome; return; }
+    if (db.fin_categorias.subgrupos.some(x => x !== s && x.grupo === s.grupo && _finNorm(x.nome) === _finNorm(nome))) { _dreAvisoCat('Já existe um subgrupo com esse nome neste grupo.'); if (input) input.value = s.nome; return; }
+    _dreAvisoCat('');
+    s.nome = nome;
+    _dreGravarCat();
+}
+async function finDreExcluirSub(sid) {
+    const fc = db.fin_categorias;
+    const s = fc.subgrupos.find(x => String(x.id) === String(sid));
+    if (!s || fc.categorias.some(c => c.subgrupo_id === s.id)) return;
+    if (!await showConfirm('Excluir o subgrupo ' + s.nome + '?', '🗑️', 'Excluir', 'Cancelar')) return;
+    fc.subgrupos = fc.subgrupos.filter(x => String(x.id) !== String(sid));
+    _dreAvisoCat('');
     _dreGravarCat();
 }
 function finDreMoverSub(id, subId) {

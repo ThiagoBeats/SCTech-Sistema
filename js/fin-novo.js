@@ -17,7 +17,7 @@ function renderFinFluxoProvisorio() {
 // ===================== RESUMO =====================
 // Minhas contas (saldos), indicadores do periodo com comparacao e avisos de vencimento (calculados na tela).
 let _finResPeriodo = 'mes';
-let _finResRegime = 'caixa';
+// O regime do Resumo e o da DRE sao um so (finDre.regime, em js/fin-dre.js).
 let _finResDe = '';
 let _finResAte = '';
 
@@ -95,11 +95,11 @@ function _finResIndicadoresHtml(hoje) {
     const barra = `<div class="lanc-barra res-barra">
         <div class="form-group"><label>Período</label><select id="res-periodo" onchange="finResMudar()">${opc.map(([v, t]) => `<option value="${v}"${_finResPeriodo === v ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
         ${_finResPeriodo === 'custom' ? `<div class="form-group"><label>De</label><input type="date" id="res-de" value="${escapeHtml(_finResDe)}" onchange="finResMudar()"></div><div class="form-group"><label>Até</label><input type="date" id="res-ate" value="${escapeHtml(_finResAte)}" onchange="finResMudar()"></div>` : ''}
-        <div class="form-group"><label>Regime</label><select id="res-regime" onchange="finResMudar()"><option value="caixa"${_finResRegime === 'caixa' ? ' selected' : ''}>Caixa</option><option value="competencia"${_finResRegime === 'competencia' ? ' selected' : ''}>Competência</option></select></div>
+        <div class="form-group"><label>Regime</label><select id="res-regime" onchange="finResMudar()"><option value="caixa"${finDre.regime === 'caixa' ? ' selected' : ''}>Caixa</option><option value="competencia"${finDre.regime === 'competencia' ? ' selected' : ''}>Competência</option></select></div>
     </div>`;
     if (!iv) return `<div class="card res-card">${barra}<p class="lanc-sub">Escolha as datas De e Até para ver os indicadores.</p></div>`;
     const ant = DreCore.periodoAnterior(iv.de, iv.ate);
-    const base = { regime: _finResRegime, contas_receber: db.contas_receber || [], contas_pagar: db.contas_pagar || [], movimentos: db.movimentos_fin || [],
+    const base = { regime: finDre.regime, contas_receber: db.contas_receber || [], contas_pagar: db.contas_pagar || [], movimentos: db.movimentos_fin || [],
         contas: getContasFin(), categorias: (db.fin_categorias || {}).categorias, subgrupos: (db.fin_categorias || {}).subgrupos };
     const L = DreCore.calcular({ ...base, de: iv.de, ate: iv.ate }).linhas;
     const A = ant ? DreCore.calcular({ ...base, de: ant.de, ate: ant.ate }).linhas : null;
@@ -123,7 +123,7 @@ function finResMudar() {
     if (novo === 'custom' && _finResPeriodo !== 'custom' && !_finResDe) { const h = hojeLocal(); _finResDe = h.slice(0, 8) + '01'; _finResAte = h; }
     _finResPeriodo = novo;
     if (novo === 'custom') { _finResDe = v('res-de') || _finResDe; _finResAte = v('res-ate') || _finResAte; }
-    _finResRegime = v('res-regime') === 'competencia' ? 'competencia' : 'caixa';
+    finDre.regime = v('res-regime') === 'competencia' ? 'competencia' : 'caixa';
     renderFinResumo();
 }
 
@@ -195,6 +195,14 @@ const _finTipoLado = lado => lado === 'pagar' ? 'cp' : 'cr';
 const _finListaLado = lado => lado === 'pagar' ? db.contas_pagar : db.contas_receber;
 const _finPessoaDe = reg => reg.cliente_nome || reg.credor_nome || '';
 
+// Rotulo das categorias de uma lista: se duas tem o mesmo nome, acrescenta o grupo ("Juros (Despesas operacionais)").
+function _finRotulosCategorias(cats) {
+    const cont = {};
+    cats.forEach(c => { const n = _finNorm(c.nome); cont[n] = (cont[n] || 0) + 1; });
+    const grupo = c => c.natureza === 'so_caixa' ? 'Só caixa' : ((FinCatCore.GRUPOS.find(g => g.id === c.grupo) || {}).rotulo || c.grupo || '');
+    return new Map(cats.map(c => [String(c.id), cont[_finNorm(c.nome)] > 1 ? c.nome + ' (' + grupo(c) + ')' : c.nome]));
+}
+
 function _finCategoriasDoLado(lado, incluirId) {
     const tipo = lado === 'pagar' ? 'saida' : 'entrada';
     const cats = (db.fin_categorias && db.fin_categorias.categorias) || [];
@@ -255,7 +263,8 @@ function _finLancMontarBarra(lado, limpar) {
         e.value = opcoes.some(o => o[0] === atual) ? atual : '';
     };
     sel('lanc-pessoa', 'Todos', [...pessoas].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR')));
-    sel('lanc-categoria', 'Todas', _finCategoriasDoLado(lado).map(c => [String(c.id), c.nome]));
+    const catsLado = _finCategoriasDoLado(lado), rotCats = _finRotulosCategorias(catsLado);
+    sel('lanc-categoria', 'Todas', catsLado.map(c => [String(c.id), rotCats.get(String(c.id))]));
     sel('lanc-conta', 'Todas', getContasFin().map(c => [String(c.id), c.nome || 'Conta']));
     const completo = temAcesso(FIN_LADOS[lado], 'completo');
     el('lanc-novo').style.display = completo ? '' : 'none';
@@ -461,6 +470,7 @@ async function abrirNovoLancamento(lado, idEditar) {
     const auto = !!reg && !FinCatCore.podeExcluir(Object.assign({}, reg, { status: 'Pendente', data_pagamento: null }), lado).ok;
     const travaValor = pago || auto;
     const cats = _finCategoriasDoLado(lado, reg && reg.categoria_id);
+    const rotCats = _finRotulosCategorias(cats);
     const catPadrao = reg ? reg.categoria_id : (pagar ? 'cat_outras_desp' : 'cat_vendas');
     const pessoas = (pagar ? db.fornecedores : db.clientes) || [];
     const contas = getContasFin().filter(c => c.ativo !== false || (reg && CaixaCore.mesmoId(c.id, reg.conta_id)));
@@ -490,7 +500,7 @@ async function abrirNovoLancamento(lado, idEditar) {
                 </div>
                 <div class="form-group">
                     <label>Categoria <span style="color:#F43927">*</span></label>
-                    <select id="lf-categoria" data-pagar="${pagar ? '1' : '0'}" onchange="finLancSincronizarCompetencia()">${cats.map(c => `<option value="${escapeHtml(String(c.id))}"${String(c.id) === String(catPadrao) ? ' selected' : ''}>${escapeHtml(c.nome)}${c.ativo === false ? ' (inativa)' : ''}</option>`).join('')}</select>
+                    <select id="lf-categoria" data-pagar="${pagar ? '1' : '0'}" onchange="finLancSincronizarCompetencia()">${cats.map(c => `<option value="${escapeHtml(String(c.id))}"${String(c.id) === String(catPadrao) ? ' selected' : ''}>${escapeHtml(rotCats.get(String(c.id)))}${c.ativo === false ? ' (inativa)' : ''}</option>`).join('')}</select>
                 </div>
                 <div class="form-group">
                     <label>Conta prevista <span class="info-tag">opcional</span></label>

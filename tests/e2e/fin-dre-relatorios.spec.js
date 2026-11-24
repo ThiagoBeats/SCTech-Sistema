@@ -117,7 +117,7 @@ test('Excel da DRE: arquivo DRE_caixa_2026.xlsx com tudo expandido e numeros com
     expect(x.nome).toBe('DRE_caixa_2026.xlsx');
     expect(x.wb.abas).toHaveLength(1);
     const todas = x.wb.abas[0].aoa;
-    expect(todas.slice(0, 5)).toEqual([['SCTech'], ['DRE'], ['Regime: Caixa'], ['Período: 01/01/2026 a 31/12/2026'], []]);
+    expect(todas.slice(0, 5)).toEqual([['SCTech'], ['DRE — Resultado da empresa'], ['Regime: Caixa'], ['Período: 01/01/2026 a 31/12/2026'], []]);
     expect(todas[todas.length - 1]).toEqual(['Saídas em negativo.']);
     const aoa = todas.slice(5, -1);
     expect(aoa[0].slice(0, 3)).toEqual(['RESULTADO', 'Jan/26', 'Fev/26']);
@@ -219,4 +219,122 @@ test('Relatorio: dialogo modal, foco entra, Esc fecha e o foco volta ao botao Re
     await page.keyboard.press('Escape');
     await expect(o).toHaveCount(0);
     await expect(page.locator('#dre-btn-relatorios')).toBeFocused();
+});
+
+// ---------- rodada final ----------
+const ler = (page, k) => page.evaluate(c => JSON.parse(localStorage.getItem(c) || 'null'), k);
+const N = n => ({ nivel: n, acoes_restritas: [] });
+const PAP = { id: 30, nome: 'So ver DRE', permissoes: { inicio: N('completo'), financeiro: N('sem_acesso'), 'financeiro.dre': N('visualizar') } };
+const USU = [
+    { id: 1, nome: 'Teste', email: 'teste@sctech.local', papel_id: 1, ativo: true, permissoes_extras: {}, senha_hash: '' },
+    { id: 2, nome: 'Leitora', email: 'leitora@sctech.local', papel_id: 30, ativo: true, permissoes_extras: {}, senha_hash: '' },
+];
+
+test('categorias com o mesmo nome em grupos diferentes aparecem com o grupo no formulario e no filtro', async ({ page }) => {
+    await abrir(page);
+    await page.locator('#dre-btn-categorias').click();
+    await page.locator('#dre-btn-nova-cat').click();
+    await page.fill('#dre-nc-nome', 'Juros e encargos');
+    await page.selectOption('#dre-nc-grupo', 'despesas');
+    await page.locator('#dre-nc-salvar').click();
+    await page.locator('#dre-cat-overlay .modal-close').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click();
+    await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
+    const filtro = await page.locator('#lanc-categoria option').allTextContents();
+    expect(filtro).toContain('Juros e encargos (Despesas operacionais)');
+    expect(filtro).toContain('Juros e encargos (Atividades de financiamento)');
+    expect(filtro).toContain('Aluguel');
+    await page.locator('#lanc-novo').click();
+    const form = await page.locator('#lf-categoria option').allTextContents();
+    expect(form).toContain('Juros e encargos (Despesas operacionais)');
+    expect(form).toContain('Juros e encargos (Atividades de financiamento)');
+    expect(form).toContain('Aluguel');
+});
+
+test('sem base: so o traço, sem seta nem cor', async ({ page }) => {
+    await page.clock.setFixedTime(HOJE);
+    await entrar(page, BASE, { sc_cr: [...CR, { ...cr(9, 500, '2026-02-12'), categoria_id: 'cat_outras_rec' }], sc_cp: CP });
+    await page.goto(BASE + '/financeiro.html');
+    await page.locator('.fin-tab-btn[data-tab="dre"]').click();
+    await page.locator('#dre-btn-relatorios').click();
+    await tipo(page, 'horizontal');
+    await linha(page, 'receitas').locator('.dre-tg').click();
+    const c = cel(page, 'cat:cat_outras_rec').nth(2);
+    await expect(c).toHaveText('—');
+    await expect(c).not.toHaveClass(/dre-fav|dre-desfav/);
+});
+
+test('Horizontal avisa quando a ultima coluna e um periodo parcial', async ({ page }) => {
+    await abrirRel(page);
+    await expect(page.locator('#dre-rel-parcial')).toHaveCount(0);
+    await tipo(page, 'horizontal');
+    await expect(page.locator('#dre-rel-parcial')).toHaveText('A última coluna vai só até 24/11; compare com cuidado.');
+    await page.fill('#dre-rel-ate', '2026-10-31');
+    await expect(page.locator('#dre-rel-parcial')).toHaveCount(0);
+});
+
+test('sem acesso a Lancamentos: relatorio e detalhe continuam abertos e sem dica', async ({ page }) => {
+    await page.clock.setFixedTime(HOJE);
+    await entrar(page, BASE, { sc_cr: CR, sc_cp: CP, sc_usr: USU });
+    await page.evaluate(q => localStorage.setItem('sc_pap', JSON.stringify([...papeisPadrao(), q])), PAP);
+    await page.evaluate(() => sessionStorage.setItem('sc_user', JSON.stringify({ id: 2, email: 'leitora@sctech.local' })));
+    await page.goto(BASE + '/financeiro.html');
+    await page.locator('#dre-btn-relatorios').click();
+    await linha(page, 'receitas').locator('.dre-tg').click();
+    await cel(page, 'cat:cat_vendas').nth(0).click();
+    await expect(page.locator('#dre-det-corpo tr.dre-det-linha')).toHaveCount(1);
+    await expect(page.locator('#dre-detalhe-overlay')).not.toContainText('Clique numa linha');
+    await page.locator('#dre-det-corpo tr.dre-det-linha').click({ force: true });
+    await expect(page.locator('#dre-detalhe-overlay')).toBeVisible();
+    await expect(page.locator('#dre-rel-overlay')).toBeVisible();
+});
+
+test('regime do Resumo e da DRE e um so', async ({ page }) => {
+    await abrir(page);
+    await page.locator('#dre-regime-competencia').click();
+    await page.locator('.fin-tab-btn[data-tab="resumo"]').click();
+    await expect(page.locator('#res-regime')).toHaveValue('competencia');
+    await page.selectOption('#res-regime', 'caixa');
+    await page.locator('.fin-tab-btn[data-tab="dre"]').click();
+    await expect(page.locator('#dre-regime-caixa')).toHaveClass(/active/);
+});
+
+test('subgrupos: renomear, recusar nome repetido e excluir so quando vazio', async ({ page }) => {
+    await abrir(page);
+    await page.locator('#dre-btn-categorias').click();
+    const nome = page.locator('.dre-sub-nome[data-sid="sub_out"]');
+    await nome.fill('Diversas');
+    await nome.blur();
+    expect((await ler(page, 'sc_fin_cat')).subgrupos.find(s => s.id === 'sub_out').nome).toBe('Diversas');
+    await nome.fill('despesas fixas');
+    await nome.blur();
+    await expect(page.locator('#dre-cat-aviso')).toHaveText('Já existe um subgrupo com esse nome neste grupo.');
+    expect((await ler(page, 'sc_fin_cat')).subgrupos.find(s => s.id === 'sub_out').nome).toBe('Diversas');
+    // subgrupo com categoria nao tem Excluir
+    await expect(page.locator('.dre-sub-excluir[data-sid="sub_fix"]')).toHaveCount(0);
+    await page.locator('#dre-btn-novo-sub').click();
+    await page.fill('#dre-ns-nome', 'Marketing');
+    await page.locator('#dre-ns-salvar').click();
+    const mkt = (await ler(page, 'sc_fin_cat')).subgrupos.find(s => s.nome === 'Marketing');
+    await page.locator('.dre-sub-excluir[data-sid="' + mkt.id + '"]').click();
+    await expect(page.locator('#sc-modal-msg')).toHaveText('Excluir o subgrupo Marketing?');
+    await page.locator('#sc-modal-ok').click();
+    expect((await ler(page, 'sc_fin_cat')).subgrupos.some(s => s.nome === 'Marketing')).toBe(false);
+});
+
+test('% margem com 1 casa decimal na impressao e no Excel; Excel DRE com titulo completo', async ({ page }) => {
+    await page.route(CDN, r => r.fulfill({ contentType: 'application/javascript', body: STUB }));
+    await abrir(page);
+    await page.locator('#dre-btn-imprimir').click();
+    expect(await page.evaluate(() => window.__html)).toContain('70,0%');
+    await page.locator('#dre-btn-excel').click();
+    await page.waitForFunction(() => window.__xlsx);
+    const aoa = (await page.evaluate(() => window.__xlsx)).wb.abas[0].aoa;
+    expect(aoa[1]).toEqual(['DRE — Resultado da empresa']);
+});
+
+test('quadro da tabela tem altura maxima para o cabecalho fixo funcionar', async ({ page }) => {
+    await abrir(page);
+    const ov = await page.locator('#dre-tabela').evaluate(t => getComputedStyle(t.closest('.dre-quadro')).overflowY);
+    expect(ov).toBe('auto');
 });
