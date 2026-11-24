@@ -80,10 +80,8 @@ test('Hoje no tema escuro: passar o mouse na conta destaca a linha', async ({ pa
     await page.goto(BASE + '/financeiro.html');
     const conta = page.locator('#hoje-saldos .hoje-conta').first();
     await conta.hover();
-    const cor = await conta.evaluate(el => getComputedStyle(el).backgroundColor);
-    const [r, g, b, a] = cor.match(/[\d.]+/g).map(Number);
-    expect(r).toBeGreaterThan(200);   // claro sobre fundo escuro, nao o preto de 5% do tema claro
-    expect(a).toBeGreaterThan(0.03);
+    // o hover anima em 150 ms: espera a transicao terminar antes de ler a cor
+    await expect.poll(() => conta.evaluate(el => getComputedStyle(el).backgroundColor)).toBe('rgba(255, 255, 255, 0.08)');
 });
 
 test('Hoje: a conta abre o Extrato pelo teclado (Enter e Espaco)', async ({ page }) => {

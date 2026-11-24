@@ -2722,7 +2722,7 @@ function mostrarPedidosCliente(clienteId) {
         tbody.innerHTML = pedidos.slice(inicio, inicio + POR_PAG).map(p => {
             const cls = COR_STATUS[normalizarStatus(p.status)] || 'st-orcamento';
             const pagto = statusPagamento(p);
-            return `<tr style="cursor:pointer" onclick="this.closest('.modal-overlay').remove();editarPedido(${p.id})" onmouseover="this.style.background='var(--info-bg)'" onmouseout="this.style.background=''">
+            return `<tr style="cursor:pointer;transition:background-color .15s ease" onclick="this.closest('.modal-overlay').remove();editarPedido(${p.id})" onmouseover="this.style.background='var(--info-bg)'" onmouseout="this.style.background=''">
                 <td style="font-size:12px;color:var(--primary);font-weight:600">#${formatPedidoId(p.id)}</td>
                 <td style="font-size:13px">${escapeHtml(p.amb || '—')}</td>
                 <td>R$ ${(p.valor||0).toFixed(2)} ${pagto.cls ? `<span class="${pagto.cls}">${pagto.label}</span>` : ''}</td>
@@ -4545,7 +4545,7 @@ function renderDashboardsButton() {
         📊 Dashboards <span style="font-size:9px;opacity:.7">▾</span>
     </button>
     <div id="dash-dropdown" style="display:none;position:absolute;top:calc(100%+8px);right:0;background:var(--white);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.14);z-index:3000;min-width:220px;padding:5px 0;overflow:hidden">
-        ${DASH_LIST.map(([id,ic,lb])=>`<a href="dashboards.html?dash=${id}" style="display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;font-weight:500;color:var(--dark);text-decoration:none;white-space:nowrap" onmouseover="this.style.background='var(--light)'" onmouseout="this.style.background=''">${ic} <span>${lb}</span></a>`).join('<div style="height:1px;background:var(--border)"></div>')}
+        ${DASH_LIST.map(([id,ic,lb])=>`<a href="dashboards.html?dash=${id}" style="display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;font-weight:500;color:var(--dark);text-decoration:none;white-space:nowrap;transition:background-color .15s ease" onmouseover="this.style.background='var(--light)'" onmouseout="this.style.background=''">${ic} <span>${lb}</span></a>`).join('<div style="height:1px;background:var(--border)"></div>')}
     </div>`;
     grp.insertBefore(wrap, grp.firstChild);
     // Painel: o botao Agenda fica logo a esquerda de Dashboards.
@@ -4579,7 +4579,7 @@ function renderMenuExtrasEstoque() {
             title="Mais abas do estoque" style="font-weight:700;letter-spacing:1px;padding:6px 12px">⋯</button>
         <div id="estoque-extras-menu" style="display:none;position:absolute;top:calc(100% + 8px);right:0;background:var(--white);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.14);z-index:3000;min-width:200px;padding:5px 0;overflow:hidden">
         ${ABAS_EXTRAS_ESTOQUE.map(([id, ic, lb]) =>
-            `<button type="button" onclick="mostrarTabEstoque('${id}')" style="display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;font-weight:500;color:var(--dark);background:none;border:0;width:100%;text-align:left;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--light)'" onmouseout="this.style.background=''">${ic} <span>${lb}</span></button>`
+            `<button type="button" onclick="mostrarTabEstoque('${id}')" style="display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;font-weight:500;color:var(--dark);background:none;border:0;width:100%;text-align:left;cursor:pointer;white-space:nowrap;transition:background-color .15s ease" onmouseover="this.style.background='var(--light)'" onmouseout="this.style.background=''">${ic} <span>${lb}</span></button>`
         ).join('<div style="height:1px;background:var(--border)"></div>')}
         </div>`;
     grp.insertBefore(wrap, grp.firstChild);
@@ -12802,7 +12802,7 @@ function renderDashboardMedicoes() {
             acc   = diff === 0 ? '#2D77C1' : 'var(--primary-text)';
             clrL  = diff === 0 ? '#2D77C1' : '#8F8F8F';
         }
-        return `<div onclick="location.href='pcp.html?view=medicoes'" style="cursor:pointer;background:${bg};border:1px solid ${bord};border-left:4px solid ${acc};border-radius:8px;padding:12px 16px;min-width:155px;flex:1;max-width:200px;transition:transform 0.1s,box-shadow 0.1s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+        return `<div onclick="location.href='pcp.html?view=medicoes'" style="cursor:pointer;background:${bg};border:1px solid ${bord};border-left:4px solid ${acc};border-radius:8px;padding:12px 16px;min-width:155px;flex:1;max-width:200px;transition:transform .15s ease,box-shadow .15s ease" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
             <div style="font-size:11px;font-weight:700;color:${clrL};text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">${label}</div>
             <div style="font-weight:700;font-size:14px;color:var(--dark);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(v.clienteNome)}">${escapeHtml(v.clienteNome)}</div>
             ${v.hora ? `<div style="font-size:12px;color:var(--dark)">🕐 ${v.hora}</div>` : ''}
@@ -12883,7 +12883,7 @@ function renderDashboardInstalacoes() {
             acc   = diff === 0 ? '#2D77C1' : 'var(--primary-text)';
             clrL  = diff === 0 ? '#2D77C1' : '#8F8F8F';
         }
-        return `<div onclick="location.href='pcp.html?view=agenda'" style="cursor:pointer;background:${bg};border:1px solid ${bord};border-left:4px solid ${acc};border-radius:8px;padding:12px 16px;min-width:155px;flex:1;max-width:200px;transition:transform 0.1s,box-shadow 0.1s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+        return `<div onclick="location.href='pcp.html?view=agenda'" style="cursor:pointer;background:${bg};border:1px solid ${bord};border-left:4px solid ${acc};border-radius:8px;padding:12px 16px;min-width:155px;flex:1;max-width:200px;transition:transform .15s ease,box-shadow .15s ease" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
             <div style="font-size:11px;font-weight:700;color:${clrL};text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">${label}</div>
             <div style="font-weight:700;font-size:14px;color:var(--dark);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(p.clienteNome)}">${escapeHtml(p.clienteNome||'—')}</div>
             <div style="font-size:11px;color:#8F8F8F">#${formatPedidoId(p.id)}</div>
