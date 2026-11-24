@@ -290,6 +290,13 @@ test('textoAvisoCliente: horario agendado, previsao arredondada para cima e sem 
     assert.ok(_aviso({ previstaMin: 14 * 60 + 37 }).includes('com chegada prevista por volta de 14:40'));
     assert.ok(_aviso({ previstaMin: 14 * 60 + 40 }).includes('com chegada prevista por volta de 14:40'));
     assert.ok(_aviso({ hora: '', previstaMin: null }).includes('em horário a combinar'));
+    assert.ok(_aviso({ previstaMin: 14 * 60 + 58 }).includes('com chegada prevista por volta de 15:00'));
+    // a previsao tem prioridade sobre o horario agendado
+    const t = _aviso({ hora: '09:00', previstaMin: 11 * 60 + 15 });
+    assert.ok(t.includes('por volta de 11:15') && !t.includes('às 09:00'));
+    // perto da meia-noite nao volta para 00:00
+    assert.ok(_aviso({ previstaMin: 23 * 60 + 58 }).includes('por volta de 23:59'));
+    assert.ok(_aviso({ previstaMin: 1500 }).includes('por volta de 23:59'));
 });
 
 test('textoAvisoCliente: placeholders desconhecidos ficam, tecnico vazio, padrao', () => {

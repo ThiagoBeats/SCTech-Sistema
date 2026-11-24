@@ -5,7 +5,7 @@ const { test, expect } = require('@playwright/test');
 const { entrar, acaoMenu } = require('./ajuda.js');
 const BASE = process.env.BASE || 'http://localhost:8131';
 
-const amanha = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+const amanha = new Date(Date.now() + 86400000).toLocaleDateString('sv-SE');
 const PEDIDOS = Array.from({ length: 45 }, (_, i) => ({
     id: 26001 + i, clienteId: 1, clienteNome: 'Cliente ' + (i + 1), vendedor_nome: 'Vend', data_entrega: amanha,
     status: i < 40 ? 'Orçamento' : 'Medição', valor: 100 + i,

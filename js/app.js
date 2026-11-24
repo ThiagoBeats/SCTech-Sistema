@@ -12006,12 +12006,14 @@ function _aceiteConfirmarRecusa(tipo, id, motivo) {
         m.recusa = { por: r.eu.id, para: m.aceite.por, motivo, em: agora };
         m.status = 'A reagendar';
         delete m.aceite;
+        delete m.aviso_cliente;
         m.usuario_id = null; m.responsavel_nome = '';
         m.data = ''; m.hora = '';
     } else {
         _agdRegistrar(m.inst_historico, 'recusado', { motivo, de: { data: m.data_entrega || '', hora: m.inst_hora || '' } });
         m.inst_recusa = { por: r.eu.id, para: m.inst_aceite.por, motivo, em: agora };
         delete m.inst_aceite;
+        delete m.inst_aviso_cliente;
         m.inst_agendado = false;
         m.data_entrega = null;
         m.inst_hora = '';
@@ -12773,6 +12775,7 @@ async function cancelarMedicao(id) {
     if (!m.historico) m.historico = [];
     _agdRegistrar(m.historico, 'cancelado');
     m.status = 'Cancelado';
+    delete m.aviso_cliente;
     m.cancelado_em = Date.now();
     _medAtualizar();
     toast('Agendamento cancelado.', 'info');
@@ -13356,6 +13359,7 @@ async function cancelarAgendamentoInstalacao(id) {
     p.data_entrega  = null;
     p.inst_hora     = '';
     delete p.inst_aceite;
+    delete p.inst_aviso_cliente;
     _instAtualizar();
     toast('Agendamento cancelado. O pedido voltou para os prontos.', 'info');
 }
@@ -18122,6 +18126,7 @@ async function cobrarNoWhatsApp(crId) {
     const link = tel ? CaixaCore.linkWhatsApp(tel, msg) : 'https://wa.me/?text=' + encodeURIComponent(msg);
     const janela = window.open(link, '_blank');
     if (!janela) { showAlert('O navegador bloqueou a janela do WhatsApp. Libere os pop-ups e tente de novo.'); return; }
+    try { janela.opener = null; } catch (e) {}
     cr.ultima_cobranca = hojeLocal();
     syncDB();
     renderContasReceber();

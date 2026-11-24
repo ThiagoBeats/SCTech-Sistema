@@ -23,7 +23,7 @@ function _rotaVisitasDoDia(data) {
     (db.medicoes || []).forEach(m => {
         if (m.status !== 'Agendado' || m.data !== data) return;
         out.push({ tipo: 'med', id: m.id, prof: _medProf(m), profNome: _medNomeResp(m),
-            cliente: m.clienteNome || '—', tel: m.clienteTel || '', end: _endMed(m), partes: _partesMedMapa(m),
+            cliente: m.clienteNome || '—', tel: m.clienteTel || (db.clientes.find(c => c.id == m.clienteId)?.tel) || '', end: _endMed(m), partes: _partesMedMapa(m),
             hora: m.hora || '', agendadoMin: _agdMin(m.hora), durMin: +m.duracao || _agdDurPadrao('med'),
             rotulo: 'Medição', ico: '📐', aviso: m.aviso_cliente || null });
     });
@@ -226,7 +226,8 @@ function _rotaAvisarHtml(itens, data) {
         if (RotasCore.avisoValido(v.aviso, data, v.hora)) {
             const a = v.aviso;
             const hh = a.em ? new Date(a.em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
-            acao = `<span class="rota-avisado">✓ Avisado${hh ? ' às ' + escapeHtml(hh) : ''}${a.porNome ? ' por ' + escapeHtml(a.porNome) : ''}</span>
+            const dia = a.em && _agdDiaLocal(a.em) !== _agdHoje() ? _agdDiaLocal(a.em).split('-').reverse().slice(0, 2).join('/') : '';
+            acao = `<span class="rota-avisado">✓ Avisado${dia ? ' em ' + escapeHtml(dia) : ''}${hh ? ' às ' + escapeHtml(hh) : ''}${a.porNome ? ' por ' + escapeHtml(a.porNome) : ''}</span>
                 <button type="button" class="rota-desfazer" onclick="desfazerAvisoCliente('${v.tipo}', ${_rotaArgId(v.id)})">desfazer</button>`;
         } else if (!CaixaCore.normalizarTelefone(v.tel)) {
             acao = `<button type="button" class="btn btn-outline btn-sm" disabled title="Cliente sem telefone no cadastro">Sem telefone</button>`;
@@ -246,7 +247,7 @@ function avisarClienteWhats(tipo, id) {
     // Sem await antes do window.open: precisa valer como clique do usuario.
     const itens = _rotaItens();
     const i = itens.findIndex(x => x.tipo === tipo && String(x.id) === String(id));
-    if (i < 0) return;
+    if (i < 0) { _rotaDesenhar(); return; }
     const v = itens[i];
     const tel = CaixaCore.normalizarTelefone(v.tel);
     if (!tel) { showAlert('Cliente sem telefone no cadastro.'); return; }
@@ -262,12 +263,13 @@ function avisarClienteWhats(tipo, id) {
     });
     const janela = window.open(CaixaCore.linkWhatsApp(tel, msg), '_blank');
     if (!janela) { showAlert('O navegador bloqueou a janela do WhatsApp. Libere os pop-ups e tente de novo.'); return; }
+    try { janela.opener = null; } catch (e) {}
     const alvo = _rotaAlvoAviso(tipo, id);
     if (!alvo) return;
     const u = getUsuarioLogado();
     const aviso = { data, hora: v.hora || '', em: new Date().toISOString(), por: u ? u.id : null, porNome: u ? u.nome : '' };
     if (tipo === 'med') alvo.aviso_cliente = aviso; else alvo.inst_aviso_cliente = aviso;
-    syncDB();
+    _gravarChaves([tipo === 'med' ? 'sc_med' : 'sc_ped']);
     _rotaDesenhar();
 }
 
@@ -275,7 +277,7 @@ function desfazerAvisoCliente(tipo, id) {
     const alvo = _rotaAlvoAviso(tipo, id);
     if (!alvo) return;
     if (tipo === 'med') delete alvo.aviso_cliente; else delete alvo.inst_aviso_cliente;
-    syncDB();
+    _gravarChaves([tipo === 'med' ? 'sc_med' : 'sc_ped']);
     _rotaDesenhar();
 }
 
@@ -540,3 +542,12 @@ async function enviarRotaAoTecnico() {
     });
     window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank', 'noopener');
 }
+
+// Outra aba mexeu nas visitas: recarrega e redesenha as Rotas (se estiverem na tela).
+window.addEventListener('storage', e => {
+    if (e.key !== 'sc_med' && e.key !== 'sc_ped') return;
+    const corpo = document.getElementById('rota-corpo');
+    if (!corpo || !corpo.offsetParent) return;
+    _dbRecarregarChave(e.key);
+    renderRotas();
+});

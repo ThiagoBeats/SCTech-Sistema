@@ -4,7 +4,7 @@ const { entrar } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 
-const ontem = () => { const d = new Date(Date.now() - 86400000); return d.toISOString().split('T')[0]; };
+const ontem = () => { const d = new Date(Date.now() - 86400000); return d.toLocaleDateString('sv-SE'); };
 const pedidoAtrasado = (id, nome) => ({ id, clienteNome: nome, status: 'Em Produção', data_entrega: ontem(), itens: [] });
 const medicaoAtrasada = { id: 501, clienteNome: 'Maria Medida', status: 'Agendado', data: ontem(), hora: '09:00' };
 

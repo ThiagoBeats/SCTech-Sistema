@@ -159,3 +159,46 @@ test('Cobrar e Enviar ao tecnico tem o icone e o title', async ({ page }) => {
     await expect(cob).toHaveAttribute('title', 'Enviar por WhatsApp');
     await expect(cob.locator('svg')).toHaveCount(1);
 });
+
+test('medicao sem telefone no registro usa o telefone do cadastro do cliente', async ({ page }) => {
+    await abrir(page, { dados: { sc_med: MEDS(''), sc_cli: [{ id: 1, nome: 'Maria Silva', tel: '(41) 97777-0000' }, ...CLIS()] } });
+    const btn = linhas(page).nth(0).locator('button');
+    await expect(btn).toBeEnabled();
+    await expect(btn).not.toHaveText('Sem telefone');
+    await btn.click();
+    expect((await abertos(page))[0].startsWith('https://wa.me/5541977770000?text=')).toBe(true);
+});
+
+test('avisado de outro usuario mostra o nome dele; de outro dia mostra a data', async ({ page }) => {
+    const meds = MEDS();
+    meds[0].aviso_cliente = { data: DIA, hora: '09:00', em: '2026-11-23T10:05:00', por: 2, porNome: 'Ana' };
+    const peds = PEDS();
+    peds[0].inst_aviso_cliente = { data: DIA, hora: '10:30', em: '2026-11-22T18:00:00', por: 2, porNome: 'Ana' };
+    await abrir(page, { dados: { sc_med: meds, sc_ped: peds } });
+    await expect(linhas(page).nth(0)).toContainText('✓ Avisado às 10:05 por Ana');
+    await expect(linhas(page).nth(0)).not.toContainText(' em ');
+    await expect(linhas(page).nth(1)).toContainText('✓ Avisado em 22/11 às 18:00 por Ana');
+});
+
+test('recusa do agendamento apaga o aviso ao cliente', async ({ page }) => {
+    const usuarios = [
+        { id: 1, nome: 'Teste', email: 'teste@sctech.local', papel_id: 1, ativo: true, permissoes_extras: {}, senha_hash: '' },
+        { id: 2, nome: 'Maria', email: 'maria@sctech.local', papel_id: 1, ativo: true, permissoes_extras: {}, senha_hash: '' },
+    ];
+    const meds = MEDS();
+    meds[0].usuario_id = 2;
+    meds[0].aceite = { status: 'pendente', por: 1, em: Date.now() };
+    meds[0].aviso_cliente = { data: DIA, hora: '09:00', em: '2026-11-23T10:05:00', por: 1, porNome: 'Teste' };
+    await page.clock.setFixedTime(new Date(2026, 10, 23, 8, 0, 0));
+    await entrar(page, BASE, { sc_usr: usuarios, sc_empresa: { nome_fantasia: 'Cortinas Teste' }, sc_med: meds, sc_cli: CLIS() });
+    await page.evaluate(() => {
+        sessionStorage.setItem('sc_user', JSON.stringify({ id: 2, email: 'maria@sctech.local' }));
+    });
+    await page.goto(BASE + '/index.html');
+    await page.click('#sino-btn');
+    await page.locator('#sino-painel .sino-item', { hasText: 'Você recebeu a medição' }).getByRole('button', { name: 'Recusar' }).click();
+    await page.fill('#aceite-motivo', 'Estou de folga');
+    await page.click('#aceite-confirmar');
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('sc_med'))[0].status)).toBe('A reagendar');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('sc_med'))[0].aviso_cliente)).toBeUndefined();
+});

@@ -361,7 +361,7 @@
             : 'no dia ' + String(d.data || '').slice(8, 10) + '/' + String(d.data || '').slice(5, 7);
         let horario = 'em horário a combinar';
         if (d.previstaMin != null && Number.isFinite(+d.previstaMin)) {
-            horario = 'com chegada prevista por volta de ' + hhmm(Math.ceil(+d.previstaMin / 5) * 5);
+            horario = 'com chegada prevista por volta de ' + hhmm(Math.min(Math.ceil(+d.previstaMin / 5) * 5, 1439));
         } else if (d.hora) {
             horario = 'às ' + d.hora;
         }

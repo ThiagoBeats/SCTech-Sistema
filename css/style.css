@@ -3069,7 +3069,6 @@ td { transition: background-color .15s ease; }
 /* Botao de WhatsApp: icone oficial + texto alinhados */
 .btn-whats { display: inline-flex; align-items: center; gap: 6px; }
 .btn-whats .icone-whats { flex: none; display: block; }
-html[data-theme="dark"] .btn-whats:not(.btn-success) { color: #E0E0E0; }
 
 /* Rotas do dia: lista Avisar clientes */
 .rota-avisar { margin: 14px 0; }
