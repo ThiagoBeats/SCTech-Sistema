@@ -16836,7 +16836,7 @@ function mostrarTabFinanceiro(tab, lado) {
     document.getElementById(`fin-${tab}`)?.classList.add('active');
     if (tab === 'resumo') renderFinResumo();
     else if (tab === 'lancamentos') renderFinLancamentos(lado);
-    else if (tab === 'fluxo')   renderFinFluxoProvisorio();
+    else if (tab === 'fluxo')   renderFinFluxo();
     else if (tab === 'dre')     renderFinDre();
     else if (tab === 'dashboard') renderDashboardFinanceiro();
     else if (tab === 'drepedido') renderDRE();
@@ -17875,109 +17875,13 @@ async function lancarSimulacaoNoPagar() {
 }
 
 // =============================================
-// FINANCEIRO — EXTRATO E TRANSFERENCIAS
+// FINANCEIRO — TRANSFERENCIAS (a tela do Fluxo de caixa fica em js/fin-fluxo.js)
 // =============================================
 
-// Filtro da aba Extrato (conta '' = todas; mes 'YYYY-MM', vazio = mes atual).
-let _extratoFiltro = { contaId: '', mes: '' };
-
-// Abre a aba Extrato ja filtrada numa conta (usado pela tela "Hoje").
+// Abre o Fluxo de caixa ja filtrado numa conta (usado pela tela "Hoje", desligada).
 function abrirExtratoDaConta(contaId) {
-    _extratoFiltro = { contaId: contaId == null ? '' : String(contaId), mes: '' };
-    mostrarTabFinanceiro('extrato');
-}
-
-// Saldo no inicio = saldo no dia anterior ao primeiro dia do mes. Saldo no fim =
-// saldo no ultimo dia do mes, ou ate hoje se o mes for o atual (o que ainda vai
-// cair fica na lista com o selo "a cair" e nao entra no saldo do fim). Mes
-// futuro: o fim e o saldo previsto no ultimo dia, com os movimentos futuros.
-function renderExtrato(opts) {
-    if (!document.getElementById('extrato-linhas')) return;
-    if (opts && typeof opts === 'object') {
-        if (opts.contaId !== undefined) _extratoFiltro.contaId = opts.contaId == null ? '' : String(opts.contaId);
-        if (opts.mes !== undefined) _extratoFiltro.mes = opts.mes || '';
-    }
-    const hoje = hojeLocal();
-    const mes = /^\d{4}-\d{2}$/.test(_extratoFiltro.mes) ? _extratoFiltro.mes : hoje.slice(0, 7);
-    const contas = getContasFin();
-    if (_extratoFiltro.contaId !== '' && !_contaFinPorId(_extratoFiltro.contaId)) _extratoFiltro.contaId = '';
-    const selConta = document.getElementById('extrato-conta');
-    selConta.innerHTML = '<option value="">Todas as contas</option>' + contas.map(c =>
-        `<option value="${escapeHtml(String(c.id))}">${escapeHtml(c.nome || '')}${c.ativo === false ? ' (desativada)' : ''}</option>`).join('');
-    selConta.value = _extratoFiltro.contaId;
-    document.getElementById('extrato-mes').value = mes;
-    const btn = document.getElementById('extrato-btn-transferir');
-    if (btn) btn.style.display = temAcesso('financeiro.fluxo', 'completo') ? '' : 'none';
-
-    const brl = v => 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const [ano, m2] = mes.split('-').map(Number);
-    const primeiro = mes + '-01';
-    const ultimo = mes + '-' + String(new Date(ano, m2, 0).getDate()).padStart(2, '0');
-    const mesFuturo = primeiro > hoje;
-    const fmtDataAb = d => String(d).split('-').reverse().join('/');
-    const ateFim = (mesFuturo || ultimo < hoje) ? ultimo : hoje;
-    // Saldos: "Todas" soma so as contas ativas; escolhendo uma conta (mesmo desativada) mostra o dela.
-    // A lista de movimentos de "Todas" mantem o historico das desativadas.
-    const escolhida = _extratoFiltro.contaId !== '';
-    const filtradas = escolhida ? contas.filter(c => CaixaCore.mesmoId(c.id, _extratoFiltro.contaId)) : contas.filter(c => c.ativo !== false);
-    const doExtrato = escolhida ? filtradas : contas;
-    const movs = Array.isArray(db.movimentos_fin) ? db.movimentos_fin : [];
-    const antes = CaixaCore.somarDias(primeiro, -1);
-    // Conta ainda nao aberta no periodo: saldo 0 (e um aviso), em vez do saldo inicial.
-    const naoAberta = c => !!c.data_saldo_inicial && c.data_saldo_inicial > ateFim;
-    const inicio = CaixaCore.arredondar(filtradas.reduce((s, c) => s + (naoAberta(c) ? 0 : CaixaCore.saldoConta(c, movs, antes)), 0));
-    const fim = CaixaCore.arredondar(filtradas.reduce((s, c) => s + CaixaCore.saldoContaAte(c, movs, ateFim), 0));
-    let avAb = document.getElementById('extrato-aviso-abertura');
-    if (!avAb) {
-        avAb = document.createElement('div');
-        avAb.id = 'extrato-aviso-abertura';
-        avAb.style.cssText = 'font-size:13px;color:var(--warn-text);margin-bottom:10px';
-        const faixa = document.getElementById('extrato-saldo-fim').parentElement.parentElement;
-        faixa.parentNode.insertBefore(avAb, faixa.nextSibling);
-    }
-    avAb.innerHTML = filtradas.filter(naoAberta).map(c =>
-        `<div>${escolhida ? '' : escapeHtml(c.nome || '') + ': '}Conta aberta em ${fmtDataAb(c.data_saldo_inicial)}</div>`).join('');
-    document.getElementById('extrato-saldo-inicio').textContent = brl(inicio);
-    document.getElementById('extrato-saldo-fim').textContent = brl(fim);
-    document.getElementById('extrato-lbl-fim').textContent = mesFuturo ? 'Saldo previsto no fim do mês' : (ultimo >= hoje ? 'Saldo até hoje' : 'Saldo no fim');
-
-    const fmtData = d => d.split('-').reverse().join('/');
-    const linhas = movs.filter(mv => {
-        const c = doExtrato.find(x => CaixaCore.mesmoId(x.id, mv.conta_id));
-        return c && mv.data >= primeiro && mv.data <= ultimo && mv.data >= c.data_saldo_inicial;
-    }).sort((x, y) => x.data < y.data ? -1 : x.data > y.data ? 1 : 0);
-    // Recebimentos sem movimento (de antes das contas, sem conta ou no cartao sem conta) contam no Resultado, mas nao passaram por conta nenhuma.
-    let avSem = document.getElementById('extrato-aviso-sem-conta');
-    if (!avSem) {
-        avSem = document.createElement('div');
-        avSem.id = 'extrato-aviso-sem-conta';
-        avSem.style.cssText = 'font-size:13px;color:var(--warn-text);margin-bottom:10px';
-        avAb.parentNode.insertBefore(avSem, avAb.nextSibling);
-    }
-    const semMov = ResultadoCore.recebimentosSemMovimento({ de: primeiro, ate: ultimo, contasReceber: db.contas_receber, movimentos: movs, contas, contasPagar: db.contas_pagar, categorias: db.fin_categorias });
-    avSem.textContent = semMov.qtd === 1 ? `1 recebimento sem conta (${brl(semMov.valor)}) não aparece aqui`
-        : semMov.qtd > 1 ? `${semMov.qtd} recebimentos sem conta (${brl(semMov.valor)}) não aparecem aqui` : '';
-    avSem.style.display = semMov.qtd > 0 ? '' : 'none';
-    const tb = document.getElementById('extrato-linhas');
-    const podeExcluir = temAcesso('financeiro.fluxo', 'completo');
-    if (!linhas.length) {
-        tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;padding:16px">Nenhum movimento neste mês.</td></tr>';
-        return;
-    }
-    tb.innerHTML = linhas.map(mv => {
-        const ent = mv.sentido === 'entrada';
-        const conta = _contaFinPorId(mv.conta_id);
-        const cair = mv.data > hoje ? ' <span style="background:var(--warn-bg);color:var(--warn-text);font-size:11px;padding:1px 6px;border-radius:8px">a cair</span>' : '';
-        const excluir = mv.origem === 'transferencia' && mv.grupo_id != null && podeExcluir
-            ? `<button class="btn btn-outline btn-sm extrato-excluir" title="Excluir transferência" onclick='excluirTransferencia(${escapeHtml(JSON.stringify(mv.grupo_id))})'>🗑</button>` : '';
-        return `<tr class="extrato-linha ${ent ? 'entrada' : 'saida'}">
-            <td>${fmtData(mv.data)}</td>
-            <td>${escapeHtml(mv.descricao || '')}${cair}</td>
-            <td>${escapeHtml(conta ? conta.nome : '—')}</td>
-            <td style="text-align:right;color:#27AE60">${ent ? brl(mv.valor) : ''}</td>
-            <td style="text-align:right;color:var(--danger-text)">${ent ? '' : brl(mv.valor)}</td>
-            <td style="text-align:right">${excluir}</td></tr>`;
-    }).join('');
+    if (typeof finFluxo !== 'undefined') finFluxo.contaId = contaId == null ? '' : String(contaId);
+    mostrarTabFinanceiro('fluxo');
 }
 
 // Transferencia entre contas: duas linhas (saida na origem, entrada no destino)
@@ -18038,7 +17942,7 @@ async function abrirModalTransferencia() {
         _finContaTocada(dest.id);
         syncDB();
         fechar();
-        renderExtrato();
+        if (typeof renderFinFluxo === 'function') renderFinFluxo();
     };
     o.querySelector('#transf-valor').focus();
 }
@@ -18051,7 +17955,7 @@ async function excluirTransferencia(grupoId) {
     lados.forEach(m => _finContaTocada(m.conta_id));
     db.movimentos_fin = db.movimentos_fin.filter(m => !lados.includes(m));
     syncDB();
-    renderExtrato();
+    if (typeof renderFinFluxo === 'function') renderFinFluxo();
 }
 
 // Alertas do Financeiro (vencimento, atraso, tendencia, meta, gap): a Visao Geral do Financeiro,

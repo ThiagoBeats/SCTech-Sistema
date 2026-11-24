@@ -1224,7 +1224,27 @@ Na janela do carrinho:
     linha destacada. Calculado na hora: some ao pagar, receber ou cancelar.
   - Cadastro de conta (Configurar Empresa › Preferências › Contas): campos novos Banco (lista dos mais comuns +
     Outro), Agência, Número da conta e Tipo da conta (corrente, poupança, caixa, cartão).
-  - Fluxo de caixa mostra o Extrato de sempre (versão provisória).
+  - Fluxo de caixa (substitui o Extrato provisório): filtros Período (padrão: mês atual), Ver por Dia | Semana |
+    Mês (padrão Dia), Conta (Todas ou uma; as desativadas aparecem com "(desativada)" e só elas mostram o próprio
+    histórico) e Categoria. Quatro cartões: Saldo inicial, Entradas, Saídas e Saldo final; quando o período passa
+    de hoje, "Previsto até DD/MM: R$ X" abaixo do Saldo final (contas em aberto pelo vencimento, de hoje em
+    diante; repasses de cartão e recorrências do mês entram). Gráfico de linhas (Saldo, Entradas, Saídas) com a
+    parte prevista tracejada, legenda e tema escuro legível. Tabela "Movimentações do período": Saldo inicial no
+    topo e depois Data, Descrição, Conta, Entrada, Saída e Saldo; linhas previstas em cinza com o selo "Previsto";
+    transferências com o selo "Transferência". Com "Todas as contas" a transferência não entra em Entradas nem em
+    Saídas (nunca é receita ou despesa); com uma conta escolhida conta como entrada ou saída dela. Clicar numa
+    linha de recebimento ou pagamento abre o lançamento em Lançamentos (se a pessoa vê aquele lado). Avisos: o
+    período inválido, os recebimentos sem conta do período e a conta ainda não aberta no período ("conta aberta
+    em DD/MM/AAAA"). Botões: Transferir entre contas (a janela de sempre) e, em cada linha de transferência, o
+    menu ⋮ com "Excluir transferência" (os dois lados saem); Importar extrato e Conciliar (aparecem só com Fluxo
+    de caixa completo; por enquanto avisam "Em breve."); Relatórios (para quem vê o Fluxo). Para cada conta com
+    extrato conciliado, a linha "Conferido com o extrato até DD/MM". Quem só visualiza não vê Transferir,
+    Importar, Conciliar nem o menu de excluir.
+    * Relatórios (janela): "Entradas e saídas por categoria" (período, regime Caixa, mesma base da DRE),
+      "Contas a pagar e a receber por período" (em aberto e pagas, por vencimento, mês a mês) e "Evolução
+      mensal do saldo" (12 meses até o mês atual, na conta escolhida na tela). Cada um com PDF, Excel e Imprimir
+      (documento claro, paisagem).
+    * O alerta "falta de caixa" do sino continua levando a esta aba.
   - DRE — Resultado da empresa: tabela do ano (Jan a Dez + Total), Regime Caixa | Competência e seletor de Ano.
     Começa recolhida (grupos e linhas calculadas); o + abre os filhos diretos do grupo (subgrupos abrem de novo).
     Receitas, Custos, Margem de contribuição (+ % margem), Despesas (variáveis, fixas, outras), Resultado
@@ -1265,7 +1285,7 @@ Na janela do carrinho:
     * "Abrir pedido" leva à lista de Pedidos já buscando o número do pedido (pedidos.html?busca=).
     * A janela "Lançar Conta a Pagar" antiga continua só para importar nota/boleto (revisão dos campos lidos).
   - As telas antigas (Hoje, Visão Geral, Resultado do mês e fechamento, Simular compra, DRE por Pedido,
-    Extrato) estão desligadas: continuam no código (FIN_RECURSOS_ANTIGOS em app.js, tudo false) e as
+    Extrato) estão desligadas (o Extrato foi trocado pelo Fluxo de caixa novo): continuam no código (FIN_RECURSOS_ANTIGOS em app.js, tudo false) e as
     seções abaixo que falam delas descrevem o que existe quando forem religadas. Os alertas de meta e
     tendência de faturamento ficam desligados junto com elas.
   - Permissões do Financeiro: Resumo, Contas a receber, Contas a pagar, Recorrências, Fluxo de caixa e DRE.

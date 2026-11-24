@@ -1,7 +1,7 @@
-// Financeiro Fase 1, tarefa 9: aba Extrato (movimentos por conta e mes,
-// saldos no inicio e no fim) e transferencia entre contas.
+// Financeiro Fase 1, tarefa 9: movimentos por conta e periodo, saldos no inicio e no fim e transferencia entre contas.
+// Desde a entrega 3 do Financeiro novo isso vive no Fluxo de caixa (o Extrato provisorio saiu); fin-fluxo.spec.js cobre a tela.
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, acaoMenu } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const ler = (page, k) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), k);
@@ -32,55 +32,66 @@ async function abrir(page, movs, extras) {
     await page.locator('.fin-tab-btn[data-tab="fluxo"]').click();
 }
 const txt = async (loc) => (await loc.innerText()).replace(/\s+/g, ' ');
+const kpi = (page, id) => page.locator('#fluxo-kpi-' + id + ' .res-kpi-valor');
+const linhas = page => page.locator('#fluxo-linhas tr.fluxo-linha');
+// Periodo = o mes de `dia` (AAAA-MM-DD ou AAAA-MM).
+async function periodoDoMes(page, mes) {
+    const [a, m] = mes.slice(0, 7).split('-').map(Number);
+    await page.fill('#fluxo-de', mes.slice(0, 7) + '-01');
+    await page.locator('#fluxo-de').dispatchEvent('change');
+    await page.fill('#fluxo-ate', mes.slice(0, 7) + '-' + p2(new Date(a, m, 0).getDate()));
+    await page.locator('#fluxo-ate').dispatchEvent('change');
+}
 
-test('extrato do mes com entradas e saidas e saldos', async ({ page }) => {
+test('fluxo do mes com entradas e saidas e saldos', async ({ page }) => {
     await abrir(page);
-    const rows = page.locator('#extrato-linhas .extrato-linha');
-    await expect(rows).toHaveCount(3);
-    await expect(page.locator('#extrato-linhas')).toContainText('Entrada do mes');
-    await expect(page.locator('#extrato-linhas')).not.toContainText('Mov mes passado');
+    // saldo inicial + 3 movimentos do mes
+    await expect(linhas(page)).toHaveCount(4);
+    await expect(page.locator('#fluxo-linhas')).toContainText('Entrada do mes');
+    await expect(page.locator('#fluxo-linhas')).not.toContainText('Mov mes passado');
     // inicio: 100 + 50 = 150 ; fim: 150 + 200 + 300 - 80 = 570
-    expect(await txt(page.locator('#extrato-saldo-inicio'))).toContain('150,00');
-    expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('570,00');
-    await expect(page.locator('#extrato-linhas .extrato-linha.entrada').first()).toBeVisible();
-    await expect(page.locator('#extrato-linhas .extrato-linha.saida')).toHaveCount(1);
+    expect(await txt(kpi(page, 'inicial'))).toContain('150,00');
+    expect(await txt(kpi(page, 'final'))).toContain('570,00');
+    expect(await txt(kpi(page, 'entradas'))).toContain('500,00');
+    expect(await txt(kpi(page, 'saidas'))).toContain('80,00');
+    await expect(page.locator('#fluxo-linhas .fluxo-linha .fluxo-ent', { hasText: '200,00' })).toBeVisible();
+    await expect(page.locator('#fluxo-linhas .fluxo-linha .fluxo-sai', { hasText: '80,00' })).toBeVisible();
 });
 
 test('filtro por conta', async ({ page }) => {
     await abrir(page);
-    await page.locator('#extrato-conta').selectOption('11');
-    await expect(page.locator('#extrato-linhas .extrato-linha')).toHaveCount(1);
-    expect(await txt(page.locator('#extrato-saldo-inicio'))).toContain('0,00');
-    expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('300,00');
+    await page.locator('#fluxo-conta').selectOption('11');
+    await expect(linhas(page)).toHaveCount(2);
+    expect(await txt(kpi(page, 'inicial'))).toContain('0,00');
+    expect(await txt(kpi(page, 'final'))).toContain('300,00');
 });
 
-test('cartao a cair aparece marcado', async ({ page }) => {
+test('cartao a cair aparece como previsto', async ({ page }) => {
     const d = new Date();
     const proximo = iso(new Date(d.getFullYear(), d.getMonth() + 1, 15));
     await abrir(page, [...MOVS, mov(5, 10, proximo, 'entrada', 1000, 'Repasse do cartao')]);
-    // mes atual: o repasse nao aparece e o fim e "ate hoje"
-    await expect(page.locator('#extrato-lbl-fim')).toHaveText('Saldo até hoje');
-    await expect(page.locator('#extrato-linhas')).not.toContainText('Repasse do cartao');
+    // mes atual: o repasse nao aparece e o saldo final nao o inclui
+    await expect(page.locator('#fluxo-linhas')).not.toContainText('Repasse do cartao');
+    expect(await txt(kpi(page, 'final'))).toContain('570,00');
     // navegando para o mes seguinte pela tela
-    await page.locator('#extrato-mes').fill(proximo.slice(0, 7));
-    const linha = page.locator('#extrato-linhas .extrato-linha', { hasText: 'Repasse do cartao' });
-    await expect(linha).toContainText('a cair');
-    await expect(page.locator('#extrato-lbl-fim')).toHaveText('Saldo previsto no fim do mês');
-    expect(await txt(page.locator('#extrato-saldo-inicio'))).toContain('570,00');
-    expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('1.570,00');
-    // volta ao mes atual: fim ate hoje nao inclui o repasse
-    await page.locator('#extrato-mes').fill(MES);
-    await expect(page.locator('#extrato-lbl-fim')).toHaveText('Saldo até hoje');
-    expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('570,00');
-    // mes passado: rotulo simples, fim = saldo ao fim daquele mes (100 + 50)
-    await page.locator('#extrato-mes').fill(MES_ANT.slice(0, 7));
-    await expect(page.locator('#extrato-lbl-fim')).toHaveText('Saldo no fim');
-    expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('150,00');
+    await periodoDoMes(page, proximo);
+    const linha = page.locator('#fluxo-linhas tr.fluxo-linha', { hasText: 'Repasse do cartao' });
+    await expect(linha).toContainText('Previsto');
+    await expect(linha).toHaveClass(/fluxo-previsto/);
+    expect(await txt(kpi(page, 'inicial'))).toContain('570,00');
+    expect(await txt(kpi(page, 'final'))).toContain('570,00');
+    await expect(page.locator('#fluxo-previsto')).toContainText('R$ 1.570,00');
+    // volta ao mes atual
+    await periodoDoMes(page, MES);
+    expect(await txt(kpi(page, 'final'))).toContain('570,00');
+    // mes passado: saldo ao fim daquele mes (100 + 50)
+    await periodoDoMes(page, MES_ANT);
+    expect(await txt(kpi(page, 'final'))).toContain('150,00');
 });
 
 test('transferir caixa para banco muda os dois saldos e nao o total', async ({ page }) => {
     await abrir(page);
-    await page.locator('#extrato-btn-transferir').click();
+    await page.locator('#fluxo-btn-transferir').click();
     const m = page.locator('#transf-modal');
     await expect(m).toBeVisible();
     await m.locator('#transf-de').selectOption('10');
@@ -97,14 +108,14 @@ test('transferir caixa para banco muda os dois saldos e nao o total', async ({ p
     expect(saida.conta_id).toBe(10); expect(saida.valor).toBe(1250.5); expect(saida.data).toBe(HOJE);
     expect(entrada.conta_id).toBe(11);
     // total (fim) igual a antes: 570 ; por conta muda
-    expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('570,00');
-    await page.locator('#extrato-conta').selectOption('11');
-    expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('1.550,50');
+    expect(await txt(kpi(page, 'final'))).toContain('570,00');
+    await page.locator('#fluxo-conta').selectOption('11');
+    expect(await txt(kpi(page, 'final'))).toContain('1.550,50');
 });
 
 test('mesma conta de origem e destino e bloqueado dentro do modal', async ({ page }) => {
     await abrir(page);
-    await page.locator('#extrato-btn-transferir').click();
+    await page.locator('#fluxo-btn-transferir').click();
     const m = page.locator('#transf-modal');
     await m.locator('#transf-de').selectOption('10');
     await m.locator('#transf-para').selectOption('10');
@@ -127,15 +138,15 @@ test('excluir transferencia remove os dois lados', async ({ page }) => {
         { id: 21, conta_id: 11, data: PRIMEIRO, sentido: 'entrada', valor: 40, origem: 'transferencia', origem_id: null, grupo_id: 777, descricao: 'Transferência de Caixa' }
     ];
     await abrir(page, [...MOVS, ...t]);
-    await expect(page.locator('#extrato-linhas .extrato-linha')).toHaveCount(5);
-    await expect(page.locator('#extrato-linhas .extrato-excluir')).toHaveCount(2);
-    await page.locator('#extrato-linhas .extrato-excluir').first().click();
+    await expect(linhas(page)).toHaveCount(6);
+    await expect(page.locator('#fluxo-linhas .btn-acoes')).toHaveCount(2);
+    await acaoMenu(page, page.locator('#fluxo-linhas tr.fluxo-transferencia').first(), 'Excluir transferência');
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await ler(page, 'sc_mov_fin')).length).toBe(MOVS.length);
-    await expect(page.locator('#extrato-linhas .extrato-linha')).toHaveCount(3);
+    await expect(linhas(page)).toHaveCount(4);
 });
 
-test('sem extrato completo nao ve Transferir', async ({ page }) => {
+test('sem fluxo completo nao ve Transferir', async ({ page }) => {
     await entrar(page, BASE, { sc_contas_fin: CONTAS, sc_mov_fin: MOVS });
     await page.evaluate(() => {
         const u = JSON.parse(localStorage.getItem('sc_usr'));
@@ -145,13 +156,13 @@ test('sem extrato completo nao ve Transferir', async ({ page }) => {
     });
     await page.goto(BASE + '/financeiro.html');
     await page.locator('.fin-tab-btn[data-tab="fluxo"]').click();
-    await expect(page.locator('#extrato-linhas .extrato-linha')).toHaveCount(3);
-    await expect(page.locator('#extrato-btn-transferir')).toBeHidden();
+    await expect(linhas(page)).toHaveCount(4);
+    await expect(page.locator('#fluxo-btn-transferir')).toBeHidden();
 });
 
 test('transferir 1.000 (so ponto de milhar) move mil reais', async ({ page }) => {
     await abrir(page);
-    await page.locator('#extrato-btn-transferir').click();
+    await page.locator('#fluxo-btn-transferir').click();
     const m = page.locator('#transf-modal');
     await m.locator('#transf-de').selectOption('10');
     await m.locator('#transf-para').selectOption('11');

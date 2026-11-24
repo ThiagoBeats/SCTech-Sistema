@@ -28,7 +28,9 @@ async function abrirExtrato(page, extras) {
     await entrar(page, BASE, extras);
     await page.goto(BASE + '/financeiro.html');
     await page.locator('.fin-tab-btn[data-tab="fluxo"]').click();
+    await expect(page.locator('#fluxo-tabela')).toBeVisible();
 }
+const kpiFluxo = (page, id) => page.locator('#fluxo-kpi-' + id + ' .res-kpi-valor');
 
 // ---- Remover conta (D1) ----
 test('remover conta com movimentos oferece desativar e nao exclui', async ({ page }) => {
@@ -146,34 +148,38 @@ test.skip('Hoje: conta inativa fora do saldo total e da previsao', async ({ page
     expect(semanas[0].entradas).toBe(10);
 });
 
-test('Extrato: totais sem conta inativa, historico e filtro com (desativada)', async ({ page }) => {
+test('Fluxo de caixa: totais sem conta inativa, historico dela so ao escolhe-la e filtro com (desativada)', async ({ page }) => {
     await abrirExtrato(page, { sc_contas_fin: [CAIXA, INATIVA], sc_meios_pag: MEIOS,
         sc_mov_fin: [mov(1, 11, MES + '-01', 'entrada', 55, 'Historico do banco velho'), mov(2, 10, MES + '-01', 'entrada', 20, 'Entrada caixa')] });
-    expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('120,00');
-    await expect(page.locator('#extrato-linhas')).toContainText('Historico do banco velho');
-    await expect(page.locator('#extrato-conta option', { hasText: 'Banco velho (desativada)' })).toHaveCount(1);
-    await page.locator('#extrato-conta').selectOption('11');
-    await expect(page.locator('#extrato-linhas')).toContainText('Historico do banco velho');
-    expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('355,00');
+    await expect(kpiFluxo(page, 'final')).toContainText('120,00');
+    await expect(page.locator('#fluxo-linhas')).toContainText('Entrada caixa');
+    await expect(page.locator('#fluxo-linhas')).not.toContainText('Historico do banco velho');
+    await expect(page.locator('#fluxo-conta option', { hasText: 'Banco velho (desativada)' })).toHaveCount(1);
+    await page.locator('#fluxo-conta').selectOption('11');
+    await expect(page.locator('#fluxo-linhas')).toContainText('Historico do banco velho');
+    await expect(kpiFluxo(page, 'final')).toContainText('355,00');
 });
 
 // ---- Mes antes da abertura ----
-test('Extrato: mes antes da abertura da conta mostra 0 e a data de abertura', async ({ page }) => {
+test('Fluxo de caixa: mes antes da abertura da conta mostra 0 e a data de abertura', async ({ page }) => {
     const aberta = { ...CAIXA, saldo_inicial: 500, data_saldo_inicial: HOJE };
     await abrirExtrato(page, { sc_contas_fin: [aberta], sc_meios_pag: MEIOS });
-    const mesAnt = iso(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 15)).slice(0, 7);
-    await page.locator('#extrato-mes').fill(mesAnt);
-    await page.locator('#extrato-mes').dispatchEvent('change');
-    expect(await txt(page.locator('#extrato-saldo-inicio'))).toContain('0,00');
-    expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('0,00');
-    expect(await txt(page.locator('#extrato-saldo-fim'))).not.toContain('500');
-    await expect(page.locator('#extrato-aviso-abertura')).toContainText('Conta aberta em ' + ddmmaaaa(HOJE));
+    const ant = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1);
+    const mesAnt = iso(ant).slice(0, 7);
+    await page.fill('#fluxo-de', mesAnt + '-01');
+    await page.locator('#fluxo-de').dispatchEvent('change');
+    await page.fill('#fluxo-ate', iso(new Date(ant.getFullYear(), ant.getMonth() + 1, 0)));
+    await page.locator('#fluxo-ate').dispatchEvent('change');
+    await expect(kpiFluxo(page, 'inicial')).toContainText('0,00');
+    await expect(kpiFluxo(page, 'final')).toContainText('0,00');
+    expect(await txt(kpiFluxo(page, 'final'))).not.toContain('500');
+    await expect(page.locator('#fluxo-aviso-abertura')).toContainText('conta aberta em ' + ddmmaaaa(HOJE));
 });
 
 // ---- Transferencia ----
 async function abrirTransf(page) {
     await abrirExtrato(page, { sc_contas_fin: [CAIXA, BANCO], sc_meios_pag: MEIOS });
-    await page.locator('#extrato-btn-transferir').click();
+    await page.locator('#fluxo-btn-transferir').click();
     return page.locator('#transf-modal');
 }
 

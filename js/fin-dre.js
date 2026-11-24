@@ -195,11 +195,35 @@ async function _dreBaixarExcel(nome, aba, aoa) {
     } catch (e) { toast('Não foi possível gerar a planilha.', 'error', 5000); }
 }
 
-// Janela de impressao: documento claro, paisagem, tabela toda expandida.
-function _dreImprimir(titulo, regime, periodoTxt, modo, tab, rotuloTotal, dicaPdf) {
-    const { cab, linhas } = _dreCelulas(modo, tab, rotuloTotal);
+// Janela de impressao (documento claro, paisagem): empresa, titulo, linha de dados (html) e o corpo (html).
+// Usada pela DRE e pelos relatorios do Fluxo de caixa.
+function _dreAbrirImpressao(titulo, metaHtml, corpoHtml, dicaPdf) {
     const emp = getEmpresa();
     const nomeEmp = emp.nome_fantasia || emp.razao_social || 'SCTech';
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${escapeHtml(titulo)}</title><style>
+        @page { size: A4 landscape; margin: 12mm; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #1a1a1a; background: #fff; font-size: 11px; margin: 0; padding: 12px; }
+        h1 { font-size: 16px; margin: 0; } h2 { font-size: 14px; margin: 10px 0 2px; }
+        .meta { color: #555; margin-bottom: 8px; }
+        table { border-collapse: collapse; width: 100%; } th, td { border-bottom: 1px solid #ddd; padding: 3px 6px; } thead th { background: #E8EBEF; }
+        .dica { background: #FFF8E1; border: 1px solid #F0D98A; padding: 6px 10px; margin-bottom: 10px; border-radius: 4px; }
+        @media print { .no-print { display: none !important; } }
+    </style></head><body><div class="doc-claro">
+        ${dicaPdf ? `<div class="dica no-print">Escolha 'Salvar como PDF' na impressora.</div>` : ''}
+        <h1>${escapeHtml(nomeEmp)}</h1>
+        <h2>${escapeHtml(titulo)}</h2>
+        <div class="meta">${metaHtml}</div>
+        ${corpoHtml}
+    </div><script>window.onload = function () { window.print(); };<\/script></body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { toast('Permita pop-ups para imprimir.', 'info'); return; }
+    w.document.write(html);
+    w.document.close();
+}
+
+// Janela de impressao da DRE / analises: tabela toda expandida.
+function _dreImprimir(titulo, regime, periodoTxt, modo, tab, rotuloTotal, dicaPdf) {
+    const { cab, linhas } = _dreCelulas(modo, tab, rotuloTotal);
     const dois = modo !== 'dre';
     const th = (t, extra) => `<th style="text-align:right;${extra || ''}">${escapeHtml(t)}</th>`;
     let h1 = '<th rowspan="' + (dois ? 2 : 1) + '" style="text-align:left">RESULTADO</th>', h2 = '';
@@ -216,25 +240,8 @@ function _dreImprimir(titulo, regime, periodoTxt, modo, tab, rotuloTotal, dicaPd
         }).join('');
         return `<tr style="${forte ? 'font-weight:700;background:#F0F2F5;' : ''}${l.chave === 'liquido' ? 'background:#E3F4E6;' : ''}"><td style="padding-left:${6 + l.nivel * 16}px">${escapeHtml(l.rotulo)}${l.inativa ? ' (inativa)' : ''}</td>${tds}</tr>`;
     }).join('');
-    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${escapeHtml(titulo)}</title><style>
-        @page { size: A4 landscape; margin: 12mm; }
-        body { font-family: Arial, Helvetica, sans-serif; color: #1a1a1a; background: #fff; font-size: 11px; margin: 0; padding: 12px; }
-        h1 { font-size: 16px; margin: 0; } h2 { font-size: 14px; margin: 10px 0 2px; }
-        .meta { color: #555; margin-bottom: 8px; }
-        table { border-collapse: collapse; width: 100%; } th, td { border-bottom: 1px solid #ddd; padding: 3px 6px; } thead th { background: #E8EBEF; }
-        .dica { background: #FFF8E1; border: 1px solid #F0D98A; padding: 6px 10px; margin-bottom: 10px; border-radius: 4px; }
-        @media print { .no-print { display: none !important; } }
-    </style></head><body><div class="doc-claro">
-        ${dicaPdf ? `<div class="dica no-print">Escolha 'Salvar como PDF' na impressora.</div>` : ''}
-        <h1>${escapeHtml(nomeEmp)}</h1>
-        <h2>${escapeHtml(titulo)}</h2>
-        <div class="meta">Regime: ${escapeHtml(regime)} &nbsp;·&nbsp; Período: ${escapeHtml(periodoTxt)}</div>
-        <table><thead><tr>${h1}</tr>${h2}</thead><tbody>${corpo}</tbody></table>
-    </div><script>window.onload = function () { window.print(); };<\/script></body></html>`;
-    const w = window.open('', '_blank');
-    if (!w) { toast('Permita pop-ups para imprimir.', 'info'); return; }
-    w.document.write(html);
-    w.document.close();
+    _dreAbrirImpressao(titulo, `Regime: ${escapeHtml(regime)} &nbsp;·&nbsp; Período: ${escapeHtml(periodoTxt)}`,
+        `<table><thead><tr>${h1}</tr>${h2}</thead><tbody>${corpo}</tbody></table>`, dicaPdf);
 }
 
 const _dreNomeRegime = r => r === 'competencia' ? 'Competência' : 'Caixa';

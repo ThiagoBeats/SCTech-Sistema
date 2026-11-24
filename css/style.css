@@ -3175,3 +3175,40 @@ html[data-theme="dark"] .dre-liquido td.dre-neg { color: #FF8A7A; }
 .dre-tabela td.dre-desfav { color: var(--danger-text, var(--danger)); font-weight: 600; }
 html[data-theme="dark"] .dre-tabela td.dre-fav { color: #8FE08C; }
 html[data-theme="dark"] .dre-tabela td.dre-desfav { color: #FF8A7A; }
+
+/* ── FLUXO DE CAIXA (Financeiro novo) ──────────────────────────── */
+#fin-fluxo-conteudo { min-width: 0; }
+.fluxo-topo-card { margin-bottom: 16px; }
+.fluxo-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; }
+.fluxo-kpis .res-kpi-valor { white-space: nowrap; }
+.fluxo-ent { color: var(--ok-text); }
+.fluxo-sai { color: var(--danger-text, var(--danger)); }
+.fluxo-conferido { margin: -4px 0 16px; font-size: 13px; color: var(--muted); }
+.fluxo-conferido-linha strong { color: var(--dark); }
+.fluxo-card { margin-bottom: 16px; min-width: 0; }
+.fluxo-card h3 { margin: 0; color: var(--primary); }
+.fluxo-grafico { position: relative; height: 280px; }
+.fluxo-tabela { width: 100%; font-size: 13px; }
+.fluxo-tabela .fluxo-num { text-align: right; white-space: nowrap; }
+.fluxo-tabela td.fluxo-ent, .fluxo-tabela td.fluxo-sai { font-weight: 600; }
+.fluxo-tabela .fluxo-acoes { width: 36px; text-align: right; }
+.fluxo-saldo-inicial td { background: var(--surface-2); }
+.fluxo-previsto td { color: var(--muted); }
+.fluxo-previsto td.fluxo-ent, .fluxo-previsto td.fluxo-sai { color: var(--muted); }
+.fluxo-clicavel { cursor: pointer; }
+.fluxo-clicavel:hover td, .fluxo-clicavel:focus td { background: var(--surface-2); }
+.fluxo-selo { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 8px; vertical-align: middle; white-space: nowrap; }
+.fluxo-selo-prev { background: var(--surface-3, #F1F1F1); color: var(--muted); border: 1px solid var(--border); }
+.fluxo-selo-transf { background: var(--warn-bg); color: var(--dark); }
+.fluxo-rel-tabela { min-width: 520px; }
+.fluxo-rel-tabela th[scope="row"] { text-align: left; font-weight: inherit; background: transparent; color: inherit; border-radius: 0; }
+.fluxo-rel-forte th, .fluxo-rel-forte td { font-weight: 700; background: var(--surface-2); }
+.fluxo-rel-vazio th { color: var(--muted); font-style: italic; }
+.fluxo-rel-seg { flex-wrap: wrap; }
+@media (max-width: 900px) { .fluxo-kpis { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) {
+    .fluxo-kpis .res-kpi-valor { font-size: 17px; }
+    .fluxo-grafico { height: 220px; }
+    .fluxo-tabela th:nth-child(3), .fluxo-tabela td:nth-child(3) { display: none; }
+    .fluxo-rel-seg .dre-seg-btn { flex: 1 1 100%; text-align: left; }
+}

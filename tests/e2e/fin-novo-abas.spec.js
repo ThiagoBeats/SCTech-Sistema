@@ -31,12 +31,13 @@ test('Administrador ve so 4 abas e nenhuma das telas antigas', async ({ page }) 
     await expect(page.locator('.fin-tab-btn[data-tab="resumo"]')).toHaveClass(/active/);
 });
 
-test('Fluxo de caixa mostra o Extrato provisorio e DRE mostra o quadro da DRE', async ({ page }) => {
+test('Fluxo de caixa mostra a tela nova e DRE mostra o quadro da DRE', async ({ page }) => {
     await abrir(page);
     await page.locator('.fin-tab-btn[data-tab="fluxo"]').click();
-    await expect(page.locator('#fin-fluxo')).toContainText('Versão provisória: o novo Fluxo de caixa chega na próxima atualização.');
-    await expect(page.locator('#extrato-linhas')).toBeAttached();
-    await expect(page.locator('#extrato-btn-transferir')).toBeVisible();
+    await expect(page.locator('#fin-fluxo')).toContainText('Movimentações do período');
+    await expect(page.locator('#fin-fluxo')).not.toContainText('Versão provisória');
+    await expect(page.locator('#fluxo-linhas')).toBeAttached();
+    await expect(page.locator('#fluxo-btn-transferir')).toBeVisible();
     await page.locator('.fin-tab-btn[data-tab="dre"]').click();
     await expect(page.locator('#fin-dre')).toContainText('DRE — Resultado da empresa');
     await expect(page.locator('#fin-fluxo')).toBeHidden();

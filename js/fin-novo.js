@@ -1,17 +1,12 @@
 'use strict';
 // Telas do Financeiro novo (Resumo, Lancamentos, Fluxo de caixa, DRE). Carregado depois de app.js.
-// O Fluxo de caixa mostra o Extrato de sempre, com o aviso de versao provisoria.
+// O Fluxo de caixa esta em js/fin-fluxo.js.
 
 const FIN_EM_CONSTRUCAO = 'Em construção: chega na próxima atualização.';
 
 function _finEmConstrucao(id, titulo) {
     const el = document.getElementById(id);
     if (el) el.innerHTML = `<h3 style="margin-bottom:8px">${titulo}</h3><p style="color:var(--muted,#8F8F8F)">${FIN_EM_CONSTRUCAO}</p>`;
-}
-
-// Fluxo de caixa provisorio: o Extrato de sempre (transferencia, saldo por conta), ate a entrega do Fluxo novo.
-function renderFinFluxoProvisorio() {
-    renderExtrato();
 }
 
 // ===================== RESUMO =====================

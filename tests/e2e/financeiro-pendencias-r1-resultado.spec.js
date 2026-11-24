@@ -33,21 +33,23 @@ async function visaoGeral(page, de, ate) {
 const kpi2 = (page, txt) => page.locator('#fin-kpis2 .fin-kpi', { hasText: txt });
 const kpi1 = (page, rotulo) => page.locator('#fin-kpis .fin-kpi').filter({ has: page.locator('.fin-kpi-label', { hasText: new RegExp('^' + rotulo + '$') }) });
 
-// ---- Extrato ----
-test('Extrato avisa os recebimentos sem conta do mes mostrado', async ({ page }) => {
+// ---- Fluxo de caixa (antigo Extrato) ----
+test('Fluxo de caixa avisa os recebimentos sem conta do periodo mostrado', async ({ page }) => {
     await abrir(page, {
         sc_contas_fin: [BANCO],
         sc_cr: [crPago(1, 500, '2026-11-03'), crPago(2, 250, '2026-11-05'), crPago(3, 700, '2026-11-07'), crPago(4, 999, '2026-10-12')],
         sc_mov_fin: [mov(1, 10, '2026-11-07', 'entrada', 700, 'cr', 3, 'Pedido 3')]
     });
     await page.locator('.fin-tab-btn[data-tab="fluxo"]').click();
-    const aviso = page.locator('#extrato-aviso-sem-conta');
+    const aviso = page.locator('#fluxo-aviso-sem-conta');
+    const periodo = async (de, ate) => {
+        await page.fill('#fluxo-de', de); await page.locator('#fluxo-de').dispatchEvent('change');
+        await page.fill('#fluxo-ate', ate); await page.locator('#fluxo-ate').dispatchEvent('change');
+    };
     await expect(aviso).toHaveText('2 recebimentos sem conta (R$ 750,00) não aparecem aqui');
-    await page.fill('#extrato-mes', '2026-10');
-    await page.locator('#extrato-mes').dispatchEvent('change');
+    await periodo('2026-10-01', '2026-10-31');
     await expect(aviso).toHaveText('1 recebimento sem conta (R$ 999,00) não aparece aqui');
-    await page.fill('#extrato-mes', '2026-09');
-    await page.locator('#extrato-mes').dispatchEvent('change');
+    await periodo('2026-09-01', '2026-09-30');
     await expect(aviso).toBeHidden();
 });
 
