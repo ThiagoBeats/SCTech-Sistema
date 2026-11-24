@@ -66,8 +66,15 @@ test('periodo padrao e o mes atual; filtros de status, categoria e competencia r
     // periodo por competencia
     await page.selectOption('#lanc-ref', 'comp');
     await page.fill('#lanc-de', '2026-12-01'); await page.fill('#lanc-ate', '2026-12-31');
-    await expect(page.locator('#tb-contas-receber tr')).toHaveCount(1);
+    // a conta vencida de novembro continua na lista (primeiro), com o aviso
+    await expect(page.locator('#tb-contas-receber tr')).toHaveCount(2);
+    await expect(page.locator('#tb-contas-receber tr').first()).toContainText('Venda vencida');
     await expect(page.locator('#tb-contas-receber')).toContainText('Eva');
+    await expect(page.locator('#lanc-aviso')).toHaveText('Inclui 1 conta(s) vencida(s) de antes do período.');
+    await page.selectOption('#lanc-status', 'aberto');
+    await expect(page.locator('#tb-contas-receber tr')).toHaveCount(1);
+    await expect(page.locator('#lanc-aviso')).toBeHidden();
+    await page.selectOption('#lanc-status', '');
     await page.fill('#lanc-busca', 'zzzz');
     await expect(page.locator('#tb-contas-receber')).toContainText('Nenhum lançamento encontrado.');
 });
@@ -240,7 +247,7 @@ test('Repetir todo mes cria a recorrencia e ela aparece em Recorrencias', async 
     await page.locator('#lf-salvar').click();
     await expect.poll(async () => (await ler(page, 'sc_df')).length).toBe(1);
     const df = (await ler(page, 'sc_df'))[0];
-    expect(df).toMatchObject({ descricao: 'Internet da loja', valor: 150, categoria_id: 'cat_contas', ativo: true, dia_vencimento: 28 });
+    expect(df).toMatchObject({ descricao: 'Internet da loja', valor: 150, categoria_id: 'cat_contas', ativo: true, dia_vencimento: 30 });
     const cp = (await ler(page, 'sc_cp')).find(c => c.descricao === 'Internet da loja');
     expect(cp).toMatchObject({ despesa_fixa_id: df.id, categoria_id: 'cat_contas', data_vencimento: '2026-11-30' });
     await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click();
@@ -309,4 +316,83 @@ test('largura 390px: sem rolagem horizontal da pagina, na lista e no formulario'
     await page.locator('#lanc-novo').click();
     await expect(page.locator('#lf-descricao')).toBeVisible();
     expect(await larg()).toBeLessThanOrEqual(0);
+});
+
+test('vencida de antes do periodo aparece primeiro, com aviso, e entra no Total em aberto', async ({ page }) => {
+    const velha = { id: 7, cliente_nome: 'Gil', descricao: 'Venda de outubro', valor: 70, status: 'Atrasado', data_vencimento: '2026-10-10', data_competencia: '2026-10-10', categoria_id: 'cat_vendas', data_pagamento: null, historico: hist() };
+    await page.clock.setFixedTime(HOJE);
+    await entrar(page, BASE, { sc_cr: [velha, CR[0]] });
+    await page.goto(BASE + '/financeiro.html');
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click();
+    await page.locator('.fin-lado-btn[data-lado="receber"]').click();
+    await expect(page.locator('#lanc-de')).toHaveValue('2026-11-01');
+    await expect(page.locator('#tb-contas-receber tr')).toHaveCount(2);
+    await expect(page.locator('#tb-contas-receber tr').first()).toContainText('Venda de outubro');
+    await expect(page.locator('#lanc-aviso')).toHaveText('Inclui 1 conta(s) vencida(s) de antes do período.');
+    await expect(page.locator('#lanc-rodape')).toContainText('Total em aberto: R$ 370,00');
+    await page.selectOption('#lanc-status', 'vencido');
+    await expect(page.locator('#tb-contas-receber tr')).toHaveCount(1);
+    await expect(page.locator('#lanc-aviso')).toBeVisible();
+    await page.selectOption('#lanc-status', 'pago');
+    await expect(page.locator('#lanc-aviso')).toBeHidden();
+});
+
+test('Repetir todo mes com vencimento dia 31: sem duplicar em janeiro e gera 28/02 em fevereiro', async ({ page }) => {
+    await page.clock.setFixedTime(new Date(2027, 0, 31, 10, 0, 0));
+    await entrar(page, BASE, { sc_cp: [], sc_df: [] });
+    await page.goto(BASE + '/financeiro.html');
+    await abrirLancamentos(page, 'pagar');
+    await page.locator('#lanc-novo').click();
+    await page.fill('#lf-descricao', 'Contador');
+    await page.fill('#lf-valor', '300');
+    await page.selectOption('#lf-categoria', 'cat_contas');
+    await page.fill('#lf-vencimento', '2027-01-31');
+    await page.check('#lf-repetir');
+    await expect(page.locator('#lf-competencia')).toHaveValue('2027-01-01');
+    await page.locator('#lf-salvar').click();
+    await expect.poll(async () => (await ler(page, 'sc_df')).length).toBe(1);
+    expect((await ler(page, 'sc_df'))[0].dia_vencimento).toBe(31);
+    expect((await ler(page, 'sc_cp'))[0]).toMatchObject({ data_vencimento: '2027-01-31', data_competencia: '2027-01-01' });
+    // gerar em janeiro nao duplica
+    await abrirLancamentos(page, 'pagar');
+    await page.locator('#lanc-gerar').click();
+    await expect(page.locator('#sc-modal-msg')).toContainText('já foram geradas');
+    await page.locator('#sc-modal-ok').click();
+    expect(await ler(page, 'sc_cp')).toHaveLength(1);
+    // fevereiro: 28/02 (2027 nao e bissexto), uma vez so
+    await page.clock.setFixedTime(new Date(2027, 1, 15, 10, 0, 0));
+    await page.goto(BASE + '/financeiro.html');
+    await abrirLancamentos(page, 'pagar');
+    await page.locator('#lanc-gerar').click();
+    await expect.poll(async () => (await ler(page, 'sc_cp')).length).toBe(2);
+    expect((await ler(page, 'sc_cp')).map(c => c.data_vencimento).sort()).toEqual(['2027-01-31', '2027-02-28']);
+    expect((await ler(page, 'sc_cp')).map(c => c.data_competencia).sort()).toEqual(['2027-01-01', '2027-02-01']);
+    await abrirLancamentos(page, 'pagar');
+    await page.locator('#lanc-gerar').click();
+    await expect(page.locator('#sc-modal-msg')).toContainText('já foram geradas');
+});
+
+test('competencia padrao de imposto e o dia 1 do mes de referencia', async ({ page }) => {
+    await abrir(page, null, 'pagar');
+    await page.locator('#lanc-novo').click();
+    await page.fill('#lf-descricao', 'DAS');
+    await page.fill('#lf-valor', '500');
+    await page.selectOption('#lf-categoria', 'cat_impostos');
+    await page.fill('#lf-vencimento', '2026-12-20');
+    await expect(page.locator('#lf-competencia')).toHaveValue('2026-11-01');
+    await page.locator('#lf-salvar').click();
+    await expect.poll(async () => (await ler(page, 'sc_cp')).length).toBe(4);
+    const c = (await ler(page, 'sc_cp')).find(x => x.descricao === 'DAS');
+    expect(c).toMatchObject({ data_competencia: '2026-11-01', mes_referencia: '2026-11', categoria_id: 'cat_impostos' });
+});
+
+test('lancamento gerado pelo sistema nao deixa mudar valor nem pedido', async ({ page }) => {
+    await abrir(page);
+    await acaoMenu(page, linha(page, 'receber', 'Entrada do pedido'), 'Editar');
+    await expect(page.locator('#lf-valor')).toBeDisabled();
+    await expect(page.locator('#lf-pedido')).toBeDisabled();
+    await page.fill('#lf-obs', 'obs nova');
+    await page.locator('#lf-salvar').click();
+    await expect.poll(async () => (await ler(page, 'sc_cr')).find(c => c.id === 6).observacoes).toBe('obs nova');
+    expect((await ler(page, 'sc_cr')).find(c => c.id === 6).pedido_id).toBe(26300);
 });

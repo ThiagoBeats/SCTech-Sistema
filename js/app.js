@@ -15689,8 +15689,11 @@ async function gerarContasPagarDoMes() {
     db.despesas_fixas.filter(df => df.ativo && !df.periodicidade).forEach(df => {
         // Recorrencia criada no Lancamentos so vale a partir do mes do primeiro vencimento.
         if (df.data_inicio && `${ano}-${mes}` < String(df.data_inicio).slice(0, 7)) return;
-        const vencStr = `${ano}-${mes}-${String(df.dia_vencimento).padStart(2, '0')}`;
-        const jaExiste = db.contas_pagar.some(cp => !cp.pedido_id && cp.data_vencimento === vencStr && cp.descricao === df.descricao);
+        // Dia 29-31 vale o ultimo dia do mes quando ele nao existe (31 -> 28/29 em fevereiro).
+        const dia = Math.min(Number(df.dia_vencimento) || 1, new Date(ano, Number(mes), 0).getDate());
+        const vencStr = `${ano}-${mes}-${String(dia).padStart(2, '0')}`;
+        const jaExiste = db.contas_pagar.some(cp => !cp.pedido_id && cp.descricao === df.descricao && cp.data_vencimento === vencStr)
+            || db.contas_pagar.some(cp => cp.despesa_fixa_id != null && cp.despesa_fixa_id === df.id && String(cp.data_vencimento || '').slice(0, 7) === `${ano}-${mes}`);
         if (!jaExiste) {
             db.contas_pagar.push(finCompletarLancamento('cp', {
                 id: Date.now() + geradas, pedido_id: null,

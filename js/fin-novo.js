@@ -116,20 +116,26 @@ function _finLancFiltrados(lado) {
     const f = { busca: _finNorm(v('lanc-busca')), status: v('lanc-status'), pessoa: v('lanc-pessoa'), categoria: v('lanc-categoria'),
         conta: v('lanc-conta'), ref: v('lanc-ref') || 'venc', de: v('lanc-de'), ate: v('lanc-ate') };
     const hoje = hojeLocal();
-    return _finListaLado(lado).filter(r => {
+    const porVenc = (a, b) => (a.data_vencimento || '9999').localeCompare(b.data_vencimento || '9999');
+    // Conta vencida de antes do periodo nunca some: com Status "Todos" ou "Vencido" ela entra primeiro.
+    const vencidaAntes = r => !!f.de && !!r.data_vencimento && FinCatCore.situacao(r, hoje) === 'vencido' && String(r.data_vencimento).slice(0, 10) < f.de;
+    const antes = [], dentro = [];
+    _finListaLado(lado).forEach(r => {
         const sit = FinCatCore.situacao(r, hoje);
-        if (f.status && sit !== f.status) return false;
-        if (f.pessoa && _finNorm(_finPessoaDe(r)) !== f.pessoa) return false;
-        if (f.categoria && String(r.categoria_id) !== f.categoria) return false;
-        if (f.conta && String(r.conta_id) !== f.conta) return false;
-        const d = f.ref === 'comp' ? (r.data_competencia || r.data_vencimento) : r.data_vencimento;
-        if (d) { const dia = String(d).slice(0, 10); if (f.de && dia < f.de) return false; if (f.ate && dia > f.ate) return false; }
+        if (f.status && sit !== f.status) return;
+        if (f.pessoa && _finNorm(_finPessoaDe(r)) !== f.pessoa) return;
+        if (f.categoria && String(r.categoria_id) !== f.categoria) return;
+        if (f.conta && String(r.conta_id) !== f.conta) return;
         if (f.busca) {
             const alvo = _finNorm([r.descricao, _finPessoaDe(r), _finNomeCategoria(r.categoria_id), r.valor].join(' '));
-            if (!alvo.includes(f.busca)) return false;
+            if (!alvo.includes(f.busca)) return;
         }
-        return true;
-    }).sort((a, b) => (a.data_vencimento || '9999').localeCompare(b.data_vencimento || '9999'));
+        if (vencidaAntes(r)) { antes.push(r); return; }
+        const d = f.ref === 'comp' ? (r.data_competencia || r.data_vencimento) : r.data_vencimento;
+        if (d) { const dia = String(d).slice(0, 10); if (f.de && dia < f.de) return; if (f.ate && dia > f.ate) return; }
+        dentro.push(r);
+    });
+    return { lista: antes.sort(porVenc).concat(dentro.sort(porVenc)), extras: antes.length };
 }
 
 function _finLancAcoes(lado, r, hoje) {
@@ -158,9 +164,11 @@ function renderFinLancLista(zerarPagina) {
     const lado = finLancLado, tb = _finLancTbody();
     if (!tb) return;
     if (zerarPagina) _finLancPag = 0;
-    const lista = _finLancFiltrados(lado);
+    const { lista, extras } = _finLancFiltrados(lado);
     const hoje = hojeLocal();
     const pagar = lado === 'pagar';
+    const aviso = document.getElementById('lanc-aviso');
+    if (aviso) { aviso.style.display = extras ? '' : 'none'; aviso.textContent = `Inclui ${extras} conta(s) vencida(s) de antes do período.`; }
     const totalAberto = lista.filter(r => { const s = FinCatCore.situacao(r, hoje); return s === 'aberto' || s === 'vencido'; })
         .reduce((s, r) => s + (Number(r.valor) || 0), 0);
     const paginas = Math.max(1, Math.ceil(lista.length / FIN_LANC_POR_PAGINA));
@@ -252,6 +260,7 @@ function abrirHistoricoLancamento(tipo, id) {
     const lista = tipo === 'cp' ? db.contas_pagar : db.contas_receber;
     const reg = lista.find(x => CaixaCore.mesmoId(x.id, id));
     if (!reg) return;
+    if (!temAcesso(tipo === 'cp' ? FIN_LADOS.pagar : FIN_LADOS.receber, 'visualizar')) return;
     const hist = (Array.isArray(reg.historico) ? reg.historico : []).slice().reverse();
     const o = document.createElement('div');
     o.className = 'modal-overlay';
@@ -324,7 +333,7 @@ async function abrirNovoLancamento(lado, idEditar) {
                 </div>
                 <div class="form-group">
                     <label>Categoria <span style="color:#F43927">*</span></label>
-                    <select id="lf-categoria">${cats.map(c => `<option value="${escapeHtml(String(c.id))}"${String(c.id) === String(catPadrao) ? ' selected' : ''}>${escapeHtml(c.nome)}${c.ativo === false ? ' (inativa)' : ''}</option>`).join('')}</select>
+                    <select id="lf-categoria" data-pagar="${pagar ? '1' : '0'}" onchange="finLancSincronizarCompetencia()">${cats.map(c => `<option value="${escapeHtml(String(c.id))}"${String(c.id) === String(catPadrao) ? ' selected' : ''}>${escapeHtml(c.nome)}${c.ativo === false ? ' (inativa)' : ''}</option>`).join('')}</select>
                 </div>
                 <div class="form-group">
                     <label>Conta prevista <span class="info-tag">opcional</span></label>
@@ -340,7 +349,7 @@ async function abrirNovoLancamento(lado, idEditar) {
                 </div>
                 <div class="form-group">
                     <label>Pedido <span class="info-tag">opcional</span></label>
-                    <select id="lf-pedido" onchange="finLancAoEscolherPedido('${lado}')"><option value="">— Sem pedido —</option>${peds.map(p => `<option value="${p.id}"${reg && reg.pedido_id == p.id ? ' selected' : ''}>#${escapeHtml(String(formatPedidoId(p.id)))} ${escapeHtml(p.clienteNome || '')}</option>`).join('')}</select>
+                    <select id="lf-pedido" ${auto ? 'disabled title="Este lançamento foi gerado pelo sistema"' : ''} onchange="finLancAoEscolherPedido('${lado}')"><option value="">— Sem pedido —</option>${peds.map(p => `<option value="${p.id}"${reg && reg.pedido_id == p.id ? ' selected' : ''}>#${escapeHtml(String(formatPedidoId(p.id)))} ${escapeHtml(p.clienteNome || '')}</option>`).join('')}</select>
                 </div>
                 <div class="form-group" style="grid-column:1/-1">
                     <label>Observações</label>
@@ -363,15 +372,25 @@ async function abrirNovoLancamento(lado, idEditar) {
     o.querySelector('#lf-descricao').focus();
 }
 
+// Competencia padrao (FinCatCore.competenciaPadrao): recorrencia = dia 1 do mes; imposto = dia 1 do mes de referencia;
+// senao o vencimento.
+function _finCompetenciaPadrao(pagar, vencimento, repetir, categoriaId) {
+    if (!vencimento) return '';
+    if (pagar && repetir) return FinCatCore.competenciaPadrao({ origem: 'recorrencia', mesOcorrencia: vencimento.slice(0, 7), vencimento });
+    if (pagar && categoriaId === 'cat_impostos') return FinCatCore.competenciaPadrao({ origem: 'imposto', mesReferencia: _mesRefImposto(vencimento), vencimento });
+    return vencimento;
+}
 function finLancSincronizarCompetencia() {
-    const v = document.getElementById('lf-vencimento'), c = document.getElementById('lf-competencia');
-    if (v && c && c.dataset.editado !== '1') c.value = v.value;
+    const v = document.getElementById('lf-vencimento'), c = document.getElementById('lf-competencia'), cat = document.getElementById('lf-categoria');
+    if (!v || !c || c.dataset.editado === '1') return;
+    c.value = _finCompetenciaPadrao(cat && cat.dataset.pagar === '1', v.value, !!document.getElementById('lf-repetir')?.checked, cat && cat.value);
 }
 function finLancAlternar(qual) {
     const p = document.getElementById('lf-parcelar'), r = document.getElementById('lf-repetir'), n = document.getElementById('lf-parcelas');
     if (qual === 'parcelar' && p.checked && r) r.checked = false;
     if (qual === 'repetir' && r && r.checked) p.checked = false;
     if (n) n.disabled = !p.checked;
+    finLancSincronizarCompetencia();
 }
 function finLancAoEscolherPedido(lado) {
     const sel = document.getElementById('lf-pedido'), pessoa = document.getElementById('lf-pessoa');
@@ -400,7 +419,8 @@ async function salvarLancamento(lado, idEditar) {
     const vencimento = vencEl && vencEl.disabled && reg ? reg.data_vencimento : g('lf-vencimento');
     const categoriaId = g('lf-categoria');
     const competencia = g('lf-competencia') || vencimento;
-    const pedidoId = g('lf-pedido');
+    const pedEl = document.getElementById('lf-pedido');
+    const pedidoId = pedEl && pedEl.disabled && reg ? (reg.pedido_id == null ? '' : String(reg.pedido_id)) : g('lf-pedido');
     const obs = g('lf-obs').trim();
     const contaId = g('lf-conta');
     const pessoa = _finResolverPessoa(lado, g('lf-pessoa'));
@@ -438,7 +458,7 @@ async function salvarLancamento(lado, idEditar) {
         : Object.assign({ cliente_nome: pessoa.nome }, pessoa.id != null ? { cliente_id: pessoa.id } : {});
     const mesRef = venc => (pagar && categoriaId === 'cat_impostos') ? { mes_referencia: _mesRefImposto(venc) } : {};
     const compEditada = document.getElementById('lf-competencia')?.dataset.editado === '1';
-    const compDe = (venc, i) => compEditada ? FinanceiroCore.somarMesesData(competencia, i) : venc;
+    const compDe = (venc, i) => compEditada ? FinanceiroCore.somarMesesData(competencia, i) : _finCompetenciaPadrao(pagar, venc, repetir && !parcelar, categoriaId);
     const tipo = pagar ? 'cp' : 'cr';
     const novos = [];
     let proximo = _finNovoId(lista);
@@ -451,14 +471,14 @@ async function salvarLancamento(lado, idEditar) {
         }, comumCampos(), pessoaCampos(), mesRef(p.vencimento)), null, 'Lançamento manual (parcelado)')));
     } else if (repetir && pagar) {
         const dfId = _finNovoId(db.despesas_fixas);
-        db.despesas_fixas.push(Object.assign({ id: dfId, descricao, valor, dia_vencimento: Math.min(28, Number(vencimento.slice(8, 10)) || 1), categoria: _finLegadoDe(categoriaId),
+        db.despesas_fixas.push(Object.assign({ id: dfId, descricao, valor, dia_vencimento: Number(vencimento.slice(8, 10)) || 1, categoria: _finLegadoDe(categoriaId),
             categoria_id: categoriaId, ativo: true, data_inicio: vencimento, credor_nome: pessoa.nome }, pessoa.id != null ? { fornecedor_id: pessoa.id } : {}));
         novos.push(finCompletarLancamento(tipo, Object.assign({
             id: usar(), descricao, valor, data_vencimento: vencimento, data_competencia: compDe(vencimento, 0), despesa_fixa_id: dfId
         }, comumCampos(), pessoaCampos(), { tipo: 'fixo' }, mesRef(vencimento)), { origem: 'recorrencia', mesOcorrencia: competencia.slice(0, 7) }, 'Recorrência: ' + descricao));
     } else {
         novos.push(finCompletarLancamento(tipo, Object.assign({
-            id: usar(), descricao, valor, data_vencimento: vencimento, data_competencia: competencia
+            id: usar(), descricao, valor, data_vencimento: vencimento, data_competencia: compDe(vencimento, 0)
         }, comumCampos(), pessoaCampos(), mesRef(vencimento)), null, 'Lançamento manual'));
     }
     novos.forEach(n => lista.push(n));

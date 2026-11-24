@@ -3081,3 +3081,4 @@ td { transition: background-color .15s ease; }
 .lanc-hist-item { padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--dark); }
 .lanc-hist-item:last-child { border-bottom: 0; }
 .lanc-hist-det { margin-top: 2px; color: var(--muted); }
+.lanc-aviso { margin: 0 0 10px; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--dark); font-size: 13px; border: 1px solid var(--border); }
