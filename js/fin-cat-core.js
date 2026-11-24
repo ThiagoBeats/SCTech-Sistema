@@ -260,9 +260,9 @@
     function podeExcluir(reg) {
         reg = reg || {};
         if (ehPago(reg)) return { ok: false, motivo: 'Estorne a baixa antes de excluir.' };
-        // Automatico: comissao, compra, origem em CR, recorrencia e parcela de pedido (CR com parcela_tipo).
+        // Automatico: comissao, compra, origem em CR, recorrencia (recorrente ou despesa_fixa_id, gerada todo mes) e parcela de pedido (CR com parcela_tipo).
         // Parcelado manual (lancamento_pai_id + parcelado) e lancamento manual ligado a pedido podem ser excluidos.
-        if (reg.papel_comissao || reg.pedido_compra_id || reg.origem_cr_id || reg.recorrente || reg.parcela_tipo) {
+        if (reg.papel_comissao || reg.pedido_compra_id || reg.origem_cr_id || reg.recorrente || reg.despesa_fixa_id || reg.parcela_tipo) {
             return { ok: false, motivo: 'Este lançamento foi gerado automaticamente; cancele em vez de excluir.' };
         }
         return { ok: true, motivo: '' };

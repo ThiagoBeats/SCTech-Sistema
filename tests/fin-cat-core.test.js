@@ -109,6 +109,7 @@ test('podeCancelar / podeExcluir', () => {
     assert.strictEqual(F.podeExcluir({ pedido_id: 3, tipo_lancamento: 'manual', status: 'Pendente' }).ok, true);
     assert.strictEqual(F.podeExcluir({ pedido_id: 3, parcela_tipo: 'entrada', status: 'Pendente' }).ok, false);
     assert.strictEqual(F.podeExcluir({ lancamento_pai_id: 9, recorrente: true, status: 'Pendente' }).ok, false);
+    assert.strictEqual(F.podeExcluir({ despesa_fixa_id: 4, status: 'Pendente' }).ok, false);
     assert.strictEqual(F.podeExcluir({ papel_comissao: 'rt', status: 'Pendente' }).ok, false);
     assert.strictEqual(F.podeExcluir({ tipo_lancamento: 'manual', status: 'Pendente' }).ok, true);
     assert.strictEqual(F.podeExcluir({ status: 'Pago' }).ok, false);
