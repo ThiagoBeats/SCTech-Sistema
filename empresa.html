@@ -162,6 +162,7 @@
                 Onde o dinheiro da empresa fica: o caixa (dinheiro vivo), os bancos e as maquininhas de cartão.
                 Informe quanto havia em cada uma e em que dia. Na maquininha, ajuste as taxas e os dias que o cartão leva para cair.
             </p>
+            <div id="emp-conectar-nota" class="lanc-aviso" style="display:none"></div>
             <div id="emp-contas"></div>
             <button type="button" class="btn btn-outline btn-sm" style="margin-top:4px" onclick="adicionarContaCfg()">+ Adicionar conta</button>
             <div style="display:flex;gap:10px;margin-top:14px;align-items:center">
@@ -316,6 +317,7 @@
             renderFormasPagamentoCfg();
             renderContasCfg();
             renderMeiosCfg();
+            if (new URLSearchParams(location.search).get('conectar') === '1') abrirConectarConta();
             iniciarEditorEtiquetas();
             iniciarEditorLayouts();
             iniciarEditorMostruario();

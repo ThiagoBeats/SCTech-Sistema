@@ -3082,3 +3082,33 @@ td { transition: background-color .15s ease; }
 .lanc-hist-item:last-child { border-bottom: 0; }
 .lanc-hist-det { margin-top: 2px; color: var(--muted); }
 .lanc-aviso { margin: 0 0 10px; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--dark); font-size: 13px; border: 1px solid var(--border); }
+
+/* ── RESUMO (Financeiro novo) ──────────────────────────────────── */
+.res-card { margin-bottom: 16px; }
+.res-card h3 { margin: 0 0 10px; color: var(--primary); }
+.res-titulo { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.res-titulo h3 { margin: 0; }
+.res-conta { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.res-conta-info { flex: 1 1 auto; min-width: 0; }
+.res-conta-nome { font-weight: 600; color: var(--dark); overflow-wrap: anywhere; }
+.res-conta-dir { text-align: right; flex: 0 0 auto; }
+.res-conta-saldo { font-weight: 700; font-size: 16px; color: var(--dark); white-space: nowrap; }
+.res-total { border-bottom: 0; padding-bottom: 0; }
+.res-neg { color: var(--danger) !important; }
+.res-selo { flex: 0 0 auto; width: 42px; height: 42px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; letter-spacing: .2px; overflow: hidden; }
+.res-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.res-kpi { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; min-width: 0; }
+.res-kpi-rotulo { font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+.res-kpi-valor { font-size: 20px; font-weight: 800; color: var(--dark); overflow-wrap: anywhere; }
+.res-var { font-size: 12px; font-weight: 700; margin-top: 4px; }
+.res-var-up { color: var(--ok-text); }
+.res-var-down { color: var(--danger); }
+.res-var-sem { color: var(--muted); font-weight: 500; }
+.res-aviso-resumo { font-weight: 700; padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; background: var(--warn-bg); color: var(--dark); border: 1px solid var(--border); }
+.res-aviso-item { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; width: 100%; text-align: left; padding: 8px 4px; background: transparent; border: 0; border-bottom: 1px solid var(--border); color: var(--dark); font: inherit; cursor: pointer; }
+.res-aviso-item:hover { background: var(--surface-2); }
+.res-aviso-venc strong { color: var(--danger); }
+.res-aviso-lado { font-size: 11px; font-weight: 700; color: var(--muted); min-width: 52px; text-transform: uppercase; }
+.res-aviso-pessoa { flex: 1 1 140px; min-width: 0; overflow-wrap: anywhere; }
+.lanc-destaque td { background: var(--warn-bg) !important; }
+@media (max-width: 600px) { .res-conta { flex-wrap: wrap; } .res-conta-dir { text-align: left; width: 100%; } }

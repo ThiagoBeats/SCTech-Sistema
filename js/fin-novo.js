@@ -1,6 +1,5 @@
 'use strict';
 // Telas do Financeiro novo (Resumo, Lancamentos, Fluxo de caixa, DRE). Carregado depois de app.js.
-// Resumo (Task 6) ainda nao tem a tela nova: ate la, mostra o aviso. Lancamentos (pagar | receber) ja e a tela nova.
 // O Fluxo de caixa mostra o Extrato de sempre, com o aviso de versao provisoria.
 
 const FIN_EM_CONSTRUCAO = 'Em construção: chega na próxima atualização.';
@@ -8,11 +7,6 @@ const FIN_EM_CONSTRUCAO = 'Em construção: chega na próxima atualização.';
 function _finEmConstrucao(id, titulo) {
     const el = document.getElementById(id);
     if (el) el.innerHTML = `<h3 style="margin-bottom:8px">${titulo}</h3><p style="color:var(--muted,#8F8F8F)">${FIN_EM_CONSTRUCAO}</p>`;
-}
-
-// Ponto de entrada da Task 6 (Resumo).
-function renderFinResumo() {
-    _finEmConstrucao('fin-resumo-conteudo', 'Resumo');
 }
 
 // Fluxo de caixa provisorio: o Extrato de sempre (transferencia, saldo por conta), ate a entrega do Fluxo novo.
@@ -24,6 +18,163 @@ function renderFinDreProvisorio() {
     _finEmConstrucao('fin-dre-conteudo', 'DRE');
 }
 
+// ===================== RESUMO =====================
+// Minhas contas (saldos), indicadores do periodo com comparacao e avisos de vencimento (calculados na tela).
+let _finResPeriodo = 'mes';
+let _finResRegime = 'caixa';
+let _finResDe = '';
+let _finResAte = '';
+
+const _finSomaDias = (iso, n) => { const [a, m, d] = iso.split('-').map(Number); return new Date(Date.UTC(a, m - 1, d + n)).toISOString().slice(0, 10); };
+const _finDiasEntre = (de, ate) => { const p = s => { const [a, m, d] = s.split('-').map(Number); return Date.UTC(a, m - 1, d); }; return Math.round((p(ate) - p(de)) / 86400000); };
+
+// Periodo escolhido -> { de, ate } (ISO). Personalizado sem as duas datas -> null.
+function _finResIntervalo(hoje) {
+    const a = Number(hoje.slice(0, 4)), m = Number(hoje.slice(5, 7));
+    const iso = (ano, mes, dia) => ano + '-' + String(mes).padStart(2, '0') + '-' + String(dia).padStart(2, '0');
+    const ult = (ano, mes) => new Date(ano, mes, 0).getDate();
+    if (_finResPeriodo === 'passado') { const ma = m === 1 ? 12 : m - 1, aa = m === 1 ? a - 1 : a; return { de: iso(aa, ma, 1), ate: iso(aa, ma, ult(aa, ma)) }; }
+    if (_finResPeriodo === 'trimestre') { const ini = Math.floor((m - 1) / 3) * 3 + 1; return { de: iso(a, ini, 1), ate: iso(a, ini + 2, ult(a, ini + 2)) }; }
+    if (_finResPeriodo === 'ano') return { de: iso(a, 1, 1), ate: iso(a, 12, 31) };
+    if (_finResPeriodo === 'custom') return _finResDe && _finResAte && _finResDe <= _finResAte ? { de: _finResDe, ate: _finResAte } : null;
+    return { de: iso(a, m, 1), ate: iso(a, m, ult(a, m)) };
+}
+
+function _finSeloBanco(c) {
+    const b = FIN_BANCOS.find(x => x.codigo === String(c.banco == null ? '' : c.banco));
+    const sigla = b ? b.sigla : (String(c.nome || '?').trim().slice(0, 2).toUpperCase() || '?');
+    const cor = b ? b.cor : '#8F8F8F', texto = b ? b.texto : '#FFFFFF';
+    return `<span class="res-selo" style="background:${cor};color:${texto}" title="${escapeHtml(b ? b.nome : 'Banco não informado')}">${escapeHtml(sigla)}</span>`;
+}
+
+function _finDescricaoConta(c) {
+    const t = TIPOS_CONTA_BANCARIA.find(x => x[0] === c.tipo_conta);
+    const partes = [t ? t[1] : 'Conta'];
+    if (c.agencia) partes.push('Ag ' + c.agencia);
+    if (c.numero_conta) partes.push('CC ' + c.numero_conta);
+    return partes.join(' · ');
+}
+
+function _finAtualizadoEm(v) {
+    if (!v) return 'Sem movimentos';
+    const s = String(v), dia = s.slice(0, 10).split('-').reverse().slice(0, 2).join('/');
+    const hora = s.length > 10 ? new Date(s).toTimeString().slice(0, 5) : '';
+    return 'Atualizado em ' + dia + (hora ? ' ' + hora : '');
+}
+
+function _finResContasHtml(hoje) {
+    const sd = CaixaCore.saldosHoje(getContasFin(), db.movimentos_fin || [], hoje);
+    const linhas = sd.contas.map(s => {
+        const c = getContasFin().find(x => CaixaCore.mesmoId(x.id, s.id)) || {};
+        return `<div class="res-conta">
+            ${_finSeloBanco(c)}
+            <div class="res-conta-info"><div class="res-conta-nome">${escapeHtml(c.nome || 'Conta')}</div><div class="lanc-sub">${escapeHtml(_finDescricaoConta(c))}</div></div>
+            <div class="res-conta-dir"><div class="res-conta-saldo ${s.saldo < 0 ? 'res-neg' : ''}">${_finBrl(s.saldo)}</div>
+                <div class="lanc-sub"><span class="fin-badge fin-badge-gray">${c.conexao === 'servidor' ? 'Conectada' : 'Manual'}</span> ${escapeHtml(_finAtualizadoEm(c.saldo_atualizado_em))}</div></div>
+        </div>`;
+    }).join('') || '<p class="lanc-sub" style="padding:8px 0">Nenhuma conta cadastrada ainda.</p>';
+    return `<div class="card res-card"><div class="res-titulo"><h3>Minhas contas</h3>
+            <button class="btn btn-outline btn-sm" id="res-conectar" onclick="window.location.href='empresa.html?conectar=1#preferencias'">+ Conectar conta</button></div>
+        ${linhas}
+        <div class="res-conta res-total"><div class="res-conta-info"><strong>Saldo total</strong></div><div class="res-conta-dir"><div class="res-conta-saldo ${sd.total < 0 ? 'res-neg' : ''}" id="res-saldo-total">${_finBrl(sd.total)}</div></div></div></div>`;
+}
+
+function _finResVar(atual, anterior, base) {
+    if (base === false) return '<div class="res-var res-var-sem">sem base de comparação</div>';
+    const v = DreCore.variacao(atual, anterior);
+    if (v === null) return '<div class="res-var res-var-sem">sem base de comparação</div>';
+    const sobe = v >= 0, txt = Math.abs(v).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+    return `<div class="res-var ${sobe ? 'res-var-up' : 'res-var-down'}">${sobe ? '↑' : '↓'} ${txt}%</div>`;
+}
+
+function _finResIndicadoresHtml(hoje) {
+    const iv = _finResIntervalo(hoje);
+    const opc = [['mes', 'Este mês'], ['passado', 'Mês passado'], ['trimestre', 'Trimestre'], ['ano', 'Ano'], ['custom', 'Personalizado']];
+    const barra = `<div class="lanc-barra res-barra">
+        <div class="form-group"><label>Período</label><select id="res-periodo" onchange="finResMudar()">${opc.map(([v, t]) => `<option value="${v}"${_finResPeriodo === v ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
+        ${_finResPeriodo === 'custom' ? `<div class="form-group"><label>De</label><input type="date" id="res-de" value="${_finResDe}" onchange="finResMudar()"></div><div class="form-group"><label>Até</label><input type="date" id="res-ate" value="${_finResAte}" onchange="finResMudar()"></div>` : ''}
+        <div class="form-group"><label>Regime</label><select id="res-regime" onchange="finResMudar()"><option value="caixa"${_finResRegime === 'caixa' ? ' selected' : ''}>Caixa</option><option value="competencia"${_finResRegime === 'competencia' ? ' selected' : ''}>Competência</option></select></div>
+    </div>`;
+    if (!iv) return `<div class="card res-card">${barra}<p class="lanc-sub">Escolha as datas De e Até para ver os indicadores.</p></div>`;
+    const ant = DreCore.periodoAnterior(iv.de, iv.ate);
+    const base = { regime: _finResRegime, contas_receber: db.contas_receber || [], contas_pagar: db.contas_pagar || [], movimentos: db.movimentos_fin || [],
+        contas: getContasFin(), categorias: (db.fin_categorias || {}).categorias, subgrupos: (db.fin_categorias || {}).subgrupos };
+    const L = DreCore.calcular({ ...base, de: iv.de, ate: iv.ate }).linhas;
+    const A = ant ? DreCore.calcular({ ...base, de: ant.de, ate: ant.ate }).linhas : null;
+    const tk = DreCore.ticketMedio({ pedidos: db.pedidos || [], de: iv.de, ate: iv.ate });
+    const tkA = ant ? DreCore.ticketMedio({ pedidos: db.pedidos || [], de: ant.de, ate: ant.ate }) : null;
+    const margem = L.receitas ? L.liquido / L.receitas * 100 : null;
+    const margemA = A && A.receitas ? A.liquido / A.receitas * 100 : null;
+    const pct = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+    const kpi = (id, rotulo, valor, comp) => `<div class="res-kpi" id="res-kpi-${id}"><div class="res-kpi-rotulo">${rotulo}</div><div class="res-kpi-valor ${id === 'lucro' && L.liquido < 0 ? 'res-neg' : ''}">${valor}</div>${comp}</div>`;
+    return `<div class="card res-card">${barra}<div class="res-kpis">
+        ${kpi('lucro', 'Lucro líquido', _finBrl(L.liquido), _finResVar(L.liquido, A && A.liquido, !!A))}
+        ${kpi('margem', 'Margem líquida', margem === null ? '—' : pct(margem), _finResVar(margem, margemA, margem !== null && margemA !== null))}
+        ${kpi('ticket', 'Ticket médio', tk.qtd ? _finBrl(tk.valor) : '—', _finResVar(tk.valor, tkA && tkA.valor, !!tkA && tk.qtd > 0))}
+        ${kpi('receita', 'Receita', _finBrl(L.receitas), _finResVar(L.receitas, A && A.receitas, !!A))}
+    </div></div>`;
+}
+
+function finResMudar() {
+    const v = id => (document.getElementById(id) || {}).value;
+    const novo = v('res-periodo') || 'mes';
+    if (novo === 'custom' && _finResPeriodo !== 'custom' && !_finResDe) { const h = hojeLocal(); _finResDe = h.slice(0, 8) + '01'; _finResAte = h; }
+    _finResPeriodo = novo;
+    if (novo === 'custom') { _finResDe = v('res-de') || _finResDe; _finResAte = v('res-ate') || _finResAte; }
+    _finResRegime = v('res-regime') === 'competencia' ? 'competencia' : 'caixa';
+    renderFinResumo();
+}
+
+function _finResAvisosHtml(hoje) {
+    const lim = _finSomaDias(hoje, 7);
+    const itens = [];
+    [['pagar', db.contas_pagar], ['receber', db.contas_receber]].forEach(([lado, lista]) => {
+        (lista || []).forEach(r => {
+            const sit = FinCatCore.situacao(r, hoje);
+            const d = String(r.data_vencimento || '').slice(0, 10);
+            if (sit === 'vencido' || (sit === 'aberto' && d && d <= lim)) itens.push({ lado, r, sit, d });
+        });
+    });
+    const resumo = lado => {
+        const v = itens.filter(i => i.lado === lado && i.sit === 'vencido');
+        const total = v.reduce((s, i) => s + (Number(i.r.valor) || 0), 0);
+        const nome = lado === 'pagar' ? 'a pagar' : 'a receber';
+        return v.length ? `<div class="res-aviso-resumo res-aviso-${lado}">${v.length} ${v.length === 1 ? 'conta' : 'contas'} ${nome} ${v.length === 1 ? 'vencida' : 'vencidas'} · ${_finBrl(total)}</div>` : '';
+    };
+    itens.sort((a, b) => (a.sit === b.sit ? a.d.localeCompare(b.d) : (a.sit === 'vencido' ? -1 : 1)));
+    const quando = i => { const n = _finDiasEntre(i.d, hoje); return i.sit === 'vencido' ? `há ${n} ${n === 1 ? 'dia' : 'dias'}` : (n === 0 ? 'vence hoje' : `vence em ${-n} ${n === -1 ? 'dia' : 'dias'}`); };
+    const lista = itens.map(i => `<button type="button" class="res-aviso-item ${i.sit === 'vencido' ? 'res-aviso-venc' : ''}" data-tipo="${i.lado === 'pagar' ? 'cp' : 'cr'}" data-id="${escapeHtml(String(i.r.id))}" onclick="abrirLancamentoNaLista('${i.lado === 'pagar' ? 'cp' : 'cr'}', ${_finIdJs(i.r.id)})">
+        <span class="res-aviso-lado">${i.lado === 'pagar' ? 'Pagar' : 'Receber'}</span>
+        <span class="res-aviso-pessoa">${escapeHtml(_finPessoaDe(i.r) || i.r.descricao || '—')}</span>
+        <strong>${_finBrl(i.r.valor)}</strong>
+        <span class="lanc-sub">${_finDataBR(i.d)} · ${quando(i)}</span></button>`).join('');
+    return `<div class="card res-card" id="res-avisos"><h3>Avisos</h3>${resumo('pagar')}${resumo('receber')}
+        ${lista || '<p class="lanc-sub">Nenhuma conta vencida nem vencendo nos próximos 7 dias.</p>'}</div>`;
+}
+
+// Abre o lancamento na tela Lancamentos: lado certo, lista sem periodo, filtrada pela pessoa, linha destacada.
+function abrirLancamentoNaLista(tipo, id) {
+    const lado = tipo === 'cp' ? 'pagar' : 'receber';
+    mostrarTabFinanceiro('lancamentos', lado);
+    const reg = _finListaLado(lado).find(r => String(r.id) === String(id));
+    const el = x => document.getElementById(x);
+    ['lanc-busca', 'lanc-status', 'lanc-pessoa', 'lanc-categoria', 'lanc-conta'].forEach(k => { if (el(k)) el(k).value = ''; });
+    el('lanc-de').value = ''; el('lanc-ate').value = '';
+    if (reg && el('lanc-pessoa')) { const n = _finNorm(_finPessoaDe(reg)); if (n && [...el('lanc-pessoa').options].some(o => o.value === n)) el('lanc-pessoa').value = n; }
+    _finLancDestaque = reg ? String(reg.id) : null;
+    renderFinLancLista(true);
+    const tr = document.querySelector('#tb-contas-' + lado + ' tr.lanc-destaque');
+    if (tr && tr.scrollIntoView) tr.scrollIntoView({ block: 'center' });
+}
+
+function renderFinResumo() {
+    const alvo = document.getElementById('fin-resumo-conteudo');
+    if (!alvo) return;
+    atualizarStatusVencimentos();
+    const hoje = hojeLocal();
+    alvo.innerHTML = _finResContasHtml(hoje) + _finResIndicadoresHtml(hoje) + _finResAvisosHtml(hoje);
+}
+
 // ===================== LANCAMENTOS (Contas a pagar | Contas a receber) =====================
 // Lados do Lancamentos e a permissao de cada um ('fixas' = Recorrencias).
 const FIN_LADOS = { pagar: 'financeiro.pagar', receber: 'financeiro.receber', fixas: 'financeiro.fixas' };
@@ -32,6 +183,7 @@ let _finLado = '';
 let finLancLado = 'receber';   // ultimo lado aberto entre 'pagar' e 'receber'
 let _finLancPag = 0;
 let _finLancIniciado = false;
+let _finLancDestaque = null;   // id da linha destacada (veio de um aviso do Resumo)
 
 const _finNorm = s => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 const _finIdJs = id => typeof id === 'number' ? String(id) : JSON.stringify(String(id));
@@ -52,6 +204,7 @@ function _finNomeCategoria(id) {
 // Ponto de entrada (Lancamentos). `lado`: 'pagar' | 'receber' | 'fixas'; sem ele, o ultimo
 // aberto (ou o primeiro que o usuario pode ver).
 function renderFinLancamentos(lado) {
+    _finLancDestaque = null;
     const permitidos = Object.keys(FIN_LADOS).filter(l => temAcesso(FIN_LADOS[l], 'visualizar'));
     if (!permitidos.length) return;
     if (!permitidos.includes(lado)) lado = permitidos.includes(_finLado) ? _finLado : permitidos[0];
@@ -189,7 +342,7 @@ function renderFinLancLista(zerarPagina) {
             const rec = (r.recorrente || r.despesa_fixa_id) ? ' <span class="fin-badge fin-badge-gray" title="Recorrência">🔁</span>' : '';
             const cancPed = r.pedido_cancelado ? ' <span class="fin-badge fin-badge-red" title="O pedido foi cancelado ou voltou para Orçamento depois desta comissão ser paga">pedido cancelado — revisar</span>' : '';
             const cat = _finNomeCategoria(r.categoria_id);
-            return `<tr class="${sit === 'vencido' ? 'fin-atrasado' : ''}">
+            return `<tr data-id="${escapeHtml(String(r.id))}" class="${sit === 'vencido' ? 'fin-atrasado' : ''}${_finLancDestaque === String(r.id) ? ' lanc-destaque' : ''}">
                 <td>${_fmtVenc(r.data_vencimento)}</td>
                 <td>${escapeHtml(r.descricao || '')}${pedido}${rec}${cancPed}</td>
                 <td>${escapeHtml(_finPessoaDe(r)) || '—'}</td>

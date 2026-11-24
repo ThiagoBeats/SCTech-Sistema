@@ -1196,7 +1196,19 @@ Na janela do carrinho:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 4 abas: Resumo | Lançamentos | Fluxo de caixa | DRE
-  - Resumo ainda em construção; Fluxo de caixa mostra o Extrato de sempre (versão provisória) e DRE mostra
+  - Resumo: cartão "Minhas contas" (uma linha por conta ativa: selo redondo com a sigla e a cor do banco, nome,
+    "Conta corrente · Ag 0001 · CC 12345-6", saldo de hoje, etiqueta "Manual" e "Atualizado em DD/MM" ou "Sem
+    movimentos"; linha "Saldo total"; botão "+ Conectar conta", que abre o cadastro de conta em Configurar Empresa
+    com a nota de que a conexão automática com o banco (Open Finance) chega com o servidor). Indicadores Lucro
+    líquido, Margem líquida, Ticket médio e Receita, com Período (Este mês, Mês passado, Trimestre, Ano,
+    Personalizado) e Regime (Caixa ou Competência), comparados ao período anterior ("↑ 12%" verde, "↓ 8%"
+    vermelho ou "sem base de comparação"; margem com receita zero mostra "—"). Cartão "Avisos": quantas contas a
+    pagar e a receber estão vencidas (e o total), mais a lista das vencidas e das que vencem em até 7 dias
+    ("há N dias", "vence em N dias", "vence hoje"); clicar abre o lançamento em Lançamentos, no lado certo, com a
+    linha destacada. Calculado na hora: some ao pagar, receber ou cancelar.
+  - Cadastro de conta (Configurar Empresa › Preferências › Contas): campos novos Banco (lista dos mais comuns +
+    Outro), Agência, Número da conta e Tipo da conta (corrente, poupança, caixa, cartão).
+  - Fluxo de caixa mostra o Extrato de sempre (versão provisória) e DRE mostra
     "Em construção: chega na próxima atualização."
   - Lançamentos: seletor Contas a pagar | Contas a receber (| Recorrências, para quem tem essa permissão), cada
     lado com a permissão de hoje (visualizar para ver; completo para criar, editar, dar baixa, cancelar, excluir).

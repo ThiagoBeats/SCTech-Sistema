@@ -815,6 +815,23 @@ const CARTAO_CAMPOS_CFG = [
     ['parcelado_taxa', 'Parcelado: taxa %'],
     ['antecipacao_taxa', 'Antecipar: taxa % extra'], ['antecipacao_dias', 'Antecipar: dias p/ cair']
 ];
+// Bancos mais comuns (codigo COMPE) para o selo redondo da conta: sigla e cor aproximada da marca.
+const FIN_BANCOS = [
+    { codigo: '001', sigla: 'BB', nome: 'Banco do Brasil', cor: '#F8D117', texto: '#1B1B1B' },
+    { codigo: '104', sigla: 'CEF', nome: 'Caixa', cor: '#005CA9', texto: '#FFFFFF' },
+    { codigo: '237', sigla: 'BRA', nome: 'Bradesco', cor: '#CC092F', texto: '#FFFFFF' },
+    { codigo: '341', sigla: 'ITAÚ', nome: 'Itaú', cor: '#EC7000', texto: '#FFFFFF' },
+    { codigo: '033', sigla: 'SAN', nome: 'Santander', cor: '#EC0000', texto: '#FFFFFF' },
+    { codigo: '077', sigla: 'INTER', nome: 'Inter', cor: '#FF7A00', texto: '#FFFFFF' },
+    { codigo: '260', sigla: 'NU', nome: 'Nubank', cor: '#820AD1', texto: '#FFFFFF' },
+    { codigo: '336', sigla: 'C6', nome: 'C6 Bank', cor: '#242424', texto: '#FFFFFF' },
+    { codigo: '756', sigla: 'SICOOB', nome: 'Sicoob', cor: '#003641', texto: '#FFFFFF' },
+    { codigo: '748', sigla: 'SICREDI', nome: 'Sicredi', cor: '#3FA110', texto: '#FFFFFF' },
+    { codigo: '290', sigla: 'PAG', nome: 'PagBank', cor: '#41B04F', texto: '#FFFFFF' },
+    { codigo: '323', sigla: 'MP', nome: 'Mercado Pago', cor: '#00B1EA', texto: '#FFFFFF' },
+    { codigo: '000', sigla: '—', nome: 'Outro', cor: '#8F8F8F', texto: '#FFFFFF' }
+];
+const TIPOS_CONTA_BANCARIA = [['corrente', 'Conta corrente'], ['poupanca', 'Poupança'], ['caixa', 'Caixa'], ['cartao', 'Cartão']];
 const TIPOS_CONTA_CFG = [['caixa', 'Caixa (dinheiro vivo)'], ['banco', 'Banco'], ['maquininha', 'Maquininha de cartão']];
 const TIPOS_MEIO_CFG = [['dinheiro', 'Dinheiro'], ['pix', 'PIX'], ['transferencia', 'Transferência'], ['boleto', 'Boleto'],
     ['cartao_debito', 'Cartão de débito'], ['cartao_credito', 'Cartão de crédito'], ['outro', 'Outro']];
@@ -869,7 +886,9 @@ const _meiosSemContaCfg = new Set();
 function _contaParaRascunho(c) {
     const r = { id: c.id, nome: c.nome || '', tipo: c.tipo, ativo: c.ativo !== false,
         saldo: String(c.saldo_inicial == null ? 0 : c.saldo_inicial).replace('.', ','),
-        data: c.data_saldo_inicial || hojeLocal() };
+        data: c.data_saldo_inicial || hojeLocal(),
+        banco: c.banco == null ? '' : String(c.banco), agencia: c.agencia || '', numero_conta: c.numero_conta || '',
+        tipo_conta: c.tipo_conta || _finTipoContaPadrao(c.tipo) };
     if (c.tipo === 'maquininha') {
         r.cartao = {};
         CARTAO_CAMPOS_CFG.forEach(([k]) => {
@@ -902,6 +921,23 @@ function renderContasCfg() {
                         oninput="_contasRascunho[${i}].data = this.value"></div>
                 <button type="button" class="btn btn-outline btn-sm btn-danger" onclick="removerContaCfg(${i})" title="Remover conta">✕</button>
             </div>
+            <div class="grid conta-banco" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:8px">
+                <div class="form-group" style="margin:0"><label>Banco</label>
+                    <select class="conta-banco-sel" onchange="_contasRascunho[${i}].banco = this.value">
+                        <option value="">Não informado</option>
+                        ${FIN_BANCOS.map(b => `<option value="${b.codigo}"${c.banco === b.codigo ? ' selected' : ''}>${b.codigo === '000' ? 'Outro' : b.codigo + ' · ' + escapeHtml(b.nome)}</option>`).join('')}
+                    </select></div>
+                <div class="form-group" style="margin:0"><label>Agência</label>
+                    <input type="text" class="conta-agencia" value="${escapeHtml(c.agencia)}" maxlength="10" placeholder="0001"
+                        oninput="_contasRascunho[${i}].agencia = this.value"></div>
+                <div class="form-group" style="margin:0"><label>Número da conta</label>
+                    <input type="text" class="conta-numero" value="${escapeHtml(c.numero_conta)}" maxlength="20" placeholder="12345-6"
+                        oninput="_contasRascunho[${i}].numero_conta = this.value"></div>
+                <div class="form-group" style="margin:0"><label>Tipo da conta</label>
+                    <select class="conta-tipo-conta" onchange="_contasRascunho[${i}].tipo_conta = this.value">
+                        ${TIPOS_CONTA_BANCARIA.map(([v, l]) => `<option value="${v}"${c.tipo_conta === v ? ' selected' : ''}>${l}</option>`).join('')}
+                    </select></div>
+            </div>
             ${c.ativo === false ? `<div class="conta-desativada" style="margin-top:8px;font-size:12px;color:var(--muted)">Conta desativada (clique em Salvar contas para valer): não entra nos saldos nem na previsão; o histórico continua no Extrato.
                 <button type="button" class="btn btn-outline btn-sm" onclick="reativarContaCfg(${i})">Reativar</button></div>` : ''}
             ${c.tipo === 'maquininha' ? `
@@ -915,14 +951,33 @@ function renderContasCfg() {
 }
 
 function adicionarContaCfg() {
-    _contasRascunho.push({ id: null, nome: '', tipo: 'caixa', ativo: true, saldo: '0', data: hojeLocal() });
+    _contasRascunho.push({ id: null, nome: '', tipo: 'caixa', ativo: true, saldo: '0', data: hojeLocal(),
+        banco: '', agencia: '', numero_conta: '', tipo_conta: 'caixa' });
     renderContasCfg();
     const inputs = document.querySelectorAll('#emp-contas .conta-nome');
     inputs[inputs.length - 1]?.focus();
 }
 
+const FIN_NOTA_CONECTAR = 'A conexão automática com o banco (Open Finance) chega quando o sistema rodar no servidor da empresa.';
+// "+ Conectar conta" do Resumo: abre o cadastro de conta (Configurar Empresa) com uma conta de banco nova.
+function abrirConectarConta() {
+    mostrarTabEmpresa('preferencias');
+    if (!_contasRascunho) _contasRascunho = getContasFin().map(_contaParaRascunho);
+    const vazia = _contasRascunho.find(c => c.id == null && !(c.nome || '').trim());
+    if (!vazia) _contasRascunho.push({ id: null, nome: '', tipo: 'banco', ativo: true, saldo: '0', data: hojeLocal(), banco: '', agencia: '', numero_conta: '', tipo_conta: 'corrente' });
+    renderContasCfg();
+    const nota = document.getElementById('emp-conectar-nota');
+    if (nota) { nota.textContent = FIN_NOTA_CONECTAR; nota.style.display = ''; }
+    const card = document.getElementById('emp-contas-card');
+    if (card && card.scrollIntoView) card.scrollIntoView({ block: 'start' });
+    const nomes = document.querySelectorAll('#emp-contas .conta-nome');
+    if (nomes.length) nomes[nomes.length - 1].focus();
+}
+
 function mudarTipoContaCfg(i, tipo) {
     const c = _contasRascunho[i];
+    // O tipo da conta acompanha o uso enquanto era o padrao do uso anterior.
+    if (c.tipo_conta === _finTipoContaPadrao(c.tipo)) c.tipo_conta = _finTipoContaPadrao(tipo);
     c.tipo = tipo;
     if (tipo === 'maquininha' && !c.cartao) {
         c.cartao = {};
@@ -1009,11 +1064,14 @@ async function salvarContasCfg() {
         // continuam os que estavam; conta nova ganha os padrao. Mudou o uso (caixa/banco/maquininha)
         // e o tipo da conta era o padrao do uso antigo: acompanha.
         const antiga = c.id != null ? _contaFinPorId(c.id) : null;
-        ['banco', 'agencia', 'numero_conta', 'tipo_conta', 'conexao', 'saldo_atualizado_em'].forEach(k => {
+        ['conexao', 'saldo_atualizado_em'].forEach(k => {
             if (antiga && antiga[k] !== undefined) conta[k] = antiga[k];
         });
+        conta.banco = c.banco ? String(c.banco) : null;
+        conta.agencia = (c.agencia || '').trim();
+        conta.numero_conta = (c.numero_conta || '').trim();
+        if (c.tipo_conta) conta.tipo_conta = c.tipo_conta;
         Object.assign(conta, _finCamposContaPadrao(conta, db.movimentos_fin));
-        if (antiga && antiga.tipo !== conta.tipo && antiga.tipo_conta === _finTipoContaPadrao(antiga.tipo)) conta.tipo_conta = _finTipoContaPadrao(conta.tipo);
         return conta;
     });
     db.contas_fin = contas;
