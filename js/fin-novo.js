@@ -2,6 +2,7 @@
 // Telas do Financeiro novo (Resumo, Lancamentos, Fluxo de caixa, DRE). Carregado depois de app.js.
 // Resumo (Task 6) e Lancamentos (Task 5) ainda nao tem a tela nova: ate la, o Resumo mostra o aviso
 // e Lancamentos mostra as listas de sempre (Contas a pagar, Contas a receber, Recorrencias).
+// O Fluxo de caixa mostra o Extrato de sempre, com o aviso de versao provisoria.
 
 const FIN_EM_CONSTRUCAO = 'Em construção: chega na próxima atualização.';
 
@@ -15,8 +16,9 @@ function renderFinResumo() {
     _finEmConstrucao('fin-resumo-conteudo', 'Resumo');
 }
 
+// Fluxo de caixa provisorio: o Extrato de sempre (transferencia, saldo por conta), ate a entrega do Fluxo novo.
 function renderFinFluxoProvisorio() {
-    _finEmConstrucao('fin-fluxo-conteudo', 'Fluxo de caixa');
+    renderExtrato();
 }
 
 function renderFinDreProvisorio() {

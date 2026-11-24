@@ -34,14 +34,13 @@ const kpi2 = (page, txt) => page.locator('#fin-kpis2 .fin-kpi', { hasText: txt }
 const kpi1 = (page, rotulo) => page.locator('#fin-kpis .fin-kpi').filter({ has: page.locator('.fin-kpi-label', { hasText: new RegExp('^' + rotulo + '$') }) });
 
 // ---- Extrato ----
-// Desativado: ver FIN_RECURSOS_ANTIGOS
-test.skip('Extrato avisa os recebimentos sem conta do mes mostrado', async ({ page }) => {
+test('Extrato avisa os recebimentos sem conta do mes mostrado', async ({ page }) => {
     await abrir(page, {
         sc_contas_fin: [BANCO],
         sc_cr: [crPago(1, 500, '2026-11-03'), crPago(2, 250, '2026-11-05'), crPago(3, 700, '2026-11-07'), crPago(4, 999, '2026-10-12')],
         sc_mov_fin: [mov(1, 10, '2026-11-07', 'entrada', 700, 'cr', 3, 'Pedido 3')]
     });
-    await page.locator('.fin-tab-btn[data-tab="extrato"]').click();
+    await page.locator('.fin-tab-btn[data-tab="fluxo"]').click();
     const aviso = page.locator('#extrato-aviso-sem-conta');
     await expect(aviso).toHaveText('2 recebimentos sem conta (R$ 750,00) não aparecem aqui');
     await page.fill('#extrato-mes', '2026-10');

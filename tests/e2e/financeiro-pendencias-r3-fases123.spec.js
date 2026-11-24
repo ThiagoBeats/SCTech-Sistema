@@ -266,14 +266,13 @@ test('cobranca: so visualizar nao ve Cobrar e a funcao recusa, sem abrir nada', 
 });
 
 // ============ Fase 1: excluir transferencia sem permissao ============
-// Desativado: ver FIN_RECURSOS_ANTIGOS
-test.skip('excluir transferencia sem permissao completa do Extrato: sem botao, a funcao recusa e os dois lados ficam', async ({ page }) => {
+test('excluir transferencia sem permissao completa do Extrato: sem botao, a funcao recusa e os dois lados ficam', async ({ page }) => {
     const mov = (id, conta, sentido, descricao) => ({ id, conta_id: conta, data: HOJE, sentido, valor: 40, origem: 'transferencia', origem_id: null, grupo_id: 777, descricao });
     const movs = [mov(20, 10, 'saida', 'Transferência para Banco'), mov(21, 11, 'entrada', 'Transferência de Caixa')];
     await entrar(page, BASE, { sc_contas_fin: CONTAS, sc_mov_fin: movs });
-    await soVisualizar(page, 'financeiro.extrato');
+    await soVisualizar(page, 'financeiro.fluxo');
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="extrato"]').click();
+    await page.locator('.fin-tab-btn[data-tab="fluxo"]').click();
     await expect(page.locator('#extrato-linhas .extrato-linha')).toHaveCount(2);
     await expect(page.locator('#extrato-linhas .extrato-excluir')).toHaveCount(0);
     await page.evaluate(() => { excluirTransferencia(777); });

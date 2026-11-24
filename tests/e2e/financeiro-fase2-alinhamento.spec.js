@@ -77,7 +77,7 @@ test.skip('mesmo mes: Visao Geral = Resultado do mes = Extrato (sem transferenci
 
     // Extrato do mesmo mes: as mesmas entradas e saidas, fora as transferencias.
     // O recebimento antigo sem movimento (2.000) nao passou por conta nenhuma, entao nao aparece no Extrato.
-    await page.locator('.fin-tab-btn[data-tab="extrato"]').click();
+    await page.locator('.fin-tab-btn[data-tab="fluxo"]').click();
     await page.fill('#extrato-mes', M);
     await page.locator('#extrato-mes').dispatchEvent('change');
     await expect(page.locator('#extrato-linhas tr.extrato-linha').first()).toBeVisible();

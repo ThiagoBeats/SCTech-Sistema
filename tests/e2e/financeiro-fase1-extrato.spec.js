@@ -29,12 +29,11 @@ const MOVS = [
 async function abrir(page, movs, extras) {
     await entrar(page, BASE, { sc_contas_fin: CONTAS, sc_mov_fin: movs || MOVS, ...extras });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="extrato"]').click();
+    await page.locator('.fin-tab-btn[data-tab="fluxo"]').click();
 }
 const txt = async (loc) => (await loc.innerText()).replace(/\s+/g, ' ');
 
-// Desativado: ver FIN_RECURSOS_ANTIGOS
-test.skip('extrato do mes com entradas e saidas e saldos', async ({ page }) => {
+test('extrato do mes com entradas e saidas e saldos', async ({ page }) => {
     await abrir(page);
     const rows = page.locator('#extrato-linhas .extrato-linha');
     await expect(rows).toHaveCount(3);
@@ -47,8 +46,7 @@ test.skip('extrato do mes com entradas e saidas e saldos', async ({ page }) => {
     await expect(page.locator('#extrato-linhas .extrato-linha.saida')).toHaveCount(1);
 });
 
-// Desativado: ver FIN_RECURSOS_ANTIGOS
-test.skip('filtro por conta', async ({ page }) => {
+test('filtro por conta', async ({ page }) => {
     await abrir(page);
     await page.locator('#extrato-conta').selectOption('11');
     await expect(page.locator('#extrato-linhas .extrato-linha')).toHaveCount(1);
@@ -56,8 +54,7 @@ test.skip('filtro por conta', async ({ page }) => {
     expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('300,00');
 });
 
-// Desativado: ver FIN_RECURSOS_ANTIGOS
-test.skip('cartao a cair aparece marcado', async ({ page }) => {
+test('cartao a cair aparece marcado', async ({ page }) => {
     const d = new Date();
     const proximo = iso(new Date(d.getFullYear(), d.getMonth() + 1, 15));
     await abrir(page, [...MOVS, mov(5, 10, proximo, 'entrada', 1000, 'Repasse do cartao')]);
@@ -81,8 +78,7 @@ test.skip('cartao a cair aparece marcado', async ({ page }) => {
     expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('150,00');
 });
 
-// Desativado: ver FIN_RECURSOS_ANTIGOS
-test.skip('transferir caixa para banco muda os dois saldos e nao o total', async ({ page }) => {
+test('transferir caixa para banco muda os dois saldos e nao o total', async ({ page }) => {
     await abrir(page);
     await page.locator('#extrato-btn-transferir').click();
     const m = page.locator('#transf-modal');
@@ -106,8 +102,7 @@ test.skip('transferir caixa para banco muda os dois saldos e nao o total', async
     expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('1.550,50');
 });
 
-// Desativado: ver FIN_RECURSOS_ANTIGOS
-test.skip('mesma conta de origem e destino e bloqueado dentro do modal', async ({ page }) => {
+test('mesma conta de origem e destino e bloqueado dentro do modal', async ({ page }) => {
     await abrir(page);
     await page.locator('#extrato-btn-transferir').click();
     const m = page.locator('#transf-modal');
@@ -126,8 +121,7 @@ test.skip('mesma conta de origem e destino e bloqueado dentro do modal', async (
     expect((await ler(page, 'sc_mov_fin')).filter(x => x.origem === 'transferencia')).toHaveLength(0);
 });
 
-// Desativado: ver FIN_RECURSOS_ANTIGOS
-test.skip('excluir transferencia remove os dois lados', async ({ page }) => {
+test('excluir transferencia remove os dois lados', async ({ page }) => {
     const t = [
         { id: 20, conta_id: 10, data: PRIMEIRO, sentido: 'saida', valor: 40, origem: 'transferencia', origem_id: null, grupo_id: 777, descricao: 'Transferência para Banco' },
         { id: 21, conta_id: 11, data: PRIMEIRO, sentido: 'entrada', valor: 40, origem: 'transferencia', origem_id: null, grupo_id: 777, descricao: 'Transferência de Caixa' }
@@ -141,23 +135,21 @@ test.skip('excluir transferencia remove os dois lados', async ({ page }) => {
     await expect(page.locator('#extrato-linhas .extrato-linha')).toHaveCount(3);
 });
 
-// Desativado: ver FIN_RECURSOS_ANTIGOS
-test.skip('sem extrato completo nao ve Transferir', async ({ page }) => {
+test('sem extrato completo nao ve Transferir', async ({ page }) => {
     await entrar(page, BASE, { sc_contas_fin: CONTAS, sc_mov_fin: MOVS });
     await page.evaluate(() => {
         const u = JSON.parse(localStorage.getItem('sc_usr'));
         u[0].papel_id = 4;
-        u[0].permissoes_extras = { 'financeiro.extrato': { nivel: 'visualizar', acoes_restritas: [] } };
+        u[0].permissoes_extras = { 'financeiro.fluxo': { nivel: 'visualizar', acoes_restritas: [] } };
         localStorage.setItem('sc_usr', JSON.stringify(u));
     });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="extrato"]').click();
+    await page.locator('.fin-tab-btn[data-tab="fluxo"]').click();
     await expect(page.locator('#extrato-linhas .extrato-linha')).toHaveCount(3);
     await expect(page.locator('#extrato-btn-transferir')).toBeHidden();
 });
 
-// Desativado: ver FIN_RECURSOS_ANTIGOS
-test.skip('transferir 1.000 (so ponto de milhar) move mil reais', async ({ page }) => {
+test('transferir 1.000 (so ponto de milhar) move mil reais', async ({ page }) => {
     await abrir(page);
     await page.locator('#extrato-btn-transferir').click();
     const m = page.locator('#transf-modal');

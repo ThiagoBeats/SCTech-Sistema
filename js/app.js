@@ -1708,11 +1708,11 @@ function salvarERecarregar(msg = 'Salvo com sucesso!', { relancarErro = false } 
 // Ligar de novo = trocar para true.
 const FIN_RECURSOS_ANTIGOS = { hoje: false, visaoGeral: false, resultado: false, fechamento: false, simulador: false, drePedido: false, extrato: false };
 // Abas do Financeiro e a permissao de cada uma (lista = basta uma delas). Depois das 4 novas vem as antigas.
-const FIN_TAB_MODULO = { resumo: 'financeiro.resumo', lancamentos: ['financeiro.pagar', 'financeiro.receber'], fluxo: 'financeiro.fluxo', dre: 'financeiro.dre',
+const FIN_TAB_MODULO = { resumo: 'financeiro.resumo', lancamentos: ['financeiro.pagar', 'financeiro.receber', 'financeiro.fixas'], fluxo: 'financeiro.fluxo', dre: 'financeiro.dre',
     dashboard: 'financeiro.dashboard', receber: 'financeiro.receber', pagar: 'financeiro.pagar', fixas: 'financeiro.fixas', drepedido: 'financeiro.dre', hoje: 'financeiro.hoje', extrato: 'financeiro.extrato', resultado: 'financeiro.resultado', simulador: 'financeiro.simulador' };
 const FIN_ABAS_NOVAS = ['resumo', 'lancamentos', 'fluxo', 'dre'];
 // Aba antiga -> recurso (em FIN_RECURSOS_ANTIGOS) que a liga.
-const FIN_ABA_ANTIGA_RECURSO = { hoje: 'hoje', dashboard: 'visaoGeral', resultado: 'resultado', simulador: 'simulador', drepedido: 'drePedido', extrato: 'extrato' };
+const FIN_ABA_ANTIGA_RECURSO = { hoje: 'hoje', dashboard: 'visaoGeral', resultado: 'resultado', simulador: 'simulador', drepedido: 'drePedido' };
 // Aba pedida (link antigo, sino, atalho) -> aba que existe hoje. Contas a receber/pagar/despesas fixas
 // agora sao do Lancamentos (com o lado certo); as telas antigas desligadas caem no Resumo ou no Fluxo.
 function finAbaDestino(tab) {
@@ -1720,7 +1720,7 @@ function finAbaDestino(tab) {
     if (tab === 'receber' || tab === 'pagar' || tab === 'fixas') return { tab: 'lancamentos', lado: tab };
     const rec = FIN_ABA_ANTIGA_RECURSO[tab];
     if (rec && FIN_RECURSOS_ANTIGOS[rec]) return { tab };
-    if (tab === 'extrato') return { tab: 'fluxo' };
+    if (tab === 'extrato') return { tab: 'fluxo' };   // o Extrato e o Fluxo de caixa provisorio
     return { tab: 'resumo' };
 }
 // Permissao de uma aba: texto ou lista (basta uma).
@@ -4812,9 +4812,7 @@ Notif.registrar('estoque-minimo', () => {
 // clicar abre essa aba.
 Notif.registrar('financeiro', () => {
     if (!temAcessoAlgumaSub('financeiro', 'visualizar')) return [];
-    // Vencimentos misturam receber e pagar: so quem ve os dois lados.
-    const veAlerta = a => a.aba === 'lancamentos' ? ['financeiro.pagar', 'financeiro.receber'].every(m => temAcesso(m, 'visualizar')) : finModuloVisivel(FIN_TAB_MODULO[a.aba] || 'financeiro');
-    return finAlertasCalcular(hojeLocal()).filter(veAlerta).map(a => ({
+    return finAlertasCalcular(hojeLocal()).filter(a => finModuloVisivel(FIN_TAB_MODULO[a.aba] || 'financeiro')).map(a => ({
         chave: 'fin:' + a.id, icone: a.icone, cor: a.cor === 'warning' ? 'warn' : a.cor, urgente: a.cor === 'danger',
         href: 'financeiro.html?aba=' + a.aba, titulo: '', texto: a.html }));
 });
@@ -13968,11 +13966,13 @@ document.addEventListener('DOMContentLoaded', () => {
         renderAvisoRevisaoFinanceiro();
         // So as 4 abas novas (e as antigas cujo recurso foi religado) aparecem, conforme a permissao.
         _finMontarAbasAntigas();
-        const abasVisiveis = Object.keys(FIN_TAB_MODULO).filter(finAbaVisivel);
+        const abasVisiveis = Object.keys(FIN_TAB_MODULO).filter(t => finAbaVisivel(t) && (FIN_ABAS_NOVAS.includes(t) || FIN_ABA_ANTIGA_RECURSO[t]));
         document.querySelectorAll('.fin-tab-btn').forEach(b => {
             b.style.setProperty('display', finAbaVisivel(b.dataset.tab) ? '' : 'none');
         });
-        const abaInicial = FIN_ABAS_NOVAS.find(t => abasVisiveis.includes(t)) || abasVisiveis[0] || 'resumo';
+        // Sem nenhuma aba permitida: mesmo comportamento de quem nao tem acesso ao Financeiro.
+        if (!abasVisiveis.length) { window.location.replace('index.html'); return; }
+        const abaInicial = FIN_ABAS_NOVAS.find(t => abasVisiveis.includes(t)) || abasVisiveis[0];
         mostrarTabFinanceiro(abaInicial);
         lembrarAbaAoRecarregar('financeiro', () => _curTabFin, mostrarTabFinanceiro, t => abasVisiveis.some(x => x === t));
         // Link de um alerta do sino/card (financeiro.html?aba=receber) ou link antigo (?tab=hoje, #hoje):
@@ -13984,7 +13984,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (abasVisiveis.includes(dest.tab)) mostrarTabFinanceiro(dest.tab, dest.lado);
         }
         // Usou o link: tira ?aba= do endereco, senao ele ganharia da aba lembrada no F5.
-        if (abaLink) { try { const u = new URL(window.location.href); ['aba', 'tab', 'view'].forEach(k => u.searchParams.delete(k)); history.replaceState(null, '', u.pathname + u.search); } catch (e) {} }
+        if (abaLink) { try { const u = new URL(window.location.href); ['aba', 'tab', 'view'].forEach(k => u.searchParams.delete(k)); history.replaceState(null, '', u.pathname + u.search + u.hash); } catch (e) {} }
         if (!temAcesso('financeiro.pagar', 'completo')) document.getElementById('cp-toolbar')?.style.setProperty('display', 'none');
         if (!temAcesso('financeiro.fixas', 'completo')) document.getElementById('df-form-card')?.style.setProperty('display', 'none');
     }
@@ -16717,7 +16717,7 @@ function preencherCategoriasFinanceiro() {
 }
 
 // Botoes das telas antigas religadas em FIN_RECURSOS_ANTIGOS (desligadas, nem existem na barra).
-const _FIN_ROTULO_ANTIGA = { hoje: '☀️ Hoje', dashboard: '📊 Visão Geral', resultado: '📅 Resultado do mês', simulador: '🧮 Simular compra', drepedido: '📈 DRE por Pedido', extrato: '📒 Extrato' };
+const _FIN_ROTULO_ANTIGA = { hoje: '☀️ Hoje', dashboard: '📊 Visão Geral', resultado: '📅 Resultado do mês', simulador: '🧮 Simular compra', drepedido: '📈 DRE por Pedido' };
 function _finMontarAbasAntigas() {
     const nav = document.querySelector('.tab-nav');
     if (!nav) return;
@@ -16749,7 +16749,6 @@ function mostrarTabFinanceiro(tab, lado) {
     else if (tab === 'dre')     renderFinDreProvisorio();
     else if (tab === 'dashboard') renderDashboardFinanceiro();
     else if (tab === 'drepedido') renderDRE();
-    else if (tab === 'extrato') renderExtrato();
     else if (tab === 'hoje')    renderHoje();
     else if (tab === 'resultado') renderResultadoMes(_resMesAtual);
     else if (tab === 'simulador') renderSimulador();
@@ -17147,6 +17146,7 @@ function renderFechamentoCard(mes) {
     const el = document.getElementById('res-fechamento');
     if (!el) return;
     const esconder = () => { el.style.display = 'none'; el.innerHTML = ''; };
+    if (!FIN_RECURSOS_ANTIGOS.fechamento) return esconder();
     if (typeof FechamentoCore === 'undefined' || !/^\d{4}-\d{2}$/.test(mes || '') || mes >= hojeLocal().slice(0, 7)) return esconder();
     const pode = temAcesso('financeiro.resultado', 'completo');
     const rot = FechamentoCore.rotuloMes(mes);
@@ -17175,6 +17175,7 @@ function _fechAtalho(tab) {
 
 // Passo a passo do fechamento (3 telas). Os valores digitados ficam em "linhas" ao trocar de tela.
 function abrirFechamentoMes(mes) {
+    if (!FIN_RECURSOS_ANTIGOS.fechamento) return;
     if (!temAcesso('financeiro.resultado', 'completo')) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
     if (typeof FechamentoCore === 'undefined' || !/^\d{4}-\d{2}$/.test(mes || '') || mes >= hojeLocal().slice(0, 7)) return;
     if (fechamentoDoMes(mes)) { verFechamentoMes(mes); return; }
@@ -17480,7 +17481,7 @@ function renderHoje() {
     }
     // Fechamento do mes anterior: lembrete de fechar, ou aviso se o mes fechado mudou depois.
     let avisoFech = '';
-    if (typeof FechamentoCore !== 'undefined' && temAcesso('financeiro.resultado', 'visualizar')) {
+    if (FIN_RECURSOS_ANTIGOS.fechamento && typeof FechamentoCore !== 'undefined' && temAcesso('financeiro.resultado', 'visualizar')) {
         const pode = temAcesso('financeiro.resultado', 'completo');
         const mesFech = FechamentoCore.mesParaFechar({ hoje, fechamentos: db.fechamentos_fin, temContas: todasContas.length > 0 });
         let linha = '';
@@ -17506,7 +17507,7 @@ function renderHoje() {
     // Lado direito: so com permissao de ver o Extrato.
     const lado = document.getElementById('hoje-lado');
     const grid = document.querySelector('#fin-hoje .hoje-grid');
-    const veLado = temAcesso('financeiro.extrato', 'visualizar');
+    const veLado = temAcesso('financeiro.fluxo', 'visualizar');
     if (lado) lado.classList.toggle('hoje-sem-lado', !veLado);
     if (grid) grid.classList.toggle('hoje-sem-lado-grid', !veLado);
     if (_chartHoje) { _chartHoje.destroy(); _chartHoje = null; }
@@ -17815,7 +17816,7 @@ function renderExtrato(opts) {
     selConta.value = _extratoFiltro.contaId;
     document.getElementById('extrato-mes').value = mes;
     const btn = document.getElementById('extrato-btn-transferir');
-    if (btn) btn.style.display = temAcesso('financeiro.extrato', 'completo') ? '' : 'none';
+    if (btn) btn.style.display = temAcesso('financeiro.fluxo', 'completo') ? '' : 'none';
 
     const brl = v => 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const [ano, m2] = mes.split('-').map(Number);
@@ -17867,7 +17868,7 @@ function renderExtrato(opts) {
         : semMov.qtd > 1 ? `${semMov.qtd} recebimentos sem conta (${brl(semMov.valor)}) não aparecem aqui` : '';
     avSem.style.display = semMov.qtd > 0 ? '' : 'none';
     const tb = document.getElementById('extrato-linhas');
-    const podeExcluir = temAcesso('financeiro.extrato', 'completo');
+    const podeExcluir = temAcesso('financeiro.fluxo', 'completo');
     if (!linhas.length) {
         tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;padding:16px">Nenhum movimento neste mês.</td></tr>';
         return;
@@ -17891,7 +17892,7 @@ function renderExtrato(opts) {
 // Transferencia entre contas: duas linhas (saida na origem, entrada no destino)
 // ligadas pelo mesmo grupo_id. Nao muda o total, so a distribuicao.
 async function abrirModalTransferencia() {
-    if (!await exigirPermissao('financeiro.extrato', 'completo')) return;
+    if (!await exigirPermissao('financeiro.fluxo', 'completo')) return;
     document.getElementById('transf-modal')?.remove();
     const contas = getContasFin().filter(c => c.ativo !== false);
     const opts = contas.map(c => `<option value="${escapeHtml(String(c.id))}">${escapeHtml(c.nome || '')}</option>`).join('');
@@ -17952,7 +17953,7 @@ async function abrirModalTransferencia() {
 }
 
 async function excluirTransferencia(grupoId) {
-    if (!await exigirPermissao('financeiro.extrato', 'completo')) return;
+    if (!await exigirPermissao('financeiro.fluxo', 'completo')) return;
     const lados = (db.movimentos_fin || []).filter(m => m.origem === 'transferencia' && m.grupo_id != null && String(m.grupo_id) === String(grupoId));
     if (!lados.length) return;
     if (!await showConfirm('Excluir esta transferência? Os dois lados saem do extrato e os saldos voltam ao que eram.', '🗑️', 'Excluir')) return;
@@ -17973,12 +17974,18 @@ function finAlertasCalcular(hojeStr) {
     // Conta pendente ja vencida conta como atrasada mesmo antes de a tela do Financeiro marcar o status.
     const atrasada = c => c.status === 'Atrasado' || (c.status === 'Pendente' && c.data_vencimento && c.data_vencimento < hojeStr);
 
+    // Vencimentos misturam os dois lados: cada lado so entra para quem pode ver aquela lista.
+    const veRec = temAcesso('financeiro.receber', 'visualizar'), vePag = temAcesso('financeiro.pagar', 'visualizar');
     if (alertaAtivo('fin_vencimento')) {
-        const venHojeRec = db.contas_receber.filter(cr=>cr.status==='Pendente'&&cr.data_vencimento===hojeStr);
-        const venHojePag = db.contas_pagar.filter(cp=>cp.status==='Pendente'&&cp.data_vencimento===hojeStr);
-        if (venHojeRec.length+venHojePag.length)
-            add('fin_vencimento','warning','⏰',`<strong>${venHojeRec.length+venHojePag.length} conta(s) vencem hoje</strong> — ${venHojeRec.length} a receber (R$ ${fmt(venHojeRec.reduce((s,x)=>s+x.valor,0))}) · ${venHojePag.length} a pagar (R$ ${fmt(venHojePag.reduce((s,x)=>s+x.valor,0))})`,
+        const venHojeRec = veRec ? db.contas_receber.filter(cr=>cr.status==='Pendente'&&cr.data_vencimento===hojeStr) : [];
+        const venHojePag = vePag ? db.contas_pagar.filter(cp=>cp.status==='Pendente'&&cp.data_vencimento===hojeStr) : [];
+        if (venHojeRec.length+venHojePag.length) {
+            const partes = [];
+            if (veRec) partes.push(`${venHojeRec.length} a receber (R$ ${fmt(venHojeRec.reduce((s,x)=>s+x.valor,0))})`);
+            if (vePag) partes.push(`${venHojePag.length} a pagar (R$ ${fmt(venHojePag.reduce((s,x)=>s+x.valor,0))})`);
+            add('fin_vencimento','warning','⏰',`<strong>${venHojeRec.length+venHojePag.length} conta(s) vencem hoje</strong> — ${partes.join(' · ')}`,
                 'lancamentos', 'venc-hoje:' + hojeStr + ':' + venHojeRec.map(x=>x.id).concat(venHojePag.map(x=>'p'+x.id)).join(','));
+        }
     }
 
     if (alertaAtivo('fin_atraso')) {
@@ -18021,15 +18028,15 @@ function finAlertasCalcular(hojeStr) {
 
     const em7 = new Date(hojeStr+'T00:00:00'); em7.setDate(em7.getDate()+7);
     const em7Str = dataLocal(em7.getTime());
-    const proxVenc = db.contas_receber.filter(cr=>finAberta(cr)&&cr.data_vencimento>hojeStr&&cr.data_vencimento<=em7Str).length
-                   + db.contas_pagar.filter(cp=>finAberta(cp)&&cp.data_vencimento>hojeStr&&cp.data_vencimento<=em7Str).length;
+    const proxVenc = (veRec ? db.contas_receber.filter(cr=>finAberta(cr)&&cr.data_vencimento>hojeStr&&cr.data_vencimento<=em7Str).length : 0)
+                   + (vePag ? db.contas_pagar.filter(cp=>finAberta(cp)&&cp.data_vencimento>hojeStr&&cp.data_vencimento<=em7Str).length : 0);
     if (alertaAtivo('fin_vencimento') && proxVenc>=3)
         add('fin_vencimento','info','📋',`<strong>${proxVenc} conta(s)</strong> vencem nos próximos 7 dias`, 'lancamentos', 'venc-7d:' + hojeStr + ':' + proxVenc);
 
     const _ent7 = db.contas_receber.filter(cr=>finAberta(cr)&&cr.data_vencimento>=hojeStr&&cr.data_vencimento<=em7Str).reduce((s,cr)=>s+cr.valor,0);
     const _sai7 = db.contas_pagar.filter(cp=>finAberta(cp)&&cp.data_vencimento>=hojeStr&&cp.data_vencimento<=em7Str).reduce((s,cp)=>s+cp.valor,0);
     if (alertaAtivo('fin_gap') && _sai7 > _ent7 && _sai7 > 0)
-        add('fin_gap','danger','⚠️',`Gap de caixa: saídas superam entradas nos próximos 7 dias em <strong>R$ ${fmt(_sai7-_ent7)}</strong> (entradas: R$ ${fmt(_ent7)} · saídas: R$ ${fmt(_sai7)})`, 'resumo', 'gap:' + hojeStr);
+        add('fin_gap','danger','⚠️',`Gap de caixa: saídas superam entradas nos próximos 7 dias em <strong>R$ ${fmt(_sai7-_ent7)}</strong> (entradas: R$ ${fmt(_ent7)} · saídas: R$ ${fmt(_sai7)})`, 'fluxo', 'gap:' + hojeStr);
     return out;
 }
 
@@ -18497,7 +18504,7 @@ async function cobrarNoWhatsApp(crId) {
     cr.ultima_cobranca = hojeLocal();
     syncDB();
     renderContasReceber();
-    if (document.getElementById('hoje-tarefas')) renderHoje();
+    if (FIN_RECURSOS_ANTIGOS.hoje && document.getElementById('hoje-tarefas')) renderHoje();
 }
 
 function renderContasPagar() {

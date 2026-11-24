@@ -31,13 +31,46 @@ test('Administrador ve so 4 abas e nenhuma das telas antigas', async ({ page }) 
     await expect(page.locator('.fin-tab-btn[data-tab="resumo"]')).toHaveClass(/active/);
 });
 
-test('Fluxo de caixa e DRE mostram Em construcao', async ({ page }) => {
+test('Fluxo de caixa mostra o Extrato provisorio e DRE mostra Em construcao', async ({ page }) => {
     await abrir(page);
     await page.locator('.fin-tab-btn[data-tab="fluxo"]').click();
-    await expect(page.locator('#fin-fluxo')).toContainText('Em construção');
+    await expect(page.locator('#fin-fluxo')).toContainText('Versão provisória: o novo Fluxo de caixa chega na próxima atualização.');
+    await expect(page.locator('#extrato-linhas')).toBeAttached();
+    await expect(page.locator('#extrato-btn-transferir')).toBeVisible();
     await page.locator('.fin-tab-btn[data-tab="dre"]').click();
     await expect(page.locator('#fin-dre')).toContainText('Em construção');
     await expect(page.locator('#fin-fluxo')).toBeHidden();
+});
+
+test('usuario so com Recorrencias ve Lancamentos aberto em Recorrencias', async ({ page }) => {
+    const papel = { id: 23, nome: 'So Fixas', permissoes: { inicio: N('completo'), financeiro: N('sem_acesso'), 'financeiro.fixas': N('completo') } };
+    await abrir(page, { sc_usr: USU(23) }, 'index.html', papel);
+    await comoUsuario(page, 2, 'vend@sctech.local');
+    await page.goto(BASE + '/financeiro.html');
+    await expect(abas(page)).toHaveText(['Lançamentos']);
+    await expect(page.locator('.fin-lado-btn:visible')).toHaveText(['Recorrências']);
+    await expect(page.locator('#fin-fixas')).toBeVisible();
+});
+
+test('usuario sem nenhuma aba do Financeiro volta para a tela inicial', async ({ page }) => {
+    const papel = { id: 24, nome: 'So Simulador', permissoes: { inicio: N('completo'), financeiro: N('sem_acesso'), 'financeiro.simulador': N('completo') } };
+    await abrir(page, { sc_usr: USU(24) }, 'index.html', papel);
+    await comoUsuario(page, 2, 'vend@sctech.local');
+    await page.goto(BASE + '/financeiro.html');
+    await expect(page).toHaveURL(/index\.html/);
+});
+
+test('alertas de vencimento por lado: so receber ve so o lado receber', async ({ page }) => {
+    const cr = { id: 1, cliente_nome: 'Cliente Hoje', valor: 100, status: 'Pendente', data_vencimento: '2026-11-24' };
+    const cp = { id: 2, descricao: 'Fornecedor', valor: 900, status: 'Pendente', data_vencimento: '2026-11-24' };
+    await abrir(page, { sc_cr: [cr], sc_cp: [cp], sc_usr: USU(3) }, 'index.html');
+    await comoUsuario(page, 2, 'vend@sctech.local');
+    await page.goto(BASE + '/index.html');
+    const t = await page.evaluate(() => finAlertasCalcular(hojeLocal()).filter(a => a.tipo === 'fin_vencimento').map(a => a.html));
+    expect(t).toHaveLength(1);
+    expect(t[0]).toContain('1 conta(s) vencem hoje');
+    expect(t[0]).toContain('1 a receber');
+    expect(t[0]).not.toContain('a pagar');
 });
 
 test('Lancamentos tem Contas a pagar, Contas a receber e Recorrencias', async ({ page }) => {
@@ -126,13 +159,13 @@ test('editor de papeis lista as 6 subpermissoes novas do Financeiro', async ({ p
     expect(await page.locator('.cfg-row-sub .cfg-sub-label').allInnerTexts()).toEqual(expect.arrayContaining(['Resumo', 'Contas a receber', 'Contas a pagar', 'Recorrências', 'Fluxo de caixa', 'DRE']));
 });
 
-test('alerta de vencimento do sino leva a Lancamentos; gap de caixa ao Resumo; meta e tendencia nao existem', async ({ page }) => {
+test('alerta de vencimento do sino leva a Lancamentos; gap de caixa ao Fluxo de caixa; meta e tendencia nao existem', async ({ page }) => {
     const cr = { id: 1, cliente_nome: 'Cliente Hoje', valor: 100, status: 'Pendente', data_vencimento: '2026-11-24' };
     const cp = { id: 2, descricao: 'Fornecedor', valor: 900, status: 'Pendente', data_vencimento: '2026-11-26' };
     await abrir(page, { sc_cr: [cr], sc_cp: [cp], sc_empresa: { razao_social: 'X', meta_faturamento_padrao: 1000 } }, 'index.html');
     const alertas = await page.evaluate(() => finAlertasCalcular(hojeLocal()).map(a => [a.tipo, a.aba]));
     expect(alertas).toContainEqual(['fin_vencimento', 'lancamentos']);
-    expect(alertas).toContainEqual(['fin_gap', 'resumo']);
+    expect(alertas).toContainEqual(['fin_gap', 'fluxo']);
     expect(alertas.map(a => a[0])).not.toContain('fin_meta');
     expect(alertas.map(a => a[0])).not.toContain('fin_tendencia');
     await page.hover('#sino-btn');
