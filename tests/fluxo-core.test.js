@@ -35,7 +35,7 @@ test('resumo consolidado: transferencia fora das entradas/saidas', () => {
     assert.strictEqual(r.entradas, 500);
     assert.strictEqual(r.saidas, 200);
     assert.strictEqual(r.saldoFinal, 1250);
-    assert.deepStrictEqual(r.previsto, { entradas: 400, saidas: 0, saldoFinal: 1650 });
+    assert.deepStrictEqual(r.previsto, { entradas: 400, saidas: 0, aberturas: 0, saldoFinal: 1650 });
 });
 
 test('resumo de uma conta: transferencia conta', () => {
@@ -80,4 +80,80 @@ test('movimentacoes: saldo inicial, transferencia e saldo final', () => {
     t.forEach(x => { assert.strictEqual(x.entrada, 0); assert.strictEqual(x.saida, 0); assert.strictEqual(x.origem, 'transferencia'); });
     assert.strictEqual(l[l.length - 1].saldo, 1650);
     assert.strictEqual(l[l.length - 1].previsto, true);
+});
+
+test('conta aberta no meio do periodo: abertura entra no saldo, nao em entradas', () => {
+    const p = base();
+    p.contas = [{ id: 1, nome: 'A', saldo_inicial: 1000, data_saldo_inicial: '2026-11-10', ativo: true }];
+    p.movimentos = [{ id: 1, conta_id: 1, data: '2026-11-12', sentido: 'saida', valor: 300, origem: 'ajuste' }];
+    p.contasReceber = []; p.contasPagar = [];
+    const r = FluxoCore.resumo(p);
+    assert.strictEqual(r.saldoInicial, 0);
+    assert.strictEqual(r.aberturas, 1000);
+    assert.strictEqual(r.entradas, 0);
+    assert.strictEqual(r.saidas, 300);
+    assert.strictEqual(r.saldoFinal, 700);
+    const l = FluxoCore.movimentacoes(p);
+    assert.strictEqual(l[1].descricao, 'Abertura da conta A');
+    assert.strictEqual(l[1].origem, 'abertura');
+    assert.strictEqual(l[l.length - 1].saldo, 700);
+    const s = FluxoCore.serie(Object.assign({}, p, { agrupar: 'mes' }));
+    assert.strictEqual(s[0].saldo, 700);
+    assert.strictEqual(FluxoCore.resumo(Object.assign({}, p, { contaId: 1 })).saldoFinal, 700);
+});
+
+test('transferencia para conta inativa conta como saida no consolidado', () => {
+    const p = base();
+    p.contas[1].ativo = false;
+    const r = FluxoCore.resumo(p);
+    assert.strictEqual(r.saidas, 500);
+    assert.strictEqual(r.saldoFinal, 950 + 500 - 500);
+});
+
+test('periodo futuro: saldo inicial projeta o previsto ate a vespera', () => {
+    const p = Object.assign(base(), { de: '2026-12-01', ate: '2026-12-31' });
+    p.contasReceber.push({ id: 3, valor: 100, status: 'Aberto', data_vencimento: '2026-11-10', pedido_id: 9 });
+    const r = FluxoCore.resumo(p);
+    // saldo de hoje (20/11) = 950 + 500 - 200 = 1250; + CR atrasada 100 (cai em hoje) + CR 400 de 25/11
+    assert.strictEqual(r.saldoInicial, 1750);
+    assert.strictEqual(r.entradas, 0);
+    assert.strictEqual(r.previsto.saldoFinal, 1750);
+});
+
+test('conta sem data_saldo_inicial conta desde sempre', () => {
+    const p = base();
+    p.contas = [{ id: 1, nome: 'A', saldo_inicial: 1000, ativo: true }];
+    const r = FluxoCore.resumo(p);
+    assert.strictEqual(r.saldoInicial, 950);
+    assert.strictEqual(r.entradas, 500);
+});
+
+test('hoje ausente gera erro claro', () => {
+    const p = base(); delete p.hoje;
+    assert.throws(() => FluxoCore.resumo(p), /hoje/);
+});
+
+test('previsto: repasse de cartao, recorrencia e filtro por conta', () => {
+    const p = base();
+    p.contasReceber = [{ id: 5, valor: 1000, status: 'Aberto', data_vencimento: '2026-11-22', pedido_id: 9, meio_previsto: { meio_id: 'm1', vezes: 1 } }];
+    p.contasPagar = [];
+    p.meios = [{ id: 'm1', tipo: 'cartao_debito', conta_id: 2 }];
+    p.contas[1].cartao = { debito_taxa: 2, debito_dias: 1 };
+    p.despesasFixas = [{ id: 1, valor: 150, dia_vencimento: 28, ativo: true, data_inicio: '2026-01-01', categoria: 'aluguel' }];
+    const todas = FluxoCore.resumo(p).previsto;
+    assert.strictEqual(todas.entradas, 980);
+    assert.strictEqual(todas.saidas, 150);
+    const contaB = FluxoCore.resumo(Object.assign({}, p, { contaId: 2 })).previsto;
+    assert.strictEqual(contaB.entradas, 980);
+    assert.strictEqual(contaB.saidas, 0);
+    const contaA = FluxoCore.resumo(Object.assign({}, p, { contaId: 1 })).previsto;
+    assert.strictEqual(contaA.entradas, 0);
+});
+
+test('categoria filtra o realizado de CR e CP', () => {
+    const p = Object.assign(base(), { categoriaId: 'cat_vendas' });
+    const r = FluxoCore.resumo(p);
+    assert.strictEqual(r.entradas, 500);
+    assert.strictEqual(r.saidas, 0);
+    assert.strictEqual(r.previsto.entradas, 400);
 });

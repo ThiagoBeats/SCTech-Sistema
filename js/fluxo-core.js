@@ -42,6 +42,7 @@
     // Cada evento: { data, ent, sai, previsto, mov, reg, transferencia }; ent/sai ja respeitam transferencia e filtros.
     function coletar(p) {
         const C = caixa(), F = fin();
+        if (!valida(p.hoje)) throw new Error('FluxoCore: informe "hoje" (AAAA-MM-DD).');
         const de = p.de ? dia10(p.de) : null, ate = p.ate ? dia10(p.ate) : null, hoje = dia10(p.hoje);
         const contas = p.contas || [];
         const contaId = p.contaId != null && p.contaId !== '' ? p.contaId : null;
@@ -53,20 +54,33 @@
         const porCr = new Map(crs.map(c => [String(c.id), c])), porCp = new Map(cps.map(c => [String(c.id), c]));
         const out = { de, ate, hoje, conjunto, contaId, catId, realizado: [], previsto: [] };
         if (!valida(de) || !valida(ate) || de > ate) return out;
+        const abertura = c => c.data_saldo_inicial || '';
+        const inativa = id => contas.some(c => mesmo(c.id, id) && c.ativo === false);
+        const noConjunto = (m, d) => {
+            const conta = conjunto.find(c => mesmo(c.id, m.conta_id));
+            return !!conta && d >= abertura(conta);
+        };
+        // Pernas de transferencia por grupo: no consolidado so zera quando a outra perna tambem esta no conjunto.
+        const pernas = new Map();
+        (p.movimentos || []).forEach(m => {
+            if (!m || m.origem !== 'transferencia' || m.grupo_id == null || !m.data) return;
+            if (!pernas.has(String(m.grupo_id))) pernas.set(String(m.grupo_id), []);
+            pernas.get(String(m.grupo_id)).push(m);
+        });
+        const parNoConjunto = m => {
+            if (m.grupo_id == null) return true;
+            return (pernas.get(String(m.grupo_id)) || []).some(o => o !== m && noConjunto(o, dia10(o.data)));
+        };
 
         // Origem do movimento: lancamento (CR/CP) ou nada (transferencia/ajuste).
         const regDe = m => (m.origem === 'cr' ? porCr : m.origem === 'cp' ? porCp : new Map()).get(String(m.origem_id));
         const evento = (m, previsto) => {
             const transf = m.origem === 'transferencia';
             let ent = m.sentido === 'entrada' ? num(m.valor) : 0, sai = m.sentido === 'entrada' ? 0 : num(m.valor);
-            if (transf && contaId == null) { ent = 0; sai = 0; }
-            return { data: dia10(m.data), ent, sai, previsto, mov: m, reg: regDe(m), transferencia: transf };
+            if (transf && contaId == null && parNoConjunto(m)) { ent = 0; sai = 0; }
+            return { data: dia10(m.data), ent, sai, ab: 0, previsto, mov: m, reg: regDe(m), transferencia: transf };
         };
         const casaCategoria = (reg, tipo) => catId == null || (!!reg && categoriaDe(reg, tipo, porId) === catId);
-        const noConjunto = (m, d) => {
-            const conta = conjunto.find(c => mesmo(c.id, m.conta_id));
-            return !!conta && d >= conta.data_saldo_inicial;
-        };
 
         // Realizado: movimentos das contas do conjunto (a partir da abertura da conta) de `de` ate min(ate, hoje).
         const fimReal = ate < hoje ? ate : hoje;
@@ -76,6 +90,16 @@
             if (catId != null && !casaCategoria(regDe(m), m.origem)) return;
             out.realizado.push(evento(m, false));
         });
+
+        // Abertura de conta dentro do periodo: o saldo inicial dela entra no saldo (nao e entrada/saida).
+        if (catId == null) {
+            conjunto.forEach(c => {
+                const d = c.data_saldo_inicial ? dia10(c.data_saldo_inicial) : null;
+                if (!d || d < de || d > ate || !num(c.saldo_inicial)) return;
+                const ev = { data: d, ent: 0, sai: 0, ab: num(c.saldo_inicial), previsto: d > hoje, mov: null, transferencia: false, abertura: c };
+                (ev.previsto ? out.previsto : out.realizado).push(ev);
+            });
+        }
 
         // Previsto: de max(de, hoje) ate `ate`. Movimentos futuros ja lancados (cartao a cair etc.) + contas em aberto.
         const iniPrev = de > hoje ? de : hoje;
@@ -91,23 +115,32 @@
                 return mp ? (p.meios || []).find(x => mesmo(x.id, mp.meio_id)) : null;
             };
             // Com conta escolhida, so entra o que se sabe ser dela (conta do lancamento ou do meio de pagamento).
-            const daConta = (reg, meio) => contaId == null || mesmo(reg.conta_id, contaId) || (!!meio && mesmo(meio.conta_id, contaId));
+            // Sem conta escolhida, o que e de conta inativa fica fora (os movimentos dela tambem ficam).
+            const daConta = (reg, meio) => {
+                if (contaId != null) return mesmo(reg.conta_id, contaId) || (!!meio && mesmo(meio.conta_id, contaId));
+                return !(reg.conta_id != null && inativa(reg.conta_id)) && !(meio && meio.conta_id != null && inativa(meio.conta_id));
+            };
             const crsUso = crs.filter(cr => casaCategoria(cr, 'cr') && daConta(cr, meioDe(cr)));
             const cpsUso = cps.filter(cp => casaCategoria(cp, 'cp') && daConta(cp, null));
             const fixasUso = (p.despesasFixas || []).filter(df => df && casaCategoria(df, 'cp') && daConta(df, null));
             C.lancamentosPrevistos({ hoje, limite: ate, movimentos: [], contasReceber: crsUso, contasPagar: cpsUso, despesasFixas: fixasUso, contas, meios: p.meios })
                 .forEach(l => {
                     if (l.data < iniPrev || l.data > ate) return;
-                    out.previsto.push({ data: l.data, ent: l.sentido === 'entrada' ? num(l.valor) : 0, sai: l.sentido === 'entrada' ? 0 : num(l.valor), previsto: true, mov: null, transferencia: false });
+                    out.previsto.push({ data: l.data, ent: l.sentido === 'entrada' ? num(l.valor) : 0, sai: l.sentido === 'entrada' ? 0 : num(l.valor), ab: 0, previsto: true, mov: null, transferencia: false });
                 });
         }
         return out;
     }
 
+    const efeito = e => e.ent - e.sai + e.ab;
+
+    // Saldo no dia anterior a `de`. Periodo futuro: saldo de hoje + previsto de hoje ate de-1 (atrasados caem em hoje).
     function saldoInicialDe(p, col) {
         const C = caixa();
-        const dia = somarDias(col.de, -1);
-        return arredondar(col.conjunto.reduce((t, c) => t + C.saldoContaAte(c, p.movimentos || [], dia), 0));
+        const saldoAte = dia => col.conjunto.reduce((t, c) => t + C.saldoContaAte(c, p.movimentos || [], dia), 0);
+        if (col.de <= col.hoje) return arredondar(saldoAte(somarDias(col.de, -1)));
+        const ponte = coletar(Object.assign({}, p, { de: col.hoje, ate: somarDias(col.de, -1), categoriaId: null }));
+        return arredondar(saldoAte(col.hoje) + ponte.previsto.reduce((t, e) => t + efeito(e), 0));
     }
 
     const soma = (evs, k) => arredondar(evs.reduce((t, e) => t + e[k], 0));
@@ -117,13 +150,14 @@
         p = p || {};
         const col = coletar(p);
         if (!periodoOk(col)) {
-            return { saldoInicial: 0, entradas: 0, saidas: 0, saldoFinal: 0, previsto: { entradas: 0, saidas: 0, saldoFinal: 0 } };
+            return { saldoInicial: 0, entradas: 0, saidas: 0, aberturas: 0, saldoFinal: 0, previsto: { entradas: 0, saidas: 0, aberturas: 0, saldoFinal: 0 } };
         }
         const saldoInicial = saldoInicialDe(p, col);
         const entradas = soma(col.realizado, 'ent'), saidas = soma(col.realizado, 'sai');
-        const saldoFinal = arredondar(saldoInicial + entradas - saidas);
-        const pe = soma(col.previsto, 'ent'), ps = soma(col.previsto, 'sai');
-        return { saldoInicial, entradas, saidas, saldoFinal, previsto: { entradas: pe, saidas: ps, saldoFinal: arredondar(saldoFinal + pe - ps) } };
+        const aberturas = soma(col.realizado, 'ab');
+        const saldoFinal = arredondar(saldoInicial + entradas - saidas + aberturas);
+        const pe = soma(col.previsto, 'ent'), ps = soma(col.previsto, 'sai'), pa = soma(col.previsto, 'ab');
+        return { saldoInicial, entradas, saidas, aberturas, saldoFinal, previsto: { entradas: pe, saidas: ps, aberturas: pa, saldoFinal: arredondar(saldoFinal + pe - ps + pa) } };
     }
 
     // Pontos da serie: dia, semana (comeca na segunda) ou mes, recortados em de..ate.
@@ -161,7 +195,7 @@
         return pontos(col.de, col.ate, p.agrupar).map(pt => {
             const evs = todos.filter(e => e.data >= pt.de && e.data <= pt.ate);
             const entradas = soma(evs, 'ent'), saidas = soma(evs, 'sai');
-            saldo = arredondar(saldo + entradas - saidas);
+            saldo = arredondar(saldo + entradas - saidas + soma(evs, 'ab'));
             return { rotulo: pt.rotulo, de: pt.de, ate: pt.ate, entradas, saidas, saldo, previsto: pt.ate > col.hoje };
         });
     }
@@ -175,12 +209,14 @@
         const rotuloOrigem = { cr: 'Recebimento', cp: 'Pagamento', transferencia: 'Transferência', ajuste: 'Ajuste de saldo' };
         const ordenar = evs => evs.map((e, i) => [e, i]).sort((a, b) => (a[0].data < b[0].data ? -1 : a[0].data > b[0].data ? 1 : a[1] - b[1])).map(x => x[0]);
         ordenar(col.realizado).concat(ordenar(col.previsto)).forEach(e => {
-            saldo = arredondar(saldo + e.ent - e.sai);
+            saldo = arredondar(saldo + efeito(e));
             const m = e.mov;
             const base = { data: e.data, entrada: e.ent, saida: e.sai, saldo, previsto: e.previsto, transferencia: !!e.transferencia };
             if (m) {
                 const descricao = m.descricao || (e.reg && (e.reg.descricao || e.reg.fornecedor || e.reg.cliente)) || rotuloOrigem[m.origem] || 'Movimento';
                 linhas.push(Object.assign(base, { descricao, conta_id: m.conta_id, origem: e.previsto ? 'previsto' : m.origem, origem_id: m.origem_id != null ? m.origem_id : null, grupo_id: m.grupo_id != null ? m.grupo_id : null }));
+            } else if (e.abertura) {
+                linhas.push(Object.assign(base, { descricao: 'Abertura da conta ' + (e.abertura.nome || ''), conta_id: e.abertura.id, origem: 'abertura', origem_id: null, grupo_id: null }));
             } else {
                 linhas.push(Object.assign(base, { descricao: e.ent > 0 ? 'A receber (previsto)' : 'A pagar (previsto)', conta_id: null, origem: 'previsto', origem_id: null, grupo_id: null }));
             }
