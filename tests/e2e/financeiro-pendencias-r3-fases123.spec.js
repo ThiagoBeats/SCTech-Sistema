@@ -50,7 +50,7 @@ const cr = extra => ({ id: 601, pedido_id: 26300, cliente_nome: 'Ana Paula Lima'
 async function abrirReceber(page, dados) {
     await entrar(page, BASE, { sc_cli: CLI, sc_contas_fin: CONTAS, sc_meios_pag: MEIOS, sc_ped: [pedido()], sc_cr: [cr()], ...dados });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
 }
 async function abrirBaixa(page) {
     await page.locator('#tb-contas-receber button', { hasText: '✓ Recebido' }).first().click();
@@ -145,7 +145,7 @@ test('cartao: recebimento parcial divide a parcela; so a parte paga gera repasse
     expect((await lerChave(page, 'sc_ped'))[0].valor_recebido).toBe(1000);
 
     // Estorno da parte paga: o valor volta para a parcela aberta e some tudo o que o cartao gerou.
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click(); // a pagina recarregou e voltou para a aba Hoje
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click(); // a pagina recarregou e voltou para a aba Hoje
     await page.locator('#tb-contas-receber button', { hasText: 'Estornar' }).click();
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_cr')).length).toBe(1);
@@ -180,7 +180,7 @@ test('cartao com a maquininha removida: o parcial vale, fica sem conta e sem mov
     expect(cps.map(c => [c.categoria, c.status, c.conta_id, c.origem_cr_id])).toEqual([['taxa_cartao', 'Pago', null, paga.id], ['taxa_cartao', 'Pago', null, paga.id]]);
     expect(cps.reduce((s, c) => s + c.valor, 0)).toBe(40);
     // Estornar tira a conta de taxa e junta a parte de volta, mesmo sem conta.
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click(); // a pagina recarregou e voltou para a aba Hoje
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click(); // a pagina recarregou e voltou para a aba Hoje
     await page.locator('#tb-contas-receber button', { hasText: 'Estornar' }).click();
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_cr')).length).toBe(1);
@@ -196,7 +196,7 @@ test('estornar pagamento feito sem conta: volta a ficar em aberto e nao mexe nos
     await entrar(page, BASE, { sc_contas_fin: CONTAS, sc_meios_pag: MEIOS,
         sc_cp: [cp(801, { conta_id: null, meio_id: null }), cp(802, { conta_id: 11, meio_id: 22, forma_pagamento: 'PIX' })], sc_mov_fin: [mov] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="pagar"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
     const linha801 = page.locator('#tb-contas-pagar tr', { hasText: 'Conta 801' });
     await expect(linha801).toBeVisible();
     await linha801.locator('button', { hasText: 'Estornar' }).click();
@@ -216,7 +216,7 @@ async function abrirCobranca(page, dados, retorno) {
     await entrar(page, BASE, dados);
     await page.goto(BASE + '/financeiro.html');
     await page.evaluate(r => { window.__abertos = []; window.open = u => { window.__abertos.push(u); return r ? {} : null; }; }, retorno !== false);
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
 }
 const abertos = page => page.evaluate(() => window.__abertos);
 const crVenc = extra => ({ id: 601, pedido_id: 26300, cliente_nome: 'Ana', descricao: 'Saldo', valor: 2000,
@@ -255,7 +255,7 @@ test('cobranca: so visualizar nao ve Cobrar e a funcao recusa, sem abrir nada', 
     await soVisualizar(page, 'financeiro.receber');
     await page.goto(BASE + '/financeiro.html');
     await page.evaluate(() => { window.__abertos = []; window.open = u => { window.__abertos.push(u); return {}; }; });
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
     await expect(page.locator('#tb-contas-receber')).toContainText('Saldo');
     await expect(page.locator('#tb-contas-receber button', { hasText: 'Cobrar' })).toHaveCount(0);
     await page.evaluate(() => { cobrarNoWhatsApp(601); });
@@ -266,7 +266,8 @@ test('cobranca: so visualizar nao ve Cobrar e a funcao recusa, sem abrir nada', 
 });
 
 // ============ Fase 1: excluir transferencia sem permissao ============
-test('excluir transferencia sem permissao completa do Extrato: sem botao, a funcao recusa e os dois lados ficam', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('excluir transferencia sem permissao completa do Extrato: sem botao, a funcao recusa e os dois lados ficam', async ({ page }) => {
     const mov = (id, conta, sentido, descricao) => ({ id, conta_id: conta, data: HOJE, sentido, valor: 40, origem: 'transferencia', origem_id: null, grupo_id: 777, descricao });
     const movs = [mov(20, 10, 'saida', 'Transferência para Banco'), mov(21, 11, 'entrada', 'Transferência de Caixa')];
     await entrar(page, BASE, { sc_contas_fin: CONTAS, sc_mov_fin: movs });
@@ -308,7 +309,8 @@ const ajusteModal = page => page.locator('#res-ajuste-modal');
 const continuar = page => fechModal(page).getByRole('button', { name: 'Continuar' });
 
 // ---- Fase 2: Escape e empilhamento das janelas de ajuste (meta / limite) ----
-test('Escape fecha a janela de ajuste da meta sem salvar o que foi digitado', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Escape fecha a janela de ajuste da meta sem salvar o que foi digitado', async ({ page }) => {
     await abrirResultado(page);
     const antes = await brutas(page, ['sc_fin_metas']);
     await page.click('#res-meta-edit');
@@ -327,7 +329,8 @@ test('Escape fecha a janela de ajuste da meta sem salvar o que foi digitado', as
     expect((await lerChave(page, 'sc_fin_metas'))['2026-10']).toBe(9000);
 });
 
-test('Escape com um aviso ou uma pergunta por cima da janela de ajuste fecha so o de cima; o Escape seguinte fecha o ajuste', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Escape com um aviso ou uma pergunta por cima da janela de ajuste fecha so o de cima; o Escape seguinte fecha o ajuste', async ({ page }) => {
     await abrirResultado(page);
     await page.evaluate(() => ajustarOrcamentoMes(_resMesAtual, 'fornecedores'));
     await expect(ajusteModal(page)).toBeVisible();
@@ -352,7 +355,8 @@ test('Escape com um aviso ou uma pergunta por cima da janela de ajuste fecha so 
     expect(await brutas(page, ['sc_fin_orcamento_mes'])).toEqual([null]);
 });
 
-test('abrir o limite com a janela da meta aberta troca uma pela outra (nunca duas) e um Escape fecha', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('abrir o limite com a janela da meta aberta troca uma pela outra (nunca duas) e um Escape fecha', async ({ page }) => {
     await abrirResultado(page);
     await page.click('#res-meta-edit');
     await expect(ajusteModal(page).locator('h3')).toHaveText('Meta de faturamento deste mês');
@@ -366,7 +370,8 @@ test('abrir o limite com a janela da meta aberta troca uma pela outra (nunca dua
     expect(await brutas(page, ['sc_fin_metas', 'sc_fin_orcamento_mes'])).toEqual([null, null]);
 });
 
-test('Escape com o passo a passo do fechamento aberto fecha so a janela de ajuste; o fechamento fica com o que foi digitado', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Escape com o passo a passo do fechamento aberto fecha so a janela de ajuste; o fechamento fica com o que foi digitado', async ({ page }) => {
     await abrirResultado(page);
     await page.click('#fech-btn-fechar');
     await fechModal(page).locator('.fech-extrato').first().fill('1.280,00');
@@ -382,7 +387,8 @@ test('Escape com o passo a passo do fechamento aberto fecha so a janela de ajust
 });
 
 // ---- Fase 3: ajuste de entrada e "Deixar anotado" no fechamento ----
-test('fechamento com extrato maior que o esperado: "Lançar ajuste" cria uma entrada de ajuste e nao muda o resultado', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('fechamento com extrato maior que o esperado: "Lançar ajuste" cria uma entrada de ajuste e nao muda o resultado', async ({ page }) => {
     await abrirResultado(page);
     const antes = await page.evaluate(() => resultadoFinanceiroDoMes('2026-10').resultado);
     await page.click('#fech-btn-fechar');
@@ -405,7 +411,8 @@ test('fechamento com extrato maior que o esperado: "Lançar ajuste" cria uma ent
     await expect(page.locator('#doc-modal-paper')).toContainText('ajuste lançado — troco que sobrou');
 });
 
-test('fechamento com "Deixar anotado": nao cria ajuste, nao pede motivo e o motivo digitado antes e descartado', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('fechamento com "Deixar anotado": nao cria ajuste, nao pede motivo e o motivo digitado antes e descartado', async ({ page }) => {
     await abrirResultado(page);
     await page.click('#fech-btn-fechar');
     const linha = fechModal(page).locator('tr[data-conta="10"]');
@@ -436,7 +443,8 @@ const SEED_SIM = {
     sc_contas_fin: [{ id: 10, nome: 'Banco', tipo: 'banco', saldo_inicial: 3000, data_saldo_inicial: '2026-11-11', ativo: true }],
     sc_cr: [], sc_cp: [], sc_mov_fin: []
 };
-test('Lançar no A Pagar: duplo clique e chamadas juntas abrem uma pergunta so; cancelar libera e o Lançar seguinte cria uma conta so', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Lançar no A Pagar: duplo clique e chamadas juntas abrem uma pergunta so; cancelar libera e o Lançar seguinte cria uma conta so', async ({ page }) => {
     await page.clock.install({ time: new Date('2026-11-14T10:00:00') });
     await entrar(page, BASE, SEED_SIM);
     await page.goto(BASE + '/financeiro.html');

@@ -33,7 +33,8 @@ async function abrir(page, movs, extras) {
 }
 const txt = async (loc) => (await loc.innerText()).replace(/\s+/g, ' ');
 
-test('extrato do mes com entradas e saidas e saldos', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('extrato do mes com entradas e saidas e saldos', async ({ page }) => {
     await abrir(page);
     const rows = page.locator('#extrato-linhas .extrato-linha');
     await expect(rows).toHaveCount(3);
@@ -46,7 +47,8 @@ test('extrato do mes com entradas e saidas e saldos', async ({ page }) => {
     await expect(page.locator('#extrato-linhas .extrato-linha.saida')).toHaveCount(1);
 });
 
-test('filtro por conta', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('filtro por conta', async ({ page }) => {
     await abrir(page);
     await page.locator('#extrato-conta').selectOption('11');
     await expect(page.locator('#extrato-linhas .extrato-linha')).toHaveCount(1);
@@ -54,7 +56,8 @@ test('filtro por conta', async ({ page }) => {
     expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('300,00');
 });
 
-test('cartao a cair aparece marcado', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('cartao a cair aparece marcado', async ({ page }) => {
     const d = new Date();
     const proximo = iso(new Date(d.getFullYear(), d.getMonth() + 1, 15));
     await abrir(page, [...MOVS, mov(5, 10, proximo, 'entrada', 1000, 'Repasse do cartao')]);
@@ -78,7 +81,8 @@ test('cartao a cair aparece marcado', async ({ page }) => {
     expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('150,00');
 });
 
-test('transferir caixa para banco muda os dois saldos e nao o total', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('transferir caixa para banco muda os dois saldos e nao o total', async ({ page }) => {
     await abrir(page);
     await page.locator('#extrato-btn-transferir').click();
     const m = page.locator('#transf-modal');
@@ -102,7 +106,8 @@ test('transferir caixa para banco muda os dois saldos e nao o total', async ({ p
     expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('1.550,50');
 });
 
-test('mesma conta de origem e destino e bloqueado dentro do modal', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('mesma conta de origem e destino e bloqueado dentro do modal', async ({ page }) => {
     await abrir(page);
     await page.locator('#extrato-btn-transferir').click();
     const m = page.locator('#transf-modal');
@@ -121,7 +126,8 @@ test('mesma conta de origem e destino e bloqueado dentro do modal', async ({ pag
     expect((await ler(page, 'sc_mov_fin')).filter(x => x.origem === 'transferencia')).toHaveLength(0);
 });
 
-test('excluir transferencia remove os dois lados', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('excluir transferencia remove os dois lados', async ({ page }) => {
     const t = [
         { id: 20, conta_id: 10, data: PRIMEIRO, sentido: 'saida', valor: 40, origem: 'transferencia', origem_id: null, grupo_id: 777, descricao: 'Transferência para Banco' },
         { id: 21, conta_id: 11, data: PRIMEIRO, sentido: 'entrada', valor: 40, origem: 'transferencia', origem_id: null, grupo_id: 777, descricao: 'Transferência de Caixa' }
@@ -135,7 +141,8 @@ test('excluir transferencia remove os dois lados', async ({ page }) => {
     await expect(page.locator('#extrato-linhas .extrato-linha')).toHaveCount(3);
 });
 
-test('sem extrato completo nao ve Transferir', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('sem extrato completo nao ve Transferir', async ({ page }) => {
     await entrar(page, BASE, { sc_contas_fin: CONTAS, sc_mov_fin: MOVS });
     await page.evaluate(() => {
         const u = JSON.parse(localStorage.getItem('sc_usr'));
@@ -149,7 +156,8 @@ test('sem extrato completo nao ve Transferir', async ({ page }) => {
     await expect(page.locator('#extrato-btn-transferir')).toBeHidden();
 });
 
-test('transferir 1.000 (so ponto de milhar) move mil reais', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('transferir 1.000 (so ponto de milhar) move mil reais', async ({ page }) => {
     await abrir(page);
     await page.locator('#extrato-btn-transferir').click();
     const m = page.locator('#transf-modal');

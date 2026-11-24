@@ -150,8 +150,8 @@ Tipo "Financeiro" (sino e card, só para quem tem acesso ao Financeiro):
     Visão Geral); no card do Painel a faixa inteira é clicável e leva à mesma aba
   - Datas dos alertas usam o dia local (não UTC): à noite não adianta para o dia seguinte
   - Urgentes (aparecem em "Só as urgentes"): os vermelhos, atrasos e gap de caixa
-  - Clicar abre a aba do Financeiro do assunto (financeiro.html?aba=receber | pagar | hoje |
-    dashboard), se o usuário puder vê-la; ao abrir, o ?aba= sai do endereço (o F5 volta à aba que estava aberta)
+  - Clicar abre a aba do Financeiro do assunto (financeiro.html?aba=lancamentos | receber | pagar |
+    resumo), se o usuário puder vê-la (vencimentos e atrasos levam a Lançamentos; gap de caixa, ao Resumo); ao abrir, o ?aba= sai do endereço (o F5 volta à aba que estava aberta)
 
 ── 2.2 CARDS DE MÉTRICAS ───────────────────────────────────────────────────────
 
@@ -1195,7 +1195,21 @@ Na janela do carrinho:
  10. FINANCEIRO (financeiro.html)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-8 abas: Hoje | Visão Geral | A Receber | A Pagar | Despesas Fixas | DRE por Pedido | Extrato | Resultado do mês
+4 abas: Resumo | Lançamentos | Fluxo de caixa | DRE
+  - Resumo e Lançamentos ainda em construção (o Lançamentos mostra, por enquanto, as listas de sempre:
+    seletor Contas a pagar | Contas a receber | Recorrências, as despesas fixas); Fluxo de caixa e DRE
+    mostram "Em construção: chega na próxima atualização."
+  - As telas antigas (Hoje, Visão Geral, Resultado do mês e fechamento, Simular compra, DRE por Pedido,
+    Extrato) estão desligadas: continuam no código (FIN_RECURSOS_ANTIGOS em app.js, tudo false) e as
+    seções abaixo que falam delas descrevem o que existe quando forem religadas. Os alertas de meta e
+    tendência de faturamento ficam desligados junto com elas.
+  - Permissões do Financeiro: Resumo, Contas a receber, Contas a pagar, Recorrências, Fluxo de caixa e DRE.
+    Quem tinha acesso às telas antigas ganha o das novas: Resumo = o maior entre Visão Geral e Hoje; Fluxo
+    de caixa = Extrato; DRE = o maior entre DRE por Pedido e Resultado do mês (vale também para as
+    permissões extras de cada usuário). A aba Lançamentos aparece para quem vê Contas a pagar ou a receber
+    e mostra só o que a pessoa pode ver. Vendedor/Atendimento fica sem Resumo, Fluxo e DRE.
+  - Links antigos continuam valendo: ?tab= / ?aba= / ?view= ou #hoje, dashboard, resultado, simulador →
+    Resumo; extrato → Fluxo de caixa; receber, pagar, fixas → Lançamentos (no lado certo).
 (Hoje e Extrato são da Fase 1, seções 10.14 a 10.20; Resultado do mês é da Fase 2, seções 10.21 a 10.25)
 
 Dados do Financeiro novo (atualização automática, uma vez):

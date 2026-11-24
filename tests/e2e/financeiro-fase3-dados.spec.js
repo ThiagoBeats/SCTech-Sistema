@@ -30,10 +30,10 @@ test('permissao financeiro.simulador nasce pela migracao com o nivel da Visao Ge
     await page.goto(BASE + '/configuracoes.html');
     const r = await page.evaluate(() => ({
         n: db.papeis.find(p => p.id === 3).permissoes['financeiro.simulador'].nivel,
-        rot: MODULOS_PERMISSAO.find(m => m.key === 'financeiro').subs.find(s => s.key === 'simulador').label,
+        naLista: MODULOS_PERMISSAO.find(m => m.key === 'financeiro').subs.some(s => s.key === 'simulador'),
         tab: FIN_TAB_MODULO.simulador
     }));
-    expect(r).toEqual({ n: 'visualizar', rot: 'Simular compra', tab: 'financeiro.simulador' });
+    expect(r).toEqual({ n: 'visualizar', naLista: false, tab: 'financeiro.simulador' });   // sai da lista de permissoes, a chave segue nos dados
 });
 
 test('nucleos carregados', async ({ page }) => {

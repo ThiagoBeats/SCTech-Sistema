@@ -23,7 +23,8 @@ async function abrir(page, dados, w) {
     await page.goto(BASE + '/financeiro.html');
 }
 
-test('Hoje e a primeira aba e abre por padrao', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Hoje e a primeira aba e abre por padrao', async ({ page }) => {
     await abrir(page, { sc_contas_fin: CONTAS });
     await expect(page.locator('.fin-tab-btn').first()).toHaveAttribute('data-tab', 'hoje');
     await expect(page.locator('.fin-tab-btn[data-tab="hoje"]')).toHaveClass(/active/);
@@ -32,7 +33,8 @@ test('Hoje e a primeira aba e abre por padrao', async ({ page }) => {
     await expect(page.locator('.fin-tab-btn').nth(1)).toHaveAttribute('data-tab', 'dashboard');
 });
 
-test('tarefas em ordem de urgencia com botoes', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('tarefas em ordem de urgencia com botoes', async ({ page }) => {
     await abrir(page, {
         sc_contas_fin: CONTAS,
         sc_mov_fin: [{ id: 1, conta_id: 12, data: HOJE, sentido: 'entrada', valor: 321, origem: 'cr', origem_id: 9, grupo_id: null, descricao: 'Repasse do cartao' }],
@@ -54,7 +56,8 @@ test('tarefas em ordem de urgencia com botoes', async ({ page }) => {
     await expect(grupos.nth(4).locator('button')).toHaveCount(0);
 });
 
-test('sem receber completo nao mostra Recebi nem Cobrar', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('sem receber completo nao mostra Recebi nem Cobrar', async ({ page }) => {
     await entrar(page, BASE, {
         sc_contas_fin: CONTAS,
         sc_cr: [cr(1, 'Atrasado Rec', somarDias(HOJE, -3))],
@@ -73,7 +76,8 @@ test('sem receber completo nao mostra Recebi nem Cobrar', async ({ page }) => {
     await expect(page.locator('#hoje-tarefas button', { hasText: 'Paguei' })).toBeVisible();
 });
 
-test('saldo de hoje nao inclui cartao a cair', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('saldo de hoje nao inclui cartao a cair', async ({ page }) => {
     await abrir(page, {
         sc_contas_fin: CONTAS,
         sc_mov_fin: [{ id: 1, conta_id: 12, data: somarDias(HOJE, 10), sentido: 'entrada', valor: 500, origem: 'cr', origem_id: 9, grupo_id: null, descricao: 'Repasse futuro' }]
@@ -86,14 +90,16 @@ test('saldo de hoje nao inclui cartao a cair', async ({ page }) => {
     await expect(maq).toContainText('a cair');
 });
 
-test('clicar na conta abre o extrato filtrado', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('clicar na conta abre o extrato filtrado', async ({ page }) => {
     await abrir(page, { sc_contas_fin: CONTAS });
     await page.locator('#hoje-saldos .hoje-conta', { hasText: 'Maquininha' }).click();
     await expect(page.locator('#fin-extrato')).toBeVisible();
     await expect(page.locator('#extrato-conta')).toHaveValue('12');
 });
 
-test('semana negativa aparece com o texto de falta', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('semana negativa aparece com o texto de falta', async ({ page }) => {
     await abrir(page, {
         sc_contas_fin: [{ ...CONTAS[0], saldo_inicial: 0 }],
         sc_cp: [cp(3, 'Conta grande', somarDias(HOJE, 3), 300)]
@@ -102,12 +108,14 @@ test('semana negativa aparece com o texto de falta', async ({ page }) => {
     await expect(page.locator('#hoje-previsao-aviso')).toContainText(`Semana de ${ddmm(HOJE)}: falta R$ 300,00`);
 });
 
-test('legenda inclui atrasados quando ha atrasado na previsao', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('legenda inclui atrasados quando ha atrasado na previsao', async ({ page }) => {
     await abrir(page, { sc_contas_fin: CONTAS, sc_cr: [cr(1, 'Atrasado Rec', somarDias(HOJE, -3))] });
     await expect(page.locator('#hoje-previsao')).toContainText('inclui atrasados');
 });
 
-test('sem contas mostra convite', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('sem contas mostra convite', async ({ page }) => {
     await abrir(page, { sc_cr: [cr(1, 'Atrasado Rec', somarDias(HOJE, -3))] });
     await expect(page.locator('#hoje-tarefas')).toContainText('Atrasado Rec');
     await expect(page.locator('#hoje-convite')).toContainText('Configure suas contas para ver quanto você tem');
@@ -115,13 +123,15 @@ test('sem contas mostra convite', async ({ page }) => {
     await expect(page.locator('#hoje-saldos .hoje-conta')).toHaveCount(0);
 });
 
-test('tudo em dia', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('tudo em dia', async ({ page }) => {
     await abrir(page, { sc_contas_fin: CONTAS });
     await expect(page.locator('#hoje-tarefas')).toContainText('Tudo em dia');
     await expect(page.locator('#hoje-tarefas .hoje-grupo')).toHaveCount(0);
 });
 
-test('em 375px de largura tarefas vem primeiro', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('em 375px de largura tarefas vem primeiro', async ({ page }) => {
     await abrir(page, { sc_contas_fin: CONTAS, sc_cr: [cr(1, 'Atrasado Rec', somarDias(HOJE, -3))] }, 375);
     const t = await page.locator('#hoje-tarefas').boundingBox();
     const s = await page.locator('#hoje-saldos').boundingBox();
@@ -129,7 +139,8 @@ test('em 375px de largura tarefas vem primeiro', async ({ page }) => {
     expect(Math.abs(t.x - s.x)).toBeLessThan(5);
 });
 
-test('aviso de pedidos para revisar aparece em Hoje sem clicar em aba', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('aviso de pedidos para revisar aparece em Hoje sem clicar em aba', async ({ page }) => {
     await entrar(page, BASE, { sc_contas_fin: CONTAS });
     await page.evaluate(() => localStorage.setItem('sc_fin_revisar', JSON.stringify([{ pedido_id: 1, rotulo: '#26501', cliente: 'Ana', motivo: 'valor diferente' }])));
     await page.goto(BASE + '/financeiro.html');
@@ -139,7 +150,8 @@ test('aviso de pedidos para revisar aparece em Hoje sem clicar em aba', async ({
     await expect(page.locator('#fin-revisar')).toContainText('#26501');
 });
 
-test('cobrar na tela Hoje marca "cobrado hoje" e o selo vem salvo', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('cobrar na tela Hoje marca "cobrado hoje" e o selo vem salvo', async ({ page }) => {
     await abrir(page, {
         sc_contas_fin: CONTAS,
         sc_cli: [{ id: 1, nome: 'Atrasado Rec', tel: '(11) 98765-4321' }],

@@ -96,7 +96,7 @@ test('salvarERecarregar sem espaco: uma baixa avisa uma vez, so recarrega depois
         };
     });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
     await page.evaluate(() => { window.__marca = 1; window.__cheio = true; });
     let alertas = 0;
     await page.exposeFunction('__contarAlerta', () => { alertas++; });

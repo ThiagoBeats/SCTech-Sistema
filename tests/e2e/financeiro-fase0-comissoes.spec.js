@@ -64,7 +64,7 @@ test('pagar no A Pagar reflete na tela de vendedores', async ({ page }) => {
     await expect(page.locator('#tb-comissoes-pendentes')).toContainText('R$ 50.00');
     await page.evaluate(() => { gerarComissoesPedido(db.pedidos[0]); syncDB(); });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="pagar"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
     const linha = page.locator('#tb-contas-pagar tr', { hasText: 'Bruno' });
     await linha.locator('button', { hasText: 'Pagar' }).click();
     await page.locator('#baixa-modal .baixa-meio').selectOption('PIX');
@@ -99,7 +99,7 @@ test('Pagar no A Pagar nao usa prompt', async ({ page }) => {
         sc_cp: [{ id: 801, descricao: 'Aluguel', valor: 300, categoria: 'outro', tipo: 'fixo', status: 'Pendente', data_vencimento: '2099-01-01', data_pagamento: null, credor_nome: 'Imob' }] });
     await page.addInitScript(() => { window.prompt = () => { window.__prompt = true; return null; }; });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="pagar"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
     await page.locator('#tb-contas-pagar button', { hasText: 'Pagar' }).click();
     await page.locator('#baixa-modal .baixa-meio').selectOption('PIX');
     await page.locator('#baixa-modal #baixa-ok').click();

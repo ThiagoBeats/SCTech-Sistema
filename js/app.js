@@ -37,15 +37,12 @@ const MODULOS_PERMISSAO = [
         { key: 'pedidos', label: 'Pedidos de Compra' },
     ]},
     { key: 'financeiro',    label: 'Financeiro',         subs: [
-        { key: 'dashboard', label: 'Visão Geral' },
-        { key: 'receber',   label: 'A Receber' },
-        { key: 'pagar',     label: 'A Pagar' },
-        { key: 'fixas',     label: 'Despesas Fixas' },
-        { key: 'dre',       label: 'DRE por Pedido' },
-        { key: 'hoje',      label: 'Hoje' },
-        { key: 'extrato',   label: 'Extrato' },
-        { key: 'resultado', label: 'Resultado do mês' },
-        { key: 'simulador', label: 'Simular compra' },
+        { key: 'resumo',    label: 'Resumo' },
+        { key: 'receber',   label: 'Contas a receber' },
+        { key: 'pagar',     label: 'Contas a pagar' },
+        { key: 'fixas',     label: 'Recorrências' },
+        { key: 'fluxo',     label: 'Fluxo de caixa' },
+        { key: 'dre',       label: 'DRE' },
     ]},
     { key: 'relatorios',    label: 'Relatórios',         subs: [
         { key: 'faturamento', label: 'Faturamento Mensal' },
@@ -114,6 +111,8 @@ function papeisPadrao() {
             pedidos:               'completo',
             clientes:              'completo',
             financeiro:            'visualizar',
+            'financeiro.resumo':   'sem_acesso',
+            'financeiro.fluxo':    'sem_acesso',
             'financeiro.dashboard':'sem_acesso',
             'financeiro.pagar':    'sem_acesso',
             'financeiro.fixas':    'sem_acesso',
@@ -200,6 +199,31 @@ function migrarArquitetoDosPedidos() {
     if (mudou) syncDB();
 }
 
+// Permissoes do Financeiro novo. Sem a chave nova, ela herda das antigas:
+// Resumo = maior entre Visao Geral e Hoje; Fluxo de caixa = Extrato; DRE = maior entre
+// DRE (por pedido) e Resultado do mes. A chave Resumo e a marca de que ja migrou (roda 1 vez).
+// `parcial` (permissoes_extras de um usuario): so conta o que ele tem, o resto vem do papel.
+// Papel sem a chave do modulo: so conta as sub-abas que ele tem.
+function _migrarPermFinanceiroNovo(perm, parcial) {
+    if (!perm || perm['financeiro.resumo']) return;
+    const maior = (a, b) => NIVEL_ORDEM[a] >= NIVEL_ORDEM[b] ? a : b;
+    const nivelDe = chaves => {
+        let n = null;
+        chaves.forEach(k => {
+            const p = perm[k] || (parcial ? null : perm.financeiro);
+            if (p && NIVEL_ORDEM[p.nivel] !== undefined) n = n === null ? p.nivel : maior(n, p.nivel);
+        });
+        return n;
+    };
+    const resumo = nivelDe(['financeiro.dashboard', 'financeiro.hoje']);
+    const fluxo = nivelDe(['financeiro.extrato']);
+    const dre = nivelDe(['financeiro.dre', 'financeiro.resultado']);
+    if (resumo === null && fluxo === null && dre === null) return;
+    if (resumo !== null) perm['financeiro.resumo'] = { nivel: resumo, acoes_restritas: [] };
+    if (fluxo !== null && !perm['financeiro.fluxo']) perm['financeiro.fluxo'] = { nivel: fluxo, acoes_restritas: [] };
+    if (dre !== null) perm['financeiro.dre'] = { nivel: dre, acoes_restritas: [] };
+}
+
 const CHAVE_PAPEL_GERENTE = 'sc_papel_gerente';
 function migrarPermissoesSalvas() {
     let mudou = false;
@@ -227,6 +251,8 @@ function migrarPermissoesSalvas() {
                 if (!p.permissoes[k]) p.permissoes[k] = { nivel: (base && base.nivel) || 'sem_acesso', acoes_restritas: [] };
             });
         }
+        // Financeiro novo (4 abas): Resumo, Fluxo de caixa e DRE nasceram das telas antigas.
+        if (p.permissoes && typeof p.permissoes === 'object') _migrarPermFinanceiroNovo(p.permissoes, false);
         if (JSON.stringify(p.permissoes) !== antes) mudou = true;
     });
     // Gerente nasceu depois: entra uma vez (a marca impede que um excluido volte)
@@ -253,6 +279,7 @@ function migrarPermissoesSalvas() {
                 if (!novo[k]) novo[k] = { nivel: base.nivel || 'sem_acesso', acoes_restritas: [] };
             });
         }
+        _migrarPermFinanceiroNovo(novo, true);
         if (JSON.stringify(novo) !== JSON.stringify(u.permissoes_extras)) { u.permissoes_extras = novo; mudou = true; }
     });
     if (mudou) syncDB();
@@ -1282,7 +1309,7 @@ let _prevTabCatalogo = null, _curTabCatalogo = 'tecidos';
 let _prevTabRel = null, _curTabRel = 'faturamento';
 let _prevTabVend = null, _curTabVend = 'lista';
 let _prevTabForn = null, _curTabForn = 'lista';
-let _prevTabFin = null, _curTabFin = 'dashboard';
+let _prevTabFin = null, _curTabFin = 'resumo';
 
 function _tabBackBtn(navSel, prevTab, goBackFn) {
     const nav = document.querySelector(navSel);
@@ -1677,7 +1704,34 @@ function salvarERecarregar(msg = 'Salvo com sucesso!', { relancarErro = false } 
 // não guardar a senha em texto puro; quando o sistema migrar para um banco de
 // dados/backend real, a autenticação deve ser refeita lá (hash forte no
 // servidor, verificação em cada rota) e este arquivo deixa de ser a fonte da verdade.
-const FIN_TAB_MODULO = { dashboard: 'financeiro.dashboard', receber: 'financeiro.receber', pagar: 'financeiro.pagar', fixas: 'financeiro.fixas', dre: 'financeiro.dre', hoje: 'financeiro.hoje', extrato: 'financeiro.extrato', resultado: 'financeiro.resultado', simulador: 'financeiro.simulador' };
+// Telas antigas do Financeiro: seguem no codigo, mas desligadas (nenhuma aba, botao ou cartao delas aparece).
+// Ligar de novo = trocar para true.
+const FIN_RECURSOS_ANTIGOS = { hoje: false, visaoGeral: false, resultado: false, fechamento: false, simulador: false, drePedido: false, extrato: false };
+// Abas do Financeiro e a permissao de cada uma (lista = basta uma delas). Depois das 4 novas vem as antigas.
+const FIN_TAB_MODULO = { resumo: 'financeiro.resumo', lancamentos: ['financeiro.pagar', 'financeiro.receber'], fluxo: 'financeiro.fluxo', dre: 'financeiro.dre',
+    dashboard: 'financeiro.dashboard', receber: 'financeiro.receber', pagar: 'financeiro.pagar', fixas: 'financeiro.fixas', drepedido: 'financeiro.dre', hoje: 'financeiro.hoje', extrato: 'financeiro.extrato', resultado: 'financeiro.resultado', simulador: 'financeiro.simulador' };
+const FIN_ABAS_NOVAS = ['resumo', 'lancamentos', 'fluxo', 'dre'];
+// Aba antiga -> recurso (em FIN_RECURSOS_ANTIGOS) que a liga.
+const FIN_ABA_ANTIGA_RECURSO = { hoje: 'hoje', dashboard: 'visaoGeral', resultado: 'resultado', simulador: 'simulador', drepedido: 'drePedido', extrato: 'extrato' };
+// Aba pedida (link antigo, sino, atalho) -> aba que existe hoje. Contas a receber/pagar/despesas fixas
+// agora sao do Lancamentos (com o lado certo); as telas antigas desligadas caem no Resumo ou no Fluxo.
+function finAbaDestino(tab) {
+    if (FIN_ABAS_NOVAS.includes(tab)) return { tab };
+    if (tab === 'receber' || tab === 'pagar' || tab === 'fixas') return { tab: 'lancamentos', lado: tab };
+    const rec = FIN_ABA_ANTIGA_RECURSO[tab];
+    if (rec && FIN_RECURSOS_ANTIGOS[rec]) return { tab };
+    if (tab === 'extrato') return { tab: 'fluxo' };
+    return { tab: 'resumo' };
+}
+// Permissao de uma aba: texto ou lista (basta uma).
+function finModuloVisivel(modulo) {
+    return (Array.isArray(modulo) ? modulo : [modulo]).some(m => temAcesso(m, 'visualizar'));
+}
+function finAbaVisivel(tab) {
+    const rec = FIN_ABA_ANTIGA_RECURSO[tab];
+    if (rec && !FIN_RECURSOS_ANTIGOS[rec]) return false;
+    return !!FIN_TAB_MODULO[tab] && finModuloVisivel(FIN_TAB_MODULO[tab]);
+}
 
 const PAGINA_MODULO = {
     'index.html':         'inicio',
@@ -4758,7 +4812,9 @@ Notif.registrar('estoque-minimo', () => {
 // clicar abre essa aba.
 Notif.registrar('financeiro', () => {
     if (!temAcessoAlgumaSub('financeiro', 'visualizar')) return [];
-    return finAlertasCalcular(hojeLocal()).filter(a => temAcesso(FIN_TAB_MODULO[a.aba] || 'financeiro', 'visualizar')).map(a => ({
+    // Vencimentos misturam receber e pagar: so quem ve os dois lados.
+    const veAlerta = a => a.aba === 'lancamentos' ? ['financeiro.pagar', 'financeiro.receber'].every(m => temAcesso(m, 'visualizar')) : finModuloVisivel(FIN_TAB_MODULO[a.aba] || 'financeiro');
+    return finAlertasCalcular(hojeLocal()).filter(veAlerta).map(a => ({
         chave: 'fin:' + a.id, icone: a.icone, cor: a.cor === 'warning' ? 'warn' : a.cor, urgente: a.cor === 'danger',
         href: 'financeiro.html?aba=' + a.aba, titulo: '', texto: a.html }));
 });
@@ -13906,23 +13962,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (document.getElementById('pedido-compra-container')) renderPedidoCompraDoc();
 
-    if (document.getElementById('fin-kpis')) {
+    if (document.getElementById('fin-resumo')) {
         atualizarStatusVencimentos();
         renderAvisoCopiaFinanceiro();
         renderAvisoRevisaoFinanceiro();
-        const abasVisiveis = Object.entries(FIN_TAB_MODULO).filter(([, modulo]) => temAcesso(modulo, 'visualizar'));
-        Object.keys(FIN_TAB_MODULO).forEach(tab => {
-            const visivel = abasVisiveis.some(([t]) => t === tab);
-            document.querySelector(`.fin-tab-btn[data-tab="${tab}"]`)?.style.setProperty('display', visivel ? '' : 'none');
+        // So as 4 abas novas (e as antigas cujo recurso foi religado) aparecem, conforme a permissao.
+        _finMontarAbasAntigas();
+        const abasVisiveis = Object.keys(FIN_TAB_MODULO).filter(finAbaVisivel);
+        document.querySelectorAll('.fin-tab-btn').forEach(b => {
+            b.style.setProperty('display', finAbaVisivel(b.dataset.tab) ? '' : 'none');
         });
-        const abaInicial = abasVisiveis.some(([t]) => t === 'hoje') ? 'hoje' : abasVisiveis.some(([t]) => t === 'dashboard') ? 'dashboard' : (abasVisiveis[0]?.[0] || 'dashboard');
+        const abaInicial = FIN_ABAS_NOVAS.find(t => abasVisiveis.includes(t)) || abasVisiveis[0] || 'resumo';
         mostrarTabFinanceiro(abaInicial);
-        lembrarAbaAoRecarregar('financeiro', () => _curTabFin, mostrarTabFinanceiro, t => abasVisiveis.some(([x]) => x === t));
-        // Link de um alerta do sino/card (financeiro.html?aba=receber): abre essa aba, se o usuario pode ve-la.
-        const abaLink = new URLSearchParams(window.location.search).get('aba');
-        if (abaLink && abaLink !== abaInicial && abasVisiveis.some(([x]) => x === abaLink)) mostrarTabFinanceiro(abaLink);
+        lembrarAbaAoRecarregar('financeiro', () => _curTabFin, mostrarTabFinanceiro, t => abasVisiveis.some(x => x === t));
+        // Link de um alerta do sino/card (financeiro.html?aba=receber) ou link antigo (?tab=hoje, #hoje):
+        // abre a aba que hoje cuida do assunto, se o usuario pode ve-la.
+        const _qs = new URLSearchParams(window.location.search);
+        const abaLink = _qs.get('aba') || _qs.get('tab') || _qs.get('view') || (window.location.hash || '').replace('#', '');
+        if (abaLink && FIN_TAB_MODULO[abaLink]) {
+            const dest = finAbaDestino(abaLink);
+            if (abasVisiveis.includes(dest.tab)) mostrarTabFinanceiro(dest.tab, dest.lado);
+        }
         // Usou o link: tira ?aba= do endereco, senao ele ganharia da aba lembrada no F5.
-        if (abaLink) { try { const u = new URL(window.location.href); u.searchParams.delete('aba'); history.replaceState(null, '', u.pathname + u.search + u.hash); } catch (e) {} }
+        if (abaLink) { try { const u = new URL(window.location.href); ['aba', 'tab', 'view'].forEach(k => u.searchParams.delete(k)); history.replaceState(null, '', u.pathname + u.search); } catch (e) {} }
         if (!temAcesso('financeiro.pagar', 'completo')) document.getElementById('cp-toolbar')?.style.setProperty('display', 'none');
         if (!temAcesso('financeiro.fixas', 'completo')) document.getElementById('df-form-card')?.style.setProperty('display', 'none');
     }
@@ -16654,18 +16716,39 @@ function preencherCategoriasFinanceiro() {
     });
 }
 
-function mostrarTabFinanceiro(tab) {
+// Botoes das telas antigas religadas em FIN_RECURSOS_ANTIGOS (desligadas, nem existem na barra).
+const _FIN_ROTULO_ANTIGA = { hoje: '☀️ Hoje', dashboard: '📊 Visão Geral', resultado: '📅 Resultado do mês', simulador: '🧮 Simular compra', drepedido: '📈 DRE por Pedido', extrato: '📒 Extrato' };
+function _finMontarAbasAntigas() {
+    const nav = document.querySelector('.tab-nav');
+    if (!nav) return;
+    Object.keys(_FIN_ROTULO_ANTIGA).forEach(tab => {
+        if (!FIN_RECURSOS_ANTIGOS[FIN_ABA_ANTIGA_RECURSO[tab]] || nav.querySelector(`.fin-tab-btn[data-tab="${tab}"]`)) return;
+        const b = document.createElement('button');
+        b.className = 'tab-btn fin-tab-btn';
+        b.dataset.tab = tab;
+        b.textContent = _FIN_ROTULO_ANTIGA[tab];
+        b.onclick = () => mostrarTabFinanceiro(tab);
+        nav.appendChild(b);
+    });
+}
+
+// `lado` (so Lancamentos): 'pagar' | 'receber' | 'fixas'. Nomes antigos de aba (receber, pagar, fixas,
+// hoje, extrato...) levam para a aba que hoje cuida do assunto (ver finAbaDestino).
+function mostrarTabFinanceiro(tab, lado) {
+    const dest = finAbaDestino(tab);
+    tab = dest.tab; lado = dest.lado || lado;
     preencherCategoriasFinanceiro();
     if (_curTabFin !== tab) { _prevTabFin = _curTabFin; _curTabFin = tab; }
     document.querySelectorAll('.fin-tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.fin-panel').forEach(p => p.classList.remove('active'));
     document.querySelector(`.fin-tab-btn[data-tab="${tab}"]`)?.classList.add('active');
     document.getElementById(`fin-${tab}`)?.classList.add('active');
-    if (tab === 'dashboard') renderDashboardFinanceiro();
-    else if (tab === 'receber') renderContasReceber();
-    else if (tab === 'pagar')   renderContasPagar();
-    else if (tab === 'fixas')   renderDespesasFixas();
-    else if (tab === 'dre')     renderDRE();
+    if (tab === 'resumo') renderFinResumo();
+    else if (tab === 'lancamentos') renderFinLancamentos(lado);
+    else if (tab === 'fluxo')   renderFinFluxoProvisorio();
+    else if (tab === 'dre')     renderFinDreProvisorio();
+    else if (tab === 'dashboard') renderDashboardFinanceiro();
+    else if (tab === 'drepedido') renderDRE();
     else if (tab === 'extrato') renderExtrato();
     else if (tab === 'hoje')    renderHoje();
     else if (tab === 'resultado') renderResultadoMes(_resMesAtual);
@@ -17895,7 +17978,7 @@ function finAlertasCalcular(hojeStr) {
         const venHojePag = db.contas_pagar.filter(cp=>cp.status==='Pendente'&&cp.data_vencimento===hojeStr);
         if (venHojeRec.length+venHojePag.length)
             add('fin_vencimento','warning','⏰',`<strong>${venHojeRec.length+venHojePag.length} conta(s) vencem hoje</strong> — ${venHojeRec.length} a receber (R$ ${fmt(venHojeRec.reduce((s,x)=>s+x.valor,0))}) · ${venHojePag.length} a pagar (R$ ${fmt(venHojePag.reduce((s,x)=>s+x.valor,0))})`,
-                'hoje', 'venc-hoje:' + hojeStr + ':' + venHojeRec.map(x=>x.id).concat(venHojePag.map(x=>'p'+x.id)).join(','));
+                'lancamentos', 'venc-hoje:' + hojeStr + ':' + venHojeRec.map(x=>x.id).concat(venHojePag.map(x=>'p'+x.id)).join(','));
     }
 
     if (alertaAtivo('fin_atraso')) {
@@ -17913,25 +17996,27 @@ function finAlertasCalcular(hojeStr) {
     const mesAtStr = `${hoje2.getFullYear()}-${String(hoje2.getMonth()+1).padStart(2,'0')}`;
     const mesAntD  = new Date(hoje2.getFullYear(), hoje2.getMonth()-1, 1);
     const mesAntStr = `${mesAntD.getFullYear()}-${String(mesAntD.getMonth()+1).padStart(2,'0')}`;
-    const precisaFat = alertaAtivo('fin_tendencia') || alertaAtivo('fin_meta');
+    // Meta e tendencia pertencem a Visao Geral/Resultado do mes: desligados com elas.
+    const metaTendOk = FIN_RECURSOS_ANTIGOS.visaoGeral || FIN_RECURSOS_ANTIGOS.resultado;
+    const precisaFat = metaTendOk && (alertaAtivo('fin_tendencia') || alertaAtivo('fin_meta'));
     const fatAt = precisaFat ? resultadoFinanceiroDoMes(mesAtStr).faturamento : 0;
-    const fatAnt = alertaAtivo('fin_tendencia') ? resultadoFinanceiroDoMes(mesAntStr).faturamento : 0;
-    if (alertaAtivo('fin_tendencia') && fatAnt>0) {
+    const fatAnt = metaTendOk && alertaAtivo('fin_tendencia') ? resultadoFinanceiroDoMes(mesAntStr).faturamento : 0;
+    if (metaTendOk && alertaAtivo('fin_tendencia') && fatAnt>0) {
         const pct = ((fatAt-fatAnt)/fatAnt*100).toFixed(1);
         // Igual tambem quando a porcentagem mostrada arredonda para 0,0% (nunca "+0.0%").
         const igual = Math.round(fatAt * 100) === Math.round(fatAnt * 100) || Math.abs(Number(pct)) === 0;
         add('fin_tendencia', fatAt>=fatAnt?'success':'warning', fatAt>=fatAnt?'📈':'📉',
             `Faturamento deste mês <strong>${igual ? 'igual ao mês anterior' : (fatAt>=fatAnt?'+':'') + pct + '% vs. mês anterior'}</strong> (R$ ${fmt(fatAt)} × R$ ${fmt(fatAnt)})`,
-            'dashboard', 'tendencia:' + mesAtStr + ':' + (fatAt>=fatAnt ? 'alta' : 'queda'));
+            'resumo', 'tendencia:' + mesAtStr + ':' + (fatAt>=fatAnt ? 'alta' : 'queda'));
     }
 
-    const metaMes = alertaAtivo('fin_meta') ? metaFinanceiraDoMes(mesAtStr) : 0;
-    if (alertaAtivo('fin_meta') && metaMes>0) {
+    const metaMes = metaTendOk && alertaAtivo('fin_meta') ? metaFinanceiraDoMes(mesAtStr) : 0;
+    if (metaTendOk && alertaAtivo('fin_meta') && metaMes>0) {
         const pctMeta = (fatAt/metaMes*100).toFixed(1);
         if (fatAt>=metaMes)
-            add('fin_meta','success','🏆',`Meta do mês atingida! <strong>${pctMeta}%</strong> — R$ ${fmt(fatAt)} de R$ ${fmt(metaMes)}`, 'dashboard', 'meta:' + mesAtStr + ':atingida');
+            add('fin_meta','success','🏆',`Meta do mês atingida! <strong>${pctMeta}%</strong> — R$ ${fmt(fatAt)} de R$ ${fmt(metaMes)}`, 'resumo', 'meta:' + mesAtStr + ':atingida');
         else if (fatAt>=metaMes*0.8)
-            add('fin_meta','info','🎯',`Faltam <strong>R$ ${fmt(metaMes-fatAt)}</strong> para atingir a meta (${pctMeta}% concluído)`, 'dashboard', 'meta:' + mesAtStr + ':perto');
+            add('fin_meta','info','🎯',`Faltam <strong>R$ ${fmt(metaMes-fatAt)}</strong> para atingir a meta (${pctMeta}% concluído)`, 'resumo', 'meta:' + mesAtStr + ':perto');
     }
 
     const em7 = new Date(hojeStr+'T00:00:00'); em7.setDate(em7.getDate()+7);
@@ -17939,12 +18024,12 @@ function finAlertasCalcular(hojeStr) {
     const proxVenc = db.contas_receber.filter(cr=>finAberta(cr)&&cr.data_vencimento>hojeStr&&cr.data_vencimento<=em7Str).length
                    + db.contas_pagar.filter(cp=>finAberta(cp)&&cp.data_vencimento>hojeStr&&cp.data_vencimento<=em7Str).length;
     if (alertaAtivo('fin_vencimento') && proxVenc>=3)
-        add('fin_vencimento','info','📋',`<strong>${proxVenc} conta(s)</strong> vencem nos próximos 7 dias`, 'hoje', 'venc-7d:' + hojeStr + ':' + proxVenc);
+        add('fin_vencimento','info','📋',`<strong>${proxVenc} conta(s)</strong> vencem nos próximos 7 dias`, 'lancamentos', 'venc-7d:' + hojeStr + ':' + proxVenc);
 
     const _ent7 = db.contas_receber.filter(cr=>finAberta(cr)&&cr.data_vencimento>=hojeStr&&cr.data_vencimento<=em7Str).reduce((s,cr)=>s+cr.valor,0);
     const _sai7 = db.contas_pagar.filter(cp=>finAberta(cp)&&cp.data_vencimento>=hojeStr&&cp.data_vencimento<=em7Str).reduce((s,cp)=>s+cp.valor,0);
     if (alertaAtivo('fin_gap') && _sai7 > _ent7 && _sai7 > 0)
-        add('fin_gap','danger','⚠️',`Gap de caixa: saídas superam entradas nos próximos 7 dias em <strong>R$ ${fmt(_sai7-_ent7)}</strong> (entradas: R$ ${fmt(_ent7)} · saídas: R$ ${fmt(_sai7)})`, 'hoje', 'gap:' + hojeStr);
+        add('fin_gap','danger','⚠️',`Gap de caixa: saídas superam entradas nos próximos 7 dias em <strong>R$ ${fmt(_sai7-_ent7)}</strong> (entradas: R$ ${fmt(_ent7)} · saídas: R$ ${fmt(_sai7)})`, 'resumo', 'gap:' + hojeStr);
     return out;
 }
 

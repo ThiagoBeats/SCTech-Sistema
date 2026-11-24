@@ -126,7 +126,8 @@ test('desmarcar o unico item da baixa desabilita Confirmar e avisa', async ({ pa
     await expect(modal.locator('#baixa-ok')).toBeEnabled();
 });
 
-test('selo do DRE usa variavel de CSS com cor propria no tema escuro', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('selo do DRE usa variavel de CSS com cor propria no tema escuro', async ({ page }) => {
     const CAT = [{ id: 7, nome: 'Linho Bege', preco_custo: 20, preco_venda: 100 }];
     await entrar(page, BASE, { sc_cli: CLI, sc_cat: CAT, sc_ped: [ped({ ambientes: [{ nome: 'Sala', tecidos: [{ tecidoId: 7, nome: 'Linho Bege', consumo_linear: 10 }] }] })] });
     await page.goto(BASE + '/financeiro.html');

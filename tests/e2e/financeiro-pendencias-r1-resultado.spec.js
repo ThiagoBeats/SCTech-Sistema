@@ -34,7 +34,8 @@ const kpi2 = (page, txt) => page.locator('#fin-kpis2 .fin-kpi', { hasText: txt }
 const kpi1 = (page, rotulo) => page.locator('#fin-kpis .fin-kpi').filter({ has: page.locator('.fin-kpi-label', { hasText: new RegExp('^' + rotulo + '$') }) });
 
 // ---- Extrato ----
-test('Extrato avisa os recebimentos sem conta do mes mostrado', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Extrato avisa os recebimentos sem conta do mes mostrado', async ({ page }) => {
     await abrir(page, {
         sc_contas_fin: [BANCO],
         sc_cr: [crPago(1, 500, '2026-11-03'), crPago(2, 250, '2026-11-05'), crPago(3, 700, '2026-11-07'), crPago(4, 999, '2026-10-12')],
@@ -52,7 +53,8 @@ test('Extrato avisa os recebimentos sem conta do mes mostrado', async ({ page })
 });
 
 // ---- Visao Geral ----
-test('periodo que corta um mes avisa que o imposto entra so nos meses inteiros', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('periodo que corta um mes avisa que o imposto entra so nos meses inteiros', async ({ page }) => {
     await abrir(page, { sc_contas_fin: [BANCO], sc_cr: [crPago(1, 1000, '2026-11-10')], sc_mov_fin: [mov(1, 10, '2026-11-10', 'entrada', 1000, 'cr', 1, 'Pedido 1')] });
     await visaoGeral(page);
     const nota = page.locator('#fin-nota-imposto');
@@ -68,7 +70,8 @@ test('periodo que corta um mes avisa que o imposto entra so nos meses inteiros',
     await expect(nota).toBeHidden();
 });
 
-test('"Este mes": a receber e a pagar ate o fim do mes, na mesma janela do recebido', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('"Este mes": a receber e a pagar ate o fim do mes, na mesma janela do recebido', async ({ page }) => {
     await abrir(page, {
         sc_contas_fin: [BANCO],
         sc_cr: [crPago(1, 1000, '2026-11-10'), crAberto(2, 400, '2026-11-25'), crAberto(3, 50, '2026-12-02')],
@@ -84,7 +87,8 @@ test('"Este mes": a receber e a pagar ate o fim do mes, na mesma janela do receb
     await expect(kpi1(page, 'A Receber')).toContainText('R$ 0,00');
 });
 
-test('grafico de fluxo usa as datas de repasse e o liquido, como a previsao do Hoje', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('grafico de fluxo usa as datas de repasse e o liquido, como a previsao do Hoje', async ({ page }) => {
     await abrir(page, {
         sc_contas_fin: [BANCO, MAQ], sc_meios_pag: MEIOS,
         // Cartao ja baixado que cai dia 20 (1.000 com taxa de 30) e um a receber no debito previsto (500 -> 492,50 no dia seguinte)
@@ -102,7 +106,8 @@ test('grafico de fluxo usa as datas de repasse e o liquido, como a previsao do H
     await expect(kpi2(page, 'Total Recebido')).toContainText('R$ 970,00 líquido (sem a taxa do cartão)');
 });
 
-test('recebido no cartao sem conta entra na data do repasse, nao na da baixa', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('recebido no cartao sem conta entra na data do repasse, nao na da baixa', async ({ page }) => {
     await abrir(page, {
         sc_contas_fin: [BANCO], sc_meios_pag: MEIOS,
         sc_cr: [crPago(1, 1000, '2026-10-20', { cartao: { tipo: 'credito', vezes: 1 }, conta_id: null })],
@@ -116,7 +121,8 @@ test('recebido no cartao sem conta entra na data do repasse, nao na da baixa', a
 });
 
 // ---- Resultado do mes ----
-test('previsto ate o fim do mes: tira a taxa do cartao a cair e ignora transferencia futura', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('previsto ate o fim do mes: tira a taxa do cartao a cair e ignora transferencia futura', async ({ page }) => {
     await abrir(page, {
         sc_contas_fin: [BANCO, CAIXA, MAQ], sc_empresa: { aliquota_estimada: 6 },
         sc_cr: [crPago(1, 1000, '2026-11-02', { cartao: { tipo: 'credito', vezes: 1 }, conta_id: 12 })],
@@ -132,7 +138,8 @@ test('previsto ate o fim do mes: tira a taxa do cartao a cair e ignora transfere
     await expect(page.locator('#res-previsto')).toHaveText('R$ 911,80');
 });
 
-test('margem de 12 meses nao recalcula a cada render sem mudanca nos dados', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('margem de 12 meses nao recalcula a cada render sem mudanca nos dados', async ({ page }) => {
     await abrir(page, {
         sc_contas_fin: [BANCO],
         sc_cr: [crPago(1, 1000, '2026-10-10')],
@@ -158,7 +165,8 @@ test('margem de 12 meses nao recalcula a cada render sem mudanca nos dados', asy
 });
 
 // ---- Fechamento ----
-test('conferencia do fechamento inclui conta sem data de saldo inicial', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('conferencia do fechamento inclui conta sem data de saldo inicial', async ({ page }) => {
     const antiga = { id: 13, nome: 'Cofre antigo', tipo: 'caixa', saldo_inicial: 200, ativo: true };
     await abrir(page, { sc_contas_fin: [BANCO, antiga], sc_cr: [crPago(1, 500, '2026-10-10')], sc_mov_fin: [mov(1, 10, '2026-10-10', 'entrada', 500, 'cr', 1, 'Pedido 1')] }, '2026-11-05');
     await page.locator('.fin-tab-btn[data-tab="resultado"]').click();
@@ -174,7 +182,7 @@ test('conferencia do fechamento inclui conta sem data de saldo inicial', async (
 // ---- A Pagar parcelado: regra R4 ----
 test('A Pagar parcelado: dia 31 vira o ultimo dia do mes, como no simulador', async ({ page }) => {
     await abrir(page, { sc_cp: [] });
-    await page.locator('.fin-tab-btn[data-tab="pagar"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
     await page.evaluate(() => {
         abrirModalContaPagar('manual');
         document.getElementById('cpm-descricao').value = 'Máquina';

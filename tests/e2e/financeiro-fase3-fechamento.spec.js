@@ -54,7 +54,8 @@ async function ateResumoComAjuste(page) {
     await expect(page.locator('#fech-confirmar')).toBeVisible();
 }
 
-test('mes atual nao tem botao; outubro tem "🔒 Fechar outubro de 2026"', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('mes atual nao tem botao; outubro tem "🔒 Fechar outubro de 2026"', async ({ page }) => {
     await abrir(page);
     await expect(page.locator('#res-mes')).toHaveValue('2026-11');
     await expect(page.locator('#fech-btn-fechar')).toHaveCount(0);
@@ -62,7 +63,8 @@ test('mes atual nao tem botao; outubro tem "🔒 Fechar outubro de 2026"', async
     await expect(page.locator('#fech-btn-fechar')).toHaveText('🔒 Fechar outubro de 2026');
 });
 
-test('passo 1: esperado 1300, extrato 1.280,00 mostra diferenca −20 e exige motivo para ajustar', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('passo 1: esperado 1300, extrato 1.280,00 mostra diferenca −20 e exige motivo para ajustar', async ({ page }) => {
     await abrir(page);
     await irPara(page, '2026-10');
     await page.click('#fech-btn-fechar');
@@ -81,7 +83,8 @@ test('passo 1: esperado 1300, extrato 1.280,00 mostra diferenca −20 e exige mo
     await expect(linha).toBeHidden();
 });
 
-test('fechar com ajuste: cria movimento de ajuste, nao muda o resultado, grava a foto e abre o documento com Enviar', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('fechar com ajuste: cria movimento de ajuste, nao muda o resultado, grava a foto e abre o documento com Enviar', async ({ page }) => {
     await abrir(page);
     await irPara(page, '2026-10');
     const antes = await page.evaluate(() => resultadoFinanceiroDoMes('2026-10').resultado);
@@ -113,7 +116,8 @@ test('fechar com ajuste: cria movimento de ajuste, nao muda o resultado, grava a
     await expect(page.locator('#res-fechamento .fech-mudou')).toHaveCount(0);
 });
 
-test('pendencias listam a CP de 80 com atalho', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('pendencias listam a CP de 80 com atalho', async ({ page }) => {
     await abrir(page);
     await irPara(page, '2026-10');
     await page.click('#fech-btn-fechar');
@@ -125,7 +129,8 @@ test('pendencias listam a CP de 80 com atalho', async ({ page }) => {
     await expect(page.locator('#fin-pagar')).toHaveClass(/active/);
 });
 
-test('sem pendencias mostra "Nada pendente neste mês."', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('sem pendencias mostra "Nada pendente neste mês."', async ({ page }) => {
     // CP de outubro paga e guia de imposto de outubro lancada (vence em novembro).
     const guia = { id: 9, descricao: 'DAS', categoria: 'imposto', tipo: 'variavel', valor: 30, mes_referencia: '2026-10', data_vencimento: '2026-11-20', data_pagamento: null, status: 'Pendente' };
     await abrir(page, { sc_cp: [SEED.sc_cp[0], guia] });
@@ -135,7 +140,8 @@ test('sem pendencias mostra "Nada pendente neste mês."', async ({ page }) => {
     await expect(modal(page)).toContainText('Nada pendente neste mês.');
 });
 
-test('duplo clique em Fechar grava uma foto e um ajuste so', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('duplo clique em Fechar grava uma foto e um ajuste so', async ({ page }) => {
     await abrir(page);
     await irPara(page, '2026-10');
     await ateResumoComAjuste(page);
@@ -145,7 +151,8 @@ test('duplo clique em Fechar grava uma foto e um ajuste so', async ({ page }) =>
     expect((await ler(page, 'sc_mov_fin')).filter(m => m.origem === 'ajuste')).toHaveLength(1);
 });
 
-test('lancar com data de outubro depois do fechamento mostra o aviso de mudanca; pagar em novembro uma conta de outubro nao mostra', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('lancar com data de outubro depois do fechamento mostra o aviso de mudanca; pagar em novembro uma conta de outubro nao mostra', async ({ page }) => {
     // Pagar em novembro a CP de outubro: nada muda em outubro.
     await abrir(page, { sc_fin_fech: [FOTO_OUT] }, () => {
         const cp = JSON.parse(localStorage.getItem('sc_cp'));
@@ -176,7 +183,8 @@ test('lancar com data de outubro depois do fechamento mostra o aviso de mudanca;
     await expect(page.locator('#doc-modal-paper')).toContainText('resultado era R$ 300,00, agora é R$ 400,00');
 });
 
-test('refazer apaga a foto e so os ajustes de outubro', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('refazer apaga a foto e so os ajustes de outubro', async ({ page }) => {
     const foto = { ...FOTO_OUT, contas: [{ conta_id: 10, nome: 'Banco', esperado: 1300, extrato: 1280, diferenca: -20, acao: 'ajuste', motivo: 'tarifa' }] };
     const movs = [
         ...SEED.sc_mov_fin,
@@ -197,7 +205,8 @@ test('refazer apaga a foto e so os ajustes de outubro', async ({ page }) => {
     expect(ids).toEqual([1, 2, 6]);
 });
 
-test('sem permissao completa: ve o selo, nao ve Fechar nem Refazer', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('sem permissao completa: ve o selo, nao ve Fechar nem Refazer', async ({ page }) => {
     await abrir(page, { sc_fin_fech: [FOTO_OUT] }, () => {
         const u = JSON.parse(localStorage.getItem('sc_usr'));
         u[0].papel_id = 4;
@@ -212,7 +221,8 @@ test('sem permissao completa: ve o selo, nao ve Fechar nem Refazer', async ({ pa
     await expect(page.locator('#fech-btn-fechar')).toHaveCount(0);
 });
 
-test('passo a passo nao fecha pelo fundo nem pelo Esc; Cancelar pergunta se ha algo digitado', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('passo a passo nao fecha pelo fundo nem pelo Esc; Cancelar pergunta se ha algo digitado', async ({ page }) => {
     await abrir(page);
     await irPara(page, '2026-10');
     await page.click('#fech-btn-fechar');
@@ -240,7 +250,8 @@ test('passo a passo nao fecha pelo fundo nem pelo Esc; Cancelar pergunta se ha a
     await expect(page.locator('#sc-modal-msg')).toBeHidden();
 });
 
-test('extrato negativo com milhar: "-1.500" e "−1.500" valem -1500', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('extrato negativo com milhar: "-1.500" e "−1.500" valem -1500', async ({ page }) => {
     await abrir(page);
     await irPara(page, '2026-10');
     await page.click('#fech-btn-fechar');
@@ -255,7 +266,8 @@ test('extrato negativo com milhar: "-1.500" e "−1.500" valem -1500', async ({ 
         .toEqual([1500, 1234.56, -1500, -1234.56, -1500]);
 });
 
-test('pendencias: credor da conta a pagar e atalhos so com permissao de ver A Pagar / A Receber', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('pendencias: credor da conta a pagar e atalhos so com permissao de ver A Pagar / A Receber', async ({ page }) => {
     const cps = [SEED.sc_cp[0], { ...SEED.sc_cp[1], credor_nome: 'Companhia de Luz' }];
     const crs = SEED.sc_cr.concat([{ id: 2, pedido_id: 102, cliente_nome: 'Cli 2', descricao: 'Pedido 2', valor: 90, data_vencimento: '2026-10-28', data_pagamento: null, status: 'Pendente', parcela_tipo: 'saldo' }]);
     await abrir(page, { sc_cp: cps, sc_cr: crs }, () => {
@@ -277,7 +289,8 @@ test('pendencias: credor da conta a pagar e atalhos so com permissao de ver A Pa
     await expect(modal(page).getByRole('button', { name: 'Abrir A Receber' })).toHaveCount(0);
 });
 
-test('guia de imposto lancada depois do fechamento: linha informativa, sem aviso amarelo', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('guia de imposto lancada depois do fechamento: linha informativa, sem aviso amarelo', async ({ page }) => {
     const guia = { id: 9, descricao: 'DAS', categoria: 'imposto', tipo: 'variavel', valor: 30, mes_referencia: '2026-10', data_vencimento: '2026-11-20', data_pagamento: null, status: 'Pendente' };
     await abrir(page, { sc_fin_fech: [FOTO_OUT], sc_cp: SEED.sc_cp.concat([guia]) });
     await irPara(page, '2026-10');

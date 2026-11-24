@@ -33,7 +33,7 @@ const CLI = [{ id: 1, nome: 'Ana Paula Lima' }];
 async function abrirPagar(page, dados) {
     await entrar(page, BASE, { sc_contas_fin: CONTAS, sc_meios_pag: MEIOS, ...dados });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="pagar"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
 }
 
 test('pagar conta no PIX gera saida no Banco', async ({ page }) => {
@@ -70,7 +70,7 @@ test('cartao so oferece conta maquininha (receber)', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_contas_fin: CONTAS, sc_meios_pag: MEIOS, sc_ped: [pedido({ valor_recebido: 0 })],
         sc_cr: [{ id: 601, pedido_id: 26400, cliente_nome: 'Ana Paula Lima', descricao: 'Saldo', valor: 500, data_vencimento: '2099-12-10', status: 'Pendente', parcela_tipo: 'saldo' }] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
     await page.locator('#tb-contas-receber button', { hasText: '✓ Recebido' }).first().click();
     const linha = page.locator('#baixa-modal .baixa-linha').first();
     await linha.locator('.baixa-meio').selectOption({ label: 'Cartão de débito' });

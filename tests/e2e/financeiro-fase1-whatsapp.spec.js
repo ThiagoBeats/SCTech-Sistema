@@ -20,7 +20,7 @@ async function abrir(page, dados) {
     await entrar(page, BASE, { sc_cli: CLI, sc_ped: [pedido()], sc_cr: [cr()], ...dados });
     await page.goto(BASE + '/financeiro.html');
     await page.evaluate(() => { window.__abertos = []; window.open = (u, t) => { window.__abertos.push([u, t]); return {}; }; });
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
 }
 const abertos = page => page.evaluate(() => window.__abertos);
 

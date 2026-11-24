@@ -14,15 +14,10 @@
         <div class="header"><h2>Controle Financeiro</h2></div>
 
         <div class="tab-nav">
-            <button class="tab-btn fin-tab-btn active" data-tab="hoje"      onclick="mostrarTabFinanceiro('hoje')">☀️ Hoje</button>
-            <button class="tab-btn fin-tab-btn"        data-tab="dashboard" onclick="mostrarTabFinanceiro('dashboard')">📊 Visão Geral</button>
-            <button class="tab-btn fin-tab-btn"        data-tab="resultado" onclick="mostrarTabFinanceiro('resultado')">📅 Resultado do mês</button>
-            <button class="tab-btn fin-tab-btn"        data-tab="simulador" onclick="mostrarTabFinanceiro('simulador')">🧮 Simular compra</button>
-            <button class="tab-btn fin-tab-btn"        data-tab="receber"   onclick="mostrarTabFinanceiro('receber')">📥 A Receber</button>
-            <button class="tab-btn fin-tab-btn"        data-tab="pagar"     onclick="mostrarTabFinanceiro('pagar')">📤 A Pagar</button>
-            <button class="tab-btn fin-tab-btn"        data-tab="fixas"     onclick="mostrarTabFinanceiro('fixas')">🔁 Despesas Fixas</button>
-            <button class="tab-btn fin-tab-btn"        data-tab="dre"       onclick="mostrarTabFinanceiro('dre')">📈 DRE por Pedido</button>
-            <button class="tab-btn fin-tab-btn"        data-tab="extrato"   onclick="mostrarTabFinanceiro('extrato')">📒 Extrato</button>
+            <button class="tab-btn fin-tab-btn active" data-tab="resumo"      onclick="mostrarTabFinanceiro('resumo')">Resumo</button>
+            <button class="tab-btn fin-tab-btn"        data-tab="lancamentos" onclick="mostrarTabFinanceiro('lancamentos')">Lançamentos</button>
+            <button class="tab-btn fin-tab-btn"        data-tab="fluxo"       onclick="mostrarTabFinanceiro('fluxo')">Fluxo de caixa</button>
+            <button class="tab-btn fin-tab-btn"        data-tab="dre"         onclick="mostrarTabFinanceiro('dre')">DRE</button>
         </div>
 
         <!-- Avisos da migracao (copia de seguranca e pedidos para conferir): valem para todas as abas -->
@@ -30,7 +25,7 @@
         <div id="fin-revisar"></div>
 
         <!-- TAB: HOJE -->
-        <div id="fin-hoje" class="fin-panel active">
+        <div id="fin-hoje" class="fin-panel">
             <div class="hoje-grid">
                 <div class="card hoje-col-tarefas">
                     <h3 class="hoje-titulo">O que fazer hoje</h3>
@@ -294,8 +289,20 @@
             </div>
         </div>
 
-        <!-- TAB: A RECEBER -->
-        <div id="fin-receber" class="fin-panel">
+        <!-- TAB: RESUMO (Task 6 monta a tela) -->
+        <div id="fin-resumo" class="fin-panel active">
+            <div class="card" id="fin-resumo-conteudo"></div>
+        </div>
+
+        <!-- TAB: LANCAMENTOS (Task 5 troca as listas abaixo pela tela nova; por enquanto: as listas de sempre) -->
+        <div id="fin-lancamentos" class="fin-panel">
+            <div class="fin-lado-bar" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+                <button class="btn btn-outline btn-sm fin-lado-btn" data-lado="pagar"   onclick="renderFinLancamentos('pagar')">Contas a pagar</button>
+                <button class="btn btn-outline btn-sm fin-lado-btn" data-lado="receber" onclick="renderFinLancamentos('receber')">Contas a receber</button>
+                <button class="btn btn-outline btn-sm fin-lado-btn" data-lado="fixas"   onclick="renderFinLancamentos('fixas')">Recorrências</button>
+            </div>
+        <!-- Contas a receber -->
+        <div id="fin-receber" class="fin-lado-painel" style="display:none">
             <div class="card">
                 <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
                     <div class="form-group" style="min-width:160px;margin-bottom:0">
@@ -323,8 +330,8 @@
             </div>
         </div>
 
-        <!-- TAB: A PAGAR -->
-        <div id="fin-pagar" class="fin-panel">
+        <!-- Contas a pagar -->
+        <div id="fin-pagar" class="fin-lado-painel" style="display:none">
             <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px" id="cp-toolbar">
                 <div style="position:relative">
                     <button class="btn btn-success" id="cp-menu-btn" onclick="toggleMenuContaPagar(event)" style="display:flex;align-items:center;gap:6px">
@@ -369,8 +376,8 @@
             </div>
         </div>
 
-        <!-- TAB: DESPESAS FIXAS -->
-        <div id="fin-fixas" class="fin-panel">
+        <!-- Recorrências (despesas fixas) -->
+        <div id="fin-fixas" class="fin-lado-painel" style="display:none">
             <div class="card" id="df-form-card">
                 <h3 style="margin-bottom:16px">Cadastrar Despesa Fixa Recorrente</h3>
                 <div class="grid">
@@ -404,9 +411,10 @@
                 </table>
             </div>
         </div>
+        </div>
 
-        <!-- TAB: DRE -->
-        <div id="fin-dre" class="fin-panel">
+        <!-- TAB: DRE POR PEDIDO (desligado: FIN_RECURSOS_ANTIGOS.drePedido) -->
+        <div id="fin-drepedido" class="fin-panel">
             <div class="card">
                 <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
                     <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
@@ -457,6 +465,16 @@
                     <tbody id="extrato-linhas"></tbody>
                 </table>
             </div>
+        </div>
+
+        <!-- TAB: FLUXO DE CAIXA -->
+        <div id="fin-fluxo" class="fin-panel">
+            <div class="card" id="fin-fluxo-conteudo"></div>
+        </div>
+
+        <!-- TAB: DRE -->
+        <div id="fin-dre" class="fin-panel">
+            <div class="card" id="fin-dre-conteudo"></div>
         </div>
     </main>
     <script src="js/vendor/chart.umd.min.js?v=20261205a"></script>

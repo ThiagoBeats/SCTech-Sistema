@@ -27,14 +27,16 @@ async function abrir(page, dados) {
 }
 const linha = (page, g) => page.locator(`#res-grupos tr[data-grupo="${g}"]`);
 
-test('aba fica logo depois de Visao Geral', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('aba fica logo depois de Visao Geral', async ({ page }) => {
     await entrar(page, BASE, {});
     await page.goto(BASE + '/financeiro.html');
     await expect(page.locator('.fin-tab-btn').nth(2)).toHaveAttribute('data-tab', 'resultado');
     await expect(page.locator('.fin-tab-btn[data-tab="resultado"]')).toContainText('Resultado do mês');
 });
 
-test('resultado de outubro com entradas, saidas por grupo e resultado', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('resultado de outubro com entradas, saidas por grupo e resultado', async ({ page }) => {
     await abrir(page, { sc_cr: CR_M, sc_cp: CP_M, sc_empresa: { aliquota_estimada: 6 } });
     await expect(page.locator('#res-entradas')).toHaveText('R$ 10.000,00');
     await expect(page.locator('#res-saidas')).toHaveText('R$ 6.288,00');
@@ -48,12 +50,14 @@ test('resultado de outubro com entradas, saidas por grupo e resultado', async ({
     await expect(page.locator('#res-meta')).toContainText('Faturamento líquido R$ 9.800,00');
 });
 
-test('resultado negativo fica vermelho', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('resultado negativo fica vermelho', async ({ page }) => {
     await abrir(page, { sc_cr: [crPago(1, M, 1000)], sc_cp: [cpPago(1, M, 'tecido', 3000)] });
     await expect(page.locator('#res-saldo')).toHaveClass(/res-neg/);
 });
 
-test('imposto estimado com aviso e lancado quando ha guia de referencia', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('imposto estimado com aviso e lancado quando ha guia de referencia', async ({ page }) => {
     await abrir(page, { sc_cr: CR_M, sc_cp: CP_M, sc_empresa: { aliquota_estimada: 6 } });
     await expect(linha(page, 'imposto')).toContainText('(estimado)');
     await expect(linha(page, 'imposto')).toContainText('R$ 588,00');
@@ -70,7 +74,8 @@ test('imposto estimado com aviso e lancado quando ha guia de referencia', async 
     await expect(page.locator('#res-imposto-aviso')).toHaveText('Informe a alíquota em Empresa para estimar o imposto');
 });
 
-test('meta: bateu / faltou e ajuste do mes', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('meta: bateu / faltou e ajuste do mes', async ({ page }) => {
     await abrir(page, { sc_cr: CR_M, sc_cp: CP_M, sc_empresa: { meta_faturamento_padrao: 9000 } });
     await expect(page.locator('#res-meta')).toContainText('Faturamento líquido R$ 9.800,00');
     await expect(page.locator('#res-meta')).toContainText('meta R$ 9.000,00');
@@ -86,7 +91,8 @@ test('meta: bateu / faltou e ajuste do mes', async ({ page }) => {
     expect((await ler(page, 'sc_fin_metas'))[M]).toBe(9000);
 });
 
-test('ponto de equilibrio com frase e comparacao', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('ponto de equilibrio com frase e comparacao', async ({ page }) => {
     const hist = { sc_cr: [...CR_M, crPago(2, M1, 10000)], sc_cp: [...CP_M, cpPago(10, M1, 'tecido', 4000)], sc_empresa: { meta_faturamento_padrao: 9000 } };
     await abrir(page, hist);
     await expect(page.locator('#res-equilibrio-frase')).toHaveText('Para pagar as contas do mês você precisa faturar R$ 2.500,00.');
@@ -99,7 +105,8 @@ test('ponto de equilibrio com frase e comparacao', async ({ page }) => {
     await expect(page.locator('#res-equilibrio-frase')).toHaveText('Com a margem atual não há ponto de equilíbrio — os custos variáveis passam do faturamento.');
 });
 
-test('orcamento com faixas e ajuste do mes', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('orcamento com faixas e ajuste do mes', async ({ page }) => {
     await abrir(page, { sc_cr: CR_M, sc_cp: CP_M, sc_empresa: { orcamento_padrao: { fornecedores: 3200, fixas: 1000, servicos: 5000 } } });
     const o = g => page.locator(`#res-orcamento tr[data-orc="${g}"]`);
     await expect(o('fornecedores')).toContainText('perto do limite');
@@ -115,7 +122,8 @@ test('orcamento com faixas e ajuste do mes', async ({ page }) => {
     expect((await ler(page, 'sc_empresa')).orcamento_padrao.fornecedores).toBe(3200);
 });
 
-test('mes atual mostra ate hoje e previsto ate o fim', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('mes atual mostra ate hoje e previsto ate o fim', async ({ page }) => {
     const mesAt = mesMais(0);
     const cr1 = { ...crPago(1, mesAt, 2000), data_pagamento: HOJE };
     const cr2 = { id: 2, pedido_id: 1, cliente_nome: 'Cli', descricao: 'Pedido', valor: 500, data_vencimento: HOJE, data_pagamento: null, status: 'Pendente', parcela_tipo: 'saldo' };
@@ -132,7 +140,8 @@ test('mes atual mostra ate hoje e previsto ate o fim', async ({ page }) => {
     await expect(page.locator('#res-aberto')).toBeHidden();
 });
 
-test('PDF abre com o total', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('PDF abre com o total', async ({ page }) => {
     await abrir(page, { sc_cr: CR_M, sc_cp: CP_M, sc_empresa: { aliquota_estimada: 6, razao_social: 'CORTINAS X' } });
     await page.click('#res-pdf');
     const doc = page.locator('#doc-modal-paper');
@@ -142,7 +151,8 @@ test('PDF abre com o total', async ({ page }) => {
     await expect(doc).toContainText('R$ 6.288,00');
 });
 
-test('sem permissao a aba nao aparece', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('sem permissao a aba nao aparece', async ({ page }) => {
     const nivel = n => ({ nivel: n, acoes_restritas: [] });
     const pap = [{ id: 1, nome: 'Restrito', permissoes: { financeiro: nivel('completo'), 'financeiro.resultado': nivel('sem_acesso') } }];
     await entrar(page, BASE, { sc_pap: pap });
@@ -151,7 +161,8 @@ test('sem permissao a aba nao aparece', async ({ page }) => {
     await expect(page.locator('.fin-tab-btn[data-tab="dashboard"]')).toBeVisible();
 });
 
-test('PDF traz linha de empate, aviso de estimativa e mes em andamento', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('PDF traz linha de empate, aviso de estimativa e mes em andamento', async ({ page }) => {
     await abrir(page, { sc_cr: [...CR_M, crPago(2, M1, 10000)], sc_cp: [...CP_M, cpPago(10, M1, 'tecido', 4000)], sc_empresa: { meta_faturamento_padrao: 9000 } });
     await page.click('#res-pdf');
     const doc = page.locator('#doc-modal-paper');
@@ -166,7 +177,8 @@ test('PDF traz linha de empate, aviso de estimativa e mes em andamento', async (
     await expect(page.locator('#doc-modal-paper')).toContainText('Previsto até o fim do mês');
 });
 
-test('previsto: legenda de atrasados e guia de imposto nao conta duas vezes', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('previsto: legenda de atrasados e guia de imposto nao conta duas vezes', async ({ page }) => {
     const mesAt = mesMais(0);
     const cr1 = { ...crPago(1, mesAt, 2000), data_pagamento: HOJE };
     const atrasada = { id: 2, pedido_id: 1, cliente_nome: 'Cli', descricao: 'Pedido', valor: 500, data_vencimento: dia(M, 5), data_pagamento: null, status: 'Pendente', parcela_tipo: 'saldo' };
@@ -184,7 +196,8 @@ test('previsto: legenda de atrasados e guia de imposto nao conta duas vezes', as
     await expect(page.locator('#res-aberto-legenda')).toHaveText('inclui atrasados');
 });
 
-test('orcamento mostra falta e % usado', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('orcamento mostra falta e % usado', async ({ page }) => {
     await abrir(page, { sc_cr: CR_M, sc_cp: CP_M, sc_empresa: { orcamento_padrao: { fornecedores: 3200, fixas: 1000 } } });
     await expect(page.locator('#res-orcamento thead, #res-orcamento-card thead')).toContainText('Falta');
     await expect(page.locator('#res-orcamento-card thead')).toContainText('% usado');
@@ -193,7 +206,8 @@ test('orcamento mostra falta e % usado', async ({ page }) => {
     await expect(page.locator('#res-orcamento tr[data-orc="fixas"]')).toContainText('150%');
 });
 
-test('limite so deste mes para grupo sem padrao, zero desliga e vazio remove', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('limite so deste mes para grupo sem padrao, zero desliga e vazio remove', async ({ page }) => {
     await abrir(page, { sc_cr: CR_M, sc_cp: CP_M, sc_empresa: { orcamento_padrao: { fornecedores: 3200 } } });
     const o = g => page.locator(`#res-orcamento tr[data-orc="${g}"]`);
     await expect(o('servicos')).toHaveCount(0);
@@ -228,7 +242,8 @@ test.describe('relogio fixo em 10/11/2026', () => {
         if (mes) { await page.fill('#res-mes', mes); await page.locator('#res-mes').dispatchEvent('change'); }
     }
 
-    test('previsto: guia de outubro vencendo em novembro nao conta em novembro e o imposto estimado e projetado', async ({ page }) => {
+    // Desativado: ver FIN_RECURSOS_ANTIGOS
+    test.skip('previsto: guia de outubro vencendo em novembro nao conta em novembro e o imposto estimado e projetado', async ({ page }) => {
         const cr1 = { ...crPago(1, '2026-11', 1000), data_pagamento: '2026-11-05' };
         const cr2 = { id: 2, pedido_id: 1, cliente_nome: 'Cli', descricao: 'Pedido', valor: 2000, data_vencimento: '2026-11-25', data_pagamento: null, status: 'Pendente', parcela_tipo: 'saldo' };
         const guiaOut = { id: 3, descricao: 'DAS outubro', valor: 500, categoria: 'imposto', tipo: 'variavel', mes_referencia: '2026-10', data_vencimento: '2026-11-20', data_pagamento: null, status: 'Pendente' };
@@ -241,7 +256,8 @@ test.describe('relogio fixo em 10/11/2026', () => {
         await expect(page.locator('#doc-modal-paper')).toContainText('Previsto até o fim do mês: R$ 2.820,00');
     });
 
-    test('ponto de equilibrio: aluguel avulso conta como fixa; sem fixas pede o cadastro (tela e PDF)', async ({ page }) => {
+    // Desativado: ver FIN_RECURSOS_ANTIGOS
+    test.skip('ponto de equilibrio: aluguel avulso conta como fixa; sem fixas pede o cadastro (tela e PDF)', async ({ page }) => {
         const cr = [crPago(1, '2026-10', 10000), crPago(2, '2026-09', 10000)];
         const base = [cpPago(1, '2026-10', 'tecido', 3000), cpPago(10, '2026-09', 'tecido', 4000)];
         await abrirEm(page, { sc_cr: cr, sc_cp: [...base, cpPago(4, '2026-10', 'aluguel', 1500, 'variavel')] }, '2026-10');
@@ -256,7 +272,8 @@ test.describe('relogio fixo em 10/11/2026', () => {
         await expect(doc).not.toContainText('R$ 0,00 ·');
     });
 
-    test('saidas por grupo explicam a regra do imposto (tela e PDF)', async ({ page }) => {
+    // Desativado: ver FIN_RECURSOS_ANTIGOS
+    test.skip('saidas por grupo explicam a regra do imposto (tela e PDF)', async ({ page }) => {
         await abrirEm(page, { sc_cr: [crPago(1, '2026-10', 1000)], sc_cp: [] }, '2026-10');
         await expect(page.locator('#res-imposto-regra')).toHaveText('Imposto contado pelo mês de referência da guia (não pela data de pagamento).');
         await page.click('#res-pdf');

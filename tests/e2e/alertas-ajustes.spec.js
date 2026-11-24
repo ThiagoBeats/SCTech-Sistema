@@ -55,13 +55,9 @@ test('2. conta vencida aparece no sino e no card para o Admin, nao para quem nao
     await page.hover('#sino-btn');
     await expect(painel(page)).toContainText('1 recebimento(s) em atraso — R$ 500,00 de 1 cliente(s)');
     await expect(painel(page).locator('.sino-item').first()).toHaveAttribute('data-href', 'financeiro.html?aba=receber');
-    // continua na Visao Geral do Financeiro
-    await page.goto(BASE + '/financeiro.html');
-    await page.click('.fin-tab-btn[data-tab="dashboard"]');
-    await expect(page.locator('#fin-alertas')).toContainText('1 recebimento(s) em atraso');
     // o link do alerta abre a aba A Receber
     await page.goto(BASE + '/financeiro.html?aba=receber');
-    await expect(page.locator('.fin-tab-btn[data-tab="receber"]')).toHaveClass(/active/);
+    await expect(page.locator('.fin-lado-btn[data-lado="receber"]')).toHaveClass(/active/);
     // usuario sem acesso ao Financeiro (papel Producao/Costura): nada
     await page.evaluate(() => sessionStorage.setItem('sc_user', JSON.stringify({ id: 2, email: 'sem@sctech.local' })));
     await page.goto(BASE + '/index.html');

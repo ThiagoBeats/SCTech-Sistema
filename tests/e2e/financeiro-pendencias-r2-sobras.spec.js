@@ -26,7 +26,8 @@ const resumoProj = page => page.locator('#fin-proj-resumo');
 const linhaProj = (page, txt) => resumoProj(page).locator('.fp-item', { hasText: txt }).locator('.fp-val');
 
 // ---- R9: Chart.js local ----
-test('Chart.js vem da copia local: graficos aparecem com o CDN bloqueado', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Chart.js vem da copia local: graficos aparecem com o CDN bloqueado', async ({ page }) => {
     await page.route('**/cdn.jsdelivr.net/**', r => r.abort());
     await abrir(page, { sc_contas_fin: [BANCO], sc_cr: [crAberto(1, 500, '2026-11-20')] });
     await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
@@ -39,7 +40,8 @@ test('Chart.js vem da copia local: graficos aparecem com o CDN bloqueado', async
 });
 
 // ---- Fixa antiga + conta lancada a mao ----
-test('projecao da Visao Geral: fixa antiga e a mesma conta lancada a mao contam uma vez', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('projecao da Visao Geral: fixa antiga e a mesma conta lancada a mao contam uma vez', async ({ page }) => {
     await abrir(page, {
         sc_contas_fin: [BANCO],
         sc_df: [{ id: 3, descricao: 'Aluguel', valor: 2000, dia_vencimento: 20, ativo: true, categoria: 'aluguel' }],
@@ -64,7 +66,8 @@ test('previsao do Hoje: fixa antiga e a mesma conta lancada a mao contam uma vez
     expect(semana).toBe(2000);
 });
 
-test('tela Hoje: a falta prevista conta a fixa antiga e a mesma conta lancada a mao uma vez so', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('tela Hoje: a falta prevista conta a fixa antiga e a mesma conta lancada a mao uma vez so', async ({ page }) => {
     // Saldo de hoje R$ 1.500 e uma saida de R$ 2.000 (fixa antiga + a mesma conta a mao):
     // contada uma vez falta R$ 500; contada duas vezes faltaria R$ 2.500.
     await abrir(page, {
@@ -95,7 +98,8 @@ test('contas recorrentes: dia que nao existe vira o ultimo dia do mes, contando 
 });
 
 // ---- PDF da Visao Geral ----
-test('relatorio (PDF) da Visao Geral mostra o liquido sem a taxa do cartao', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('relatorio (PDF) da Visao Geral mostra o liquido sem a taxa do cartao', async ({ page }) => {
     await abrir(page, {
         sc_contas_fin: [BANCO, MAQ],
         sc_cr: [crPago(1, 1000, '2026-10-21', { cartao: { tipo: 'credito', vezes: 1 }, conta_id: 12 })],
@@ -109,7 +113,8 @@ test('relatorio (PDF) da Visao Geral mostra o liquido sem a taxa do cartao', asy
 });
 
 // ---- R12: transferencias fora das barras da projecao ----
-test('projecao da Visao Geral: transferencia futura entre contas nao entra nas barras', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('projecao da Visao Geral: transferencia futura entre contas nao entra nas barras', async ({ page }) => {
     await abrir(page, {
         sc_contas_fin: [BANCO, CAIXA],
         sc_cr: [crAberto(1, 500, '2026-11-16')],
@@ -161,7 +166,7 @@ test('salvarERecarregar sem espaco: depois do aviso recarrega e a tela mostra o 
         };
     });
     await page.reload();
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
     await page.evaluate(() => { window.__marca = 1; window.__cheio = true; });
     await page.locator('#tb-contas-receber button', { hasText: '✓ Recebido' }).first().click();
     const modal = page.locator('#baixa-modal');
@@ -173,7 +178,7 @@ test('salvarERecarregar sem espaco: depois do aviso recarrega e a tela mostra o 
     expect(await page.evaluate(() => window.__marca), 'so recarrega depois do OK').toBe(1);
     await page.locator('#sc-modal-ok').click();
     await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
     await expect(page.locator('#tb-contas-receber button', { hasText: '✓ Recebido' })).toHaveCount(1);
     expect(await page.evaluate(() => db.contas_receber[0].status)).toBe('Pendente');
     expect(erros).toEqual([]);

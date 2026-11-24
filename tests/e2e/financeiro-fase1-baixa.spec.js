@@ -34,7 +34,7 @@ const cr = extra => ({ id: 601, pedido_id: 26300, cliente_nome: 'Ana Paula Lima'
 async function abrirReceber(page, dados) {
     await entrar(page, BASE, { sc_cli: CLI, sc_contas_fin: CONTAS, sc_meios_pag: MEIOS, sc_ped: [pedido()], ...dados });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
 }
 
 async function receber(page) {

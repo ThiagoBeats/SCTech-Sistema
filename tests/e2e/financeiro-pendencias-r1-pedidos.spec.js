@@ -102,7 +102,7 @@ test('vincular nota a conta existente atualiza o tipo de lancamento', async ({ p
     const cp = cpPC(9001, 'Pendente', { cnpj_fornecedor: '11.222.333/0001-81', valor: 1000 });
     await entrar(page, BASE, { sc_forn: FORN, sc_pc: [pc()], sc_cp: [cp] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="pagar"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
     await page.evaluate(() => {
         abrirModalContaPagar('manual');
         document.getElementById('cpm-descricao').value = 'NF 123';

@@ -55,6 +55,6 @@ test('comissao paga de pedido que voltou para Orcamento fica marcada para revisa
     expect(cps.map(c => c.id)).toEqual([701]);
     expect(cps[0].pedido_cancelado).toBe(true);
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="pagar"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
     await expect(page.locator('#tb-contas-pagar')).toContainText('pedido cancelado — revisar');
 });

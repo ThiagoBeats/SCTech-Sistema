@@ -135,7 +135,8 @@ test('conta desativada pode ser reativada', async ({ page }) => {
 // ---- Conta inativa fora dos saldos e da previsao ----
 const INATIVA = { ...BANCO, nome: 'Banco velho', ativo: false };
 
-test('Hoje: conta inativa fora do saldo total e da previsao', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Hoje: conta inativa fora do saldo total e da previsao', async ({ page }) => {
     const futuro = somarDias(HOJE, 3);
     await entrar(page, BASE, { sc_contas_fin: [CAIXA, INATIVA], sc_meios_pag: MEIOS, sc_mov_fin: [mov(1, 11, futuro, 'entrada', 777, 'Entrada futura do banco velho'), mov(2, 10, futuro, 'entrada', 10, 'Entrada do caixa')] });
     await page.goto(BASE + '/financeiro.html');
@@ -145,7 +146,8 @@ test('Hoje: conta inativa fora do saldo total e da previsao', async ({ page }) =
     expect(semanas[0].entradas).toBe(10);
 });
 
-test('Extrato: totais sem conta inativa, historico e filtro com (desativada)', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Extrato: totais sem conta inativa, historico e filtro com (desativada)', async ({ page }) => {
     await abrirExtrato(page, { sc_contas_fin: [CAIXA, INATIVA], sc_meios_pag: MEIOS,
         sc_mov_fin: [mov(1, 11, MES + '-01', 'entrada', 55, 'Historico do banco velho'), mov(2, 10, MES + '-01', 'entrada', 20, 'Entrada caixa')] });
     expect(await txt(page.locator('#extrato-saldo-fim'))).toContain('120,00');
@@ -157,7 +159,8 @@ test('Extrato: totais sem conta inativa, historico e filtro com (desativada)', a
 });
 
 // ---- Mes antes da abertura ----
-test('Extrato: mes antes da abertura da conta mostra 0 e a data de abertura', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Extrato: mes antes da abertura da conta mostra 0 e a data de abertura', async ({ page }) => {
     const aberta = { ...CAIXA, saldo_inicial: 500, data_saldo_inicial: HOJE };
     await abrirExtrato(page, { sc_contas_fin: [aberta], sc_meios_pag: MEIOS });
     const mesAnt = iso(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 15)).slice(0, 7);
@@ -176,7 +179,8 @@ async function abrirTransf(page) {
     return page.locator('#transf-modal');
 }
 
-test('transferencia: destino comeca vazio e e obrigatorio', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('transferencia: destino comeca vazio e e obrigatorio', async ({ page }) => {
     const m = await abrirTransf(page);
     expect(await m.locator('#transf-para').inputValue()).toBe('');
     await m.locator('#transf-valor').fill('10');
@@ -185,7 +189,8 @@ test('transferencia: destino comeca vazio e e obrigatorio', async ({ page }) => 
     expect((await ler(page, 'sc_mov_fin')) || []).toHaveLength(0);
 });
 
-test('transferencia: destino igual a origem e recusado', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('transferencia: destino igual a origem e recusado', async ({ page }) => {
     const m = await abrirTransf(page);
     await m.locator('#transf-de').selectOption('10');
     await m.locator('#transf-para').selectOption('10');
@@ -194,7 +199,8 @@ test('transferencia: destino igual a origem e recusado', async ({ page }) => {
     await expect(m.locator('#transf-erro')).toHaveText('Escolha uma conta de destino diferente da origem.');
 });
 
-test('transferencia: data depois de hoje e recusada', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('transferencia: data depois de hoje e recusada', async ({ page }) => {
     const m = await abrirTransf(page);
     await expect(m.locator('#transf-data')).toHaveAttribute('max', HOJE);
     await m.locator('#transf-de').selectOption('10');
@@ -210,7 +216,7 @@ test('transferencia: data depois de hoje e recusada', async ({ page }) => {
 async function abrirBaixaCR(page, extras) {
     await entrar(page, BASE, { sc_contas_fin: [CAIXA, BANCO], sc_meios_pag: MEIOS, sc_cr: [cr(1)], ...extras });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
 }
 
 test('baixa de recebimento: data depois de hoje e bloqueada', async ({ page }) => {
@@ -239,7 +245,7 @@ test('baixa de recebimento: data vazia nao vira hoje', async ({ page }) => {
 test('baixa de pagamento: data depois de hoje e bloqueada', async ({ page }) => {
     await entrar(page, BASE, { sc_contas_fin: [CAIXA, BANCO], sc_meios_pag: MEIOS, sc_cp: [cp(5)] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="pagar"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
     await page.evaluate(() => { marcarCPPago(5); });
     await expect(page.locator('#baixa-data')).toHaveAttribute('max', HOJE);
     await page.locator('#baixa-modal .baixa-meio').first().selectOption({ index: 1 });
@@ -270,7 +276,8 @@ test('baixarContasReceber valida data e valor por conta propria e nao altera nad
 });
 
 // ---- Sem vencimento / valor 0 ----
-test('conta sem vencimento mostra "sem vencimento" e nao entra em Hoje nem como atrasada', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('conta sem vencimento mostra "sem vencimento" e nao entra em Hoje nem como atrasada', async ({ page }) => {
     await entrar(page, BASE, { sc_contas_fin: [CAIXA], sc_meios_pag: MEIOS,
         sc_cr: [cr(1, { data_vencimento: undefined, descricao: 'Sem data' })], sc_cp: [cp(2, { data_vencimento: '', descricao: 'Sem data pagar' })] });
     await page.goto(BASE + '/financeiro.html');
@@ -278,10 +285,10 @@ test('conta sem vencimento mostra "sem vencimento" e nao entra em Hoje nem como 
     await expect(page.locator('#hoje-tarefas')).not.toContainText('Sem data');
     const semanas = await page.evaluate(() => _simPrevisao([]));
     expect(semanas.reduce((s, w) => s + w.entradas + w.saidas, 0)).toBe(0);
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
     await expect(page.locator('#tb-contas-receber')).toContainText('sem vencimento');
     await expect(page.locator('#tb-contas-receber')).not.toContainText('Atrasado');
-    await page.locator('.fin-tab-btn[data-tab="pagar"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
     await expect(page.locator('#tb-contas-pagar')).toContainText('sem vencimento');
     expect((await ler(page, 'sc_cr'))[0].status).toBe('Pendente');
 });
@@ -290,14 +297,15 @@ test('conta a receber com vencimento vazio nao tem botao Cobrar; com vencimento 
     await entrar(page, BASE, { sc_contas_fin: [CAIXA], sc_meios_pag: MEIOS,
         sc_cr: [cr(1, { data_vencimento: '', descricao: 'Sem data' }), cr(2, { data_vencimento: somarDias(HOJE, -2), descricao: 'Vencida' })] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
     const linhas = page.locator('#tb-contas-receber tr');
     await expect(linhas.filter({ hasText: 'Vencida' }).locator('button:has-text("Cobrar")')).toHaveCount(1);
     await expect(linhas.filter({ hasText: 'Sem data' })).toHaveCount(1);
     await expect(linhas.filter({ hasText: 'Sem data' }).locator('button:has-text("Cobrar")')).toHaveCount(0);
 });
 
-test('item atrasado com valor 0 nao marca "inclui atrasados"', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('item atrasado com valor 0 nao marca "inclui atrasados"', async ({ page }) => {
     await entrar(page, BASE, { sc_contas_fin: [CAIXA], sc_meios_pag: MEIOS, sc_cr: [cr(1, { valor: 0, data_vencimento: somarDias(HOJE, -5), status: 'Atrasado' })] });
     await page.goto(BASE + '/financeiro.html');
     await expect(page.locator('#hoje-total')).toHaveText('R$ 100,00');
@@ -306,7 +314,8 @@ test('item atrasado com valor 0 nao marca "inclui atrasados"', async ({ page }) 
     expect((await page.evaluate(() => _chartHoje.data.labels)).some(l => l.endsWith('*'))).toBe(false);
 });
 
-test('Hoje: previsao e legenda sem a conta desativada', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Hoje: previsao e legenda sem a conta desativada', async ({ page }) => {
     const inativo = { ...BANCO, ativo: false };
     await entrar(page, BASE, { sc_contas_fin: [CAIXA, inativo], sc_meios_pag: MEIOS,
         sc_mov_fin: [mov(1, 11, AMANHA, 'entrada', 1000, 'Repasse banco desativado')],

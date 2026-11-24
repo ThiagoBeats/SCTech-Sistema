@@ -49,7 +49,8 @@ const permissao = nivel => [n => {
     localStorage.setItem('sc_usr', JSON.stringify(u));
 }, nivel];
 
-test('aba aparece com a permissao e some sem ela', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('aba aparece com a permissao e some sem ela', async ({ page }) => {
     await abrir(page, {}, permissao('visualizar'));
     const aba = page.locator('.fin-tab-btn[data-tab="simulador"]');
     await expect(aba).toBeVisible();
@@ -63,7 +64,8 @@ test('aba aparece com a permissao e some sem ela', async ({ page }) => {
     await expect(page.locator('.fin-tab-btn[data-tab="simulador"]')).toBeHidden();
 });
 
-test('a vista de 500: Cabe, tabela com 8 semanas', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('a vista de 500: Cabe, tabela com 8 semanas', async ({ page }) => {
     await abrirSimulador(page);
     await expect(page.locator('#sim-data')).toHaveValue('2026-11-14');
     await expect(page.locator('#sim-primeira')).toHaveValue('2026-12-14');
@@ -80,7 +82,8 @@ test('a vista de 500: Cabe, tabela com 8 semanas', async ({ page }) => {
     await expect(page.locator('#sim-erro')).toBeHidden();
 });
 
-test('a vista de 1500: Cabe, mas aperta, caixa fica em R$ 500,00', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('a vista de 1500: Cabe, mas aperta, caixa fica em R$ 500,00', async ({ page }) => {
     await abrirSimulador(page);
     await simular(page, { valor: '1.500,00' });
     await expect(page.locator('#sim-titulo')).toHaveText('Cabe, mas aperta');
@@ -88,7 +91,8 @@ test('a vista de 1500: Cabe, mas aperta, caixa fica em R$ 500,00', async ({ page
     await expect(page.locator('#sim-frases')).toContainText('O caixa fica em R$ 500,00 na semana de 14/11.');
 });
 
-test('a vista de 2500: Não cabe agora, com a frase de melhor data ou a de nenhuma', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('a vista de 2500: Não cabe agora, com a frase de melhor data ou a de nenhuma', async ({ page }) => {
     await abrirSimulador(page);
     await simular(page, { valor: '2500' });
     await expect(page.locator('#sim-titulo')).toHaveText('Não cabe agora');
@@ -108,7 +112,8 @@ test('a vista de 2500: Não cabe agora, com a frase de melhor data ou a de nenhu
     await expect(frases).toContainText('Comprando a partir de 21/11, cabe.');
 });
 
-test('data da compra no passado cai na primeira semana', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('data da compra no passado cai na primeira semana', async ({ page }) => {
     await abrirSimulador(page);
     await simular(page, { valor: '500', data: '2026-11-01' });
     await expect(page.locator('#sim-titulo')).toHaveText('Cabe');
@@ -116,7 +121,8 @@ test('data da compra no passado cai na primeira semana', async ({ page }) => {
     await expect(primeira).toContainText('R$ 1.500,00');
 });
 
-test('parcelado 10x com resultado medio menor que a parcela: amarelo com a frase da parcela', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('parcelado 10x com resultado medio menor que a parcela: amarelo com a frase da parcela', async ({ page }) => {
     // Outubro: so uma conta paga de 200 -> resultado -200 (unico mes com movimento).
     const cps = SEED.sc_cp.concat([{ id: 3, descricao: 'Tecido', categoria: 'tecido', tipo: 'variavel', valor: 200, data_vencimento: '2026-10-15', data_pagamento: '2026-10-15', status: 'Pago' }]);
     await abrirSimulador(page, { sc_cp: cps });
@@ -127,14 +133,16 @@ test('parcelado 10x com resultado medio menor que a parcela: amarelo com a frase
     await expect(page.locator('#sim-frases')).not.toContainText('O caixa fica');
 });
 
-test('ganho mensal 150 em compra de 1000: Se paga em 7 meses.', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('ganho mensal 150 em compra de 1000: Se paga em 7 meses.', async ({ page }) => {
     await abrirSimulador(page);
     await simular(page, { valor: '1000', ganho: '150' });
     await expect(page.locator('#sim-titulo')).toHaveText('Cabe');
     await expect(page.locator('#sim-frases')).toContainText('Se paga em 7 meses.');
 });
 
-test('validacao: valor vazio e parcelas 1 mostram o texto do nucleo', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('validacao: valor vazio e parcelas 1 mostram o texto do nucleo', async ({ page }) => {
     await abrirSimulador(page);
     await simular(page, { valor: '' });
     await expect(page.locator('#sim-erro')).toHaveText('Informe o valor da compra.');
@@ -146,7 +154,8 @@ test('validacao: valor vazio e parcelas 1 mostram o texto do nucleo', async ({ p
     await expect(page.locator('#sim-lancar')).toHaveCount(0);
 });
 
-test('Lançar no A Pagar: entrada + 3 parcelas cria 4 CPs com os campos do parcelado; duplo clique cria so 4', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Lançar no A Pagar: entrada + 3 parcelas cria 4 CPs com os campos do parcelado; duplo clique cria so 4', async ({ page }) => {
     await abrirSimulador(page);
     await page.selectOption('#sim-categoria', 'tecido');
     await page.fill('#sim-credor', 'Fornecedor X');
@@ -177,7 +186,8 @@ test('Lançar no A Pagar: entrada + 3 parcelas cria 4 CPs com os campos do parce
     expect(new Set(cps.map(c => c.id)).size).toBe(4);
 });
 
-test('Lançar no A Pagar: a vista pede 1 conta e parcelado pede N parcelas', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Lançar no A Pagar: a vista pede 1 conta e parcelado pede N parcelas', async ({ page }) => {
     await abrirSimulador(page);
     await simular(page, { valor: '500' });
     await page.locator('#sim-lancar').click();
@@ -193,7 +203,8 @@ test('Lançar no A Pagar: a vista pede 1 conta e parcelado pede N parcelas', asy
     expect(cps.every(c => c.categoria === 'outro' && c.parcelado)).toBe(true);
 });
 
-test('visualizar simula mas nao ve Lançar no A Pagar', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('visualizar simula mas nao ve Lançar no A Pagar', async ({ page }) => {
     await abrirSimulador(page, {}, permissao('visualizar'));
     await simular(page, { valor: '500' });
     await expect(page.locator('#sim-titulo')).toHaveText('Cabe');
@@ -204,7 +215,8 @@ test('visualizar simula mas nao ve Lançar no A Pagar', async ({ page }) => {
     expect((await ler(page, 'sc_cp')).length).toBe(antes);
 });
 
-test('Lançar usa descrição, categoria e credor do formulário na hora de lançar', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Lançar usa descrição, categoria e credor do formulário na hora de lançar', async ({ page }) => {
     await abrirSimulador(page);
     await page.selectOption('#sim-categoria', 'tecido');
     await page.fill('#sim-credor', 'Loja A');
@@ -223,7 +235,8 @@ test('Lançar usa descrição, categoria e credor do formulário na hora de lan�
     expect(cps[0]).toMatchObject({ descricao: 'Máquina nova', categoria: 'aluguel', credor_nome: 'Loja B', valor: 500 });
 });
 
-test('mudar valor, forma, parcelas, datas ou ganho depois de simular apaga o resultado e o Lançar', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('mudar valor, forma, parcelas, datas ou ganho depois de simular apaga o resultado e o Lançar', async ({ page }) => {
     await abrirSimulador(page);
     const muda = [
         async () => page.fill('#sim-valor', '600'),
@@ -246,7 +259,8 @@ test('mudar valor, forma, parcelas, datas ou ganho depois de simular apaga o res
     await expect(page.locator('#sim-lancar')).toHaveCount(0);
 });
 
-test('voltar para a aba apaga o resultado antigo', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('voltar para a aba apaga o resultado antigo', async ({ page }) => {
     await abrirSimulador(page);
     await simular(page, { valor: '500' });
     await expect(page.locator('#sim-lancar')).toBeVisible();
@@ -257,7 +271,8 @@ test('voltar para a aba apaga o resultado antigo', async ({ page }) => {
     expect(await page.evaluate(() => _simUltima)).toBeNull();
 });
 
-test('sem conta ativa: pede para configurar as contas em vez do veredito', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('sem conta ativa: pede para configurar as contas em vez do veredito', async ({ page }) => {
     await abrirSimulador(page, { sc_contas_fin: [{ ...SEED.sc_contas_fin[0], ativo: false }] });
     await simular(page, { valor: '500' });
     await expect(page.locator('#sim-resultado')).toContainText('Configure suas contas para simular.');
@@ -266,7 +281,8 @@ test('sem conta ativa: pede para configurar as contas em vez do veredito', async
     await expect(page.locator('#sim-lancar')).toHaveCount(0);
 });
 
-test('1ª parcela segue a data da compra até ser editada; antes da compra é recusada', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('1ª parcela segue a data da compra até ser editada; antes da compra é recusada', async ({ page }) => {
     await abrirSimulador(page);
     await page.locator('input[name="sim-forma"][value="parcelado"]').check();
     await page.fill('#sim-data', '2026-11-20');
@@ -287,7 +303,8 @@ test('1ª parcela segue a data da compra até ser editada; antes da compra é re
     await expect(page.locator('#sim-primeira')).toHaveValue('2026-12-30');
 });
 
-test('caixa já negativo sem a compra: diz a semana e não procura melhor data', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('caixa já negativo sem a compra: diz a semana e não procura melhor data', async ({ page }) => {
     const cps = [{ ...SEED.sc_cp[0], valor: 4000 }, SEED.sc_cp[1]];
     await abrirSimulador(page, { sc_cp: cps });
     await simular(page, { valor: '500' });

@@ -107,20 +107,20 @@ test('4. no card do Painel a faixa do Financeiro leva a aba do assunto', async (
     await expect(faixa).toHaveAttribute('data-href', 'financeiro.html?aba=receber');
     await faixa.click();
     await page.waitForURL(/financeiro\.html/);
-    await expect(page.locator('.fin-tab-btn[data-tab="receber"]')).toHaveClass(/active/);
+    await expect(page.locator('.fin-lado-btn[data-lado="receber"]')).toHaveClass(/active/);
 });
 
 test('5. ?aba= e tirado do endereco depois de usado (sem nova entrada no historico)', async ({ page }) => {
     await abrir(page, { sc_cr: [crAtrasada] }, 'index.html');
     const antes = await page.evaluate(() => history.length);
     await page.goto(BASE + '/financeiro.html?aba=pagar');
-    await expect(page.locator('.fin-tab-btn[data-tab="pagar"]')).toHaveClass(/active/);
+    await expect(page.locator('.fin-lado-btn[data-lado="pagar"]')).toHaveClass(/active/);
     await expect.poll(() => page.url()).toBe(BASE + '/financeiro.html');
     expect(await page.evaluate(() => history.length)).toBe(antes + 1);
     // aba sem permissao/invalida: tambem limpa e cai na aba inicial
     await page.goto(BASE + '/financeiro.html?aba=nao_existe');
     await expect.poll(() => page.url()).toBe(BASE + '/financeiro.html');
-    await expect(page.locator('.fin-tab-btn[data-tab="hoje"]')).toHaveClass(/active/);
+    await expect(page.locator('.fin-tab-btn[data-tab="resumo"]')).toHaveClass(/active/);
 });
 
 test('6. o Salvar Configuracoes da empresa tambem grava os feriados da cidade', async ({ page }) => {

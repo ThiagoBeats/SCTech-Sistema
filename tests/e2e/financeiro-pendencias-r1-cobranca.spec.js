@@ -15,7 +15,7 @@ async function abrir(page, dados, retorno) {
     await entrar(page, BASE, dados);
     await page.goto(BASE + '/financeiro.html');
     await page.evaluate(r => { window.__abertos = []; window.open = u => { window.__abertos.push(u); return r ? {} : null; }; }, retorno);
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
 }
 const abertos = page => page.evaluate(() => window.__abertos);
 

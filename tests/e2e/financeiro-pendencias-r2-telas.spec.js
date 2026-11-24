@@ -53,7 +53,7 @@ test('aviso do estorno de cartao vem em um paragrafo so', async ({ page }) => {
         sc_mov_fin: [{ id: 91, conta_id: 12, data: d1, sentido: 'entrada', valor: 100, origem: 'cr', origem_id: 601, grupo_id: 999, descricao: 'x' }]
     });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
     await page.locator('#tb-contas-receber button', { hasText: 'Estornar' }).click();
     const msg = await page.locator('#sc-modal-msg').textContent();
     expect(msg).toContain('Isso muda o saldo de hoje da conta Maquininha.');
@@ -65,7 +65,7 @@ test('cobrar conta sem pedido nao escreve #undefined nem #null', async ({ page }
     await entrar(page, BASE, { sc_cli: [{ id: 1, nome: 'Ana', tel: '(11) 98765-4321' }], sc_cr: [cr(601, { cliente_nome: 'Ana' })] });
     await page.goto(BASE + '/financeiro.html');
     await page.evaluate(() => { window.__abertos = []; window.open = u => { window.__abertos.push(u); return {}; }; });
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
     await page.locator('#tb-contas-receber button', { hasText: 'Cobrar' }).click();
     const url = (await page.evaluate(() => window.__abertos))[0];
     const msg = decodeURIComponent(url.split('?text=')[1]);
@@ -74,7 +74,8 @@ test('cobrar conta sem pedido nao escreve #undefined nem #null', async ({ page }
 });
 
 // ---- Fase 1: tela Hoje ----
-test('Hoje no tema escuro: passar o mouse na conta destaca a linha', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Hoje no tema escuro: passar o mouse na conta destaca a linha', async ({ page }) => {
     await entrar(page, BASE, { sc_contas_fin: CONTAS });
     await page.evaluate(() => localStorage.setItem('sc_tema', 'dark'));
     await page.goto(BASE + '/financeiro.html');
@@ -84,7 +85,8 @@ test('Hoje no tema escuro: passar o mouse na conta destaca a linha', async ({ pa
     await expect.poll(() => conta.evaluate(el => getComputedStyle(el).backgroundColor)).toBe('rgba(255, 255, 255, 0.08)');
 });
 
-test('Hoje: a conta abre o Extrato pelo teclado (Enter e Espaco)', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Hoje: a conta abre o Extrato pelo teclado (Enter e Espaco)', async ({ page }) => {
     await entrar(page, BASE, { sc_contas_fin: CONTAS });
     await page.goto(BASE + '/financeiro.html');
     const conta = page.locator('#hoje-saldos .hoje-conta').first();
@@ -99,7 +101,8 @@ test('Hoje: a conta abre o Extrato pelo teclado (Enter e Espaco)', async ({ page
     await expect(page.locator('#fin-extrato')).toBeVisible();
 });
 
-test('Hoje: quem so ve A Receber nao ve as tarefas de A Pagar (e o contrario)', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Hoje: quem so ve A Receber nao ve as tarefas de A Pagar (e o contrario)', async ({ page }) => {
     await entrar(page, BASE, { sc_contas_fin: CONTAS, sc_cr: [cr(1, { descricao: 'Parcela receber', data_vencimento: somarDias(HOJE, -2) })],
         sc_cp: [cp(2, { descricao: 'Conta a pagar X', data_vencimento: somarDias(HOJE, -2) })] });
     const como = extras => page.evaluate(e => {
@@ -178,7 +181,8 @@ test('valor da conta a pagar aceita 1.250,50', async ({ page }) => {
 });
 
 // ---- Fase 2: Resultado do mes ----
-test('meta padrao aparece como sugestao no ajuste do mes', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('meta padrao aparece como sugestao no ajuste do mes', async ({ page }) => {
     await entrar(page, BASE, { sc_empresa: { meta_faturamento_padrao: 30000 } });
     await page.goto(BASE + '/financeiro.html');
     await page.locator('.fin-tab-btn[data-tab="resultado"]').click();
@@ -187,7 +191,8 @@ test('meta padrao aparece como sugestao no ajuste do mes', async ({ page }) => {
     await expect(page.locator('#res-ajuste-valor')).toHaveValue('');
 });
 
-test('"+ Limite so neste mes" so aparece com algum orcamento definido', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('"+ Limite so neste mes" so aparece com algum orcamento definido', async ({ page }) => {
     await entrar(page, BASE, {});
     await page.goto(BASE + '/financeiro.html');
     await page.locator('.fin-tab-btn[data-tab="resultado"]').click();
@@ -200,7 +205,8 @@ test('"+ Limite so neste mes" so aparece com algum orcamento definido', async ({
 });
 
 // ---- Fase 3: comparacao com o mes anterior ----
-test('fechamento: diferenca zero diz "igual ao mês anterior", sem +0%', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('fechamento: diferenca zero diz "igual ao mês anterior", sem +0%', async ({ page }) => {
     const mov = (id, data, sentido, valor, origem, origem_id) => ({ id, conta_id: 10, data, sentido, valor, origem, origem_id, grupo_id: null, descricao: 'x' });
     const crPago = (id, data) => ({ id, pedido_id: 100 + id, cliente_nome: 'Cli', descricao: 'Pedido ' + id, valor: 500, data_vencimento: data, data_pagamento: data, status: 'Pago', parcela_tipo: 'saldo' });
     await page.clock.install({ time: new Date('2026-11-05T10:00:00') });

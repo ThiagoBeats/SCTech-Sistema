@@ -104,7 +104,7 @@ test('confirmar pagamento ja vem com o meio previsto de cada parcela', async ({ 
     await escolherMeios(page);
     await gravar(page);
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="receber"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
     await page.locator('#tb-contas-receber button', { hasText: '✓ Recebido' }).first().click();
     const modal = page.locator('#baixa-modal');
     await expect(modal).toBeVisible();

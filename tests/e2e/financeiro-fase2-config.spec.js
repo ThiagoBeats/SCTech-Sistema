@@ -29,7 +29,7 @@ test('meta padrao e orcamento salvos sem apagar outros campos da empresa', async
 test('conta de imposto tem mes de referencia preenchido com o mes anterior ao vencimento e editavel', async ({ page }) => {
     await entrar(page, BASE, { sc_cp: [] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="pagar"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
     await page.evaluate(() => abrirModalContaPagar());
     await expect(page.locator('#cpm-mes-ref')).toBeHidden();
     await page.fill('#cpm-descricao', 'DAS');
@@ -49,7 +49,8 @@ test('conta de imposto tem mes de referencia preenchido com o mes anterior ao ve
     expect(c).toMatchObject({ categoria: 'imposto', mes_referencia: '2027-01' });
 });
 
-test('categoria Imposto aparece no grafico de despesas com rotulo', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('categoria Imposto aparece no grafico de despesas com rotulo', async ({ page }) => {
     // Fase 2: o grafico conta o imposto pela referencia (guia do mes, paga ou em aberto).
     const hoje = iso(new Date());
     await entrar(page, BASE, { sc_cp: [{ id: 1, tipo: 'variavel', categoria: 'imposto', descricao: 'DAS', valor: 300, mes_referencia: hoje.slice(0, 7), data_vencimento: hoje, data_pagamento: null, status: 'Pendente' }] });
@@ -72,7 +73,7 @@ test('papel Vendedor salvo nao ganha Resultado do mes; Financeiro ganha', async 
         return { v: n(3, 'financeiro.resultado'), a: n(1, 'financeiro.resultado'), f: n(2, 'financeiro.resultado') };
     });
     expect(r).toEqual({ v: 'sem_acesso', a: 'completo', f: 'completo' });
-    expect(await page.evaluate(() => [MODULOS_PERMISSAO.find(m => m.key === 'financeiro').subs.some(s => s.key === 'resultado' && s.label === 'Resultado do mês'), FIN_TAB_MODULO.resultado])).toEqual([true, 'financeiro.resultado']);
+    expect(await page.evaluate(() => [MODULOS_PERMISSAO.find(m => m.key === 'financeiro').subs.some(s => s.key === 'resultado'), FIN_TAB_MODULO.resultado])).toEqual([false, 'financeiro.resultado']);   // a sub-aba saiu da lista (virou DRE), a chave segue nos dados
 });
 
 test('exportar e importar levam meta, orcamento e ajustes', async ({ page }) => {

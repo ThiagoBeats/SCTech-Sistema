@@ -53,7 +53,8 @@ async function visaoGeralDoMes(page, mes) {
 }
 const kpi = (page, txt) => page.locator('#fin-kpis2 .fin-kpi', { hasText: txt });
 
-test('mesmo mes: Visao Geral = Resultado do mes = Extrato (sem transferencias)', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('mesmo mes: Visao Geral = Resultado do mes = Extrato (sem transferencias)', async ({ page }) => {
     await entrar(page, BASE, SEED_M);
     await page.goto(BASE + '/financeiro.html');
 
@@ -92,7 +93,8 @@ test('mesmo mes: Visao Geral = Resultado do mes = Extrato (sem transferencias)',
     expect(ext).toEqual([3500 - 2000, 980]);
 });
 
-test('meta da Visao Geral usa o padrao quando o mes nao tem ajuste', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('meta da Visao Geral usa o padrao quando o mes nao tem ajuste', async ({ page }) => {
     const mesAt = mesMais(0);
     const dados = {
         sc_contas_fin: CONTAS,
@@ -121,7 +123,8 @@ test('meta da Visao Geral usa o padrao quando o mes nao tem ajuste', async ({ pa
     expect(metas[mesAt]).toBeUndefined();
 });
 
-test('grafico de despesas inclui taxa de cartao e imposto', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('grafico de despesas inclui taxa de cartao e imposto', async ({ page }) => {
     await entrar(page, BASE, SEED_M);
     await page.goto(BASE + '/financeiro.html');
     await visaoGeralDoMes(page, M);
@@ -136,7 +139,8 @@ test('grafico de despesas inclui taxa de cartao e imposto', async ({ page }) => 
     expect(desp).toEqual({ 'Fornecedores e materiais': 800, 'Taxas de cartão': 30, 'Imposto': 150 });
 });
 
-test('Hoje mostra orcamento estourado so com permissao', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Hoje mostra orcamento estourado so com permissao', async ({ page }) => {
     const mesAt = mesMais(0);
     const dados = {
         sc_contas_fin: CONTAS,
@@ -168,7 +172,8 @@ test('Hoje mostra orcamento estourado so com permissao', async ({ page }) => {
 const somarDias = (dataISO, n) => { const d = new Date(dataISO + 'T12:00:00'); d.setDate(d.getDate() + n); return iso(d); };
 const ddmm = d => d.slice(8, 10) + '/' + d.slice(5, 7);
 
-test('Total Recebido avisa o que ainda vai cair no periodo', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Total Recebido avisa o que ainda vai cair no periodo', async ({ page }) => {
     const d1 = somarDias(HOJE, 5), d2 = somarDias(HOJE, 12);
     await entrar(page, BASE, {
         sc_contas_fin: CONTAS,
@@ -187,7 +192,8 @@ test('Total Recebido avisa o que ainda vai cair no periodo', async ({ page }) =>
 
 test.describe('relogio fixo no dia 10', () => {
     test.use({ timezoneId: 'America/Sao_Paulo' });
-    test('Resultado do mes atual avisa entradas a cair', async ({ page }) => {
+    // Desativado: ver FIN_RECURSOS_ANTIGOS
+    test.skip('Resultado do mes atual avisa entradas a cair', async ({ page }) => {
         const mesAt = mesMais(0);
         const hoje = dia(mesAt, 10), amanha = dia(mesAt, 11);
         await page.clock.install({ time: new Date(hoje + 'T12:00:00-03:00') });
@@ -206,7 +212,8 @@ test.describe('relogio fixo no dia 10', () => {
         await expect(page.locator('#res-entradas-a-cair')).toBeHidden();
     });
 
-    test('Resultado de mes futuro tambem avisa entradas a cair', async ({ page }) => {
+    // Desativado: ver FIN_RECURSOS_ANTIGOS
+    test.skip('Resultado de mes futuro tambem avisa entradas a cair', async ({ page }) => {
         await page.clock.install({ time: new Date('2026-11-10T12:00:00-03:00') });
         await entrar(page, BASE, {
             sc_contas_fin: CONTAS,
@@ -224,7 +231,8 @@ test.describe('relogio fixo no dia 10', () => {
         await expect(page.locator('#res-entradas-a-cair')).toBeHidden();
     });
 
-    test('Lucro (Caixa) em 30 dias avisa o imposto de meses incompletos', async ({ page }) => {
+    // Desativado: ver FIN_RECURSOS_ANTIGOS
+    test.skip('Lucro (Caixa) em 30 dias avisa o imposto de meses incompletos', async ({ page }) => {
         await page.clock.install({ time: new Date('2026-11-10T12:00:00-03:00') });
         // 30 dias = 12/10 a 10/11: outubro e novembro incompletos; outubro tem faturamento e aliquota.
         await entrar(page, BASE, { sc_empresa: { aliquota_estimada: 6 }, sc_cr: [crPago(1, 1000, '2026-10-20')], sc_cp: [], sc_mov_fin: [] });
@@ -243,7 +251,8 @@ test.describe('relogio fixo no dia 10', () => {
     });
 });
 
-test('Lucro (Caixa) explica o imposto e marca quando e estimado', async ({ page }) => {
+// Desativado: ver FIN_RECURSOS_ANTIGOS
+test.skip('Lucro (Caixa) explica o imposto e marca quando e estimado', async ({ page }) => {
     await entrar(page, BASE, SEED_M);
     await page.goto(BASE + '/financeiro.html');
     await visaoGeralDoMes(page, M);

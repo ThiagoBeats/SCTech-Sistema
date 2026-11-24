@@ -88,7 +88,7 @@ test('importar nota do mesmo fornecedor oferece vincular', async ({ page }) => {
         descricao: 'Pedido de compra #5001', valor: 1000, data_vencimento: '2099-01-10', data_pagamento: null, status: 'Pendente', tipo: 'variavel' };
     await entrar(page, BASE, { sc_forn: FORN, sc_pc: [pc({ conta_pagar_gerada: true })], sc_cp: [cp] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="pagar"]').click();
+    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
     await page.evaluate(() => {
         abrirModalContaPagar('manual');
         document.getElementById('cpm-descricao').value = 'NF 123';
