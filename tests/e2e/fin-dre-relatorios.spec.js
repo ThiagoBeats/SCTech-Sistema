@@ -116,7 +116,10 @@ test('Excel da DRE: arquivo DRE_caixa_2026.xlsx com tudo expandido e numeros com
     const x = await page.evaluate(() => window.__xlsx);
     expect(x.nome).toBe('DRE_caixa_2026.xlsx');
     expect(x.wb.abas).toHaveLength(1);
-    const aoa = x.wb.abas[0].aoa;
+    const todas = x.wb.abas[0].aoa;
+    expect(todas.slice(0, 5)).toEqual([['SCTech'], ['DRE'], ['Regime: Caixa'], ['Período: 01/01/2026 a 31/12/2026'], []]);
+    expect(todas[todas.length - 1]).toEqual(['Saídas em negativo.']);
+    const aoa = todas.slice(5, -1);
     expect(aoa[0].slice(0, 3)).toEqual(['RESULTADO', 'Jan/26', 'Fev/26']);
     expect(aoa[0][13]).toBe('Total 2026');
     expect(aoa[1][0]).toBe('Receitas operacionais');
@@ -139,16 +142,18 @@ test('Excel do relatorio: Analise_vertical com valor e AV% como numeros', async 
     let x = await page.evaluate(() => window.__xlsx);
     expect(x.nome).toBe('Analise_vertical_2026-01-01_2026-11-24.xlsx');
     expect(x.wb.abas[0].nome).toBe('Análise Vertical');
-    expect(x.wb.abas[0].aoa[0].slice(0, 3)).toEqual(['RESULTADO', 'Jan/26', 'Jan/26 AV%']);
-    expect(x.wb.abas[0].aoa[1].slice(0, 3)).toEqual(['Receitas operacionais', 10000, 100]);
+    const A = () => x.wb.abas[0].aoa.slice(5);
+    expect(x.wb.abas[0].aoa.slice(1, 4)).toEqual([['Análise Vertical'], ['Regime: Caixa'], ['Período: 01/01/2026 a 24/11/2026']]);
+    expect(A()[0].slice(0, 3)).toEqual(['RESULTADO', 'Jan/26', 'Jan/26 AV%']);
+    expect(A()[1].slice(0, 3)).toEqual(['Receitas operacionais', 10000, 100]);
     await page.evaluate(() => { window.__xlsx = null; });
     await tipo(page, 'horizontal');
     await page.locator('#dre-rel-excel').click();
     await page.waitForFunction(() => window.__xlsx);
     x = await page.evaluate(() => window.__xlsx);
     expect(x.nome).toBe('Analise_horizontal_2026-01-01_2026-11-24.xlsx');
-    expect(x.wb.abas[0].aoa[0].slice(0, 4)).toEqual(['RESULTADO', 'Jan/26', 'Fev/26', 'Fev/26 AH%']);
-    expect(x.wb.abas[0].aoa[1].slice(0, 4)).toEqual(['Receitas operacionais', 10000, 15000, 50]);
+    expect(A()[0].slice(0, 4)).toEqual(['RESULTADO', 'Jan/26', 'Fev/26', 'Fev/26 AH%']);
+    expect(A()[1].slice(0, 4)).toEqual(['Receitas operacionais', 10000, 15000, 50]);
 });
 
 test('Sem internet: Excel avisa que nao foi possivel carregar o gerador de planilhas', async ({ page }) => {
@@ -192,4 +197,26 @@ test('Imprimir o relatorio horizontal usa o titulo, o regime escolhido e o perio
     expect(html).toContain('01/01/2026 a 24/11/2026');
     expect(html).toContain('AH%');
     expect(html).toContain('Aluguel');
+});
+
+test('Do detalhe aberto num relatorio, abrir o lancamento fecha tudo e destaca a linha em Lancamentos', async ({ page }) => {
+    await abrirRel(page);
+    await linha(page, 'receitas').locator('.dre-tg').click();
+    await cel(page, 'cat:cat_vendas').nth(0).click();
+    await page.locator('#dre-detalhe-overlay tr.dre-det-linha').click();
+    await expect(page.locator('#dre-detalhe-overlay')).toHaveCount(0);
+    await expect(page.locator('#dre-rel-overlay')).toHaveCount(0);
+    await expect(page.locator('.fin-tab-btn[data-tab="lancamentos"]')).toHaveClass(/active/);
+    await expect(page.locator('#tb-contas-receber tr.lanc-destaque')).toContainText('Venda 1');
+});
+
+test('Relatorio: dialogo modal, foco entra, Esc fecha e o foco volta ao botao Relatorios', async ({ page }) => {
+    await abrirRel(page);
+    const o = page.locator('#dre-rel-overlay');
+    await expect(o).toHaveAttribute('role', 'dialog');
+    await expect(o).toHaveAttribute('aria-modal', 'true');
+    expect(await page.evaluate(() => document.getElementById('dre-rel-overlay').contains(document.activeElement))).toBe(true);
+    await page.keyboard.press('Escape');
+    await expect(o).toHaveCount(0);
+    await expect(page.locator('#dre-btn-relatorios')).toBeFocused();
 });

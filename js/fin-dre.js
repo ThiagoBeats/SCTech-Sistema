@@ -170,6 +170,12 @@ function _dreMatrizExcel(modo, tab, rotuloTotal) {
     return aoa;
 }
 
+// Linhas de apresentacao no topo: empresa, titulo, regime, periodo, linha em branco; e a nota no fim.
+function _dreComCabecalhoExcel(aoa, titulo, regime, periodoTxt) {
+    const emp = getEmpresa();
+    return [[emp.nome_fantasia || emp.razao_social || 'SCTech'], [titulo], ['Regime: ' + regime], ['Período: ' + periodoTxt], []].concat(aoa, [['Saídas em negativo.']]);
+}
+
 async function _dreBaixarExcel(nome, aba, aoa) {
     try { await garantirSheetJs('o gerador de planilhas'); }
     catch (e) { toast(e.message, 'error', 5000); return; }
@@ -233,7 +239,7 @@ function exportarDrePdf() { _dreImprimirAtual(true); }
 function imprimirDre() { _dreImprimirAtual(false); }
 function exportarDreExcel() {
     if (!finDre.ano) finDre.ano = Number(hojeLocal().slice(0, 4));
-    return _dreBaixarExcel('DRE_' + finDre.regime + '_' + finDre.ano + '.xlsx', 'DRE', _dreMatrizExcel('dre', finDreTabelaAtual(), 'Total ' + finDre.ano));
+    return _dreBaixarExcel('DRE_' + finDre.regime + '_' + finDre.ano + '.xlsx', 'DRE', _dreComCabecalhoExcel(_dreMatrizExcel('dre', finDreTabelaAtual(), 'Total ' + finDre.ano), 'DRE', _dreNomeRegime(finDre.regime), '01/01/' + finDre.ano + ' a 31/12/' + finDre.ano));
 }
 
 // ---- Relatorios ----
@@ -250,6 +256,10 @@ function abrirRelatoriosDre() {
     const o = document.createElement('div');
     o.id = 'dre-rel-overlay';
     o.className = 'dre-rel';
+    o.setAttribute('role', 'dialog');
+    o.setAttribute('aria-modal', 'true');
+    o.setAttribute('aria-label', 'Relatórios da DRE');
+    o.tabIndex = -1;
     const reg = (v, t) => `<button type="button" class="dre-seg-btn" id="dre-rel-regime-${v}" aria-pressed="false" onclick="finRelMudar('regime','${v}')">${t}</button>`;
     const tip = (v, t) => `<button type="button" class="dre-seg-btn" id="dre-rel-tipo-${v}" aria-pressed="false" onclick="finRelMudar('tipo','${v}')">${t}</button>`;
     const ints = [['mensal', 'Mensal'], ['trimestral', 'Trimestral'], ['semestral', 'Semestral'], ['anual', 'Anual'], ['personalizado', 'Personalizado']];
@@ -259,7 +269,7 @@ function abrirRelatoriosDre() {
                 <button class="btn btn-outline btn-sm" id="dre-rel-pdf" onclick="exportarRelatorioDrePdf()">PDF</button>
                 <button class="btn btn-outline btn-sm" id="dre-rel-excel" onclick="exportarRelatorioDreExcel()">Excel</button>
                 <button class="btn btn-outline btn-sm" id="dre-rel-imprimir" onclick="imprimirRelatorioDre()">Imprimir</button>
-                <button class="btn btn-outline btn-sm" id="dre-rel-fechar" onclick="document.getElementById('dre-rel-overlay').remove()">Fechar</button>
+                <button class="btn btn-outline btn-sm" id="dre-rel-fechar" onclick="_dreRelFechar(true)">Fechar</button>
             </div></div>
         <div class="lanc-barra dre-barra">
             <div class="form-group"><label>Tipo</label><div class="dre-seg" role="group" aria-label="Tipo">${tip('vertical', 'Vertical')}${tip('horizontal', 'Horizontal')}</div></div>
@@ -277,11 +287,21 @@ function abrirRelatoriosDre() {
         if (c) _dreRelDetalhe(c.dataset.chave, Number(c.dataset.i));
     });
     o.addEventListener('keydown', e => {
+        if (e.key === 'Escape') { e.stopPropagation(); _dreRelFechar(true); return; }
         if (e.key !== 'Enter' && e.key !== ' ') return;
         const c = e.target.closest('td[data-chave]');
         if (c) { e.preventDefault(); _dreRelDetalhe(c.dataset.chave, Number(c.dataset.i)); }
     });
     _dreRelRender();
+    o.focus();
+}
+
+// Fecha o relatorio; devolve o foco ao botao Relatorios quando pedido.
+function _dreRelFechar(devolverFoco) {
+    const o = document.getElementById('dre-rel-overlay');
+    if (o) o.remove();
+    const b = document.getElementById('dre-btn-relatorios');
+    if (devolverFoco && b) b.focus();
 }
 
 function finRelMudar(campo, valor) {
@@ -347,7 +367,7 @@ function imprimirRelatorioDre() { _dreRelImprimirAgora(false); }
 function exportarRelatorioDreExcel() {
     const tab = _dreRelTabela();
     if (!tab.periodos.length) { toast('Período inválido.', 'info'); return; }
-    return _dreBaixarExcel('Analise_' + finRel.tipo + '_' + finRel.de + '_' + finRel.ate + '.xlsx', _dreRelTitulo(), _dreMatrizExcel(finRel.tipo, tab, ''));
+    return _dreBaixarExcel('Analise_' + finRel.tipo + '_' + finRel.de + '_' + finRel.ate + '.xlsx', _dreRelTitulo(), _dreComCabecalhoExcel(_dreMatrizExcel(finRel.tipo, tab, ''), _dreRelTitulo(), _dreNomeRegime(finRel.regime), _dreRelPeriodoTxt()));
 }
 
 // ===================== DETALHE (lancamentos de uma categoria num periodo) =====================
@@ -383,7 +403,7 @@ function abrirDetalheDre(chave, indice, ctx) {
     o.addEventListener('click', e => {
         if (e.target === o) { o.remove(); return; }
         const tr = e.target.closest('tr.dre-det-linha');
-        if (tr) { const t = tr.dataset.tipo, id = tr.dataset.id; o.remove(); abrirLancamentoNaLista(t, id); }
+        if (tr) { const t = tr.dataset.tipo, id = tr.dataset.id; o.remove(); _dreRelFechar(false); abrirLancamentoNaLista(t, id); }
     });
 }
 
