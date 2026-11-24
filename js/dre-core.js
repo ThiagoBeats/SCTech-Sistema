@@ -29,8 +29,12 @@
         const padrao = F.categoriasPadrao();
         const categorias = (p.categorias && p.categorias.length) ? p.categorias : padrao.categorias;
         const porId = new Map(categorias.map(c => [String(c.id), c]));
+        // Categoria do registro; desconhecida ou de tipo contrario ao lado (CR = entrada, CP = saida) cai na do legado.
+        // Estorno/reembolso nao entra (igual ao ResultadoCore): so valores positivos de cada lado.
         const catDe = (reg, tipo) => {
-            if (reg.categoria_id != null && reg.categoria_id !== '' && porId.has(String(reg.categoria_id))) return porId.get(String(reg.categoria_id));
+            const certo = tipo === 'receber' ? 'entrada' : 'saida';
+            const c = reg.categoria_id != null && reg.categoria_id !== '' ? porId.get(String(reg.categoria_id)) : null;
+            if (c && c.tipo === certo) return c;
             return porId.get(F.categoriaDoLegado(reg, tipo)) || null;
         };
         const subs = p.subgrupos && p.subgrupos.length ? p.subgrupos : padrao.subgrupos;
@@ -52,7 +56,7 @@
                 itens.push({ tipo: 'cp', reg: cp, data: dia10(cp.data_pagamento), valor: num(cp.valor) });
             });
         } else if (ok) {
-            const comp = r => r.data_competencia || r.data_vencimento;
+            const comp = r => r.data_competencia || r.data_vencimento || r.data_pagamento;
             crs.forEach(cr => { if (cr.status !== 'Cancelado' && dentro(comp(cr))) itens.push({ tipo: 'cr', reg: cr, data: dia10(comp(cr)), valor: num(cr.valor) }); });
             cps.forEach(cp => { if (cp.status !== 'Cancelado' && dentro(comp(cp))) itens.push({ tipo: 'cp', reg: cp, data: dia10(comp(cp)), valor: num(cp.valor) }); });
         }
@@ -82,7 +86,7 @@
         return { linhas: { receitas, custos, margem, despesas, resultadoOperacional, investimento, financiamento, liquido }, porCategoria, porSubgrupo, lancamentos };
     }
 
-    // 12 meses do ano + total do ano (calculado no ano inteiro, nao pela soma dos meses).
+    // 12 meses do ano + total = soma dos 12 meses (linha a linha, igual a tabela).
     function calcularMeses(p) {
         p = p || {};
         const ano = Number(p.ano);
@@ -90,30 +94,31 @@
         for (let m = 1; m <= 12; m++) {
             meses.push(calcular(Object.assign({}, p, { de: iso(ano, m, 1), ate: iso(ano, m, ultimoDia(ano, m)) })));
         }
-        const total = calcular(Object.assign({}, p, { de: iso(ano, 1, 1), ate: iso(ano, 12, 31) }));
+        const total = { linhas: {}, porCategoria: {}, porSubgrupo: {}, lancamentos: {} };
+        Object.keys(meses[0].linhas).forEach(k => { total.linhas[k] = arredondar(meses.reduce((t, r) => t + r.linhas[k], 0)); });
+        meses.forEach(r => {
+            ['porCategoria', 'porSubgrupo'].forEach(mapa => {
+                Object.keys(r[mapa]).forEach(k => { total[mapa][k] = arredondar((total[mapa][k] || 0) + r[mapa][k]); });
+            });
+            Object.keys(r.lancamentos).forEach(k => { total.lancamentos[k] = (total.lancamentos[k] || []).concat(r.lancamentos[k]); });
+        });
         return { meses, total };
     }
 
-    // Mesmo criterio do ticket da tela inicial: pedidos instalados / aguardando financeiro, com valor.
-    // Periodo pela data_aprovacao; sem o campo, pela data do pedido.
+    // Ticket medio: pedidos aprovados no periodo (status diferente de Orcamento, com valor), pela
+    // data_aprovacao (inclusive). Pedido sem data_aprovacao nao conta.
     function ticketMedio(p) {
         p = p || {};
-        const aprovado = x => ['Instalado', 'Aguardando Financeiro', 'Faturado'].includes(x.status) && num(x.valor) > 0;
-        const lista = (p.pedidos || []).filter(x => {
-            if (!x || !aprovado(x)) return false;
-            let d = x.data_aprovacao || x.data || x.data_criacao;
-            if (!d && Number.isFinite(Number(x.id)) && Number(x.id) > 946684800000) {
-                const t = new Date(Number(x.id));
-                d = iso(t.getFullYear(), t.getMonth() + 1, t.getDate());
-            }
-            return !!d && dia10(d) >= p.de && dia10(d) <= p.ate;
-        });
+        const lista = (p.pedidos || []).filter(x => x && x.status !== 'Orçamento' && num(x.valor) > 0
+            && !!x.data_aprovacao && dia10(x.data_aprovacao) >= p.de && dia10(x.data_aprovacao) <= p.ate);
         const total = lista.reduce((s, x) => s + num(x.valor), 0);
         return { valor: lista.length ? arredondar(total / lista.length) : 0, qtd: lista.length };
     }
 
     // Periodo de mesmo tamanho logo antes; meses cheios -> mesma quantidade de meses cheios antes.
     function periodoAnterior(de, ate) {
+        const valido = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d);
+        if (!valido(de) || !valido(ate) || de > ate) return null;
         const [a1, m1, d1] = de.split('-').map(Number), [a2, m2, d2] = ate.split('-').map(Number);
         if (d1 === 1 && d2 === ultimoDia(a2, m2)) {
             const k = (a2 * 12 + m2) - (a1 * 12 + m1) + 1;

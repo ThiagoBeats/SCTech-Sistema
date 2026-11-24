@@ -93,17 +93,21 @@ test('paridade com o ResultadoCore: cartão com repasses, conta sem movimento', 
 test('ticketMedio, periodoAnterior e variacao', () => {
     const pedidos = [
         { id: 1, status: 'Instalado', valor: 1000, data_aprovacao: '2026-03-05' },
-        { id: 2, status: 'Aguardando Financeiro', valor: 3000, data_aprovacao: '2026-03-20' },
+        { id: 2, status: 'Em Produção', valor: 3000, data_aprovacao: '2026-03-31' },
         { id: 3, status: 'Orçamento', valor: 9999, data_aprovacao: '2026-03-10' },
-        { id: 4, status: 'Instalado', valor: 500, data_aprovacao: '2026-04-02' }
+        { id: 4, status: 'Instalado', valor: 500, data_aprovacao: '2026-04-02' },
+        { id: 5, status: 'Instalado', valor: 700 }
     ];
     assert.deepStrictEqual(D.ticketMedio({ pedidos, de: '2026-03-01', ate: '2026-03-31' }), { valor: 2000, qtd: 2 });
     assert.deepStrictEqual(D.ticketMedio({ pedidos, de: '2026-05-01', ate: '2026-05-31' }), { valor: 0, qtd: 0 });
+    assert.strictEqual(D.periodoAnterior(), null);
+    assert.strictEqual(D.periodoAnterior('2026-03-31', '2026-03-01'), null);
     assert.deepStrictEqual(D.periodoAnterior('2026-03-01', '2026-03-31'), { de: '2026-02-01', ate: '2026-02-28' });
     assert.deepStrictEqual(D.periodoAnterior('2026-01-01', '2026-03-31'), { de: '2025-10-01', ate: '2025-12-31' });
     assert.deepStrictEqual(D.periodoAnterior('2026-03-10', '2026-03-19'), { de: '2026-02-28', ate: '2026-03-09' });
     assert.strictEqual(D.variacao(110, 100), 10);
     assert.strictEqual(D.variacao(5, 0), null);
+    assert.strictEqual(D.variacao(-50, -100), 50);
 });
 
 test('calcularMeses devolve 12 meses e o total do ano', () => {
@@ -111,4 +115,26 @@ test('calcularMeses devolve 12 meses e o total do ano', () => {
     assert.strictEqual(r.meses.length, 12);
     assert.strictEqual(r.meses[2].linhas.liquido, 450);
     assert.strictEqual(r.total.linhas.receitas, 1000);
+    Object.keys(r.total.linhas).forEach(k => assert.strictEqual(r.total.linhas[k], Math.round(r.meses.reduce((t, m) => t + m.linhas[k], 0) * 100) / 100, k));
+    assert.strictEqual(r.total.porCategoria.cat_aluguel, 200);
+});
+
+test('categoria desconhecida ou de tipo contrario cai na do legado', () => {
+    const base = { regime: 'caixa', de: '2026-03-01', ate: '2026-03-31' };
+    const r = D.calcular({ ...base, contas_receber: [cr({ id: 1, pedido_id: 1, valor: 100, categoria_id: 'cat_tecido', data_pagamento: '2026-03-01' }), cr({ id: 2, valor: 50, categoria_id: 'nao_existe', data_pagamento: '2026-03-31' })],
+        contas_pagar: [cp({ id: 1, categoria: 'aluguel', valor: 30, categoria_id: 'cat_vendas', data_pagamento: '2026-03-01' }), cp({ id: 2, categoria: 'tecido', valor: 20, categoria_id: 'nao_existe', data_pagamento: '2026-03-31' })] });
+    assert.strictEqual(r.porCategoria.cat_vendas, 100);
+    assert.strictEqual(r.porCategoria.cat_outras_rec, 50);
+    assert.strictEqual(r.porCategoria.cat_aluguel, 30);
+    assert.strictEqual(r.porCategoria.cat_tecido, 20);
+    assert.strictEqual(r.linhas.receitas, 150);
+});
+
+test('datas inclusivas, CR cancelada e competência sem data_competencia', () => {
+    const d = { contas_receber: [cr({ id: 1, valor: 10, data_pagamento: '2026-03-01' }), cr({ id: 2, valor: 20, data_pagamento: '2026-03-31' }), cr({ id: 3, valor: 40, data_pagamento: '2026-04-01' }),
+        cr({ id: 4, valor: 80, status: 'Cancelado', data_vencimento: '2026-03-10', data_pagamento: '2026-03-10' })], contas_pagar: [cp({ id: 1, categoria: 'aluguel', valor: 5, status: 'Pendente', data_pagamento: '2026-03-15' })] };
+    assert.strictEqual(D.calcular({ regime: 'caixa', de: '2026-03-01', ate: '2026-03-31', ...d }).linhas.receitas, 30);
+    const c = D.calcular({ regime: 'competencia', de: '2026-03-01', ate: '2026-03-31', ...d });
+    assert.strictEqual(c.linhas.receitas, 30);
+    assert.strictEqual(c.linhas.despesas, 5);
 });
