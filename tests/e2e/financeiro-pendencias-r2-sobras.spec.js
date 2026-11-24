@@ -1,7 +1,7 @@
 // Pendencias R2/R3, tarefa 3: sobras da rodada 1 e Chart.js local.
 // Relogio fixo em 14/11/2026.
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos, acaoLanc, linhasLanc } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8173';
 const MSG = 'Não foi possível salvar: o espaço do navegador acabou. Baixe uma cópia de segurança e libere espaço.';
@@ -166,9 +166,9 @@ test('salvarERecarregar sem espaco: depois do aviso recarrega e a tela mostra o 
         };
     });
     await page.reload();
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
+    await abrirLancamentos(page, 'receber');
     await page.evaluate(() => { window.__marca = 1; window.__cheio = true; });
-    await page.locator('#tb-contas-receber button', { hasText: '✓ Recebido' }).first().click();
+    await acaoLanc(page, 'receber', 'Dar baixa');
     const modal = page.locator('#baixa-modal');
     await modal.locator('.baixa-linha').first().locator('.baixa-meio').selectOption({ label: 'PIX' });
     await modal.locator('#baixa-ok').click();
@@ -178,8 +178,8 @@ test('salvarERecarregar sem espaco: depois do aviso recarrega e a tela mostra o 
     expect(await page.evaluate(() => window.__marca), 'so recarrega depois do OK').toBe(1);
     await page.locator('#sc-modal-ok').click();
     await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
-    await expect(page.locator('#tb-contas-receber button', { hasText: '✓ Recebido' })).toHaveCount(1);
+    await abrirLancamentos(page, 'receber');
+    await expect(linhasLanc(page, 'receber', 'Dar baixa')).toHaveCount(1);
     expect(await page.evaluate(() => db.contas_receber[0].status)).toBe('Pendente');
     expect(erros).toEqual([]);
 });

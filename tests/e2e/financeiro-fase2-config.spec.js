@@ -1,7 +1,7 @@
 // Financeiro Fase 2, tarefa 2: meta padrao, orcamento, categoria Imposto
 // (com mes de referencia) e a permissao "Resultado do mes".
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const ler = (page, k) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), k);
@@ -29,7 +29,7 @@ test('meta padrao e orcamento salvos sem apagar outros campos da empresa', async
 test('conta de imposto tem mes de referencia preenchido com o mes anterior ao vencimento e editavel', async ({ page }) => {
     await entrar(page, BASE, { sc_cp: [] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
+    await abrirLancamentos(page, 'pagar');
     await page.evaluate(() => abrirModalContaPagar());
     await expect(page.locator('#cpm-mes-ref')).toBeHidden();
     await page.fill('#cpm-descricao', 'DAS');

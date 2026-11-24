@@ -7,7 +7,7 @@
 //  - estorno de pagamento / comissao com permissao negada: financeiro-pendencias-r3-fase0.spec.js
 //  - periodicidade de despesas fixas e alta de grupo no limite (30% / R$ 100): tests/caixa-core.test.js e tests/fechamento-core.test.js
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos, acaoLanc, acoesDaLinha, acaoMenu } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8175';
 // Varias acoes terminam recarregando a pagina: espera a recarga em vez de falhar no meio dela.
@@ -50,10 +50,10 @@ const cr = extra => ({ id: 601, pedido_id: 26300, cliente_nome: 'Ana Paula Lima'
 async function abrirReceber(page, dados) {
     await entrar(page, BASE, { sc_cli: CLI, sc_contas_fin: CONTAS, sc_meios_pag: MEIOS, sc_ped: [pedido()], sc_cr: [cr()], ...dados });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
+    await abrirLancamentos(page, 'receber');
 }
 async function abrirBaixa(page) {
-    await page.locator('#tb-contas-receber button', { hasText: '✓ Recebido' }).first().click();
+    await acaoLanc(page, 'receber', 'Dar baixa');
     const modal = page.locator('#baixa-modal');
     await expect(modal).toBeVisible();
     return modal;
@@ -145,8 +145,8 @@ test('cartao: recebimento parcial divide a parcela; so a parte paga gera repasse
     expect((await lerChave(page, 'sc_ped'))[0].valor_recebido).toBe(1000);
 
     // Estorno da parte paga: o valor volta para a parcela aberta e some tudo o que o cartao gerou.
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click(); // a pagina recarregou e voltou para a aba Hoje
-    await page.locator('#tb-contas-receber button', { hasText: 'Estornar' }).click();
+    await abrirLancamentos(page, 'receber'); // a pagina recarregou e voltou para a aba Hoje
+    await acaoLanc(page, 'receber', 'Estornar');
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_cr')).length).toBe(1);
     const volta = (await lerChave(page, 'sc_cr'))[0];
@@ -180,8 +180,8 @@ test('cartao com a maquininha removida: o parcial vale, fica sem conta e sem mov
     expect(cps.map(c => [c.categoria, c.status, c.conta_id, c.origem_cr_id])).toEqual([['taxa_cartao', 'Pago', null, paga.id], ['taxa_cartao', 'Pago', null, paga.id]]);
     expect(cps.reduce((s, c) => s + c.valor, 0)).toBe(40);
     // Estornar tira a conta de taxa e junta a parte de volta, mesmo sem conta.
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click(); // a pagina recarregou e voltou para a aba Hoje
-    await page.locator('#tb-contas-receber button', { hasText: 'Estornar' }).click();
+    await abrirLancamentos(page, 'receber'); // a pagina recarregou e voltou para a aba Hoje
+    await acaoLanc(page, 'receber', 'Estornar');
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_cr')).length).toBe(1);
     expect((await lerChave(page, 'sc_cr'))[0].valor).toBe(3000);
@@ -196,10 +196,10 @@ test('estornar pagamento feito sem conta: volta a ficar em aberto e nao mexe nos
     await entrar(page, BASE, { sc_contas_fin: CONTAS, sc_meios_pag: MEIOS,
         sc_cp: [cp(801, { conta_id: null, meio_id: null }), cp(802, { conta_id: 11, meio_id: 22, forma_pagamento: 'PIX' })], sc_mov_fin: [mov] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
+    await abrirLancamentos(page, 'pagar');
     const linha801 = page.locator('#tb-contas-pagar tr', { hasText: 'Conta 801' });
     await expect(linha801).toBeVisible();
-    await linha801.locator('button', { hasText: 'Estornar' }).click();
+    await acaoMenu(page, linha801, 'Estornar');
     await expect(page.locator('#sc-modal-msg')).toHaveText('Estornar este pagamento? A conta volta a ficar em aberto.');
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_cp')).find(c => c.id === 801).status).toBe('Pendente');
@@ -216,7 +216,7 @@ async function abrirCobranca(page, dados, retorno) {
     await entrar(page, BASE, dados);
     await page.goto(BASE + '/financeiro.html');
     await page.evaluate(r => { window.__abertos = []; window.open = u => { window.__abertos.push(u); return r ? {} : null; }; }, retorno !== false);
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
+    await abrirLancamentos(page, 'receber');
 }
 const abertos = page => page.evaluate(() => window.__abertos);
 const crVenc = extra => ({ id: 601, pedido_id: 26300, cliente_nome: 'Ana', descricao: 'Saldo', valor: 2000,
@@ -225,7 +225,7 @@ const crVenc = extra => ({ id: 601, pedido_id: 26300, cliente_nome: 'Ana', descr
 test('cobranca: sem pedido casa o cliente pelo nome (sem diferenciar maiusculas nem espacos nas pontas)', async ({ page }) => {
     await abrirCobranca(page, { sc_cli: [{ id: 5, nome: '  ANA paula ', tel: '11 93333-3333' }, { id: 6, nome: 'Outra', tel: '11 94444-4444' }],
         sc_ped: [], sc_cr: [crVenc({ pedido_id: null, cliente_nome: 'Ana Paula' })] });
-    await page.locator('#tb-contas-receber button', { hasText: 'Cobrar' }).click();
+    await acaoLanc(page, 'receber', 'Cobrar no WhatsApp');
     await expect.poll(() => abertos(page)).toHaveLength(1);
     expect((await abertos(page))[0]).toMatch(/^https:\/\/wa\.me\/5511933333333\?text=/);
 });
@@ -234,7 +234,7 @@ test('cobranca: cliente do pedido que nao existe mais cai no nome; sem nome que 
     // clienteId 99 foi apagado do cadastro: o nome da parcela acha a Ana (so uma).
     await abrirCobranca(page, { sc_cli: [{ id: 2, nome: 'Ana', tel: '11 92222-2222' }],
         sc_ped: [pedido({ clienteId: 99, clienteNome: 'Ana' })], sc_cr: [crVenc()] });
-    await page.locator('#tb-contas-receber button', { hasText: 'Cobrar' }).click();
+    await acaoLanc(page, 'receber', 'Cobrar no WhatsApp');
     await expect.poll(() => abertos(page)).toHaveLength(1);
     expect((await abertos(page))[0]).toMatch(/^https:\/\/wa\.me\/5511922222222\?text=/);
     await expect(page.locator('#tb-contas-receber')).toContainText('cobrado hoje');
@@ -243,7 +243,7 @@ test('cobranca: cliente do pedido que nao existe mais cai no nome; sem nome que 
 test('cobranca: id apagado e nome que nao casa com ninguem: avisa e nao abre nem marca cobrado hoje', async ({ page }) => {
     await abrirCobranca(page, { sc_cli: [{ id: 2, nome: 'Bia', tel: '11 92222-2222' }],
         sc_ped: [pedido({ clienteId: 99, clienteNome: 'Ana' })], sc_cr: [crVenc()] });
-    await page.locator('#tb-contas-receber button', { hasText: 'Cobrar' }).click();
+    await acaoLanc(page, 'receber', 'Cobrar no WhatsApp');
     await expect(page.locator('#sc-modal-msg')).toHaveText('Cliente sem telefone no cadastro.');
     await page.locator('#sc-modal-ok').click();
     expect(await abertos(page)).toEqual([]);
@@ -255,9 +255,9 @@ test('cobranca: so visualizar nao ve Cobrar e a funcao recusa, sem abrir nada', 
     await soVisualizar(page, 'financeiro.receber');
     await page.goto(BASE + '/financeiro.html');
     await page.evaluate(() => { window.__abertos = []; window.open = u => { window.__abertos.push(u); return {}; }; });
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
+    await abrirLancamentos(page, 'receber');
     await expect(page.locator('#tb-contas-receber')).toContainText('Saldo');
-    await expect(page.locator('#tb-contas-receber button', { hasText: 'Cobrar' })).toHaveCount(0);
+    expect(await acoesDaLinha(page, page.locator('#tb-contas-receber tr').first())).not.toContain('Cobrar no WhatsApp');
     await page.evaluate(() => { cobrarNoWhatsApp(601); });
     await expect(page.locator('#sc-modal-msg')).toContainText('permissão');
     await page.locator('#sc-modal-ok').click();

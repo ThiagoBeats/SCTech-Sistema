@@ -1,7 +1,7 @@
 // Pendencias R1, tarefa 6: Visao Geral, Resultado do mes, Extrato, fechamento e A Pagar parcelado.
 // Relogio fixo em 14/11/2026 (05/11 no fechamento). O Chart.js vem do CDN: os testes leem numeros e textos do DOM.
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const ler = (page, k) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), k);
@@ -181,7 +181,7 @@ test.skip('conferencia do fechamento inclui conta sem data de saldo inicial', as
 // ---- A Pagar parcelado: regra R4 ----
 test('A Pagar parcelado: dia 31 vira o ultimo dia do mes, como no simulador', async ({ page }) => {
     await abrir(page, { sc_cp: [] });
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
+    await abrirLancamentos(page, 'pagar');
     await page.evaluate(() => {
         abrirModalContaPagar('manual');
         document.getElementById('cpm-descricao').value = 'Máquina';

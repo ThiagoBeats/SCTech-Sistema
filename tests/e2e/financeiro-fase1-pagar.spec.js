@@ -1,7 +1,7 @@
 // Financeiro Fase 1, tarefa 5: pagamentos (A Pagar e comissoes) com meio e
 // conta, saida no extrato e estorno de pagamento.
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos, acaoLanc, acoesDaLinha, acaoMenu } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const ler = (page, k) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), k);
@@ -33,12 +33,12 @@ const CLI = [{ id: 1, nome: 'Ana Paula Lima' }];
 async function abrirPagar(page, dados) {
     await entrar(page, BASE, { sc_contas_fin: CONTAS, sc_meios_pag: MEIOS, ...dados });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
+    await abrirLancamentos(page, 'pagar');
 }
 
 test('pagar conta no PIX gera saida no Banco', async ({ page }) => {
     await abrirPagar(page, { sc_cp: [cp()] });
-    await page.locator('#tb-contas-pagar button', { hasText: '✓ Pagar' }).first().click();
+    await acaoLanc(page, 'pagar', 'Dar baixa');
     const modal = page.locator('#baixa-modal');
     await expect(modal).toBeVisible();
     const linha = modal.locator('.baixa-linha').first();
@@ -55,7 +55,7 @@ test('pagar conta no PIX gera saida no Banco', async ({ page }) => {
 
 test('modal de pagar nao oferece cartao e exige escolher o meio', async ({ page }) => {
     await abrirPagar(page, { sc_cp: [cp()] });
-    await page.locator('#tb-contas-pagar button', { hasText: '✓ Pagar' }).first().click();
+    await acaoLanc(page, 'pagar', 'Dar baixa');
     const modal = page.locator('#baixa-modal');
     const meio = modal.locator('.baixa-linha').first().locator('.baixa-meio');
     const textos = await meio.locator('option').allTextContents();
@@ -70,8 +70,8 @@ test('cartao so oferece conta maquininha (receber)', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_contas_fin: CONTAS, sc_meios_pag: MEIOS, sc_ped: [pedido({ valor_recebido: 0 })],
         sc_cr: [{ id: 601, pedido_id: 26400, cliente_nome: 'Ana Paula Lima', descricao: 'Saldo', valor: 500, data_vencimento: '2099-12-10', status: 'Pendente', parcela_tipo: 'saldo' }] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
-    await page.locator('#tb-contas-receber button', { hasText: '✓ Recebido' }).first().click();
+    await abrirLancamentos(page, 'receber');
+    await acaoLanc(page, 'receber', 'Dar baixa');
     const linha = page.locator('#baixa-modal .baixa-linha').first();
     await linha.locator('.baixa-meio').selectOption({ label: 'Cartão de débito' });
     expect(await linha.locator('.baixa-conta option').allTextContents()).toEqual(['— sem conta —', 'Maquininha']);
@@ -112,17 +112,24 @@ test('estornar no A Pagar e excluir pago/taxa de cartao sao bloqueados', async (
     await abrirPagar(page, { sc_cp: [taxa, pago],
         sc_mov_fin: [{ id: 1, conta_id: 11, data: '2026-11-05', sentido: 'saida', valor: 800, origem: 'cp', origem_id: 703, grupo_id: null, descricao: 'x' }] });
     const linhaTaxa = page.locator('#tb-contas-pagar tr', { hasText: 'Taxa de cartão' });
-    await expect(linhaTaxa.locator('button', { hasText: 'Estornar' })).toHaveCount(0);
-    await linhaTaxa.locator('button[title="Excluir"]').click();
+    // no menu da taxa de cartao nao ha Estornar nem Excluir; no da conta paga ha Estornar, mas nao Excluir
+    const acoesTaxa = await acoesDaLinha(page, linhaTaxa);
+    expect(acoesTaxa).not.toContain('Estornar');
+    expect(acoesTaxa).not.toContain('Excluir');
+    const linhaPaga = page.locator('#tb-contas-pagar tr', { hasText: 'Aluguel' });
+    const acoesPaga = await acoesDaLinha(page, linhaPaga);
+    expect(acoesPaga).toContain('Estornar');
+    expect(acoesPaga).not.toContain('Excluir');
+    // as funcoes continuam recusando mesmo chamadas direto
+    await page.evaluate(() => { excluirCP(702); });
     await expect(page.locator('.sc-modal-overlay')).toContainText('A taxa do cartão sai pelo estorno do recebimento.');
     await page.locator('.sc-modal-overlay button').last().click();
-    const linhaPaga = page.locator('#tb-contas-pagar tr', { hasText: 'Aluguel' });
-    await linhaPaga.locator('button[title="Excluir"]').click();
+    await page.evaluate(() => { excluirCP(703); });
     await expect(page.locator('.sc-modal-overlay')).toContainText('Estorne o pagamento antes de excluir.');
     await page.locator('.sc-modal-overlay button').last().click();
     expect(await ler(page, 'sc_cp')).toHaveLength(2);
     // estornar a conta paga comum
-    await linhaPaga.locator('button', { hasText: 'Estornar' }).click();
+    await acaoMenu(page, linhaPaga, 'Estornar');
     await page.locator('.sc-modal-overlay button', { hasText: 'Estornar' }).last().click();
     await expect.poll(async () => (await ler(page, 'sc_cp')).find(x => x.id === 703).status).toBe('Pendente');
     expect(await ler(page, 'sc_mov_fin')).toEqual([]);

@@ -3065,3 +3065,19 @@ td { transition: background-color .15s ease; }
 @media (prefers-reduced-motion: reduce) {
     .metric-card:hover, .kanban-card:hover, .ag-ev:hover, .index-card-3d.index-card-click:hover { transform: none; }
 }
+
+/* ── LANCAMENTOS (Financeiro novo) ─────────────────────────────── */
+.fin-badge-green { background: var(--ok-bg); color: var(--ok-text); }
+.lanc-barra { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
+.lanc-barra .form-group { margin-bottom: 0; min-width: 130px; flex: 0 1 160px; }
+.lanc-barra .form-group.lanc-busca { flex: 1 1 220px; min-width: 200px; }
+.lanc-acoes { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.lanc-tabela { overflow-x: auto; }
+.lanc-sub { font-size: 11px; color: var(--muted); }
+.lanc-rodape { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; font-size: 13px; color: var(--dark); }
+.lanc-pag { color: var(--muted); }
+.lanc-opcoes { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; }
+.lanc-opcao { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; font-weight: 600; color: var(--dark); }
+.lanc-hist-item { padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--dark); }
+.lanc-hist-item:last-child { border-bottom: 0; }
+.lanc-hist-det { margin-top: 2px; color: var(--muted); }

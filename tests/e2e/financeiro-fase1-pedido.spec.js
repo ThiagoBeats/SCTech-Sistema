@@ -1,7 +1,7 @@
 // Financeiro Fase 1, tarefa 6: o pedido guarda o plano e o meio previsto da
 // entrada e do saldo; ao aprovar, as parcelas nascem com esse meio previsto.
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos, acaoLanc } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const ler = (page, k) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), k);
@@ -104,15 +104,15 @@ test('confirmar pagamento ja vem com o meio previsto de cada parcela', async ({ 
     await escolherMeios(page);
     await gravar(page);
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
-    await page.locator('#tb-contas-receber button', { hasText: '✓ Recebido' }).first().click();
+    await abrirLancamentos(page, 'receber');
+    await acaoLanc(page, 'receber', 'Dar baixa');
     const modal = page.locator('#baixa-modal');
     await expect(modal).toBeVisible();
     const linhas = modal.locator('.baixa-linha');
     await expect(linhas).toHaveCount(1);
     await expect(linhas.nth(0).locator('.baixa-meio')).toHaveValue('22');
     await modal.locator('#baixa-cancel').click();
-    await page.locator('#tb-contas-receber button', { hasText: '✓ Recebido' }).nth(1).click();
+    await acaoLanc(page, 'receber', 'Dar baixa', { n: 1 });
     const l2 = page.locator('#baixa-modal .baixa-linha').first();
     await expect(l2.locator('.baixa-meio')).toHaveValue('26');
     await expect(l2.locator('.baixa-vezes')).toHaveValue('3');

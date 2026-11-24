@@ -1,7 +1,7 @@
 // Pendencias R1, tarefa 1: falta de espaco no navegador, importacao, ids da
 // migracao antiga, recarga depois do download e aviso de copia parcial.
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos, acaoLanc } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8151';
 const MSG = 'Não foi possível salvar: o espaço do navegador acabou. Baixe uma cópia de segurança e libere espaço.';
@@ -96,12 +96,12 @@ test('salvarERecarregar sem espaco: uma baixa avisa uma vez, so recarrega depois
         };
     });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
+    await abrirLancamentos(page, 'receber');
     await page.evaluate(() => { window.__marca = 1; window.__cheio = true; });
     let alertas = 0;
     await page.exposeFunction('__contarAlerta', () => { alertas++; });
     await page.evaluate(() => { const o = window.showAlert; window.showAlert = (...a) => { window.__contarAlerta(); return o(...a); }; });
-    await page.locator('#tb-contas-receber button', { hasText: '✓ Recebido' }).first().click();
+    await acaoLanc(page, 'receber', 'Dar baixa');
     const modal = page.locator('#baixa-modal');
     await expect(modal).toBeVisible();
     await modal.locator('.baixa-linha').first().locator('.baixa-meio').selectOption({ label: 'PIX' });

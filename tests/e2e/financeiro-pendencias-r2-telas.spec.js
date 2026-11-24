@@ -1,6 +1,6 @@
 // Pendencias R2, tarefa 2: telas e textos das Fases 1, 2 e 3 do Financeiro.
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos, acaoLanc } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const ler = (page, k) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), k);
@@ -53,8 +53,8 @@ test('aviso do estorno de cartao vem em um paragrafo so', async ({ page }) => {
         sc_mov_fin: [{ id: 91, conta_id: 12, data: d1, sentido: 'entrada', valor: 100, origem: 'cr', origem_id: 601, grupo_id: 999, descricao: 'x' }]
     });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
-    await page.locator('#tb-contas-receber button', { hasText: 'Estornar' }).click();
+    await abrirLancamentos(page, 'receber');
+    await acaoLanc(page, 'receber', 'Estornar');
     const msg = await page.locator('#sc-modal-msg').textContent();
     expect(msg).toContain('Isso muda o saldo de hoje da conta Maquininha.');
     expect(msg).not.toContain('\n');
@@ -65,8 +65,8 @@ test('cobrar conta sem pedido nao escreve #undefined nem #null', async ({ page }
     await entrar(page, BASE, { sc_cli: [{ id: 1, nome: 'Ana', tel: '(11) 98765-4321' }], sc_cr: [cr(601, { cliente_nome: 'Ana' })] });
     await page.goto(BASE + '/financeiro.html');
     await page.evaluate(() => { window.__abertos = []; window.open = u => { window.__abertos.push(u); return {}; }; });
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
-    await page.locator('#tb-contas-receber button', { hasText: 'Cobrar' }).click();
+    await abrirLancamentos(page, 'receber');
+    await acaoLanc(page, 'receber', 'Cobrar no WhatsApp');
     const url = (await page.evaluate(() => window.__abertos))[0];
     const msg = decodeURIComponent(url.split('?text=')[1]);
     expect(msg).not.toMatch(/undefined|null|#/);

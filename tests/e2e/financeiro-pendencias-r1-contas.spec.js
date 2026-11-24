@@ -1,6 +1,6 @@
 // Pendencias R1, tarefa 3: contas, movimentos e datas (Extrato, Hoje, baixas, transferencia, exclusoes).
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos, acoesDaLinha } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const ler = (page, k) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), k);
@@ -211,7 +211,7 @@ test('transferencia: data depois de hoje e recusada', async ({ page }) => {
 async function abrirBaixaCR(page, extras) {
     await entrar(page, BASE, { sc_contas_fin: [CAIXA, BANCO], sc_meios_pag: MEIOS, sc_cr: [cr(1)], ...extras });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
+    await abrirLancamentos(page, 'receber');
 }
 
 test('baixa de recebimento: data depois de hoje e bloqueada', async ({ page }) => {
@@ -240,7 +240,7 @@ test('baixa de recebimento: data vazia nao vira hoje', async ({ page }) => {
 test('baixa de pagamento: data depois de hoje e bloqueada', async ({ page }) => {
     await entrar(page, BASE, { sc_contas_fin: [CAIXA, BANCO], sc_meios_pag: MEIOS, sc_cp: [cp(5)] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
+    await abrirLancamentos(page, 'pagar');
     await page.evaluate(() => { marcarCPPago(5); });
     await expect(page.locator('#baixa-data')).toHaveAttribute('max', HOJE);
     await page.locator('#baixa-modal .baixa-meio').first().selectOption({ index: 1 });
@@ -277,10 +277,10 @@ test('conta sem vencimento mostra "sem vencimento" nas listas e nao fica atrasad
     await page.goto(BASE + '/financeiro.html');
     const semanas = await page.evaluate(() => _simPrevisao([]));
     expect(semanas.reduce((s, w) => s + w.entradas + w.saidas, 0)).toBe(0);
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
+    await abrirLancamentos(page, 'receber');
     await expect(page.locator('#tb-contas-receber')).toContainText('sem vencimento');
     await expect(page.locator('#tb-contas-receber')).not.toContainText('Atrasado');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
+    await abrirLancamentos(page, 'pagar');
     await expect(page.locator('#tb-contas-pagar')).toContainText('sem vencimento');
     expect((await ler(page, 'sc_cr'))[0].status).toBe('Pendente');
 });
@@ -289,11 +289,11 @@ test('conta a receber com vencimento vazio nao tem botao Cobrar; com vencimento 
     await entrar(page, BASE, { sc_contas_fin: [CAIXA], sc_meios_pag: MEIOS,
         sc_cr: [cr(1, { data_vencimento: '', descricao: 'Sem data' }), cr(2, { data_vencimento: somarDias(HOJE, -2), descricao: 'Vencida' })] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
+    await abrirLancamentos(page, 'receber');
     const linhas = page.locator('#tb-contas-receber tr');
-    await expect(linhas.filter({ hasText: 'Vencida' }).locator('button:has-text("Cobrar")')).toHaveCount(1);
+    expect(await acoesDaLinha(page, linhas.filter({ hasText: 'Vencida' }))).toContain('Cobrar no WhatsApp');
     await expect(linhas.filter({ hasText: 'Sem data' })).toHaveCount(1);
-    await expect(linhas.filter({ hasText: 'Sem data' }).locator('button:has-text("Cobrar")')).toHaveCount(0);
+    expect(await acoesDaLinha(page, linhas.filter({ hasText: 'Sem data' }))).not.toContain('Cobrar no WhatsApp');
 });
 
 // Desativado: ver FIN_RECURSOS_ANTIGOS

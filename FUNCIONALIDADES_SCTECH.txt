@@ -1196,9 +1196,27 @@ Na janela do carrinho:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 4 abas: Resumo | Lançamentos | Fluxo de caixa | DRE
-  - Resumo e Lançamentos ainda em construção (o Lançamentos mostra, por enquanto, as listas de sempre:
-    seletor Contas a pagar | Contas a receber | Recorrências, as despesas fixas); Fluxo de caixa e DRE
-    mostram "Em construção: chega na próxima atualização."
+  - Resumo ainda em construção; Fluxo de caixa mostra o Extrato de sempre (versão provisória) e DRE mostra
+    "Em construção: chega na próxima atualização."
+  - Lançamentos: seletor Contas a pagar | Contas a receber (| Recorrências, para quem tem essa permissão), cada
+    lado com a permissão de hoje (visualizar para ver; completo para criar, editar, dar baixa, cancelar, excluir).
+    * Barra: busca, Status (Todos, Em aberto, Vencido, Pago/Recebido, Cancelado), Cliente/Fornecedor, Categoria,
+      Conta, Período por Vencimento ou Competência (de/até; padrão = mês atual; conta sem vencimento sempre
+      aparece), "+ Novo lançamento", "Importar nota/boleto" e "Gerar recorrências do mês" (só a pagar).
+    * Tabela: Vencimento, Descrição, Cliente/Fornecedor, Categoria, Valor, Status (selo) e menu ⋮ (Dar baixa /
+      Estornar, Cobrar no WhatsApp [a receber, vencida ou vence hoje], Editar, Histórico, Abrir pedido, Ver anexo,
+      Cancelar, Excluir). Rodapé: "Total em aberto: R$ X" do filtro; 50 por página.
+    * Novo/editar: Descrição, Valor, Cliente ou Fornecedor (do cadastro ou nome livre), Categoria (só as do tipo
+      certo, ativas), Conta prevista, Vencimento, Competência (padrão = vencimento), Pedido, Observações;
+      "Parcelar em N vezes" (2 a 48; vencimento todo mês, centavos na última parcela) e, só a pagar, "Repetir
+      todo mês" (cria uma recorrência com a categoria). Antes de salvar, avisa se já existe lançamento parecido
+      (mesmo valor e cliente/fornecedor, vencimento a até 3 dias). Lançamento pago ou gerado pelo sistema não
+      muda de valor na edição.
+    * Cancelar pede o motivo; lançamento pago responde "Estorne a baixa antes de cancelar.". Excluir só aparece
+      em lançamento manual, em aberto (fica registro em sc_fin_excluidos). Histórico mostra criado, editado,
+      categoria, baixa, estorno e cancelado, com quem fez e quando. Dar baixa e Estornar usam as janelas de sempre.
+    * "Abrir pedido" leva à lista de Pedidos já buscando o número do pedido (pedidos.html?busca=).
+    * A janela "Lançar Conta a Pagar" antiga continua só para importar nota/boleto (revisão dos campos lidos).
   - As telas antigas (Hoje, Visão Geral, Resultado do mês e fechamento, Simular compra, DRE por Pedido,
     Extrato) estão desligadas: continuam no código (FIN_RECURSOS_ANTIGOS em app.js, tudo false) e as
     seções abaixo que falam delas descrevem o que existe quando forem religadas. Os alertas de meta e

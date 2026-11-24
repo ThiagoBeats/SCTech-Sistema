@@ -1,7 +1,7 @@
 // Financeiro fase 0 - comissoes viram contas a pagar: instalar gera uma conta
 // por papel; pagar (vendedores ou A Pagar) baixa a mesma conta e os flags do pedido.
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos, acaoLanc, acaoMenu } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const CLI = [{ id: 1, nome: 'Ana Paula Lima' }];
@@ -64,9 +64,9 @@ test('pagar no A Pagar reflete na tela de vendedores', async ({ page }) => {
     await expect(page.locator('#tb-comissoes-pendentes')).toContainText('R$ 50.00');
     await page.evaluate(() => { gerarComissoesPedido(db.pedidos[0]); syncDB(); });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
+    await abrirLancamentos(page, 'pagar');
     const linha = page.locator('#tb-contas-pagar tr', { hasText: 'Bruno' });
-    await linha.locator('button', { hasText: 'Pagar' }).click();
+    await acaoMenu(page, linha, 'Dar baixa');
     await page.locator('#baixa-modal .baixa-meio').selectOption('PIX');
     await page.locator('#baixa-modal #baixa-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_ped'))[0].comissao_paga).toBe(true);
@@ -99,8 +99,8 @@ test('Pagar no A Pagar nao usa prompt', async ({ page }) => {
         sc_cp: [{ id: 801, descricao: 'Aluguel', valor: 300, categoria: 'outro', tipo: 'fixo', status: 'Pendente', data_vencimento: '2099-01-01', data_pagamento: null, credor_nome: 'Imob' }] });
     await page.addInitScript(() => { window.prompt = () => { window.__prompt = true; return null; }; });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
-    await page.locator('#tb-contas-pagar button', { hasText: 'Pagar' }).click();
+    await abrirLancamentos(page, 'pagar');
+    await acaoLanc(page, 'pagar', 'Dar baixa');
     await page.locator('#baixa-modal .baixa-meio').selectOption('PIX');
     await page.locator('#baixa-modal #baixa-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_cp'))[0].status).toBe('Pago');

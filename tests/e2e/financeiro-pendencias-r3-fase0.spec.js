@@ -2,7 +2,7 @@
 // de parcela vencida e sem permissao, custo guardado, nota em conta parcelada,
 // aliquota fora da faixa, ciclo estorno -> exportar -> importar).
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos, acaoLanc } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 // Varias acoes terminam recarregando a pagina: repete a leitura/escrita se a recarga pegar no meio
@@ -30,9 +30,9 @@ const soVisualizar = (page, modulo) => page.evaluate(m => {
 test('cancelar a janela de recebimento nao muda nada', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_ped: [ped({ status: 'Medição' })], sc_cr: [cr(601, 'Pendente', { data_vencimento: '2099-01-10' })] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
+    await abrirLancamentos(page, 'receber');
     const antes = await page.evaluate(() => [localStorage.getItem('sc_cr'), localStorage.getItem('sc_ped'), localStorage.getItem('sc_mov_fin')]);
-    await page.locator('#tb-contas-receber button', { hasText: 'Recebido' }).click();
+    await acaoLanc(page, 'receber', 'Dar baixa');
     await expect(page.locator('#baixa-modal')).toBeVisible();
     await page.locator('#baixa-cancel').click();
     await expect(page.locator('#baixa-modal')).toHaveCount(0);
@@ -44,9 +44,9 @@ test('cancelar a janela de pagamento (Escape) nao muda nada', async ({ page }) =
     const cp = { id: 801, descricao: 'Tecido', credor_nome: 'RC', valor: 300, categoria: 'tecido', data_vencimento: '2099-01-10', data_pagamento: null, status: 'Pendente', tipo: 'variavel' };
     await entrar(page, BASE, { sc_cp: [cp] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
+    await abrirLancamentos(page, 'pagar');
     const antes = await page.evaluate(() => [localStorage.getItem('sc_cp'), localStorage.getItem('sc_mov_fin')]);
-    await page.locator('#tb-contas-pagar button', { hasText: 'Pagar' }).click();
+    await acaoLanc(page, 'pagar', 'Dar baixa');
     await expect(page.locator('#baixa-modal')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.locator('#baixa-modal')).toHaveCount(0);
@@ -76,8 +76,8 @@ test('estornar parcela vencida volta como Atrasado (a receber)', async ({ page }
     await entrar(page, BASE, { sc_cli: CLI, sc_ped: [ped({ valor_recebido: 500 })],
         sc_cr: [cr(601, 'Pago', { data_vencimento: '2020-01-10', data_pagamento: '2020-01-10' })] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
-    await page.locator('#tb-contas-receber button', { hasText: 'Estornar' }).click();
+    await abrirLancamentos(page, 'receber');
+    await acaoLanc(page, 'receber', 'Estornar');
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_cr'))[0].status).toBe('Atrasado');
     const c = (await lerChave(page, 'sc_cr'))[0];
@@ -90,12 +90,12 @@ test('estornar conta a pagar vencida volta como Atrasado; a de data futura volta
         data_pagamento: '2020-01-05', status: 'Pago', tipo: 'variavel', forma_pagamento: 'PIX' });
     await entrar(page, BASE, { sc_cp: [cp(801, '2020-01-10'), cp(802, '2099-01-10')] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
+    await abrirLancamentos(page, 'pagar');
     await expect(page.locator('#tb-contas-pagar')).toContainText('Conta 801');
     await page.evaluate(() => { estornarCP(801); });
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_cp')).find(c => c.id === 801).status).toBe('Atrasado');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
+    await abrirLancamentos(page, 'pagar');
     await expect(page.locator('#tb-contas-pagar')).toContainText('Conta 802');
     await page.waitForFunction(() => typeof estornarCP === 'function');
     await page.evaluate(() => { estornarCP(802); });
@@ -107,7 +107,7 @@ test('sem permissao nao estorna o recebimento', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_ped: [ped({ valor_recebido: 500 })], sc_cr: [cr(601, 'Pago')] });
     await soVisualizar(page, 'financeiro.receber');
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
+    await abrirLancamentos(page, 'receber');
     await expect(page.locator('#tb-contas-receber')).toContainText('Parcela 601');
     await page.evaluate(() => { estornarCR(601); });
     await expect(page.locator('#sc-modal-msg')).toContainText('permissão');
@@ -126,7 +126,7 @@ test('sem permissao nao estorna o pagamento nem a comissao', async ({ page }) =>
     await entrar(page, BASE, { sc_cli: CLI, sc_cp: [cp, com], sc_ped: [ped({ vendedor_id: 2, comissao_paga: true })] });
     await soVisualizar(page, 'financeiro.pagar');
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
+    await abrirLancamentos(page, 'pagar');
     await expect(page.locator('#tb-contas-pagar')).toContainText('Tecido');
     await page.evaluate(() => { estornarCP(801); });
     await expect(page.locator('#sc-modal-msg')).toContainText('permissão');
@@ -217,7 +217,7 @@ const lancarNota = (page, valor) => page.evaluate(v => {
 const abrirPagar = async (page, cps) => {
     await entrar(page, BASE, { sc_forn: [{ id: 7, nome: 'RC Tecidos' }], sc_cp: cps });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
+    await abrirLancamentos(page, 'pagar');
 };
 
 test('nota que bate com a soma das parcelas vincula as 3 parcelas e nao cria conta', async ({ page }) => {
@@ -296,7 +296,7 @@ test('estorno, exportar e importar: a parcela continua em aberto (a migracao nao
     await entrar(page, BASE, { sc_cli: CLI, sc_ped: [ped({ valor_recebido: 500, pagamento_pendente: false, pagamento_confirmado_em: Date.now() })],
         sc_cr: [cr(601, 'Pago'), cr(602, 'Pago', { data_vencimento: '2099-01-10', data_pagamento: '2026-10-02' })] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
+    await abrirLancamentos(page, 'receber');
     await page.evaluate(() => { estornarCR(601); });
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_cr')).find(c => c.id === 601).status).toBe('Atrasado');
@@ -311,7 +311,7 @@ test('estorno, exportar e importar: a parcela continua em aberto (a migracao nao
     await page.locator('#sc-modal-ok').click();
     await page.waitForFunction(() => JSON.parse(localStorage.getItem('sc_cr') || '[]').length === 2);
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
+    await abrirLancamentos(page, 'receber');
     await expect(page.locator('#tb-contas-receber')).toContainText('Parcela 601');
     const crs = await lerChave(page, 'sc_cr');
     const c601 = crs.find(c => c.id === 601);

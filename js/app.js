@@ -13704,6 +13704,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const telaFiltro = arquivoAtual === 'pedidos.html' ? 'pedidos' : 'painel_acompanhamento';
         inicializarFiltroVendedorTela(telaFiltro);
         const rolagemPedidos = lembrarListaPedidosAoRecarregar(telaFiltro);
+        // Vindo do Financeiro ("Abrir pedido"): a lista ja chega buscando o numero do pedido.
+        const buscaUrl = new URLSearchParams(window.location.search).get('busca');
+        if (buscaUrl && arquivoAtual === 'pedidos.html') { const t = document.getElementById('filtro-texto'); if (t) t.value = buscaUrl; }
         renderDashboard();
         if (rolagemPedidos) rolagemPedidos();
     }
@@ -15684,6 +15687,8 @@ async function gerarContasPagarDoMes() {
     const ano = hoje.getFullYear();
     let geradas = 0;
     db.despesas_fixas.filter(df => df.ativo && !df.periodicidade).forEach(df => {
+        // Recorrencia criada no Lancamentos so vale a partir do mes do primeiro vencimento.
+        if (df.data_inicio && `${ano}-${mes}` < String(df.data_inicio).slice(0, 7)) return;
         const vencStr = `${ano}-${mes}-${String(df.dia_vencimento).padStart(2, '0')}`;
         const jaExiste = db.contas_pagar.some(cp => !cp.pedido_id && cp.data_vencimento === vencStr && cp.descricao === df.descricao);
         if (!jaExiste) {
@@ -18445,39 +18450,6 @@ function renderDashboardFinanceiro() {
     }
 }
 
-function renderContasReceber() {
-    atualizarStatusVencimentos();
-    const tb = document.getElementById('tb-contas-receber');
-    if (!tb) return;
-    const filtroStatus  = document.getElementById('cr-filtro-status')?.value || '';
-    const filtroCliente = (document.getElementById('cr-filtro-cliente')?.value||'').toLowerCase().trim();
-    let lista = db.contas_receber.filter(cr => {
-        if (filtroStatus && cr.status !== filtroStatus) return false;
-        if (filtroCliente && !cr.cliente_nome.toLowerCase().includes(filtroCliente) && !cr.descricao.toLowerCase().includes(filtroCliente)) return false;
-        return true;
-    }).sort((a,b) => (a.data_vencimento||'9999').localeCompare(b.data_vencimento||'9999'));
-    const totPend = lista.filter(cr=>finAberta(cr)).reduce((s,cr)=>s+cr.valor,0);
-    const totRec  = lista.filter(cr=>cr.status==='Pago').reduce((s,cr)=>s+cr.valor,0);
-    const res = document.getElementById('cr-resumo');
-    if (res) res.innerHTML = `<span style="color:var(--primary-text)">✓ Recebido: <strong>R$ ${totRec.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>&nbsp;&nbsp;<span style="color:#F2C924">⏳ Pendente: <strong>R$ ${totPend.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>`;
-    if (!lista.length) { tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:#999;padding:24px">Nenhum registro encontrado.</td></tr>'; return; }
-    const podeEditar = temAcesso('financeiro.receber', 'completo');
-    const hoje = hojeLocal();
-    tb.innerHTML = lista.map(cr => {
-        const at=cr.status==='Atrasado', pago=cr.status==='Pago', canc=cr.status==='Cancelado';
-        const cobravel = !pago && !canc && !!cr.data_vencimento && cr.data_vencimento <= hoje;
-        const cobrarBtn = cobravel ? `<button class="btn btn-outline btn-sm" onclick="cobrarNoWhatsApp(${cr.id})" title="Cobrar pelo WhatsApp" style="margin-right:4px">💬 Cobrar</button>${cr.ultima_cobranca===hoje?'<span style="font-size:11px;color:#888;margin-right:4px">cobrado hoje</span>':''}` : '';
-        return `<tr class="${at?'fin-atrasado':''}">
-            <td>${_fmtVenc(cr.data_vencimento)}</td>
-            <td><strong>${escapeHtml(cr.cliente_nome)}</strong></td>
-            <td>${escapeHtml(cr.descricao)}</td>
-            <td style="text-align:right"><strong>R$ ${cr.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
-            <td>${pago?`<span style="color:var(--primary-text);font-size:12px">✓ ${new Date(cr.data_pagamento+'T12:00:00').toLocaleDateString('pt-BR')}</span>`:`<span class="fin-badge fin-badge-${canc?'gray':at?'red':'pending'}"${canc&&cr.motivo_cancelamento?` title="${escapeHtml(cr.motivo_cancelamento)}"`:''}>${cr.status}</span>`}</td>
-            <td>${podeEditar && !canc ? `${cobrarBtn}${!pago?`<button class="btn btn-sm btn-success" onclick="marcarCRPago(${cr.id})" title="Confirmar recebimento">✓ Recebido</button>`:`<button class="btn btn-outline btn-sm" onclick="estornarCR(${cr.id})" title="Desfazer este recebimento">↩ Estornar</button>`}<button class="btn btn-outline btn-sm btn-danger" onclick="excluirCR(${cr.id})" title="Excluir" style="margin-left:4px">🗑️</button>` : ''}</td>
-        </tr>`;
-    }).join('');
-}
-
 // Abre o WhatsApp com a mensagem de cobranca da parcela. Independe do DOM do A Receber.
 async function cobrarNoWhatsApp(crId) {
     // Checa antes de qualquer await para o window.open continuar valendo como clique do usuario.
@@ -18503,47 +18475,8 @@ async function cobrarNoWhatsApp(crId) {
     if (!janela) { showAlert('O navegador bloqueou a janela do WhatsApp. Libere os pop-ups e tente de novo.'); return; }
     cr.ultima_cobranca = hojeLocal();
     syncDB();
-    renderContasReceber();
+    if (typeof renderFinLancLista === 'function') renderFinLancLista();
     if (FIN_RECURSOS_ANTIGOS.hoje && document.getElementById('hoje-tarefas')) renderHoje();
-}
-
-function renderContasPagar() {
-    atualizarStatusVencimentos();
-    const tb = document.getElementById('tb-contas-pagar');
-    if (!tb) return;
-    const filtroTipo   = document.getElementById('cp-filtro-tipo')?.value || '';
-    const filtroStatus = document.getElementById('cp-filtro-status')?.value || '';
-    let lista = db.contas_pagar.filter(cp => {
-        if (filtroTipo && cp.tipo !== filtroTipo) return false;
-        if (filtroStatus && cp.status !== filtroStatus) return false;
-        return true;
-    }).sort((a,b) => (a.data_vencimento||'9999').localeCompare(b.data_vencimento||'9999'));
-    const totPend = lista.filter(cp=>finAberta(cp)).reduce((s,cp)=>s+cp.valor,0);
-    const totPago = lista.filter(cp=>cp.status==='Pago').reduce((s,cp)=>s+cp.valor,0);
-    const res = document.getElementById('cp-resumo');
-    if (res) res.innerHTML = `<span style="color:#F43927">↑ Pago: <strong>R$ ${totPago.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>&nbsp;&nbsp;<span style="color:#F2C924">⏳ A pagar: <strong>R$ ${totPend.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>`;
-    if (!lista.length) { tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:#999;padding:24px">Nenhum registro encontrado.</td></tr>'; return; }
-    const podeEditar = temAcesso('financeiro.pagar', 'completo');
-    tb.innerHTML = lista.map(cp => {
-        const at=cp.status==='Atrasado', pago=cp.status==='Pago', canc=cp.status==='Cancelado', isRT=cp.categoria==='comissao_rt';
-        const tipoTag = cp.tipo==='fixo' ? '<span class="fin-badge fin-badge-gray">Fixo</span>' : '<span class="fin-badge fin-badge-blue">Variável</span>';
-        const grupoTag = cp.parcelado ? `<span class="fin-badge fin-badge-blue" title="Parcela ${cp.parcela_atual} de ${cp.numero_parcelas}">${cp.parcela_atual}/${cp.numero_parcelas}</span>`
-            : cp.recorrente ? `<span class="fin-badge fin-badge-gray" title="Lançamento recorrente (${cp.periodicidade})">🔁</span>` : '';
-        const anexoBtn = cp.arquivo_anexo_url ? `<button class="btn btn-outline btn-sm" onclick="verAnexoCP(${cp.id})" title="Ver documento anexado" style="margin-left:4px">📎</button>` : '';
-        const grupoDelBtn = (podeEditar && cp.lancamento_pai_id) ? `<button class="btn btn-outline btn-sm btn-danger" onclick="excluirGrupoCP(${cp.lancamento_pai_id})" title="Excluir todo o grupo" style="margin-left:4px">🗑️ grupo</button>` : '';
-        const acoes = podeEditar && !canc
-            ? `${!pago?`<button class="btn btn-sm btn-success" onclick="marcarCPPago(${cp.id})" title="Confirmar pagamento">✓ Pagar</button>`:(cp.categoria==='taxa_cartao'?'':`<button class="btn btn-outline btn-sm" onclick="estornarCP(${cp.id})" title="Desfazer este pagamento">↩ Estornar</button>`)}<button class="btn btn-outline btn-sm btn-danger" onclick="excluirCP(${cp.id})" title="Excluir" style="margin-left:4px">🗑️</button>${grupoDelBtn}${anexoBtn}`
-            : anexoBtn;
-        return `<tr class="${at?'fin-atrasado':''}">
-            <td>${_fmtVenc(cp.data_vencimento)}</td>
-            <td>${escapeHtml(cp.descricao)}${cp.pedido_cancelado?' <span class="fin-badge fin-badge-red" title="O pedido foi cancelado ou voltou para Orçamento depois desta comissão ser paga">pedido cancelado — revisar</span>':''}${isRT?' <span title="Comissão RT — gerada após quitação total do pedido" style="cursor:help">🏛️</span>':''}${grupoTag?' '+grupoTag:''}</td>
-            <td>${escapeHtml(cp.credor_nome||'—')}</td>
-            <td style="text-align:right"><strong>R$ ${cp.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></td>
-            <td>${tipoTag}</td>
-            <td>${pago?`<span style="color:var(--primary-text);font-size:12px">✓ ${new Date(cp.data_pagamento+'T12:00:00').toLocaleDateString('pt-BR')}</span>`:`<span class="fin-badge fin-badge-${canc?'gray':at?'red':'pending'}"${canc&&cp.motivo_cancelamento?` title="${escapeHtml(cp.motivo_cancelamento)}"`:''}>${cp.status}</span>`}</td>
-            <td>${acoes}</td>
-        </tr>`;
-    }).join('');
 }
 
 function renderDespesasFixas() {
@@ -18554,7 +18487,7 @@ function renderDespesasFixas() {
     tb.innerHTML = db.despesas_fixas.map(df=>`
         <tr>
             <td><strong>${escapeHtml(df.descricao)}</strong></td>
-            <td>${escapeHtml((CATEGORIAS_DESPESA_FIXA.find(c => c[0] === df.categoria) || [, df.categoria])[1])}</td>
+            <td>${escapeHtml((db.fin_categorias && db.fin_categorias.categorias.find(c => String(c.id) === String(df.categoria_id)) || {}).nome || (CATEGORIAS_DESPESA_FIXA.find(c => c[0] === df.categoria) || [, df.categoria])[1])}</td>
             <td>Todo dia ${df.dia_vencimento}</td>
             <td>R$ ${(df.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
             <td>${podeEditar ? `<button class="btn btn-outline btn-sm btn-danger" onclick="excluirDespesaFixa(${df.id})" title="Excluir">🗑️</button>` : ''}</td>

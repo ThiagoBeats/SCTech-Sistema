@@ -1,6 +1,6 @@
 // Pendencias R1, tarefa 2: pedido, comissao e pedido de compra.
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const lerChave = (page, k) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), k);
@@ -102,7 +102,7 @@ test('vincular nota a conta existente atualiza o tipo de lancamento', async ({ p
     const cp = cpPC(9001, 'Pendente', { cnpj_fornecedor: '11.222.333/0001-81', valor: 1000 });
     await entrar(page, BASE, { sc_forn: FORN, sc_pc: [pc()], sc_cp: [cp] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
+    await abrirLancamentos(page, 'pagar');
     await page.evaluate(() => {
         abrirModalContaPagar('manual');
         document.getElementById('cpm-descricao').value = 'NF 123';

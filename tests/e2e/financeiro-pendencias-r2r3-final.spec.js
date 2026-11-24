@@ -3,7 +3,7 @@
 // comissao antiga de arquiteto (comissao_rt) e "igual ao mes anterior" quando
 // a porcentagem arredonda para zero.
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos, acaoLanc } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8181';
 const ler = (page, k) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), k);
@@ -57,8 +57,8 @@ test('confirmar pagamento do pedido: desmarcar a entrada ainda deixa confirmar e
 test('A Receber: desmarcar o unico item continua bloqueando com "Marque pelo menos um item."', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_ped: [pedAF({ status: 'Instalado' })], sc_cr: [crAb(701, 'entrada', '2099-11-01')] });
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="receber"]').click();
-    await page.locator('#tb-contas-receber button', { hasText: '✓ Recebido' }).click();
+    await abrirLancamentos(page, 'receber');
+    await acaoLanc(page, 'receber', 'Dar baixa');
     const modal = page.locator('#baixa-modal');
     await expect(modal.locator('#baixa-ok')).toBeEnabled();
     await modal.locator('.baixa-check').uncheck();

@@ -2,7 +2,7 @@
 // recebimento (Financeiro novo: as contas em aberto ficam como Cancelado, motivo
 // "Pedido excluído"); comissao paga de pedido cancelado fica marcada para revisao.
 const { test, expect } = require('@playwright/test');
-const { entrar } = require('./ajuda.js');
+const { entrar, abrirLancamentos } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const CLI = [{ id: 1, nome: 'Ana Paula Lima' }];
@@ -55,6 +55,6 @@ test('comissao paga de pedido que voltou para Orcamento fica marcada para revisa
     expect(cps.map(c => c.id)).toEqual([701]);
     expect(cps[0].pedido_cancelado).toBe(true);
     await page.goto(BASE + '/financeiro.html');
-    await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click(); await page.locator('.fin-lado-btn[data-lado="pagar"]').click();
+    await abrirLancamentos(page, 'pagar');
     await expect(page.locator('#tb-contas-pagar')).toContainText('pedido cancelado — revisar');
 });

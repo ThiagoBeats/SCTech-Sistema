@@ -78,8 +78,10 @@ test('Lancamentos tem Contas a pagar, Contas a receber e Recorrencias', async ({
     await page.locator('.fin-tab-btn[data-tab="lancamentos"]').click();
     await expect(page.locator('.fin-lado-btn:visible')).toHaveText(['Contas a pagar', 'Contas a receber', 'Recorrências']);
     await page.locator('.fin-lado-btn[data-lado="receber"]').click();
+    await page.fill('#lanc-de', ''); await page.fill('#lanc-ate', '');
     await expect(page.locator('#tb-contas-receber')).toContainText('Ana');
-    await expect(page.locator('#fin-pagar')).toBeHidden();
+    await expect(page.locator('#fin-lanc')).toBeVisible();
+    await expect(page.locator('#fin-fixas')).toBeHidden();
     await page.locator('.fin-lado-btn[data-lado="fixas"]').click();
     await expect(page.locator('#df-descricao')).toBeVisible();
 });
@@ -91,8 +93,10 @@ test('papel antigo so com Contas a receber ve so Lancamentos e so Contas a receb
     await page.goto(BASE + '/financeiro.html');
     await expect(abas(page)).toHaveText(['Lançamentos']);
     await expect(page.locator('.fin-lado-btn:visible')).toHaveText(['Contas a receber']);
-    await expect(page.locator('#fin-receber')).toBeVisible();
-    await expect(page.locator('#fin-pagar')).toBeHidden();
+    await expect(page.locator('#fin-lanc')).toBeVisible();
+    await expect(page.locator('.fin-lado-btn[data-lado="receber"]')).toHaveClass(/active/);
+    await expect(page.locator('#tb-contas-receber')).toBeAttached();
+    await expect(page.locator('#tb-contas-pagar')).toHaveCount(0);
 });
 
 test('Vendedor padrao: so Lancamentos, so Contas a receber', async ({ page }) => {
@@ -140,13 +144,14 @@ test('links antigos abrem a aba que hoje cuida do assunto', async ({ page }) => 
     await expect(page.locator('.fin-tab-btn[data-tab="resumo"]')).toHaveClass(/active/);
     await page.goto(BASE + '/financeiro.html?aba=pagar');
     await expect(page.locator('.fin-tab-btn[data-tab="lancamentos"]')).toHaveClass(/active/);
-    await expect(page.locator('#fin-pagar')).toBeVisible();
-    await expect(page.locator('#fin-receber')).toBeHidden();
+    await expect(page.locator('#fin-lanc')).toBeVisible();
+    await expect(page.locator('.fin-lado-btn[data-lado="pagar"]')).toHaveClass(/active/);
     await page.goto(BASE + '/index.html');
     await page.goto(BASE + '/financeiro.html#resultado');
     await expect(page.locator('.fin-tab-btn[data-tab="resumo"]')).toHaveClass(/active/);
     await page.goto(BASE + '/financeiro.html?view=receber');
-    await expect(page.locator('#fin-receber')).toBeVisible();
+    await expect(page.locator('#fin-lanc')).toBeVisible();
+    await expect(page.locator('.fin-lado-btn[data-lado="receber"]')).toHaveClass(/active/);
 });
 
 test('editor de papeis lista as 6 subpermissoes novas do Financeiro', async ({ page }) => {

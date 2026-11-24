@@ -294,85 +294,74 @@
             <div class="card" id="fin-resumo-conteudo"></div>
         </div>
 
-        <!-- TAB: LANCAMENTOS (Task 5 troca as listas abaixo pela tela nova; por enquanto: as listas de sempre) -->
+        <!-- TAB: LANCAMENTOS -->
         <div id="fin-lancamentos" class="fin-panel">
             <div class="fin-lado-bar" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
                 <button class="btn btn-outline btn-sm fin-lado-btn" data-lado="pagar"   onclick="renderFinLancamentos('pagar')">Contas a pagar</button>
                 <button class="btn btn-outline btn-sm fin-lado-btn" data-lado="receber" onclick="renderFinLancamentos('receber')">Contas a receber</button>
                 <button class="btn btn-outline btn-sm fin-lado-btn" data-lado="fixas"   onclick="renderFinLancamentos('fixas')">Recorrências</button>
             </div>
-        <!-- Contas a receber -->
-        <div id="fin-receber" class="fin-lado-painel" style="display:none">
+        <!-- Lançamentos: Contas a pagar | Contas a receber (mesma tabela; o corpo leva o id do lado aberto) -->
+        <div id="fin-lanc" class="fin-lado-painel" style="display:none">
             <div class="card">
-                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
-                    <div class="form-group" style="min-width:160px;margin-bottom:0">
-                        <label>Status</label>
-                        <select id="cr-filtro-status" onchange="renderContasReceber()">
+                <div class="lanc-barra">
+                    <div class="form-group lanc-busca">
+                        <label for="lanc-busca">Buscar</label>
+                        <input type="text" id="lanc-busca" placeholder="Descrição, nome, categoria ou valor…" oninput="renderFinLancLista(true)">
+                    </div>
+                    <div class="form-group">
+                        <label for="lanc-status">Status</label>
+                        <select id="lanc-status" onchange="renderFinLancLista(true)">
                             <option value="">Todos</option>
-                            <option>Pendente</option>
-                            <option>Atrasado</option>
-                            <option>Pago</option>
+                            <option value="aberto">Em aberto</option>
+                            <option value="vencido">Vencido</option>
+                            <option value="pago">Pago</option>
+                            <option value="cancelado">Cancelado</option>
                         </select>
                     </div>
-                    <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0">
-                        <label>Cliente / Descrição</label>
-                        <input type="text" id="cr-filtro-cliente" placeholder="Buscar…" oninput="renderContasReceber()">
+                    <div class="form-group">
+                        <label for="lanc-pessoa" id="lanc-pessoa-rotulo">Cliente</label>
+                        <select id="lanc-pessoa" onchange="renderFinLancLista(true)"></select>
                     </div>
-                    <div id="cr-resumo" style="margin-bottom:0;display:flex;gap:16px;align-items:center;font-size:13px;flex-wrap:wrap"></div>
-                </div>
-                <table>
-                    <thead><tr>
-                        <th>Vencimento</th><th>Cliente</th><th>Descrição</th>
-                        <th style="text-align:right">Valor</th><th>Status</th><th>Ações</th>
-                    </tr></thead>
-                    <tbody id="tb-contas-receber"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Contas a pagar -->
-        <div id="fin-pagar" class="fin-lado-painel" style="display:none">
-            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px" id="cp-toolbar">
-                <div style="position:relative">
-                    <button class="btn btn-success" id="cp-menu-btn" onclick="toggleMenuContaPagar(event)" style="display:flex;align-items:center;gap:6px">
-                        + Nova Conta a Pagar <span style="font-size:9px;opacity:.8">▾</span>
-                    </button>
-                    <div id="cp-menu-dropdown" style="display:none;position:absolute;top:calc(100% + 6px);left:0;background:var(--white);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.14);z-index:500;min-width:230px;overflow:hidden">
-                        <button class="logo-popup-item" style="width:100%" onclick="abrirModalContaPagar('manual')">✏️ Lançar manualmente</button>
-                        <div style="height:1px;background:var(--border)"></div>
-                        <button class="logo-popup-item" style="width:100%" onclick="abrirModalContaPagar('arquivo')">📎 Exportar nota/boleto</button>
+                    <div class="form-group">
+                        <label for="lanc-categoria">Categoria</label>
+                        <select id="lanc-categoria" onchange="renderFinLancLista(true)"></select>
                     </div>
-                </div>
-                <button class="btn btn-outline" onclick="gerarContasPagarDoMes()" title="Gera os lançamentos das despesas fixas para o mês atual">🔁 Gerar Despesas Fixas do Mês</button>
-            </div>
-            <div class="card">
-                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
-                    <div class="form-group" style="min-width:150px;margin-bottom:0">
-                        <label>Tipo</label>
-                        <select id="cp-filtro-tipo" onchange="renderContasPagar()">
-                            <option value="">Todos</option>
-                            <option value="variavel">Variável</option>
-                            <option value="fixo">Fixo</option>
+                    <div class="form-group">
+                        <label for="lanc-conta">Conta</label>
+                        <select id="lanc-conta" onchange="renderFinLancLista(true)"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="lanc-ref">Período por</label>
+                        <select id="lanc-ref" onchange="renderFinLancLista(true)">
+                            <option value="venc">Vencimento</option>
+                            <option value="comp">Competência</option>
                         </select>
                     </div>
-                    <div class="form-group" style="min-width:150px;margin-bottom:0">
-                        <label>Status</label>
-                        <select id="cp-filtro-status" onchange="renderContasPagar()">
-                            <option value="">Todos</option>
-                            <option>Pendente</option>
-                            <option>Atrasado</option>
-                            <option>Pago</option>
-                        </select>
+                    <div class="form-group">
+                        <label for="lanc-de">De</label>
+                        <input type="date" id="lanc-de" onchange="renderFinLancLista(true)">
                     </div>
-                    <div id="cp-resumo" style="margin-bottom:0;display:flex;gap:16px;align-items:center;font-size:13px;flex-wrap:wrap"></div>
+                    <div class="form-group">
+                        <label for="lanc-ate">Até</label>
+                        <input type="date" id="lanc-ate" onchange="renderFinLancLista(true)">
+                    </div>
                 </div>
-                <table>
-                    <thead><tr>
-                        <th>Vencimento</th><th>Descrição</th><th>Credor</th>
-                        <th style="text-align:right">Valor</th><th>Tipo</th><th>Status</th><th>Ações</th>
-                    </tr></thead>
-                    <tbody id="tb-contas-pagar"></tbody>
-                </table>
+                <div class="lanc-acoes">
+                    <button class="btn btn-success" id="lanc-novo" onclick="abrirNovoLancamento(finLancLado)">+ Novo lançamento</button>
+                    <button class="btn btn-outline" id="lanc-importar" onclick="abrirModalContaPagar('arquivo')">📎 Importar nota/boleto</button>
+                    <button class="btn btn-outline" id="lanc-gerar" onclick="gerarContasPagarDoMes()" title="Gera os lançamentos das recorrências para o mês atual">🔁 Gerar recorrências do mês</button>
+                </div>
+                <div class="lanc-tabela">
+                    <table>
+                        <thead><tr>
+                            <th>Vencimento</th><th>Descrição</th><th id="lanc-th-pessoa">Cliente</th><th>Categoria</th>
+                            <th style="text-align:right">Valor</th><th>Status</th><th style="text-align:right">Ações</th>
+                        </tr></thead>
+                        <tbody id="lanc-tbody"></tbody>
+                    </table>
+                </div>
+                <div class="lanc-rodape" id="lanc-rodape"></div>
             </div>
         </div>
 
@@ -402,7 +391,7 @@
                 <button class="btn btn-success" onclick="salvarDespesaFixa()">Cadastrar Despesa Fixa</button>
             </div>
             <div class="card">
-                <h3 style="margin-bottom:16px">Despesas Fixas Cadastradas</h3>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px"><h3>Despesas Fixas Cadastradas</h3><button class="btn btn-outline btn-sm" onclick="gerarContasPagarDoMes()" title="Gera os lançamentos das recorrências para o mês atual">🔁 Gerar recorrências do mês</button></div>
                 <table>
                     <thead><tr>
                         <th>Descrição</th><th>Categoria</th><th>Vencimento</th><th>Valor Mensal</th><th>Ações</th>
