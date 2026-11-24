@@ -329,3 +329,17 @@ test('historico de baixa e estorno com o nome de quem fez; saldo atualizado na b
     expect(exc[0]).toEqual(expect.objectContaining({ tipo: 'cp', por: 1, porNome: 'Teste' }));
     expect(exc[0].lancamento).toEqual({ ...cp, arquivo_anexo_url: '[anexo não copiado]' });
 });
+
+test('gerador: categoria vinda do codigo antigo ganha categoria_auto; categoria ja definida nao', async ({ page }) => {
+    await page.clock.setFixedTime(HOJE);
+    await entrar(page, BASE, { sc_cli: CLI });
+    await page.goto(BASE + '/financeiro.html');
+    const r = await page.evaluate(() => {
+        const a = { id: 9001, tipo: 'variavel', categoria: 'tecido', descricao: 'Legado', credor_nome: 'Z', valor: 5, data_vencimento: '2026-12-01', status: 'Pendente' };
+        const b = { id: 9002, tipo: 'variavel', categoria: 'tecido', categoria_id: 'cat_aluguel', descricao: 'Escolhida', credor_nome: 'Z', valor: 5, data_vencimento: '2026-12-01', status: 'Pendente' };
+        finCompletarLancamento('cp', a, {}, 'x'); finCompletarLancamento('cp', b, {}, 'x');
+        return [a, b];
+    });
+    expect(r[0]).toMatchObject({ categoria_id: 'cat_tecido', categoria_auto: true });
+    expect(r[1].categoria_auto).toBeUndefined();
+});

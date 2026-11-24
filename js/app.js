@@ -14510,7 +14510,7 @@ function _finDataBR(d) { return d ? String(d).split('-').reverse().join('/') : '
 // `tipo`: 'cr' | 'cp'. `comp`: { origem, dataAprovacao, dataCompra, mesOcorrencia }.
 function finCompletarLancamento(tipo, reg, comp, detalhe) {
     const ehCR = tipo === 'cr';
-    if (!reg.categoria_id) reg.categoria_id = FinCatCore.categoriaDoLegado(reg, ehCR ? 'receber' : 'pagar');
+    if (!reg.categoria_id) { reg.categoria_id = FinCatCore.categoriaDoLegado(reg, ehCR ? 'receber' : 'pagar'); reg.categoria_auto = true; }
     if (!reg.data_competencia) {
         const c = reg.mes_referencia ? { origem: 'imposto', mesReferencia: reg.mes_referencia } : Object.assign({ origem: 'manual' }, comp || {});
         c.vencimento = reg.data_vencimento;
