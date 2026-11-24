@@ -105,8 +105,11 @@ test('situacao e rotulos', () => {
 test('podeCancelar / podeExcluir', () => {
     assert.deepStrictEqual(F.podeCancelar({ status: 'Pago' }), { ok: false, motivo: 'Estorne a baixa antes de cancelar.' });
     assert.strictEqual(F.podeCancelar({ status: 'Pendente' }).ok, true);
-    assert.strictEqual(F.podeExcluir({ pedido_id: 3, status: 'Pendente' }).ok, false);
-    assert.strictEqual(F.podeExcluir({ lancamento_pai_id: 9, status: 'Pendente' }).ok, false);
+    assert.strictEqual(F.podeExcluir({ lancamento_pai_id: 9, parcelado: true, status: 'Pendente' }).ok, true);
+    assert.strictEqual(F.podeExcluir({ pedido_id: 3, tipo_lancamento: 'manual', status: 'Pendente' }).ok, true);
+    assert.strictEqual(F.podeExcluir({ pedido_id: 3, parcela_tipo: 'entrada', status: 'Pendente' }).ok, false);
+    assert.strictEqual(F.podeExcluir({ lancamento_pai_id: 9, recorrente: true, status: 'Pendente' }).ok, false);
+    assert.strictEqual(F.podeExcluir({ papel_comissao: 'rt', status: 'Pendente' }).ok, false);
     assert.strictEqual(F.podeExcluir({ tipo_lancamento: 'manual', status: 'Pendente' }).ok, true);
     assert.strictEqual(F.podeExcluir({ status: 'Pago' }).ok, false);
 });
@@ -118,4 +121,31 @@ test('registrarHistorico acrescenta sem apagar', () => {
     assert.strictEqual(r.historico.length, 2);
     assert.strictEqual(r.historico[0].acao, 'criado');
     assert.strictEqual(r.historico[1].detalhe, 'x');
+});
+
+test('planoMigracaoV4: registro sem data nao reaparece na segunda rodada', () => {
+    const e = { agoraISO: 'x', contas_receber: [{ id: 1, valor: 5 }], contas_pagar: [{ id: 2, valor: 5 }] };
+    const p = F.planoMigracaoV4(e);
+    assert.strictEqual(p.cr.length, 1);
+    const p2 = F.planoMigracaoV4({ ...e, contas_receber: aplicar(e.contas_receber, p.cr), contas_pagar: aplicar(e.contas_pagar, p.cp) });
+    assert.deepStrictEqual([p2.cr, p2.cp], [[], []]);
+});
+
+test('acharParecido: ids number/string e tipos misturados', () => {
+    const lista = [{ id: 1, _tipo: 'pagar', valor: 10, credor_nome: 'Zé', data_vencimento: '2026-05-10', status: 'Pendente' }];
+    const base = { valor: 10, pessoaNome: 'ze', vencimento: '2026-05-10', tipo: 'pagar' };
+    assert.strictEqual(F.acharParecido({ ...base, id: '1' }, lista), null);
+    assert.strictEqual(F.acharParecido(base, lista), lista[0]);
+    assert.strictEqual(F.acharParecido({ ...base, tipo: 'receber' }, lista), null);
+});
+
+test('dividirParcelas: bissexto e centavos de ponto flutuante', () => {
+    assert.strictEqual(F.dividirParcelas(10, 2, '2028-01-31')[1].vencimento, '2028-02-29');
+    assert.deepStrictEqual(F.dividirParcelas(19.99, 2, '2026-01-10').map(x => x.valor), [9.99, 10]);
+    assert.deepStrictEqual(F.dividirParcelas(0.30, 3, '2026-01-10').map(x => x.valor), [0.1, 0.1, 0.1]);
+});
+
+test('situacao: data_pagamento e Atrasado velho', () => {
+    assert.strictEqual(F.situacao({ status: 'Pendente', data_pagamento: '2026-05-01', data_vencimento: '2026-04-01' }, '2026-05-10'), 'pago');
+    assert.strictEqual(F.situacao({ status: 'Atrasado', data_vencimento: '2026-06-01' }, '2026-05-10'), 'aberto');
 });

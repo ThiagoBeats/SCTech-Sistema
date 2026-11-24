@@ -151,7 +151,7 @@
                 }
             }
             if (!Array.isArray(c.historico)) set.historico = historicoInicial();
-            out.cr.push({ id: c.id, set });
+            if (Object.keys(set).length) out.cr.push({ id: c.id, set });
         });
 
         cps.forEach(c => {
@@ -176,7 +176,7 @@
                 }
             }
             if (!Array.isArray(c.historico)) set.historico = historicoInicial();
-            out.cp.push({ id: c.id, set });
+            if (Object.keys(set).length) out.cp.push({ id: c.id, set });
         });
 
         dfs.forEach(d => {
@@ -220,13 +220,16 @@
         return out;
     }
 
+    // Contrato: `lista` deve ter registros de um unico tipo (so CR ou so CP). Se o chamador
+    // misturar, cada registro deve trazer `_tipo` ('pagar'|'receber'); registros de outro tipo sao ignorados.
     function acharParecido(novo, lista) {
         novo = novo || {};
         const cents = Math.round(Number(novo.valor) * 100);
         const nomeN = norm(novo.pessoaNome);
         return (lista || []).find(r => {
             if (!r || r.status === 'Cancelado') return false;
-            if (temVal(novo.id) && r.id === novo.id) return false;
+            if (temVal(novo.id) && String(r.id) === String(novo.id)) return false;
+            if (temVal(novo.tipo) && temVal(r._tipo) && r._tipo !== novo.tipo) return false;
             if (Math.round(Number(r.valor) * 100) !== cents) return false;
             const rid = r.cliente_id !== undefined ? r.cliente_id : r.fornecedor_id;
             const rnome = r.cliente_nome || r.credor_nome || r.pessoaNome;
@@ -257,7 +260,9 @@
     function podeExcluir(reg) {
         reg = reg || {};
         if (ehPago(reg)) return { ok: false, motivo: 'Estorne a baixa antes de excluir.' };
-        if (reg.pedido_id || reg.pedido_compra_id || reg.papel_comissao || reg.lancamento_pai_id || reg.origem_cr_id) {
+        // Automatico: comissao, compra, origem em CR, recorrencia e parcela de pedido (CR com parcela_tipo).
+        // Parcelado manual (lancamento_pai_id + parcelado) e lancamento manual ligado a pedido podem ser excluidos.
+        if (reg.papel_comissao || reg.pedido_compra_id || reg.origem_cr_id || reg.recorrente || reg.parcela_tipo) {
             return { ok: false, motivo: 'Este lançamento foi gerado automaticamente; cancele em vez de excluir.' };
         }
         return { ok: true, motivo: '' };
