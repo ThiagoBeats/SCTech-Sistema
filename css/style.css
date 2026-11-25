@@ -3175,6 +3175,16 @@ html[data-theme="dark"] .dre-liquido td.dre-neg { color: #FF8A7A; }
 .dre-tabela td.dre-desfav { color: var(--danger-text, var(--danger)); font-weight: 600; }
 html[data-theme="dark"] .dre-tabela td.dre-fav { color: #8FE08C; }
 html[data-theme="dark"] .dre-tabela td.dre-desfav { color: #FF8A7A; }
+/* Coluna RESULTADO: as linhas usam <th>; o estilo geral de <th> (fundo escuro, texto branco, cantos
+   arredondados) nao vale aqui. Seletores com tbody para vencer tambem o th do tema escuro. */
+.dre-tabela tbody th, html[data-theme="dark"] .dre-tabela tbody th { color: var(--dark); background: var(--white); border-radius: 0; letter-spacing: normal; font-size: 13px; padding: 7px 10px; }
+.dre-tabela tbody tr.dre-grupo th, html[data-theme="dark"] .dre-tabela tbody tr.dre-grupo th { background: var(--surface-2); }
+.dre-tabela tbody tr.dre-calculada th, html[data-theme="dark"] .dre-tabela tbody tr.dre-calculada th { background: var(--surface-3); }
+.dre-tabela tbody tr.dre-percentual th, .dre-tabela tbody tr.dre-percentual td { color: #5F6368; font-size: 12px; }
+html[data-theme="dark"] .dre-tabela tbody tr.dre-percentual th, html[data-theme="dark"] .dre-tabela tbody tr.dre-percentual td { color: var(--muted); font-size: 12px; }
+.dre-tabela tbody tr.dre-liquido th { background: var(--ok-bg); color: var(--ok-text); font-size: 14px; }
+html[data-theme="dark"] .dre-tabela tbody tr.dre-liquido th { background: #16301F; color: #8FE08C; font-size: 14px; }
+.dre-tabela thead th { border-radius: 0; }
 
 /* ── FLUXO DE CAIXA (Financeiro novo) ──────────────────────────── */
 #fin-fluxo-conteudo { min-width: 0; }
@@ -3245,3 +3255,55 @@ html[data-theme="dark"] .dre-tabela td.dre-desfav { color: #FF8A7A; }
 @media (max-width: 600px) {
     .conc-acoes .btn { flex: 1 1 40%; min-width: 0; width: auto; }
 }
+
+/* ── Notas fiscais do pedido ───────────────────────────────────── */
+.nf-box { min-width: 0; }
+.nf-box .modal-body { min-width: 0; }
+.nf-topo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-bottom: 12px; }
+.nf-resumo { font-weight: 600; color: var(--dark); overflow-wrap: anywhere; }
+.nf-lista { display: flex; flex-direction: column; gap: 10px; }
+.nf-vazio { color: var(--muted); text-align: center; padding: 16px 0; }
+.nf-linha { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--white); min-width: 0; }
+.nf-linha-topo { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; font-size: 14px; }
+.nf-tipo { font-weight: 800; color: var(--dark); }
+.nf-num { flex: 1 1 140px; min-width: 0; overflow-wrap: anywhere; color: var(--dark); }
+.nf-data { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.nf-valor { font-weight: 700; white-space: nowrap; }
+.nf-acoes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.nf-aviso-manual { background: var(--info-bg); color: var(--dark); border-radius: 6px; padding: 10px 12px; font-size: 13px; margin-bottom: 14px; overflow-wrap: anywhere; }
+.nf-sub { margin: 14px 0 8px; font-size: 14px; font-weight: 800; color: var(--dark); }
+.nf-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
+.nf-grade .form-group, .nf-box .form-group { min-width: 0; }
+.nf-grade input, .nf-box select, .nf-box textarea { width: 100%; max-width: 100%; box-sizing: border-box; }
+.nf-itens-cab, .nf-item { display: grid; grid-template-columns: minmax(0, 1fr) 70px 120px; gap: 8px; margin-bottom: 6px; }
+.nf-itens-cab { font-size: 12px; color: var(--muted); font-weight: 600; }
+.nf-item input { min-width: 0; width: 100%; box-sizing: border-box; }
+.nf-total { text-align: right; margin: 6px 0 12px; color: var(--dark); }
+.nf-botoes-dados { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.nf-erro { background: var(--danger-bg); color: #F43927; border-radius: 6px; padding: 8px 12px; font-size: 13px; margin: -4px 0 10px; overflow-wrap: anywhere; }
+.nf-avisos { margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
+.nf-aviso { background: var(--warn-bg); border: 1px solid #F2C924; color: var(--warn-text); border-radius: 6px; padding: 8px 12px; font-size: 13px; overflow-wrap: anywhere; }
+.nf-rodape { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.nf-evento { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+.nf-evento-por { color: var(--muted); font-size: 12px; }
+.nf-evento-txt { margin-top: 2px; overflow-wrap: anywhere; color: var(--dark); }
+html[data-theme="dark"] .nf-aviso-manual { color: #F5F6F8; }
+@media (max-width: 600px) {
+    .nf-grade { grid-template-columns: minmax(0, 1fr); }
+    .nf-itens-cab { display: none; }
+    .nf-item { grid-template-columns: 60px minmax(0, 1fr); }
+    .nf-item-desc { grid-column: 1 / -1; }
+    .nf-acoes .btn { flex: 1 1 40%; min-width: 0; width: auto; }
+    .nf-overlay { padding: 10px; }
+    .nf-box .modal-body { padding: 16px; }
+}
+.nf-filtros { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 12px; }
+.nf-filtros .form-group { margin: 0; min-width: 0; }
+.nf-filtros .nf-busca { flex: 1 1 180px; }
+.nf-lista-tabela { overflow-x: auto; max-width: 100%; }
+.nf-clicavel { cursor: pointer; }
+.nf-clicavel:hover { background: var(--surface-2); }
+.nf-lista-rodape { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px; color: var(--dark); }
+.nf-selo-lanc { white-space: nowrap; }
+.nf-espaco { margin: 12px 0 0; font-size: 12px; color: var(--muted); }
+.nf-pag { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; margin-top: 10px; font-size: 13px; color: var(--dark); }

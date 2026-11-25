@@ -265,6 +265,7 @@ function _finLancMontarBarra(lado, limpar) {
     el('lanc-novo').style.display = completo ? '' : 'none';
     el('lanc-importar').style.display = pagar && completo ? '' : 'none';
     el('lanc-gerar').style.display = pagar && completo ? '' : 'none';
+    el('lanc-notas').style.display = !pagar && typeof abrirListaNotas === 'function' && (temAcesso('pedidos', 'visualizar') || temAcesso('financeiro.receber', 'visualizar')) ? '' : 'none';
     const tb = _finLancTbody();
     if (tb) tb.id = pagar ? 'tb-contas-pagar' : 'tb-contas-receber';
 }
@@ -350,9 +351,10 @@ function renderFinLancLista(zerarPagina) {
             const rec = (r.recorrente || r.despesa_fixa_id) ? ' <span class="fin-badge fin-badge-gray" title="Recorrência">🔁</span>' : '';
             const cancPed = r.pedido_cancelado ? ' <span class="fin-badge fin-badge-red" title="O pedido foi cancelado ou voltou para Orçamento depois desta comissão ser paga">pedido cancelado — revisar</span>' : '';
             const cat = _finNomeCategoria(r.categoria_id);
+            const nfSelo = !pagar && typeof notasSeloPedido === 'function' ? notasSeloPedido(r.pedido_id) : '';
             return `<tr data-id="${escapeHtml(String(r.id))}" class="${sit === 'vencido' ? 'fin-atrasado' : ''}${_finLancDestaque === String(r.id) ? ' lanc-destaque' : ''}">
                 <td>${_fmtVenc(r.data_vencimento)}</td>
-                <td>${escapeHtml(r.descricao || '')}${pedido}${rec}${cancPed}</td>
+                <td>${escapeHtml(r.descricao || '')}${pedido}${nfSelo}${rec}${cancPed}</td>
                 <td>${escapeHtml(_finPessoaDe(r)) || '—'}</td>
                 <td>${escapeHtml(cat) || '—'}</td>
                 <td style="text-align:right;white-space:nowrap"><strong>${_finBrl(r.valor)}</strong></td>

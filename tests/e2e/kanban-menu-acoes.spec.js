@@ -28,7 +28,7 @@ test('card sem icones de acao e com o botao ⋮', async ({ page }) => {
         const c = card(page, n);
         await expect(c.locator('.btn-kebab')).toHaveCount(1);
         await expect(c.locator('.btn-kebab')).toHaveText('⋮');
-        for (const t of ['Ver Ordem de Serviço', 'Ver timeline', 'Avançar etapa', 'Voltar etapa', 'Voltar status', 'Imprimir etiquetas'])
+        for (const t of ['Ver Ordem de Serviço', 'Ver timeline', 'Notas fiscais', 'Avançar etapa', 'Voltar etapa', 'Voltar status', 'Imprimir etiquetas'])
             await expect(c.locator(`button[title="${t}"]`), `${n}: sem ${t}`).toHaveCount(0);
     }
     await expect(card(page, 'Medida Ana').locator('.kanban-card-id')).toHaveText('#26301');
@@ -36,13 +36,13 @@ test('card sem icones de acao e com o botao ⋮', async ({ page }) => {
 
 test('menu lista as acoes de cada etapa', async ({ page }) => {
     await abrir(page);
-    expect(await itens(page, card(page, 'Medida Ana'))).toEqual(['Ver Ordem de Serviço', 'Imprimir etiquetas', 'Ver timeline', 'Avançar etapa']);
+    expect(await itens(page, card(page, 'Medida Ana'))).toEqual(['Ver Ordem de Serviço', 'Imprimir etiquetas', 'Ver timeline', 'Notas fiscais', 'Avançar etapa']);
     await page.keyboard.press('Escape');
-    expect(await itens(page, card(page, 'Costura Bia'))).toEqual(['Ver Ordem de Serviço', 'Imprimir etiquetas', 'Ver timeline', 'Voltar etapa', 'Avançar etapa']);
+    expect(await itens(page, card(page, 'Costura Bia'))).toEqual(['Ver Ordem de Serviço', 'Imprimir etiquetas', 'Ver timeline', 'Notas fiscais', 'Voltar etapa', 'Avançar etapa']);
     await page.keyboard.press('Escape');
-    expect(await itens(page, card(page, 'Pronto Caio'))).toEqual(['Ver Ordem de Serviço', 'Imprimir etiquetas', 'Ver timeline', 'Voltar etapa', 'Avançar etapa']);
+    expect(await itens(page, card(page, 'Pronto Caio'))).toEqual(['Ver Ordem de Serviço', 'Imprimir etiquetas', 'Ver timeline', 'Notas fiscais', 'Voltar etapa', 'Avançar etapa']);
     await page.keyboard.press('Escape');
-    expect(await itens(page, card(page, 'Instalado Duda'))).toEqual(['Ver Ordem de Serviço', 'Imprimir etiquetas', 'Ver timeline', 'Voltar etapa']);
+    expect(await itens(page, card(page, 'Instalado Duda'))).toEqual(['Ver Ordem de Serviço', 'Imprimir etiquetas', 'Ver timeline', 'Notas fiscais', 'Voltar etapa']);
 });
 
 test('Avançar etapa pelo menu muda o status', async ({ page }) => {

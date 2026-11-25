@@ -272,3 +272,26 @@ test('outra aba grava as categorias: a DRE aberta se redesenha', async ({ page }
     });
     await expect(linha(page, 'sub:sub_fix')).toContainText('Fixas da loja');
 });
+
+// A coluna RESULTADO usa <th> nas linhas: o estilo geral de <th> (texto branco) nao pode vazar.
+function contraste(c1, c2) {
+    const lum = s => { const [r, g, b] = s.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+    const a = lum(c1), b = lum(c2);
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+for (const tema of ['light', 'dark']) {
+    test(`coluna Resultado legivel no tema ${tema === 'dark' ? 'escuro' : 'claro'} (texto com contraste em todas as linhas)`, async ({ page }) => {
+        await abrir(page);
+        await page.evaluate(t => document.documentElement.setAttribute('data-theme', t), tema);
+        await abrirGrupo(page, 'despesas');
+        const cores = await page.locator('#dre-tabela tbody th').evaluateAll(l => l.map(th => {
+            const cs = getComputedStyle(th);
+            return { texto: th.textContent.trim(), cor: cs.color, fundo: cs.backgroundColor, raio: cs.borderTopLeftRadius };
+        }));
+        expect(cores.length).toBeGreaterThan(8);
+        for (const c of cores) {
+            expect(contraste(c.cor, c.fundo), `${c.texto}: ${c.cor} sobre ${c.fundo}`).toBeGreaterThanOrEqual(4.5);
+            expect(c.raio).toBe('0px');
+        }
+    });
+}

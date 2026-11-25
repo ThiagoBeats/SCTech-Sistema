@@ -320,6 +320,8 @@ let db = {
     // Linhas de extrato bancario importadas (OFX) e o que cada uma conciliou.
     fin_extrato:     JSON.parse(localStorage.getItem('sc_fin_extrato')) || [],
     fin_extrato_imp: JSON.parse(localStorage.getItem('sc_fin_extrato_imp')) || [],
+    // Notas fiscais do pedido (modo manual: XML e PDF anexados).
+    notas_fiscais:   JSON.parse(localStorage.getItem('sc_nf')) || [],
     medicoes:       JSON.parse(localStorage.getItem('sc_med'))  || [],
     agenda_eventos:  JSON.parse(localStorage.getItem('sc_agd_ev')) || [],
     rotas:           JSON.parse(localStorage.getItem('sc_rotas')) || [],
@@ -332,7 +334,7 @@ let db = {
 const _DB_CHAVE_CAMPO = {
     sc_cli: 'clientes', sc_cat: 'catalogo', sc_ped: 'pedidos', sc_est: 'estoque', sc_mat: 'materiais',
     sc_mov: 'movimentos', sc_cr: 'contas_receber', sc_cp: 'contas_pagar', sc_mov_fin: 'movimentos_fin', sc_med: 'medicoes', sc_agd_ev: 'agenda_eventos', sc_usr: 'usuarios', sc_pap: 'papeis',
-    sc_fin_cat: 'fin_categorias', sc_fin_excluidos: 'fin_excluidos', sc_fin_extrato: 'fin_extrato', sc_fin_extrato_imp: 'fin_extrato_imp',
+    sc_fin_cat: 'fin_categorias', sc_fin_excluidos: 'fin_excluidos', sc_fin_extrato: 'fin_extrato', sc_fin_extrato_imp: 'fin_extrato_imp', sc_nf: 'notas_fiscais',
 };
 // Texto de cada chave como esta aba leu ou gravou por ultimo. Reler so troca o array
 // quando o texto gravado mudou (outra aba gravou): um fluxo no meio de uma confirmacao
@@ -468,6 +470,7 @@ function _dbPares() {
         ['sc_fin_excluidos', db.fin_excluidos || []],
         ['sc_fin_extrato', db.fin_extrato || []],
         ['sc_fin_extrato_imp', db.fin_extrato_imp || []],
+        ['sc_nf', db.notas_fiscais || []],
         ['sc_med', db.medicoes],
         ['sc_rotas', db.rotas || []],
         ['sc_agd_ev', db.agenda_eventos || []],
@@ -576,6 +579,7 @@ function salvarEmpresaConfigs() {
         site:          (document.getElementById('emp-site')?.value      || '').trim(),
         logo_base64:   document.getElementById('emp-logo-preview')?.dataset.base64 || '',
         regime_tributario: document.getElementById('emp-regime')?.value || '',
+        nota_tipo_padrao: document.getElementById('emp-nota-tipo')?.value === 'nfe' ? 'nfe' : 'nfse',
         aliquota_estimada: Number.isFinite(aliq) ? Math.min(100, Math.max(0, aliq)) : 0
     };
     if (fer) { emp.feriados_municipais = fer.lista; emp.corpus_municipal = fer.corpus; }
@@ -1304,6 +1308,7 @@ function carregarEmpresaConfigs() {
     set('emp-email',    emp.email);
     set('emp-site',     emp.site);
     set('emp-regime',   emp.regime_tributario);
+    set('emp-nota-tipo', typeof FiscalCore !== 'undefined' ? FiscalCore.tipoPadrao(emp) : (emp.nota_tipo_padrao || 'nfse'));
     // Alíquota 0 volta como "0" e decimal com vírgula ("6,5"); nunca salva = vazio.
     const aliqSalva = emp.aliquota_estimada;
     const aliqEl = document.getElementById('emp-aliquota');
@@ -3729,6 +3734,10 @@ function _ehComissaoDoPedido(cp) { return !!cp && (!!cp.papel_comissao || cp.cat
 
 async function excluirPedido(id) {
     if (!await exigirPermissao('pedidos', 'completo')) return;
+    if ((db.notas_fiscais || []).some(n => n.pedido_id == id && n.status !== 'cancelada')) {
+        await showAlert('Este pedido tem nota fiscal emitida e não pode ser excluído. Cancele a nota antes.', '⚠️');
+        return;
+    }
     if (FinanceiroCore.totalRecebido(db.contas_receber, id) > 0) {
         await showAlert('Este pedido já tem recebimento registrado e não pode ser excluído.\n\nPrimeiro estorne os recebimentos em Financeiro > A Receber; depois exclua o pedido.', '⚠️');
         return;
@@ -4012,6 +4021,10 @@ async function moverStatus(id, direcao) {
     const idx    = STATUS_PIPELINE.indexOf(normalizarStatus(ped.status));
     const novoIdx = idx + direcao;
     if (novoIdx < 0 || novoIdx >= STATUS_PIPELINE.length) return;
+    if (STATUS_PIPELINE[novoIdx] === 'Orçamento' && _pedidoTemNotaAtiva(ped.id)) {
+        await showAlert('Este pedido tem nota fiscal emitida. Cancele a nota antes de voltar para Orçamento.', '⚠️');
+        return;
+    }
 
     // ── Aguardando Tecido → Na Costura: verificar e baixar tecidos
     if (STATUS_PIPELINE[novoIdx] === 'Na Costura' && !ped.baixa_tecido_realizada && !ped.baixa_realizada) {
@@ -4430,6 +4443,20 @@ document.addEventListener('click', e => {
     abrirMenuAcoes(e, itens, botao);
 });
 
+// Pedido com nota fiscal guardada (qualquer status da nota).
+function _pedidoTemNota(id) { return (db.notas_fiscais || []).some(n => n && n.pedido_id == id); }
+// Nota emitida e ainda valida (nao cancelada): trava voltar para Orcamento e excluir.
+function _pedidoTemNotaAtiva(id) { return (db.notas_fiscais || []).some(n => n && n.pedido_id == id && n.status !== 'cancelada'); }
+// Pedido salvo com valor diferente da soma das notas autorizadas: pergunta antes.
+async function confirmarValorContraNotas(pedidoId, valor) {
+    const aut = (db.notas_fiscais || []).filter(n => n && n.pedido_id == pedidoId && n.status === 'autorizada');
+    if (!aut.length) return true;
+    const soma = aut.reduce((s, n) => s + (Number(n.valor) || 0), 0);
+    if (Math.round(soma * 100) === Math.round((Number(valor) || 0) * 100)) return true;
+    const brl = v => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return showConfirm(`O valor do pedido (R$ ${brl(valor)}) ficou diferente das notas emitidas (R$ ${brl(soma)}). Salvar mesmo assim?`, '⚠️', 'Salvar', 'Cancelar');
+}
+
 function abrirMenuAcoesPedido(ev, id) {
     const p = db.pedidos.find(x => x.id == id);
     if (!p) return;
@@ -4445,6 +4472,7 @@ function abrirMenuAcoesPedido(ev, id) {
             ? { icone: '🏷️', rotulo: 'Imprimir etiquetas', acao: () => abrirImpressaoEtiquetas(id) }
             : { icone: '🏷️', rotulo: 'Imprimir etiquetas', bloqueado: true, dica: 'Liberado a partir de "Pronto p/ Instalação"', acao: () => toast(msgEtiquetaBloqueada(p), 'warning', 4500) },
         { icone: '⏱', rotulo: 'Ver timeline', acao: () => verTimeline(id) },
+        (status !== 'Orçamento' || _pedidoTemNota(id)) && typeof abrirNotasDoPedido === 'function' ? { icone: '🧾', rotulo: 'Notas fiscais', acao: () => abrirNotasDoPedido(id) } : null,
         podeEditar ? { sep: true } : null,
         podeEditar ? { icone: '🗑️', rotulo: 'Excluir pedido', perigo: true, acao: () => excluirPedido(id) } : null,
     ]);
@@ -4975,7 +5003,7 @@ Notif.registrar('aceite-respostas', () => {
 
 // Outra aba gravou: traz para a memoria o que os alertas leem.
 // So troca o array quando o texto gravado mudou (ver _dbRecarregarChave).
-const _NOTIF_CHAVES_DB = ['sc_ped', 'sc_med', 'sc_cat', 'sc_mat', 'sc_est', 'sc_mov', 'sc_cr', 'sc_cp', 'sc_mov_fin', 'sc_usr', 'sc_pap', 'sc_agd_ev', 'sc_fin_cat', 'sc_fin_excluidos', 'sc_fin_extrato', 'sc_fin_extrato_imp'];
+const _NOTIF_CHAVES_DB = ['sc_ped', 'sc_med', 'sc_cat', 'sc_mat', 'sc_est', 'sc_mov', 'sc_cr', 'sc_cp', 'sc_mov_fin', 'sc_usr', 'sc_pap', 'sc_agd_ev', 'sc_fin_cat', 'sc_fin_excluidos', 'sc_fin_extrato', 'sc_fin_extrato_imp', 'sc_nf'];
 function _notifRecarregarDB(chave) {
     if (_NOTIF_CHAVES_DB.includes(chave)) _dbRecarregarChave(chave);
 }
@@ -7567,6 +7595,7 @@ Volte o pedido para Orçamento para editar.`, '🔒');
     dadosPedido.entrada_pct = _entradaValida(document.getElementById('ped-entrada-pct')?.value, entradaDaFormaPagamento(dadosPedido.forma_pagamento));
     dadosPedido.meio_entrada = dadosPedido.entrada_pct <= 0 ? null : _lerMeioPedido('entrada');
     dadosPedido.meio_saldo = dadosPedido.entrada_pct >= 100 ? null : _lerMeioPedido('saldo');
+    if (editandoIdPedido && !await confirmarValorContraNotas(editandoIdPedido, valor)) return;
     if (editandoIdPedido) {
         const index = db.pedidos.findIndex(p => p.id == editandoIdPedido);
         dadosPedido.id = editandoIdPedido;
@@ -7681,6 +7710,10 @@ async function voltarPedidoParaOrcamento(id) {
     if (!ped) return;
     const status = normalizarStatus(ped.status);
     if (status === 'Orçamento' || status === 'Instalado') return;
+    if (_pedidoTemNotaAtiva(ped.id)) {
+        await showAlert('Este pedido tem nota fiscal emitida. Cancele a nota antes de voltar para Orçamento.', '⚠️');
+        return;
+    }
     const recebimentos = (db.contas_receber || []).filter(cr => cr.pedido_id == ped.id && cr.status !== 'Cancelado');
     const pagos = recebimentos.filter(cr => cr.status === 'Pago');
     const abertos = recebimentos.filter(finAberta);
@@ -8059,6 +8092,7 @@ function _menuAcoesCardPedido(p, { podeVoltar, podeAvancar } = {}) {
             ? { icone: '🏷️', rotulo: 'Imprimir etiquetas', onclick: `abrirImpressaoEtiquetas(${p.id})` }
             : { icone: '🏷️', rotulo: 'Imprimir etiquetas', bloqueado: true, dica: 'Liberado a partir de "Pronto p/ Instalação"', onclick: `toast(msgEtiquetaBloqueada(db.pedidos.find(x => x.id == ${p.id})), 'warning', 4500)` },
         { icone: '⏱', rotulo: 'Ver timeline', onclick: `verTimeline(${p.id})` },
+        { icone: '🧾', rotulo: 'Notas fiscais', onclick: `abrirNotasDoPedido(${p.id})`, oculto: (normalizarStatus(p.status) === 'Orçamento' && !_pedidoTemNota(p.id)) || typeof abrirNotasDoPedido !== 'function' },
         { icone: '←', rotulo: 'Voltar etapa', onclick: `moverStatus(${p.id},-1)`, oculto: !podeVoltar },
         { icone: '→', rotulo: 'Avançar etapa', onclick: `moverStatus(${p.id},1)`, oculto: !podeAvancar }
     ]);
@@ -8616,7 +8650,7 @@ function _dadosExportacao(marcaFase0) {
         medicoes: db.medicoes, rotas: db.rotas || [], agenda_eventos: db.agenda_eventos || [],
         fin_metas: _lerObjetoLS('sc_fin_metas'), fin_orcamento_mes: _lerObjetoLS('sc_fin_orcamento_mes'),
         // Financeiro novo: categorias da DRE, excluidos e a versao dos dados (backup sem ela passa pela migracao v4).
-        fin_categorias: db.fin_categorias, fin_excluidos: db.fin_excluidos || [], fin_extrato: db.fin_extrato || [], fin_extrato_imp: db.fin_extrato_imp || [], fin_versao: localStorage.getItem(CHAVE_FIN_VERSAO),
+        fin_categorias: db.fin_categorias, fin_excluidos: db.fin_excluidos || [], fin_extrato: db.fin_extrato || [], fin_extrato_imp: db.fin_extrato_imp || [], notas_fiscais: db.notas_fiscais || [], fin_versao: localStorage.getItem(CHAVE_FIN_VERSAO),
         empresa: getEmpresa(), formas_pag: getFormasPagamentoCfg(),
         import_perfis: db.import_perfis || [],
         config_ls: _configsLS(),
@@ -8637,9 +8671,14 @@ function _baixarJSON(dados, nome) {
     a.href = url; a.download = nome;
     a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-function exportarDados() {
-    _baixarJSON(_dadosExportacao(localStorage.getItem('sc_fin_migracao') === '1'), `sctech_backup_${hojeLocal()}.json`);
+async function exportarDados() {
+    const dados = _dadosExportacao(localStorage.getItem('sc_fin_migracao') === '1');
+    // Os PDFs das notas ficam no IndexedDB: entram no arquivo do backup.
+    if (typeof NfArquivos !== 'undefined') { try { dados.notas_fiscais = await NfArquivos.paraBackup(dados.notas_fiscais); } catch (e) { /* segue sem os PDFs */ } }
+    _baixarJSON(dados, `sctech_backup_${hojeLocal()}.json`);
     toast('Backup exportado com sucesso!');
+    const semPdf = typeof NfArquivos !== 'undefined' ? NfArquivos.falhasBackup || 0 : 0;
+    if (semPdf) await showAlert(`${semPdf} PDF(s) não puderam ser incluídos no backup.`, '⚠️');
 }
 function importarDados(event) {
     const file = event.target.files[0];
@@ -8678,6 +8717,9 @@ function importarDados(event) {
             db.fin_excluidos  = Array.isArray(dados.fin_excluidos) ? dados.fin_excluidos : [];
             db.fin_extrato    = Array.isArray(dados.fin_extrato) ? dados.fin_extrato : [];
             db.fin_extrato_imp = Array.isArray(dados.fin_extrato_imp) ? dados.fin_extrato_imp : [];
+            db.notas_fiscais  = Array.isArray(dados.notas_fiscais) ? dados.notas_fiscais.filter(n => n && typeof n === 'object') : [];
+            // PDFs das notas (do arquivo, inline) vao para o IndexedDB depois da gravacao; no sc_nf ficam so os dados.
+            const pdfsNotas = typeof NfArquivos !== 'undefined' ? NfArquivos.separarDoBackup(db.notas_fiscais) : [];
             // Tudo numa gravacao so (dados, marca da Fase 0, metas, orcamentos, empresa e
             // planos): se faltar espaco no meio, o que ja foi gravado volta ao anterior e a
             // migracao nunca roda sobre dados misturados.
@@ -8777,6 +8819,16 @@ function importarDados(event) {
             }
             // Gravou: o que era dos dados anteriores (copia, revisao e avisos) sai.
             ['sc_fin_backup_fase0', 'sc_fin_revisar', 'sc_fin_backup_falhou', 'sc_fin_migracao_erro', CHAVE_FIN_BACKUP_V3, CHAVE_FIN_V4_FALHOU, CHAVE_FIN_V4_ERRO].forEach(k => localStorage.removeItem(k));
+            // Sem PDFs a guardar nem a manter, so limpa os antigos (sem esperar, para a recarga nao atrasar).
+            if (typeof NfArquivos !== 'undefined' && !pdfsNotas.length && !(pdfsNotas.manter || []).length) NfArquivos.limpar().catch(() => {});
+            else if (typeof NfArquivos !== 'undefined') {
+                const falhas = await NfArquivos.gravarVarios(pdfsNotas, pdfsNotas.manter);
+                if (falhas.length) {
+                    db.notas_fiscais.forEach(n => { if (falhas.some(id => String(id) === String(n.id))) { n.tem_pdf = false; n.pdf_nome = ''; delete n.pdf_tamanho; } });
+                    _gravarChaves(['sc_nf'], { silencioso: true });
+                    await showAlert(`${falhas.length} PDF(s) não puderam ser guardados neste navegador.`, '⚠️');
+                }
+            }
             if (sessaoNova) sessionStorage.setItem('sc_user', JSON.stringify(sessaoNova));
             else if (encerrarSessao) sessionStorage.removeItem('sc_user');
             if (acessosIgnorados) await showAlert('Dados importados. Usuários e acessos não foram importados: só o Administrador importa usuários.', 'ℹ️');

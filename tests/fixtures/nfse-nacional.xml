@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.00">
+  <infNFSe Id="NFS35503082212345678000195000000000000726112345678901">
+    <nNFSe>72</nNFSe>
+    <dhProc>2026-11-21T09:30:00-03:00</dhProc>
+    <emit>
+      <CNPJ>12345678000195</CNPJ>
+      <xNome>Cortinas Exemplo Ltda</xNome>
+    </emit>
+    <valores>
+      <vLiq>3450.00</vLiq>
+    </valores>
+    <DPS versao="1.00">
+      <infDPS Id="DPS355030821234567800019500001000000000000072">
+        <serie>1</serie>
+        <nDPS>72</nDPS>
+        <dhEmi>2026-11-21T09:28:00-03:00</dhEmi>
+        <toma>
+          <CPF>12345678909</CPF>
+          <xNome>Maria da Silva</xNome>
+        </toma>
+        <serv><cServ><xDescServ>Instalacao de cortinas</xDescServ></cServ></serv>
+        <valores><vServPrest><vServ>3450.00</vServ></vServPrest></valores>
+      </infDPS>
+    </DPS>
+  </infNFSe>
+</NFSe>
