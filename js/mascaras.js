@@ -26,10 +26,19 @@
     function aplicarMoeda(el, e) {
         const v = el.value;
         const colou = e && (!e.isTrusted || /^insertFrom/.test(e.inputType || '') || (e.data && e.data.length > 1));
-        let novo;
-        novo = '';
-        if (colou && /[.,]/.test(v) && M.lerMoeda(v) !== null) novo = M.formatarMoeda(M.lerMoeda(v));
-        if (novo === '') novo = M.formatarMoedaDigitos(v, MAX_DIGITOS_MOEDA);
+        // data-moeda-neg: o campo aceita valor negativo (saldo, extrato: "-R$ 12,50"); nos demais o sinal e' descartado.
+        const aceitaNeg = el.hasAttribute('data-moeda-neg');
+        let novo = '';
+        if (colou && /[.,]/.test(v) && M.lerMoeda(v) !== null) {
+            const n = M.lerMoeda(v);
+            novo = M.formatarMoeda(aceitaNeg ? n : Math.abs(n));
+        }
+        if (novo === '') {
+            novo = M.formatarMoedaDigitos(v, MAX_DIGITOS_MOEDA);
+            // Zero digitado e' valor ("0" -> R$ 0,00: ex. limite 0 tira o limite); ao apagar, zeros esvaziam o campo.
+            if (novo === '' && /\d/.test(v) && !/^delete/.test((e && e.inputType) || '')) novo = 'R$ 0,00';
+            if (aceitaNeg && /-/.test(v)) novo = novo === '' ? '-' : (novo === 'R$ 0,00' ? novo : '-' + novo);
+        }
         if (novo !== v) el.value = novo;
         fim(el);
     }

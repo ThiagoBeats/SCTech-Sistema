@@ -894,7 +894,7 @@ const _meiosSemContaCfg = new Set();
 
 function _contaParaRascunho(c) {
     const r = { id: c.id, nome: c.nome || '', tipo: c.tipo, ativo: c.ativo !== false,
-        saldo: String(c.saldo_inicial == null ? 0 : c.saldo_inicial).replace('.', ','),
+        saldo: MascarasCore.formatarMoeda(c.saldo_inicial == null ? 0 : c.saldo_inicial),
         data: c.data_saldo_inicial || hojeLocal(),
         banco: c.banco == null ? '' : String(c.banco), agencia: c.agencia || '', numero_conta: c.numero_conta || '',
         tipo_conta: c.tipo_conta || _finTipoContaPadrao(c.tipo) };
@@ -906,6 +906,14 @@ function _contaParaRascunho(c) {
         });
     }
     return r;
+}
+
+// Saldo do rascunho da conta: texto mascarado ("R$ 1.250,00") ou legado ("0", "1250,5").
+function _saldoRascunhoTxt(t) { return MascarasCore.formatarMoeda(MascarasCore.lerMoeda(t)); }
+function _saldoRascunhoNum(t) {
+    if (String(t == null ? '' : t).trim() === '') return 0;
+    const v = MascarasCore.lerMoeda(t);
+    return v === null ? NaN : v;
 }
 
 function renderContasCfg() {
@@ -923,7 +931,7 @@ function renderContasCfg() {
                         ${TIPOS_CONTA_CFG.map(([v, l]) => `<option value="${v}"${c.tipo === v ? ' selected' : ''}>${l}</option>`).join('')}
                     </select></div>
                 <div class="form-group" style="margin:0"><label>Saldo inicial (R$)</label>
-                    <input type="text" inputmode="decimal" class="conta-saldo" value="${escapeHtml(c.saldo)}"
+                    <input type="text" inputmode="decimal" data-moeda data-moeda-neg placeholder="R$ 0,00" class="conta-saldo" value="${escapeHtml(_saldoRascunhoTxt(c.saldo))}"
                         oninput="_contasRascunho[${i}].saldo = this.value"></div>
                 <div class="form-group" style="margin:0"><label>Data do saldo</label>
                     <input type="date" class="conta-data" value="${escapeHtml(c.data)}"
@@ -960,7 +968,7 @@ function renderContasCfg() {
 }
 
 function adicionarContaCfg() {
-    _contasRascunho.push({ id: null, nome: '', tipo: 'caixa', ativo: true, saldo: '0', data: hojeLocal(),
+    _contasRascunho.push({ id: null, nome: '', tipo: 'caixa', ativo: true, saldo: 'R$ 0,00', data: hojeLocal(),
         banco: '', agencia: '', numero_conta: '', tipo_conta: 'caixa' });
     renderContasCfg();
     const inputs = document.querySelectorAll('#emp-contas .conta-nome');
@@ -973,7 +981,7 @@ function abrirConectarConta() {
     mostrarTabEmpresa('preferencias');
     if (!_contasRascunho) _contasRascunho = getContasFin().map(_contaParaRascunho);
     const vazia = _contasRascunho.find(c => c.id == null && !(c.nome || '').trim());
-    if (!vazia) _contasRascunho.push({ id: null, nome: '', tipo: 'banco', ativo: true, saldo: '0', data: hojeLocal(), banco: '', agencia: '', numero_conta: '', tipo_conta: 'corrente' });
+    if (!vazia) _contasRascunho.push({ id: null, nome: '', tipo: 'banco', ativo: true, saldo: 'R$ 0,00', data: hojeLocal(), banco: '', agencia: '', numero_conta: '', tipo_conta: 'corrente' });
     renderContasCfg();
     const nota = document.getElementById('emp-conectar-nota');
     if (nota) { nota.textContent = FIN_NOTA_CONECTAR; nota.style.display = ''; }
@@ -1053,7 +1061,7 @@ async function salvarContasCfg() {
     }
     const rasc = _contasRascunho.filter(c => (c.nome || '').trim());
     if (rasc.some(c => !/^\d{4}-\d{2}-\d{2}$/.test(c.data || ''))) { await showAlert('Informe a data do saldo inicial de cada conta.', '⚠️'); return; }
-    const invalido = rasc.some(c => Number.isNaN(_valorDigitadoBaixa(c.saldo, 0)) ||
+    const invalido = rasc.some(c => Number.isNaN(_saldoRascunhoNum(c.saldo)) ||
         (c.tipo === 'maquininha' && CARTAO_CAMPOS_CFG.some(([k]) => Number.isNaN(_numeroBR(c.cartao && c.cartao[k], 0)))));
     if (invalido) { await showAlert('Use só números no saldo e nas taxas (ex.: 1250,50 ou 1,5).', '⚠️'); return; }
     const usados = new Set(getContasFin().map(c => c.id));
@@ -1062,7 +1070,7 @@ async function salvarContasCfg() {
         const conta = {
             id: c.id != null ? c.id : _novoIdCfgFin(usados),
             nome: c.nome.trim(), tipo: c.tipo,
-            saldo_inicial: CaixaCore.arredondar(_valorDigitadoBaixa(c.saldo, 0)),
+            saldo_inicial: CaixaCore.arredondar(_saldoRascunhoNum(c.saldo)),
             data_saldo_inicial: c.data, ativo: c.ativo !== false
         };
         if (c.tipo === 'maquininha') {
@@ -1199,16 +1207,15 @@ function renderOrcamentoCfg(emp) {
     box.innerHTML = ResultadoCore.GRUPOS.map(g => `
         <div class="form-group">
             <label for="orc-${g.id}">${escapeHtml(g.rotulo)}</label>
-            <input type="text" inputmode="decimal" id="orc-${g.id}" placeholder="sem limite" value="${orc[g.id] ? escapeHtml(String(orc[g.id])) : ''}">
+            <input type="text" inputmode="decimal" data-moeda id="orc-${g.id}" placeholder="sem limite" value="${orc[g.id] ? escapeHtml(MascarasCore.formatarMoeda(orc[g.id])) : ''}">
         </div>`).join('');
 }
 
 async function salvarMetaOrcamento() {
     const lerValor = id => {
-        const t = (document.getElementById(id)?.value || '').trim();
-        if (!t) return 0;
-        const v = _valorDigitadoBaixa(t);
-        return (Number.isNaN(v) || v < 0) ? NaN : CaixaCore.arredondar(v);
+        const v = lerCampoMoeda(id);
+        if (v === null) return (document.getElementById(id)?.value || '').trim() ? NaN : 0;
+        return v < 0 ? NaN : CaixaCore.arredondar(v);
     };
     const meta = lerValor('emp-meta-padrao');
     const orc = {};
@@ -1313,7 +1320,7 @@ function carregarEmpresaConfigs() {
     const aliqSalva = emp.aliquota_estimada;
     const aliqEl = document.getElementById('emp-aliquota');
     if (aliqEl) aliqEl.value = (aliqSalva == null || aliqSalva === '' || !Number.isFinite(Number(aliqSalva))) ? '' : String(Number(aliqSalva)).replace('.', ',');
-    set('emp-meta-padrao', emp.meta_faturamento_padrao);
+    definirCampoMoeda('emp-meta-padrao', emp.meta_faturamento_padrao > 0 ? emp.meta_faturamento_padrao : null);
     renderOrcamentoCfg(emp);
     set('emp-msg-cobranca', emp.mensagem_cobranca || (typeof CaixaCore !== 'undefined' ? CaixaCore.MENSAGEM_COBRANCA_PADRAO : ''));
     set('emp-msg-aviso', emp.mensagem_aviso_visita || (typeof RotasCore !== 'undefined' ? RotasCore.MENSAGEM_AVISO_PADRAO : ''));
@@ -2985,7 +2992,7 @@ async function salvarCatalogo() {
     if (editandoCatalogoId !== null) {
         const c = db.catalogo.find(x => x.id == editandoCatalogoId);
         if (c) {
-            const preco = parseFloat(document.getElementById('cat-preco')?.value) || c.preco || 0;
+            const preco = lerCampoMoeda('cat-preco') || c.preco || 0;
             const dupNome = db.catalogo.find(x => x.id != editandoCatalogoId && x.nome.trim().toLowerCase() === nome.toLowerCase());
             if (dupNome) { await showAlert(`Já existe outro tecido com o nome "${dupNome.nome}".`, '⚠️'); return; }
             if (referencia) {
@@ -3032,8 +3039,8 @@ async function salvarCatalogo() {
             await showAlert('Informe a margem total (%) ou escolha “Definir margem depois”.', '⚠️');
             return;
         }
-        const custo = parseFloat(document.getElementById('cat-custo')?.value) || 0;
-        const custoPeca = parseFloat(document.getElementById('cat-custo-peca')?.value);
+        const custo = lerCampoMoeda('cat-custo') || 0;
+        const custoPeca = lerCampoMoeda('cat-custo-peca');
         const qtd = parseFloat(document.getElementById('cat-qtd')?.value) || 0;
         const infinito = _catEstado.estoqueModo === 'infinito';
         const novaImgCad = document.getElementById('cat-foto-preview')?.dataset.base64 || '';
@@ -3045,7 +3052,7 @@ async function salvarCatalogo() {
             // Venda sai do custo POR METRO. O custo de corte por peça é
             // registro da tabela do fornecedor: nenhuma margem incide nele.
             preco: _cfgVenda(_catEstado, custo) || 0,
-            preco_peca: isFinite(custoPeca) ? custoPeca : null,
+            preco_peca: custoPeca !== null ? custoPeca : null,
             preco_corte: custo || null,
             estoque_infinito: infinito,
             fornecedor_id: forn_id_cat,
@@ -3280,8 +3287,7 @@ function pintarCabecalhoOrdenacao(seletorTabela, estado) {
 
 function _catTxt(id) { return (document.getElementById(id)?.value || '').trim().toLowerCase(); }
 function _catNum(id) {
-    const v = parseFloat(document.getElementById(id)?.value);
-    return isNaN(v) ? null : v;
+    return lerCampoMoeda(id);
 }
 
 // Fornecedor do filtro: '' = todos, '__sem__' = os que nao tem fornecedor.
@@ -3598,7 +3604,7 @@ function editarCatalogo(id) {
     const precoGroup = document.getElementById('cat-preco-group');
     if (precoGroup) {
         precoGroup.style.display = '';
-        document.getElementById('cat-preco').value = c.preco || 0;
+        definirCampoMoeda('cat-preco', c.preco || 0);
     }
     const preview = document.getElementById('cat-foto-preview');
     if (preview) {
@@ -5179,7 +5185,7 @@ function verificarConflitoDeLote(tecidoId, metrosNecessarios) {
 
 // --- ESTOQUE DE TECIDO: CRUD ---
 function _calcularPrecoVenda(custoId, markupId, displayId) {
-    const custo  = parseFloat(document.getElementById(custoId)?.value) || 0;
+    const custo  = lerCampoMoeda(custoId) || 0;
     const markup = parseFloat(document.getElementById(markupId)?.value) || 0;
     const venda  = custo > 0 ? custo * (1 + markup / 100) : 0;
     const display = document.getElementById(displayId);
@@ -5704,7 +5710,7 @@ async function salvarEntradaEstoque() {
     const tecidoId   = parseInt(document.getElementById('est-tecido').value);
     const metros     = parseFloat(document.getElementById('est-metros').value);
     const data       = document.getElementById('est-data').value;
-    const custo      = parseFloat(document.getElementById('est-preco-custo')?.value) || 0;
+    const custo      = lerCampoMoeda('est-preco-custo') || 0;
     const markup     = parseFloat(document.getElementById('est-markup')?.value) || 0;
     if (!referencia)            { await showAlert('Informe a referência do rolo.', '⚠️'); return; }
     if (!tecidoId)              { await showAlert('Escolha o tecido na lista de sugestões.', '⚠️'); return; }
@@ -5900,7 +5906,7 @@ function autoFillEntradaTecido() {
         const refEl = document.getElementById('est-lote');
         if (refEl && !refEl.value.trim() && tec.referencia) refEl.value = tec.referencia;
         const custoEl = document.getElementById('est-preco-custo');
-        if (custoEl && tec.preco_custo) custoEl.value = tec.preco_custo;
+        if (custoEl && tec.preco_custo) definirCampoMoeda(custoEl, tec.preco_custo);
         const markupEl = document.getElementById('est-markup');
         if (markupEl && tec.preco_custo > 0 && tec.preco > 0)
             markupEl.value = Math.round(((tec.preco / tec.preco_custo) - 1) * 100);
@@ -5920,7 +5926,7 @@ function autoFillEntradaMaterialById() {
     }
     if (mat.preco_custo > 0) {
         const custoEl = document.getElementById('est-mat-preco-custo');
-        if (custoEl) custoEl.value = mat.preco_custo;
+        if (custoEl) definirCampoMoeda(custoEl, mat.preco_custo);
         const markupEl = document.getElementById('est-mat-markup');
         if (markupEl && mat.preco > 0)
             markupEl.value = Math.round(((mat.preco / mat.preco_custo) - 1) * 100);
@@ -6116,7 +6122,7 @@ async function salvarMaterial() {
     if (editandoMaterialId !== null) {
         const m = db.materiais.find(x => x.id == editandoMaterialId);
         if (m) {
-            const preco = parseFloat(document.getElementById('mat-preco')?.value) || m.preco || 0;
+            const preco = lerCampoMoeda('mat-preco') || m.preco || 0;
             const dupNome = db.materiais.find(x => x.id != editandoMaterialId && x.nome.trim().toLowerCase() === nome.toLowerCase());
             if (dupNome) { await showAlert(`Já existe outro material com o nome "${dupNome.nome}".`, '⚠️'); return; }
             if (referencia) {
@@ -6153,7 +6159,7 @@ async function salvarMaterial() {
             await showAlert('Informe a margem total (%) ou escolha “Definir margem depois”.', '⚠️');
             return;
         }
-        const custo = parseFloat(document.getElementById('mat-custo')?.value) || 0;
+        const custo = lerCampoMoeda('mat-custo') || 0;
         const qtd = parseFloat(document.getElementById('mat-qtd')?.value) || 0;
         const infinito = _matEstado.estoqueModo === 'infinito';
         db.materiais.push({
@@ -6182,7 +6188,7 @@ function autoFillMaterialPorReferencia() {
     const unEl = document.getElementById('mat-unidade');
     if (unEl) unEl.value = existing.unidade || 'un';
     const precoEl = document.getElementById('mat-preco');
-    if (precoEl) precoEl.value = existing.preco || '';
+    if (precoEl) definirCampoMoeda(precoEl, existing.preco || null);
     const minEl = document.getElementById('mat-min');
     if (minEl) minEl.value = existing.min_estoque || 0;
     const fornSel = document.getElementById('mat-fornecedor');
@@ -6209,7 +6215,7 @@ function editarMaterial(id) {
     const precoGroup = document.getElementById('mat-preco-group');
     if (precoGroup) {
         precoGroup.style.display = '';
-        document.getElementById('mat-preco').value = m.preco || 0;
+        definirCampoMoeda('mat-preco', m.preco || 0);
     }
     carregarCfgDoRegistro('mat', m);
     const btn = document.querySelector('button[onclick="salvarMaterial()"]');
@@ -6604,22 +6610,22 @@ function _cfgMostrarVenda(idSaida, estado, custo, sufixo) {
 function renderCfgKitPronto() { renderCartoesConfig('kp'); }
 
 function atualizarVendaKitPronto() {
-    _cfgMostrarVenda('kp-venda', _kpEstado, parseFloat(document.getElementById('kp-custo')?.value));
+    _cfgMostrarVenda('kp-venda', _kpEstado, lerCampoMoeda('kp-custo'));
 }
 
 function atualizarVendaTecido() {
-    _cfgMostrarVenda('cat-venda', _catEstado, parseFloat(document.getElementById('cat-custo')?.value), '/m');
+    _cfgMostrarVenda('cat-venda', _catEstado, lerCampoMoeda('cat-custo'), '/m');
 }
 
 function atualizarVendaMaterial() {
     const un = document.getElementById('mat-unidade')?.value || '';
-    _cfgMostrarVenda('mat-venda', _matEstado, parseFloat(document.getElementById('mat-custo')?.value), un ? '/' + un : '');
+    _cfgMostrarVenda('mat-venda', _matEstado, lerCampoMoeda('mat-custo'), un ? '/' + un : '');
 }
 
 async function salvarKitPronto() {
     const ref = document.getElementById('kp-ref')?.value.trim();
     const nome = document.getElementById('kp-nome')?.value.trim();
-    const custo = parseFloat(document.getElementById('kp-custo')?.value);
+    const custo = lerCampoMoeda('kp-custo');
 
     if (!ref) { await showAlert('Informe o código do kit.', '⚠️'); return; }
     if (!nome) { await showAlert('Informe o nome do kit.', '⚠️'); return; }
@@ -7498,7 +7504,7 @@ document.addEventListener('click', e => {
 // Pedidos antigos fechados naquele modo guardam os proprios valores e nao sao
 // recalculados — ver o DRE, que ainda le tipo_precificacao.
 function atualizarTotalPedido() {
-    const mao     = parseFloat(document.getElementById('ped-mao')?.value) || 0;
+    const mao     = lerCampoMoeda('ped-mao') || 0;
     const descPct = parseFloat(document.getElementById('ped-desconto')?.value) || 0;
 
     const totalMat   = pedidoDraft.ambientes.filter(a => a.calculado).reduce((s, a) => s + (a.tecidos || []).reduce((ts, t) => ts + (t.total_material || 0), 0), 0);
@@ -7508,7 +7514,7 @@ function atualizarTotalPedido() {
     const descVal  = Math.round(bruto * descPct / 100 * 100) / 100;
     const total    = bruto - descVal;
     const recEl    = document.getElementById('ped-valor-recebido');
-    const recebido = parseFloat(document.getElementById('ped-valor-recebido')?.value) || 0;
+    const recebido = lerCampoMoeda('ped-valor-recebido') || 0;
     const saldo    = Math.max(0, total - recebido);
     const el = id => document.getElementById(id);
     if (el('ped-total-mat'))    el('ped-total-mat').textContent    = totalMat.toFixed(2);
@@ -7561,7 +7567,7 @@ Volte o pedido para Orçamento para editar.`, '🔒');
         if (el) a.amb = el.value.trim() || a.amb;
     });
     const cliente          = db.clientes.find(c => c.id == clienteId);
-    const maoObra          = parseFloat(document.getElementById('ped-mao')?.value) || 0;
+    const maoObra          = lerCampoMoeda('ped-mao') || 0;
     const desconto_pct     = parseFloat(document.getElementById('ped-desconto')?.value) || 0;
     const total_material   = pedidoDraft.ambientes.reduce((s,a)=>s+(a.tecidos||[]).reduce((ts,t)=>ts+(t.total_material||0),0),0);
     const total_acessorios = pedidoDraft.itens.reduce((s,i)=>s+(i.subtotal||0),0);
@@ -7773,14 +7779,14 @@ function carregarPedidoParaEdicao(id) {
     const buscaEl = document.getElementById('ped-cliente-busca');
     if (buscaEl && cli) { buscaEl.value = cli.nome; filtrarClientes(); }
     document.getElementById('ped-cliente').value = String(ped.clienteId || '');
-    document.getElementById('ped-mao').value     = ped.maoObra || 0;
+    definirCampoMoeda('ped-mao', ped.maoObra || 0);
     document.getElementById('ped-status').value  = normalizarStatus(ped.status);
     const entregaEl = document.getElementById('ped-entrega');
     if (entregaEl) entregaEl.value = ped.data_entrega || '';
     const obsEl = document.getElementById('ped-obs');
     if (obsEl) obsEl.value = ped.observacoes || '';
     const recebidoEl = document.getElementById('ped-valor-recebido');
-    if (recebidoEl) recebidoEl.value = ped.valor_recebido || 0;
+    if (recebidoEl) definirCampoMoeda(recebidoEl, ped.valor_recebido || 0);
     const descontoEl = document.getElementById('ped-desconto');
     if (descontoEl) descontoEl.value = ped.desconto_pct || 0;
     const vendedorEl = document.getElementById('ped-vendedor');
@@ -10354,6 +10360,7 @@ async function abrirEntradaEstoquePC(pc, { perguntarSeJaLancou = false } = {}) {
         const inp = 'padding:5px;border:1px solid var(--border-strong);border-radius:4px;width:100%';
         const campo = (rot, html) => `<div style="flex:1;min-width:90px"><label style="display:block;font-size:11px;color:#8F8F8F;margin-bottom:2px">${rot}</label>${html}</div>`;
         const num = (cls, v, step) => `<input type="number" class="${cls}" step="${step}" min="0" value="${v === '' ? '' : v}" style="${inp}">`;
+        const moeda = (cls, v) => `<input type="text" inputmode="decimal" data-moeda class="${cls}" placeholder="R$ 0,00" value="${escapeHtml(MascarasCore.formatarMoeda(v === '' ? null : v))}" style="${inp}">`;
         const html = linhas.map(l => {
             if (l.semCadastro) {
                 return `<div class="pcent-linha pcent-sem" style="padding:8px 0;border-top:1px solid var(--border-strong);font-size:13px;color:#8F8F8F"><strong>${escapeHtml(l.nome || 'Item')}</strong> — sem cadastro — lance à mão</div>`;
@@ -10365,11 +10372,11 @@ async function abrirEntradaEstoquePC(pc, { perguntarSeJaLancou = false } = {}) {
             if (l.tipo === 'tecido') {
                 campos = campo('Código do rolo', `<input type="text" class="pcent-lote" value="${escapeHtml(l.lote)}" style="${inp}">`)
                     + campo('Metragem (m)', num('pcent-metros', l.metros, '0.01'))
-                    + campo('Custo (R$/m)', num('pcent-custo', l.custo, '0.01'))
+                    + campo('Custo (R$/m)', moeda('pcent-custo', l.custo))
                     + campo('Margem (%)', num('pcent-margem', l.margem, '1'));
             } else if (l.tipo === 'material') {
                 campos = campo(`Quantidade (${escapeHtml(l.unidade)})`, num('pcent-qtd', l.qtd, '0.001'))
-                    + campo('Custo (R$)', num('pcent-custo', l.custo, '0.01'))
+                    + campo('Custo (R$)', moeda('pcent-custo', l.custo))
                     + campo('Margem (%)', num('pcent-margem', l.margem, '1'));
             } else {
                 campos = campo('Quantidade (un)', num('pcent-qtd', l.qtd, '1'));
@@ -10407,7 +10414,7 @@ async function abrirEntradaEstoquePC(pc, { perguntarSeJaLancou = false } = {}) {
             for (const el of marcadas) {
                 const tipo = el.dataset.tipo, id = parseInt(el.dataset.id, 10);
                 const nome = el.querySelector('strong').textContent;
-                const custo = val(el, '.pcent-custo') || 0;
+                const custo = lerCampoMoeda(el.querySelector('.pcent-custo')) || 0;
                 const margemTxt = el.querySelector('.pcent-margem')?.value;
                 const markup = margemTxt === undefined || margemTxt === '' ? null : parseFloat(margemTxt);
                 if (tipo === 'tecido') {
@@ -10468,7 +10475,7 @@ function abrirModalContaPagarPC(pc) {
             <h3 style="margin:0 0 4px;font-size:16px">Gerar conta a pagar</h3>
             <div style="font-size:12px;color:#8F8F8F;margin-bottom:12px">Pedido #${formatPedidoId(pc.id)} — ${escapeHtml(pc.fornecedor_nome || '')}</div>
             <label style="display:block;font-size:12px;margin-bottom:4px">Valor a pagar (R$)</label>
-            <input type="number" id="pcp-valor" step="0.01" min="0" value="${_pcTotal(pc).toFixed(2)}" style="${inp}">
+            <input type="text" inputmode="decimal" data-moeda id="pcp-valor" placeholder="R$ 0,00" value="${MascarasCore.formatarMoeda(_pcTotal(pc))}" style="${inp}">
             <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px"><input type="radio" name="pcp-modo" value="avista" checked> À vista (hoje)</label>
             <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:6px"><input type="radio" name="pcp-modo" value="prazo"> Boleto ou prazo único</label>
             <div id="pcp-bloco-prazo" style="display:none;margin-left:24px"><label style="display:block;font-size:12px;margin-bottom:4px">Vencimento</label><input type="date" id="pcp-venc" value="${hoje}" style="${inp}"></div>
@@ -10500,7 +10507,7 @@ function abrirModalContaPagarPC(pc) {
         o.querySelector('#pcp-ok').onclick = () => {
             erroEl.style.display = 'none';
             if (!temAcesso('financeiro.pagar', 'completo')) { erro('Você não tem permissão para gerar contas a pagar. O pedido fica marcado como "sem conta a pagar" para o financeiro gerar depois.'); return; }
-            const valor = FinanceiroCore.arredondar(parseFloat(o.querySelector('#pcp-valor').value) || 0);
+            const valor = FinanceiroCore.arredondar(lerCampoMoeda(o.querySelector('#pcp-valor')) || 0);
             const m = modo();
             const venc = o.querySelector('#pcp-venc').value;
             const n = parseInt(o.querySelector('#pcp-parcelas').value, 10) || 0;
@@ -14199,7 +14206,7 @@ async function salvarEntradaMaterial() {
     const matId  = parseInt(document.getElementById('est-mat-id')?.value);
     const qtd    = parseFloat(document.getElementById('est-mat-qtd')?.value);
     const data   = document.getElementById('est-mat-data')?.value;
-    const custo  = parseFloat(document.getElementById('est-mat-preco-custo')?.value) || 0;
+    const custo  = lerCampoMoeda('est-mat-preco-custo') || 0;
     const markup = parseFloat(document.getElementById('est-mat-markup')?.value) || 0;
     if (!matId) { await showAlert('Escolha o material na lista de sugestões.', '⚠️'); return; }
     if (!qtd || qtd <= 0) { await showAlert('Informe uma quantidade válida.', '⚠️'); return; }
@@ -15224,6 +15231,9 @@ function _valorDigitadoBaixa(t, padrao) {
     return _numeroBR(/^-?\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, '') : s, padrao === undefined ? NaN : padrao);
 }
 
+// Campo de moeda (mascara): numero ou NaN quando vazio — o contrato de _valorDigitadoBaixa(x, NaN).
+function _moedaOuNaN(id) { const v = lerCampoMoeda(id); return v === null ? NaN : v; }
+
 const AVISO_CONTA_BAIXA = 'Esta conta ainda não está configurada / data anterior ao saldo inicial — não entra no saldo';
 
 // Modal de baixa: uma linha por parcela (marcar, valor, meio, conta e, no
@@ -15270,7 +15280,7 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
                         <strong>${brl(it.valor)}</strong>
                     </label>
                     <div class="baixa-detalhe" style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0 24px">
-                        <input type="text" inputmode="decimal" class="baixa-valor" title="Valor recebido" value="${(Number(it.valor) || 0).toFixed(2).replace('.', ',')}" ${permiteParcial ? '' : 'readonly'} style="${sel};flex:1 1 90px;${permiteParcial ? '' : 'background:var(--surface-3)'}">
+                        <input type="text" inputmode="decimal" data-moeda placeholder="R$ 0,00" class="baixa-valor" title="Valor recebido" value="${MascarasCore.formatarMoeda(Number(it.valor) || 0)}" ${permiteParcial ? '' : 'readonly'} style="${sel};flex:1 1 90px;${permiteParcial ? '' : 'background:var(--surface-3)'}">
                         <select class="baixa-meio" title="Meio" style="${sel};flex:2 1 130px">${m.chave ? '' : '<option value="" selected>Escolha o meio</option>'}${meios.map(x => `<option value="${escapeHtml(x.chave)}" ${x === m ? 'selected' : ''}>${escapeHtml(x.nome)}</option>`).join('')}</select>
                         <select class="baixa-conta" title="Conta" style="${sel};flex:2 1 130px;${semContas ? 'display:none' : ''}">${opcoesConta(m, contaInicial(it, m))}</select>
                         <div class="baixa-cartao" style="display:none;flex:1 1 100%;gap:10px;align-items:center">
@@ -15297,7 +15307,8 @@ function abrirModalBaixa({ titulo, itens, comData = true, permiteParcial = false
         const lerLinha = l => {
             const it = itens[Number(l.dataset.idx)];
             const max = CaixaCore.arredondar(Number(it.valor) || 0);
-            const v = CaixaCore.arredondar(_valorDigitadoBaixa(l.querySelector('.baixa-valor').value));
+            const vLido = lerCampoMoeda(l.querySelector('.baixa-valor'));
+            const v = CaixaCore.arredondar(vLido === null ? NaN : vLido);
             let erro = '';
             if (!(v > 0)) erro = 'Informe um valor maior que zero.';
             else if (v > max) erro = 'O valor não pode passar de ' + brl(max) + '.';
@@ -16033,7 +16044,7 @@ async function excluirGrupoCP(paiId) {
 async function salvarDespesaFixa() {
     if (!await exigirPermissao('financeiro.fixas', 'completo')) return;
     const descricao = document.getElementById('df-descricao')?.value.trim();
-    const valor = parseFloat(document.getElementById('df-valor')?.value) || 0;
+    const valor = lerCampoMoeda('df-valor') || 0;
     const dia = parseInt(document.getElementById('df-dia')?.value) || 1;
     const categoria = document.getElementById('df-categoria')?.value || 'outro';
     if (!descricao) { await showAlert('Informe a descrição da despesa.', '⚠️'); return; }
@@ -16124,7 +16135,7 @@ function abrirModalContaPagar(modo, manterAnexoPendente) {
                 </div>
                 <div class="form-group">
                     <label>Valor (R$) <span style="color:#F43927">*</span></label>
-                    <input type="text" inputmode="decimal" id="cpm-valor" placeholder="0,00">
+                    <input type="text" inputmode="decimal" data-moeda id="cpm-valor" placeholder="R$ 0,00">
                 </div>
                 <div class="form-group">
                     <label>Vencimento <span style="color:#F43927">*</span></label>
@@ -16267,7 +16278,7 @@ function onDocContaPagarInput() {
     if (digits.length === 47 || digits.length === 48) {
         const res = decodificarLinhaDigitavel(digits);
         if (res.ok) {
-            if (res.valor) document.getElementById('cpm-valor').value = res.valor.toFixed(2).replace('.', ',');
+            if (res.valor) definirCampoMoeda('cpm-valor', res.valor);
             if (res.vencimento) document.getElementById('cpm-vencimento').value = res.vencimento;
             const descEl = document.getElementById('cpm-descricao');
             if (descEl && !descEl.value.trim()) descEl.value = res.tipo === 'boleto' ? `Boleto ${res.banco}` : 'Conta de consumo (convênio)';
@@ -16288,7 +16299,7 @@ function onDocContaPagarInput() {
             const credorEl = document.getElementById('cpm-credor');
             const valorEl = document.getElementById('cpm-valor');
             if (credorEl && !credorEl.value.trim()) credorEl.value = achado.credor_nome || '';
-            if (valorEl && !valorEl.value) valorEl.value = achado.valor.toFixed(2).replace('.', ',');
+            if (valorEl && !valorEl.value) definirCampoMoeda(valorEl, achado.valor);
             helpEl.style.color = 'var(--primary-text)';
             helpEl.textContent = `Encontrado no histórico: lançamento anterior de "${achado.credor_nome || '—'}" com este número de documento.`;
         } else {
@@ -16305,7 +16316,7 @@ async function adicionarContaPagarManual() {
     const descricao   = document.getElementById('cpm-descricao')?.value.trim();
     const cnpjFornecedor = document.getElementById('cpm-cnpj')?.value.trim() || '';
     const credor      = document.getElementById('cpm-credor')?.value.trim() || '';
-    const valor       = _valorDigitadoBaixa(document.getElementById('cpm-valor')?.value, 0);
+    const valor       = lerCampoMoeda('cpm-valor') || 0;
     const vencimento  = document.getElementById('cpm-vencimento')?.value;
     const categoria   = document.getElementById('cpm-categoria')?.value || 'outro';
     const mesRefDigitado = document.getElementById('cpm-mes-ref')?.value || '';
@@ -16548,7 +16559,7 @@ function _preencherModalComExtracao(dados, nomeArquivo) {
     if (dados.ok) {
         if (dados.cnpj) { set('cpm-cnpj', dados.cnpj); const el = document.getElementById('cpm-cnpj'); if (el) mascaraCNPJ(el); }
         set('cpm-credor', dados.credor || '');
-        if (dados.valor != null) set('cpm-valor', dados.valor.toFixed(2).replace('.', ','));
+        if (dados.valor != null) definirCampoMoeda('cpm-valor', dados.valor);
         set('cpm-vencimento', dados.vencimento || '');
         set('cpm-descricao', dados.credor ? `Nota/Boleto ${dados.credor}` : (dados.tipo === 'nota' ? 'Nota fiscal importada' : 'Boleto importado'));
         const docEl = document.getElementById('cpm-doc');
@@ -16918,7 +16929,7 @@ function salvarMetaMes() {
     if (!temAcesso('financeiro.dashboard', 'completo')) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
     const hoje = new Date();
     const key = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
-    const val = parseFloat(document.getElementById('fin-meta-valor')?.value) || 0;
+    const val = lerCampoMoeda('fin-meta-valor') || 0;
     // 0 ou vazio = sem ajuste neste mes (vale a meta padrao da empresa).
     if (val > 0) _finMetas[key] = val; else delete _finMetas[key];
     localStorage.setItem('sc_fin_metas', JSON.stringify(_finMetas));
@@ -17373,7 +17384,7 @@ function _resAbrirAjuste({ titulo, dica, atual, aoSalvar, sugestao }) {
     o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:380px;width:92%">
         <h3 style="margin:0 0 10px;font-size:16px">${escapeHtml(titulo)}</h3>
         <div class="form-group"><label for="res-ajuste-valor">Valor (R$)</label>
-            <input type="text" inputmode="decimal" id="res-ajuste-valor" value="${atual != null ? escapeHtml(String(atual).replace('.', ',')) : ''}" placeholder="${escapeHtml(sugestao || 'ex: 30.000')}">
+            <input type="text" inputmode="decimal" data-moeda id="res-ajuste-valor" value="${atual != null ? escapeHtml(MascarasCore.formatarMoeda(atual)) : ''}" placeholder="${escapeHtml(sugestao || 'R$ 0,00')}">
             <small style="color:#888">${escapeHtml(dica)}</small></div>
         <div id="res-ajuste-erro" style="color:#F43927;font-size:13px;min-height:16px"></div>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
@@ -17386,8 +17397,8 @@ function _resAbrirAjuste({ titulo, dica, atual, aoSalvar, sugestao }) {
         const t = o.querySelector('#res-ajuste-valor').value.trim();
         let v = null;
         if (t) {
-            v = _valorDigitadoBaixa(t);
-            if (Number.isNaN(v) || v < 0) { o.querySelector('#res-ajuste-erro').textContent = 'Informe só números (ex: 30.000 ou 30.000,50).'; return; }
+            v = lerCampoMoeda(o.querySelector('#res-ajuste-valor'));
+            if (v === null || v < 0) { o.querySelector('#res-ajuste-erro').textContent = 'Informe só números (ex: 30.000 ou 30.000,50).'; return; }
             v = CaixaCore.arredondar(v);
         }
         aoSalvar(v);
@@ -17411,7 +17422,7 @@ function ajustarMetaMes(mes) {
     const padrao = Number(getEmpresa().meta_faturamento_padrao);
     _resAbrirAjuste({
         titulo: 'Meta de faturamento deste mês', dica: 'Vale só para este mês. Vazio volta à meta padrão da Empresa.', atual,
-        sugestao: padrao > 0 ? padrao.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '',
+        sugestao: padrao > 0 ? MascarasCore.formatarMoeda(padrao) : '',
         aoSalvar: v => {
             const metas = _resLerLS('sc_fin_metas');
             if (v != null && v > 0) metas[mes] = v; else delete metas[mes];
@@ -17566,7 +17577,7 @@ function abrirFechamentoMes(mes) {
     }).map(c => ({ ...c, texto: '', acao: 'anotado', motivo: '' }));
     const st = { passo: 1, anotacoes: '' };
     // Extrato digitado: null = nao conferida, NaN = invalido.
-    const extratoDe = l => { const t = String(l.texto || '').trim(); return t ? _valorDigitadoBaixa(t, NaN) : null; };
+    const extratoDe = l => { const t = String(l.texto || '').trim(); if (!t) return null; const v = MascarasCore.lerMoeda(t); return v === null ? NaN : v; };
     const difDe = l => { const e = extratoDe(l); return e == null || Number.isNaN(e) ? null : CaixaCore.arredondar(e - l.esperado); };
     const temDif = l => { const d = difDe(l); return d != null && Math.round(d * 100) !== 0; };
 
@@ -17594,7 +17605,7 @@ function abrirFechamentoMes(mes) {
     function passo1() {
         const corpo = linhas.length ? `<div class="fech-tabela-wrap"><table class="fech-tabela"><thead><tr><th>Conta</th><th style="text-align:right">Esperado</th><th>Saldo no extrato</th><th>Diferença</th></tr></thead><tbody>${linhas.map((l, i) => `
             <tr data-conta="${escapeHtml(String(l.conta_id))}" data-i="${i}"><td>${escapeHtml(l.nome || '')}</td><td style="text-align:right">${_resBrl(l.esperado)}</td>
-                <td><input type="text" inputmode="decimal" class="fech-extrato" value="${escapeHtml(l.texto)}" placeholder="não conferida" aria-label="Saldo no extrato de ${escapeHtml(l.nome || '')}"></td>
+                <td><input type="text" inputmode="decimal" data-moeda data-moeda-neg class="fech-extrato" value="${escapeHtml(l.texto)}" placeholder="não conferida" aria-label="Saldo no extrato de ${escapeHtml(l.nome || '')}"></td>
                 <td><div class="fech-dif"></div><div class="fech-acao" style="display:none">
                     <label><input type="radio" name="fech-acao-${i}" value="ajuste"${l.acao === 'ajuste' ? ' checked' : ''}> Lançar ajuste</label>
                     <label><input type="radio" name="fech-acao-${i}" value="anotado"${l.acao !== 'ajuste' ? ' checked' : ''}> Deixar anotado</label>
@@ -18046,7 +18057,7 @@ function simularCompra() {
     const forma = _simForma();
     const dataCompra = val('sim-data');
     const dataPrimeira = val('sim-primeira');
-    const valorTotal = _valorDigitadoBaixa(val('sim-valor'), NaN);
+    const valorTotal = _moedaOuNaN('sim-valor');
     let erro = '';
     if (!descricao) erro = 'Informe a descrição da compra.';
     else if (!['avista', 'parcelado', 'entrada'].includes(forma)) erro = 'Escolha a forma de pagamento.';
@@ -18057,7 +18068,7 @@ function simularCompra() {
         r = SimuladorCore.pagamentosDaCompra({
             valor: valorTotal, forma,
             parcelas: val('sim-parcelas') === '' ? NaN : Number(val('sim-parcelas')),
-            entrada: _valorDigitadoBaixa(val('sim-entrada'), NaN),
+            entrada: _moedaOuNaN('sim-entrada'),
             dataCompra, dataPrimeira
         });
         if (!r.ok) erro = r.erro;
@@ -18073,7 +18084,7 @@ function simularCompra() {
     const semanasSem = _simPrevisao([]);
     const semanasCom = _simPrevisao(pagamentos);
     const fim = semanasCom.length ? semanasCom[semanasCom.length - 1].fim : hoje;
-    const ganho = _valorDigitadoBaixa(val('sim-ganho'), NaN);
+    const ganho = _moedaOuNaN('sim-ganho');
     const parcelas = pagamentos.filter(p => !_simEhAvulsa(p));
     const v = SimuladorCore.veredito({
         semanasSem, semanasCom,
@@ -18191,7 +18202,7 @@ async function abrirModalTransferencia() {
         <label style="display:block;font-size:12px;margin-bottom:4px" for="transf-para">Para</label>
         <select id="transf-para" style="${campo}"><option value="">Selecione…</option>${opts}</select>
         <label style="display:block;font-size:12px;margin-bottom:4px" for="transf-valor">Valor</label>
-        <input type="text" inputmode="decimal" id="transf-valor" placeholder="0,00" style="${campo}">
+        <input type="text" inputmode="decimal" data-moeda id="transf-valor" placeholder="R$ 0,00" style="${campo}">
         <label style="display:block;font-size:12px;margin-bottom:4px" for="transf-data">Data</label>
         <input type="date" id="transf-data" value="${hojeLocal()}" max="${hojeLocal()}" style="${campo}">
         <div id="transf-erro" style="display:none;color:var(--danger-text);font-size:12px;margin-bottom:10px"></div>
@@ -18207,7 +18218,7 @@ async function abrirModalTransferencia() {
     o.querySelector('#transf-cancel').onclick = fechar;
     o.querySelector('#transf-ok').onclick = () => {
         const deId = o.querySelector('#transf-de').value, paraId = para.value;
-        const valor = _valorDigitadoBaixa(o.querySelector('#transf-valor').value);
+        const valor = lerCampoMoeda(o.querySelector('#transf-valor'));
         const data = o.querySelector('#transf-data').value;
         const de = _contaFinPorId(deId), dest = _contaFinPorId(paraId);
         if (!de) return erro('Escolha a conta de origem.');
@@ -18469,11 +18480,11 @@ function renderDashboardFinanceiro() {
     const metaValor  = metaFinanceiraDoMes(mesKey);
     const fatMesAt   = resultadoFinanceiroDoMes(mesKey).faturamento;
     const metaInputEl = document.getElementById('fin-meta-valor');
-    if (metaInputEl && !metaInputEl._userEditing) metaInputEl.value = Number(_finMetas[mesKey]) > 0 ? _finMetas[mesKey] : '';
+    if (metaInputEl && !metaInputEl._userEditing) definirCampoMoeda(metaInputEl, Number(_finMetas[mesKey]) > 0 ? Number(_finMetas[mesKey]) : null);
     // Sem ajuste no mes, a sugestao e a meta padrao da Empresa (como no Resultado do mes).
     if (metaInputEl) {
         const metaPadrao = Number(getEmpresa().meta_faturamento_padrao);
-        metaInputEl.placeholder = metaPadrao > 0 ? metaPadrao.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : 'Ex: 15000';
+        metaInputEl.placeholder = metaPadrao > 0 ? MascarasCore.formatarMoeda(metaPadrao) : 'R$ 0,00';
     }
     const nomeMes = hoje3.toLocaleString('pt-BR',{month:'long',year:'numeric'});
     const labelMetaEl = document.getElementById('fin-meta-mes-label');

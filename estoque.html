@@ -55,7 +55,7 @@
                     </div>
                     <div class="form-group">
                         <label>Preço de Custo (R$/m) <span class="info-tag">pago ao fornecedor</span></label>
-                        <input type="number" id="est-preco-custo" placeholder="Ex: 45.00" step="0.01" min="0" oninput="calcularPrecoVendaTecido()">
+                        <input type="text" inputmode="decimal" data-moeda id="est-preco-custo" placeholder="R$ 0,00" oninput="calcularPrecoVendaTecido()">
                     </div>
                     <div class="form-group">
                         <label>Margem (%)</label>
@@ -130,7 +130,7 @@
                     </div>
                     <div class="form-group">
                         <label>Preço de Custo (R$) <span class="info-tag">pago ao fornecedor</span></label>
-                        <input type="number" id="est-mat-preco-custo" placeholder="Ex: 8.50" step="0.01" min="0" oninput="calcularPrecoVendaMat()">
+                        <input type="text" inputmode="decimal" data-moeda id="est-mat-preco-custo" placeholder="R$ 0,00" oninput="calcularPrecoVendaMat()">
                     </div>
                     <div class="form-group">
                         <label>Margem (%)</label>
