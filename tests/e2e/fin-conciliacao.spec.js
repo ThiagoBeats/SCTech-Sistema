@@ -29,7 +29,7 @@ const MOVS = [20, 21, 22].flatMap((id, i) => [
 ]);
 const DADOS = {
     sc_contas_fin: CONTAS,
-    sc_cr: [cr(10, 'Ana', 500, '2026-11-07', { conta_id: 2 }), cr(11, 'Bia', 300, '2026-11-08'), cr(12, 'Caio', 400, '2026-11-09')].concat(CARTAO),
+    sc_cr: [cr(10, 'Ana', 500, '2026-11-07', { conta_id: 2, forma_pagamento: 'PIX' }), cr(11, 'Bia', 300, '2026-11-08'), cr(12, 'Caio', 400, '2026-11-09')].concat(CARTAO),
     sc_cp: TAXAS, sc_mov_fin: MOVS
 };
 
@@ -138,6 +138,11 @@ test('linha +500 sugere a conta de 500: Confirmar dá baixa na data do extrato; 
     await expect(linha(page, 'CRED PIX ANA')).toContainText('Ana - Venda Ana');
     await page.locator('#conc-fechar').click();
     await expect(kpi(page, 'final')).toHaveText('R$ 1.500,00');
+    // Ainda ha linha pendente em 05/11 (o aluguel): nada conferido ate la.
+    await expect(page.locator('#fluxo-conferido')).toHaveCount(0);
+    await page.locator('#fluxo-btn-conciliar').click();
+    await linha(page, 'PAGTO ALUGUÉL').locator('.conc-ignorar').click();
+    await page.locator('#conc-fechar').click();
     await expect(page.locator('#fluxo-conferido')).toContainText('Itaú · Conferido com o extrato até 05/11');
 
     // Desfazer: o recebimento volta a ficar em aberto (com a conta prevista de antes) e a linha volta para Pendentes.
@@ -146,9 +151,9 @@ test('linha +500 sugere a conta de 500: Confirmar dá baixa na data do extrato; 
     await linha(page, 'CRED PIX ANA').locator('.conc-desfazer').click();
     await expect(page.locator('#sc-modal-msg')).toContainText('estornado');
     await page.locator('#sc-modal-ok').click();
-    await expect(page.locator('#conc-aba-pendente')).toHaveText('Pendentes (5)');
+    await expect(page.locator('#conc-aba-pendente')).toHaveText('Pendentes (4)');
     c = await doCR(page, 10);
-    expect([c.status, c.data_pagamento, c.conta_id]).toEqual(['Atrasado', null, 2]);
+    expect([c.status, c.data_pagamento, c.conta_id, c.forma_pagamento]).toEqual(['Atrasado', null, 2, 'PIX']);
     expect(c.historico.map(h => h.acao)).toEqual(['criado', 'baixa', 'conciliado', 'conciliado', 'estorno']);
     expect((await ler(page, 'sc_mov_fin')).some(m => m.origem === 'cr' && m.origem_id === 10)).toBe(false);
     const volta = await extrato(page, 'L500');
@@ -248,7 +253,7 @@ test('É transferência: cria o par de movimentos e o Fluxo (todas as contas) n�
     const par = (await ler(page, 'sc_mov_fin')).filter(m => m.origem === 'transferencia');
     expect(par.map(m => [m.conta_id, m.sentido, m.valor, m.data])).toEqual([[1, 'saida', 89.9, '2026-11-09'], [2, 'entrada', 89.9, '2026-11-09']]);
     const ext = await extrato(page, 'L89');
-    expect([ext.situacao, ext.mov_id, ext.mov_ids]).toEqual(['transferencia', par[0].id, [par[0].id, par[1].id]]);
+    expect([ext.situacao, ext.mov_id, ext.mov_ids]).toEqual(['transferencia', par[0].id, [par[0].id]]);
     await page.locator('#conc-aba-conciliado').click();
     await expect(linha(page, 'TED MESMA TITULARIDADE')).toContainText('Transferência para Bradesco');
     await page.locator('#conc-fechar').click();
@@ -275,6 +280,54 @@ test('Desfazer a transferência criada pela conciliação exclui o par', async (
     expect(await ler(page, 'sc_mov_fin')).toEqual(MOVS);
 });
 
+test('os dois lados de uma transferência: o segundo extrato liga à transferência já registrada (sem outro par)', async ({ page }) => {
+    await abrir(page);
+    await importar(page, 1, ofx('56789-0', [['20261110', -1000, 'T1', 'TED PARA BRADESCO']]));
+    await linha(page, 'TED PARA BRADESCO').locator('.conc-transf').click();
+    await page.locator('#conc-transf-conta').selectOption('2');
+    await page.locator('#conc-transf-ok').click();
+    await expect(page.locator('#conc-aba-conciliado')).toHaveText('Conciliadas (1)');
+    await importar(page, 2, ofx('11111-1', [['20261111', 1000, 'T2', 'TED RECEBIDA ITAU']]));
+    await linha(page, 'TED RECEBIDA ITAU').locator('.conc-transf').click();
+    await page.locator('#conc-transf-conta').selectOption('1');
+    await page.locator('#conc-transf-ok').click();
+    await expect(page.locator('.sc-toast').last()).toHaveText('Ligada à transferência de 10/11 já registrada.');
+    const par = (await ler(page, 'sc_mov_fin')).filter(m => m.origem === 'transferencia');
+    expect(par.map(m => [m.conta_id, m.sentido, m.valor, m.data])).toEqual([[1, 'saida', 1000, '2026-11-10'], [2, 'entrada', 1000, '2026-11-10']]);
+    const t2 = await extrato(page, 'T2');
+    expect([t2.situacao, t2.mov_id, t2.mov_ids, t2.transf_grupo]).toEqual(['transferencia', par[1].id, [par[1].id], undefined]);
+    await page.locator('#conc-fechar').click();
+    await page.locator('#fluxo-conta').selectOption('1');
+    await expect(kpi(page, 'final')).toHaveText('R$ 0,00');
+    await page.locator('#fluxo-conta').selectOption('2');
+    await expect(kpi(page, 'final')).toHaveText('R$ 1.000,00');
+    // Desfazer a ligacao so desliga; desfazer o lado que criou o par exclui o par e o outro lado volta a pendente.
+    await page.locator('#fluxo-btn-conciliar').click();
+    await page.locator('#conc-aba-conciliado').click();
+    await linha(page, 'TED RECEBIDA ITAU').locator('.conc-desfazer').click();
+    await expect(page.locator('#sc-modal-msg')).toContainText('lançamentos e movimentos ficam como estão');
+    await page.locator('#sc-modal-ok').click();
+    await expect.poll(async () => (await extrato(page, 'T2')).situacao).toBe('pendente');
+    expect((await ler(page, 'sc_mov_fin')).filter(m => m.origem === 'transferencia')).toHaveLength(2);
+    await page.locator('#conc-aba-pendente').click();
+    await linha(page, 'TED RECEBIDA ITAU').locator('.conc-transf').click();
+    await page.locator('#conc-transf-conta').selectOption('1');
+    await page.locator('#conc-transf-ok').click();
+    await expect.poll(async () => (await extrato(page, 'T2')).situacao).toBe('transferencia');
+    await page.locator('#conc-conta').selectOption('1');
+    await page.locator('#conc-aba-conciliado').click();
+    await linha(page, 'TED PARA BRADESCO').locator('.conc-desfazer').click();
+    await page.locator('#sc-modal-ok').click();
+    await expect.poll(async () => (await ler(page, 'sc_mov_fin')).filter(m => m.origem === 'transferencia').length).toBe(0);
+    expect((await extrato(page, 'T2')).situacao).toBe('pendente');
+});
+
+test('conta cadastrada sem o dígito: o ACCTID com dígito não dispara o aviso', async ({ page }) => {
+    await abrir(page, Object.assign({}, DADOS, { sc_contas_fin: CONTAS.map(c => (c.id === 1 ? Object.assign({}, c, { numero_conta: '56789' }) : c)) }));
+    await importar(page, 1, FIX_SGML);
+    await expect(page.locator('#conc-resumo')).toHaveText('3 linha(s) nova(s) importada(s); 0 já estavam no sistema.');
+});
+
 test('Ignorar leva a linha para Ignoradas; Desfazer devolve', async ({ page }) => {
     await abrir(page);
     await importar(page, 1, ITAU);
@@ -298,6 +351,18 @@ test('depósito da maquininha que junta três vendas: sugestão "3 repasses" e l
     await abrir(page);
     await importar(page, 3, ofx('99999', [['20261112', 100, 'D100', 'CREDITO VENDAS CARTAO']]));
     const l = linha(page, 'CREDITO VENDAS CARTAO');
+    // Escolher outro: o repasse e o movimento que o representa nao podem ir juntos.
+    await l.locator('.conc-btn-escolher').click();
+    const rep20 = page.locator('#conc-escolher input[value="rep:20:2026-11-12"]');
+    const mov100 = page.locator('#conc-escolher input[value="mov:100"]');
+    await expect(mov100).toBeEnabled();
+    await rep20.check();
+    await expect(mov100).toBeDisabled();
+    await rep20.uncheck();
+    await expect(mov100).toBeEnabled();
+    await mov100.check();
+    await expect(rep20).toBeDisabled();
+    await page.locator('#conc-escolher-cancelar').click();
     await expect(l.locator('.conc-sug')).toContainText('3 repasses de cartão de 12/11 — R$ 100,00');
     await l.locator('.conc-confirmar').click();
     await expect(page.locator('#conc-aba-conciliado')).toHaveText('Conciliadas (1)');

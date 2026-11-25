@@ -1238,7 +1238,8 @@ Na janela do carrinho:
     em DD/MM/AAAA"). Botões: Transferir entre contas (a janela de sempre) e, em cada linha de transferência, o
     menu ⋮ com "Excluir transferência" (os dois lados saem); Importar extrato e Conciliar (aparecem só com Fluxo
     de caixa completo); Relatórios (para quem vê o Fluxo). Para cada conta com extrato conciliado, a linha
-    "Conferido com o extrato até DD/MM" (data da última linha conciliada ou transferência; ignoradas não contam).
+    "Conferido com o extrato até DD/MM" (a última data conciliada sem nenhuma linha pendente da conta até ela;
+    ignoradas não contam).
     Quem só visualiza não vê Transferir, Importar, Conciliar nem o menu de excluir.
     * Importar extrato (janela): escolher a Conta (obrigatória) e o arquivo .ofx baixado do banco (SGML ou XML,
       acentos em ISO-8859-1/1252 ou UTF-8, valores com vírgula ou ponto). Arquivo que não é OFX mostra "Arquivo não
@@ -1256,12 +1257,15 @@ Na janela do carrinho:
         movimentos do repasse (entrada bruta e taxa).
       - Escolher outro: lista sugestões, lançamentos em aberto do lado (vencimento até 60 dias), movimentos e
         repasses da conta (até 31 dias); marcar um ou vários; "Marcado: R$ X de R$ Y (faltam …)"; Confirmar só
-        habilita quando a soma bate (±R$ 0,01).
+        habilita quando a soma bate (±R$ 0,01). Um repasse e o movimento que já o representa não podem ser marcados
+        juntos.
       - Criar lançamento: abre o formulário de Lançamentos já com descrição, valor, data (vencimento) e conta,
         sem Parcelar/Repetir; passa pela checagem de lançamento parecido; ao salvar, dá a baixa e a linha fica
         conciliada.
-      - É transferência: escolher a outra conta; cria o par de movimentos na data do extrato (não muda Entradas
-        e Saídas de "Todas as contas").
+      - É transferência: escolher a outra conta. Se já existe nesta conta o lado de uma transferência com o mesmo
+        sentido e valor, a ±5 dias, ainda não ligado a outra linha (registrada pelo extrato da outra conta ou à
+        mão), liga a ela: "Ligada à transferência de DD/MM já registrada." (sem outro par). Senão cria o par de
+        movimentos na data do extrato (não muda Entradas e Saídas de "Todas as contas").
       - Ignorar: vai para Ignoradas.
       - Desfazer (Conciliadas e Ignoradas): a linha volta para Pendentes; se a conciliação deu baixa, a baixa é
         estornada pela rotina de estorno (o lançamento volta em aberto, com a conta prevista de antes); se criou a
