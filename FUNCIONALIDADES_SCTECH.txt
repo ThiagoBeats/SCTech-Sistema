@@ -997,7 +997,8 @@ Tabela de performance por vendedor:
  8. VENDEDORES (vendedores.html)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-3 abas: Vendedores | Comissões Pendentes | Histórico de Pagamentos
+2 abas: Cadastro | Comissões (em cada tipo: Vendedores e Arquitetos; a aba Comissões
+mostra os dois juntos)
 
 ── 8.1 ABA: VENDEDORES ─────────────────────────────────────────────────────────
 
@@ -1012,34 +1013,38 @@ Tabela de vendedores:
   - Situação e Ações agora são duas colunas separadas (vale também para
     Arquitetos); Ações em menu ⋮ com "✏️ Editar" e "🗑️ Excluir" (em vermelho)
 
-── 8.2 ABA: COMISSÕES PENDENTES ────────────────────────────────────────────────
+── 8.2 ABA: COMISSÕES ─────────────────────────────────────────────────────────
 
-Filtro por vendedor (select)
+Substitui as antigas abas Comissões Pendentes e Histórico de Pagamentos. A
+comissão é um registro do pedido (seção 10.9): Registrada (pedido aprovado),
+Pendente (pedido Instalado) ou Paga.
 
-Resumo total:
-  - Valor total de comissões pendentes do vendedor selecionado (destaque visual)
-  - Botão "Pagar Todas as Comissões" do filtro aplicado (com confirmação)
+Filtros:
+  - Vendedor (Todos, cada vendedor e cada arquiteto)
+  - Mês (pela data de instalação; "Todos")
 
-Tabela de comissões pendentes:
-  - Colunas: Pedido | Cliente | Vendedor | Valor do Pedido | Comissão (R$)
-  - Uma linha por pedido com comissão ainda não quitada
-  - Pagar abre a janela "Registrar pagamento" (conta e data); a comissão é um
-    registro do pedido (seção 10.9). A RT antiga (só conta) entra como comissão
-    do pedido pela migração e aparece na aba Arquitetos
+Cartões, um por pessoa do filtro:
+  - Acumulado (pendente + paga), A pagar (pendente) e Pago; comissão Registrada
+    não entra nos valores
+  - Botão "Pagar todos os pendentes de <nome>" (respeita o filtro de mês)
 
-── 8.3 ABA: HISTÓRICO DE PAGAMENTOS ────────────────────────────────────────────
-
-Filtro por vendedor (select)
-
-Tabela de histórico:
-  - Colunas: Data do Pagamento | Pedido | Cliente | Vendedor |
-    Valor do Pedido | Comissão Paga
-  - Ordenado por data mais recente
+Tabela (uma linha por comissão; pedido com vendedor e arquiteto tem duas):
+  - Colunas: Data (instalação) | Pedido | Cliente | Vendedor | Valor do pedido |
+    % | Comissão | Status (Registrada/Pendente/Paga) | Pago em
+  - Clicar no número do pedido abre o pedido
+  - Linhas Pendentes têm caixa de seleção; o botão "Registrar pagamento" paga as
+    marcadas (janela com conta*, data* - hoje por padrão - e o total)
+  - Linha Paga: menu ⋮ "Desfazer pagamento" (a comissão volta a Pendente e a saída
+    some do caixa)
+  - Sem permissão (vendedores ou Contas a pagar completos) a tela só mostra os
+    dados: sem caixas, sem botões de pagar e sem o menu
+  - Pagar e desfazer nunca criam nem mexem em Contas a Pagar
+  - Links antigos (?aba=pendentes e ?aba=historico) abrem esta aba
 
 Comissão de RT (Retorno Técnico para Arquiteto):
   - Configurável por pedido (campo "% RT" no formulário do pedido)
   - Gerada automaticamente como conta a pagar ao marcar pedido como pago/instalado
-  - Visível nas abas de comissões pendentes e histórico
+  - Visível na aba Comissões (linha do arquiteto)
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1770,9 +1775,8 @@ Voltar o pedido para Orçamento:
     valor. Pedido antigo sem situação: Paga se estava paga, Pendente se instalado,
     senão Registrada. Rodar de novo não muda nada; backup importado sem a marca
     passa pela migração
-  - Enquanto a nova tela de comissões não chega, a aba Comissões Pendentes e o
-    Histórico de Vendedores continuam, pagando pela janela acima ("Registrar
-    pagamento") e desfazendo pelo botão Estornar ("Desfazer pagamento")
+  - A tela Vendedores > Comissões (seção 8.2) paga pela janela acima ("Registrar
+    pagamento") e desfaz pelo menu ⋮ ("Desfazer pagamento")
 
 ── 10.10 DRE POR PEDIDO: COMO O RESULTADO É CALCULADO ──────────────────────────
 

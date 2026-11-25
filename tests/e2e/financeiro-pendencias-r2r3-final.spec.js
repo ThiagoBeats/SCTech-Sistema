@@ -3,7 +3,7 @@
 // comissao antiga de arquiteto (comissao_rt) e "igual ao mes anterior" quando
 // a porcentagem arredonda para zero.
 const { test, expect } = require('@playwright/test');
-const { entrar, abrirLancamentos, acaoLanc } = require('./ajuda.js');
+const { entrar, abrirLancamentos, acaoLanc, acaoMenu } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8181';
 const ler = (page, k) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), k);
@@ -82,10 +82,9 @@ test('desfazer pagamento de comissao antiga de arquiteto (comissao_rt) tira a co
             vendedor_id: 3, status: 'Pago', data_vencimento: '2026-10-25', data_pagamento: '2026-10-25', forma_pagamento: 'PIX', meio_id: 1, conta_id: 10 }],
         sc_mov_fin: [{ id: 1, conta_id: 10, data: '2026-10-25', sentido: 'saida', valor: 100, origem: 'cp', origem_id: 900, grupo_id: null, descricao: 'RT Studio M' }]
     });
-    await page.goto(BASE + '/vendedores.html?tipo=arquiteto&aba=historico');
-    const btn = page.locator('#tb-hist-comissoes button', { hasText: 'Estornar' });
-    await expect(btn).toBeVisible();
-    await btn.click();
+    await page.goto(BASE + '/vendedores.html?tipo=arquiteto&aba=comissoes');
+    await expect(page.locator('#tb-comissoes tr[data-status="paga"]')).toBeVisible();
+    await acaoMenu(page, page.locator('#tb-comissoes tr[data-status="paga"]'), 'Desfazer pagamento');
     await expect(page.locator('#sc-modal-msg')).toHaveText('Desfazer este pagamento? A comissão volta a ficar pendente.');
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await ler(page, 'sc_ped'))[0].arq_comissao_paga).toBe(false);
@@ -95,8 +94,9 @@ test('desfazer pagamento de comissao antiga de arquiteto (comissao_rt) tira a co
     expect((await ler(page, 'sc_mov_fin')) || []).toEqual([]);
     expect((await ler(page, 'sc_ped'))[0].arq_comissao_status).toBe('pendente');
     // Pagar de novo pela lista de pendentes
-    await page.goto(BASE + '/vendedores.html?tipo=arquiteto&aba=pendentes');
-    await page.locator('#tb-comissoes-pendentes button', { hasText: 'Pagar' }).click();
+    await page.goto(BASE + '/vendedores.html?tipo=arquiteto&aba=comissoes');
+    await page.locator('#tb-comissoes .com-sel').first().check();
+    await page.locator('#com-btn-pagar').click();
     const modal = page.locator('#com-pag-modal');
     await expect(modal).toBeVisible();
     await modal.locator('#com-pag-conta').selectOption('10');

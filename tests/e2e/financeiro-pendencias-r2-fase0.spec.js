@@ -34,8 +34,9 @@ test('comissao: a conta comeca em branco e e obrigatoria ao pagar', async ({ pag
         sc_contas_fin: [{ id: 1, nome: 'Banco A', tipo: 'banco', saldo_inicial: 0, data_saldo_inicial: '2026-01-01', ativo: true }],
         sc_formas_pag: [{ nome: '50% entrada + 50% na instalação', desconto: 0, entrada: 50 }],
         sc_ped: [ped({ status: 'Instalado', valor_recebido: 1000, vendedor_id: 2, vendedor_nome: 'Bruno', comissao_valor: 50, comissao_pct: 5, comissao_status: 'pendente' })] });
-    await page.goto(BASE + '/vendedores.html?aba=pendentes');
-    await page.locator('#tb-comissoes-pendentes button', { hasText: 'Pagar' }).click();
+    await page.goto(BASE + '/vendedores.html?aba=comissoes');
+    await page.locator('#tb-comissoes .com-sel').first().check();
+    await page.locator('#com-btn-pagar').click();
     await expect(page.locator('#com-pag-conta')).toHaveValue('');
     await page.locator('#com-pag-ok').click();
     await expect(page.locator('#com-pag-erro')).toContainText('Escolha a conta');

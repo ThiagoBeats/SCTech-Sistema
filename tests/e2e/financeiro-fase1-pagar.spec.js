@@ -81,8 +81,9 @@ test('cartao so oferece conta maquininha (receber)', async ({ page }) => {
 
 test('pagar comissao gera saida e desfazer devolve a pendente', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_vend: VEND, sc_contas_fin: CONTAS, sc_meios_pag: MEIOS, sc_ped: [pedido()] });
-    await page.goto(BASE + '/vendedores.html?aba=pendentes');
-    await page.click('#tb-comissoes-pendentes button:has-text("Pagar")');
+    await page.goto(BASE + '/vendedores.html?aba=comissoes');
+    await page.locator('#tb-comissoes .com-sel').first().check();
+    await page.locator('#com-btn-pagar').click();
     const modal = page.locator('#com-pag-modal');
     await modal.locator('#com-pag-conta').selectOption('11');
     await modal.locator('#com-pag-ok').click();
@@ -90,8 +91,7 @@ test('pagar comissao gera saida e desfazer devolve a pendente', async ({ page })
     let movs = await ler(page, 'sc_mov_fin');
     expect(movs).toHaveLength(1);
     expect(movs[0]).toMatchObject({ conta_id: 11, sentido: 'saida', valor: 50, origem: 'comissao' });
-    await page.click('.vend-tab-btn[data-tab="historico"]');
-    await page.locator('#tb-hist-comissoes button', { hasText: '↩ Estornar' }).click();
+    await acaoMenu(page, page.locator('#tb-comissoes tr[data-status="paga"]'), 'Desfazer pagamento');
     await page.locator('.sc-modal-overlay button', { hasText: 'Desfazer pagamento' }).last().click();
     await expect.poll(async () => (await ler(page, 'sc_ped'))[0].comissao_paga).toBeFalsy();
     const ped = (await ler(page, 'sc_ped'))[0];
@@ -99,8 +99,9 @@ test('pagar comissao gera saida e desfazer devolve a pendente', async ({ page })
     expect(ped.comissao_status).toBe('pendente');
     expect((await ler(page, 'sc_cp')) || []).toHaveLength(0);
     expect(await ler(page, 'sc_mov_fin')).toEqual([]);
-    await page.goto(BASE + '/vendedores.html?aba=pendentes');
-    await expect(page.locator('#tb-comissoes-pendentes')).toContainText('R$ 50.00');
+    await page.goto(BASE + '/vendedores.html?aba=comissoes');
+    await expect(page.locator('#tb-comissoes')).toContainText('R$ 50,00');
+    await expect(page.locator('#tb-comissoes')).toContainText('Pendente');
 });
 
 test('estornar no A Pagar e excluir pago/taxa de cartao sao bloqueados', async ({ page }) => {
@@ -136,8 +137,8 @@ test('estornar no A Pagar e excluir pago/taxa de cartao sao bloqueados', async (
 test('pagar varias comissoes de uma vez, mesma data e conta', async ({ page }) => {
     const peds = [pedido({ id: 26401 }), pedido({ id: 26402, comissao_valor: 70 })];
     await entrar(page, BASE, { sc_cli: CLI, sc_vend: VEND, sc_contas_fin: CONTAS, sc_meios_pag: MEIOS, sc_ped: peds });
-    await page.goto(BASE + '/vendedores.html?aba=pendentes');
-    await page.click('button:has-text("Pagar Todas")');
+    await page.goto(BASE + '/vendedores.html?aba=comissoes');
+    await page.click('button:has-text("Pagar todos os pendentes de Bruno")');
     const modal = page.locator('#com-pag-modal');
     await modal.locator('#com-pag-data').fill('2026-11-05');
     await expect(modal.locator('#com-pag-total')).toHaveText('R$ 120,00');

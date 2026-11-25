@@ -9073,17 +9073,6 @@ function comissaoDoCadastro(id, valor) {
     return { pct, valor: pct > 0 ? Math.round(valor * pct / 100 * 100) / 100 : 0 };
 }
 
-function _preencherFiltrosVendedores() {
-    ['filtro-vend-pendente', 'filtro-vend-hist'].forEach(fId => {
-        const el = document.getElementById(fId);
-        if (!el) return;
-        const atual = el.value;
-        el.innerHTML = `<option value="">Todos os ${TIPOS_VENDEDOR[_tipoVend].varios.toLowerCase()}</option>` +
-            vendedoresDoTipo(_tipoVend).map(v => `<option value="${v.id}">${escapeHtml(v.nome)}</option>`).join('');
-        el.value = [...el.options].some(o => o.value === atual) ? atual : '';
-    });
-}
-
 function _rotulosTipoVendedores() {
     const t = TIPOS_VENDEDOR[_tipoVend];
     document.querySelectorAll('.vend-col-nome').forEach(th => { th.textContent = t.um; });
@@ -9099,7 +9088,6 @@ function mostrarTipoVendedores(tipo) {
     _tipoVend = tipo;
     _vendLembrarNaUrl('tipo', tipo);
     document.querySelectorAll('.vend-tipo-btn').forEach(b => b.classList.toggle('active', b.dataset.tipo === tipo));
-    _preencherFiltrosVendedores();
     _rotulosTipoVendedores();
     mostrarTabVendedores(_curTabVend || 'lista');
 }
@@ -9206,156 +9194,143 @@ function renderTabelaVendedores() {
     }).join('');
 }
 
-// Pendente = pedido instalado, com comissao do papel da aba ainda nao paga.
-// "Pagar todas" usa a mesma regra, para nunca pagar o que a tela nao mostra.
-// Um pedido com vendedor e arquiteto aparece nas duas abas, cada um com a sua.
-function _comissoesPendentesDoTipo(filtroVend) {
-    const c = CAMPOS_COMISSAO[_tipoVend];
-    let pedidos = db.pedidos.filter(p => FinanceiroCore.temComissao(p, _tipoVend) && !p[c.paga] &&
-        normalizarStatus(p.status) === 'Instalado');
-    if (filtroVend) pedidos = pedidos.filter(p => p[c.id] == filtroVend);
-    // Comissao de arquiteto antiga (categoria comissao_rt, sem papel) pendente
-    // tambem entra na lista do arquiteto: so existe como conta a pagar.
-    if (_tipoVend === 'arquiteto') {
-        db.contas_pagar.filter(_ehComissaoRTAntiga).forEach(cp => {
-            const ped = db.pedidos.find(p => p.id == cp.pedido_id);
-            if (!ped || pedidos.includes(ped)) return;
-            if (filtroVend && cp.vendedor_id != filtroVend) return;
-            pedidos.push(ped);
-        });
-    }
-    return pedidos;
+// --- TELA VENDEDORES > COMISSOES ---
+// Filtros Vendedor (todos, vendedores e arquitetos) e Mes (data de instalacao); a tabela e os cartoes saem de
+// FinanceiroCore.linhasComissoes/totaisComissoes. Pagar = registrarPagamentoComissoes (movimento de saida, sem conta a pagar).
+const _COM_STATUS_ROTULO = { registrada: 'Registrada', pendente: 'Pendente', paga: 'Paga' };
+const _COM_STATUS_CLASSE = { registrada: 'fin-badge-gray', pendente: 'fin-badge-pending', paga: 'fin-badge-green' };
+let _comLinhasVisiveis = [];
+
+function _comMesLabel(m) {
+    const [a, mm] = m.split('-');
+    return ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'][Number(mm) - 1] + ' de ' + a;
 }
 
-function _ehComissaoRTAntiga(cp) {
-    return cp.categoria === 'comissao_rt' && !cp.papel_comissao && finAberta(cp) && cp.pedido_id != null;
+function _preencherFiltrosComissoes() {
+    const selV = document.getElementById('com-filtro-vend');
+    const selM = document.getElementById('com-filtro-mes');
+    if (!selV || !selM) return;
+    const atualV = selV.value, atualM = selM.value;
+    const lista = (db.vendedores || []).slice().sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+    selV.innerHTML = '<option value="">Todos</option>' + lista.map(v => `<option value="${escapeHtml(String(v.id))}">${escapeHtml(v.nome)}${tipoDoVendedor(v) === 'arquiteto' ? ' (arquiteto)' : ''}</option>`).join('');
+    selV.value = [...selV.options].some(o => o.value === atualV) ? atualV : '';
+    const meses = new Set();
+    FinanceiroCore.linhasComissoes(db.pedidos, db.vendedores, {}).forEach(l => { if (l.data) meses.add(l.data.slice(0, 7)); });
+    selM.innerHTML = '<option value="">Todos</option>' + [...meses].sort().reverse().map(m => `<option value="${m}">${_comMesLabel(m)}</option>`).join('');
+    selM.value = [...selM.options].some(o => o.value === atualM) ? atualM : '';
 }
 
-// Valor, % e nome da comissao pendente do pedido na aba aberta.
-function _dadosComissaoPendente(p) {
-    const c = CAMPOS_COMISSAO[_tipoVend];
-    if (FinanceiroCore.temComissao(p, _tipoVend) && !p[c.paga]) {
-        const v = db.vendedores.find(x => x.id == p[c.id]);
-        return { valor: p[c.valor] || 0, pct: p[c.pct] || 0, nome: v?.nome || p[c.nome] || '' };
-    }
-    const cp = _tipoVend === 'arquiteto' ? db.contas_pagar.find(x => _ehComissaoRTAntiga(x) && x.pedido_id == p.id) : null;
-    return cp ? { valor: Number(cp.valor) || 0, pct: p.rt_pct || 0, nome: cp.credor_nome || p.arquiteto_nome || '' } : { valor: 0, pct: 0, nome: '' };
+function _comLinhasFiltradas() {
+    const vendedorId = document.getElementById('com-filtro-vend')?.value || '';
+    const mes = document.getElementById('com-filtro-mes')?.value || '';
+    const linhas = FinanceiroCore.linhasComissoes(db.pedidos, db.vendedores, { vendedorId, mes });
+    linhas.sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')) || (b.pedidoId - a.pedidoId));
+    return linhas;
 }
 
-function renderComissoesPendentes() {
-    const tb = document.getElementById('tb-comissoes-pendentes');
+function renderComissoes() {
+    const tb = document.getElementById('tb-comissoes');
     if (!tb) return;
-    const c = CAMPOS_COMISSAO[_tipoVend];
-    const filtroVend = document.getElementById('filtro-vend-pendente')?.value || '';
-    const pedidos = _comissoesPendentesDoTipo(filtroVend);
-    pedidos.sort((a, b) => (b.data_instalado || b.id) - (a.data_instalado || a.id));
-    const totalEl = document.getElementById('total-comissoes-pendentes');
-    if (!pedidos.length) {
-        tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;padding:20px;">Nenhuma comissão pendente.</td></tr>';
-        if (totalEl) totalEl.textContent = 'R$ 0,00';
+    if (!document.getElementById('com-filtro-vend').options.length) _preencherFiltrosComissoes();
+    const pode = _permiteGerirComissoes();
+    const linhas = _comLinhasFiltradas();
+    _comLinhasVisiveis = linhas;
+    const tot = FinanceiroCore.totaisComissoes(linhas);
+    const cartoes = Object.values(tot.porVendedor).sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+    document.getElementById('com-cartoes').innerHTML = cartoes.map(t => {
+        const chave = String(t.vendedorId != null ? t.vendedorId : 'nome:' + t.nome);
+        return `<div class="card com-cartao" data-vend="${escapeHtml(chave)}" style="flex:1 1 240px;margin:0">
+            <h4 style="margin:0 0 8px;font-size:15px">${escapeHtml(t.nome || '—')}</h4>
+            <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span>Acumulado</span><strong class="com-acumulado">${_finBrl(t.acumulado)}</strong></div>
+            <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span>A pagar</span><strong class="com-apagar" style="color:#F43927">${_finBrl(t.aPagar)}</strong></div>
+            <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span>Pago</span><strong class="com-pago" style="color:var(--ok-text)">${_finBrl(t.pago)}</strong></div>
+            ${pode && t.aPagar > 0 ? `<button class="btn btn-sm btn-success" style="margin-top:8px;width:100%" onclick="pagarTodosPendentesComissao('${escapeHtml(chave)}')">Pagar todos os pendentes de ${escapeHtml(t.nome || '—')}</button>` : ''}
+        </div>`;
+    }).join('');
+    document.getElementById('com-sel-todos').style.visibility = pode ? 'visible' : 'hidden';
+    document.getElementById('com-sel-todos').checked = false;
+    document.getElementById('com-btn-pagar').style.display = pode ? '' : 'none';
+    if (!linhas.length) {
+        tb.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#999;padding:20px;">Nenhuma comissão encontrada.</td></tr>';
+        _comAtualizarSelecao();
         return;
     }
-    tb.innerHTML = pedidos.map(p => {
-        const d = _dadosComissaoPendente(p);
-        return `<tr>
-            <td style="font-size:12px">#${formatPedidoId(p.id)}</td>
-            <td>${escapeHtml(p.clienteNome || '—')}</td>
-            <td>${escapeHtml(d.nome || '—')}</td>
-            <td>R$ ${(p.valor || 0).toFixed(2)}</td>
-            <td><strong>R$ ${d.valor.toFixed(2)}</strong> <span style="color:#888;font-size:12px">(${d.pct}%)</span></td>
-            <td><button class="btn btn-sm btn-success" onclick="pagarComissao(${p.id})">✓ Pagar</button></td>
+    tb.innerHTML = linhas.map((l, i) => {
+        const acoes = pode && l.status === 'paga' ? menuAcoesHtml([{ icone: '↩', rotulo: 'Desfazer pagamento', onclick: `desfazerPagamentoComissaoTela(${l.pedidoId},'${l.papel}')` }]) : '';
+        return `<tr data-ped="${l.pedidoId}" data-papel="${l.papel}" data-status="${l.status}">
+            <td style="width:30px">${pode && l.status === 'pendente' ? `<input type="checkbox" class="com-sel" data-i="${i}" onchange="_comAtualizarSelecao()">` : ''}</td>
+            <td style="font-size:12px;white-space:nowrap">${l.data ? _finDataBR(l.data) : '—'}</td>
+            <td style="font-size:12px"><span style="cursor:pointer;color:var(--primary);font-weight:bold;text-decoration:underline" onclick="abrirPedidoDaComissao(${l.pedidoId})" title="Abrir pedido">#${formatPedidoId(l.pedidoId)}</span></td>
+            <td>${escapeHtml(l.clienteNome || '—')}</td>
+            <td>${escapeHtml(l.nome || '—')}${l.papel === 'arquiteto' ? ' <span style="color:#888;font-size:11px">(arquiteto)</span>' : ''}</td>
+            <td>${_finBrl(l.valorPedido)}</td>
+            <td>${l.pct}%</td>
+            <td><strong>${_finBrl(l.valor)}</strong></td>
+            <td><span class="fin-badge ${_COM_STATUS_CLASSE[l.status] || ''}">${_COM_STATUS_ROTULO[l.status] || l.status}</span></td>
+            <td style="font-size:12px;white-space:nowrap">${l.pagoEm ? _finDataBR(l.pagoEm) : '—'}</td>
+            <td class="td-acoes">${acoes}</td>
         </tr>`;
     }).join('');
-    const total = pedidos.reduce((s, p) => s + _dadosComissaoPendente(p).valor, 0);
-    if (totalEl) totalEl.textContent = `R$ ${total.toFixed(2)}`;
+    _comAtualizarSelecao();
 }
 
-function renderHistoricoComissoes() {
-    const tb = document.getElementById('tb-hist-comissoes');
-    if (!tb) return;
-    const c = CAMPOS_COMISSAO[_tipoVend];
-    const filtroVend = document.getElementById('filtro-vend-hist')?.value || '';
-    let pedidos = db.pedidos.filter(p => p[c.id] && (p[c.valor] || 0) > 0 && p[c.paga]);
-    if (filtroVend) pedidos = pedidos.filter(p => p[c.id] == filtroVend);
-    pedidos.sort((a, b) => (b[c.data] || 0) - (a[c.data] || 0));
-    if (!pedidos.length) {
-        tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:20px;">Nenhum pagamento registrado.</td></tr>';
-        return;
-    }
-    tb.innerHTML = pedidos.map(p => {
-        const v        = db.vendedores.find(x => x.id == p[c.id]);
-        const dataPgto = p[c.data] ? new Date(p[c.data]).toLocaleDateString('pt-BR') : '—';
-        const estornar = `<button class="btn btn-outline btn-sm" onclick="estornarComissaoAntiga(${p.id})" title="Desfazer este pagamento">↩ Estornar</button>`;
-        return `<tr>
-            <td style="font-size:12px;white-space:nowrap">${dataPgto}</td>
-            <td style="font-size:12px">#${formatPedidoId(p.id)}</td>
-            <td>${escapeHtml(p.clienteNome || '—')}</td>
-            <td>${escapeHtml(v?.nome || p[c.nome] || '—')}</td>
-            <td>R$ ${(p.valor || 0).toFixed(2)}</td>
-            <td><span class="badge-comissao-paga">R$ ${(p[c.valor] || 0).toFixed(2)} pago</span></td>
-            <td>${estornar}</td>
-        </tr>`;
-    }).join('');
+function _comSelecionadas() {
+    return [...document.querySelectorAll('#tb-comissoes .com-sel:checked')].map(cb => _comLinhasVisiveis[Number(cb.dataset.i)]).filter(Boolean);
 }
 
-// Conta a pagar ja paga da comissao do papel da aba neste pedido. Na aba do
-// arquiteto vale tambem a antiga 'comissao_rt' (sem papel).
-function _contaComissaoPaga(pedidoId) {
-    return db.contas_pagar.find(x => x.pedido_id == pedidoId && x.status === 'Pago' && (x.papel_comissao === _tipoVend ||
-        (_tipoVend === 'arquiteto' && !x.papel_comissao && x.categoria === 'comissao_rt')));
+function _comAtualizarSelecao() {
+    const sel = _comSelecionadas();
+    const total = sel.reduce((s, l) => s + l.valor, 0);
+    const el = document.getElementById('com-sel-resumo');
+    if (el) el.textContent = sel.length ? `${sel.length} selecionada(s): ${_finBrl(total)}` : '';
+    const btn = document.getElementById('com-btn-pagar');
+    if (btn) btn.disabled = !sel.length;
 }
 
-// Estorna a comissao paga antes de existir conta a pagar (so a marca no pedido):
-// o pedido volta a ter a comissao pendente, como no estorno de uma conta paga.
-async function estornarComissaoAntiga(pedidoId) {
+function comSelecionarTodos(marcado) {
+    document.querySelectorAll('#tb-comissoes .com-sel').forEach(cb => { cb.checked = marcado; });
+    _comAtualizarSelecao();
+}
+
+function abrirPedidoDaComissao(pedidoId) { editarPedido(pedidoId); }
+
+async function _pagarLinhasComissao(linhas, titulo) {
     if (!_permiteGerirComissoes()) { await showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
-    const ped = db.pedidos.find(p => p.id == pedidoId);
-    const c = CAMPOS_COMISSAO[_tipoVend];
-    if (!ped || !c || !ped[c.paga]) return;
-    if (!await showConfirm('Desfazer este pagamento? A comissão volta a ficar pendente.', '↩', 'Desfazer pagamento', 'Cancelar')) return;
-    const res = desfazerPagamentoComissao({ pedidoId, papel: _tipoVend });
-    if (!res.ok) { await showAlert(res.erro, '⚠️'); return; }
-    salvarERecarregar('Pagamento desfeito.');
-}
-
-// Paga a comissao do papel da aba aberta; a do outro papel no mesmo pedido fica.
-// A comissao e uma conta a pagar: aqui so localizamos a conta e abrimos a baixa.
-async function pagarComissao(pedidoId) {
-    const ped = db.pedidos.find(p => p.id == pedidoId);
-    if (!ped) return;
-    await _baixarComissoes([ped], 'Pagar comissão');
-}
-
-// Paga as comissoes pendentes do papel da aba (registro no pedido, sem conta a pagar): pede conta e data.
-async function _baixarComissoes(pedidos, titulo) {
-    if (!_permiteGerirComissoes()) { await showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
-    const papel = _tipoVend, c = CAMPOS_COMISSAO[papel];
-    const alvos = pedidos.filter(p => FinanceiroCore.temComissao(p, papel) && (p[FinanceiroCore.CAMPOS_COMISSAO_REG[papel].status] || FinanceiroCore.statusEsperadoComissao(p, papel)) === 'pendente');
+    const alvos = linhas.filter(l => l.status === 'pendente');
     if (!alvos.length) { await showAlert('Nenhuma comissão pendente para pagar.', 'ℹ️'); return; }
-    const r = await abrirModalPagarComissoes({ titulo, itens: alvos.map(p => ({ descricao: `#${formatPedidoId(p.id)} — ${p[c.nome] || ''}`, valor: p[c.valor] })) });
+    const r = await abrirModalPagarComissoes({ titulo, itens: alvos.map(l => ({ descricao: `#${formatPedidoId(l.pedidoId)} — ${l.nome}`, valor: l.valor })) });
     if (!r) return;
-    const res = registrarPagamentoComissoes({ itens: alvos.map(p => ({ pedidoId: p.id, papel })), contaId: r.contaId, data: r.data });
+    const res = registrarPagamentoComissoes({ itens: alvos.map(l => ({ pedidoId: l.pedidoId, papel: l.papel })), contaId: r.contaId, data: r.data });
     if (!res.ok) { await showAlert(res.erro, '⚠️'); return; }
     salvarERecarregar(res.pagos > 1 ? 'Comissões pagas!' : 'Comissão paga!');
 }
 
-async function pagarTodasFiltradas() {
-    const filtroVend = document.getElementById('filtro-vend-pendente')?.value || '';
-    const pedidos = _comissoesPendentesDoTipo(filtroVend);
-    if (!pedidos.length) { await showAlert('Nenhuma comissão pendente para pagar.', 'ℹ️'); return; }
-    await _baixarComissoes(pedidos, `Pagar ${pedidos.length} comissão(ões)`);
+function registrarPagamentoComissoesSelecionadas() { return _pagarLinhasComissao(_comSelecionadas(), 'Registrar pagamento'); }
+
+function pagarTodosPendentesComissao(chave) {
+    const linhas = _comLinhasVisiveis.filter(l => String(l.vendedorId != null ? l.vendedorId : 'nome:' + l.nome) === chave && l.status === 'pendente');
+    const nome = linhas[0] ? linhas[0].nome : '';
+    return _pagarLinhasComissao(linhas, `Pagar todos os pendentes de ${nome}`);
+}
+
+async function desfazerPagamentoComissaoTela(pedidoId, papel) {
+    if (!_permiteGerirComissoes()) { await showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
+    if (!await showConfirm('Desfazer este pagamento? A comissão volta a ficar pendente.', '↩', 'Desfazer pagamento', 'Cancelar')) return;
+    const res = desfazerPagamentoComissao({ pedidoId, papel });
+    if (!res.ok) { await showAlert(res.erro, '⚠️'); return; }
+    salvarERecarregar('Pagamento desfeito.');
 }
 
 function mostrarTabVendedores(tab) {
     if (_curTabVend !== tab) { _prevTabVend = _curTabVend; _curTabVend = tab; }
-    document.querySelectorAll('#tab-vend-lista,#tab-vend-pendentes,#tab-vend-historico').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('#tab-vend-lista,#tab-vend-comissoes').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.vend-tab-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('tab-vend-' + tab)?.classList.add('active');
     document.querySelector(`.vend-tab-btn[data-tab="${tab}"]`)?.classList.add('active');
     _vendLembrarNaUrl('aba', tab);
     if (tab === 'lista')     renderTabelaVendedores();
-    if (tab === 'pendentes') renderComissoesPendentes();
-    if (tab === 'historico') renderHistoricoComissoes();
+    if (tab === 'comissoes') renderComissoes();
+    document.querySelector('.vend-tipo-nav')?.classList.toggle('vend-oculto', tab === 'comissoes');
     _tabBackBtn('.vend-sub-nav', _prevTabVend, () => mostrarTabVendedores(_prevTabVend));
 }
 
@@ -14052,7 +14027,8 @@ document.addEventListener('DOMContentLoaded', () => {
         preencherSelectUsuarios('vend-usuario', '— Sem conta de acesso —');
         const url = new URLSearchParams(window.location.search);
         const aba = url.get('aba');
-        if (['lista', 'pendentes', 'historico'].includes(aba)) _curTabVend = aba;
+        if (['lista', 'comissoes'].includes(aba)) _curTabVend = aba;
+        else if (['pendentes', 'historico'].includes(aba)) _curTabVend = 'comissoes'; // links antigos
         mostrarTipoVendedores(url.get('tipo') === 'arquiteto' ? 'arquiteto' : 'vendedor');
     }
 

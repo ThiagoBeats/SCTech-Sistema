@@ -36,8 +36,9 @@ test('instalar deixa uma comissao pendente por papel, sem criar conta a pagar', 
 
 test('pagar comissao na tela de vendedores gera a saida e marca o pedido', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_vend: VEND, sc_contas_fin: CONTAS, sc_ped: [pedido({ status: 'Instalado' })] });
-    await page.goto(BASE + '/vendedores.html?aba=pendentes');
-    await page.click('#tb-comissoes-pendentes button:has-text("Pagar")');
+    await page.goto(BASE + '/vendedores.html?aba=comissoes');
+    await page.locator('#tb-comissoes tr[data-papel="vendedor"] .com-sel').check();
+    await page.locator('#com-btn-pagar').click();
     const modal = page.locator('#com-pag-modal');
     await expect(modal).toBeVisible();
     await modal.locator('#com-pag-data').fill('2026-11-05');
@@ -52,34 +53,37 @@ test('pagar comissao na tela de vendedores gera a saida e marca o pedido', async
     expect(ped.comissao_paga).toBe(true);
     expect(ped.comissao_data_pgto).toBe(new Date('2026-11-05T12:00:00').getTime());
     expect(ped.arq_comissao_paga, 'a do arquiteto continua').toBeFalsy();
-    await page.click('.vend-tab-btn[data-tab="historico"]');
-    await expect(page.locator('#tb-hist-comissoes')).toContainText('R$ 50.00');
+    await expect(page.locator('#tb-comissoes tr[data-papel="vendedor"]')).toContainText('Paga');
+    await expect(page.locator('#tb-comissoes tr[data-papel="vendedor"]')).toContainText('05/11/2026');
+    await expect(page.locator('#tb-comissoes tr[data-papel="vendedor"]')).toContainText('R$ 50,00');
 });
 
 test('a comissao nao aparece em A Pagar; pagar na tela de vendedores tira da lista de pendentes', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_vend: VEND, sc_contas_fin: CONTAS, sc_ped: [pedido({ status: 'Instalado' })] });
-    await page.goto(BASE + '/vendedores.html?aba=pendentes');
-    await expect(page.locator('#tb-comissoes-pendentes')).toContainText('R$ 50.00');
+    await page.goto(BASE + '/vendedores.html?aba=comissoes');
+    await expect(page.locator('#tb-comissoes tr:has-text("Bruno")')).toContainText('Pendente');
     await page.evaluate(() => { gerarComissoesPedido(db.pedidos[0]); syncDB(); });
     await page.goto(BASE + '/financeiro.html');
     await abrirLancamentos(page, 'pagar');
     await expect(page.locator('#tb-contas-pagar tr', { hasText: 'Bruno' })).toHaveCount(0);
-    await page.goto(BASE + '/vendedores.html?aba=pendentes');
-    await page.click('#tb-comissoes-pendentes tr:has-text("Bruno") button:has-text("Pagar")');
+    await page.goto(BASE + '/vendedores.html?aba=comissoes');
+    await page.locator('#tb-comissoes tr:has-text("Bruno") .com-sel').check();
+    await page.locator('#com-btn-pagar').click();
     await page.locator('#com-pag-conta').selectOption('11');
     await page.locator('#com-pag-ok').click();
     await expect.poll(async () => (await lerChave(page, 'sc_ped'))[0].comissao_paga).toBe(true);
-    await page.goto(BASE + '/vendedores.html?aba=pendentes');
-    await expect(page.locator('#tb-comissoes-pendentes')).not.toContainText('R$ 50.00');
+    await page.goto(BASE + '/vendedores.html?aba=comissoes');
+    await expect(page.locator('#tb-comissoes tr:has-text("Bruno")')).toContainText('Paga');
+    await expect(page.locator('#tb-comissoes tr:has-text("Bruno") .com-sel')).toHaveCount(0);
 });
 
 test('pagar todas da pessoa', async ({ page }) => {
     const peds = [pedido({ id: 26401, status: 'Instalado' }), pedido({ id: 26402, status: 'Instalado', vendedor_id: 9, vendedor_nome: 'Outro', comissao_valor: 70 }),
         pedido({ id: 26403, status: 'Instalado', comissao_valor: 30 })];
     await entrar(page, BASE, { sc_cli: CLI, sc_vend: [...VEND, { id: 9, nome: 'Outro', comissao_pct: 7, tipo: 'vendedor' }], sc_contas_fin: CONTAS, sc_ped: peds });
-    await page.goto(BASE + '/vendedores.html?aba=pendentes');
-    await page.selectOption('#filtro-vend-pendente', '2');
-    await page.click('button:has-text("Pagar Todas")');
+    await page.goto(BASE + '/vendedores.html?aba=comissoes');
+    await page.selectOption('#com-filtro-vend', '2');
+    await page.click('button:has-text("Pagar todos os pendentes de Bruno")');
     const modal = page.locator('#com-pag-modal');
     await expect(modal).toBeVisible();
     await expect(modal.locator('#com-pag-total')).toHaveText('R$ 80,00');
@@ -116,8 +120,10 @@ test('pagar comissao exige permissao (vendedores ou contas a pagar)', async ({ p
         u[0].permissoes_extras = { vendedores: { nivel: 'visualizar', acoes_restritas: [] }, 'financeiro.pagar': { nivel: 'visualizar', acoes_restritas: [] } };
         localStorage.setItem('sc_usr', JSON.stringify(u));
     });
-    await page.goto(BASE + '/vendedores.html?aba=pendentes');
-    await page.evaluate(() => { pagarComissao(26400); });
+    await page.goto(BASE + '/vendedores.html?aba=comissoes');
+    await expect(page.locator('#com-btn-pagar')).toBeHidden();
+    await expect(page.locator('.com-sel')).toHaveCount(0);
+    await page.evaluate(() => { pagarTodosPendentesComissao('2'); });
     await expect(page.locator('#sc-modal-msg')).toContainText('permissão');
     await expect(page.locator('#com-pag-modal')).toHaveCount(0);
     expect(((await lerChave(page, 'sc_mov_fin')) || [])).toHaveLength(0);

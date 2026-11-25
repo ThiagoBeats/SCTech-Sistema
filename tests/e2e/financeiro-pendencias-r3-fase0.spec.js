@@ -58,14 +58,15 @@ test('cancelar a janela de comissao deixa a comissao pendente', async ({ page })
     await entrar(page, BASE, { sc_cli: CLI, sc_vend: [{ id: 2, nome: 'Bruno', comissao_pct: 5, tipo: 'vendedor' }],
         sc_contas_fin: [{ id: 1, nome: 'Banco A', tipo: 'banco', saldo_inicial: 0, data_saldo_inicial: '2026-01-01', ativo: true }],
         sc_ped: [ped({ status: 'Instalado', valor_recebido: 1000, vendedor_id: 2, vendedor_nome: 'Bruno', comissao_valor: 50, comissao_pct: 5, comissao_status: 'pendente' })] });
-    await page.goto(BASE + '/vendedores.html?aba=pendentes');
-    await expect(page.locator('#tb-comissoes-pendentes button', { hasText: 'Pagar' })).toBeVisible();
+    await page.goto(BASE + '/vendedores.html?aba=comissoes');
+    await expect(page.locator('#tb-comissoes .com-sel')).toBeVisible();
     const antes = await page.evaluate(() => [localStorage.getItem('sc_cp'), localStorage.getItem('sc_ped'), localStorage.getItem('sc_mov_fin')]);
-    await page.locator('#tb-comissoes-pendentes button', { hasText: 'Pagar' }).click();
+    await page.locator('#tb-comissoes .com-sel').check();
+    await page.locator('#com-btn-pagar').click();
     await expect(page.locator('#com-pag-modal')).toBeVisible();
     await page.locator('#com-pag-cancel').click();
     await expect(page.locator('#com-pag-modal')).toHaveCount(0);
-    await expect(page.locator('#tb-comissoes-pendentes button', { hasText: 'Pagar' })).toBeVisible();
+    await expect(page.locator('#tb-comissoes .com-sel')).toBeVisible();
     expect(await page.evaluate(() => [localStorage.getItem('sc_cp'), localStorage.getItem('sc_ped'), localStorage.getItem('sc_mov_fin')])).toEqual(antes);
     expect((await lerChave(page, 'sc_ped'))[0].comissao_status).toBe('pendente');
 });
