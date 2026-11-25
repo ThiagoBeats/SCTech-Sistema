@@ -3743,7 +3743,9 @@ async function excluirPedido(id) {
         return;
     }
     const pedExc = db.pedidos.find(p => p.id == id);
-    if (pedExc && (pedExc.comissao_status === 'paga' || pedExc.arq_comissao_status === 'paga')) {
+    // Status calculado (cobre pedido antigo sem status gravado e comissao paga ou aberta em Contas a Pagar).
+    const comPaga = papel => { const s = FinanceiroCore.statusEsperadoComissao(pedExc, papel, db.contas_pagar); return s === 'paga' || s === 'em_cp'; };
+    if (pedExc && (comPaga('vendedor') || comPaga('arquiteto'))) {
         await showAlert('Este pedido tem comissão paga. Desfaça o pagamento em Vendedores › Comissões antes de excluir.', '⚠️');
         return;
     }

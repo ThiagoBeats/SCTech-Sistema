@@ -3070,7 +3070,8 @@ td { transition: background-color .15s ease; }
 .kanban-card, .imp-celula, .kit-celula, .etq-chip, .etq-el, .dl-paleta { transition: border-color .15s ease; }
 .btn-ver-senha { transition: opacity .15s ease; }
 .link-galeria { transition: transform .15s ease; }
-.est-tec-linha > @media (prefers-reduced-motion: reduce) { .nav-selo, .sidebar-rodape .sidebar-sair { transition: none; } }
+.est-tec-linha > td { transition: background-color .15s ease; }
+@media (prefers-reduced-motion: reduce) { .nav-selo, .sidebar-rodape .sidebar-sair { transition: none; } }
 td { transition: background-color .15s ease; }
 .carrinhos-lista-item { transition: border-color .15s ease, background-color .15s ease; }
 
