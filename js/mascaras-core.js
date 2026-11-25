@@ -17,6 +17,7 @@
         if (n === null || n === undefined || n === '') return '';
         const v = Number(n);
         if (!Number.isFinite(v)) return '';
+        if (Math.abs(v) >= 1e13) return '';
         const cent = Math.round(Math.abs(v) * 100 + 1e-9);
         const txt = formatarMoedaDigitos(String(cent)) || 'R$ 0,00';
         return (v < 0 && cent > 0 ? '-' : '') + txt;
@@ -33,7 +34,7 @@
         if (vir >= 0 && pon >= 0) t = vir > pon ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, '');
         else if (vir >= 0) t = t.replace(',', '.');
         else if (pon >= 0) {
-            if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
+            if (/^[1-9]\d{0,2}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
         }
         if (!/^\d+(\.\d+)?$/.test(t)) return null;
         const v = parseFloat(t);
@@ -89,12 +90,20 @@
         return { texto: out.join(''), cursor: cs };
     }
 
+    // Texto que ficaria no lugar de `data` se ele fosse digitado logo depois de `antes` (maiuscula automatica).
+    // Usado pelo script global para trocar so o trecho inserido, sem reescrever o campo.
+    function inserirCapitalizado(antes, data) {
+        const a = String(antes == null ? '' : antes), x = String(data == null ? '' : data);
+        return capitalizar(a + x, a.length + x.length).texto.slice(a.length);
+    }
+
     const norm = s => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
     // Trechos distintivos: valem como pedaco do identificador.
     const SUBSTR = ['email', 'senha', 'password', 'telefone', 'celular', 'whats', 'codigo', 'cnpj', 'cpf', 'digitavel',
-        'agencia', 'iban', 'usuario', 'token', 'busca', 'search', 'filtro', 'documento', 'numero_conta', 'conta_numero'];
+        'agencia', 'iban', 'usuario', 'token', 'busca', 'search', 'filtro', 'documento', 'numero_conta', 'conta_numero', 'filter', 'colar', 'nfe'];
     // Curtos/ambiguos: so valem como palavra inteira (separada por - _ espaco ou maiuscula).
-    const TOKENS = ['url', 'site', 'cep', 'doc', 'tel', 'cod', 'sku', 'chave', 'pix', 'placa', 'login', 'cor'];
+    const TOKENS = ['url', 'site', 'cep', 'doc', 'tel', 'cod', 'sku', 'chave', 'pix', 'placa', 'login', 'cor',
+        'ref', 'referencia', 'lote', 'medida', 'ie', 'num', 'numero', 'chave'];
 
     function ehExcluidoPorNome(valor) {
         if (!valor) return false;
@@ -129,7 +138,7 @@
         return !(ehExcluidoPorNome(f.id) || ehExcluidoPorNome(f.name));
     }
 
-    const api = { formatarMoedaDigitos, formatarMoeda, lerMoeda, capitalizar, aceitaMaiuscula };
+    const api = { formatarMoedaDigitos, formatarMoeda, lerMoeda, capitalizar, inserirCapitalizado, aceitaMaiuscula };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.MascarasCore = api;
 

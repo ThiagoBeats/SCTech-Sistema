@@ -72,3 +72,18 @@ test('aceitaMaiuscula', () => {
     assert.strictEqual(M.aceitaMaiuscula(c({ id: 'corte-descricao' })), true);
     assert.strictEqual(M.aceitaMaiuscula({ tag: 'SELECT' }), false);
 });
+
+test('inserirCapitalizado, exclusoes extras e lerMoeda sem zero a esquerda', () => {
+    assert.strictEqual(M.inserirCapitalizado('', 'maria. ana'), 'Maria. Ana');
+    assert.strictEqual(M.inserirCapitalizado('Oi. ', 'ana'), 'Ana');
+    assert.strictEqual(M.inserirCapitalizado('Oi', ' ana'), ' ana');
+    assert.strictEqual(M.inserirCapitalizado('Av. ', 'das'), 'das');
+    assert.strictEqual(M.inserirCapitalizado('x@', 'y'), 'y');
+    const c = (id) => ({ tag: 'INPUT', type: 'text', id, name: '', autocomplete: '', inputmode: '', dataset: {} });
+    ['imp-colar', 'cat-ref', 'a-tec-ref-1', 'referencia', 'balanco-filter-nome', 'est-lote', 'kp-medida', 'forn-ie', 'forn-num', 'cli-numero',
+        'est-filtro', 'x-busca', 'nf-chave', 'nfe-xml'].forEach(i => assert.strictEqual(M.aceitaMaiuscula(c(i)), false, i));
+    assert.strictEqual(M.aceitaMaiuscula(c('cli-nome')), true);
+    assert.strictEqual(M.aceitaMaiuscula(c('nf-cancel-motivo')), true);
+    assert.strictEqual(M.lerMoeda('0.500'), 0.5);
+    assert.strictEqual(M.formatarMoeda(1e21), '');
+});

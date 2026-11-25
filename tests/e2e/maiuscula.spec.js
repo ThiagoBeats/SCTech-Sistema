@@ -80,3 +80,27 @@ test('valor definido por codigo nao e alterado; cursor mantido no meio', async (
     const pos = await page.evaluate(() => document.getElementById('cli-nome').selectionStart);
     expect(pos).toBe(2);
 });
+
+test('apagar nao recapitaliza; desfazer funciona; colar fica como colado; campo de referencia nao capitaliza', async ({ page }) => {
+    await abrir(page, 'clientes.html', '#cli-nome');
+    await digitar(page, '#cli-nome', 'ana');
+    await expect(page.locator('#cli-nome')).toHaveValue('Ana');
+    await page.keyboard.press('Home');
+    await page.keyboard.press('Delete');
+    await page.keyboard.type('b');
+    await expect(page.locator('#cli-nome')).toHaveValue('Bna');
+    await page.keyboard.press('Home');
+    await page.keyboard.press('Delete');
+    await expect(page.locator('#cli-nome')).toHaveValue('na');
+    await page.keyboard.press('Control+z');
+    await expect(page.locator('#cli-nome')).toHaveValue('Bna');
+    await page.locator('#cli-nome').fill('');
+    await page.evaluate(() => { const e = document.getElementById('cli-nome'); e.focus(); });
+    await page.evaluate(() => {
+        const e = document.getElementById('cli-nome');
+        const dt = new DataTransfer(); dt.setData('text/plain', 'colado minusculo');
+        e.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+        e.value = 'colado minusculo';
+    });
+    await expect(page.locator('#cli-nome')).toHaveValue('colado minusculo');
+});
