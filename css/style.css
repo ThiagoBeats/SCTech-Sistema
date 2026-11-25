@@ -113,7 +113,7 @@ h5, h6 { font-weight: 600; }
     border-bottom: none;
     display: flex; flex-direction: column; align-items: stretch;
     overflow-x: hidden; overflow-y: auto;
-    transition: width .2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: width .2s cubic-bezier(.2, .8, .2, 1), padding .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s ease;
     padding: 10px 14px 16px;
     z-index: 100;
 }
@@ -122,14 +122,14 @@ h5, h6 { font-weight: 600; }
    dos ícones. Fixado: a barra fica aberta e empurra a tela (fluxo normal). */
 html[data-sidebar="collapsed"] .sidebar {
     position: fixed; left: 0; top: var(--topbar-h); bottom: 0; height: auto;
-    width: var(--sidebar-w-collapsed); padding: 10px 8px 16px;
+    width: var(--sidebar-w-collapsed); padding: 10px 16.5px 16px;
 }
 html[data-sidebar="collapsed"] .main { margin-left: var(--sidebar-w-collapsed); }
-html[data-sidebar="collapsed"] .sidebar:not(:hover) .nav-text,
-html[data-sidebar="collapsed"] .sidebar:not(:hover) .logo h2,
-html[data-sidebar="collapsed"] .sidebar:not(:hover) .sidebar-pin { display: none; }
-html[data-sidebar="collapsed"] .sidebar:not(:hover) .logo { justify-content: center; padding-left: 0; padding-right: 0; }
-html[data-sidebar="collapsed"] .sidebar:not(:hover) .nav-item { width: 46px; height: 46px; margin: 2px auto; padding: 0; justify-content: center; }
+/* Fechada: o item continua com a mesma altura e margem da aberta; só a largura
+   (da barra) muda. Os textos ficam no layout e somem por max-width/opacity. */
+html[data-sidebar="collapsed"] .sidebar:not(:hover) .nav-text { max-width: 0; opacity: 0; margin-left: 0; }
+html[data-sidebar="collapsed"] .sidebar:not(:hover) .nav-item { padding: 0 0 0 13.5px; }
+html[data-sidebar="collapsed"] .sidebar:not(:hover) .sidebar-pin { width: 0; margin-left: -4px; opacity: 0; pointer-events: none; visibility: hidden; transition: width .2s cubic-bezier(.2, .8, .2, 1), margin .2s cubic-bezier(.2, .8, .2, 1), opacity .15s ease, visibility 0s linear .2s; }
 html[data-sidebar="collapsed"] .sidebar:hover {
     width: var(--sidebar-w); padding: 10px 14px 16px;
     box-shadow: 8px 0 32px rgba(0, 0, 0, 0.28);
@@ -140,9 +140,9 @@ html[data-sidebar="collapsed"] .sidebar:hover {
     margin-left: 4px; flex-shrink: 0;
     width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
     border: none; border-radius: 8px; background: none; cursor: pointer;
-    font-size: 15px; line-height: 1; padding: 0;
+    font-size: 15px; line-height: 1; padding: 0; overflow: hidden;
     opacity: .45; filter: grayscale(1); transform: rotate(45deg);
-    transition: opacity .15s ease, filter .15s ease, transform .15s ease, background-color .15s ease;
+    transition: opacity .15s ease, filter .15s ease, transform .15s ease, background-color .15s ease, width .2s cubic-bezier(.2, .8, .2, 1), margin .2s cubic-bezier(.2, .8, .2, 1);
 }
 .sidebar-pin:hover { background: rgba(0, 0, 0, 0.07); opacity: 1; }
 .sidebar-pin.fixado { opacity: 1; filter: none; transform: none; }
@@ -176,11 +176,16 @@ html[data-sidebar="collapsed"] .sidebar:not(:hover) .sidebar-logo-chip .sidebar-
     min-height: 0; overflow-y: auto; padding: 8px 0; gap: 4px;
 }
 .nav-item {
-    padding: 10px 16px; cursor: pointer; border-radius: 12px;
+    height: 46px; margin: 2px 0; padding: 0 16px; cursor: pointer; border-radius: 12px;
     font-weight: 600; text-decoration: none; color: var(--sidebar-fg);
-    display: flex; flex-direction: row; align-items: center; gap: 14px;
-    white-space: nowrap; font-size: 14px;
-    transition: background-color .15s ease, color .15s ease, box-shadow .15s ease;
+    display: flex; flex-direction: row; align-items: center; gap: 0;
+    white-space: nowrap; font-size: 14px; flex-shrink: 0;
+    transition: background-color .15s ease, color .15s ease, box-shadow .15s ease, padding .2s cubic-bezier(.2, .8, .2, 1);
+}
+.nav-item .nav-icon-svg { flex-shrink: 0; }
+.nav-item .nav-text {
+    overflow: hidden; max-width: 200px; margin-left: 14px; opacity: 1;
+    transition: max-width .2s cubic-bezier(.2, .8, .2, 1), margin .2s cubic-bezier(.2, .8, .2, 1), opacity .15s ease;
 }
 .nav-item:hover {
     background-color: rgba(0, 0, 0, 0.05);
@@ -204,8 +209,12 @@ button.nav-item { border: none; background: none; font-family: inherit; text-ali
 }
 .sidebar-rodape .sidebar-sair { flex: 1; min-width: 0; }
 .sidebar-rodape .sidebar-sair:hover { background: rgba(244, 57, 39, 0.1); color: #C62A19; }
-html[data-sidebar="collapsed"] .sidebar:not(:hover) .sidebar-rodape { justify-content: center; }
-html[data-sidebar="collapsed"] .sidebar:not(:hover) .sidebar-rodape .sidebar-sair { flex: 0 0 auto; }
+
+/* Sem movimento: a largura final aparece direto */
+@media (prefers-reduced-motion: reduce) {
+    .sidebar, .nav-item, .nav-item .nav-text, .sidebar-pin,
+    html[data-sidebar="collapsed"] .sidebar:not(:hover) .sidebar-pin { transition: none; }
+}
 
 /* ── BARRA SUPERIOR ───────────────────────────────────────────── */
 body:has(> #main-sidebar) { padding-top: var(--topbar-h); }
@@ -1196,8 +1205,9 @@ html[data-theme="dark"] .fin-periodo-btn.active { background: var(--secondary); 
     /* Em telas estreitas a sidebar sempre recolhe (só ícones) para não tomar
        espaço horizontal precioso — independente da preferência salva. */
     .sidebar:not(:hover) { width: var(--sidebar-w-collapsed) !important; }
-    .sidebar:not(:hover) .nav-text, .sidebar:not(:hover) .logo h2, .sidebar:not(:hover) .sidebar-pin { display: none; }
-    .sidebar:not(:hover) .logo, .sidebar:not(:hover) .nav-item { justify-content: center; padding-left: 0; padding-right: 0; }
+    .sidebar:not(:hover) { padding: 10px 16.5px 16px; }
+    .sidebar:not(:hover) .nav-text { max-width: 0; opacity: 0; margin-left: 0; }
+    .sidebar:not(:hover) .nav-item { padding: 0 0 0 13.5px; }
     /* Aqui o menu é sempre solto: flutua e abre por cima ao tocar/passar. */
     .sidebar { position: fixed; left: 0; top: var(--topbar-h); bottom: 0; height: auto; }
     .sidebar:hover { width: var(--sidebar-w) !important; box-shadow: 8px 0 32px rgba(0, 0, 0, 0.28); }
