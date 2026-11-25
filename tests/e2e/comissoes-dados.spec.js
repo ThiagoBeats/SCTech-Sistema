@@ -245,3 +245,28 @@ test('Fluxo: comissao pendente aparece como saida prevista no ultimo dia do mes'
     await expect(linha).toContainText('30/11');
     await expect(page.locator('#fluxo-linhas tr.fluxo-linha', { hasText: 'Comissão Studio M — Pedido #26600' })).toHaveCount(1);
 });
+
+test('conta de comissao antiga com baixa parcial: fica Em Contas a Pagar (nao se paga em Vendedores); paga a conta vira Paga; sem a conta volta a Pendente', async ({ page }) => {
+    const cp = { id: 701, pedido_id: 26600, papel_comissao: 'vendedor', categoria: 'comissao', descricao: 'Comissão 5% — Bruno', credor_nome: 'Bruno', valor: 50, status: 'Pendente', data_vencimento: '2026-10-25', tipo: 'variavel', vendedor_id: 2 };
+    const mov = { id: 9, conta_id: 1, data: '2026-11-01', sentido: 'saida', valor: 20, origem: 'cp', origem_id: 701, grupo_id: null, descricao: 'Parcial' };
+    await abrir(page, { sc_ped: [pedido({ arq_id: null, arq_nome: '', arq_comissao_valor: 0 })], sc_cp: [cp], sc_mov_fin: [mov] }, '/vendedores.html?aba=comissoes');
+    await page.evaluate(() => localStorage.removeItem('sc_comissao_v2'));
+    await page.reload();
+    expect((await ler(page, 'sc_cp')).map(c => c.id)).toEqual([701]);
+    expect((await ler(page, 'sc_ped'))[0].comissao_status).toBe('em_cp');
+    const linha = page.locator('#tb-comissoes tr[data-ped="26600"]');
+    await expect(linha).toContainText('Em Contas a Pagar');
+    await expect(linha.locator('.com-sel')).toHaveCount(0);
+    await expect(page.locator('.com-cartao .com-apagar')).toHaveText('R$ 50,00');
+    await expect(page.locator('.com-cartao button', { hasText: 'Pagar todos' })).toHaveCount(0);
+    const r = await page.evaluate(() => registrarPagamentoComissoes({ itens: [{ pedidoId: 26600, papel: 'vendedor' }], contaId: 1, data: '2026-11-10' }));
+    expect(r.ok).toBe(false);
+    expect((await ler(page, 'sc_mov_fin'))).toHaveLength(1);
+    // conta paga: a comissao fica paga
+    await page.evaluate(() => { baixarContasPagar('2026-11-10', [{ id: 701, conta_id: 1 }]); syncDB(); });
+    expect((await ler(page, 'sc_ped'))[0]).toMatchObject({ comissao_status: 'paga', comissao_paga: true });
+    // conta que sai: volta a pendente (ao abrir o app)
+    await page.evaluate(() => { const p = db.pedidos[0]; p.comissao_status = 'em_cp'; p.comissao_paga = false; db.contas_pagar = []; syncDB(); });
+    await page.reload();
+    expect((await ler(page, 'sc_ped'))[0].comissao_status).toBe('pendente');
+});

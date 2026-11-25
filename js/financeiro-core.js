@@ -306,23 +306,28 @@
 
     // Status que a comissao deve ter agora: paga fica paga; senao pendente no Instalado,
     // registrada nas etapas aprovadas, e nada em Orcamento (ainda nao aprovado).
-    function statusEsperadoComissao(ped, papel) {
+    // Com `contasPagar`: enquanto houver conta de comissao em aberto do papel (comissao antiga, com baixa parcial)
+    // a situacao e 'em_cp' (Em Contas a Pagar): nao se paga por Vendedores; conta toda paga = 'paga'.
+    function statusEsperadoComissao(ped, papel, contasPagar) {
         if (!temComissao(ped, papel)) return null;
         const c = CAMPOS_COMISSAO[papel], r = CAMPOS_COMISSAO_REG[papel];
-        if (ped[c.paga] || ped[r.status] === 'paga') return 'paga';
+        const cps = (contasPagar || []).filter(cp => cp && cp.pedido_id == ped.id && cp.status !== 'Cancelado' && papelDaContaComissao(cp) === papel);
+        if (cps.some(cp => cp.status !== 'Pago')) return 'em_cp';
+        if (ped[c.paga] || ped[r.status] === 'paga' || cps.length) return 'paga';
         if (_instalado(ped.status)) return 'pendente';
         return _aprovado(ped.status) ? 'registrada' : null;
     }
 
     // Poe o status certo em cada comissao do pedido. Devolve as mudancas [{papel, de, para}].
     // `historico(papel, de, para)` (opcional) devolve a linha {em, por, porNome, acao, detalhe} a anotar.
-    function sincronizarStatusComissoes(ped, historico) {
+    function sincronizarStatusComissoes(ped, historico, contasPagar) {
         const mudou = [];
         Object.keys(CAMPOS_COMISSAO).forEach(papel => {
             const r = CAMPOS_COMISSAO_REG[papel];
             const de = ped[r.status] || null;
-            const para = statusEsperadoComissao(ped, papel);
+            const para = statusEsperadoComissao(ped, papel, contasPagar);
             if (de === para) return;
+            if (para === 'paga' && !ped[CAMPOS_COMISSAO[papel].paga]) ped[CAMPOS_COMISSAO[papel].paga] = true;
             if (para === null) delete ped[r.status]; else ped[r.status] = para;
             if (historico && para) {
                 const h = historico(papel, de, para);
@@ -374,13 +379,13 @@
 
     // Linhas da tela de comissoes: uma por comissao do pedido (papel). `mes` 'AAAA-MM' (data de instalacao).
     function linhasComissoes(pedidos, vendedores, opcoes) {
-        const { vendedorId, mes } = opcoes || {};
+        const { vendedorId, mes, contasPagar } = opcoes || {};
         const out = [];
         (pedidos || []).forEach(p => {
             Object.keys(CAMPOS_COMISSAO).forEach(papel => {
                 if (!temComissao(p, papel)) return;
                 const c = CAMPOS_COMISSAO[papel], r = CAMPOS_COMISSAO_REG[papel];
-                const status = p[r.status] || statusEsperadoComissao(p, papel);
+                const status = p[r.status] || statusEsperadoComissao(p, papel, contasPagar);
                 if (!status) return;
                 const id = p[c.id] != null && p[c.id] !== '' ? p[c.id] : null;
                 if (vendedorId != null && vendedorId !== '' && String(id) !== String(vendedorId)) return;
@@ -399,9 +404,11 @@
 
     // Cartoes: Acumulado = pendente + paga; A pagar = pendente; Pago = paga. Geral e por vendedor.
     function totaisComissoes(linhas) {
-        const zero = () => ({ acumulado: 0, aPagar: 0, pago: 0 });
+        // aPagar inclui o que esta em Contas a Pagar; pagavel = so o pendente (o que Vendedores paga).
+        const zero = () => ({ acumulado: 0, aPagar: 0, pago: 0, pagavel: 0 });
         const soma = (t, l) => {
-            if (l.status === 'pendente') { t.aPagar += l.valor; t.acumulado += l.valor; }
+            if (l.status === 'pendente') { t.aPagar += l.valor; t.pagavel += l.valor; t.acumulado += l.valor; }
+            else if (l.status === 'em_cp') { t.aPagar += l.valor; t.acumulado += l.valor; }
             else if (l.status === 'paga') { t.pago += l.valor; t.acumulado += l.valor; }
         };
         const geral = zero(), porVendedor = {};
@@ -411,7 +418,7 @@
             if (!porVendedor[k]) porVendedor[k] = Object.assign(zero(), { vendedorId: l.vendedorId, nome: l.nome });
             soma(porVendedor[k], l);
         });
-        [geral].concat(Object.values(porVendedor)).forEach(t => { ['acumulado', 'aPagar', 'pago'].forEach(k => { t[k] = arredondar(t[k]); }); });
+        [geral].concat(Object.values(porVendedor)).forEach(t => { ['acumulado', 'aPagar', 'pago', 'pagavel'].forEach(k => { t[k] = arredondar(t[k]); }); });
         return { geral, porVendedor };
     }
 
@@ -447,7 +454,9 @@
                 }
                 if (!temComissao(ref, papel)) return;
                 const jaPaga = !!ped[c.paga] || pagas.length > 0;
-                const novo = jaPaga ? 'paga' : (_instalado(ped.status) ? 'pendente' : (_aprovado(ped.status) ? 'registrada' : null));
+                // Conta de comissao que ficou em aberto (baixa parcial): a comissao fica em Contas a Pagar.
+                const restaAberta = contas.some(cp => cp.status !== 'Pago' && comMov(cp));
+                const novo = restaAberta ? 'em_cp' : jaPaga ? 'paga' : (_instalado(ped.status) ? 'pendente' : (_aprovado(ped.status) ? 'registrada' : null));
                 // Sem conta nenhuma ligada e ja com status: nada a fazer (rodar de novo nao muda).
                 if (!contas.length && ped[r.status]) return;
                 if (novo === null) return;

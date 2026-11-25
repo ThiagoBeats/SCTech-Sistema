@@ -9197,8 +9197,8 @@ function renderTabelaVendedores() {
 // --- TELA VENDEDORES > COMISSOES ---
 // Filtros Vendedor (todos, vendedores e arquitetos) e Mes (data de instalacao); a tabela e os cartoes saem de
 // FinanceiroCore.linhasComissoes/totaisComissoes. Pagar = registrarPagamentoComissoes (movimento de saida, sem conta a pagar).
-const _COM_STATUS_ROTULO = { registrada: 'Registrada', pendente: 'Pendente', paga: 'Paga' };
-const _COM_STATUS_CLASSE = { registrada: 'fin-badge-gray', pendente: 'fin-badge-pending', paga: 'fin-badge-green' };
+const _COM_STATUS_ROTULO = { registrada: 'Registrada', pendente: 'Pendente', em_cp: 'Em Contas a Pagar', paga: 'Paga' };
+const _COM_STATUS_CLASSE = { registrada: 'fin-badge-gray', pendente: 'fin-badge-pending', em_cp: 'fin-badge-pending', paga: 'fin-badge-green' };
 let _comLinhasVisiveis = [];
 
 function _comMesLabel(m) {
@@ -9223,7 +9223,7 @@ function _preencherFiltrosComissoes() {
 function _comLinhasFiltradas() {
     const vendedorId = document.getElementById('com-filtro-vend')?.value || '';
     const mes = document.getElementById('com-filtro-mes')?.value || '';
-    const linhas = FinanceiroCore.linhasComissoes(db.pedidos, db.vendedores, { vendedorId, mes });
+    const linhas = FinanceiroCore.linhasComissoes(db.pedidos, db.vendedores, { vendedorId, mes, contasPagar: db.contas_pagar });
     linhas.sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')) || (b.pedidoId - a.pedidoId));
     return linhas;
 }
@@ -9244,7 +9244,7 @@ function renderComissoes() {
             <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span>Acumulado</span><strong class="com-acumulado">${_finBrl(t.acumulado)}</strong></div>
             <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span>A pagar</span><strong class="com-apagar" style="color:#F43927">${_finBrl(t.aPagar)}</strong></div>
             <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span>Pago</span><strong class="com-pago" style="color:var(--ok-text)">${_finBrl(t.pago)}</strong></div>
-            ${pode && t.aPagar > 0 ? `<button class="btn btn-sm btn-success" style="margin-top:8px;width:100%" onclick="pagarTodosPendentesComissao('${escapeHtml(chave)}')">Pagar todos os pendentes de ${escapeHtml(t.nome || '—')}</button>` : ''}
+            ${pode && t.pagavel > 0 ? `<button class="btn btn-sm btn-success" style="margin-top:8px;width:100%" onclick="pagarTodosPendentesComissao('${escapeHtml(chave)}')">Pagar todos os pendentes de ${escapeHtml(t.nome || '—')}</button>` : ''}
         </div>`;
     }).join('');
     document.getElementById('com-sel-todos').style.visibility = pode ? 'visible' : 'hidden';
@@ -13800,7 +13800,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try { if (localStorage.getItem(CHAVE_FIN_MIGRACAO) === '1') _migrarFinanceiroV4(); }
     catch (e) { console.error('Migração do Financeiro (v4) falhou:', e); }
     // Comissao como registro do pedido (depois da Fase 0, que ainda cria contas de comissao).
-    try { _migrarComissoesV2(); }
+    try { _migrarComissoesV2(); _sincronizarComissoesEmCP(); }
     catch (e) { console.error('Migração das comissões falhou:', e); }
 
     if (!document.getElementById('login-usuario')) {
@@ -14785,6 +14785,18 @@ function _migrarComissoesV2() {
     return _gravarSemFalhar(CHAVE_COMISSAO_V2, '1');
 }
 
+// Comissao 'em_cp' (conta antiga em aberto): ao abrir o app, paga se a conta foi paga e volta a pendente se a conta saiu.
+function _sincronizarComissoesEmCP() {
+    if (localStorage.getItem(CHAVE_COMISSAO_V2) !== '1') return;
+    const campos = Object.values(FinanceiroCore.CAMPOS_COMISSAO_REG);
+    let mudou = false;
+    (db.pedidos || []).forEach(p => {
+        const tem = campos.some(r => p[r.status] === 'em_cp');
+        if (tem && sincronizarComissoesPedido(p).length) mudou = true;
+    });
+    if (mudou) _gravarChaves(['sc_ped'], { silencioso: true });
+}
+
 // Sem espaco para a copia da migracao v4: baixa a copia em arquivo (as mesmas chaves,
 // com os anexos) e migra sem a copia no navegador.
 function baixarCopiaEMigrarFinanceiroV4() {
@@ -15469,10 +15481,11 @@ function sincronizarComissoesPedido(ped) {
     const textos = {
         registrada: de => (de === 'pendente' ? 'Pedido saiu de Instalado: a comissão voltou a ficar registrada' : 'Comissão registrada com a aprovação do pedido'),
         pendente: () => 'Pedido instalado: comissão a pagar',
+        em_cp: () => 'Comissão antiga com conta em aberto: fica em Contas a Pagar até ser paga',
         paga: () => 'Comissão paga'
     };
     return FinanceiroCore.sincronizarStatusComissoes(ped, (papel, de, para) =>
-        Object.assign({ acao: para === 'registrada' && de === 'pendente' ? 'voltou' : para, detalhe: textos[para](de), em: new Date().toISOString() }, _finQuem()));
+        Object.assign({ acao: para === 'registrada' && de === 'pendente' ? 'voltou' : para, detalhe: textos[para](de), em: new Date().toISOString() }, _finQuem()), db.contas_pagar);
 }
 
 // Pedido instalado: as comissoes ficam pendentes (sem criar conta a pagar). Idempotente.
@@ -15501,7 +15514,7 @@ function registrarPagamentoComissoes({ itens, contaId, data } = {}) {
     for (const it of (itens || [])) {
         const ped = db.pedidos.find(p => p.id == it.pedidoId);
         const c = CAMPOS_COMISSAO[it.papel], r = FinanceiroCore.CAMPOS_COMISSAO_REG[it.papel];
-        if (!ped || !c || !FinanceiroCore.temComissao(ped, it.papel) || (ped[r.status] || FinanceiroCore.statusEsperadoComissao(ped, it.papel)) !== 'pendente')
+        if (!ped || !c || !FinanceiroCore.temComissao(ped, it.papel) || (ped[r.status] || FinanceiroCore.statusEsperadoComissao(ped, it.papel, db.contas_pagar)) !== 'pendente')
             return { ok: false, erro: `A comissão do pedido #${formatPedidoId(it.pedidoId)} não está pendente.` };
         if (!alvos.some(a => a.ped === ped && a.papel === it.papel)) alvos.push({ ped, papel: it.papel, c, r });
     }
@@ -15653,6 +15666,7 @@ function baixarContasPagar(data, linhas) {
             if (ped && c && (cp.papel_comissao || ped[c.id])) {
                 ped[c.paga] = true;
                 ped[c.data] = new Date(data + 'T12:00:00').getTime();
+                sincronizarComissoesPedido(ped);   // conta toda paga: a comissao fica paga
             }
         }
         if (!CaixaCore.contaAceitaMovimento(conta, data)) return;
@@ -15700,7 +15714,7 @@ function _estornarCPDados(cp) {
     if (papelCom && cp.pedido_id) {
         const ped = db.pedidos.find(p => p.id == cp.pedido_id);
         const c = CAMPOS_COMISSAO[papelCom];
-        if (ped && c && (cp.papel_comissao || ped[c.id])) { ped[c.paga] = false; ped[c.data] = null; }
+        if (ped && c && (cp.papel_comissao || ped[c.id])) { ped[c.paga] = false; ped[c.data] = null; sincronizarComissoesPedido(ped); }
     }
 }
 

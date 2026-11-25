@@ -58,8 +58,8 @@ test('linhas e totais: acumulado = pendente + paga; a pagar = pendente; pago = p
     const todas = F.linhasComissoes(peds, [{ id: 1, nome: 'Ana' }]);
     assert.strictEqual(todas.length, 4);
     const t = F.totaisComissoes(todas);
-    assert.deepStrictEqual(t.geral, { acumulado: 90, aPagar: 60, pago: 30 });
-    assert.deepStrictEqual(t.porVendedor['1'], { acumulado: 80, aPagar: 50, pago: 30, vendedorId: 1, nome: 'Ana' });
+    assert.deepStrictEqual(t.geral, { acumulado: 90, aPagar: 60, pago: 30, pagavel: 60 });
+    assert.deepStrictEqual(t.porVendedor['1'], { acumulado: 80, aPagar: 50, pago: 30, pagavel: 50, vendedorId: 1, nome: 'Ana' });
     const out = F.linhasComissoes(peds, [], { mes: '2026-10', vendedorId: 1 });
     assert.deepStrictEqual(out.map(l => l.pedidoId), [1, 2]);
     assert.strictEqual(out[1].pagoEm, '2026-10-15');
@@ -183,7 +183,25 @@ test('migracao: conta de comissao com baixa parcial nao e removida', () => {
     const pedidos = [ped({ id: 1, status: 'Instalado' })];
     const contas_pagar = [{ id: 10, pedido_id: 1, papel_comissao: 'vendedor', status: 'Pendente', valor: 50 }];
     const movimentos = [{ id: 5, origem: 'cp', origem_id: 10 }];
-    assert.deepStrictEqual(F.planoMigracaoComissao({ pedidos, contas_pagar, movimentos }).removerCP, []);
+    const plano = F.planoMigracaoComissao({ pedidos, contas_pagar, movimentos });
+    assert.deepStrictEqual(plano.removerCP, []);
+    assert.strictEqual(plano.pedidos[0].set.comissao_status, 'em_cp');
+});
+
+test('em_cp: conta aberta segura a comissao; paga vira paga; conta que sai volta a pendente; nao entra em previstas nem no pagavel', () => {
+    const p = ped({ id: 1, status: 'Instalado' });
+    const cp = { pedido_id: 1, papel_comissao: 'vendedor', status: 'Atrasado', valor: 50 };
+    F.sincronizarStatusComissoes(p, null, [cp]);
+    assert.strictEqual(p.comissao_status, 'em_cp');
+    assert.deepStrictEqual(F.comissoesPendentesPrevistas([p], [cp], []), []);
+    const t = F.totaisComissoes(F.linhasComissoes([p], [], { contasPagar: [cp] }));
+    assert.deepStrictEqual([t.geral.aPagar, t.geral.pagavel, t.geral.acumulado], [50, 0, 50]);
+    cp.status = 'Pago';
+    F.sincronizarStatusComissoes(p, null, [cp]);
+    assert.deepStrictEqual([p.comissao_status, p.comissao_paga], ['paga', true]);
+    const q = ped({ id: 2, status: 'Instalado', comissao_status: 'em_cp' });
+    F.sincronizarStatusComissoes(q, null, []);
+    assert.strictEqual(q.comissao_status, 'pendente');
 });
 
 test('comissoesPendentesPrevistas: so pendentes sem conta propria', () => {
