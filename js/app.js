@@ -8845,8 +8845,8 @@ function importarDados(event) {
             }
             // Gravou: o que era dos dados anteriores (copia, revisao e avisos) sai.
             ['sc_fin_backup_fase0', 'sc_fin_revisar', 'sc_fin_backup_falhou', 'sc_fin_migracao_erro', CHAVE_FIN_BACKUP_V3, CHAVE_FIN_V4_FALHOU, CHAVE_FIN_V4_ERRO].forEach(k => localStorage.removeItem(k));
-            // Sem PDFs a guardar nem a manter, so limpa os antigos (sem esperar, para a recarga nao atrasar).
-            if (typeof NfArquivos !== 'undefined' && !pdfsNotas.length && !(pdfsNotas.manter || []).length) NfArquivos.limpar().catch(() => {});
+            // Sem PDFs a guardar nem a manter, limpa os antigos e espera terminar: recarregar no meio abortaria a limpeza.
+            if (typeof NfArquivos !== 'undefined' && !pdfsNotas.length && !(pdfsNotas.manter || []).length) { try { await NfArquivos.limpar(); } catch (e) { /* segue */ } }
             else if (typeof NfArquivos !== 'undefined') {
                 const falhas = await NfArquivos.gravarVarios(pdfsNotas, pdfsNotas.manter);
                 if (falhas.length) {

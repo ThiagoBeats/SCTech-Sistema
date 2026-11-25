@@ -43,6 +43,16 @@
     const LETRA = /\p{L}/u;
     const PULA = /[\s"'“”‘’(\[{«¿¡\-–—*]/;
     const FIM = /[.?!]/;
+    // Abreviacoes comuns: o ponto depois delas nao termina frase.
+    const ABREV = ['av', 'r', 'al', 'trav', 'rod', 'est', 'pça', 'pca', 'jd', 'vl', 'res', 'cond', 'ed', 'apto', 'ap', 'bl', 'qd', 'lt',
+        'km', 'nº', 'no', 'n', 'dr', 'dra', 'sr', 'sra', 'srta', 'prof', 'profa', 'eng', 'arq', 'ltda', 'cia', 'me', 'epp', 's.a', 'sa',
+        'obs', 'ref', 'tel', 'cel', 'aprox', 'etc'];
+    function ehAbreviacao(t, posPonto) {
+        let k = posPonto;
+        while (k > 0 && !/\s/.test(t[k - 1])) k--;
+        const w = t.slice(k, posPonto).replace(/^[^\p{L}\d]+/u, '').toLowerCase();
+        return ABREV.indexOf(w) >= 0;
+    }
 
     // Maiuscula na primeira letra e na primeira letra depois de ". ", "? ", "! " (ou quebra de linha).
     function capitalizar(texto, cursor) {
@@ -70,7 +80,7 @@
             if (FIM.test(c)) {
                 let j = i;
                 while (j < t.length && FIM.test(t[j])) j++;
-                if (j < t.length && /\s/.test(t[j])) pend = true;
+                if (j < t.length && /\s/.test(t[j]) && !(j - i === 1 && t[i] === '.' && ehAbreviacao(t, i))) pend = true;
                 i = j;
                 continue;
             }

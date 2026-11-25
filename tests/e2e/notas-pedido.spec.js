@@ -297,7 +297,7 @@ test('backup leva as notas (exportar e importar)', async ({ page }) => {
     await page.evaluate(() => { window.__marca = 1; });
     await page.evaluate(json => importarDados({ target: { files: [new File([json], 'b.json')], value: '' } }), JSON.stringify(dados));
     await page.locator('#sc-modal-ok').click();
-    await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
+    await expect.poll(() => page.evaluate(() => window.__marca).catch(() => 'navegando')).toBeUndefined();
     await page.waitForFunction(() => typeof db !== 'undefined');
     expect((await ler(page, 'sc_nf'))[0].numero).toBe('456');
 });
@@ -448,7 +448,7 @@ test('backup com PDF: exporta o PDF junto e a importacao o devolve ao IndexedDB;
     await page.evaluate(() => { window.__marca = 1; });
     await page.evaluate(j => importarDados({ target: { files: [new File([j], 'b.json')], value: '' } }), json);
     await page.locator('#sc-modal-ok').click();
-    await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
+    await expect.poll(() => page.evaluate(() => window.__marca).catch(() => 'navegando')).toBeUndefined();
     await page.waitForFunction(() => typeof db !== 'undefined');
     const n = (await notas(page))[0];
     expect(n.pdf).toBeUndefined();
@@ -639,7 +639,7 @@ test('N1: PDF que nao da para ler no backup avisa; a importacao nao apaga o PDF 
     await page.evaluate(() => { window.__marca = 1; });
     await page.evaluate(j => importarDados({ target: { files: [new File([j], 'b.json')], value: '' } }), json);
     await page.locator('#sc-modal-ok').click();
-    await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
+    await expect.poll(() => page.evaluate(() => window.__marca).catch(() => 'navegando')).toBeUndefined();
     await page.waitForFunction(() => typeof db !== 'undefined');
     expect(await idbBytes(page, 501)).not.toBeNull();
     expect((await notas(page))[0]).toMatchObject({ tem_pdf: true });
@@ -652,7 +652,7 @@ test('N1: importar apaga o PDF local de nota que o backup diz que nao tem PDF', 
     await page.evaluate(() => { window.__marca = 1; });
     await page.evaluate(j => importarDados({ target: { files: [new File([j], 'b.json')], value: '' } }), json);
     await page.locator('#sc-modal-ok').click();
-    await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
+    await expect.poll(() => page.evaluate(() => window.__marca).catch(() => 'navegando')).toBeUndefined();
     await page.waitForFunction(() => typeof db !== 'undefined');
     await expect.poll(() => idbBytes(page, 501)).toBeNull();
 });

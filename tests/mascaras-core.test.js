@@ -52,6 +52,10 @@ test('capitalizar', () => {
     assert.strictEqual(M.capitalizar('a.\nb', 0).texto, 'A.\nB');
     assert.strictEqual(M.capitalizar('abc', 2).cursor, 2);
     assert.strictEqual(M.capitalizar('', 0).texto, '');
+    assert.strictEqual(M.capitalizar('av. das palmeiras', 0).texto, 'Av. das palmeiras');
+    assert.strictEqual(M.capitalizar('rua x, n. 10. depois', 0).texto, 'Rua x, n. 10. Depois');
+    assert.strictEqual(M.capitalizar('dr. joão chegou. ele saiu', 0).texto, 'Dr. joão chegou. Ele saiu');
+    assert.strictEqual(M.capitalizar('ltda. foi. ok', 0).texto, 'Ltda. foi. Ok');
     assert.strictEqual(M.capitalizar('já Ok', 5).texto, 'Já Ok');
 });
 

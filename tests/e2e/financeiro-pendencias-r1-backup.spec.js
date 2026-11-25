@@ -75,7 +75,7 @@ test('importar quase sem espaco: tira so a copia da Fase 0 e grava', async ({ pa
     await page.evaluate(json => importarDados({ target: { files: [new File([json], 'b.json')], value: '' } }),
         JSON.stringify({ clientes: [{ id: 7, nome: 'Bia' }], catalogo: [], pedidos: [], contas_pagar: [], fin_fase0: true }));
     await page.locator('#sc-modal-ok').click();
-    await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
+    await expect.poll(() => page.evaluate(() => window.__marca).catch(() => 'navegando')).toBeUndefined();
     expect(await page.evaluate(() => [localStorage.getItem('sc_fin_migracao'), localStorage.getItem('sc_fin_backup_fase0'), JSON.parse(localStorage.getItem('sc_cli'))[0].nome]))
         .toEqual(['1', null, 'Bia']);
 });
@@ -112,7 +112,7 @@ test('salvarERecarregar sem espaco: uma baixa avisa uma vez, so recarrega depois
     expect(alertas).toBe(1);
     // R11: depois do aviso a tela recarrega os dados salvos.
     await page.locator('#sc-modal-ok').click();
-    await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
+    await expect.poll(() => page.evaluate(() => window.__marca).catch(() => 'navegando')).toBeUndefined();
     expect(erros).toEqual([]);
 });
 
@@ -174,7 +174,7 @@ test('baixar copia e corrigir: espera 1500 ms e oferece Recarregar agora; copia 
     expect(await page.evaluate(() => window.__marca), 'ainda nao recarregou').toBe(1);
     await page.locator('#sc-aviso-recarregar button').click();
     await page.waitForLoadState('load');
-    await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
+    await expect.poll(() => page.evaluate(() => window.__marca).catch(() => 'navegando')).toBeUndefined();
 });
 
 test('copia guardada diz que e parcial e nao serve para Importar', async ({ page }) => {

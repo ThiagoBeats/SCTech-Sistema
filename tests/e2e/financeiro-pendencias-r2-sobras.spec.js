@@ -177,7 +177,7 @@ test('salvarERecarregar sem espaco: depois do aviso recarrega e a tela mostra o 
     expect((await ler(page, 'sc_cr'))[0].status).toBe('Pendente');
     expect(await page.evaluate(() => window.__marca), 'so recarrega depois do OK').toBe(1);
     await page.locator('#sc-modal-ok').click();
-    await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
+    await expect.poll(() => page.evaluate(() => window.__marca).catch(() => 'navegando')).toBeUndefined();
     await abrirLancamentos(page, 'receber');
     await expect(linhasLanc(page, 'receber', 'Dar baixa')).toHaveCount(1);
     expect(await page.evaluate(() => db.contas_receber[0].status)).toBe('Pendente');
