@@ -1289,6 +1289,28 @@ Na janela do carrinho:
       mensal do saldo" (12 meses até o mês atual, na conta escolhida na tela). Cada um com PDF, Excel e Imprimir
       (documento claro, paisagem).
     * O alerta "falta de caixa" do sino continua levando a esta aba.
+  - Notas fiscais do pedido (modo manual): no menu ⋮ do pedido (Pedidos, Painel inicial e Painel de Produção — lista e
+    Kanban), "🧾 Notas fiscais", para pedido fora de Orçamento. A janela "Notas fiscais — Pedido #N" lista as notas
+    (tipo NF-e/NFS-e, número e série ou código de verificação, data, valor e selo Autorizada/Cancelada) com Ver PDF,
+    Baixar XML, Histórico e Cancelar nota, e o botão Emitir nota. Um pedido pode ter várias notas.
+    * Emitir nota: tipo (NF-e produto / NFS-e serviço; o padrão vem de Configurar Empresa > "Tipo de nota mais usado"),
+      tomador (nome, CPF/CNPJ, endereço, cidade, UF, CEP, e-mail) e itens (descrição, quantidade, valor) já preenchidos
+      com os dados do cliente e do pedido (o valor do pedido é repartido pela quantidade dos itens) e editáveis;
+      o aviso "Emita esta nota no sistema da prefeitura/SEFAZ ou do seu contador e anexe aqui o XML e o PDF.";
+      Copiar dados (texto para colar no sistema da prefeitura) e Imprimir dados; Anexar XML (obrigatório) e Anexar PDF
+      (opcional, até 1 MB).
+    * Ao anexar o XML (NF-e, NFS-e padrão nacional ou ABRASF) o sistema lê número, série/código, data e valor e confere
+      com o pedido, o cliente e a empresa: valor diferente, CPF/CNPJ do tomador diferente do cliente ou emitente que não
+      é a empresa mostram um aviso amarelo, mas deixam salvar (os avisos ficam no Histórico da nota). Arquivo que não é
+      nota: "Este arquivo não é o XML de uma nota fiscal." e não salva. Mesma nota (chave, ou número + código/série +
+      emitente) já em outro pedido: "Esta nota já está anexada ao pedido #N." e não salva. PDF acima de 1 MB:
+      "Arquivo grande demais para guardar no navegador. Guarde o PDF no computador e anexe só o XML."
+    * Salva como Autorizada (Cancelada se o XML for de cancelamento), origem manual, com o evento "Nota anexada".
+      Ver PDF abre o PDF guardado em nova aba (sem PDF: "PDF não anexado." com o botão Anexar PDF; pop-up bloqueado
+      avisa). Baixar XML devolve o arquivo com o nome original. Cancelar nota pede o motivo (obrigatório) e, se quiser,
+      o XML do evento de cancelamento; a nota não some, fica com o selo Cancelada e o evento no Histórico.
+    * Permissões: emitir, anexar PDF e cancelar = Contas a receber completo ou Pedidos completo; ver = quem vê o pedido.
+    * Guardado em sc_nf (também no backup); sem espaço no navegador mostra a mensagem de espaço cheio e não grava.
   - DRE — Resultado da empresa: tabela do ano (Jan a Dez + Total), Regime Caixa | Competência e seletor de Ano.
     Começa recolhida (grupos e linhas calculadas); o + abre os filhos diretos do grupo (subgrupos abrem de novo).
     Receitas, Custos, Margem de contribuição (+ % margem), Despesas (variáveis, fixas, outras), Resultado
