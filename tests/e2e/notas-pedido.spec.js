@@ -314,3 +314,84 @@ test('390px sem rolagem horizontal e tema escuro legivel', async ({ page }) => {
     const cor = await page.locator('#nf-emitir .nf-box').evaluate(e => getComputedStyle(e).backgroundColor);
     expect(cor).not.toBe('rgb(255, 255, 255)');
 });
+
+test('arquivo que nao e PDF (html renomeado) e recusado ao anexar e ao abrir backup adulterado', async ({ page }) => {
+    await page.addInitScript(() => { window.__abertos = []; window.open = u => { window.__abertos.push(u); return {}; }; });
+    await abrir(page);
+    await emitir(page, 26401);
+    await page.setInputFiles('#nf-pdf', { name: 'falso.pdf', mimeType: 'application/pdf', buffer: Buffer.from('<html><script>alert(1)</script></html>') });
+    await expect(page.locator('#nf-msg-pdf')).toHaveText('Este arquivo não é um PDF.');
+    await page.setInputFiles('#nf-xml', FIX('nfse-abrasf.xml'));
+    await page.locator('#nf-salvar').click();
+    expect((await notas(page))[0].pdf).toBeNull();
+    // PDF guardado com tipo html (backup adulterado): nao abre
+    await page.evaluate(() => { db.notas_fiscais[0].pdf = 'data:text/html;base64,' + btoa('<script>1</script>'); });
+    await page.locator('#nf-janela').getByRole('button', { name: 'Ver PDF' }).click();
+    await expect(page.locator('#sc-modal-msg')).toHaveText('Este arquivo não é um PDF.');
+    expect(await page.evaluate(() => window.__abertos)).toHaveLength(0);
+    await page.locator('#sc-modal-ok').click();
+    // tipo html mas bytes de PDF: abre como application/pdf
+    await page.evaluate(() => { db.notas_fiscais[0].pdf = 'data:text/html;base64,' + btoa('%PDF-1.4 x'); });
+    await page.locator('#nf-janela').getByRole('button', { name: 'Ver PDF' }).click();
+    const u = (await page.evaluate(() => window.__abertos))[0];
+    expect(await page.evaluate(async u => (await (await fetch(u)).blob()).type, u)).toBe('application/pdf');
+});
+
+test('XML ISO-8859-1 com acentos: le certo e Baixar XML devolve os bytes originais', async ({ page }) => {
+    const xml = require('fs').readFileSync(FIX('nfse-abrasf.xml'), 'utf8').replace('encoding="UTF-8"', 'encoding="ISO-8859-1"').replace('Instalacao de cortinas', 'Instalação de cortinas').replace('Maria da Silva', 'Maria da Conceição');
+    const bytes = Buffer.from(xml, 'latin1');
+    expect(bytes.includes(Buffer.from([0xE7, 0xE3]))).toBe(true);
+    await abrir(page);
+    await emitir(page, 26401);
+    await page.setInputFiles('#nf-xml', { name: 'latin.xml', mimeType: 'text/xml', buffer: bytes });
+    await expect(page.locator('#nf-numero')).toHaveValue('456');
+    await page.locator('#nf-salvar').click();
+    const n = (await notas(page))[0];
+    expect(n.xml).toContain('Instalação de cortinas');
+    expect(n.xml).not.toContain('�');
+    expect(n.xml_encoding).toBe('iso-8859-1');
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.locator('#nf-janela').getByRole('button', { name: 'Baixar XML' }).click()]);
+    const baixado = require('fs').readFileSync(await dl.path());
+    expect(Buffer.compare(baixado, bytes)).toBe(0);
+});
+
+const EVENTO = chave => Buffer.from('<?xml version="1.0" encoding="UTF-8"?><procEventoNFe versao="1.00"><evento><infEvento><tpEvento>110111</tpEvento><chNFe>' + chave + '</chNFe></infEvento></evento></procEventoNFe>');
+const CHAVE_NFE = '35261112345678000195550010000001231000001237';
+
+test('XML de cancelamento marca a nota existente como cancelada, sem criar outra', async ({ page }) => {
+    await abrir(page);
+    await emitir(page, 26401);
+    await page.setInputFiles('#nf-xml', FIX('nfe-venda.xml'));
+    await page.locator('#nf-salvar').click();
+    await page.locator('#nf-btn-emitir').click();
+    await page.setInputFiles('#nf-xml', { name: 'cancel.xml', mimeType: 'text/xml', buffer: EVENTO(CHAVE_NFE) });
+    await expect(page.locator('#nf-salvar')).toBeEnabled();
+    await page.locator('#nf-salvar').click();
+    await expect(page.locator('#nf-janela .nf-linha')).toHaveCount(1);
+    await expect(page.locator('#nf-janela .nf-selo')).toHaveText('Cancelada');
+    const nf = await notas(page);
+    expect(nf).toHaveLength(1);
+    expect(nf[0].status).toBe('cancelada');
+    expect(nf[0].eventos.at(-1).detalhe).toContain('Cancelamento anexado (XML)');
+    expect(nf[0].xml_cancelamento).toContain('110111');
+});
+
+test('XML de cancelamento sem nota com a chave: mensagem e nada salvo', async ({ page }) => {
+    await abrir(page);
+    await emitir(page, 26401);
+    await page.setInputFiles('#nf-xml', { name: 'cancel.xml', mimeType: 'text/xml', buffer: EVENTO('99999999999999999999999999999999999999999999') });
+    await expect(page.locator('#nf-msg-xml')).toHaveText('Não há nota com essa chave neste pedido para cancelar.');
+    await expect(page.locator('#nf-salvar')).toBeDisabled();
+    expect(await notas(page)).toEqual([]);
+});
+
+test('excluir pedido com nota nao cancelada e recusado', async ({ page }) => {
+    await abrir(page);
+    await emitir(page, 26401);
+    await page.setInputFiles('#nf-xml', FIX('nfse-abrasf.xml'));
+    await page.locator('#nf-salvar').click();
+    await page.evaluate(() => { excluirPedido(26401); });
+    await expect(page.locator('#sc-modal-msg')).toHaveText('Este pedido tem nota fiscal emitida e não pode ser excluído. Cancele a nota antes.');
+    await page.locator('#sc-modal-ok').click();
+    expect(await page.evaluate(() => db.pedidos.some(p => p.id === 26401))).toBe(true);
+});

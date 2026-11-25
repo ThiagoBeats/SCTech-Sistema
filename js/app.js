@@ -3734,6 +3734,10 @@ function _ehComissaoDoPedido(cp) { return !!cp && (!!cp.papel_comissao || cp.cat
 
 async function excluirPedido(id) {
     if (!await exigirPermissao('pedidos', 'completo')) return;
+    if ((db.notas_fiscais || []).some(n => n.pedido_id == id && n.status !== 'cancelada')) {
+        await showAlert('Este pedido tem nota fiscal emitida e não pode ser excluído. Cancele a nota antes.', '⚠️');
+        return;
+    }
     if (FinanceiroCore.totalRecebido(db.contas_receber, id) > 0) {
         await showAlert('Este pedido já tem recebimento registrado e não pode ser excluído.\n\nPrimeiro estorne os recebimentos em Financeiro > A Receber; depois exclua o pedido.', '⚠️');
         return;

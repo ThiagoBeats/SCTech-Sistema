@@ -64,13 +64,47 @@ function _nfJanela(id, titulo, corpo, largura) {
     return o;
 }
 
-function _nfLerArquivo(file, comoDataUrl) {
+function _nfLerBytes(file) {
     return new Promise((resolve, reject) => {
         const r = new FileReader();
-        r.onload = () => resolve(String(r.result || ''));
+        r.onload = () => resolve(new Uint8Array(r.result));
         r.onerror = () => reject(r.error);
-        if (comoDataUrl) r.readAsDataURL(file); else r.readAsText(file);
+        r.readAsArrayBuffer(file);
     });
+}
+function _nfBase64(bytes) {
+    let s = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(s);
+}
+function _nfDeBase64(b64) {
+    const bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+}
+const _nfEhPdf = b => !!b && b.length >= 4 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46;
+const NF_MSG_NAO_PDF = 'Este arquivo não é um PDF.';
+// Le o PDF: so aceita quem comeca com %PDF; guarda sempre como application/pdf.
+async function _nfLerPdf(file) {
+    const bytes = await _nfLerBytes(file);
+    if (!_nfEhPdf(bytes)) return null;
+    return 'data:application/pdf;base64,' + _nfBase64(bytes);
+}
+// Le o XML pelos bytes: codificacao da declaracao (padrao UTF-8). Devolve { texto, encoding, b64 } (b64 so quando
+// os bytes nao voltam iguais a partir do texto UTF-8, para o download devolver o arquivo original).
+async function _nfLerXmlArquivo(file) {
+    const bytes = await _nfLerBytes(file);
+    let enc = 'utf-8';
+    const cabeca = Array.from(bytes.subarray(0, 200)).map(c => String.fromCharCode(c)).join('');
+    const m = /^(?:\xEF\xBB\xBF)?\s*<\?xml[^>]*encoding\s*=\s*["']([^"']+)["']/i.exec(cabeca);
+    if (m) enc = m[1].trim().toLowerCase();
+    let texto = '', limpo = false;
+    try { texto = new TextDecoder(enc, { fatal: enc === 'utf-8' || enc === 'utf8', ignoreBOM: true }).decode(bytes); limpo = enc === 'utf-8' || enc === 'utf8'; }
+    catch (e) {
+        enc = 'windows-1252';
+        try { texto = new TextDecoder(enc, { ignoreBOM: true }).decode(bytes); } catch (e2) { texto = ''; }
+    }
+    return { texto, encoding: enc, b64: limpo ? null : _nfBase64(bytes) };
 }
 
 // ---------- janela do pedido ----------
@@ -273,24 +307,38 @@ function _nfDuplicada(nota) {
     });
 }
 
+let _nfTok = 0;
 async function _nfAoEscolherXml(input) {
     if (!_nfEst) return;
+    const tok = ++_nfTok;
     const file = input.files && input.files[0];
+    _nfEst.cancelaNota = null; _nfEst.xmlB64 = null; _nfEst.xmlEnc = 'utf-8';
     _nfEst.nota = null; _nfEst.avisos = []; _nfEst.erroXml = ''; _nfEst.xmlTexto = ''; _nfEst.xmlNome = '';
     document.getElementById('nf-lido').hidden = true;
     const av = document.getElementById('nf-avisos'); av.hidden = true; av.innerHTML = '';
     _nfMsg('nf-msg-xml', '');
     if (file) {
-        let texto = '';
-        try { texto = await _nfLerArquivo(file, false); } catch (e) { texto = ''; }
+        let texto = '', lido = { texto: '', encoding: 'utf-8', b64: null };
+        try { lido = await _nfLerXmlArquivo(file); texto = lido.texto; } catch (e) { texto = ''; }
+        if (tok !== _nfTok || !_nfEst || !document.getElementById('nf-emitir')) return;
+        _nfEst.xmlB64 = lido.b64; _nfEst.xmlEnc = lido.encoding;
         const res = FiscalCore.lerXmlNota(texto);
         if (!res.ok) {
             _nfEst.erroXml = NF_MSG_NAO_NOTA;
             _nfMsg('nf-msg-xml', NF_MSG_NAO_NOTA);
         } else {
             const nota = res.nota;
-            const dup = _nfDuplicada(nota);
-            if (dup) {
+            const ehCancel = nota.cancelada && !nota.numero;
+            const alvo = ehCancel ? _nfNotas().find(n => nota.chave && n.chave === nota.chave && String(n.pedido_id) === String(_nfEst.pedidoId)) : null;
+            const dup = ehCancel ? null : _nfDuplicada(nota);
+            if (ehCancel && (!alvo || alvo.status === 'cancelada')) {
+                _nfEst.erroXml = alvo ? 'Esta nota já está cancelada.' : 'Não há nota com essa chave neste pedido para cancelar.';
+                _nfMsg('nf-msg-xml', _nfEst.erroXml);
+            } else if (ehCancel) {
+                _nfEst.nota = nota; _nfEst.xmlTexto = texto; _nfEst.xmlNome = file.name; _nfEst.cancelaNota = alvo.id;
+                const av2 = document.getElementById('nf-avisos'); av2.hidden = false;
+                av2.innerHTML = `<div class="nf-aviso">Este XML é de cancelamento: a nota ${_nfEsc(alvo.numero ? 'nº ' + alvo.numero : '')} será marcada como cancelada.</div>`;
+            } else if (dup) {
                 _nfEst.erroXml = 'Esta nota já está anexada ao pedido #' + formatPedidoId(dup.pedido_id) + '.';
                 _nfMsg('nf-msg-xml', _nfEst.erroXml);
             } else {
@@ -312,6 +360,7 @@ async function _nfAoEscolherXml(input) {
     _nfAtualizarSalvar();
 }
 
+let _nfTokPdf = 0;
 async function _nfAoEscolherPdf(input) {
     if (!_nfEst) return;
     const file = input.files && input.files[0];
@@ -321,8 +370,13 @@ async function _nfAoEscolherPdf(input) {
             input.value = '';
             _nfMsg('nf-msg-pdf', NF_MSG_PDF_GRANDE);
         } else {
-            try { _nfEst.pdf = await _nfLerArquivo(file, true); _nfEst.pdfNome = file.name; }
-            catch (e) { _nfMsg('nf-msg-pdf', 'Não foi possível ler o PDF.'); }
+            const tok = ++_nfTokPdf;
+            try {
+                const url = await _nfLerPdf(file);
+                if (tok !== _nfTokPdf || !_nfEst || !document.getElementById('nf-emitir')) return;
+                if (!url) { input.value = ''; _nfMsg('nf-msg-pdf', NF_MSG_NAO_PDF); }
+                else { _nfEst.pdf = url; _nfEst.pdfNome = file.name; }
+            } catch (e) { _nfMsg('nf-msg-pdf', 'Não foi possível ler o PDF.'); }
         }
     }
 }
@@ -334,8 +388,20 @@ async function _nfSalvarNota() {
     const ped = db.pedidos.find(p => p.id == e.pedidoId);
     if (!ped) return;
     // Outra nota igual pode ter entrado (outra aba) desde que o XML foi lido.
-    const dup = _nfDuplicada(nota);
+    const dup = nota.cancelada && !nota.numero ? null : _nfDuplicada(nota);
     if (dup) { e.nota = null; e.erroXml = 'Esta nota já está anexada ao pedido #' + formatPedidoId(dup.pedido_id) + '.'; _nfMsg('nf-msg-xml', e.erroXml); _nfAtualizarSalvar(); return; }
+    if (e.cancelaNota != null) {
+        const alvo = _nfPorId(e.cancelaNota);
+        if (!alvo || alvo.status === 'cancelada') return;
+        const antes = { status: alvo.status, ev: alvo.eventos.length, x: alvo.xml_cancelamento, xn: alvo.xml_cancelamento_nome, xb: alvo.xml_cancelamento_b64 };
+        alvo.status = 'cancelada';
+        alvo.xml_cancelamento = e.xmlTexto; alvo.xml_cancelamento_nome = e.xmlNome; alvo.xml_cancelamento_b64 = e.xmlB64 || null;
+        alvo.eventos.push(_nfEvento('cancelada', 'Cancelamento anexado (XML)' + (e.xmlNome ? ' (' + e.xmlNome + ')' : '')));
+        if (!_nfGravar(() => { alvo.status = antes.status; alvo.eventos.length = antes.ev; alvo.xml_cancelamento = antes.x; alvo.xml_cancelamento_nome = antes.xn; alvo.xml_cancelamento_b64 = antes.xb; })) return;
+        _nfFechar('nf-emitir'); _nfEst = null; _nfRenderLista(ped.id);
+        toast('Nota cancelada.', 'success');
+        return;
+    }
     const dados = _nfDadosAtuais();
     const eventos = [_nfEvento('anexada', 'Nota anexada' + (e.xmlNome ? ' (' + e.xmlNome + ')' : ''))];
     e.avisos.forEach(a => eventos.push(_nfEvento('aviso', a)));
@@ -344,7 +410,7 @@ async function _nfSalvarNota() {
         chave: nota.chave || null, codigo_verificacao: nota.codigo_verificacao || null,
         data_emissao: nota.data_emissao || hojeLocal(), valor: nota.valor || 0, cliente_id: ped.clienteId == null ? null : ped.clienteId,
         status: nota.cancelada ? 'cancelada' : 'autorizada', protocolo: null, eventos,
-        xml_nome: e.xmlNome, xml: e.xmlTexto, pdf_nome: e.pdf ? e.pdfNome : '', pdf: e.pdf || null,
+        xml_nome: e.xmlNome, xml: e.xmlTexto, xml_encoding: e.xmlEnc || 'utf-8', xml_b64: e.xmlB64 || null, pdf_nome: e.pdf ? e.pdfNome : '', pdf: e.pdf || null,
         emitente_doc: nota.emitente_doc || '', tomador_doc: nota.tomador_doc || '', dados,
         origem: 'manual', criado_em: new Date().toISOString(), criado_por: _nfQuemId()
     };
@@ -363,13 +429,13 @@ async function exigirPermissao_nf() {
 }
 
 // ---------- ver PDF, baixar XML ----------
+// Sempre application/pdf, e so se os bytes comecam com %PDF (backup importado pode trazer qualquer coisa).
 function _nfDataUrlParaBlob(url) {
-    const m = /^data:([^;,]*)(;base64)?,(.*)$/s.exec(url || '');
+    const m = /^data:[^;,]*;base64,([A-Za-z0-9+\/=]*)$/.exec(url || '');
     if (!m) return null;
-    const bin = m[2] ? atob(m[3]) : decodeURIComponent(m[3]);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return new Blob([bytes], { type: m[1] || 'application/pdf' });
+    let bytes;
+    try { bytes = _nfDeBase64(m[1]); } catch (e) { return null; }
+    return _nfEhPdf(bytes) ? new Blob([bytes], { type: 'application/pdf' }) : null;
 }
 
 async function verPdfNota(notaId) {
@@ -382,7 +448,7 @@ async function verPdfNota(notaId) {
         return;
     }
     const blob = _nfDataUrlParaBlob(n.pdf);
-    if (!blob) { showAlert('Não foi possível abrir o PDF.', '⚠️'); return; }
+    if (!blob) { showAlert(NF_MSG_NAO_PDF, '⚠️'); return; }
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
     if (!w) toast('O navegador bloqueou a nova aba. Libere os pop-ups deste site e tente de novo.', 'warning', 6000);
@@ -392,7 +458,8 @@ async function verPdfNota(notaId) {
 function baixarXmlNota(notaId) {
     const n = _nfPorId(notaId);
     if (!n || !n.xml) { toast('Esta nota não tem XML guardado.', 'warning'); return; }
-    const blob = new Blob([n.xml], { type: 'application/xml' });
+    let blob;
+    try { blob = new Blob([n.xml_b64 ? _nfDeBase64(n.xml_b64) : n.xml], { type: 'application/xml' }); } catch (e) { blob = new Blob([n.xml], { type: 'application/xml' }); }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = n.xml_nome || ('nota-' + (n.numero || n.id) + '.xml');
@@ -420,7 +487,9 @@ async function _nfSalvarAnexo(notaId) {
     if (!file) { _nfMsg('nf-anexo-msg', 'Escolha o arquivo PDF.'); return; }
     if (file.size > NF_PDF_MAX) { _nfMsg('nf-anexo-msg', NF_MSG_PDF_GRANDE); return; }
     let url = '';
-    try { url = await _nfLerArquivo(file, true); } catch (e) { _nfMsg('nf-anexo-msg', 'Não foi possível ler o PDF.'); return; }
+    try { url = await _nfLerPdf(file); } catch (e) { if (document.getElementById('nf-anexar')) _nfMsg('nf-anexo-msg', 'Não foi possível ler o PDF.'); return; }
+    if (!document.getElementById('nf-anexar')) return;
+    if (!url) { _nfMsg('nf-anexo-msg', NF_MSG_NAO_PDF); return; }
     if (!await exigirPermissao_nf()) return;
     const antes = { pdf: n.pdf, pdf_nome: n.pdf_nome, ev: n.eventos.length };
     n.pdf = url; n.pdf_nome = file.name;
@@ -451,20 +520,24 @@ async function _nfConfirmarCancelamento(notaId) {
     const motivo = (document.getElementById('nf-cancel-motivo')?.value || '').trim();
     if (!motivo) { _nfMsg('nf-cancel-msg', 'Informe o motivo do cancelamento.'); return; }
     const file = document.getElementById('nf-cancel-xml')?.files[0];
-    let detalhe = motivo;
+    let detalhe = motivo, xmlEv = null;
     if (file) {
-        let texto = '';
-        try { texto = await _nfLerArquivo(file, false); } catch (e) { texto = ''; }
-        if (!FiscalCore.lerXmlNota(texto).ok) { _nfMsg('nf-cancel-msg', NF_MSG_NAO_NOTA); return; }
+        let lido = { texto: '' };
+        try { lido = await _nfLerXmlArquivo(file); } catch (e) { lido = { texto: '' }; }
+        if (!document.getElementById('nf-cancelar')) return;
+        if (!FiscalCore.lerXmlNota(lido.texto).ok) { _nfMsg('nf-cancel-msg', NF_MSG_NAO_NOTA); return; }
+        xmlEv = lido;
         detalhe += ' (XML do evento: ' + file.name + ')';
     }
     if (!await exigirPermissao_nf()) return;
     const res = await Fiscal.provedor.cancelar(n.id, motivo);
     if (res && res.status === 'erro') { _nfMsg('nf-cancel-msg', res.mensagem || 'Não foi possível cancelar a nota.'); return; }
-    const antes = { status: n.status, ev: n.eventos.length };
+    if (!document.getElementById('nf-cancelar')) return;
+    const antes = { status: n.status, ev: n.eventos.length, x: n.xml_cancelamento, xn: n.xml_cancelamento_nome, xb: n.xml_cancelamento_b64 };
     n.status = 'cancelada';
+    if (xmlEv) { n.xml_cancelamento = xmlEv.texto; n.xml_cancelamento_nome = file.name; n.xml_cancelamento_b64 = xmlEv.b64; }
     n.eventos.push(_nfEvento('cancelada', detalhe));
-    if (!_nfGravar(() => { n.status = antes.status; n.eventos.length = antes.ev; })) return;
+    if (!_nfGravar(() => { n.status = antes.status; n.eventos.length = antes.ev; n.xml_cancelamento = antes.x; n.xml_cancelamento_nome = antes.xn; n.xml_cancelamento_b64 = antes.xb; })) return;
     _nfFechar('nf-cancelar');
     _nfRenderLista(n.pedido_id);
     toast('Nota cancelada.', 'success');
