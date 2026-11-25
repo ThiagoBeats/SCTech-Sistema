@@ -194,3 +194,54 @@ test('migracao: pedido antigo sem status (paga / Instalado / etapa anterior)', a
     const ps = await ler(page, 'sc_ped');
     expect(ps.map(p => p.comissao_status)).toEqual(['paga', 'pendente', 'registrada', undefined]);
 });
+
+test('estornar a conta paga de uma comissao antiga em A Pagar e bloqueado; Desfazer pagamento a tira do Financeiro e volta a pendente', async ({ page }) => {
+    const cp = { id: 900, pedido_id: 26600, papel_comissao: 'vendedor', categoria: 'comissao', descricao: 'Comissão 5% — Bruno', credor_nome: 'Bruno', valor: 50, status: 'Pago',
+        data_vencimento: '2026-10-25', data_pagamento: '2026-10-25', conta_id: 1, tipo: 'variavel' };
+    const mov = { id: 9, conta_id: 1, data: '2026-10-25', sentido: 'saida', valor: 50, origem: 'cp', origem_id: 900, grupo_id: null, descricao: 'Comissão' };
+    await abrir(page, { sc_ped: [pedido({ comissao_status: 'paga', comissao_paga: true, comissao_data_pgto: DATA_INST, comissao_mov_id: 9, arq_id: null, arq_nome: '', arq_comissao_valor: 0 })], sc_cp: [cp], sc_mov_fin: [mov] }, '/financeiro.html');
+    await page.evaluate(() => { estornarCP(900); });
+    await expect(page.locator('#sc-modal-msg')).toHaveText('Esta comissão foi paga antes da mudança. Para desfazer, use Vendedores › Comissões.');
+    await page.locator('#sc-modal-ok').click();
+    expect((await ler(page, 'sc_cp'))[0].status).toBe('Pago');
+    expect((await ler(page, 'sc_mov_fin'))).toHaveLength(1);
+    const r = await page.evaluate(() => desfazerPagamentoComissao({ pedidoId: 26600, papel: 'vendedor' }));
+    expect(r.ok).toBe(true);
+    expect((await ler(page, 'sc_cp')) || []).toEqual([]);
+    expect((await ler(page, 'sc_mov_fin')) || []).toEqual([]);
+    const exc = await ler(page, 'sc_fin_excluidos');
+    expect(exc.map(x => [x.lancamento.id, x.motivo])).toEqual([[900, 'Comissão passou a ser registro do pedido']]);
+    const p = (await ler(page, 'sc_ped'))[0];
+    expect([p.comissao_status, p.comissao_paga]).toEqual(['pendente', false]);
+});
+
+test('editar o pedido nao muda comissao paga (valor, % e pessoa) e avisa; a nao paga recalcula', async ({ page }) => {
+    const base = { status: 'Orçamento', financeiro_gerado: false, valor_recebido: 0, data_instalado: undefined, clienteId: 9, clienteNome: 'Cli Teste',
+        ambientes: [{ nome: 'Sala', calculado: true, tecidos: [] }], itens: [],
+        comissao_status: 'paga', comissao_paga: true, comissao_data_pgto: DATA_INST, comissao_mov_id: 9, comissao_pct: 5, comissao_valor: 50, arq_id: null, arq_nome: '', arq_comissao_valor: 0, arq_comissao_pct: 0 };
+    await abrir(page, { sc_cli: [{ id: 9, nome: 'Cli Teste' }], sc_vend: [...VEND, { id: 5, nome: 'Bia', comissao_pct: 10, tipo: 'vendedor' }],
+        sc_ped: [pedido(base)], sc_mov_fin: [{ id: 9, conta_id: 1, data: '2026-10-25', sentido: 'saida', valor: 50, origem: 'comissao', origem_id: 26600, papel: 'vendedor', categoria_id: 'cat_comissoes' }],
+        sc_editando_id: 26600 }, '/pedido.html');
+    await page.selectOption('#ped-vendedor', '5');
+    await page.evaluate(() => {
+        pedidoDraft.ambientes.forEach(a => { a.calculado = true; });
+        pedidoDraft.itens = [{ materialId: 1, nome: 'X', quantidade: 1, preco_unit: 2000, subtotal: 2000 }];
+        document.getElementById('ped-desconto').value = 0;
+        salvarPedido();
+    });
+    await expect(page.locator('#sc-modal-msg')).toHaveText('A comissão de Bruno já foi paga (R$ 50,00). Ela não muda com esta edição.');
+    await page.locator('#sc-modal-ok').click();
+    await page.waitForURL(/index\.html/);
+    const p = (await ler(page, 'sc_ped'))[0];
+    expect(p).toMatchObject({ vendedor_id: 2, vendedor_nome: 'Bruno', comissao_pct: 5, comissao_valor: 50, comissao_status: 'paga', comissao_paga: true, comissao_mov_id: 9 });
+});
+
+test('Fluxo: comissao pendente aparece como saida prevista no ultimo dia do mes', async ({ page }) => {
+    await abrir(page, { sc_ped: [pendente()] }, '/financeiro.html');
+    await page.locator('.fin-tab-btn[data-tab="fluxo"]').click();
+    const linha = page.locator('#fluxo-linhas tr.fluxo-linha', { hasText: 'Comissão Bruno — Pedido #26600' });
+    await expect(linha).toHaveCount(1);
+    await expect(linha).toContainText('Previsto');
+    await expect(linha).toContainText('30/11');
+    await expect(page.locator('#fluxo-linhas tr.fluxo-linha', { hasText: 'Comissão Studio M — Pedido #26600' })).toHaveCount(1);
+});

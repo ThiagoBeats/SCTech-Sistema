@@ -169,3 +169,46 @@ test('Fluxo: movimento de comissao e saida realizada, na categoria Comissoes', (
     assert.strictEqual(FX.resumo(Object.assign({}, p, { categoriaId: 'cat_comissoes' })).saidas, 50);
     assert.strictEqual(FX.movimentacoes(p).find(l => l.origem === 'comissao').descricao, 'Comissão Ana — Pedido #7');
 });
+
+test('status desconhecido: so e registrada se o pedido ja passou do Orcamento', () => {
+    const p = ped({ status: 'Qualquer coisa' });
+    F.sincronizarStatusComissoes(p);
+    assert.strictEqual(p.comissao_status, undefined);
+    const q = ped({ status: 'Produção' });
+    F.sincronizarStatusComissoes(q);
+    assert.strictEqual(q.comissao_status, 'registrada');
+});
+
+test('migracao: conta de comissao com baixa parcial nao e removida', () => {
+    const pedidos = [ped({ id: 1, status: 'Instalado' })];
+    const contas_pagar = [{ id: 10, pedido_id: 1, papel_comissao: 'vendedor', status: 'Pendente', valor: 50 }];
+    const movimentos = [{ id: 5, origem: 'cp', origem_id: 10 }];
+    assert.deepStrictEqual(F.planoMigracaoComissao({ pedidos, contas_pagar, movimentos }).removerCP, []);
+});
+
+test('comissoesPendentesPrevistas: so pendentes sem conta propria', () => {
+    const peds = [
+        ped({ id: 1, status: 'Instalado', comissao_status: 'pendente' }),
+        ped({ id: 2, status: 'Medição', comissao_status: 'registrada' }),
+        ped({ id: 3, status: 'Instalado', comissao_status: 'paga', comissao_paga: true }),
+        ped({ id: 4, status: 'Instalado', comissao_status: 'pendente' })
+    ];
+    const cps = [{ pedido_id: 4, papel_comissao: 'vendedor', status: 'Pendente', valor: 50 }];
+    assert.deepStrictEqual(F.comissoesPendentesPrevistas(peds, cps, []), [{ pedidoId: 1, papel: 'vendedor', nome: 'Ana', valor: 50 }]);
+});
+
+test('Fluxo: comissao pendente e saida prevista no ultimo dia do mes, com a descricao; fora com conta ou outra categoria', () => {
+    const peds = [ped({ id: 7, status: 'Instalado', comissao_status: 'pendente' })];
+    const p = { de: '2026-11-01', ate: '2026-12-31', hoje: '2026-11-25', contaId: null, categoriaId: null,
+        contas: [{ id: 1, nome: 'A', saldo_inicial: 1000, data_saldo_inicial: '2026-09-01', ativo: true }],
+        movimentos: [], contasReceber: [], contasPagar: [], despesasFixas: [], meios: [], pedidos: peds, vendedores: [] };
+    assert.strictEqual(FX.resumo(p).previsto.saidas, 50);
+    const lin = FX.movimentacoes(p).find(l => l.previsto && /Comissão/.test(l.descricao));
+    assert.strictEqual(lin.data, '2026-11-30');
+    assert.strictEqual(lin.descricao, 'Comissão Ana — Pedido #7');
+    assert.strictEqual(lin.saida, 50);
+    assert.strictEqual(FX.resumo(Object.assign({}, p, { categoriaId: 'cat_comissoes' })).previsto.saidas, 50);
+    assert.strictEqual(FX.resumo(Object.assign({}, p, { categoriaId: 'cat_vendas' })).previsto.saidas, 0);
+    assert.strictEqual(FX.resumo(Object.assign({}, p, { contaId: 1 })).previsto.saidas, 0);
+    assert.strictEqual(FX.resumo(Object.assign({}, p, { ate: '2026-11-20' })).previsto.saidas, 0);
+});

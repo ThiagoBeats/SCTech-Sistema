@@ -71,7 +71,7 @@
                 const di = ped && FC.dataLocalISO(ped.data_instalado);
                 if (!di || !dentro(di)) return;
                 FC.comissoesContaveis(ped, cps).forEach(c => {
-                    itens.push({ tipo: 'comissao', reg: { id: ped.id + ':' + c.papel, categoria_id: 'cat_comissoes', descricao: 'Comissão — Pedido #' + ped.id }, data: di, valor: c.valor });
+                    itens.push({ tipo: 'comissao', reg: { id: ped.id + ':' + c.papel, categoria_id: 'cat_comissoes', descricao: 'Comissão — Pedido #' + String(ped.id) }, data: di, valor: c.valor });
                 });
             });
         }

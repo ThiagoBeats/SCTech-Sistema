@@ -295,7 +295,8 @@
     };
     const STATUS_COMISSAO = ['registrada', 'pendente', 'paga'];
     const _instalado = s => s === 'Instalado' || s === 'Faturado';   // 'Faturado' e o nome antigo
-    const _aprovado = s => !!s && s !== 'Orçamento' && s !== 'Orcamento';
+    const ETAPAS_APROVADAS = ['Medição', 'Produção', 'Aguardando Tecido', 'Na Costura', 'Pronto p/ Instalação', 'Aguardando Financeiro', 'Aguardando Pagamento', 'Instalado', 'Faturado'];
+    const _aprovado = s => ETAPAS_APROVADAS.includes(s);   // status desconhecido = ainda nao aprovado
 
     // O pedido tem comissao neste papel: valor > 0 e alguem (id ou nome) a receber.
     function temComissao(ped, papel) {
@@ -350,6 +351,23 @@
             const temCP = (contasPagar || []).some(cp => cp && cp.pedido_id == ped.id && cp.status !== 'Cancelado' && papelDaContaComissao(cp) === papel);
             if (temCP) return;
             out.push({ papel, status, valor: arredondar(ped[CAMPOS_COMISSAO[papel].valor]) });
+        });
+        return out;
+    }
+
+    // Comissoes pendentes que ainda vao sair do caixa (previsao): [{ pedidoId, papel, nome, valor }].
+    // Fora as que tem conta a pagar propria (a previsao ja conta a conta).
+    function comissoesPendentesPrevistas(pedidos, contasPagar, vendedores) {
+        const out = [];
+        (pedidos || []).forEach(ped => {
+            Object.keys(CAMPOS_COMISSAO).forEach(papel => {
+                if (!temComissao(ped, papel)) return;
+                const c = CAMPOS_COMISSAO[papel], r = CAMPOS_COMISSAO_REG[papel];
+                if ((ped[r.status] || statusEsperadoComissao(ped, papel)) !== 'pendente') return;
+                if ((contasPagar || []).some(cp => cp && cp.pedido_id == ped.id && cp.status !== 'Cancelado' && papelDaContaComissao(cp) === papel)) return;
+                const v = ped[c.id] != null && ped[c.id] !== '' ? (vendedores || []).find(x => String(x.id) === String(ped[c.id])) : null;
+                out.push({ pedidoId: ped.id, papel, nome: (v && v.nome) || ped[c.nome] || '', valor: arredondar(ped[c.valor]) });
+            });
         });
         return out;
     }
@@ -412,7 +430,9 @@
             Object.keys(CAMPOS_COMISSAO).forEach(papel => {
                 const c = CAMPOS_COMISSAO[papel], r = CAMPOS_COMISSAO_REG[papel];
                 const contas = doPapel(ped, papel);
-                const abertas = contas.filter(cp => cp.status !== 'Pago');
+                // So sai a conta totalmente em aberto: com baixa parcial (movimento 'cp') fica como esta.
+                const comMov = cp => (movimentos || []).some(m => m && m.origem === 'cp' && String(m.origem_id) === String(cp.id));
+                const abertas = contas.filter(cp => cp.status !== 'Pago' && !comMov(cp));
                 const pagas = contas.filter(cp => cp.status === 'Pago');
                 abertas.forEach(cp => plano.removerCP.push(cp.id));
                 let ref = ped;
@@ -453,7 +473,7 @@
         tecidosDoPedido, custoSnapshotPedido, resultadoPedido, contasComissaoDoPedido, parcelasCompra, acharContaDuplicadaNota,
         dataLocalISO, planoMigracaoFase0, somarMesesData,
         CAMPOS_COMISSAO_REG, STATUS_COMISSAO, MOTIVO_COMISSAO_V2, temComissao, statusEsperadoComissao, sincronizarStatusComissoes, papelDaContaComissao,
-        comissoesContaveis, linhasComissoes, totaisComissoes, planoMigracaoComissao
+        comissoesContaveis, comissoesPendentesPrevistas, linhasComissoes, totaisComissoes, planoMigracaoComissao
     };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

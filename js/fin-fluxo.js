@@ -29,7 +29,8 @@ function _fxParams(extra) {
     return Object.assign({
         de: finFluxo.de, ate: finFluxo.ate, hoje: hojeLocal(), contaId: finFluxo.contaId, categoriaId: finFluxo.categoriaId,
         movimentos: db.movimentos_fin || [], contas: getContasFin(), contasReceber: db.contas_receber || [], contasPagar: db.contas_pagar || [],
-        despesasFixas: db.despesas_fixas || [], meios: getMeiosPag(), categorias: fc.categorias
+        despesasFixas: db.despesas_fixas || [], meios: getMeiosPag(), categorias: fc.categorias,
+        pedidos: db.pedidos || [], vendedores: db.vendedores || []
     }, extra || {});
 }
 

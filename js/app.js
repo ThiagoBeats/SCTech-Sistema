@@ -7597,6 +7597,7 @@ Volte o pedido para Orçamento para editar.`, '🔒');
     dadosPedido.meio_entrada = dadosPedido.entrada_pct <= 0 ? null : _lerMeioPedido('entrada');
     dadosPedido.meio_saldo = dadosPedido.entrada_pct >= 100 ? null : _lerMeioPedido('saldo');
     if (editandoIdPedido && !await confirmarValorContraNotas(editandoIdPedido, valor)) return;
+    const avisosComissaoPaga = [];
     if (editandoIdPedido) {
         const index = db.pedidos.findIndex(p => p.id == editandoIdPedido);
         dadosPedido.id = editandoIdPedido;
@@ -7622,6 +7623,15 @@ Volte o pedido para Orçamento para editar.`, '🔒');
              'inst_cep', 'inst_rua', 'inst_numero', 'inst_complemento', 'inst_bairro', 'inst_uf',
              'inst_historico', 'inst_confirmada_em', 'usuario_instalacao_id', 'instalador_nome', 'inst_aceite', 'inst_recusa']
                 .forEach(k => { if (db.pedidos[index][k] !== undefined) dadosPedido[k] = db.pedidos[index][k]; });
+            // Comissao paga e um retrato: valor, % e pessoa nao mudam com a edicao (so a nao paga recalcula).
+            Object.keys(CAMPOS_COMISSAO).forEach(papel => {
+                const c = CAMPOS_COMISSAO[papel], orig = db.pedidos[index];
+                if (FinanceiroCore.statusEsperadoComissao(orig, papel) !== 'paga') return;
+                const mudou = String(dadosPedido[c.id] || '') !== String(orig[c.id] || '')
+                    || Math.abs((Number(dadosPedido[c.valor]) || 0) - (Number(orig[c.valor]) || 0)) >= 0.005;
+                ['id', 'nome', 'pct', 'valor'].forEach(k => { dadosPedido[c[k]] = orig[c[k]]; });
+                if (mudou) avisosComissaoPaga.push(`A comissão de ${orig[c.nome] || ''} já foi paga (${_finBrl(orig[c.valor])}). Ela não muda com esta edição.`);
+            });
             dadosPedido.comissao_paga     = db.pedidos[index].comissao_paga     || false;
             // Status, pagamento e historico das comissoes sobrevivem a edicao.
             ['comissao_status', 'comissao_mov_id', 'comissao_conta_id', 'comissao_historico',
@@ -7670,6 +7680,7 @@ Volte o pedido para Orçamento para editar.`, '🔒');
     gerarComissoesPedido(dadosPedido);
     syncDB();
     await avisarPagoAMais(pagoAMais);
+    if (avisosComissaoPaga.length) await showAlert(avisosComissaoPaga.join(String.fromCharCode(10)), 'ℹ️');
     localStorage.removeItem('sc_editando_id');
     toastReload('Pedido salvo!');
     window.location.href = 'index.html';
@@ -15521,6 +15532,8 @@ function registrarPagamentoComissoes({ itens, contaId, data } = {}) {
     if (!alvos.length) return { ok: false, erro: 'Nenhuma comissão pendente para pagar.' };
     if (!Array.isArray(db.movimentos_fin)) db.movimentos_fin = [];
     const novoIdMov = _novosIdsFin(db.movimentos_fin);
+    // Para voltar ao que era se faltar espaco para gravar.
+    const antes = { peds: alvos.map(a => [a.ped, JSON.parse(JSON.stringify(a.ped))]), nMov: db.movimentos_fin.length, saldoEm: conta.saldo_atualizado_em };
     const quando = new Date(data + 'T12:00:00').getTime();
     let total = 0;
     alvos.forEach(({ ped, papel, c, r }) => {
@@ -15536,7 +15549,12 @@ function registrarPagamentoComissoes({ itens, contaId, data } = {}) {
         total += valor;
     });
     _finContaTocada(conta.id);
-    _gravarChaves(['sc_ped', 'sc_mov_fin', 'sc_contas_fin']);
+    if (!_gravarChaves(['sc_ped', 'sc_mov_fin', 'sc_contas_fin'], { silencioso: true })) {
+        antes.peds.forEach(([p, copia]) => { Object.keys(p).forEach(k => { delete p[k]; }); Object.assign(p, copia); });
+        db.movimentos_fin.length = antes.nMov;
+        conta.saldo_atualizado_em = antes.saldoEm;
+        return { ok: false, erro: MSG_SEM_ESPACO };
+    }
     return { ok: true, pagos: alvos.length, total: CaixaCore.arredondar(total) };
 }
 
@@ -15549,6 +15567,9 @@ function desfazerPagamentoComissao({ pedidoId, papel } = {}) {
     const c = CAMPOS_COMISSAO[papel], r = FinanceiroCore.CAMPOS_COMISSAO_REG[papel];
     if (!ped || !c || (ped[r.status] || FinanceiroCore.statusEsperadoComissao(ped, papel)) !== 'paga') return { ok: false, erro: 'Esta comissão não está paga.' };
     const mov = ped[r.mov] != null ? (db.movimentos_fin || []).find(m => CaixaCore.mesmoId(m.id, ped[r.mov])) : null;
+    // Para voltar ao que era se faltar espaco para gravar (pedido, listas e saldo das contas tocadas).
+    const antesD = { ped: JSON.parse(JSON.stringify(ped)), movs: (db.movimentos_fin || []).slice(), cps: (db.contas_pagar || []).map(x => [x, JSON.parse(JSON.stringify(x))]),
+        cpLista: (db.contas_pagar || []).slice(), exc: (db.fin_excluidos || []).slice(), extrato: JSON.stringify(db.fin_extrato || []), contas: JSON.stringify(getContasFin()) };
     const dataPgto = FinanceiroCore.dataLocalISO(ped[c.data]);
     if (mov && mov.origem === 'comissao') {
         db.movimentos_fin = db.movimentos_fin.filter(m => m !== mov);
@@ -15568,7 +15589,15 @@ function desfazerPagamentoComissao({ pedidoId, papel } = {}) {
     if (!Array.isArray(ped[r.hist])) ped[r.hist] = [];
     ped[r.hist].push(Object.assign({ acao: 'pagamento_desfeito', detalhe: `Pagamento de ${_finBrl(ped[c.valor])}${dataPgto ? ' em ' + _finDataBR(dataPgto) : ''} desfeito`, em: new Date().toISOString() }, _finQuem()));
     if (typeof _ccDesligarSumidos === 'function') _ccDesligarSumidos();
-    _gravarChaves(['sc_ped', 'sc_mov_fin', 'sc_contas_fin', 'sc_cp', 'sc_fin_excluidos', 'sc_fin_extrato']);
+    if (!_gravarChaves(['sc_ped', 'sc_mov_fin', 'sc_contas_fin', 'sc_cp', 'sc_fin_excluidos', 'sc_fin_extrato'], { silencioso: true })) {
+        Object.keys(ped).forEach(k => { delete ped[k]; }); Object.assign(ped, antesD.ped);
+        db.movimentos_fin = antesD.movs;
+        db.contas_pagar = antesD.cpLista; antesD.cps.forEach(([x, copia]) => { Object.keys(x).forEach(k => { delete x[k]; }); Object.assign(x, copia); });
+        db.fin_excluidos = antesD.exc;
+        db.fin_extrato = JSON.parse(antesD.extrato);
+        const cs = JSON.parse(antesD.contas); getContasFin().forEach((c, i) => { Object.keys(c).forEach(k => { delete c[k]; }); Object.assign(c, cs[i]); });
+        return { ok: false, erro: MSG_SEM_ESPACO };
+    }
     return { ok: true };
 }
 
@@ -15671,6 +15700,9 @@ async function estornarCP(id) {
     const cp = db.contas_pagar.find(x => CaixaCore.mesmoId(x.id, id));
     if (!cp || cp.status !== 'Pago') return;
     if (cp.categoria === 'taxa_cartao') { await showAlert('A taxa do cartão sai pelo estorno do recebimento.', 'ℹ️'); return; }
+    if (FinanceiroCore.papelDaContaComissao(cp) && cp.pedido_id != null) {
+        await showAlert('Esta comissão foi paga antes da mudança. Para desfazer, use Vendedores › Comissões.', 'ℹ️'); return;
+    }
     if (!await showConfirm('Estornar este pagamento? A conta volta a ficar em aberto.', '↩', 'Estornar', 'Cancelar')) return;
     _estornarCPDados(cp);
     if (typeof _ccDesligarSumidos === 'function') _ccDesligarSumidos();
@@ -17188,7 +17220,9 @@ function _resPrevisto(mes) {
     });
     const aCair = ResultadoCore.aCairNoMes({ mes, hoje, ...dadosFinanceirosBase() });
     const entradas = CaixaCore.arredondar(semanas.reduce((s, w) => s + w.entradas, 0) + cartao + aCair.entradas);
-    const saidas = CaixaCore.arredondar(semanas.reduce((s, w) => s + w.saidas, 0) + aCair.saidas);
+    // Comissoes pendentes saem do caixa ate o fim do mes (pagamento manual): contam como saida prevista.
+    const comissoesPrev = FinanceiroCore.comissoesPendentesPrevistas(db.pedidos, db.contas_pagar, db.vendedores).reduce((s, c) => s + c.valor, 0);
+    const saidas = CaixaCore.arredondar(semanas.reduce((s, w) => s + w.saidas, 0) + aCair.saidas + comissoesPrev);
     // Taxas de cartao ainda previstas (CPs em aberto e as dos repasses ja baixados que ainda vao cair): saem do faturamento previsto.
     const taxas = CaixaCore.arredondar(cps.filter(c => finAberta(c) && c.categoria === 'taxa_cartao').reduce((s, c) => s + (Number(c.valor) || 0), 0) + aCair.taxas);
     return { entradas, saidas, taxas, atrasados };

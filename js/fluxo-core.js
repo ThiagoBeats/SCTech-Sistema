@@ -11,6 +11,7 @@
     }
     const caixa = () => dep('CaixaCore', './caixa-core.js');
     const fin = () => dep('FinCatCore', './fin-cat-core.js');
+    const fcore = () => dep('FinanceiroCore', './financeiro-core.js');
 
     const num = v => (v === '' || v == null ? 0 : Number(v) || 0);
     function arredondar(v) {
@@ -124,6 +125,17 @@
             const crsUso = crs.filter(cr => casaCategoria(cr, 'cr') && daConta(cr, meioDe(cr)));
             const cpsUso = cps.filter(cp => casaCategoria(cp, 'cp') && daConta(cp, null));
             const fixasUso = (p.despesasFixas || []).filter(df => df && casaCategoria(df, 'cp') && daConta(df, null));
+            // Comissoes pendentes: saida prevista no ultimo dia do mes atual (conta nao definida: so sem filtro de conta).
+            if (contaId == null && (catId == null || catId === 'cat_comissoes')) {
+                const ano = Number(hoje.slice(0, 4)), mes = Number(hoje.slice(5, 7));
+                const dataCom = iso(ano, mes, ultimoDia(ano, mes));
+                if (dataCom >= iniPrev && dataCom <= ate) {
+                    fcore().comissoesPendentesPrevistas(p.pedidos, cps, p.vendedores).forEach(c => {
+                        out.previsto.push({ data: dataCom, ent: 0, sai: c.valor, ab: 0, previsto: true, mov: null, transferencia: false,
+                            lanc: { tipo: 'comissao', descricao: 'Comissão ' + c.nome + ' — Pedido #' + c.pedidoId, pessoa: '', conta_id: null } });
+                    });
+                }
+            }
             C.lancamentosPrevistos({ hoje, limite: ate, movimentos: [], contasReceber: crsUso, contasPagar: cpsUso, despesasFixas: fixasUso, contas, meios: p.meios, comOrigem: true })
                 .forEach(l => {
                     if (l.data < iniPrev || l.data > ate) return;
