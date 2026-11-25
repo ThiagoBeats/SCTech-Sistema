@@ -121,3 +121,40 @@ test('Excel da lista filtrada (stub XLSX)', async ({ page }) => {
     expect(aoa).toContainEqual(['101', 'NFS-e', 'Maria da Silva', '#26401', '05/11/2026', 1000, 'Autorizada']);
     expect(aoa).toContainEqual(['Total das autorizadas', '', '', '', '', 1500]);
 });
+
+test('busca ignora acento e caixa (cliente e numero)', async ({ page }) => {
+    await abrir(page, { sc_cli: [{ id: 1, nome: 'José Conceição' }, ...CLIENTES.slice(1)], sc_nf: [nota(1, 26401, 1, 'nfse', '101', '2026-11-05', 1000, 'autorizada'), nota(2, 26402, 2, 'nfe', '202', '2026-11-12', 500, 'autorizada')] });
+    await abrirLista(page);
+    await page.locator('#nfl-busca').fill('jose conceicao');
+    await expect(linhas(page)).toHaveCount(1);
+    await page.locator('#nfl-busca').fill('CONCEIÇÃO');
+    await expect(linhas(page)).toHaveCount(1);
+});
+
+test('ordena numero de nota como numero e pagina de 50 em 50', async ({ page }) => {
+    const muitas = [];
+    for (let i = 1; i <= 60; i++) muitas.push(nota(100 + i, 26401, 1, 'nfse', String(i), '2026-11-10', 10, 'autorizada'));
+    await abrir(page, { sc_nf: muitas });
+    await abrirLista(page);
+    await expect(linhas(page)).toHaveCount(50);
+    await expect(page.locator('#nfl-pag-txt')).toHaveText('Página 1 de 2');
+    await expect(linhas(page).first().locator('td').first()).toHaveText('60');
+    await expect(linhas(page).nth(1).locator('td').first()).toHaveText('59');
+    await expect(page.locator('#nfl-total')).toContainText('600,00');
+    await page.locator('#nfl-prox').click();
+    await expect(linhas(page)).toHaveCount(10);
+    await expect(page.locator('#nfl-prox')).toBeDisabled();
+});
+
+test('Excel sem datas: periodo "Todas as datas" e nome do arquivo', async ({ page }) => {
+    await page.route(CDN, r => r.fulfill({ contentType: 'application/javascript', body: STUB }));
+    await abrir(page);
+    await abrirLista(page);
+    await page.fill('#nfl-de', '');
+    await page.fill('#nfl-ate', '');
+    await page.locator('#nfl-excel').click();
+    await page.waitForFunction(() => window.__xlsx);
+    const x = await page.evaluate(() => window.__xlsx);
+    expect(x.nome).toBe('Notas_fiscais_todas_as_datas.xlsx');
+    expect(x.wb.abas[0].aoa[2]).toEqual(['Período: Todas as datas']);
+});

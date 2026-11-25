@@ -105,7 +105,7 @@ test('anexar NFS-e ABRASF preenche numero e data, confere e salva com historico'
     await expect(linha.locator('.nf-selo')).toHaveText('Autorizada');
     const nf = await ler(page, 'sc_nf');
     expect(nf).toHaveLength(1);
-    expect(nf[0]).toMatchObject({ pedido_id: 26401, tipo: 'nfse', numero: '456', codigo_verificacao: 'ABCD1234', status: 'autorizada', origem: 'manual', cliente_id: 1, xml_nome: 'nfse-abrasf.xml', pdf: null });
+    expect(nf[0]).toMatchObject({ pedido_id: 26401, tipo: 'nfse', numero: '456', codigo_verificacao: 'ABCD1234', status: 'autorizada', origem: 'manual', cliente_id: 1, xml_nome: 'nfse-abrasf.xml', tem_pdf: false });
     expect(nf[0].eventos[0]).toMatchObject({ tipo: 'anexada', detalhe: expect.stringContaining('Nota anexada'), por: 'Teste' });
     await linha.getByRole('button', { name: 'Histórico' }).click();
     await expect(page.locator('#nf-historico')).toContainText('Nota anexada');
@@ -157,7 +157,7 @@ test('PDF de 1,2 MB e recusado com o texto exato', async ({ page }) => {
     await page.setInputFiles('#nf-xml', FIX('nfse-abrasf.xml'));
     await page.locator('#nf-salvar').click();
     await expect(page.locator('#nf-janela .nf-linha')).toHaveCount(1);
-    expect((await ler(page, 'sc_nf'))[0].pdf).toBeNull();
+    expect((await ler(page, 'sc_nf'))[0].tem_pdf).toBe(false);
 });
 
 test('Ver PDF abre em nova aba; sem PDF oferece anexar', async ({ page }) => {
@@ -167,9 +167,9 @@ test('Ver PDF abre em nova aba; sem PDF oferece anexar', async ({ page }) => {
     await page.setInputFiles('#nf-xml', FIX('nfse-abrasf.xml'));
     await page.setInputFiles('#nf-pdf', PDF_PEQ);
     await page.locator('#nf-salvar').click();
-    await page.locator('#nf-janela').getByRole('button', { name: 'Ver PDF' }).click();
+    await page.locator('#nf-janela').getByRole('button', { name: 'Ver PDF', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => window.__abertos.length)).toBe(1);
     const abertos = await page.evaluate(() => window.__abertos);
-    expect(abertos).toHaveLength(1);
     expect(abertos[0]).toMatch(/^blob:/);
     const conteudo = await page.evaluate(async u => (await (await fetch(u)).text()).slice(0, 8), abertos[0]);
     expect(conteudo).toBe('%PDF-1.4');
@@ -178,7 +178,7 @@ test('Ver PDF abre em nova aba; sem PDF oferece anexar', async ({ page }) => {
     await emitir(page, 26402);
     await page.setInputFiles('#nf-xml', FIX('nfe-venda.xml'));
     await page.locator('#nf-salvar').click();
-    await page.locator('#nf-janela').getByRole('button', { name: 'Ver PDF' }).click();
+    await page.locator('#nf-janela').getByRole('button', { name: 'Ver PDF', exact: true }).click();
     await expect(page.locator('#sc-modal-msg')).toHaveText('PDF não anexado.');
     await page.getByRole('button', { name: 'Anexar PDF' }).click();
     await page.setInputFiles('#nf-anexo-pdf', PDF_PEQ);
@@ -195,7 +195,7 @@ test('Ver PDF com pop-up bloqueado avisa', async ({ page }) => {
     await page.setInputFiles('#nf-xml', FIX('nfse-abrasf.xml'));
     await page.setInputFiles('#nf-pdf', PDF_PEQ);
     await page.locator('#nf-salvar').click();
-    await page.locator('#nf-janela').getByRole('button', { name: 'Ver PDF' }).click();
+    await page.locator('#nf-janela').getByRole('button', { name: 'Ver PDF', exact: true }).click();
     await expect(page.locator('.sc-toast', { hasText: 'bloqueou a nova aba' })).toBeVisible();
 });
 
@@ -292,6 +292,7 @@ test('backup leva as notas (exportar e importar)', async ({ page }) => {
     await page.locator('#nf-salvar').click();
     const dados = await page.evaluate(() => JSON.parse(JSON.stringify(_dadosExportacao())));
     expect(dados.notas_fiscais).toHaveLength(1);
+    dados.notas_fiscais[0].eventos = undefined;
     await page.evaluate(() => { localStorage.removeItem('sc_nf'); });
     await page.evaluate(() => { window.__marca = 1; });
     await page.evaluate(json => importarDados({ target: { files: [new File([json], 'b.json')], value: '' } }), JSON.stringify(dados));
@@ -323,16 +324,17 @@ test('arquivo que nao e PDF (html renomeado) e recusado ao anexar e ao abrir bac
     await expect(page.locator('#nf-msg-pdf')).toHaveText('Este arquivo não é um PDF.');
     await page.setInputFiles('#nf-xml', FIX('nfse-abrasf.xml'));
     await page.locator('#nf-salvar').click();
-    expect((await notas(page))[0].pdf).toBeNull();
+    expect((await notas(page))[0].tem_pdf).toBe(false);
     // PDF guardado com tipo html (backup adulterado): nao abre
     await page.evaluate(() => { db.notas_fiscais[0].pdf = 'data:text/html;base64,' + btoa('<script>1</script>'); });
-    await page.locator('#nf-janela').getByRole('button', { name: 'Ver PDF' }).click();
+    await page.locator('#nf-janela').getByRole('button', { name: 'Ver PDF', exact: true }).click();
     await expect(page.locator('#sc-modal-msg')).toHaveText('Este arquivo não é um PDF.');
     expect(await page.evaluate(() => window.__abertos)).toHaveLength(0);
     await page.locator('#sc-modal-ok').click();
     // tipo html mas bytes de PDF: abre como application/pdf
     await page.evaluate(() => { db.notas_fiscais[0].pdf = 'data:text/html;base64,' + btoa('%PDF-1.4 x'); });
-    await page.locator('#nf-janela').getByRole('button', { name: 'Ver PDF' }).click();
+    await page.locator('#nf-janela').getByRole('button', { name: 'Ver PDF', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => window.__abertos.length)).toBe(1);
     const u = (await page.evaluate(() => window.__abertos))[0];
     expect(await page.evaluate(async u => (await (await fetch(u)).blob()).type, u)).toBe('application/pdf');
 });
@@ -347,8 +349,11 @@ test('XML ISO-8859-1 com acentos: le certo e Baixar XML devolve os bytes origina
     await expect(page.locator('#nf-numero')).toHaveValue('456');
     await page.locator('#nf-salvar').click();
     const n = (await notas(page))[0];
-    expect(n.xml).toContain('Instalação de cortinas');
-    expect(n.xml).not.toContain('�');
+    expect(n.xml).toBe('');
+    expect(n.xml_b64).toBeTruthy();
+    const txt = await page.evaluate(() => _nfXmlTexto(db.notas_fiscais[0]));
+    expect(txt).toContain('Instalação de cortinas');
+    expect(txt).not.toContain('\uFFFD');
     expect(n.xml_encoding).toBe('iso-8859-1');
     const [dl] = await Promise.all([page.waitForEvent('download'), page.locator('#nf-janela').getByRole('button', { name: 'Baixar XML' }).click()]);
     const baixado = require('fs').readFileSync(await dl.path());
@@ -394,4 +399,230 @@ test('excluir pedido com nota nao cancelada e recusado', async ({ page }) => {
     await expect(page.locator('#sc-modal-msg')).toHaveText('Este pedido tem nota fiscal emitida e não pode ser excluído. Cancele a nota antes.');
     await page.locator('#sc-modal-ok').click();
     expect(await page.evaluate(() => db.pedidos.some(p => p.id === 26401))).toBe(true);
+});
+
+const idbBytes = (page, id) => page.evaluate(async i => { const b = await NfArquivos.ler(i); return b ? Array.from(b.slice(0, 8)) : null; }, id);
+const PDF_TXT = '%PDF-1.4';
+const NOTA = (extra) => Object.assign({ id: 501, pedido_id: 26401, tipo: 'nfse', numero: '9', serie: '', chave: null, codigo_verificacao: 'X', data_emissao: '2026-11-20', valor: 3450, cliente_id: 1, status: 'autorizada', protocolo: null, eventos: [], xml_nome: 'a.xml', xml: '<a/>', pdf_nome: '', pdf: null, origem: 'manual', criado_em: '2026-11-20T10:00:00Z', criado_por: 1 }, extra || {});
+
+test('PDF vai para o IndexedDB: sc_nf guarda so os dados e o texto de espaco aparece', async ({ page }) => {
+    await abrir(page);
+    await emitir(page, 26401);
+    await page.setInputFiles('#nf-xml', FIX('nfse-abrasf.xml'));
+    await page.setInputFiles('#nf-pdf', PDF_PEQ);
+    await expect.poll(() => page.evaluate(() => _nfEst && !!_nfEst.pdfBytes)).toBe(true);
+    await page.locator('#nf-salvar').click();
+    await expect(page.locator('#nf-janela .nf-linha')).toHaveCount(1);
+    const n = (await notas(page))[0];
+    expect(n.pdf).toBeUndefined();
+    expect(n).toMatchObject({ tem_pdf: true, pdf_nome: 'nota.pdf', pdf_tamanho: PDF_PEQ.buffer.length });
+    expect(await idbBytes(page, n.id)).toEqual(Array.from(Buffer.from(PDF_TXT)));
+    expect(JSON.stringify(await ler(page, 'sc_nf'))).not.toContain('JVBER');
+    await expect(page.locator('#nf-espaco')).toHaveText(/^Notas fiscais ocupam \d+,\d MB no navegador\.$/);
+});
+
+test('migracao: PDF inline de nota antiga vai para o IndexedDB e sai do sc_nf; XML nao fica duas vezes', async ({ page }) => {
+    const b64 = Buffer.from('%PDF-1.4 antigo').toString('base64');
+    await abrir(page, { sc_nf: [NOTA({ pdf: 'data:application/pdf;base64,' + b64, pdf_nome: 'velho.pdf', xml: 'texto', xml_b64: 'dGV4dG8=', xml_encoding: 'iso-8859-1' })] });
+    await expect.poll(async () => (await notas(page))[0].tem_pdf).toBe(true);
+    const n = (await notas(page))[0];
+    expect(n.pdf).toBeUndefined();
+    expect(n.xml).toBe('');
+    expect(n.pdf_tamanho).toBe('%PDF-1.4 antigo'.length);
+    expect((await idbBytes(page, 501)).length).toBe(8);
+});
+
+test('backup com PDF: exporta o PDF junto e a importacao o devolve ao IndexedDB; backup antigo com pdf inline importa', async ({ page }) => {
+    await abrir(page);
+    await emitir(page, 26401);
+    await page.setInputFiles('#nf-xml', FIX('nfse-abrasf.xml'));
+    await page.setInputFiles('#nf-pdf', PDF_PEQ);
+    await expect.poll(() => page.evaluate(() => _nfEst && !!_nfEst.pdfBytes)).toBe(true);
+    await page.locator('#nf-salvar').click();
+    await expect(page.locator('#nf-janela .nf-linha')).toHaveCount(1);
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.evaluate(() => exportarDados())]);
+    const json = require('fs').readFileSync(await dl.path(), 'utf8');
+    const dados = JSON.parse(json);
+    expect(dados.notas_fiscais[0].pdf).toMatch(/^data:application\/pdf;base64,/);
+    await page.evaluate(async () => { await NfArquivos.limpar(); });
+    await page.evaluate(() => { window.__marca = 1; });
+    await page.evaluate(j => importarDados({ target: { files: [new File([j], 'b.json')], value: '' } }), json);
+    await page.locator('#sc-modal-ok').click();
+    await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
+    await page.waitForFunction(() => typeof db !== 'undefined');
+    const n = (await notas(page))[0];
+    expect(n.pdf).toBeUndefined();
+    expect(n.tem_pdf).toBe(true);
+    expect(await idbBytes(page, n.id)).toEqual(Array.from(Buffer.from(PDF_TXT)));
+});
+
+test('Remover PDF tira o arquivo, mantem o XML e registra o evento', async ({ page }) => {
+    await abrir(page);
+    await emitir(page, 26401);
+    await page.setInputFiles('#nf-xml', FIX('nfse-abrasf.xml'));
+    await page.setInputFiles('#nf-pdf', PDF_PEQ);
+    await expect.poll(() => page.evaluate(() => _nfEst && !!_nfEst.pdfBytes)).toBe(true);
+    await page.locator('#nf-salvar').click();
+    await page.locator('#nf-janela').getByRole('button', { name: 'Remover PDF' }).click();
+    await page.locator('#sc-modal-ok').click();
+    await expect(page.locator('#nf-janela').getByRole('button', { name: 'Remover PDF' })).toHaveCount(0);
+    const n = (await notas(page))[0];
+    expect(n).toMatchObject({ tem_pdf: false, pdf_nome: '' });
+    expect(n.xml).toContain('CompNfse');
+    expect(n.eventos.at(-1).detalhe).toContain('PDF removido');
+    expect(await idbBytes(page, n.id)).toBeNull();
+});
+
+test('sem IndexedDB: PDF e recusado com a mensagem clara e o XML ainda salva', async ({ page }) => {
+    await page.addInitScript(() => { Object.defineProperty(window, 'indexedDB', { value: undefined, configurable: true }); });
+    await abrir(page);
+    await emitir(page, 26401);
+    await page.setInputFiles('#nf-pdf', PDF_PEQ);
+    await expect(page.locator('#nf-msg-pdf')).toHaveText('Este navegador não permite guardar o PDF. Guarde o PDF no computador e anexe só o XML.');
+    await page.setInputFiles('#nf-xml', FIX('nfse-abrasf.xml'));
+    await page.locator('#nf-salvar').click();
+    expect((await notas(page))).toHaveLength(1);
+});
+
+test('PDF junto com XML de cancelamento nao e guardado e avisa', async ({ page }) => {
+    await abrir(page);
+    await emitir(page, 26401);
+    await page.setInputFiles('#nf-xml', FIX('nfe-venda.xml'));
+    await page.locator('#nf-salvar').click();
+    await page.locator('#nf-btn-emitir').click();
+    await page.setInputFiles('#nf-pdf', PDF_PEQ);
+    await expect.poll(() => page.evaluate(() => _nfEst && !!_nfEst.pdfBytes)).toBe(true);
+    await page.setInputFiles('#nf-xml', { name: 'cancel.xml', mimeType: 'text/xml', buffer: EVENTO(CHAVE_NFE) });
+    await expect(page.locator('#nf-msg-pdf')).toHaveText('O PDF não foi guardado: este XML é de cancelamento.');
+    await page.locator('#nf-salvar').click();
+    expect((await notas(page))[0]).toMatchObject({ status: 'cancelada', tem_pdf: false });
+});
+
+test('Cancelar nota com XML de evento de outra nota e recusado', async ({ page }) => {
+    await abrir(page);
+    await emitir(page, 26401);
+    await page.setInputFiles('#nf-xml', FIX('nfe-venda.xml'));
+    await page.locator('#nf-salvar').click();
+    await page.locator('#nf-janela').getByRole('button', { name: 'Cancelar nota' }).click();
+    await page.fill('#nf-cancel-motivo', 'Erro');
+    await page.setInputFiles('#nf-cancel-xml', { name: 'outro.xml', mimeType: 'text/xml', buffer: EVENTO('99999999999999999999999999999999999999999999') });
+    await page.locator('#nf-cancel-ok').click();
+    await expect(page.locator('#nf-cancel-msg')).toHaveText('Este XML de cancelamento é de outra nota.');
+    expect((await notas(page))[0].status).toBe('autorizada');
+    await page.setInputFiles('#nf-cancel-xml', { name: 'certo.xml', mimeType: 'text/xml', buffer: EVENTO(CHAVE_NFE) });
+    await page.locator('#nf-cancel-ok').click();
+    await expect(page.locator('#nf-cancelar')).toHaveCount(0);
+    const n = (await notas(page))[0];
+    expect(n.status).toBe('cancelada');
+    expect(n.xml_cancelamento).toContain('110111');
+    await expect(page.locator('#nf-janela').getByRole('button', { name: 'Desfazer cancelamento' })).toHaveCount(0);
+});
+
+test('Desfazer cancelamento manual volta a nota para autorizada com evento', async ({ page }) => {
+    await abrir(page);
+    await emitir(page, 26401);
+    await page.setInputFiles('#nf-xml', FIX('nfse-abrasf.xml'));
+    await page.locator('#nf-salvar').click();
+    await page.locator('#nf-janela').getByRole('button', { name: 'Cancelar nota' }).click();
+    await page.fill('#nf-cancel-motivo', 'Nota errada');
+    await page.locator('#nf-cancel-ok').click();
+    await expect(page.locator('#nf-janela .nf-selo')).toHaveText('Cancelada');
+    await page.locator('#nf-janela').getByRole('button', { name: 'Desfazer cancelamento' }).click();
+    await page.locator('#sc-modal-ok').click();
+    await expect(page.locator('#nf-janela .nf-selo')).toHaveText('Autorizada');
+    const n = (await notas(page))[0];
+    expect(n.status).toBe('autorizada');
+    expect(n.eventos.at(-1).detalhe).toBe('Cancelamento desfeito');
+});
+
+test('aviso de valor abaixo do pedido: "A nota cobre R$ X de R$ Y do pedido."', async ({ page }) => {
+    await abrir(page, { sc_ped: PEDIDOS().map(p => p.id === 26401 ? { ...p, valor: 4000 } : p) });
+    await emitir(page, 26401);
+    await page.setInputFiles('#nf-xml', FIX('nfse-abrasf.xml'));
+    await expect(page.locator('#nf-avisos .nf-aviso')).toHaveText('A nota cobre R$ 3.450,00 de R$ 4.000,00 do pedido.');
+});
+
+test('Baixar XML sempre com extensao .xml e sem pasta', async ({ page }) => {
+    await abrir(page, { sc_nf: [NOTA({ xml_nome: '..\\x/nota.html' })] });
+    await abrirJanela(page, 26401);
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.locator('#nf-janela').getByRole('button', { name: 'Baixar XML' }).click()]);
+    expect(dl.suggestedFilename()).toBe('nota.xml');
+});
+
+test('nota sem eventos (backup antigo) nao quebra Cancelar nem Historico', async ({ page }) => {
+    await abrir(page, { sc_nf: [NOTA({ eventos: undefined })] });
+    await abrirJanela(page, 26401);
+    await page.locator('#nf-janela').getByRole('button', { name: 'Histórico' }).click();
+    await expect(page.locator('#nf-historico')).toContainText('Sem eventos');
+    await page.locator('#nf-historico .modal-close').click();
+    await page.locator('#nf-janela').getByRole('button', { name: 'Cancelar nota' }).click();
+    await page.fill('#nf-cancel-motivo', 'x');
+    await page.locator('#nf-cancel-ok').click();
+    await expect(page.locator('#nf-janela .nf-selo')).toHaveText('Cancelada');
+});
+
+test('Voltar para Orcamento recusa com nota ativa; menu Notas fiscais aparece em Orcamento se ha nota', async ({ page }) => {
+    await abrir(page, { sc_nf: [NOTA()] });
+    await page.evaluate(() => { voltarPedidoParaOrcamento(26401); });
+    await expect(page.locator('#sc-modal-msg')).toHaveText('Este pedido tem nota fiscal emitida. Cancele a nota antes de voltar para Orçamento.');
+    await page.locator('#sc-modal-ok').click();
+    expect(await page.evaluate(() => db.pedidos.find(p => p.id === 26401).status)).toBe('Medição');
+    // com a nota cancelada o menu continua em pedido Orcamento que tenha nota
+    await abrir(page, { sc_nf: [NOTA({ pedido_id: 26403, status: 'cancelada' })] });
+    await menuPed(page, 26403).click();
+    await expect(page.locator('#menu-acoes-flutuante .menu-acoes-item', { hasText: 'Notas fiscais' })).toHaveCount(1);
+});
+
+test('salvar pedido com valor diferente das notas autorizadas pergunta antes', async ({ page }) => {
+    await abrir(page, { sc_nf: [NOTA()] });
+    const p1 = page.evaluate(() => confirmarValorContraNotas(26401, 2900));
+    await expect(page.locator('#sc-modal-msg')).toHaveText('O valor do pedido (R$ 2.900,00) ficou diferente das notas emitidas (R$ 3.450,00). Salvar mesmo assim?');
+    await page.locator('#sc-modal-cancel').click();
+    expect(await p1).toBe(false);
+    expect(await page.evaluate(() => confirmarValorContraNotas(26401, 3450))).toBe(true);
+});
+
+test('provedor com servidor: emitir recebe referencia e pedido_id, rascunho vira processando; cancelar so cancela com status valido', async ({ page }) => {
+    await abrir(page);
+    await page.evaluate(() => {
+        window.__chamadas = [];
+        Fiscal.provedor = {
+            nome: 'falso',
+            emitir: async d => { window.__chamadas.push(['emitir', d, JSON.parse(localStorage.getItem('sc_nf')).map(n => n.status)]); return { status: 'processando', servidor_id: 'SRV-1' }; },
+            consultar: async () => ({ status: 'processando' }),
+            cancelar: async (id, motivo) => { window.__chamadas.push(['cancelar', id, motivo]); return { status: window.__respCancel }; }
+        };
+        window.__respCancel = 'rejeitada';
+    });
+    await emitir(page, 26401);
+    await page.locator('#nf-emitir-agora').click();
+    await expect(page.locator('#nf-emitir')).toHaveCount(0);
+    const [ch] = await page.evaluate(() => window.__chamadas);
+    const n = (await notas(page))[0];
+    expect(ch[1].referencia).toBe(n.id);
+    expect(ch[1].pedido_id).toBe(26401);
+    expect(ch[2]).toEqual(['rascunho']);   // gravada como rascunho antes de chamar o provedor
+    expect(n).toMatchObject({ status: 'processando', servidor_id: 'SRV-1', ref: n.id, origem: 'servidor' });
+    await expect(page.locator('#nf-janela .nf-selo')).toHaveText('Processando');
+    // cancelar com resposta que nao confirma: nada muda
+    await page.locator('#nf-janela').getByRole('button', { name: 'Cancelar nota' }).click();
+    await page.fill('#nf-cancel-motivo', 'teste');
+    await page.locator('#nf-cancel-ok').click();
+    await expect(page.locator('#nf-cancel-msg')).toContainText('não foi confirmado');
+    expect((await notas(page))[0].status).toBe('processando');
+    expect((await page.evaluate(() => window.__chamadas))[1]).toEqual(['cancelar', 'SRV-1', 'teste']);
+    // processando: segue processando com evento; cancelada: cancela
+    await page.evaluate(() => { window.__respCancel = 'cancelada'; });
+    await page.locator('#nf-cancel-ok').click();
+    await expect(page.locator('#nf-cancelar')).toHaveCount(0);
+    expect((await notas(page))[0].status).toBe('cancelada');
+});
+
+test('provedor manual devolve manual: emitir-agora desfaz o rascunho e segue o fluxo de anexar', async ({ page }) => {
+    await abrir(page);
+    await page.evaluate(() => { Fiscal.provedor = { nome: 'quase', emitir: async () => ({ status: 'manual' }), cancelar: async () => ({ status: 'manual' }) }; });
+    await emitir(page, 26401);
+    await page.locator('#nf-emitir-agora').click();
+    await expect(page.locator('#nf-msg-xml')).toHaveText(/Emita esta nota no sistema/);
+    expect(await notas(page)).toEqual([]);
 });

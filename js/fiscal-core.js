@@ -211,7 +211,8 @@
                 nome: c.nome || p.clienteNome || '', doc: docDoCliente(c), endereco,
                 cidade: c.cidade || '', uf: c.uf || '', cep: soDigitos(c.cep), email: c.email || ''
             },
-            itens, valor_total: valorTotal, observacoes: 'Pedido #' + p.id
+            itens, valor_total: valorTotal, observacoes: 'Pedido #' + p.id,
+            pedido_id: p.id == null ? null : p.id, cliente_id: c.id != null ? c.id : (p.clienteId != null ? p.clienteId : null)
         };
     }
 
@@ -225,7 +226,8 @@
             const outras = (notasDoPedido || []).filter(n => n && n !== nota && !(nota.id != null && n.id === nota.id) && n.status === 'autorizada');
             const soma = outras.reduce((s, n) => s + (Number(n.valor) || 0), 0) + (Number(nota.valor) || 0);
             const diverge = outras.length ? cent(soma) > cent(vp) : cent(nota.valor) !== cent(vp);
-            if (diverge) av.push('O valor da nota (R$ ' + dinheiro(nota.valor) + ') é diferente do valor do pedido (R$ ' + dinheiro(vp) + ').');
+            if (diverge && !outras.length && cent(nota.valor) < cent(vp)) av.push('A nota cobre R$ ' + dinheiro(nota.valor) + ' de R$ ' + dinheiro(vp) + ' do pedido.');
+            else if (diverge) av.push('O valor da nota (R$ ' + dinheiro(nota.valor) + ') é diferente do valor do pedido (R$ ' + dinheiro(vp) + ').');
         }
         const docCli = docDoCliente(cliente);
         if (docCli && nota.tomador_doc && soDigitos(nota.tomador_doc) !== docCli) {

@@ -1310,11 +1310,28 @@ Na janela do carrinho:
       avisa). Baixar XML devolve o arquivo com o nome original. Cancelar nota pede o motivo (obrigatório) e, se quiser,
       o XML do evento de cancelamento; a nota não some, fica com o selo Cancelada e o evento no Histórico.
     * Permissões: emitir, anexar PDF e cancelar = Contas a receber completo ou Pedidos completo; ver = quem vê o pedido.
-    * Guardado em sc_nf (também no backup); sem espaço no navegador mostra a mensagem de espaço cheio e não grava.
+    * Guardado em sc_nf (também no backup): só os dados e o XML ficam no localStorage; o PDF vai para o IndexedDB do
+      navegador (banco "sctech_arquivos"), com nome, tamanho e marca na nota. O backup JSON leva os PDFs e a importação
+      os devolve; backup antigo com o PDF dentro da nota também importa, e notas antigas são migradas ao abrir. XML
+      que não é UTF-8 guarda os bytes originais (o Baixar XML devolve o arquivo exato). Sem IndexedDB o PDF é recusado
+      ("Este navegador não permite guardar o PDF. Guarde o PDF no computador e anexe só o XML.") e o XML continua salvando.
+      A janela do pedido mostra "Notas fiscais ocupam X MB no navegador." e tem Remover PDF (mantém o XML) e, para
+      cancelamento feito só no sistema (sem XML), Desfazer cancelamento. Sem espaço mostra a mensagem de espaço cheio e não grava.
+    * Cancelamento por XML: o XML de evento de cancelamento anexado em Emitir nota marca a nota de mesma chave como
+      cancelada ("Cancelamento anexado (XML)"); em Cancelar nota o XML do evento precisa ser da mesma nota.
+    * Pedido com nota não cancelada não pode ser excluído nem voltar para Orçamento ("Cancele a nota antes"). Pedido com
+      nota mostra "Notas fiscais" no menu ⋮ em qualquer status. Salvar o pedido com valor diferente da soma das notas
+      autorizadas pergunta antes. Nota com valor menor que o do pedido (sem outras notas) avisa "A nota cobre R$ X de R$ Y".
+    * Provedor fiscal: se Fiscal.provedor não for o manual, a janela mostra "Emitir agora": a nota nasce 'rascunho'
+      (o id local é a referência de idempotência enviada junto com pedido_id) e vira autorizada, processando ou rejeitada
+      conforme a resposta; o cancelamento só vale com resposta 'cancelada' ou 'manual'. O contrato está em js/fiscal.js.
+    * Decisões registradas: o tipo padrão da nota vem só de Configurar Empresa (não do regime tributário); as notas ficam
+      na janela do menu ⋮ do pedido e na lista do Financeiro, sem um bloco na tela do pedido (decisão do plano).
     * Consulta no financeiro: em Lançamentos > Contas a receber, o botão "🧾 Notas fiscais" abre a lista de todas as notas
       (Número, Tipo, Cliente, Pedido, Data, Valor, Status) com filtros de período de emissão (padrão: mês atual), status,
       tipo e busca por número ou cliente; mostra o total só das notas autorizadas do filtro; clicar numa nota abre a janela
-      do pedido; Excel da lista filtrada. A conta a receber de um pedido com nota ganha o selo "NF nº X".
+      do pedido; Excel da lista filtrada (sem datas: "Todas as datas"). A busca ignora acento e caixa, os números de
+      nota ordenam como número e a lista mostra 50 notas por página. A conta a receber de um pedido com nota ganha o selo "NF nº X".
       Quem só visualiza Contas a receber vê a lista, sem o botão Cancelar nota.
   - DRE — Resultado da empresa: tabela do ano (Jan a Dez + Total), Regime Caixa | Competência e seletor de Ano.
     Começa recolhida (grupos e linhas calculadas); o + abre os filhos diretos do grupo (subgrupos abrem de novo).

@@ -2,11 +2,15 @@
 // Notas fiscais do pedido (modo manual): a nota e emitida fora (prefeitura/SEFAZ/contador) e aqui entram o XML e o PDF.
 // Janela do pedido (menu ⋮): lista, emitir (conferir + anexar), ver PDF, baixar XML, cancelar e historico.
 // Notas ficam em db.notas_fiscais (sc_nf): { id, pedido_id, tipo, numero, serie, chave, codigo_verificacao, data_emissao, valor,
-//   cliente_id, status, protocolo, eventos: [{ em, tipo, detalhe, por }], xml_nome, xml, pdf_nome, pdf, origem, criado_em, criado_por }.
+//   cliente_id, status, protocolo, servidor_id, eventos: [{ em, tipo, detalhe, por }], xml_nome, xml (texto, so quando o arquivo e UTF-8 limpo)
+//   ou xml_b64 + xml_encoding (bytes originais), pdf_nome, pdf_tamanho, tem_pdf (os bytes do PDF ficam no IndexedDB, NfArquivos), origem, criado_em, criado_por }.
 // Carregado depois de app.js (usa db, getEmpresa, temAcesso, _gravarChaves...) e de fiscal-core.js / fiscal.js.
 
 const NF_PDF_MAX = 1024 * 1024;
 const NF_MSG_PDF_GRANDE = 'Arquivo grande demais para guardar no navegador. Guarde o PDF no computador e anexe só o XML.';
+const NF_MSG_SEM_IDB = 'Este navegador não permite guardar o PDF. Guarde o PDF no computador e anexe só o XML.';
+const NF_POR_PAGINA = 50;
+const NF_MSG_PDF_CANCEL = 'O PDF não foi guardado: este XML é de cancelamento.';
 const NF_MSG_NAO_NOTA = 'Este arquivo não é o XML de uma nota fiscal.';
 const NF_STATUS = {
     autorizada: ['Autorizada', 'fin-badge-green'], cancelada: ['Cancelada', 'fin-badge-red'], rascunho: ['Rascunho', 'fin-badge-gray'],
@@ -28,7 +32,28 @@ const _nfNum = s => {
 };
 const _nfPode = () => temAcesso('financeiro.receber', 'completo') || temAcesso('pedidos', 'completo');
 const _nfPodeVer = () => temAcesso('pedidos', 'visualizar') || temAcesso('financeiro.receber', 'visualizar');
-const _nfNotas = () => { if (!Array.isArray(db.notas_fiscais)) db.notas_fiscais = []; return db.notas_fiscais; };
+const _nfNotas = () => {
+    if (!Array.isArray(db.notas_fiscais)) db.notas_fiscais = [];
+    db.notas_fiscais.forEach(n => { if (n && !Array.isArray(n.eventos)) n.eventos = []; });
+    return db.notas_fiscais;
+};
+const _nfTemPdf = n => !!n && (n.tem_pdf === true || (typeof n.pdf === 'string' && n.pdf.length > 0));
+const _nfTemXml = n => !!n && !!(n.xml || n.xml_b64);
+// Texto do XML guardado (decodifica os bytes originais quando a nota nao e UTF-8).
+function _nfXmlTexto(n) {
+    if (!n) return '';
+    if (n.xml) return n.xml;
+    if (!n.xml_b64) return '';
+    try { return new TextDecoder(n.xml_encoding || 'windows-1252').decode(_nfDeBase64(n.xml_b64)); } catch (e) { return ''; }
+}
+const _nfNorm = s => (typeof _finNorm === 'function' ? _finNorm(s) : String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim());
+// Espaco que as notas usam no navegador: dados no localStorage (2 bytes por caractere) + PDFs no IndexedDB.
+function _nfEspacoMb() {
+    let bytes = 0;
+    try { bytes += (localStorage.getItem('sc_nf') || '').length * 2; } catch (e) { /* sem storage */ }
+    _nfNotas().forEach(n => { if (n && n.tem_pdf) bytes += Number(n.pdf_tamanho) || 0; });
+    return (bytes / 1048576).toFixed(1).replace('.', ',');
+}
 const _nfPorId = id => _nfNotas().find(n => String(n.id) === String(id));
 const _nfQuem = () => { const u = typeof getUsuarioLogado === 'function' ? getUsuarioLogado() : null; return u ? (u.nome || String(u.id)) : ''; };
 const _nfQuemId = () => { const u = typeof getUsuarioLogado === 'function' ? getUsuarioLogado() : null; return u ? u.id : null; };
@@ -84,11 +109,10 @@ function _nfDeBase64(b64) {
 }
 const _nfEhPdf = b => !!b && b.length >= 4 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46;
 const NF_MSG_NAO_PDF = 'Este arquivo não é um PDF.';
-// Le o PDF: so aceita quem comeca com %PDF; guarda sempre como application/pdf.
+// Le o PDF: so aceita quem comeca com %PDF. Devolve os bytes (ou null se nao for PDF).
 async function _nfLerPdf(file) {
     const bytes = await _nfLerBytes(file);
-    if (!_nfEhPdf(bytes)) return null;
-    return 'data:application/pdf;base64,' + _nfBase64(bytes);
+    return _nfEhPdf(bytes) ? bytes : null;
 }
 // Le o XML pelos bytes: codificacao da declaracao (padrao UTF-8). Devolve { texto, encoding, b64 } (b64 so quando
 // os bytes nao voltam iguais a partir do texto UTF-8, para o download devolver o arquivo original).
@@ -111,7 +135,7 @@ async function _nfLerXmlArquivo(file) {
 function abrirNotasDoPedido(pedidoId) {
     const ped = db.pedidos.find(p => p.id == pedidoId);
     if (!ped || !_nfPodeVer()) return;
-    _nfJanela('nf-janela', `Notas fiscais — Pedido #${formatPedidoId(ped.id)}`, '', 820);
+    _nfJanela('nf-janela', `Notas fiscais — Pedido #${_nfEsc(formatPedidoId(ped.id))}`, '', 820);
     _nfRenderLista(ped.id);
 }
 
@@ -135,9 +159,11 @@ function _nfRenderLista(pedidoId) {
             </div>
             <div class="nf-acoes">
                 <button type="button" class="btn btn-outline btn-sm" onclick="verPdfNota(${_nfEsc(JSON.stringify(n.id))})">Ver PDF</button>
+                ${pode && _nfTemPdf(n) ? `<button type="button" class="btn btn-outline btn-sm nf-remover-pdf" onclick="removerPdfNota(${_nfEsc(JSON.stringify(n.id))})">Remover PDF</button>` : ''}
                 <button type="button" class="btn btn-outline btn-sm" onclick="baixarXmlNota(${_nfEsc(JSON.stringify(n.id))})">Baixar XML</button>
                 <button type="button" class="btn btn-outline btn-sm" onclick="abrirHistoricoNota(${_nfEsc(JSON.stringify(n.id))})">Histórico</button>
                 ${pode && n.status !== 'cancelada' ? `<button type="button" class="btn btn-outline btn-sm nf-cancelar" onclick="cancelarNota(${_nfEsc(JSON.stringify(n.id))})">Cancelar nota</button>` : ''}
+                ${pode && n.status === 'cancelada' && n.cancelamento_manual ? `<button type="button" class="btn btn-outline btn-sm nf-desfazer" onclick="desfazerCancelamentoNota(${_nfEsc(JSON.stringify(n.id))})">Desfazer cancelamento</button>` : ''}
             </div>
         </div>`;
     }).join('');
@@ -146,7 +172,8 @@ function _nfRenderLista(pedidoId) {
             <span class="nf-resumo">${ped ? _nfEsc(ped.clienteNome || '') + ' · R$ ' + _nfBrl(ped.valor) : ''}</span>
             ${pode ? `<button type="button" class="btn btn-success" id="nf-btn-emitir" onclick="emitirNotaPedido(${_nfEsc(id)})">Emitir nota</button>` : ''}
         </div>
-        <div class="nf-lista">${linhas || '<p class="nf-vazio">Nenhuma nota fiscal neste pedido.</p>'}</div>`;
+        <div class="nf-lista">${linhas || '<p class="nf-vazio">Nenhuma nota fiscal neste pedido.</p>'}</div>
+        <p class="nf-espaco" id="nf-espaco">Notas fiscais ocupam ${_nfEspacoMb()} MB no navegador.</p>`;
 }
 
 // ---------- emitir (modo manual) ----------
@@ -170,11 +197,12 @@ function emitirNotaPedido(pedidoId) {
     const ped = db.pedidos.find(p => p.id == pedidoId);
     if (!ped) return;
     const tipo = FiscalCore.tipoPadrao(getEmpresa());
-    _nfEst = { pedidoId: ped.id, nota: null, avisos: [], xmlNome: '', xmlTexto: '', pdfNome: '', pdf: null, erroXml: '', erroPdf: '' };
+    _nfEst = { pedidoId: ped.id, nota: null, avisos: [], xmlNome: '', xmlTexto: '', pdfNome: '', pdfBytes: null, erroXml: '', erroPdf: '', refId: null };
+    const comProvedor = Fiscal.provedor && Fiscal.provedor.nome !== 'manual';
     const { dados } = _nfDadosForm(ped.id, tipo);
     const t = dados.tomador;
     const campo = (id, rot, v, extra) => `<div class="form-group"><label for="${id}">${rot}</label><input type="text" id="${id}" value="${_nfEsc(v)}" ${extra || ''}></div>`;
-    _nfJanela('nf-emitir', `Emitir nota — Pedido #${formatPedidoId(ped.id)}`, `
+    _nfJanela('nf-emitir', `Emitir nota — Pedido #${_nfEsc(formatPedidoId(ped.id))}`, `
         <div class="nf-aviso-manual" id="nf-aviso-manual">${_nfEsc(FiscalCore.AVISO_MANUAL)}</div>
         <div class="form-group">
             <label for="nf-tipo">Tipo de nota</label>
@@ -199,6 +227,7 @@ function emitirNotaPedido(pedidoId) {
             <button type="button" class="btn btn-outline" id="nf-copiar" onclick="_nfCopiarDados()">Copiar dados</button>
             <button type="button" class="btn btn-outline" id="nf-imprimir" onclick="_nfImprimirDados()">Imprimir dados</button>
         </div>
+        ${comProvedor ? `<div class="nf-botoes-dados"><button type="button" class="btn btn-success" id="nf-emitir-agora" onclick="_nfEmitirAgora()">Emitir agora (${_nfEsc(Fiscal.provedor.nome)})</button></div>` : ''}
         <h4 class="nf-sub">Nota emitida</h4>
         <div class="form-group"><label for="nf-xml">Anexar XML (obrigatório)</label><input type="file" id="nf-xml" accept=".xml,text/xml,application/xml" onchange="_nfAoEscolherXml(this)"></div>
         <div class="nf-erro" id="nf-msg-xml" hidden></div>
@@ -310,6 +339,7 @@ function _nfDuplicada(nota) {
 let _nfTok = 0;
 async function _nfAoEscolherXml(input) {
     if (!_nfEst) return;
+    const est = _nfEst;
     const tok = ++_nfTok;
     const file = input.files && input.files[0];
     _nfEst.cancelaNota = null; _nfEst.xmlB64 = null; _nfEst.xmlEnc = 'utf-8';
@@ -320,7 +350,7 @@ async function _nfAoEscolherXml(input) {
     if (file) {
         let texto = '', lido = { texto: '', encoding: 'utf-8', b64: null };
         try { lido = await _nfLerXmlArquivo(file); texto = lido.texto; } catch (e) { texto = ''; }
-        if (tok !== _nfTok || !_nfEst || !document.getElementById('nf-emitir')) return;
+        if (tok !== _nfTok || _nfEst !== est || !document.getElementById('nf-emitir')) return;
         _nfEst.xmlB64 = lido.b64; _nfEst.xmlEnc = lido.encoding;
         const res = FiscalCore.lerXmlNota(texto);
         if (!res.ok) {
@@ -338,6 +368,7 @@ async function _nfAoEscolherXml(input) {
                 _nfEst.nota = nota; _nfEst.xmlTexto = texto; _nfEst.xmlNome = file.name; _nfEst.cancelaNota = alvo.id;
                 const av2 = document.getElementById('nf-avisos'); av2.hidden = false;
                 av2.innerHTML = `<div class="nf-aviso">Este XML é de cancelamento: a nota ${_nfEsc(alvo.numero ? 'nº ' + alvo.numero : '')} será marcada como cancelada.</div>`;
+                if (_nfEst.pdfBytes) { _nfEst.pdfBytes = null; _nfEst.pdfNome = ''; const ip = document.getElementById('nf-pdf'); if (ip) ip.value = ''; _nfMsg('nf-msg-pdf', NF_MSG_PDF_CANCEL); }
             } else if (dup) {
                 _nfEst.erroXml = 'Esta nota já está anexada ao pedido #' + formatPedidoId(dup.pedido_id) + '.';
                 _nfMsg('nf-msg-xml', _nfEst.erroXml);
@@ -363,22 +394,22 @@ async function _nfAoEscolherXml(input) {
 let _nfTokPdf = 0;
 async function _nfAoEscolherPdf(input) {
     if (!_nfEst) return;
+    const est = _nfEst;
     const file = input.files && input.files[0];
-    _nfEst.pdf = null; _nfEst.pdfNome = ''; _nfMsg('nf-msg-pdf', '');
-    if (file) {
-        if (file.size > NF_PDF_MAX) {
-            input.value = '';
-            _nfMsg('nf-msg-pdf', NF_MSG_PDF_GRANDE);
-        } else {
-            const tok = ++_nfTokPdf;
-            try {
-                const url = await _nfLerPdf(file);
-                if (tok !== _nfTokPdf || !_nfEst || !document.getElementById('nf-emitir')) return;
-                if (!url) { input.value = ''; _nfMsg('nf-msg-pdf', NF_MSG_NAO_PDF); }
-                else { _nfEst.pdf = url; _nfEst.pdfNome = file.name; }
-            } catch (e) { _nfMsg('nf-msg-pdf', 'Não foi possível ler o PDF.'); }
-        }
-    }
+    est.pdfBytes = null; est.pdfNome = ''; _nfMsg('nf-msg-pdf', '');
+    if (!file) return;
+    const recusa = texto => { input.value = ''; _nfMsg('nf-msg-pdf', texto); };
+    if (file.size > NF_PDF_MAX) { recusa(NF_MSG_PDF_GRANDE); return; }
+    const tok = ++_nfTokPdf;
+    try {
+        const bytes = await _nfLerPdf(file);
+        if (tok !== _nfTokPdf || _nfEst !== est || !document.getElementById('nf-emitir')) return;
+        if (!bytes) { recusa(NF_MSG_NAO_PDF); return; }
+        if (!await NfArquivos.disponivel()) { recusa(NF_MSG_SEM_IDB); return; }
+        if (tok !== _nfTokPdf || _nfEst !== est || !document.getElementById('nf-emitir')) return;
+        if (est.cancelaNota != null) { recusa(NF_MSG_PDF_CANCEL); return; }
+        est.pdfBytes = bytes; est.pdfNome = file.name;
+    } catch (e) { if (_nfEst === est) _nfMsg('nf-msg-pdf', 'Não foi possível ler o PDF.'); }
 }
 
 async function _nfSalvarNota() {
@@ -395,7 +426,7 @@ async function _nfSalvarNota() {
         if (!alvo || alvo.status === 'cancelada') return;
         const antes = { status: alvo.status, ev: alvo.eventos.length, x: alvo.xml_cancelamento, xn: alvo.xml_cancelamento_nome, xb: alvo.xml_cancelamento_b64 };
         alvo.status = 'cancelada';
-        alvo.xml_cancelamento = e.xmlTexto; alvo.xml_cancelamento_nome = e.xmlNome; alvo.xml_cancelamento_b64 = e.xmlB64 || null;
+        alvo.xml_cancelamento = e.xmlB64 ? '' : e.xmlTexto; alvo.xml_cancelamento_nome = e.xmlNome; alvo.xml_cancelamento_b64 = e.xmlB64 || null;
         alvo.eventos.push(_nfEvento('cancelada', 'Cancelamento anexado (XML)' + (e.xmlNome ? ' (' + e.xmlNome + ')' : '')));
         if (!_nfGravar(() => { alvo.status = antes.status; alvo.eventos.length = antes.ev; alvo.xml_cancelamento = antes.x; alvo.xml_cancelamento_nome = antes.xn; alvo.xml_cancelamento_b64 = antes.xb; })) return;
         _nfFechar('nf-emitir'); _nfEst = null; _nfRenderLista(ped.id);
@@ -403,6 +434,7 @@ async function _nfSalvarNota() {
         return;
     }
     const dados = _nfDadosAtuais();
+    const bytesPdf = e.pdfBytes || null;
     const eventos = [_nfEvento('anexada', 'Nota anexada' + (e.xmlNome ? ' (' + e.xmlNome + ')' : ''))];
     e.avisos.forEach(a => eventos.push(_nfEvento('aviso', a)));
     const registro = {
@@ -410,13 +442,22 @@ async function _nfSalvarNota() {
         chave: nota.chave || null, codigo_verificacao: nota.codigo_verificacao || null,
         data_emissao: nota.data_emissao || hojeLocal(), valor: nota.valor || 0, cliente_id: ped.clienteId == null ? null : ped.clienteId,
         status: nota.cancelada ? 'cancelada' : 'autorizada', protocolo: null, eventos,
-        xml_nome: e.xmlNome, xml: e.xmlTexto, xml_encoding: e.xmlEnc || 'utf-8', xml_b64: e.xmlB64 || null, pdf_nome: e.pdf ? e.pdfNome : '', pdf: e.pdf || null,
+        xml_nome: e.xmlNome, xml: e.xmlB64 ? '' : e.xmlTexto, xml_encoding: e.xmlEnc || 'utf-8', xml_b64: e.xmlB64 || null,
+        pdf_nome: bytesPdf ? e.pdfNome : '', pdf_tamanho: bytesPdf ? bytesPdf.length : 0, tem_pdf: !!bytesPdf, servidor_id: null,
+        cancelada_no_xml: !!nota.cancelada,
         emitente_doc: nota.emitente_doc || '', tomador_doc: nota.tomador_doc || '', dados,
         origem: 'manual', criado_em: new Date().toISOString(), criado_por: _nfQuemId()
     };
     const lista = _nfNotas();
+    if (bytesPdf) {
+        try { await NfArquivos.gravar(registro.id, bytesPdf); }
+        catch (err) { _nfMsg('nf-msg-pdf', NF_MSG_SEM_IDB); return; }
+    }
     lista.push(registro);
-    if (!_nfGravar(() => { const i = lista.indexOf(registro); if (i >= 0) lista.splice(i, 1); })) return;
+    if (!_nfGravar(() => { const i = lista.indexOf(registro); if (i >= 0) lista.splice(i, 1); })) {
+        if (bytesPdf) NfArquivos.apagar(registro.id).catch(() => {});
+        return;
+    }
     _nfFechar('nf-emitir');
     _nfEst = null;
     _nfRenderLista(ped.id);
@@ -426,6 +467,70 @@ async function exigirPermissao_nf() {
     if (_nfPode()) return true;
     await showAlert('Você não tem permissão para realizar esta ação.', '🚫');
     return false;
+}
+
+// Provedor que emite de verdade (servidor): grava a nota como rascunho (o id local e a referencia, chave de idempotencia),
+// chama emitir() e aplica o status devolvido. 'manual' = segue o fluxo de anexar. 'processando' fica para ser consultada.
+async function _nfEmitirAgora() {
+    const est = _nfEst;
+    if (!est || !await exigirPermissao_nf()) return;
+    const ped = db.pedidos.find(p => p.id == est.pedidoId);
+    if (!ped) return;
+    const dados = _nfDadosAtuais();
+    const lista = _nfNotas();
+    let reg = est.refId != null ? _nfPorId(est.refId) : null;
+    if (!reg || reg.status !== 'rascunho') {
+        reg = {
+            id: _nfNovoId(), pedido_id: ped.id, tipo: dados.tipo, numero: '', serie: '', chave: null, codigo_verificacao: null,
+            data_emissao: hojeLocal(), valor: dados.valor_total, cliente_id: ped.clienteId == null ? null : ped.clienteId,
+            status: 'rascunho', protocolo: null, servidor_id: null, eventos: [_nfEvento('rascunho', 'Nota criada para emissão')],
+            xml_nome: '', xml: '', pdf_nome: '', pdf_tamanho: 0, tem_pdf: false, dados, origem: 'servidor',
+            criado_em: new Date().toISOString(), criado_por: _nfQuemId()
+        };
+        reg.ref = reg.id;
+        lista.push(reg);
+        if (!_nfGravar(() => { const i = lista.indexOf(reg); if (i >= 0) lista.splice(i, 1); })) return;
+        est.refId = reg.id;
+    }
+    _nfMsg('nf-msg-xml', '');
+    let res;
+    try { res = await Fiscal.provedor.emitir(Object.assign({}, dados, { referencia: reg.id, pedido_id: ped.id, cliente_id: reg.cliente_id })); }
+    catch (e) { res = { status: 'erro', mensagem: 'Não foi possível falar com o provedor de notas.' }; }
+    if (_nfEst !== est) return;
+    const st = res && res.status;
+    const grava = () => _nfGravar(() => {});
+    if (st === 'manual') {
+        const i = lista.indexOf(reg);
+        if (i >= 0) { lista.splice(i, 1); grava(); }
+        est.refId = null;
+        _nfMsg('nf-msg-xml', (res && res.mensagem) || FiscalCore.AVISO_MANUAL);
+        return;
+    }
+    if (st === 'erro' || !st) {
+        reg.eventos.push(_nfEvento('erro', (res && res.mensagem) || 'Erro ao emitir.'));
+        grava();
+        _nfMsg('nf-msg-xml', (res && res.mensagem) || 'Não foi possível emitir a nota agora. Tente de novo: a mesma referência evita nota duplicada.');
+        return;
+    }
+    reg.servidor_id = res.servidor_id != null ? res.servidor_id : reg.servidor_id;
+    reg.protocolo = res.protocolo || null;
+    if (st === 'autorizada') {
+        reg.status = 'autorizada';
+        reg.numero = res.numero != null ? String(res.numero) : ''; reg.serie = res.serie != null ? String(res.serie) : '';
+        reg.chave = res.chave || null;
+        if (typeof res.xml === 'string' && res.xml) { reg.xml = res.xml; reg.xml_nome = 'nota-' + (reg.numero || reg.id) + '.xml'; }
+        reg.eventos.push(_nfEvento('autorizada', 'Nota autorizada' + (res.protocolo ? ' (protocolo ' + res.protocolo + ')' : '')));
+    } else if (st === 'processando') {
+        reg.status = 'processando';
+        reg.eventos.push(_nfEvento('processando', 'Emissão enviada, aguardando resposta' + (res.mensagem ? ': ' + res.mensagem : '')));
+    } else {
+        reg.status = 'rejeitada';
+        reg.eventos.push(_nfEvento('rejeitada', (res && res.mensagem) || 'Nota rejeitada.'));
+    }
+    grava();
+    _nfFechar('nf-emitir');
+    _nfEst = null;
+    _nfRenderLista(ped.id);
 }
 
 // ---------- ver PDF, baixar XML ----------
@@ -441,13 +546,19 @@ function _nfDataUrlParaBlob(url) {
 async function verPdfNota(notaId) {
     const n = _nfPorId(notaId);
     if (!n) return;
-    if (!n.pdf) {
+    if (!_nfTemPdf(n)) {
         if (!_nfPode()) { showAlert('PDF não anexado.', '📄'); return; }
         const r = await showEscolha('PDF não anexado.', '📄', [{ rotulo: 'Anexar PDF', valor: 'anexar', destaque: true }], 'Fechar');
         if (r === 'anexar') anexarArquivosNota(n.id);
         return;
     }
-    const blob = _nfDataUrlParaBlob(n.pdf);
+    let blob = null;
+    if (typeof n.pdf === 'string' && n.pdf) blob = _nfDataUrlParaBlob(n.pdf);   // nota antiga, ainda com o PDF dentro
+    else {
+        let bytes = null;
+        try { bytes = await NfArquivos.ler(n.id); } catch (e) { bytes = null; }
+        if (bytes && _nfEhPdf(bytes)) blob = new Blob([bytes], { type: 'application/pdf' });
+    }
     if (!blob) { showAlert(NF_MSG_NAO_PDF, '⚠️'); return; }
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -455,14 +566,20 @@ async function verPdfNota(notaId) {
     setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
+// Nome do arquivo baixado: so o nome (sem pasta) e sempre .xml.
+function _nfNomeXml(n) {
+    let nome = String(n.xml_nome || '').split(/[\\/]/).pop().replace(/[:*?"<>|]/g, '_').trim();
+    if (!nome) nome = 'nota-' + String(n.numero || n.id);
+    return /\.xml$/i.test(nome) ? nome : nome.replace(/\.[^.]*$/, '') + '.xml';
+}
 function baixarXmlNota(notaId) {
     const n = _nfPorId(notaId);
-    if (!n || !n.xml) { toast('Esta nota não tem XML guardado.', 'warning'); return; }
+    if (!n || !_nfTemXml(n)) { toast('Esta nota não tem XML guardado.', 'warning'); return; }
     let blob;
-    try { blob = new Blob([n.xml_b64 ? _nfDeBase64(n.xml_b64) : n.xml], { type: 'application/xml' }); } catch (e) { blob = new Blob([n.xml], { type: 'application/xml' }); }
+    try { blob = new Blob([n.xml_b64 ? _nfDeBase64(n.xml_b64) : n.xml], { type: 'application/xml' }); } catch (e) { blob = new Blob([_nfXmlTexto(n)], { type: 'application/xml' }); }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = n.xml_nome || ('nota-' + (n.numero || n.id) + '.xml');
+    a.href = url; a.download = _nfNomeXml(n);
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -486,25 +603,47 @@ async function _nfSalvarAnexo(notaId) {
     if (!n) return;
     if (!file) { _nfMsg('nf-anexo-msg', 'Escolha o arquivo PDF.'); return; }
     if (file.size > NF_PDF_MAX) { _nfMsg('nf-anexo-msg', NF_MSG_PDF_GRANDE); return; }
-    let url = '';
-    try { url = await _nfLerPdf(file); } catch (e) { if (document.getElementById('nf-anexar')) _nfMsg('nf-anexo-msg', 'Não foi possível ler o PDF.'); return; }
-    if (!document.getElementById('nf-anexar')) return;
-    if (!url) { _nfMsg('nf-anexo-msg', NF_MSG_NAO_PDF); return; }
+    const jan = document.getElementById('nf-anexar');
+    let bytes = null;
+    try { bytes = await _nfLerPdf(file); } catch (e) { if (document.getElementById('nf-anexar') === jan) _nfMsg('nf-anexo-msg', 'Não foi possível ler o PDF.'); return; }
+    if (!jan || document.getElementById('nf-anexar') !== jan) return;
+    if (!bytes) { _nfMsg('nf-anexo-msg', NF_MSG_NAO_PDF); return; }
     if (!await exigirPermissao_nf()) return;
-    const antes = { pdf: n.pdf, pdf_nome: n.pdf_nome, ev: n.eventos.length };
-    n.pdf = url; n.pdf_nome = file.name;
+    try { await NfArquivos.gravar(n.id, bytes); } catch (e) { _nfMsg('nf-anexo-msg', NF_MSG_SEM_IDB); return; }
+    const antes = { tem: n.tem_pdf, nome: n.pdf_nome, tam: n.pdf_tamanho, pdf: n.pdf, ev: n.eventos.length };
+    n.tem_pdf = true; n.pdf_nome = file.name; n.pdf_tamanho = bytes.length; delete n.pdf;
     n.eventos.push(_nfEvento('pdf', 'PDF anexado (' + file.name + ')'));
-    if (!_nfGravar(() => { n.pdf = antes.pdf; n.pdf_nome = antes.pdf_nome; n.eventos.length = antes.ev; })) return;
+    if (!_nfGravar(() => { n.tem_pdf = antes.tem; n.pdf_nome = antes.nome; n.pdf_tamanho = antes.tam; if (antes.pdf !== undefined) n.pdf = antes.pdf; n.eventos.length = antes.ev; })) {
+        if (!antes.tem) NfArquivos.apagar(n.id).catch(() => {});
+        return;
+    }
     _nfFechar('nf-anexar');
     _nfRenderLista(n.pedido_id);
     toast('PDF anexado.', 'success');
 }
 
+async function removerPdfNota(notaId) {
+    const n = _nfPorId(notaId);
+    if (!n || !_nfTemPdf(n)) return;
+    if (!await exigirPermissao_nf()) return;
+    if (!await showConfirm('Remover o PDF desta nota? O XML e os dados da nota continuam guardados.', '🗑️', 'Remover', 'Cancelar')) return;
+    const antes = { tem: n.tem_pdf, nome: n.pdf_nome, tam: n.pdf_tamanho, pdf: n.pdf, ev: n.eventos.length };
+    try { await NfArquivos.apagar(n.id); } catch (e) { /* sem IndexedDB: tira so a marca */ }
+    n.tem_pdf = false; n.pdf_tamanho = 0; delete n.pdf;
+    n.eventos.push(_nfEvento('pdf', 'PDF removido' + (antes.nome ? ' (' + antes.nome + ')' : '')));
+    n.pdf_nome = '';
+    if (!_nfGravar(() => { n.tem_pdf = antes.tem; n.pdf_nome = antes.nome; n.pdf_tamanho = antes.tam; if (antes.pdf !== undefined) n.pdf = antes.pdf; n.eventos.length = antes.ev; })) return;
+    _nfRenderLista(n.pedido_id);
+    toast('PDF removido.', 'success');
+}
+
 // ---------- cancelar ----------
+let _nfCancTok = 0;
 function cancelarNota(notaId) {
     const n = _nfPorId(notaId);
     if (!n) return;
     if (!_nfPode()) { showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
+    _nfCancTok++;
     _nfJanela('nf-cancelar', `Cancelar nota${n.numero ? ' nº ' + _nfEsc(n.numero) : ''}`, `
         <div class="form-group"><label for="nf-cancel-motivo">Motivo do cancelamento (obrigatório)</label><textarea id="nf-cancel-motivo" rows="3"></textarea></div>
         <div class="form-group"><label for="nf-cancel-xml">XML do evento de cancelamento (opcional)</label><input type="file" id="nf-cancel-xml" accept=".xml,text/xml,application/xml"></div>
@@ -517,6 +656,9 @@ function cancelarNota(notaId) {
 async function _nfConfirmarCancelamento(notaId) {
     const n = _nfPorId(notaId);
     if (!n) return;
+    const tok = _nfCancTok;
+    const jan = document.getElementById('nf-cancelar');
+    const vivo = () => tok === _nfCancTok && jan && document.getElementById('nf-cancelar') === jan;
     const motivo = (document.getElementById('nf-cancel-motivo')?.value || '').trim();
     if (!motivo) { _nfMsg('nf-cancel-msg', 'Informe o motivo do cancelamento.'); return; }
     const file = document.getElementById('nf-cancel-xml')?.files[0];
@@ -524,23 +666,52 @@ async function _nfConfirmarCancelamento(notaId) {
     if (file) {
         let lido = { texto: '' };
         try { lido = await _nfLerXmlArquivo(file); } catch (e) { lido = { texto: '' }; }
-        if (!document.getElementById('nf-cancelar')) return;
-        if (!FiscalCore.lerXmlNota(lido.texto).ok) { _nfMsg('nf-cancel-msg', NF_MSG_NAO_NOTA); return; }
+        if (!vivo()) return;
+        const r = FiscalCore.lerXmlNota(lido.texto);
+        if (!r.ok) { _nfMsg('nf-cancel-msg', NF_MSG_NAO_NOTA); return; }
+        if (r.nota.chave && n.chave && r.nota.chave !== n.chave) { _nfMsg('nf-cancel-msg', 'Este XML de cancelamento é de outra nota.'); return; }
         xmlEv = lido;
         detalhe += ' (XML do evento: ' + file.name + ')';
     }
     if (!await exigirPermissao_nf()) return;
-    const res = await Fiscal.provedor.cancelar(n.id, motivo);
-    if (res && res.status === 'erro') { _nfMsg('nf-cancel-msg', res.mensagem || 'Não foi possível cancelar a nota.'); return; }
-    if (!document.getElementById('nf-cancelar')) return;
-    const antes = { status: n.status, ev: n.eventos.length, x: n.xml_cancelamento, xn: n.xml_cancelamento_nome, xb: n.xml_cancelamento_b64 };
-    n.status = 'cancelada';
-    if (xmlEv) { n.xml_cancelamento = xmlEv.texto; n.xml_cancelamento_nome = file.name; n.xml_cancelamento_b64 = xmlEv.b64; }
-    n.eventos.push(_nfEvento('cancelada', detalhe));
-    if (!_nfGravar(() => { n.status = antes.status; n.eventos.length = antes.ev; n.xml_cancelamento = antes.x; n.xml_cancelamento_nome = antes.xn; n.xml_cancelamento_b64 = antes.xb; })) return;
+    let res;
+    try { res = await Fiscal.provedor.cancelar(n.servidor_id || n.id, motivo); } catch (e) { res = { status: 'erro', mensagem: 'Não foi possível cancelar a nota.' }; }
+    if (!vivo()) return;
+    const st = res && res.status;
+    if (st !== 'cancelada' && st !== 'manual' && st !== 'processando') {
+        _nfMsg('nf-cancel-msg', (res && res.mensagem) || 'O cancelamento não foi confirmado. A nota continua como está.');
+        return;
+    }
+    const antes = { status: n.status, ev: n.eventos.length, x: n.xml_cancelamento, xn: n.xml_cancelamento_nome, xb: n.xml_cancelamento_b64, man: n.cancelamento_manual, sa: n.status_antes };
+    if (st === 'processando') {
+        n.status = 'processando';
+        n.eventos.push(_nfEvento('cancelamento', 'Cancelamento solicitado, aguardando confirmação. ' + detalhe));
+    } else {
+        n.status_antes = n.status;
+        n.status = 'cancelada';
+        if (xmlEv) { n.xml_cancelamento = xmlEv.b64 ? '' : xmlEv.texto; n.xml_cancelamento_nome = file.name; n.xml_cancelamento_b64 = xmlEv.b64; }
+        else n.cancelamento_manual = true;
+        n.eventos.push(_nfEvento('cancelada', detalhe));
+    }
+    if (!_nfGravar(() => { n.status = antes.status; n.eventos.length = antes.ev; n.xml_cancelamento = antes.x; n.xml_cancelamento_nome = antes.xn; n.xml_cancelamento_b64 = antes.xb; n.cancelamento_manual = antes.man; n.status_antes = antes.sa; })) return;
     _nfFechar('nf-cancelar');
     _nfRenderLista(n.pedido_id);
-    toast('Nota cancelada.', 'success');
+    toast(st === 'processando' ? 'Cancelamento solicitado.' : 'Nota cancelada.', 'success');
+}
+
+// Cancelamento registrado so aqui (sem XML de cancelamento) pode ser desfeito.
+async function desfazerCancelamentoNota(notaId) {
+    const n = _nfPorId(notaId);
+    if (!n || n.status !== 'cancelada' || !n.cancelamento_manual) return;
+    if (!await exigirPermissao_nf()) return;
+    if (!await showConfirm('Desfazer o cancelamento desta nota? Ela volta a valer no pedido.', '↩', 'Desfazer cancelamento', 'Voltar')) return;
+    const antes = { status: n.status, ev: n.eventos.length, man: n.cancelamento_manual, sa: n.status_antes };
+    n.status = n.status_antes && n.status_antes !== 'cancelada' ? n.status_antes : 'autorizada';
+    delete n.cancelamento_manual; delete n.status_antes;
+    n.eventos.push(_nfEvento('cancelamento_desfeito', 'Cancelamento desfeito'));
+    if (!_nfGravar(() => { n.status = antes.status; n.eventos.length = antes.ev; n.cancelamento_manual = antes.man; n.status_antes = antes.sa; })) return;
+    _nfRenderLista(n.pedido_id);
+    toast('Cancelamento desfeito.', 'success');
 }
 
 // ---------- historico ----------
@@ -560,19 +731,26 @@ function abrirListaNotas() {
     const hoje = typeof hojeLocal === 'function' ? hojeLocal() : new Date().toISOString().slice(0, 10);
     const de = hoje.slice(0, 8) + '01';
     const ate = hoje.slice(0, 8) + String(new Date(Number(hoje.slice(0, 4)), Number(hoje.slice(5, 7)), 0).getDate()).padStart(2, '0');
-    const sel = (id, ops) => `<select id="${id}" onchange="_nfListaFiltrar()">${ops.map(o => `<option value="${o[0]}">${o[1]}</option>`).join('')}</select>`;
+    const sel = (id, ops) => `<select id="${id}" onchange="_nfListaFiltrar(true)">${ops.map(o => `<option value="${o[0]}">${o[1]}</option>`).join('')}</select>`;
     const o = _nfJanela('nf-lista-janela', 'Notas fiscais', `
         <div class="nf-filtros">
-            <div class="form-group"><label for="nfl-de">De</label><input type="date" id="nfl-de" value="${de}" onchange="_nfListaFiltrar()"></div>
-            <div class="form-group"><label for="nfl-ate">Até</label><input type="date" id="nfl-ate" value="${ate}" onchange="_nfListaFiltrar()"></div>
+            <div class="form-group"><label for="nfl-de">De</label><input type="date" id="nfl-de" value="${de}" onchange="_nfListaFiltrar(true)"></div>
+            <div class="form-group"><label for="nfl-ate">Até</label><input type="date" id="nfl-ate" value="${ate}" onchange="_nfListaFiltrar(true)"></div>
             <div class="form-group"><label for="nfl-status">Status</label>${sel('nfl-status', [['', 'Todos'], ['autorizada', 'Autorizada'], ['cancelada', 'Cancelada'], ['rascunho', 'Rascunho'], ['processando', 'Processando'], ['rejeitada', 'Rejeitada']])}</div>
             <div class="form-group"><label for="nfl-tipo">Tipo</label>${sel('nfl-tipo', [['', 'Todos'], ['nfse', 'NFS-e'], ['nfe', 'NF-e']])}</div>
-            <div class="form-group nf-busca"><label for="nfl-busca">Buscar</label><input type="text" id="nfl-busca" placeholder="Número ou cliente…" oninput="_nfListaFiltrar()"></div>
+            <div class="form-group nf-busca"><label for="nfl-busca">Buscar</label><input type="text" id="nfl-busca" placeholder="Número ou cliente…" oninput="_nfListaFiltrar(true)"></div>
         </div>
         <div class="nf-lista-tabela"><table class="data-table"><thead><tr><th>Número</th><th>Tipo</th><th>Cliente</th><th>Pedido</th><th>Data</th><th style="text-align:right">Valor</th><th>Status</th></tr></thead><tbody id="nfl-tbody"></tbody></table></div>
+        <div class="nf-pag" id="nfl-pag" hidden>
+            <button type="button" class="btn btn-outline btn-sm" id="nfl-ant" onclick="_nfListaPagina(-1)">Anterior</button>
+            <span id="nfl-pag-txt"></span>
+            <button type="button" class="btn btn-outline btn-sm" id="nfl-prox" onclick="_nfListaPagina(1)">Próxima</button>
+        </div>
         <div class="nf-lista-rodape"><span id="nfl-total"></span><button type="button" class="btn btn-outline btn-sm" id="nfl-excel" onclick="exportarListaNotasExcel()">Excel</button></div>`, 980);
-    if (o) _nfListaFiltrar();
+    if (o) _nfListaFiltrar(true);
 }
+let _nfListaPag = 0;
+function _nfListaPagina(d) { _nfListaPag += d; _nfListaFiltrar(); }
 
 function _nfNomeCliente(n) {
     const c = (db.clientes || []).find(x => String(x.id) === String(n.cliente_id));
@@ -584,25 +762,36 @@ function _nfNomeCliente(n) {
 function _nfListaFiltradas() {
     const v = id => { const e = document.getElementById(id); return e ? e.value : ''; };
     const de = v('nfl-de'), ate = v('nfl-ate'), st = v('nfl-status'), tp = v('nfl-tipo');
-    const q = v('nfl-busca').trim().toLowerCase();
+    const q = _nfNorm(v('nfl-busca'));
     return _nfNotas().filter(n => {
         const d = String(n.data_emissao || '').slice(0, 10);
         if (de && d < de) return false;
         if (ate && d > ate) return false;
         if (st && n.status !== st) return false;
         if (tp && n.tipo !== tp) return false;
-        if (q && !(String(n.numero || '').toLowerCase().includes(q) || _nfNomeCliente(n).toLowerCase().includes(q))) return false;
+        if (q && !(_nfNorm(n.numero).includes(q) || _nfNorm(_nfNomeCliente(n)).includes(q))) return false;
         return true;
-    }).sort((a, b) => String(b.data_emissao || '').localeCompare(String(a.data_emissao || '')) || String(b.numero || '').localeCompare(String(a.numero || '')));
+    }).sort((a, b) => String(b.data_emissao || '').localeCompare(String(a.data_emissao || '')) || String(b.numero || '').localeCompare(String(a.numero || ''), 'pt-BR', { numeric: true }));
 }
 
-function _nfListaFiltrar() {
+function _nfListaFiltrar(zerarPagina) {
     const tb = document.getElementById('nfl-tbody');
     if (!tb) return;
     const lista = _nfListaFiltradas();
-    tb.innerHTML = lista.length ? lista.map(n => {
+    if (zerarPagina) _nfListaPag = 0;
+    const paginas = Math.max(1, Math.ceil(lista.length / NF_POR_PAGINA));
+    _nfListaPag = Math.min(Math.max(0, _nfListaPag), paginas - 1);
+    const pag = document.getElementById('nfl-pag');
+    if (pag) {
+        pag.hidden = paginas <= 1;
+        document.getElementById('nfl-pag-txt').textContent = 'Página ' + (_nfListaPag + 1) + ' de ' + paginas;
+        document.getElementById('nfl-ant').disabled = _nfListaPag === 0;
+        document.getElementById('nfl-prox').disabled = _nfListaPag >= paginas - 1;
+    }
+    const idsPedidos = new Set((db.pedidos || []).map(p => String(p.id)));
+    tb.innerHTML = lista.length ? lista.slice(_nfListaPag * NF_POR_PAGINA, (_nfListaPag + 1) * NF_POR_PAGINA).map(n => {
         const [rot, cls] = NF_STATUS[n.status] || [n.status, 'fin-badge-gray'];
-        const ped = (db.pedidos || []).some(p => String(p.id) === String(n.pedido_id));
+        const ped = idsPedidos.has(String(n.pedido_id));
         return `<tr class="nf-lista-linha${ped ? ' nf-clicavel' : ''}" data-nota="${_nfEsc(n.id)}" ${ped ? `onclick="abrirNotasDoPedido(${_nfEsc(JSON.stringify(n.pedido_id))})" title="Abrir as notas do pedido"` : ''}>
             <td>${_nfEsc(n.numero || '—')}</td><td>${_nfRotuloTipo(n.tipo)}</td><td>${_nfEsc(_nfNomeCliente(n)) || '—'}</td>
             <td>#${_nfEsc(formatPedidoId(n.pedido_id))}</td><td>${_nfEsc(_nfDataBr(n.data_emissao))}</td>
@@ -617,18 +806,32 @@ async function exportarListaNotasExcel() {
     const lista = _nfListaFiltradas();
     const v = id => (document.getElementById(id) || {}).value || '';
     const emp = getEmpresa();
-    const aoa = [[emp.nome_fantasia || emp.razao_social || 'SCTech'], ['Notas fiscais'], ['Período: ' + _nfDataBr(v('nfl-de')) + ' a ' + _nfDataBr(v('nfl-ate'))], [],
+    const de = _nfDataBr(v('nfl-de')), ate = _nfDataBr(v('nfl-ate'));
+    const periodo = de && ate ? de + ' a ' + ate : de ? 'A partir de ' + de : ate ? 'Até ' + ate : 'Todas as datas';
+    const aoa = [[emp.nome_fantasia || emp.razao_social || 'SCTech'], ['Notas fiscais'], ['Período: ' + periodo], [],
         ['Número', 'Tipo', 'Cliente', 'Pedido', 'Data', 'Valor', 'Status']]
         .concat(lista.map(n => [n.numero || '', _nfRotuloTipo(n.tipo), _nfNomeCliente(n), '#' + formatPedidoId(n.pedido_id), _nfDataBr(n.data_emissao), Number(n.valor) || 0, (NF_STATUS[n.status] || [n.status])[0]]));
     const total = lista.filter(n => n.status === 'autorizada').reduce((s, n) => s + (Number(n.valor) || 0), 0);
     aoa.push([], ['Total das autorizadas', '', '', '', '', total]);
-    await _dreBaixarExcel('Notas_fiscais_' + v('nfl-de') + '_a_' + v('nfl-ate') + '.xlsx', 'Notas fiscais', aoa);
+    await _dreBaixarExcel('Notas_fiscais_' + (v('nfl-de') || v('nfl-ate') ? (v('nfl-de') || 'inicio') + '_a_' + (v('nfl-ate') || 'hoje') : 'todas_as_datas') + '.xlsx', 'Notas fiscais', aoa);
 }
 
 // Selo "NF nº X" da conta a receber de um pedido com nota (so notas nao canceladas).
+// O mapa pedido -> notas e montado uma vez por desenho (vale ate o fim da rodada atual).
+let _nfMapaSelo = null;
 function notasSeloPedido(pedidoId) {
     if (pedidoId == null || pedidoId === '' || !_nfPodeVer()) return '';
-    const ns = _nfNotas().filter(n => String(n.pedido_id) === String(pedidoId) && n.status !== 'cancelada' && n.numero);
+    if (!_nfMapaSelo) {
+        _nfMapaSelo = new Map();
+        _nfNotas().forEach(n => {
+            if (!n || n.status === 'cancelada' || !n.numero) return;
+            const k = String(n.pedido_id);
+            if (!_nfMapaSelo.has(k)) _nfMapaSelo.set(k, []);
+            _nfMapaSelo.get(k).push(n);
+        });
+        setTimeout(() => { _nfMapaSelo = null; }, 0);
+    }
+    const ns = _nfMapaSelo.get(String(pedidoId)) || [];
     if (!ns.length) return '';
     return ` <span class="fin-badge fin-badge-blue nf-selo-lanc" title="Notas fiscais do pedido">NF nº ${_nfEsc(ns.map(n => n.numero).join(', '))}</span>`;
 }

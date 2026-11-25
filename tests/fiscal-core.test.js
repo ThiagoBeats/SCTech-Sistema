@@ -112,7 +112,9 @@ test('dadosNotaDoPedido: NFS-e com instalacao ganha item de servico; soma fecha 
 test('conferir: avisos exatos', () => {
     const nota = { cancelada: false, valor: 3000, tomador_doc: '12345678909', emitente_doc: '12345678000195' };
     assert.deepStrictEqual(F.conferir(nota, { pedido, cliente, empresa }),
-        ['O valor da nota (R$ 3.000,00) é diferente do valor do pedido (R$ 3.450,00).']);
+        ['A nota cobre R$ 3.000,00 de R$ 3.450,00 do pedido.']);
+    assert.deepStrictEqual(F.conferir({ ...nota, valor: 4000 }, { pedido, cliente, empresa }),
+        ['O valor da nota (R$ 4.000,00) é diferente do valor do pedido (R$ 3.450,00).']);
     assert.deepStrictEqual(F.conferir({ ...nota, valor: 3450 }, { pedido, cliente, empresa }), []);
     const a = F.conferir({ ...nota, valor: 3450, tomador_doc: '98765432100' }, { pedido, cliente, empresa });
     assert.deepStrictEqual(a, ['O CPF/CNPJ do tomador (987.654.321-00) não é o do cliente (123.456.789-09).']);
@@ -130,7 +132,7 @@ test('conferir: duas notas somam o valor do pedido', () => {
     assert.match(estoura[0], /^O valor da nota \(R\$ 1\.500,00\)/);
     // nota cancelada do pedido nao entra na soma
     assert.deepStrictEqual(F.conferir(servico, { pedido, cliente, empresa, notasDoPedido: [{ ...produto, status: 'cancelada', valor: 9999 }] }),
-        ['O valor da nota (R$ 1.450,00) é diferente do valor do pedido (R$ 3.450,00).']);
+        ['A nota cobre R$ 1.450,00 de R$ 3.450,00 do pedido.']);
 });
 
 test('tipoPadrao', () => {

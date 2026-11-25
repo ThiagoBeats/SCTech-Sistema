@@ -3302,6 +3302,8 @@ html[data-theme="dark"] .nf-aviso-manual { color: #F5F6F8; }
 .nf-filtros .nf-busca { flex: 1 1 180px; }
 .nf-lista-tabela { overflow-x: auto; max-width: 100%; }
 .nf-clicavel { cursor: pointer; }
-.nf-clicavel:hover { background: var(--bg); }
+.nf-clicavel:hover { background: var(--surface-2); }
 .nf-lista-rodape { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px; color: var(--dark); }
 .nf-selo-lanc { white-space: nowrap; }
+.nf-espaco { margin: 12px 0 0; font-size: 12px; color: var(--muted); }
+.nf-pag { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; margin-top: 10px; font-size: 13px; color: var(--dark); }
