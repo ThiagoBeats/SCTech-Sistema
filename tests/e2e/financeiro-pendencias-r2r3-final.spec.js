@@ -68,7 +68,7 @@ test('A Receber: desmarcar o unico item continua bloqueando com "Marque pelo men
 });
 
 // ---- 3. Comissao antiga de arquiteto paga por conta comissao_rt ----
-test('estornar comissao antiga de arquiteto (comissao_rt) reabre a conta, tira o movimento e deixa pagar de novo', async ({ page }) => {
+test('desfazer pagamento de comissao antiga de arquiteto (comissao_rt) tira a conta e o movimento e deixa pagar de novo', async ({ page }) => {
     await entrar(page, BASE, {
         sc_cli: CLI,
         sc_vend: [{ id: 3, nome: 'Studio M', comissao_pct: 10, tipo: 'arquiteto' }],
@@ -86,24 +86,26 @@ test('estornar comissao antiga de arquiteto (comissao_rt) reabre a conta, tira o
     const btn = page.locator('#tb-hist-comissoes button', { hasText: 'Estornar' });
     await expect(btn).toBeVisible();
     await btn.click();
-    await expect(page.locator('#sc-modal-msg')).toHaveText('Estornar este pagamento? A conta volta a ficar em aberto.');
+    await expect(page.locator('#sc-modal-msg')).toHaveText('Desfazer este pagamento? A comissão volta a ficar pendente.');
     await page.locator('#sc-modal-ok').click();
-    await expect.poll(async () => (await ler(page, 'sc_cp'))[0].status).not.toBe('Pago');
+    await expect.poll(async () => (await ler(page, 'sc_ped'))[0].arq_comissao_paga).toBe(false);
+    // a conta paga antiga sai do Financeiro (a comissao e do pedido) e fica em Excluidos
+    expect((await ler(page, 'sc_cp')) || []).toEqual([]);
+    expect((await ler(page, 'sc_fin_excluidos')).map(x => x.lancamento.id)).toEqual([900]);
     expect((await ler(page, 'sc_mov_fin')) || []).toEqual([]);
-    expect((await ler(page, 'sc_ped'))[0].arq_comissao_paga).toBe(false);
+    expect((await ler(page, 'sc_ped'))[0].arq_comissao_status).toBe('pendente');
     // Pagar de novo pela lista de pendentes
     await page.goto(BASE + '/vendedores.html?tipo=arquiteto&aba=pendentes');
     await page.locator('#tb-comissoes-pendentes button', { hasText: 'Pagar' }).click();
-    const modal = page.locator('#baixa-modal');
+    const modal = page.locator('#com-pag-modal');
     await expect(modal).toBeVisible();
-    await modal.locator('.baixa-meio').selectOption('PIX');
-    await modal.locator('#baixa-ok').click();
-    await expect.poll(async () => (await ler(page, 'sc_cp'))[0].status).toBe('Pago');
-    const cps = await ler(page, 'sc_cp');
-    expect(cps).toHaveLength(1);
+    await modal.locator('#com-pag-conta').selectOption('10');
+    await modal.locator('#com-pag-ok').click();
+    await expect.poll(async () => (await ler(page, 'sc_ped'))[0].arq_comissao_paga).toBe(true);
+    expect((await ler(page, 'sc_cp')) || []).toHaveLength(0);
     const movs = await ler(page, 'sc_mov_fin');
-    expect(movs.map(m => [m.origem, m.origem_id, m.sentido, m.valor])).toEqual([['cp', 900, 'saida', 100]]);
-    expect((await ler(page, 'sc_ped'))[0].arq_comissao_paga).toBe(true);
+    expect(movs.map(m => [m.origem, m.origem_id, m.papel, m.sentido, m.valor])).toEqual([['comissao', 26800, 'arquiteto', 'saida', 100]]);
+    expect((await ler(page, 'sc_ped'))[0].arq_comissao_status).toBe('paga');
 });
 
 // ---- 7. "igual ao mes anterior" quando a porcentagem arredonda para 0 ----

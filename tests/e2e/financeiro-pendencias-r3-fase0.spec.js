@@ -55,20 +55,19 @@ test('cancelar a janela de pagamento (Escape) nao muda nada', async ({ page }) =
 });
 
 test('cancelar a janela de comissao deixa a comissao pendente', async ({ page }) => {
-    const cp = { id: 701, pedido_id: 26500, descricao: 'Comissão', credor_nome: 'Bruno', valor: 50, categoria: 'comissao', papel_comissao: 'vendedor',
-        data_vencimento: '2026-10-20', data_pagamento: null, status: 'Pendente', tipo: 'variavel' };
     await entrar(page, BASE, { sc_cli: CLI, sc_vend: [{ id: 2, nome: 'Bruno', comissao_pct: 5, tipo: 'vendedor' }],
-        sc_ped: [ped({ valor_recebido: 1000, vendedor_id: 2, vendedor_nome: 'Bruno', comissao_valor: 50, comissao_pct: 5 })], sc_cp: [cp] });
+        sc_contas_fin: [{ id: 1, nome: 'Banco A', tipo: 'banco', saldo_inicial: 0, data_saldo_inicial: '2026-01-01', ativo: true }],
+        sc_ped: [ped({ status: 'Instalado', valor_recebido: 1000, vendedor_id: 2, vendedor_nome: 'Bruno', comissao_valor: 50, comissao_pct: 5, comissao_status: 'pendente' })] });
     await page.goto(BASE + '/vendedores.html?aba=pendentes');
     await expect(page.locator('#tb-comissoes-pendentes button', { hasText: 'Pagar' })).toBeVisible();
     const antes = await page.evaluate(() => [localStorage.getItem('sc_cp'), localStorage.getItem('sc_ped'), localStorage.getItem('sc_mov_fin')]);
     await page.locator('#tb-comissoes-pendentes button', { hasText: 'Pagar' }).click();
-    await expect(page.locator('#baixa-modal')).toBeVisible();
-    await page.locator('#baixa-cancel').click();
-    await expect(page.locator('#baixa-modal')).toHaveCount(0);
+    await expect(page.locator('#com-pag-modal')).toBeVisible();
+    await page.locator('#com-pag-cancel').click();
+    await expect(page.locator('#com-pag-modal')).toHaveCount(0);
     await expect(page.locator('#tb-comissoes-pendentes button', { hasText: 'Pagar' })).toBeVisible();
     expect(await page.evaluate(() => [localStorage.getItem('sc_cp'), localStorage.getItem('sc_ped'), localStorage.getItem('sc_mov_fin')])).toEqual(antes);
-    expect((await lerChave(page, 'sc_cp'))[0].status).toBe('Pendente');
+    expect((await lerChave(page, 'sc_ped'))[0].comissao_status).toBe('pendente');
 });
 
 // ---- 2. Estorno de parcela vencida volta "Atrasado"; permissao negada ----

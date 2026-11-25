@@ -73,7 +73,8 @@
         };
 
         // Origem do movimento: lancamento (CR/CP) ou nada (transferencia/ajuste).
-        const regDe = m => (m.origem === 'cr' ? porCr : m.origem === 'cp' ? porCp : new Map()).get(String(m.origem_id));
+        // Pagamento de comissao: o proprio movimento faz o papel do lancamento (categoria Comissoes).
+        const regDe = m => (m.origem === 'comissao' ? Object.assign({ categoria_id: 'cat_comissoes' }, m) : (m.origem === 'cr' ? porCr : m.origem === 'cp' ? porCp : new Map()).get(String(m.origem_id)));
         const evento = (m, previsto) => {
             const transf = m.origem === 'transferencia';
             let ent = m.sentido === 'entrada' ? num(m.valor) : 0, sai = m.sentido === 'entrada' ? 0 : num(m.valor);
@@ -206,7 +207,7 @@
         if (!periodoOk(col)) return [];
         let saldo = saldoInicialDe(p, col);
         const linhas = [{ data: col.de, descricao: 'Saldo inicial', conta_id: col.contaId, entrada: 0, saida: 0, saldo, origem: 'saldo_inicial', origem_id: null, grupo_id: null, previsto: false, transferencia: false }];
-        const rotuloOrigem = { cr: 'Recebimento', cp: 'Pagamento', transferencia: 'Transferência', ajuste: 'Ajuste de saldo' };
+        const rotuloOrigem = { cr: 'Recebimento', cp: 'Pagamento', comissao: 'Comissão', transferencia: 'Transferência', ajuste: 'Ajuste de saldo' };
         const ordenar = evs => evs.map((e, i) => [e, i]).sort((a, b) => (a[0].data < b[0].data ? -1 : a[0].data > b[0].data ? 1 : a[1] - b[1])).map(x => x[0]);
         ordenar(col.realizado).concat(ordenar(col.previsto)).forEach(e => {
             saldo = arredondar(saldo + efeito(e));
@@ -256,7 +257,7 @@
             const vazio = { nome: '', grupo: null, subgrupo_id: null, natureza: 'dre', especial: null };
             if (m.origem === 'transferencia') return somar(sentido, 'transferencia', Object.assign({}, vazio, { nome: 'Transferências', especial: 'transferencia' }), valor);
             if (m.origem === 'ajuste') return somar(sentido, 'ajuste', Object.assign({}, vazio, { nome: 'Ajustes de saldo', especial: 'ajuste' }), valor);
-            if (e.reg && (m.origem === 'cr' || m.origem === 'cp')) {
+            if (e.reg && (m.origem === 'cr' || m.origem === 'cp' || m.origem === 'comissao')) {
                 const c = porId.get(String(categoriaDe(e.reg, m.origem, porId)));
                 if (c) return somar(sentido, 'cat:' + c.id, { nome: c.nome, grupo: c.grupo || null, subgrupo_id: c.subgrupo_id || null, natureza: c.natureza || 'dre', especial: null, id: c.id }, valor);
             }

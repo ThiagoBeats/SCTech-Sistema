@@ -94,7 +94,7 @@ function _finResIndicadoresHtml(hoje) {
     </div>`;
     if (!iv) return `<div class="card res-card">${barra}<p class="lanc-sub">Escolha as datas De e Até para ver os indicadores.</p></div>`;
     const ant = DreCore.periodoAnterior(iv.de, iv.ate);
-    const base = { regime: finDre.regime, contas_receber: db.contas_receber || [], contas_pagar: db.contas_pagar || [], movimentos: db.movimentos_fin || [],
+    const base = { regime: finDre.regime, contas_receber: db.contas_receber || [], contas_pagar: db.contas_pagar || [], movimentos: db.movimentos_fin || [], pedidos: db.pedidos || [],
         contas: getContasFin(), categorias: (db.fin_categorias || {}).categorias, subgrupos: (db.fin_categorias || {}).subgrupos };
     const L = DreCore.calcular({ ...base, de: iv.de, ate: iv.ate }).linhas;
     const A = ant ? DreCore.calcular({ ...base, de: ant.de, ate: ant.ate }).linhas : null;

@@ -79,27 +79,25 @@ test('cartao so oferece conta maquininha (receber)', async ({ page }) => {
     expect(await linha.locator('.baixa-conta option').allTextContents()).toEqual(['— sem conta —', 'Caixa', 'Banco', 'Maquininha']);
 });
 
-test('pagar comissao gera saida e estornar devolve a pendente', async ({ page }) => {
+test('pagar comissao gera saida e desfazer devolve a pendente', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_vend: VEND, sc_contas_fin: CONTAS, sc_meios_pag: MEIOS, sc_ped: [pedido()] });
     await page.goto(BASE + '/vendedores.html?aba=pendentes');
     await page.click('#tb-comissoes-pendentes button:has-text("Pagar")');
-    const modal = page.locator('#baixa-modal');
-    await modal.locator('.baixa-meio').selectOption({ label: 'PIX' });
-    await modal.locator('#baixa-ok').click();
+    const modal = page.locator('#com-pag-modal');
+    await modal.locator('#com-pag-conta').selectOption('11');
+    await modal.locator('#com-pag-ok').click();
     await expect.poll(async () => (await ler(page, 'sc_ped'))[0].comissao_paga).toBe(true);
     let movs = await ler(page, 'sc_mov_fin');
     expect(movs).toHaveLength(1);
-    expect(movs[0]).toMatchObject({ conta_id: 11, sentido: 'saida', valor: 50, origem: 'cp' });
+    expect(movs[0]).toMatchObject({ conta_id: 11, sentido: 'saida', valor: 50, origem: 'comissao' });
     await page.click('.vend-tab-btn[data-tab="historico"]');
     await page.locator('#tb-hist-comissoes button', { hasText: '↩ Estornar' }).click();
-    await page.locator('.sc-modal-overlay button', { hasText: 'Estornar' }).last().click();
+    await page.locator('.sc-modal-overlay button', { hasText: 'Desfazer pagamento' }).last().click();
     await expect.poll(async () => (await ler(page, 'sc_ped'))[0].comissao_paga).toBeFalsy();
     const ped = (await ler(page, 'sc_ped'))[0];
     expect(ped.comissao_data_pgto).toBeNull();
-    const c = (await ler(page, 'sc_cp')).find(x => x.papel_comissao === 'vendedor');
-    expect(c.status).toBe('Atrasado');
-    expect(c).toMatchObject({ data_pagamento: null, forma_pagamento: null, meio_id: null, baixado_em: null });
-    expect(c.estornado_em).toBeGreaterThan(0);
+    expect(ped.comissao_status).toBe('pendente');
+    expect((await ler(page, 'sc_cp')) || []).toHaveLength(0);
     expect(await ler(page, 'sc_mov_fin')).toEqual([]);
     await page.goto(BASE + '/vendedores.html?aba=pendentes');
     await expect(page.locator('#tb-comissoes-pendentes')).toContainText('R$ 50.00');
@@ -135,18 +133,16 @@ test('estornar no A Pagar e excluir pago/taxa de cartao sao bloqueados', async (
     expect(await ler(page, 'sc_mov_fin')).toEqual([]);
 });
 
-test('pagar varias comissoes de uma vez, mesma data e meio', async ({ page }) => {
+test('pagar varias comissoes de uma vez, mesma data e conta', async ({ page }) => {
     const peds = [pedido({ id: 26401 }), pedido({ id: 26402, comissao_valor: 70 })];
     await entrar(page, BASE, { sc_cli: CLI, sc_vend: VEND, sc_contas_fin: CONTAS, sc_meios_pag: MEIOS, sc_ped: peds });
     await page.goto(BASE + '/vendedores.html?aba=pendentes');
     await page.click('button:has-text("Pagar Todas")');
-    const modal = page.locator('#baixa-modal');
-    await modal.locator('#baixa-data').fill('2026-11-05');
-    const meios = modal.locator('.baixa-meio');
-    await expect(meios).toHaveCount(2);
-    await meios.nth(0).selectOption({ label: 'Dinheiro' });
-    await meios.nth(1).selectOption({ label: 'Dinheiro' });
-    await modal.locator('#baixa-ok').click();
+    const modal = page.locator('#com-pag-modal');
+    await modal.locator('#com-pag-data').fill('2026-11-05');
+    await expect(modal.locator('#com-pag-total')).toHaveText('R$ 120,00');
+    await modal.locator('#com-pag-conta').selectOption('10');
+    await modal.locator('#com-pag-ok').click();
     await expect.poll(async () => (await ler(page, 'sc_ped')).every(p => p.comissao_paga)).toBe(true);
     const movs = await ler(page, 'sc_mov_fin');
     expect(movs.map(m => [m.conta_id, m.data, m.valor, m.sentido]).sort()).toEqual([[10, '2026-11-05', 50, 'saida'], [10, '2026-11-05', 70, 'saida']]);

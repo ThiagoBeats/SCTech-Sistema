@@ -19,18 +19,21 @@ const PED = [
       comissao_paga: true, comissao_data_pgto: 1760000000000 },
 ];
 
+// Conta para pagar comissoes (a janela de pagamento exige a conta).
+const CONTAS = [{ id: 1, nome: 'Banco A', tipo: 'banco', saldo_inicial: 0, data_saldo_inicial: '2020-01-01', ativo: true }];
+
 async function abrir(page, url, extras) {
-    await entrar(page, BASE, { sc_vend: VEND, sc_ped: PED, ...(extras || {}) });
+    await entrar(page, BASE, { sc_vend: VEND, sc_ped: PED, sc_contas_fin: CONTAS, ...(extras || {}) });
     await page.goto(BASE + '/' + (url || 'vendedores.html'));
 }
 
 async function confirmarModal(page) {
-    // Pagar comissao abre o modal de baixa (data/forma); as demais confirmacoes usam #sc-modal-ok.
-    const ok = page.locator('#baixa-ok, #sc-modal-ok').first();
+    // Pagar comissao abre a janela de pagamento (conta e data); as demais confirmacoes usam #sc-modal-ok.
+    const ok = page.locator('#com-pag-ok, #sc-modal-ok').first();
     await ok.waitFor({ timeout: 5000 });
-    // A baixa exige escolher o meio de cada linha.
-    const meios = page.locator('#baixa-modal .baixa-meio');
-    for (let i = 0, n = await meios.count(); i < n; i++) await meios.nth(i).selectOption({ index: 1 });
+    // O pagamento exige escolher a conta.
+    const conta = page.locator('#com-pag-conta');
+    if (await conta.count()) await conta.selectOption({ index: 1 });
     await ok.click();
     await page.waitForTimeout(400);
 }

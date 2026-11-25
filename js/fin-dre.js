@@ -21,7 +21,7 @@ function _dreAnosComDados() {
 function _dreParams(de, ate, intervalo, regime) {
     const fc = db.fin_categorias || {};
     return { regime: regime || finDre.regime, de, ate, intervalo, contas_receber: db.contas_receber || [], contas_pagar: db.contas_pagar || [],
-        movimentos: db.movimentos_fin || [], contas: getContasFin(), categorias: fc.categorias, subgrupos: fc.subgrupos };
+        movimentos: db.movimentos_fin || [], pedidos: db.pedidos || [], contas: getContasFin(), categorias: fc.categorias, subgrupos: fc.subgrupos };
 }
 
 // A tabela exibida (mensal, ano escolhido); usada tambem pelos exportadores.
@@ -411,8 +411,9 @@ function abrirDetalheDre(chave, indice, ctx) {
     const soma = itens.reduce((t, i) => t + (Number(i.valor) || 0), 0);
     let algumPode = false;
     const linhasHtml = itens.map(i => {
-        const r = (i.tipo === 'cp' ? db.contas_pagar : db.contas_receber).find(x => String(x.id) === String(i.id)) || {};
-        const pode = temAcesso(i.tipo === 'cp' ? FIN_LADOS.pagar : FIN_LADOS.receber, 'visualizar');
+        // Comissao vem do pedido (ou do movimento do pagamento): sem lancamento para abrir.
+        const r = i.tipo === 'comissao' ? { descricao: i.descricao } : (i.tipo === 'cp' ? db.contas_pagar : db.contas_receber).find(x => String(x.id) === String(i.id)) || {};
+        const pode = i.tipo !== 'comissao' && temAcesso(i.tipo === 'cp' ? FIN_LADOS.pagar : FIN_LADOS.receber, 'visualizar');
         if (pode) algumPode = true;
         return `<tr class="dre-det-linha" data-tipo="${i.tipo}" data-id="${escapeHtml(String(i.id))}"${pode ? ' data-ir="1" style="cursor:pointer"' : ''}>
             <td>${dataBr(i.data)}</td><td>${escapeHtml(r.descricao || '—')}</td><td>${escapeHtml(_finPessoaDe(r) || '—')}</td><td style="text-align:right;white-space:nowrap">R$ ${brl(i.valor)}</td></tr>`;

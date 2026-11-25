@@ -3788,6 +3788,7 @@ async function aprovarPedido(id) {
     ped.timeline.push({ status: 'Medição', data: Date.now() });
     const pagoAMais = gerarFinanceiroPedido(ped);
     registrarCustoPedido(ped);
+    sincronizarComissoesPedido(ped);
     syncDB();
     await avisarPagoAMais(pagoAMais);
     salvarERecarregar('Pedido aprovado!');
@@ -4126,7 +4127,7 @@ async function moverStatus(id, direcao) {
     if (idx === 0) { pagoAMais = gerarFinanceiroPedido(ped); registrarCustoPedido(ped); }
     if (novoIdx === 1 && !ped.data_producao)  ped.data_producao  = Date.now();
     if (STATUS_PIPELINE[novoIdx] === 'Instalado' && !ped.data_instalado) ped.data_instalado = Date.now();
-    if (STATUS_PIPELINE[novoIdx] === 'Instalado') gerarComissoesPedido(ped);
+    gerarComissoesPedido(ped);   // pendente no Instalado; ao voltar dele, volta a registrada
     syncDB();
     await avisarPagoAMais(pagoAMais);
     toastReload('Status atualizado!');
@@ -7622,6 +7623,10 @@ Volte o pedido para Orçamento para editar.`, '🔒');
              'inst_historico', 'inst_confirmada_em', 'usuario_instalacao_id', 'instalador_nome', 'inst_aceite', 'inst_recusa']
                 .forEach(k => { if (db.pedidos[index][k] !== undefined) dadosPedido[k] = db.pedidos[index][k]; });
             dadosPedido.comissao_paga     = db.pedidos[index].comissao_paga     || false;
+            // Status, pagamento e historico das comissoes sobrevivem a edicao.
+            ['comissao_status', 'comissao_mov_id', 'comissao_conta_id', 'comissao_historico',
+             'arq_comissao_status', 'arq_comissao_mov_id', 'arq_comissao_conta_id', 'arq_comissao_historico']
+                .forEach(k => { if (db.pedidos[index][k] !== undefined) dadosPedido[k] = db.pedidos[index][k]; });
             dadosPedido.comissao_data_pgto = db.pedidos[index].comissao_data_pgto || null;
             dadosPedido.arq_comissao_paga      = db.pedidos[index].arq_comissao_paga      || false;
             dadosPedido.arq_comissao_data_pgto = db.pedidos[index].arq_comissao_data_pgto || null;
@@ -7662,7 +7667,7 @@ Volte o pedido para Orçamento para editar.`, '🔒');
         pagoAMais = gerarFinanceiroPedido(dadosPedido);
         registrarCustoPedido(dadosPedido);
     }
-    if (normalizarStatus(dadosPedido.status) === 'Instalado') gerarComissoesPedido(dadosPedido);
+    gerarComissoesPedido(dadosPedido);
     syncDB();
     await avisarPagoAMais(pagoAMais);
     localStorage.removeItem('sc_editando_id');
@@ -7734,6 +7739,7 @@ Ele sai do painel de produção e fica liberado para edição até ser aprovado 
     removerFinanceiroAbertoPedido(ped.id);
     ped.financeiro_gerado = false;
     ped.status = 'Orçamento';
+    sincronizarComissoesPedido(ped);   // comissao nao paga deixa de ser registrada (volta a aprovar)
     if (!ped.timeline) ped.timeline = [];
     ped.timeline.push({ status: 'Orçamento', data: Date.now(), label: `Voltou para Orçamento (estava em ${status})` });
     // Conferencia valia para o pedido aprovado; volumes continuam.
@@ -8650,7 +8656,7 @@ function _dadosExportacao(marcaFase0) {
         medicoes: db.medicoes, rotas: db.rotas || [], agenda_eventos: db.agenda_eventos || [],
         fin_metas: _lerObjetoLS('sc_fin_metas'), fin_orcamento_mes: _lerObjetoLS('sc_fin_orcamento_mes'),
         // Financeiro novo: categorias da DRE, excluidos e a versao dos dados (backup sem ela passa pela migracao v4).
-        fin_categorias: db.fin_categorias, fin_excluidos: db.fin_excluidos || [], fin_extrato: db.fin_extrato || [], fin_extrato_imp: db.fin_extrato_imp || [], notas_fiscais: db.notas_fiscais || [], fin_versao: localStorage.getItem(CHAVE_FIN_VERSAO),
+        fin_categorias: db.fin_categorias, fin_excluidos: db.fin_excluidos || [], fin_extrato: db.fin_extrato || [], fin_extrato_imp: db.fin_extrato_imp || [], notas_fiscais: db.notas_fiscais || [], fin_versao: localStorage.getItem(CHAVE_FIN_VERSAO), comissao_v2: localStorage.getItem('sc_comissao_v2') === '1',
         empresa: getEmpresa(), formas_pag: getFormasPagamentoCfg(),
         import_perfis: db.import_perfis || [],
         config_ls: _configsLS(),
@@ -8728,6 +8734,8 @@ function importarDados(event) {
             const extras = [['sc_fin_migracao', dados.fin_fase0 ? '1' : null]];
             // Backup sem a versao 4 do Financeiro passa pela migracao v4 ao recarregar (com copia nova).
             extras.push([CHAVE_FIN_VERSAO, Number(dados.fin_versao) >= 4 ? String(dados.fin_versao) : null]);
+            // Backup sem a marca das comissoes (contas de comissao em aberto) passa pela migracao ao recarregar.
+            extras.push(['sc_comissao_v2', dados.comissao_v2 ? '1' : null]);
             // Ajustes por mes do Resultado: backup antigo (sem eles) volta ao padrao vazio.
             ['fin_metas', 'fin_orcamento_mes'].forEach(k => {
                 const o = dados[k];
@@ -9192,7 +9200,7 @@ function renderTabelaVendedores() {
 // Um pedido com vendedor e arquiteto aparece nas duas abas, cada um com a sua.
 function _comissoesPendentesDoTipo(filtroVend) {
     const c = CAMPOS_COMISSAO[_tipoVend];
-    let pedidos = db.pedidos.filter(p => p[c.id] && (p[c.valor] || 0) > 0 && !p[c.paga] &&
+    let pedidos = db.pedidos.filter(p => FinanceiroCore.temComissao(p, _tipoVend) && !p[c.paga] &&
         normalizarStatus(p.status) === 'Instalado');
     if (filtroVend) pedidos = pedidos.filter(p => p[c.id] == filtroVend);
     // Comissao de arquiteto antiga (categoria comissao_rt, sem papel) pendente
@@ -9215,7 +9223,7 @@ function _ehComissaoRTAntiga(cp) {
 // Valor, % e nome da comissao pendente do pedido na aba aberta.
 function _dadosComissaoPendente(p) {
     const c = CAMPOS_COMISSAO[_tipoVend];
-    if (p[c.id] && (p[c.valor] || 0) > 0 && !p[c.paga]) {
+    if (FinanceiroCore.temComissao(p, _tipoVend) && !p[c.paga]) {
         const v = db.vendedores.find(x => x.id == p[c.id]);
         return { valor: p[c.valor] || 0, pct: p[c.pct] || 0, nome: v?.nome || p[c.nome] || '' };
     }
@@ -9266,11 +9274,7 @@ function renderHistoricoComissoes() {
     tb.innerHTML = pedidos.map(p => {
         const v        = db.vendedores.find(x => x.id == p[c.id]);
         const dataPgto = p[c.data] ? new Date(p[c.data]).toLocaleDateString('pt-BR') : '—';
-        const cpPaga = _contaComissaoPaga(p.id);
-        // Comissao paga antes de virar conta a pagar: sem conta para estornar, volta pelo pedido.
-        const estornar = cpPaga
-            ? `<button class="btn btn-outline btn-sm" onclick="estornarCP(${cpPaga.id})" title="Desfazer este pagamento">↩ Estornar</button>`
-            : `<button class="btn btn-outline btn-sm" onclick="estornarComissaoAntiga(${p.id})" title="Desfazer este pagamento">↩ Estornar</button>`;
+        const estornar = `<button class="btn btn-outline btn-sm" onclick="estornarComissaoAntiga(${p.id})" title="Desfazer este pagamento">↩ Estornar</button>`;
         return `<tr>
             <td style="font-size:12px;white-space:nowrap">${dataPgto}</td>
             <td style="font-size:12px">#${formatPedidoId(p.id)}</td>
@@ -9293,16 +9297,14 @@ function _contaComissaoPaga(pedidoId) {
 // Estorna a comissao paga antes de existir conta a pagar (so a marca no pedido):
 // o pedido volta a ter a comissao pendente, como no estorno de uma conta paga.
 async function estornarComissaoAntiga(pedidoId) {
-    if (!await exigirPermissao('financeiro.pagar', 'completo')) return;
+    if (!_permiteGerirComissoes()) { await showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
     const ped = db.pedidos.find(p => p.id == pedidoId);
     const c = CAMPOS_COMISSAO[_tipoVend];
     if (!ped || !c || !ped[c.paga]) return;
-    const cpPaga = _contaComissaoPaga(ped.id);
-    if (cpPaga) { await estornarCP(cpPaga.id); return; }
-    if (!await showConfirm('Estornar este pagamento? A comissão volta a ficar pendente.', '↩', 'Estornar', 'Cancelar')) return;
-    ped[c.paga] = false;
-    ped[c.data] = null;
-    salvarERecarregar('Pagamento estornado.');
+    if (!await showConfirm('Desfazer este pagamento? A comissão volta a ficar pendente.', '↩', 'Desfazer pagamento', 'Cancelar')) return;
+    const res = desfazerPagamentoComissao({ pedidoId, papel: _tipoVend });
+    if (!res.ok) { await showAlert(res.erro, '⚠️'); return; }
+    salvarERecarregar('Pagamento desfeito.');
 }
 
 // Paga a comissao do papel da aba aberta; a do outro papel no mesmo pedido fica.
@@ -9313,23 +9315,17 @@ async function pagarComissao(pedidoId) {
     await _baixarComissoes([ped], 'Pagar comissão');
 }
 
-// Localiza (gerando se faltarem) as contas do papel da aba e abre uma baixa unica.
+// Paga as comissoes pendentes do papel da aba (registro no pedido, sem conta a pagar): pede conta e data.
 async function _baixarComissoes(pedidos, titulo) {
-    if (!await exigirPermissao('financeiro.pagar', 'completo')) return;
-    const papel = _tipoVend;
-    const itens = [];
-    pedidos.forEach(p => {
-        gerarComissoesPedido(p);
-        const cp = db.contas_pagar.find(x => x.pedido_id == p.id && finAberta(x) &&
-            (x.papel_comissao === papel || (papel === 'arquiteto' && _ehComissaoRTAntiga(x))));
-        if (cp) itens.push({ id: cp.id, descricao: `#${formatPedidoId(p.id)} — ${cp.credor_nome || ''}`, valor: cp.valor, marcado: true });
-    });
-    if (!itens.length) { await showAlert('Nenhuma comissão pendente para pagar.', 'ℹ️'); return; }
-    const r = await abrirModalBaixa({ titulo, itens, permiteCartao: false, permiteParcial: false });
-    if (!r || !r.linhas.length) return;
-    const baixa = baixarContasPagar(r.data, r.linhas);
-    if (!baixa.ok) { await showAlert(baixa.erro, '⚠️'); return; }
-    salvarERecarregar(r.linhas.length > 1 ? 'Comissões pagas!' : 'Comissão paga!');
+    if (!_permiteGerirComissoes()) { await showAlert('Você não tem permissão para realizar esta ação.', '🚫'); return; }
+    const papel = _tipoVend, c = CAMPOS_COMISSAO[papel];
+    const alvos = pedidos.filter(p => FinanceiroCore.temComissao(p, papel) && (p[FinanceiroCore.CAMPOS_COMISSAO_REG[papel].status] || FinanceiroCore.statusEsperadoComissao(p, papel)) === 'pendente');
+    if (!alvos.length) { await showAlert('Nenhuma comissão pendente para pagar.', 'ℹ️'); return; }
+    const r = await abrirModalPagarComissoes({ titulo, itens: alvos.map(p => ({ descricao: `#${formatPedidoId(p.id)} — ${p[c.nome] || ''}`, valor: p[c.valor] })) });
+    if (!r) return;
+    const res = registrarPagamentoComissoes({ itens: alvos.map(p => ({ pedidoId: p.id, papel })), contaId: r.contaId, data: r.data });
+    if (!res.ok) { await showAlert(res.erro, '⚠️'); return; }
+    salvarERecarregar(res.pagos > 1 ? 'Comissões pagas!' : 'Comissão paga!');
 }
 
 async function pagarTodasFiltradas() {
@@ -13817,6 +13813,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Financeiro novo (v4), so depois da Fase 0 (que ainda cria e tira contas); um erro aqui nao impede a pagina.
     try { if (localStorage.getItem(CHAVE_FIN_MIGRACAO) === '1') _migrarFinanceiroV4(); }
     catch (e) { console.error('Migração do Financeiro (v4) falhou:', e); }
+    // Comissao como registro do pedido (depois da Fase 0, que ainda cria contas de comissao).
+    try { _migrarComissoesV2(); }
+    catch (e) { console.error('Migração das comissões falhou:', e); }
 
     if (!document.getElementById('login-usuario')) {
         // Lembrete de confirmar instalacao: depois de a pagina montar.
@@ -14759,6 +14758,46 @@ function _migrarFinanceiroV4({ semCopia = false } = {}) {
     return true;
 }
 
+// Migracao unica das comissoes (sc_comissao_v2): a comissao passa a ser registro do pedido.
+// Conta a pagar de comissao EM ABERTO sai do Financeiro (guardada em fin_excluidos) e o pedido fica
+// pendente/registrada; conta PAGA continua como esta (o pedido fica pago). Roda depois da Fase 0
+// (que ainda cria contas de comissao). Sem espaco para salvar: volta ao que era e tenta na proxima.
+const CHAVE_COMISSAO_V2 = 'sc_comissao_v2';
+function _migrarComissoesV2() {
+    if (localStorage.getItem(CHAVE_COMISSAO_V2) === '1') return true;
+    if (localStorage.getItem(CHAVE_FIN_MIGRACAO) !== '1') return false;
+    const plano = FinanceiroCore.planoMigracaoComissao({ pedidos: db.pedidos, contas_pagar: db.contas_pagar, movimentos: db.movimentos_fin });
+    if (plano.removerCP.length || plano.pedidos.length) {
+        const antes = JSON.stringify({ contas_pagar: db.contas_pagar, pedidos: db.pedidos, fin_excluidos: db.fin_excluidos || [] });
+        const sair = new Set(plano.removerCP.map(String));
+        const removidas = db.contas_pagar.filter(cp => sair.has(String(cp.id)));
+        const em = new Date().toISOString();
+        if (!Array.isArray(db.fin_excluidos)) db.fin_excluidos = [];
+        removidas.forEach(cp => db.fin_excluidos.push({ tipo: 'cp', em, por: null, porNome: 'Sistema', motivo: FinanceiroCore.MOTIVO_COMISSAO_V2, lancamento: JSON.parse(JSON.stringify(_finSemAnexos(cp))) }));
+        db.contas_pagar = db.contas_pagar.filter(cp => !sair.has(String(cp.id)));
+        plano.pedidos.forEach(it => {
+            const ped = db.pedidos.find(p => p.id == it.id);
+            if (!ped) return;
+            Object.assign(ped, it.set);
+            Object.keys(FinanceiroCore.CAMPOS_COMISSAO_REG).forEach(papel => {
+                const r = FinanceiroCore.CAMPOS_COMISSAO_REG[papel];
+                if (it.set[r.status] === undefined) return;
+                if (!Array.isArray(ped[r.hist])) ped[r.hist] = [];
+                ped[r.hist].push({ acao: 'migrada', detalhe: `Comissão passou a ser registro do pedido (${it.set[r.status]})`, em, por: null, porNome: 'Sistema' });
+            });
+        });
+        try { _syncDBBruto([[CHAVE_COMISSAO_V2, '1']]); }
+        catch (e) {
+            console.warn('Migração das comissões não pôde ser salva.', e);
+            const orig = JSON.parse(antes);
+            db.contas_pagar = orig.contas_pagar; db.pedidos = orig.pedidos; db.fin_excluidos = orig.fin_excluidos;
+            return false;
+        }
+        return true;
+    }
+    return _gravarSemFalhar(CHAVE_COMISSAO_V2, '1');
+}
+
 // Sem espaco para a copia da migracao v4: baixa a copia em arquivo (as mesmas chaves,
 // com os anexos) e migra sem a copia no navegador.
 function baixarCopiaEMigrarFinanceiroV4() {
@@ -15436,24 +15475,141 @@ function removerMovimentosDaBaixaCR(crId) {
     return { removidos: movs.length, caidos };
 }
 
-// Comissoes do pedido instalado viram contas a pagar (uma por papel). Idempotente.
+// A comissao e um registro do pedido (registrada -> pendente -> paga), sem conta a pagar.
+// Poe o status certo de cada comissao do pedido pela etapa dele (aprovado = registrada,
+// Instalado = pendente, voltou de Instalado = registrada; paga continua paga). Idempotente; nao grava.
+function sincronizarComissoesPedido(ped) {
+    const textos = {
+        registrada: de => (de === 'pendente' ? 'Pedido saiu de Instalado: a comissão voltou a ficar registrada' : 'Comissão registrada com a aprovação do pedido'),
+        pendente: () => 'Pedido instalado: comissão a pagar',
+        paga: () => 'Comissão paga'
+    };
+    return FinanceiroCore.sincronizarStatusComissoes(ped, (papel, de, para) =>
+        Object.assign({ acao: para === 'registrada' && de === 'pendente' ? 'voltou' : para, detalhe: textos[para](de), em: new Date().toISOString() }, _finQuem()));
+}
+
+// Pedido instalado: as comissoes ficam pendentes (sem criar conta a pagar). Idempotente.
 function gerarComissoesPedido(ped) {
-    const dataInst = dataLocal(ped.data_instalado) || hojeLocal();
-    const novas = FinanceiroCore.contasComissaoDoPedido(ped, {
-        vendedores: db.vendedores, contasPagar: db.contas_pagar,
-        data: dataInst, rotuloPedido: '#' + formatPedidoId(ped.id)
-    });
     // Pedido que voltou a ser Instalado: a marca "pedido cancelado" da comissao
-    // ja paga nao vale mais.
+    // ja paga (antiga conta a pagar) nao vale mais.
     (db.contas_pagar || []).forEach(cp => {
         if (cp.pedido_id == ped.id && cp.papel_comissao && cp.pedido_cancelado) delete cp.pedido_cancelado;
     });
-    const usados = new Set((db.contas_pagar || []).map(c => c.id));
-    let proximoId = Date.now();
-    novas.forEach(cp => {
-        while (usados.has(proximoId)) proximoId++;
-        usados.add(proximoId);
-        db.contas_pagar.push(finCompletarLancamento('cp', { id: proximoId, ...cp }, null, `Comissão do pedido #${formatPedidoId(ped.id)}`));
+    sincronizarComissoesPedido(ped);
+}
+
+function _permiteGerirComissoes() { return temAcesso('vendedores', 'completo') || temAcesso('financeiro.pagar', 'completo'); }
+
+// Paga comissoes pendentes: um movimento de saida por comissao (origem 'comissao', categoria Comissoes) na conta
+// escolhida, e a comissao vira paga. itens: [{ pedidoId, papel: 'vendedor'|'arquiteto' }]. Valida tudo antes de mexer.
+// Devolve { ok, erro, pagos, total }. Grava (pedidos, movimentos e saldo da conta).
+function registrarPagamentoComissoes({ itens, contaId, data } = {}) {
+    if (!_permiteGerirComissoes()) return { ok: false, erro: 'Você não tem permissão para realizar esta ação.' };
+    const erroData = _erroDataBaixa(data);
+    if (erroData) return { ok: false, erro: erroData };
+    const conta = _contaFinPorId(contaId);
+    if (!conta) return { ok: false, erro: 'Escolha a conta.' };
+    if (!CaixaCore.contaAceitaMovimento(conta, data)) return { ok: false, erro: 'A conta está inativa ou a data é anterior ao saldo inicial dela.' };
+    const alvos = [];
+    for (const it of (itens || [])) {
+        const ped = db.pedidos.find(p => p.id == it.pedidoId);
+        const c = CAMPOS_COMISSAO[it.papel], r = FinanceiroCore.CAMPOS_COMISSAO_REG[it.papel];
+        if (!ped || !c || !FinanceiroCore.temComissao(ped, it.papel) || (ped[r.status] || FinanceiroCore.statusEsperadoComissao(ped, it.papel)) !== 'pendente')
+            return { ok: false, erro: `A comissão do pedido #${formatPedidoId(it.pedidoId)} não está pendente.` };
+        if (!alvos.some(a => a.ped === ped && a.papel === it.papel)) alvos.push({ ped, papel: it.papel, c, r });
+    }
+    if (!alvos.length) return { ok: false, erro: 'Nenhuma comissão pendente para pagar.' };
+    if (!Array.isArray(db.movimentos_fin)) db.movimentos_fin = [];
+    const novoIdMov = _novosIdsFin(db.movimentos_fin);
+    const quando = new Date(data + 'T12:00:00').getTime();
+    let total = 0;
+    alvos.forEach(({ ped, papel, c, r }) => {
+        const valor = CaixaCore.arredondar(ped[c.valor]);
+        const v = (db.vendedores || []).find(x => x.id == ped[c.id]);
+        const nome = (v && v.nome) || ped[c.nome] || '';
+        const mov = { id: novoIdMov(), conta_id: conta.id, data, sentido: 'saida', valor, origem: 'comissao', origem_id: ped.id, papel, grupo_id: null,
+            descricao: `Comissão ${nome} — Pedido #${formatPedidoId(ped.id)}`, categoria_id: 'cat_comissoes' };
+        db.movimentos_fin.push(mov);
+        ped[r.status] = 'paga'; ped[c.paga] = true; ped[c.data] = quando; ped[r.mov] = mov.id; ped[r.conta] = conta.id;
+        if (!Array.isArray(ped[r.hist])) ped[r.hist] = [];
+        ped[r.hist].push(Object.assign({ acao: 'paga', detalhe: `Pago ${_finBrl(valor)} em ${_finDataBR(data)} — ${conta.nome || ''}`, em: new Date().toISOString() }, _finQuem()));
+        total += valor;
+    });
+    _finContaTocada(conta.id);
+    _gravarChaves(['sc_ped', 'sc_mov_fin', 'sc_contas_fin']);
+    return { ok: true, pagos: alvos.length, total: CaixaCore.arredondar(total) };
+}
+
+// Desfaz o pagamento de uma comissao: tira o movimento (o saldo da conta volta) e a comissao volta a pendente
+// (ou a registrada, se o pedido ja saiu de Instalado). Pagamento antigo, feito por conta a pagar, estorna a conta
+// e a tira do Financeiro (a comissao agora e do pedido). Devolve { ok, erro }.
+function desfazerPagamentoComissao({ pedidoId, papel } = {}) {
+    if (!_permiteGerirComissoes()) return { ok: false, erro: 'Você não tem permissão para realizar esta ação.' };
+    const ped = db.pedidos.find(p => p.id == pedidoId);
+    const c = CAMPOS_COMISSAO[papel], r = FinanceiroCore.CAMPOS_COMISSAO_REG[papel];
+    if (!ped || !c || (ped[r.status] || FinanceiroCore.statusEsperadoComissao(ped, papel)) !== 'paga') return { ok: false, erro: 'Esta comissão não está paga.' };
+    const mov = ped[r.mov] != null ? (db.movimentos_fin || []).find(m => CaixaCore.mesmoId(m.id, ped[r.mov])) : null;
+    const dataPgto = FinanceiroCore.dataLocalISO(ped[c.data]);
+    if (mov && mov.origem === 'comissao') {
+        db.movimentos_fin = db.movimentos_fin.filter(m => m !== mov);
+        _finContaTocada(mov.conta_id);
+    } else {
+        const cp = (db.contas_pagar || []).find(x => x.pedido_id == ped.id && x.status === 'Pago' && FinanceiroCore.papelDaContaComissao(x) === papel);
+        if (cp) {
+            _estornarCPDados(cp);
+            _finRegistrarExcluidos('cp', [cp]);
+            db.fin_excluidos[db.fin_excluidos.length - 1].motivo = FinanceiroCore.MOTIVO_COMISSAO_V2;
+            db.contas_pagar = db.contas_pagar.filter(x => x !== cp);
+        }
+    }
+    ped[c.paga] = false; ped[c.data] = null;
+    delete ped[r.mov]; delete ped[r.conta]; delete ped[r.status];
+    sincronizarComissoesPedido(ped);
+    if (!Array.isArray(ped[r.hist])) ped[r.hist] = [];
+    ped[r.hist].push(Object.assign({ acao: 'pagamento_desfeito', detalhe: `Pagamento de ${_finBrl(ped[c.valor])}${dataPgto ? ' em ' + _finDataBR(dataPgto) : ''} desfeito`, em: new Date().toISOString() }, _finQuem()));
+    if (typeof _ccDesligarSumidos === 'function') _ccDesligarSumidos();
+    _gravarChaves(['sc_ped', 'sc_mov_fin', 'sc_contas_fin', 'sc_cp', 'sc_fin_excluidos', 'sc_fin_extrato']);
+    return { ok: true };
+}
+
+// Janela do pagamento de comissoes: conta*, data* (hoje) e o total. Devolve { contaId, data } ou null.
+// itens: [{ descricao, valor }].
+function abrirModalPagarComissoes({ titulo, itens }) {
+    return new Promise(resolve => {
+        const hoje = hojeLocal();
+        const contas = getContasFin().filter(c => c.ativo !== false);
+        const total = (itens || []).reduce((s, i) => s + (Number(i.valor) || 0), 0);
+        const sel = 'width:100%;padding:6px;border:1px solid var(--border-strong);border-radius:4px;font-size:13px;box-sizing:border-box';
+        const o = document.createElement('div');
+        o.id = 'com-pag-modal';
+        o.className = 'sc-modal-overlay';
+        o.style.display = 'flex';
+        o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:460px;width:calc(100% - 32px)">
+            <h3 style="margin:0 0 12px;font-size:16px">${escapeHtml(titulo || 'Registrar pagamento')}</h3>
+            <div style="max-height:30vh;overflow:auto;margin-bottom:10px;font-size:13px">${(itens || []).map(i => `<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0"><span>${escapeHtml(i.descricao || '')}</span><strong>${_finBrl(i.valor)}</strong></div>`).join('')}</div>
+            <label style="display:block;font-size:12px;margin-bottom:4px">Conta *</label>
+            <select id="com-pag-conta" style="${sel};margin-bottom:10px"><option value="">Escolha a conta</option>${contas.map(c => `<option value="${escapeHtml(String(c.id))}">${escapeHtml(c.nome || '')}</option>`).join('')}</select>
+            <label style="display:block;font-size:12px;margin-bottom:4px">Data *</label>
+            <input type="date" id="com-pag-data" value="${hoje}" max="${hoje}" style="${sel};margin-bottom:10px">
+            <div id="com-pag-erro" style="display:none;color:var(--danger-text);font-size:12px;margin-bottom:8px"></div>
+            <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:12px"><span>Total</span><strong id="com-pag-total">${_finBrl(total)}</strong></div>
+            <div class="sc-modal-btns"><button class="btn btn-outline" id="com-pag-cancel">Cancelar</button><button class="btn btn-success" id="com-pag-ok">Registrar pagamento</button></div>
+        </div>`;
+        document.body.appendChild(o);
+        const fechar = v => { o.remove(); resolve(v); };
+        const erro = t => { const e = o.querySelector('#com-pag-erro'); e.textContent = t; e.style.display = 'block'; };
+        o.querySelector('#com-pag-cancel').onclick = () => fechar(null);
+        o.addEventListener('click', e => { if (e.target === o) fechar(null); });
+        o.querySelector('#com-pag-ok').onclick = () => {
+            const contaId = o.querySelector('#com-pag-conta').value;
+            const data = o.querySelector('#com-pag-data').value;
+            if (!contaId) return erro('Escolha a conta.');
+            const e = _erroDataBaixa(data);
+            if (e) return erro(e);
+            const conta = _contaFinPorId(contaId);
+            if (!CaixaCore.contaAceitaMovimento(conta, data)) return erro('A data é anterior ao saldo inicial da conta.');
+            fechar({ contaId, data });
+        };
     });
 }
 

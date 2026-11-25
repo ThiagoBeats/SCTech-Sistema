@@ -406,8 +406,8 @@ Avanço de status com comportamentos automáticos:
     Instalado. O botão só aparece para quem tem acesso completo a Financeiro ›
     A Receber (Administrador e Financeiro); os demais veem "Aguardando
     confirmação do financeiro".
-  - Ao chegar em Instalado, as comissões do vendedor e do arquiteto viram contas
-    no A Pagar (seção 10.9)
+  - Ao chegar em Instalado, as comissões do vendedor e do arquiteto ficam
+    pendentes de pagamento no próprio pedido (seção 10.9; não viram contas a pagar)
 
 Confirmar pagamento (ao instalar):
   - Mostra as parcelas em aberto do pedido, cada uma com uma caixa de seleção
@@ -1023,9 +1023,9 @@ Resumo total:
 Tabela de comissões pendentes:
   - Colunas: Pedido | Cliente | Vendedor | Valor do Pedido | Comissão (R$)
   - Uma linha por pedido com comissão ainda não quitada
-  - Na aba Arquitetos, a comissão de RT antiga (de pedidos de antes das contas
-    a pagar de comissão) que ainda está pendente também aparece na lista e é
-    paga pelo mesmo fluxo (mesma data e forma de pagamento)
+  - Pagar abre a janela "Registrar pagamento" (conta e data); a comissão é um
+    registro do pedido (seção 10.9). A RT antiga (só conta) entra como comissão
+    do pedido pela migração e aparece na aba Arquitetos
 
 ── 8.3 ABA: HISTÓRICO DE PAGAMENTOS ────────────────────────────────────────────
 
@@ -1415,7 +1415,8 @@ Dados do Financeiro novo (atualização automática, uma vez):
 Como o dinheiro é controlado (resumo, detalhes nas seções 10.7 a 10.13):
   - Tudo o que o cliente pagou fica nas parcelas do A Receber. O "Valor recebido"
     do pedido é a soma dessas parcelas pagas (não se digita mais).
-  - Toda comissão vira uma conta no A Pagar quando o pedido é instalado.
+  - Comissão é um registro do pedido (registrada, pendente, paga), sem conta no A Pagar;
+    o pagamento é manual e gera uma saída no caixa (seção 10.9).
   - O DRE por pedido usa o custo real do material guardado na aprovação.
   - Pedido de compra recebido pode gerar a conta a pagar com um clique.
 
@@ -1612,7 +1613,8 @@ Tabela de contas a pagar:
     primeira; um dia que não existe no mês vira o último dia dele (31/01 →
     28/02 ou 29/02 → 31/03 → 30/04). Quinzenal soma 15 dias a cada vez. O teto
     de 60 meses e de 240 ocorrências continua
-  - Contas de comissão aparecem aqui com a categoria "Comissão" (seção 10.9)
+  - Comissões novas não aparecem aqui (são registro do pedido, seção 10.9); só as já
+    pagas por conta a pagar antes da mudança continuam como contas
   - Contas vindas de pedido de compra ficam vinculadas a ele (seção 10.11)
 
 ── 10.4 ABA: DESPESAS FIXAS ────────────────────────────────────────────────────
@@ -1723,11 +1725,11 @@ Voltar o pedido para Orçamento:
     de novo (em outro dia, pelo painel ou pela tela do pedido), as contas a
     receber refeitas continuam com a receita (competência) no mês da primeira
     aprovação
-  - Saem só as parcelas em aberto e as comissões pendentes; as parcelas já pagas
-    ficam no Financeiro
-  - A pergunta de confirmação acrescenta "A comissão pendente deste pedido será
-    removida." (ou "As N comissões pendentes deste pedido serão removidas."),
-    só quando há comissão pendente
+  - Saem só as parcelas em aberto; as parcelas já pagas ficam no Financeiro. A
+    comissão é registro do pedido: a não paga deixa de ser registrada até aprovar
+    de novo e a já paga continua paga (seção 10.9). Contas de comissão em aberto de
+    antes da migração das comissões ainda avisam "A comissão pendente deste pedido
+    será removida."
   - Ao aprovar de novo, só o valor que ainda falta é cobrado
   - Se o cliente já pagou mais do que o novo valor do pedido, ao aprovar de
     novo aparece "O cliente já pagou R$ X, mais que o novo valor do pedido (R$
@@ -1735,32 +1737,42 @@ Voltar o pedido para Orçamento:
   - Pedido sem nenhuma parcela (valor recebido digitado antes): confirmar o
     pagamento mantém o valor recebido digitado
 
-── 10.9 COMISSÕES NO A PAGAR ───────────────────────────────────────────────────
+── 10.9 COMISSÕES (REGISTRO DO PEDIDO) ────────────────────────────────────────
 
-  - Ao chegar em Instalado, o pedido gera uma conta a pagar para o vendedor e
-    outra para o arquiteto (se houver e se o percentual for maior que zero)
-  - Categoria "Comissão", credor = nome do cadastro, vencimento = data da
-    instalação, vinculada ao pedido
-  - A comissão é gerada na instalação, mesmo que o cliente ainda deva o saldo
-  - Pagar comissão (tela de Vendedores ou aba A Pagar) é a mesma ação e pede
-    data e forma de pagamento. O meio começa em branco ("Escolha o meio") e é
-    obrigatório: sem escolher, aparece "Escolha o meio."
-  - Pagar pedido a pedido (padrão) ou várias de uma vez: escolhe-se a pessoa,
-    marcam-se as comissões pendentes e todas são pagas com a mesma data e forma
-    (cada conta fica paga individualmente)
-  - Se o pedido voltar para Orçamento ou for excluído: comissões pendentes são
-    removidas; as já pagas ficam e ganham o aviso "pedido cancelado — revisar"
-  - As comissões entram no fluxo de caixa e no DRE por pedido
-  - Se o pedido voltou a ser aprovado e chega de novo em Instalado, a marca
-    "pedido cancelado — revisar" sai das comissões já pagas
-  - Comissão de RT antiga ainda pendente também aparece na aba Arquitetos da
-    tela de Vendedores (seção 8.2)
-  - Comissão antiga já paga, sem conta no A Pagar, também tem o botão Estornar
-    no histórico (pede permissão completa do A Pagar e confirmação): desmarca o
-    pago no pedido, a comissão volta a Pendentes e gera a conta no próximo
-    Pagar. Se existir conta paga, o estorno é o mesmo da conta (vale também
-    para a comissão antiga de arquiteto paga como "Comissão RT": a conta volta
-    a ficar em aberto, o movimento sai e a comissão pode ser paga de novo)
+  - A comissão do vendedor e a do arquiteto (se houver e se o valor for maior que
+    zero) são um registro no próprio pedido, com situação Registrada, Pendente ou
+    Paga. Não existe conta a pagar de comissão
+  - Aprovar o pedido: Registrada. Chegar em Instalado (todos os caminhos, mesmo
+    que o cliente ainda deva o saldo): Pendente. Voltar de Instalado para a etapa
+    anterior: volta a Registrada (a Paga continua Paga). Voltar para Orçamento: a
+    não paga deixa de ser registrada até aprovar de novo. Valor 0 ou sem vendedor:
+    sem comissão
+  - Cada mudança fica no histórico da comissão (quando, quem, o quê)
+  - Pagamento (registro manual, vendedores ou Contas a pagar com acesso completo):
+    escolhe-se a conta (obrigatória) e a data (padrão hoje, não pode ser futura nem
+    anterior ao saldo inicial da conta). Para cada comissão pendente é criada uma
+    saída na conta (categoria Comissões, descrição "Comissão <nome> — Pedido #N"),
+    o saldo da conta cai e a comissão passa a Paga com a data do pagamento
+  - Desfazer pagamento: remove a saída (o saldo volta) e a comissão volta a
+    Pendente, com registro no histórico. Comissão antiga paga por conta a pagar: a
+    conta é estornada e sai do Financeiro (fica em Excluídos)
+  - O Financeiro enxerga a saída: saldos das contas, Fluxo de caixa (realizado, por
+    categoria Comissões), DRE por caixa (despesa variável Comissões pela data do
+    pagamento), DRE por competência (pelo mês da instalação do pedido, comissões
+    Pendentes e Pagas, não as Registradas), Resumo (lucro), conciliação (a saída
+    liga a uma linha do extrato) e o Resultado do mês. Não aparece em Lançamentos
+  - O resultado do pedido (DRE por pedido) soma as comissões Pendentes e Pagas
+  - Migração única (marca sc_comissao_v2, depois da migração do Financeiro): conta
+    de comissão em aberto sai do A Pagar (guardada em Excluídos com o motivo
+    "Comissão passou a ser registro do pedido") e o pedido fica Pendente (se
+    instalado) ou Registrada; conta de comissão já paga continua como está e o
+    pedido fica Paga. RT antigo (só conta) vira comissão do pedido sem mudar o
+    valor. Pedido antigo sem situação: Paga se estava paga, Pendente se instalado,
+    senão Registrada. Rodar de novo não muda nada; backup importado sem a marca
+    passa pela migração
+  - Enquanto a nova tela de comissões não chega, a aba Comissões Pendentes e o
+    Histórico de Vendedores continuam, pagando pela janela acima ("Registrar
+    pagamento") e desfazendo pelo botão Estornar ("Desfazer pagamento")
 
 ── 10.10 DRE POR PEDIDO: COMO O RESULTADO É CALCULADO ──────────────────────────
 
