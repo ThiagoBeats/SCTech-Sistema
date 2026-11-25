@@ -454,8 +454,13 @@ function _finResolverPessoa(lado, texto) {
     return { id: null, nome: texto, cnpj: null };
 }
 
-async function abrirNovoLancamento(lado, idEditar) {
+// `opcoes` (so lancamento novo, usado pela conciliacao): { preencher: { descricao, valor, vencimento, contaId },
+// aoSalvar(reg) } — o formulario nasce preenchido, sem Parcelar/Repetir, e ao salvar (depois da checagem de
+// duplicidade) chama aoSalvar com o lancamento criado em vez de recarregar a pagina.
+async function abrirNovoLancamento(lado, idEditar, opcoes) {
     if (lado !== 'pagar' && lado !== 'receber') lado = finLancLado;
+    if (idEditar != null) opcoes = null;
+    const pre = (opcoes && opcoes.preencher) || {};
     if (!await exigirPermissao(FIN_LADOS[lado], 'completo')) return;
     const pagar = lado === 'pagar';
     const reg = idEditar != null ? _finListaLado(lado).find(x => CaixaCore.mesmoId(x.id, idEditar)) : null;
@@ -471,7 +476,7 @@ async function abrirNovoLancamento(lado, idEditar) {
     const contas = getContasFin().filter(c => c.ativo !== false || (reg && CaixaCore.mesmoId(c.id, reg.conta_id)));
     const peds = db.pedidos.filter(p => normalizarStatus(p.status) !== 'Orçamento' || (reg && reg.pedido_id == p.id));
     const val = x => x == null ? '' : escapeHtml(String(x));
-    const valorTxt = reg ? String(Number(reg.valor).toFixed(2)).replace('.', ',') : '';
+    const valorTxt = reg ? String(Number(reg.valor).toFixed(2)).replace('.', ',') : pre.valor > 0 ? Number(pre.valor).toFixed(2).replace('.', ',') : '';
     const o = document.createElement('div');
     o.className = 'modal-overlay';
     o.id = 'lanc-form-overlay';
@@ -482,7 +487,7 @@ async function abrirNovoLancamento(lado, idEditar) {
             <div class="grid">
                 <div class="form-group" style="grid-column:1/-1">
                     <label>Descrição <span style="color:#F43927">*</span></label>
-                    <input type="text" id="lf-descricao" value="${val(reg && reg.descricao)}" placeholder="${pagar ? 'Ex: Compra de tecido, aluguel…' : 'Ex: Serviço de instalação'}">
+                    <input type="text" id="lf-descricao" value="${val(reg ? reg.descricao : pre.descricao)}" placeholder="${pagar ? 'Ex: Compra de tecido, aluguel…' : 'Ex: Serviço de instalação'}">
                 </div>
                 <div class="form-group">
                     <label>Valor (R$) <span style="color:#F43927">*</span></label>
@@ -499,15 +504,15 @@ async function abrirNovoLancamento(lado, idEditar) {
                 </div>
                 <div class="form-group">
                     <label>Conta prevista <span class="info-tag">opcional</span></label>
-                    <select id="lf-conta" ${pago ? 'disabled' : ''}><option value="">— Sem conta —</option>${contas.map(c => `<option value="${escapeHtml(String(c.id))}"${reg && CaixaCore.mesmoId(c.id, reg.conta_id) ? ' selected' : ''}>${escapeHtml(c.nome || 'Conta')}</option>`).join('')}</select>
+                    <select id="lf-conta" ${pago ? 'disabled' : ''}><option value="">— Sem conta —</option>${contas.map(c => `<option value="${escapeHtml(String(c.id))}"${(reg ? CaixaCore.mesmoId(c.id, reg.conta_id) : pre.contaId != null && CaixaCore.mesmoId(c.id, pre.contaId)) ? ' selected' : ''}>${escapeHtml(c.nome || 'Conta')}</option>`).join('')}</select>
                 </div>
                 <div class="form-group">
                     <label>Vencimento <span style="color:#F43927">*</span></label>
-                    <input type="date" id="lf-vencimento" value="${val(reg && reg.data_vencimento)}" ${pago ? 'disabled' : ''} oninput="finLancSincronizarCompetencia()">
+                    <input type="date" id="lf-vencimento" value="${val(reg ? reg.data_vencimento : pre.vencimento)}" ${pago ? 'disabled' : ''} oninput="finLancSincronizarCompetencia()">
                 </div>
                 <div class="form-group">
                     <label>Competência <span class="info-tag">mês da receita/despesa</span></label>
-                    <input type="date" id="lf-competencia" value="${val(reg && reg.data_competencia)}" oninput="this.dataset.editado='1'" ${reg && reg.data_competencia ? 'data-editado="1"' : ''}>
+                    <input type="date" id="lf-competencia" value="${val(reg ? reg.data_competencia : pre.vencimento)}" oninput="this.dataset.editado='1'" ${reg && reg.data_competencia ? 'data-editado="1"' : ''}>
                 </div>
                 ${pagar ? `<div class="form-group">
                     <label>Pedido <span class="info-tag">opcional</span></label>
@@ -518,7 +523,7 @@ async function abrirNovoLancamento(lado, idEditar) {
                     <textarea id="lf-obs" rows="2">${val(reg && reg.observacoes)}</textarea>
                 </div>
             </div>
-            ${reg ? '' : `<div class="lanc-opcoes">
+            ${reg || opcoes ? '' : `<div class="lanc-opcoes">
                 <label class="lanc-opcao"><input type="checkbox" id="lf-parcelar" onchange="finLancAlternar('parcelar')"> <span>Parcelar em</span>
                     <input type="number" id="lf-parcelas" min="2" max="48" step="1" value="2" disabled style="width:70px"> <span>vezes</span></label>
                 ${pagar ? '<label class="lanc-opcao"><input type="checkbox" id="lf-repetir" onchange="finLancAlternar(\'repetir\')"> <span>Repetir todo mês</span></label>' : ''}
@@ -529,6 +534,7 @@ async function abrirNovoLancamento(lado, idEditar) {
             <button class="btn btn-success" id="lf-salvar" onclick="salvarLancamento('${lado}', ${reg ? escapeHtml(_finIdJs(reg.id)) : 'null'})">${reg ? 'Salvar alterações' : 'Salvar lançamento'}</button>
             <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
         </div></div>`;
+    if (opcoes && typeof opcoes.aoSalvar === 'function') o._aoSalvar = opcoes.aoSalvar;
     document.body.appendChild(o);
     o.addEventListener('click', e => { if (e.target === o) o.remove(); });
     o.querySelector('#lf-descricao').focus();
@@ -644,6 +650,12 @@ async function salvarLancamento(lado, idEditar) {
         }, comumCampos(), pessoaCampos(), mesRef(vencimento)), null, 'Lançamento manual'));
     }
     novos.forEach(n => lista.push(n));
+    const form = document.getElementById('lanc-form-overlay');
+    if (form && typeof form._aoSalvar === 'function' && novos.length === 1) {
+        form.remove();
+        await form._aoSalvar(novos[0]);
+        return;
+    }
     salvarERecarregar(parcelar ? `${nParc} parcelas lançadas!` : repetir ? 'Lançamento criado e recorrência cadastrada!' : 'Lançamento salvo!');
 }
 

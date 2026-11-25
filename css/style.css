@@ -3213,3 +3213,29 @@ html[data-theme="dark"] .dre-tabela td.dre-desfav { color: #FF8A7A; }
     .fluxo-tabela th:nth-child(3), .fluxo-tabela td:nth-child(3) { display: none; }
     .fluxo-rel-seg .dre-seg-btn { flex: 1 1 100%; text-align: left; }
 }
+/* Conciliar extrato (dentro do Fluxo de caixa) */
+.lanc-barra .form-group.conc-grupo-abas { flex: 0 1 auto; }
+.conc-abas { flex-wrap: wrap; }
+.conc-resumo { margin: 0 0 12px; font-weight: 600; color: var(--dark); }
+.conc-lista { display: flex; flex-direction: column; gap: 10px; }
+.conc-linha { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--white); min-width: 0; }
+.conc-linha-topo { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; font-size: 14px; }
+.conc-data { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.conc-desc { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; font-weight: 600; color: var(--dark); }
+.conc-valor { white-space: nowrap; font-weight: 700; }
+.conc-sug { margin-top: 6px; font-size: 13px; color: var(--dark); overflow-wrap: anywhere; }
+.conc-sem { color: var(--muted); font-style: italic; }
+.conc-acoes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.conc-escolher { margin-top: 10px; padding: 10px; border-radius: 6px; background: var(--surface-2); }
+.conc-cands { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow: auto; }
+.conc-cand { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; padding: 6px; border-radius: 4px; cursor: pointer; background: var(--white); border: 1px solid var(--border); }
+.conc-cand-trava { opacity: .6; cursor: not-allowed; }
+.conc-cand-tipo { font-size: 11px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.conc-cand-desc { flex: 1 1 140px; min-width: 0; overflow-wrap: anywhere; }
+.conc-cand-valor { white-space: nowrap; }
+.conc-escolher-rodape { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; }
+#conc-soma { flex: 1 1 180px; color: var(--muted); }
+#conc-soma.conc-soma-ok { color: var(--ok-text); font-weight: 600; }
+@media (max-width: 600px) {
+    .conc-acoes .btn { flex: 1 1 40%; min-width: 0; width: auto; }
+}

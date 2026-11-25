@@ -44,7 +44,7 @@ function finFluxoMudar(campo, valor) {
 function _fxConferidos(contas) {
     const ext = Array.isArray(db.fin_extrato) ? db.fin_extrato : [];
     return contas.map(c => {
-        const datas = ext.filter(x => x && String(x.conta_id) === String(c.id) && (x.situacao === 'conciliado' || x.situacao === 'transferencia') && x.data).map(x => String(x.data).slice(0, 10));
+        const datas = ext.filter(x => x && String(x.conta_id) === String(c.id) && _ccFeita(x) && !_ccOrfa(x) && x.data).map(x => String(x.data).slice(0, 10));
         return datas.length ? { conta: c, ate: datas.sort().pop() } : null;
     }).filter(Boolean);
 }
@@ -88,7 +88,7 @@ function renderFinFluxo() {
     }
     alvo.innerHTML = `<div class="card fluxo-topo-card"><div class="dre-topo"><h3>Fluxo de caixa</h3>
         <div class="dre-acoes">
-            ${completo ? '<button class="btn btn-outline btn-sm" id="fluxo-btn-importar" onclick="abrirImportarExtrato()">Importar extrato</button>' : ''}
+            ${completo ? '<button class="btn btn-outline btn-sm" id="fluxo-btn-importar" onclick="importarExtrato()">Importar extrato</button>' : ''}
             ${completo ? '<button class="btn btn-outline btn-sm" id="fluxo-btn-conciliar" onclick="abrirConciliacao(finFluxo.contaId === \'\' ? null : finFluxo.contaId)">Conciliar</button>' : ''}
             <button class="btn btn-outline btn-sm" id="fluxo-btn-relatorios" onclick="abrirRelatoriosFluxo()">Relatórios</button>
         </div></div>
@@ -205,9 +205,588 @@ function _fxTabelaHtml(linhas, hoje, completo, contas) {
         <tbody id="fluxo-linhas">${trs}</tbody></table></div>${vazio}</div>`;
 }
 
-// ===================== IMPORTAR E CONCILIAR (entram na proxima etapa) =====================
-function abrirImportarExtrato() { toast('Em breve.', 'info'); }
-function abrirConciliacao(contaId) { toast('Em breve.', 'info'); }
+// ===================== IMPORTAR EXTRATO E CONCILIAR =====================
+// Linhas em db.fin_extrato (sc_fin_extrato): { id, conta_id, fitid, data, valor (com sinal), descricao, importado_em, arquivo,
+//   situacao: 'pendente'|'conciliado'|'ignorado'|'transferencia', mov_id, mov_ids, vinculos, conc_desc, conc_em, conc_por,
+//   transf_grupo, criado }.
+// vinculos = o que a linha conciliou: { t: 'mov', id } (movimento que ja existia: so liga), { t: 'cr'|'cp', id, baixa: true,
+// antes: { conta_id } } (a conciliacao deu a baixa: o Desfazer estorna pelas rotinas de estorno), { t: 'rep', id: crId, data }
+// (repasse de cartao). mov_ids = todos os movimentos da linha (ligados, criados pela baixa ou pela transferencia).
+const finConc = { contaId: null, aba: 'pendente', escolher: null, marcados: new Set(), resumo: '' };
+
+const _ccExtrato = () => { if (!Array.isArray(db.fin_extrato)) db.fin_extrato = []; return db.fin_extrato; };
+const _ccAtivas = () => getContasFin().filter(c => c.ativo !== false);
+const _ccLinha = id => (id == null ? null : _ccExtrato().find(l => l && String(l.id) === String(id)) || null);
+const _ccCent = v => Math.round((Number(v) || 0) * 100);
+const _ccUtc = s => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
+const _ccDias = (a, b) => Math.abs(Math.round((_ccUtc(a) - _ccUtc(b)) / 86400000));
+const _ccMovIds = l => (Array.isArray(l.mov_ids) ? l.mov_ids : (l.mov_id != null ? [l.mov_id] : []));
+const _ccFeita = l => !!l && (l.situacao === 'conciliado' || l.situacao === 'transferencia');
+const _ccLista = t => (t === 'cr' ? db.contas_receber : db.contas_pagar) || [];
+
+// ACCTID do arquivo x numero da conta: compara so os digitos (sem zeros a esquerda); um pode trazer a agencia na frente.
+function _ccMesmaConta(acctid, numero) {
+    const d = s => String(s || '').replace(/\D/g, '').replace(/^0+/, '');
+    const a = d(acctid), b = d(numero);
+    if (!a || !b || a === b) return true;
+    return Math.min(a.length, b.length) >= 4 && (a.endsWith(b) || b.endsWith(a));
+}
+
+// Repasses de cartao dos recebimentos ja baixados no cartao: um por data, com o LIQUIDO (bruto - taxa) que o banco deposita.
+// Com movimentos (conta aceitou): a entrada bruta e a saida da taxa do mesmo dia; sem movimentos: cr.cartao.repasses e as taxas.
+function _ccRepasses() {
+    const movs = db.movimentos_fin || [];
+    const out = [];
+    (db.contas_receber || []).forEach(cr => {
+        if (!cr || cr.status !== 'Pago' || !cr.cartao) return;
+        const taxas = (db.contas_pagar || []).filter(cp => cp && cp.categoria === 'taxa_cartao' && CaixaCore.mesmoId(cp.origem_cr_id, cr.id));
+        const entradas = movs.filter(m => m.origem === 'cr' && m.sentido === 'entrada' && CaixaCore.mesmoId(m.origem_id, cr.id));
+        if (entradas.length) {
+            entradas.forEach(m => {
+                const tx = movs.filter(t => t.origem === 'cp' && t.sentido === 'saida' && t.data === m.data && CaixaCore.mesmoId(t.conta_id, m.conta_id) && taxas.some(cp => CaixaCore.mesmoId(cp.id, t.origem_id)));
+                out.push({ crId: cr.id, data: String(m.data).slice(0, 10), liquido: CaixaCore.arredondar(Number(m.valor) - tx.reduce((s, t) => s + Number(t.valor), 0)), contaId: m.conta_id, movIds: [m.id].concat(tx.map(t => t.id)), cr });
+            });
+        } else if (Array.isArray(cr.cartao.repasses) && cr.conta_id != null) {
+            cr.cartao.repasses.forEach(r => {
+                const taxa = taxas.filter(cp => cp.data_vencimento === r.data).reduce((s, cp) => s + Number(cp.valor), 0);
+                out.push({ crId: cr.id, data: String(r.data).slice(0, 10), liquido: CaixaCore.arredondar(Number(r.bruto) - taxa), contaId: cr.conta_id, movIds: [], cr });
+            });
+        }
+    });
+    return out;
+}
+
+// Tudo o que o nucleo precisa para sugerir; jaUsados = o que outras linhas ja conciliaram (repasse e os movimentos dele andam juntos).
+function _ccContexto(contaId) {
+    const jaUsados = new Set();
+    _ccExtrato().forEach(l => {
+        if (!_ccFeita(l)) return;
+        _ccMovIds(l).forEach(id => jaUsados.add('mov:' + id));
+        (l.vinculos || []).forEach(v => jaUsados.add(v.t === 'rep' ? 'rep:' + v.id + ':' + v.data : v.t + ':' + v.id));
+    });
+    const repasses = _ccRepasses();
+    repasses.forEach(r => {
+        const k = 'rep:' + r.crId + ':' + r.data;
+        if (r.movIds.some(id => jaUsados.has('mov:' + id))) jaUsados.add(k);
+        if (jaUsados.has(k)) r.movIds.forEach(id => jaUsados.add('mov:' + id));
+    });
+    return { contaId, contasReceber: db.contas_receber || [], contasPagar: db.contas_pagar || [], movimentos: db.movimentos_fin || [], repasses, jaUsados };
+}
+
+// Chave de item ('mov:ID', 'cr:ID', 'cp:ID', 'rep:CRID:AAAA-MM-DD') -> { k, t, id, valor, data, descricao, ... } ou null.
+function _ccResolver(k, ctx) {
+    const i = k.indexOf(':'), t = k.slice(0, i), resto = k.slice(i + 1);
+    if (t === 'mov') {
+        const m = (db.movimentos_fin || []).find(x => String(x.id) === resto);
+        return m ? { k, t, id: m.id, valor: Number(m.valor), data: String(m.data).slice(0, 10), descricao: m.descricao || 'Movimento', mov: m } : null;
+    }
+    if (t === 'cr' || t === 'cp') {
+        const reg = _ccLista(t).find(x => String(x.id) === resto);
+        return reg ? { k, t, id: reg.id, valor: Number(reg.valor), data: String(reg.data_vencimento || '').slice(0, 10),
+            descricao: [t === 'cr' ? reg.cliente_nome : reg.credor_nome, reg.descricao].filter(Boolean).join(' - ') || 'Lançamento', reg } : null;
+    }
+    if (t === 'rep') {
+        const j = resto.lastIndexOf(':'), crId = resto.slice(0, j), data = resto.slice(j + 1);
+        const r = ctx.repasses.find(x => String(x.crId) === crId && x.data === data);
+        return r ? { k, t, id: r.crId, valor: r.liquido, data, descricao: 'Repasse de cartão — ' + ([r.cr.cliente_nome, r.cr.descricao].filter(Boolean).join(' - ') || 'Recebimento'), rep: r } : null;
+    }
+    return null;
+}
+
+function _ccChavesDaSugestao(s, linha) {
+    if (s.tipo === 'movimento') return s.ids.map(id => 'mov:' + id);
+    if (s.tipo === 'lancamento') return s.ids.map(id => (linha.valor > 0 ? 'cr:' : 'cp:') + id);
+    return s.ids.map(id => 'rep:' + id + ':' + s.data);
+}
+
+const _ccRotuloTipo = { mov: 'Movimento', cr: 'Lançamento', cp: 'Lançamento', rep: 'Repasse de cartão' };
+function _ccTextoSugestao(s) {
+    const data = _fxDm(s.data);
+    if (s.tipo === 'repasses') return `<strong>${s.ids.length} repasses de cartão</strong> de ${data} — ${_fxBrl(s.valor)}`;
+    const rot = { movimento: 'Movimento', lancamento: 'Lançamento', repasse: 'Repasse de cartão' }[s.tipo];
+    return `<strong>${rot}</strong> · ${escapeHtml(s.descricao || '')} — ${_fxBrl(s.valor)} · ${s.tipo === 'lancamento' ? 'vence' : 'em'} ${data}`;
+}
+
+// Itens para "Escolher outro": as sugestoes, os movimentos da conta (mesmo sentido, ate 31 dias), os lancamentos em aberto
+// do lado (vencimento ate 60 dias) e os repasses da conta (ate 31 dias), sem os ja conciliados. Sugestoes primeiro, depois por data.
+function _ccCandidatos(linha, ctx) {
+    const entrada = linha.valor > 0, sentido = entrada ? 'entrada' : 'saida';
+    const perto = (d, dias) => /^\d{4}-\d{2}-\d{2}/.test(String(d || '')) && _ccDias(String(d).slice(0, 10), linha.data) <= dias;
+    const sug = [];
+    ConciliacaoCore.sugestoes(linha, ctx).forEach(s => _ccChavesDaSugestao(s, linha).forEach(k => sug.push(k)));
+    const outros = [];
+    ctx.movimentos.forEach(m => { if (m && CaixaCore.mesmoId(m.conta_id, linha.conta_id) && m.sentido === sentido && perto(m.data, 31)) outros.push('mov:' + m.id); });
+    (entrada ? ctx.contasReceber : ctx.contasPagar).forEach(r => { if (finAberta(r) && perto(r.data_vencimento, 60)) outros.push((entrada ? 'cr:' : 'cp:') + r.id); });
+    if (entrada) ctx.repasses.forEach(r => { if (CaixaCore.mesmoId(r.contaId, linha.conta_id) && perto(r.data, 31)) outros.push('rep:' + r.crId + ':' + r.data); });
+    const vistos = new Set();
+    const lista = [];
+    sug.concat(outros).forEach((k, i) => {
+        if (vistos.has(k) || ctx.jaUsados.has(k)) return;
+        vistos.add(k);
+        const it = _ccResolver(k, ctx);
+        if (it) lista.push(Object.assign(it, { sugerido: i < sug.length }));
+    });
+    const dist = it => (/^\d{4}-\d{2}-\d{2}$/.test(it.data) ? _ccDias(it.data, linha.data) : 9999);
+    return lista.sort((a, b) => (b.sugerido - a.sugerido) || (dist(a) - dist(b)));
+}
+
+// Linha conciliada cujos movimentos (ou baixas) sumiram por fora (estorno, exclusao da transferencia): nao vale mais.
+function _ccOrfa(l) {
+    if (!_ccFeita(l)) return false;
+    const ids = _ccMovIds(l);
+    const movs = db.movimentos_fin || [];
+    if (ids.length) return ids.some(id => !movs.some(m => String(m.id) === String(id)));
+    const baixas = (l.vinculos || []).filter(v => v.baixa);
+    return baixas.some(v => { const reg = _ccLista(v.t).find(x => CaixaCore.mesmoId(x.id, v.id)); return !reg || reg.status !== 'Pago'; });
+}
+function _ccVoltarPendente(l) {
+    l.situacao = 'pendente';
+    l.mov_id = null;
+    ['mov_ids', 'vinculos', 'conc_desc', 'conc_em', 'conc_por', 'transf_grupo', 'criado'].forEach(k => delete l[k]);
+}
+// Volta para pendente as linhas orfas (sem gravar). Devolve quantas.
+function _ccDesligarSumidos() {
+    let n = 0;
+    _ccExtrato().forEach(l => { if (_ccOrfa(l)) { _ccVoltarPendente(l); n++; } });
+    return n;
+}
+
+// ---------- Importar ----------
+async function importarExtrato(contaPadrao) {
+    if (!await exigirPermissao('financeiro.fluxo', 'completo')) return;
+    const ativas = _ccAtivas();
+    if (!ativas.length) { await showAlert('Cadastre uma conta antes de importar o extrato.', 'ℹ️'); return; }
+    document.getElementById('conc-imp-modal')?.remove();
+    const padrao = contaPadrao != null && contaPadrao !== '' ? contaPadrao : (finFluxo.contaId !== '' ? finFluxo.contaId : '');
+    const campo = 'width:100%;padding:6px;border:1px solid var(--border-strong);border-radius:4px;font-size:13px;box-sizing:border-box;margin-bottom:10px';
+    const o = document.createElement('div');
+    o.id = 'conc-imp-modal';
+    o.className = 'sc-modal-overlay';
+    o.style.display = 'flex';
+    o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:440px;width:calc(100% - 32px)" role="dialog" aria-modal="true" aria-labelledby="conc-imp-titulo">
+        <h3 id="conc-imp-titulo" style="margin:0 0 12px;font-size:16px">Importar extrato (OFX)</h3>
+        <label style="display:block;font-size:12px;margin-bottom:4px" for="conc-imp-conta">Conta <span style="color:#F43927">*</span></label>
+        <select id="conc-imp-conta" style="${campo}"><option value="">Selecione…</option>${ativas.map(c => `<option value="${escapeHtml(String(c.id))}"${String(c.id) === String(padrao) ? ' selected' : ''}>${escapeHtml(c.nome || '')}</option>`).join('')}</select>
+        <label style="display:block;font-size:12px;margin-bottom:4px" for="conc-imp-arquivo">Arquivo .ofx <span style="color:#F43927">*</span></label>
+        <input type="file" id="conc-imp-arquivo" accept=".ofx,.OFX,application/x-ofx" style="${campo}">
+        <p class="lanc-sub" style="margin:0 0 10px">Baixe o extrato no site ou no aplicativo do banco no formato OFX. Linhas que já foram importadas são puladas.</p>
+        <div id="conc-imp-erro" role="alert" style="display:none;color:var(--danger-text);font-size:12px;margin-bottom:10px"></div>
+        <div class="sc-modal-btns"><button class="btn btn-outline" id="conc-imp-cancel">Cancelar</button><button class="btn btn-success" id="conc-imp-ok">Importar</button></div>
+    </div>`;
+    document.body.appendChild(o);
+    const erroEl = o.querySelector('#conc-imp-erro');
+    const erro = msg => { erroEl.textContent = msg; erroEl.style.display = msg ? 'block' : 'none'; };
+    const fechar = () => { document.removeEventListener('keydown', esc); o.remove(); };
+    const esc = e => { if (e.key === 'Escape' && o.style.display !== 'none') fechar(); };
+    document.addEventListener('keydown', esc);
+    o.querySelector('#conc-imp-cancel').onclick = fechar;
+    let ocupado = false;
+    o.querySelector('#conc-imp-ok').onclick = async () => {
+        if (ocupado) return;
+        const conta = _contaFinPorId(o.querySelector('#conc-imp-conta').value);
+        const arq = o.querySelector('#conc-imp-arquivo').files[0];
+        if (!conta) return erro('Escolha a conta.');
+        if (!arq) return erro('Escolha o arquivo .ofx do banco.');
+        ocupado = true;
+        try {
+            let bytes;
+            try { bytes = new Uint8Array(await arq.arrayBuffer()); } catch (e) { erro('Não foi possível ler o arquivo.'); return; }
+            const r = ConciliacaoCore.lerOfx(ConciliacaoCore.decodificar(bytes));
+            if (!r.linhas.length) { erro(r.erros.length ? r.erros.join(' ') : 'O arquivo não tem nenhuma movimentação.'); return; }
+            erro('');
+            if (r.conta && conta.numero_conta && !_ccMesmaConta(r.conta, conta.numero_conta)) {
+                o.style.display = 'none';
+                const seguir = await showConfirm(`Este extrato parece ser da conta ${r.conta}, e você escolheu ${conta.nome || ''}. Importar mesmo assim?`, '⚠️', 'Importar', 'Cancelar');
+                o.style.display = 'flex';
+                if (!seguir) return;
+            }
+            const ext = _ccExtrato();
+            const novas = ConciliacaoCore.novasLinhas(r.linhas, ext, conta.id);
+            const novoId = _novosIdsFin(ext);
+            const agora = new Date().toISOString();
+            novas.forEach(n => ext.push({ id: novoId(), conta_id: conta.id, fitid: n.fitid, data: n.data, valor: n.valor, descricao: n.descricao,
+                importado_em: agora, arquivo: arq.name || '', situacao: 'pendente', mov_id: null }));
+            if (novas.length) _finContaTocada(conta.id);
+            syncDB();
+            fechar();
+            let resumo = `${novas.length} linha(s) nova(s) importada(s); ${r.linhas.length - novas.length} já estavam no sistema.`;
+            toast(resumo, 'success', 6000);
+            if (r.erros.length) resumo += ' ' + r.erros.join(' ');
+            renderFinFluxo();
+            abrirConciliacao(conta.id);
+            finConc.resumo = resumo;
+            _ccRender();
+        } finally { ocupado = false; }
+    };
+    o.querySelector('#conc-imp-conta').focus();
+}
+
+// ---------- Tela Conciliar ----------
+function abrirConciliacao(contaId) {
+    if (!temAcesso('financeiro.fluxo', 'completo')) { exigirPermissao('financeiro.fluxo', 'completo'); return; }
+    const contas = getContasFin();
+    const pedida = contaId != null && contaId !== '' ? contas.find(c => CaixaCore.mesmoId(c.id, contaId)) : null;
+    let id = pedida ? pedida.id : null;
+    if (id == null) {
+        const ativas = _ccAtivas();
+        const comPend = ativas.find(c => _ccExtrato().some(l => l && CaixaCore.mesmoId(l.conta_id, c.id) && l.situacao === 'pendente'));
+        id = comPend ? comPend.id : (ativas[0] ? ativas[0].id : null);
+    }
+    Object.assign(finConc, { contaId: id, aba: 'pendente', escolher: null, resumo: '' });
+    finConc.marcados.clear();
+    if (_ccDesligarSumidos()) _gravarChaves(['sc_fin_extrato']);
+    document.getElementById('conc-overlay')?.remove();
+    const o = document.createElement('div');
+    o.id = 'conc-overlay';
+    o.className = 'dre-rel';
+    o.setAttribute('role', 'dialog');
+    o.setAttribute('aria-modal', 'true');
+    o.setAttribute('aria-label', 'Conciliar extrato');
+    o.tabIndex = -1;
+    o.innerHTML = `<div class="dre-rel-caixa">
+        <div class="dre-topo"><h3>Conciliar extrato</h3>
+            <div class="dre-acoes">
+                <button class="btn btn-outline btn-sm" id="conc-btn-importar" onclick="importarExtrato(finConc.contaId)">Importar extrato</button>
+                <button class="btn btn-outline btn-sm" id="conc-fechar" onclick="_ccFechar()">Fechar</button>
+            </div></div>
+        <div id="conc-corpo"></div></div>`;
+    document.body.appendChild(o);
+    o.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); _ccFechar(); } });
+    o.addEventListener('change', e => {
+        if (e.target.id === 'conc-conta') {
+            const c = _contaFinPorId(e.target.value);
+            Object.assign(finConc, { contaId: c ? c.id : null, escolher: null, resumo: '' });
+            finConc.marcados.clear();
+            _ccRender();
+        } else if (e.target.classList.contains('conc-cand-check')) {
+            if (e.target.checked) finConc.marcados.add(e.target.value); else finConc.marcados.delete(e.target.value);
+            _ccAtualizarSoma();
+        }
+    });
+    _ccRender();
+    o.focus();
+}
+
+function _ccFechar() {
+    document.getElementById('conc-overlay')?.remove();
+    finConc.escolher = null;
+    finConc.marcados.clear();
+    renderFinFluxo();
+    document.getElementById('fluxo-btn-conciliar')?.focus();
+}
+
+function finConcAba(aba) {
+    finConc.aba = ['conciliado', 'ignorado'].includes(aba) ? aba : 'pendente';
+    finConc.escolher = null;
+    finConc.marcados.clear();
+    _ccRender();
+}
+
+function _ccRender() {
+    const corpo = document.getElementById('conc-corpo');
+    if (!corpo) return;
+    const contas = getContasFin();
+    if (finConc.contaId == null || !contas.some(c => CaixaCore.mesmoId(c.id, finConc.contaId))) {
+        corpo.innerHTML = '<p class="lanc-aviso" id="conc-sem-conta">Cadastre uma conta (Empresa › Preferências) para importar e conciliar extratos.</p>';
+        return;
+    }
+    const opcs = contas.filter(c => c.ativo !== false || CaixaCore.mesmoId(c.id, finConc.contaId))
+        .map(c => `<option value="${escapeHtml(String(c.id))}">${escapeHtml(c.nome || '')}${c.ativo === false ? ' (desativada)' : ''}</option>`).join('');
+    const daConta = _ccExtrato().filter(l => l && CaixaCore.mesmoId(l.conta_id, finConc.contaId));
+    const grupo = l => (_ccFeita(l) ? 'conciliado' : l.situacao === 'ignorado' ? 'ignorado' : 'pendente');
+    const qtd = a => daConta.filter(l => grupo(l) === a).length;
+    const aba = (a, t) => `<button type="button" class="dre-seg-btn${finConc.aba === a ? ' active' : ''}" id="conc-aba-${a}" aria-pressed="${finConc.aba === a}" onclick="finConcAba('${a}')">${t} (${qtd(a)})</button>`;
+    const ordem = finConc.aba === 'pendente' ? 1 : -1;
+    const lista = daConta.filter(l => grupo(l) === finConc.aba).sort((a, b) => (a.data < b.data ? -ordem : a.data > b.data ? ordem : 0));
+    const ctx = _ccContexto(finConc.contaId);
+    const vazio = {
+        pendente: daConta.length ? 'Nenhuma linha pendente: tudo conferido.' : 'Nenhum extrato importado para esta conta. Use "Importar extrato" (arquivo .ofx do banco).',
+        conciliado: 'Nenhuma linha conciliada.', ignorado: 'Nenhuma linha ignorada.'
+    }[finConc.aba];
+    corpo.innerHTML = `<div class="lanc-barra dre-barra">
+            <div class="form-group"><label for="conc-conta">Conta</label><select id="conc-conta">${opcs}</select></div>
+            <div class="form-group conc-grupo-abas"><label>Linhas</label><div class="dre-seg conc-abas" role="group" aria-label="Linhas">${aba('pendente', 'Pendentes')}${aba('conciliado', 'Conciliadas')}${aba('ignorado', 'Ignoradas')}</div></div>
+        </div>
+        ${finConc.resumo ? `<p class="lanc-sub conc-resumo" id="conc-resumo">${escapeHtml(finConc.resumo)}</p>` : ''}
+        <div class="conc-lista" id="conc-lista">${lista.length ? lista.map(l => _ccLinhaHtml(l, ctx)).join('') : `<p class="lanc-sub" id="conc-vazio">${vazio}</p>`}</div>`;
+    corpo.querySelector('#conc-conta').value = String(finConc.contaId);
+    _ccAtualizarSoma();
+}
+
+function _ccLinhaHtml(l, ctx) {
+    const entrada = l.valor > 0;
+    const idJs = escapeHtml(_fxIdJs(l.id));
+    const ladoOk = temAcesso(entrada ? FIN_LADOS.receber : FIN_LADOS.pagar, 'completo');
+    const topo = `<div class="conc-linha-topo"><span class="conc-data">${_fxDataBr(l.data)}</span><span class="conc-desc">${escapeHtml(l.descricao || '—')}</span>
+        <span class="conc-valor ${entrada ? 'fluxo-ent' : 'fluxo-sai'}">${entrada ? '+' : '−'} ${_fxBrl(Math.abs(l.valor))}</span></div>`;
+    const btn = (cls, txt, fn, tipo) => `<button type="button" class="btn btn-sm ${tipo || 'btn-outline'} ${cls}" onclick="${fn}(${idJs})">${txt}</button>`;
+    let meio = '', acoes = '';
+    if (finConc.aba === 'pendente') {
+        const sug = ConciliacaoCore.sugestoes(l, ctx)[0];
+        meio = sug ? `<div class="conc-sug">Sugestão: ${_ccTextoSugestao(sug)}</div>` : '<div class="conc-sug conc-sem">Nenhuma sugestão automática.</div>';
+        // Confirmar um lancamento da baixa: precisa tambem de completo no lado (pagar/receber).
+        const podeConfirmar = sug && (sug.tipo !== 'lancamento' || ladoOk);
+        acoes = (podeConfirmar ? btn('conc-confirmar', 'Confirmar', 'concConfirmar', 'btn-success') : '')
+            + btn('conc-btn-escolher', 'Escolher outro', 'concEscolher')
+            + (ladoOk ? btn('conc-criar', 'Criar lançamento', 'concCriarLancamento') : '')
+            + btn('conc-transf', 'É transferência', 'concTransferencia')
+            + btn('conc-ignorar', 'Ignorar', 'concIgnorar');
+        if (finConc.escolher != null && String(finConc.escolher) === String(l.id)) meio += _ccEscolherHtml(l, ctx, ladoOk);
+    } else {
+        const quando = l.conc_em ? ' · ' + new Date(l.conc_em).toLocaleDateString('pt-BR') : '';
+        meio = finConc.aba === 'ignorado' ? `<div class="conc-sug conc-sem">Ignorada${quando}</div>`
+            : `<div class="conc-sug">${l.situacao === 'transferencia' ? '<span class="fluxo-selo fluxo-selo-transf">Transferência</span> ' : ''}${escapeHtml(l.conc_desc || 'Conciliada')}${quando}</div>`;
+        acoes = btn('conc-desfazer', 'Desfazer', 'desfazerConciliacao');
+    }
+    return `<div class="conc-linha" id="conc-linha-${escapeHtml(String(l.id))}" data-id="${escapeHtml(String(l.id))}">${topo}${meio}<div class="conc-acoes">${acoes}</div></div>`;
+}
+
+function _ccEscolherHtml(l, ctx, ladoOk) {
+    const itens = _ccCandidatos(l, ctx).map(c => {
+        const trava = (c.t === 'cr' || c.t === 'cp') && !ladoOk;
+        return `<label class="conc-cand${trava ? ' conc-cand-trava' : ''}"${trava ? ' title="Sem permissão para dar baixa neste lançamento"' : ''}>
+            <input type="checkbox" class="conc-cand-check" value="${escapeHtml(c.k)}" data-cent="${Math.abs(_ccCent(c.valor))}"${finConc.marcados.has(c.k) ? ' checked' : ''}${trava ? ' disabled' : ''}>
+            <span class="conc-cand-tipo">${_ccRotuloTipo[c.t]}${c.sugerido ? ' · sugerido' : ''}</span>
+            <span class="conc-cand-desc">${escapeHtml(c.descricao)}${/^\d{4}-\d{2}-\d{2}$/.test(c.data) ? ' · ' + _fxDm(c.data) : ''}</span>
+            <strong class="conc-cand-valor">${_fxBrl(c.valor)}</strong></label>`;
+    }).join('');
+    return `<div class="conc-escolher" id="conc-escolher">
+        <p class="lanc-sub" style="margin:0 0 6px">Marque um ou mais itens cuja soma dê ${_fxBrl(Math.abs(l.valor))}.</p>
+        <div class="conc-cands">${itens || '<p class="lanc-sub" id="conc-sem-cand">Nenhum lançamento, movimento ou repasse por perto. Use "Criar lançamento".</p>'}</div>
+        <div class="conc-escolher-rodape"><span id="conc-soma"></span>
+            <button type="button" class="btn btn-success btn-sm" id="conc-escolher-ok" disabled onclick="concConfirmarEscolhidos()">Confirmar</button>
+            <button type="button" class="btn btn-outline btn-sm" id="conc-escolher-cancelar" onclick="concEscolher(null)">Cancelar</button></div>
+    </div>`;
+}
+
+// Soma do que esta marcado em "Escolher outro"; Confirmar so com a soma igual ao valor da linha (±0,01).
+function _ccAtualizarSoma() {
+    const el = document.getElementById('conc-soma');
+    const l = _ccLinha(finConc.escolher);
+    if (!el || !l) return;
+    const alvo = Math.abs(_ccCent(l.valor));
+    const marc = [...document.querySelectorAll('#conc-escolher .conc-cand-check')].filter(c => c.checked);
+    const soma = marc.reduce((s, c) => s + Number(c.dataset.cent || 0), 0);
+    const bate = marc.length > 0 && Math.abs(soma - alvo) <= 1;
+    el.textContent = `Marcado: ${_fxBrl(soma / 100)} de ${_fxBrl(alvo / 100)}${marc.length && !bate ? (soma < alvo ? ` (faltam ${_fxBrl((alvo - soma) / 100)})` : ` (passou ${_fxBrl((soma - alvo) / 100)})`) : ''}`;
+    el.classList.toggle('conc-soma-ok', bate);
+    document.getElementById('conc-escolher-ok').disabled = !bate;
+}
+
+function concEscolher(id) {
+    finConc.escolher = id == null || (finConc.escolher != null && String(finConc.escolher) === String(id)) ? null : id;
+    finConc.marcados.clear();
+    _ccRender();
+}
+
+// ---------- Acoes ----------
+async function concConfirmar(id) {
+    const l = _ccLinha(id);
+    if (!l || l.situacao !== 'pendente') return;
+    const sug = ConciliacaoCore.sugestoes(l, _ccContexto(l.conta_id))[0];
+    if (!sug) { _ccRender(); return; }
+    await _ccAplicar(l.id, _ccChavesDaSugestao(sug, l));
+}
+async function concConfirmarEscolhidos() {
+    const l = _ccLinha(finConc.escolher);
+    if (!l || !finConc.marcados.size) return;
+    await _ccAplicar(l.id, [...finConc.marcados]);
+}
+
+// Concilia a linha com os itens (chaves). Lancamento em aberto: baixa na data do extrato e na conta do extrato (rotinas de
+// baixa de sempre); movimento: so liga; repasse: liga aos movimentos dele (sem movimento: fica conferido). Devolve true se conciliou.
+async function _ccAplicar(linhaId, chaves, opcoes) {
+    opcoes = opcoes || {};
+    if (!await exigirPermissao('financeiro.fluxo', 'completo')) return false;
+    const l = _ccLinha(linhaId);
+    if (!l || l.situacao !== 'pendente') { _ccRender(); return false; }
+    const entrada = l.valor > 0;
+    const ctx = _ccContexto(l.conta_id);
+    const itens = chaves.map(k => _ccResolver(k, ctx));
+    const refazer = async msg => { await showAlert(msg, '⚠️'); finConc.marcados.clear(); _ccRender(); return false; };
+    if (!chaves.length || itens.some(i => !i) || chaves.some(k => ctx.jaUsados.has(k))) return refazer('Um dos itens escolhidos já foi conciliado ou não existe mais. Confira a lista.');
+    if (itens.some(i => (i.t === 'cr' && !entrada) || (i.t === 'cp' && entrada) || (i.t === 'rep' && !entrada) || (i.t === 'mov' && i.mov.sentido !== (entrada ? 'entrada' : 'saida'))))
+        return refazer('Os itens escolhidos não são do mesmo sentido da linha do extrato.');
+    const soma = itens.reduce((s, i) => s + Math.abs(_ccCent(i.valor)), 0);
+    if (Math.abs(soma - Math.abs(_ccCent(l.valor))) > 1) return refazer('A soma dos itens escolhidos não bate com o valor do extrato.');
+    const lancs = itens.filter(i => i.t === 'cr' || i.t === 'cp');
+    if (lancs.some(i => !finAberta(i.reg))) return refazer('Este lançamento já foi baixado ou cancelado.');
+    if (lancs.length && !await exigirPermissao(entrada ? FIN_LADOS.receber : FIN_LADOS.pagar, 'completo')) return false;
+    const conta = _contaFinPorId(l.conta_id);
+    if (lancs.length && !conta) return refazer('A conta deste extrato não existe mais.');
+    const dm = _fxDm(l.data);
+    const antes = new Map(lancs.map(i => [i.k, { conta_id: i.reg.conta_id == null ? null : i.reg.conta_id }]));
+    if (lancs.length) {
+        const meios = getMeiosPag();
+        const linhas = lancs.map(i => {
+            // Meio previsto (que nao seja cartao) vira o meio da baixa; o dinheiro caiu direto na conta do extrato.
+            const mp = i.reg.meio_previsto;
+            const meio = mp ? meios.find(m => CaixaCore.mesmoId(m.id, mp.meio_id) && m.tipo !== 'cartao_credito' && m.tipo !== 'cartao_debito') : null;
+            return { id: i.reg.id, valor: null, meio_id: meio ? meio.id : null, meio_nome: '', conta_id: conta.id, cartao: null };
+        });
+        const r = entrada ? baixarContasReceber(l.data, linhas) : baixarContasPagar(l.data, linhas);
+        if (!r.ok) return refazer(r.erro);
+    }
+    const movIds = [], vinculos = [], descs = [];
+    const lancDoMov = m => ((m.origem === 'cr' || m.origem === 'cp') && m.origem_id != null ? _ccLista(m.origem).find(x => CaixaCore.mesmoId(x.id, m.origem_id)) : null);
+    itens.forEach(i => {
+        if (i.t === 'mov') {
+            movIds.push(i.id);
+            vinculos.push({ t: 'mov', id: i.id });
+            const reg = lancDoMov(i.mov);
+            if (reg) finHist(reg, 'conciliado', `Conciliado com o extrato de ${dm}`);
+        } else if (i.t === 'cr' || i.t === 'cp') {
+            (db.movimentos_fin || []).filter(m => m.origem === i.t && CaixaCore.mesmoId(m.origem_id, i.reg.id)).forEach(m => movIds.push(m.id));
+            vinculos.push({ t: i.t, id: i.reg.id, baixa: true, antes: antes.get(i.k) });
+            finHist(i.reg, 'conciliado', `Conciliado com o extrato de ${dm}`);
+        } else {
+            i.rep.movIds.forEach(id => movIds.push(id));
+            vinculos.push({ t: 'rep', id: i.rep.crId, data: i.data });
+            finHist(i.rep.cr, 'conciliado', `Repasse do cartão de ${_fxDm(i.data)} conciliado com o extrato de ${dm}`);
+        }
+        descs.push(`${_ccRotuloTipo[i.t]}: ${i.descricao} (${_fxBrl(i.valor)})`);
+    });
+    const daqui = movIds.find(id => { const m = (db.movimentos_fin || []).find(x => String(x.id) === String(id)); return m && CaixaCore.mesmoId(m.conta_id, l.conta_id); });
+    Object.assign(l, { situacao: 'conciliado', mov_id: daqui != null ? daqui : (movIds.length ? movIds[0] : null), mov_ids: movIds, vinculos,
+        conc_desc: (opcoes.criado ? 'Lançamento criado · ' : '') + descs.join(' + '), conc_em: new Date().toISOString(), conc_por: (getUsuarioLogado() || {}).id ?? null });
+    if (opcoes.criado) l.criado = true;
+    if (conta) _finContaTocada(conta.id);
+    syncDB();
+    finConc.escolher = null;
+    finConc.marcados.clear();
+    _ccRender();
+    renderFinFluxo();
+    toast(lancs.length ? 'Conciliado: baixa registrada em ' + _fxDataBr(l.data) + '.' : 'Conciliado.');
+    return true;
+}
+
+async function concCriarLancamento(id) {
+    if (!await exigirPermissao('financeiro.fluxo', 'completo')) return;
+    const l = _ccLinha(id);
+    if (!l || l.situacao !== 'pendente') return;
+    const lado = l.valor > 0 ? 'receber' : 'pagar';
+    await abrirNovoLancamento(lado, null, {
+        preencher: { descricao: l.descricao, valor: Math.abs(l.valor), vencimento: l.data, contaId: l.conta_id },
+        aoSalvar: async reg => {
+            const ok = await _ccAplicar(l.id, [(lado === 'receber' ? 'cr:' : 'cp:') + reg.id], { criado: true });
+            // Sem conciliar (ex.: valor mudado no formulario), o lancamento novo fica salvo, em aberto.
+            if (!ok) { syncDB(); _ccRender(); renderFinFluxo(); }
+        }
+    });
+}
+
+async function concTransferencia(id) {
+    if (!await exigirPermissao('financeiro.fluxo', 'completo')) return;
+    const l = _ccLinha(id);
+    if (!l || l.situacao !== 'pendente') return;
+    const conta = _contaFinPorId(l.conta_id);
+    const outras = _ccAtivas().filter(c => !CaixaCore.mesmoId(c.id, l.conta_id));
+    if (!conta) { await showAlert('A conta deste extrato não existe mais.', '⚠️'); return; }
+    if (!outras.length) { await showAlert('Cadastre outra conta para registrar a transferência.', 'ℹ️'); return; }
+    const saiu = l.valor < 0;
+    document.getElementById('conc-transf-modal')?.remove();
+    const o = document.createElement('div');
+    o.id = 'conc-transf-modal';
+    o.className = 'sc-modal-overlay';
+    o.style.display = 'flex';
+    o.innerHTML = `<div class="sc-modal-box" style="text-align:left;max-width:420px;width:calc(100% - 32px)" role="dialog" aria-modal="true" aria-labelledby="conc-transf-titulo">
+        <h3 id="conc-transf-titulo" style="margin:0 0 8px;font-size:16px">É transferência</h3>
+        <p style="font-size:13px;margin:0 0 10px">${saiu ? 'Saíram' : 'Entraram'} ${_fxBrl(Math.abs(l.valor))} em ${_fxDataBr(l.data)} ${saiu ? 'de' : 'em'} ${escapeHtml(conta.nome || '')}.</p>
+        <label style="display:block;font-size:12px;margin-bottom:4px" for="conc-transf-conta">${saiu ? 'Para qual conta foi?' : 'De qual conta veio?'}</label>
+        <select id="conc-transf-conta" style="width:100%;padding:6px;border:1px solid var(--border-strong);border-radius:4px;font-size:13px;box-sizing:border-box;margin-bottom:10px"><option value="">Selecione…</option>${outras.map(c => `<option value="${escapeHtml(String(c.id))}">${escapeHtml(c.nome || '')}</option>`).join('')}</select>
+        <div id="conc-transf-erro" role="alert" style="display:none;color:var(--danger-text);font-size:12px;margin-bottom:10px"></div>
+        <div class="sc-modal-btns"><button class="btn btn-outline" id="conc-transf-cancel">Cancelar</button><button class="btn btn-success" id="conc-transf-ok">Registrar transferência</button></div>
+    </div>`;
+    document.body.appendChild(o);
+    const erroEl = o.querySelector('#conc-transf-erro');
+    const erro = msg => { erroEl.textContent = msg; erroEl.style.display = msg ? 'block' : 'none'; };
+    const fechar = () => { document.removeEventListener('keydown', esc); o.remove(); };
+    const esc = e => { if (e.key === 'Escape') fechar(); };
+    document.addEventListener('keydown', esc);
+    o.querySelector('#conc-transf-cancel').onclick = fechar;
+    o.querySelector('#conc-transf-ok').onclick = () => {
+        const outra = _contaFinPorId(o.querySelector('#conc-transf-conta').value);
+        if (!outra) return erro('Escolha a outra conta.');
+        if (l.situacao !== 'pendente') { fechar(); _ccRender(); return; }
+        if (l.data > hojeLocal()) return erro('A data não pode ser depois de hoje.');
+        if (!CaixaCore.contaAceitaMovimento(conta, l.data) || !CaixaCore.contaAceitaMovimento(outra, l.data))
+            return erro('A data é anterior ao saldo inicial de uma das contas.');
+        const t = criarTransferenciaFin(saiu ? conta : outra, saiu ? outra : conta, Math.abs(l.valor), l.data);
+        const daqui = saiu ? t.saida : t.entrada;
+        Object.assign(l, { situacao: 'transferencia', mov_id: daqui.id, mov_ids: [t.saida.id, t.entrada.id], vinculos: [], transf_grupo: t.grupo,
+            conc_desc: (saiu ? 'Transferência para ' : 'Transferência de ') + (outra.nome || ''), conc_em: new Date().toISOString(), conc_por: (getUsuarioLogado() || {}).id ?? null });
+        syncDB();
+        fechar();
+        _ccRender();
+        renderFinFluxo();
+        toast('Transferência registrada.');
+    };
+    o.querySelector('#conc-transf-conta').focus();
+}
+
+async function concIgnorar(id) {
+    if (!await exigirPermissao('financeiro.fluxo', 'completo')) return;
+    const l = _ccLinha(id);
+    if (!l || l.situacao !== 'pendente') return;
+    Object.assign(l, { situacao: 'ignorado', conc_em: new Date().toISOString(), conc_por: (getUsuarioLogado() || {}).id ?? null });
+    _gravarChaves(['sc_fin_extrato']);
+    if (String(finConc.escolher) === String(id)) { finConc.escolher = null; finConc.marcados.clear(); }
+    _ccRender();
+}
+
+// Volta a linha para pendente. Se a conciliacao deu baixa, estorna essa baixa (rotinas de estorno de sempre) e devolve
+// a conta prevista que o lancamento tinha; se criou a transferencia, exclui o par; se so ligou, so desliga.
+async function desfazerConciliacao(extratoId) {
+    if (!await exigirPermissao('financeiro.fluxo', 'completo')) return;
+    const l = _ccLinha(extratoId);
+    if (!l || l.situacao === 'pendente') return;
+    if (l.situacao === 'ignorado') {
+        _ccVoltarPendente(l);
+        _gravarChaves(['sc_fin_extrato']);
+        _ccRender();
+        return;
+    }
+    const entrada = l.valor > 0;
+    const baixas = (l.vinculos || []).filter(v => v.baixa);
+    if (baixas.length && !await exigirPermissao(entrada ? FIN_LADOS.receber : FIN_LADOS.pagar, 'completo')) return;
+    let msg = 'Desfazer esta conciliação? A linha volta para Pendentes';
+    if (baixas.length) msg += ` e ${entrada ? 'o recebimento registrado' : 'o pagamento registrado'} por ela é estornado (volta a ficar em aberto).`;
+    else if (l.transf_grupo != null) msg += ' e a transferência criada por ela é excluída.';
+    else msg += '; lançamentos e movimentos ficam como estão.';
+    if (l.criado) msg += ' O lançamento criado continua em Lançamentos.';
+    if (!await showConfirm(msg, '↩', 'Desfazer', 'Cancelar')) return;
+    if (!_ccFeita(l)) { _ccRender(); return; }
+    const dm = _fxDm(l.data);
+    baixas.forEach(v => {
+        const reg = _ccLista(v.t).find(x => CaixaCore.mesmoId(x.id, v.id));
+        // Ja estornado (ou baixado de novo em outra data) por fora: nada a estornar aqui.
+        if (!reg || reg.status !== 'Pago' || String(reg.data_pagamento || '').slice(0, 10) !== l.data) return;
+        finHist(reg, 'conciliado', `Conciliação com o extrato de ${dm} desfeita`);
+        if (v.t === 'cr') _estornarCRDados(reg); else _estornarCPDados(reg);
+        if (v.antes && _ccLista(v.t).includes(reg)) reg.conta_id = v.antes.conta_id;
+    });
+    (l.vinculos || []).forEach(v => {
+        let reg = null;
+        if (v.t === 'rep') reg = _ccLista('cr').find(x => CaixaCore.mesmoId(x.id, v.id));
+        else if (v.t === 'mov') {
+            const m = (db.movimentos_fin || []).find(x => CaixaCore.mesmoId(x.id, v.id));
+            if (m && (m.origem === 'cr' || m.origem === 'cp') && m.origem_id != null) reg = _ccLista(m.origem).find(x => CaixaCore.mesmoId(x.id, m.origem_id));
+        }
+        if (reg) finHist(reg, 'conciliado', `Conciliação com o extrato de ${dm} desfeita`);
+    });
+    if (l.transf_grupo != null) {
+        const par = (db.movimentos_fin || []).filter(m => m.origem === 'transferencia' && m.grupo_id != null && String(m.grupo_id) === String(l.transf_grupo));
+        par.forEach(m => _finContaTocada(m.conta_id));
+        db.movimentos_fin = (db.movimentos_fin || []).filter(m => !par.includes(m));
+    }
+    _ccVoltarPendente(l);
+    // Outra linha que dependia do que saiu (ex.: movimento ligado a duas coisas) tambem volta.
+    _ccDesligarSumidos();
+    syncDB();
+    _ccRender();
+    renderFinFluxo();
+    toast('Conciliação desfeita.');
+}
 
 // ===================== RELATORIOS =====================
 const finFluxoRel = { tipo: 'categoria', de: '', ate: '' };

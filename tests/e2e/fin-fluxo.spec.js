@@ -225,12 +225,17 @@ test('com Fluxo so para visualizar: sem Transferir, Importar, Conciliar nem menu
     expect(await ler(page, 'sc_mov_fin')).toEqual(MOVS);
 });
 
-test('Importar extrato e Conciliar ainda avisam Em breve', async ({ page }) => {
+test('Importar extrato abre a janela; Conciliar abre a tela da conta', async ({ page }) => {
     await abrir(page);
     await page.locator('#fluxo-btn-importar').click();
-    await expect(page.locator('.sc-toast').last()).toHaveText('Em breve.');
+    await expect(page.locator('#conc-imp-modal')).toBeVisible();
+    await page.locator('#conc-imp-cancel').click();
+    await expect(page.locator('#conc-imp-modal')).toHaveCount(0);
     await page.locator('#fluxo-btn-conciliar').click();
-    await expect(page.locator('.sc-toast')).toHaveCount(2);
+    await expect(page.locator('#conc-overlay')).toBeVisible();
+    await expect(page.locator('#conc-vazio')).toContainText('Nenhum extrato importado');
+    await page.locator('#conc-fechar').click();
+    await expect(page.locator('#conc-overlay')).toHaveCount(0);
 });
 
 test('linha "Conferido com o extrato ate" das contas com extrato conciliado', async ({ page }) => {

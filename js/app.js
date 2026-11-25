@@ -317,6 +317,8 @@ let db = {
     // Categorias da DRE ({ subgrupos, categorias }) e lancamentos excluidos (registro de quem excluiu).
     fin_categorias:  _lerFinCategorias(),
     fin_excluidos:   JSON.parse(localStorage.getItem('sc_fin_excluidos')) || [],
+    // Linhas de extrato bancario importadas (OFX) e o que cada uma conciliou.
+    fin_extrato:     JSON.parse(localStorage.getItem('sc_fin_extrato')) || [],
     medicoes:       JSON.parse(localStorage.getItem('sc_med'))  || [],
     agenda_eventos:  JSON.parse(localStorage.getItem('sc_agd_ev')) || [],
     rotas:           JSON.parse(localStorage.getItem('sc_rotas')) || [],
@@ -329,7 +331,7 @@ let db = {
 const _DB_CHAVE_CAMPO = {
     sc_cli: 'clientes', sc_cat: 'catalogo', sc_ped: 'pedidos', sc_est: 'estoque', sc_mat: 'materiais',
     sc_mov: 'movimentos', sc_cr: 'contas_receber', sc_cp: 'contas_pagar', sc_mov_fin: 'movimentos_fin', sc_med: 'medicoes', sc_agd_ev: 'agenda_eventos', sc_usr: 'usuarios', sc_pap: 'papeis',
-    sc_fin_cat: 'fin_categorias', sc_fin_excluidos: 'fin_excluidos',
+    sc_fin_cat: 'fin_categorias', sc_fin_excluidos: 'fin_excluidos', sc_fin_extrato: 'fin_extrato',
 };
 // Texto de cada chave como esta aba leu ou gravou por ultimo. Reler so troca o array
 // quando o texto gravado mudou (outra aba gravou): um fluxo no meio de uma confirmacao
@@ -463,6 +465,7 @@ function _dbPares() {
         ['sc_fin_fech', db.fechamentos_fin],
         ...(db.fin_categorias ? [['sc_fin_cat', db.fin_categorias]] : []),
         ['sc_fin_excluidos', db.fin_excluidos || []],
+        ['sc_fin_extrato', db.fin_extrato || []],
         ['sc_med', db.medicoes],
         ['sc_rotas', db.rotas || []],
         ['sc_agd_ev', db.agenda_eventos || []],
@@ -4970,7 +4973,7 @@ Notif.registrar('aceite-respostas', () => {
 
 // Outra aba gravou: traz para a memoria o que os alertas leem.
 // So troca o array quando o texto gravado mudou (ver _dbRecarregarChave).
-const _NOTIF_CHAVES_DB = ['sc_ped', 'sc_med', 'sc_cat', 'sc_mat', 'sc_est', 'sc_mov', 'sc_cr', 'sc_cp', 'sc_mov_fin', 'sc_usr', 'sc_pap', 'sc_agd_ev', 'sc_fin_cat', 'sc_fin_excluidos'];
+const _NOTIF_CHAVES_DB = ['sc_ped', 'sc_med', 'sc_cat', 'sc_mat', 'sc_est', 'sc_mov', 'sc_cr', 'sc_cp', 'sc_mov_fin', 'sc_usr', 'sc_pap', 'sc_agd_ev', 'sc_fin_cat', 'sc_fin_excluidos', 'sc_fin_extrato'];
 function _notifRecarregarDB(chave) {
     if (_NOTIF_CHAVES_DB.includes(chave)) _dbRecarregarChave(chave);
 }
@@ -8611,7 +8614,7 @@ function _dadosExportacao(marcaFase0) {
         medicoes: db.medicoes, rotas: db.rotas || [], agenda_eventos: db.agenda_eventos || [],
         fin_metas: _lerObjetoLS('sc_fin_metas'), fin_orcamento_mes: _lerObjetoLS('sc_fin_orcamento_mes'),
         // Financeiro novo: categorias da DRE, excluidos e a versao dos dados (backup sem ela passa pela migracao v4).
-        fin_categorias: db.fin_categorias, fin_excluidos: db.fin_excluidos || [], fin_versao: localStorage.getItem(CHAVE_FIN_VERSAO),
+        fin_categorias: db.fin_categorias, fin_excluidos: db.fin_excluidos || [], fin_extrato: db.fin_extrato || [], fin_versao: localStorage.getItem(CHAVE_FIN_VERSAO),
         empresa: getEmpresa(), formas_pag: getFormasPagamentoCfg(),
         import_perfis: db.import_perfis || [],
         config_ls: _configsLS(),
@@ -8671,6 +8674,7 @@ function importarDados(event) {
             const catOk = c => c && typeof c === 'object' && Array.isArray(c.categorias) && Array.isArray(c.subgrupos);
             db.fin_categorias = catOk(dados.fin_categorias) ? dados.fin_categorias : FinCatCore.categoriasPadrao();
             db.fin_excluidos  = Array.isArray(dados.fin_excluidos) ? dados.fin_excluidos : [];
+            db.fin_extrato    = Array.isArray(dados.fin_extrato) ? dados.fin_extrato : [];
             // Tudo numa gravacao so (dados, marca da Fase 0, metas, orcamentos, empresa e
             // planos): se faltar espaco no meio, o que ja foi gravado volta ao anterior e a
             // migracao nunca roda sobre dados misturados.
@@ -15457,6 +15461,13 @@ async function estornarCP(id) {
     if (!cp || cp.status !== 'Pago') return;
     if (cp.categoria === 'taxa_cartao') { await showAlert('A taxa do cartão sai pelo estorno do recebimento.', 'ℹ️'); return; }
     if (!await showConfirm('Estornar este pagamento? A conta volta a ficar em aberto.', '↩', 'Estornar', 'Cancelar')) return;
+    _estornarCPDados(cp);
+    if (typeof _ccDesligarSumidos === 'function') _ccDesligarSumidos();
+    salvarERecarregar('Pagamento estornado.');
+}
+
+// O estorno de uma conta a pagar paga, sem perguntas nem gravacao (estornarCP e o Desfazer da conciliacao usam).
+function _estornarCPDados(cp) {
     const contasMov = (db.movimentos_fin || []).filter(m => m.origem === 'cp' && CaixaCore.mesmoId(m.origem_id, cp.id)).map(m => m.conta_id);
     removerMovimentosDaBaixaCP(cp.id);
     contasMov.forEach(_finContaTocada);
@@ -15472,7 +15483,6 @@ async function estornarCP(id) {
         const c = CAMPOS_COMISSAO[papelCom];
         if (ped && c && (cp.papel_comissao || ped[c.id])) { ped[c.paga] = false; ped[c.data] = null; }
     }
-    salvarERecarregar('Pagamento estornado.');
 }
 
 // Mesma regra do excluirCR: conta paga so sai pelo estorno; taxa de
@@ -15518,6 +15528,16 @@ async function estornarCR(id) {
         if (nomes.length) msg += ` Isso muda o saldo de hoje da conta ${nomes.join(', ')}.`;
     }
     if (!await showConfirm(msg, '↩', 'Estornar', 'Cancelar')) return;
+    _estornarCRDados(cr);
+    if (typeof _ccDesligarSumidos === 'function') _ccDesligarSumidos();
+    salvarERecarregar('Recebimento estornado.');
+}
+
+// O estorno de um recebimento pago, sem perguntas nem gravacao (estornarCR e o Desfazer da conciliacao usam):
+// tira os movimentos e as taxas de cartao da baixa; parte paga de parcela dividida volta para a parcela em aberto.
+function _estornarCRDados(cr) {
+    const origem = cr.parcela_origem_id != null ? db.contas_receber.find(x => CaixaCore.mesmoId(x.id, cr.parcela_origem_id)) : null;
+    const juntar = !!origem && origem !== cr && finAberta(origem);
     const contasMov = _movimentosDaBaixaCR(cr.id).movs.map(m => m.conta_id);
     removerMovimentosDaBaixaCR(cr.id);
     contasMov.forEach(_finContaTocada);
@@ -15548,7 +15568,6 @@ async function estornarCR(id) {
         const ped = db.pedidos.find(p => p.id == cr.pedido_id);
         if (ped) ped.pagamento_pendente = true;
     }
-    salvarERecarregar('Recebimento estornado.');
 }
 
 async function excluirCR(id) {
@@ -17930,21 +17949,27 @@ async function abrirModalTransferencia() {
         if (data > hojeLocal()) return erro('A data não pode ser depois de hoje.');
         if (!CaixaCore.contaAceitaMovimento(de, data) || !CaixaCore.contaAceitaMovimento(dest, data))
             return erro('A data é anterior ao saldo inicial de uma das contas.');
-        if (!Array.isArray(db.movimentos_fin)) db.movimentos_fin = [];
-        const novoId = _novosIdsFin(db.movimentos_fin);
-        const grupo = _novoIdCfgFin(new Set(db.movimentos_fin.map(m => m.grupo_id).filter(g => g != null)));
-        const v = CaixaCore.arredondar(valor);
-        db.movimentos_fin.push(
-            { id: novoId(), conta_id: de.id, data, sentido: 'saida', valor: v, origem: 'transferencia', origem_id: null, grupo_id: grupo, descricao: 'Transferência para ' + (dest.nome || '') },
-            { id: novoId(), conta_id: dest.id, data, sentido: 'entrada', valor: v, origem: 'transferencia', origem_id: null, grupo_id: grupo, descricao: 'Transferência de ' + (de.nome || '') }
-        );
-        _finContaTocada(de.id);
-        _finContaTocada(dest.id);
+        criarTransferenciaFin(de, dest, valor, data);
         syncDB();
         fechar();
         if (typeof renderFinFluxo === 'function') renderFinFluxo();
     };
     o.querySelector('#transf-valor').focus();
+}
+
+// Cria o par de movimentos da transferencia (saida na origem, entrada no destino, mesmo grupo_id). Sem validar
+// nem gravar (quem chama valida). Devolve { grupo, saida, entrada } (os dois movimentos).
+function criarTransferenciaFin(de, dest, valor, data) {
+    if (!Array.isArray(db.movimentos_fin)) db.movimentos_fin = [];
+    const novoId = _novosIdsFin(db.movimentos_fin);
+    const grupo = _novoIdCfgFin(new Set(db.movimentos_fin.map(m => m.grupo_id).filter(g => g != null)));
+    const v = CaixaCore.arredondar(valor);
+    const saida = { id: novoId(), conta_id: de.id, data, sentido: 'saida', valor: v, origem: 'transferencia', origem_id: null, grupo_id: grupo, descricao: 'Transferência para ' + (dest.nome || '') };
+    const entrada = { id: novoId(), conta_id: dest.id, data, sentido: 'entrada', valor: v, origem: 'transferencia', origem_id: null, grupo_id: grupo, descricao: 'Transferência de ' + (de.nome || '') };
+    db.movimentos_fin.push(saida, entrada);
+    _finContaTocada(de.id);
+    _finContaTocada(dest.id);
+    return { grupo, saida, entrada };
 }
 
 async function excluirTransferencia(grupoId) {
@@ -17954,6 +17979,8 @@ async function excluirTransferencia(grupoId) {
     if (!await showConfirm('Excluir esta transferência? Os dois lados saem do extrato e os saldos voltam ao que eram.', '🗑️', 'Excluir')) return;
     lados.forEach(m => _finContaTocada(m.conta_id));
     db.movimentos_fin = db.movimentos_fin.filter(m => !lados.includes(m));
+    // Linha de extrato que estava ligada a esta transferencia volta a ficar pendente.
+    if (typeof _ccDesligarSumidos === 'function') _ccDesligarSumidos();
     syncDB();
     if (typeof renderFinFluxo === 'function') renderFinFluxo();
 }

@@ -1237,9 +1237,40 @@ Na janela do carrinho:
     período inválido, os recebimentos sem conta do período e a conta ainda não aberta no período ("conta aberta
     em DD/MM/AAAA"). Botões: Transferir entre contas (a janela de sempre) e, em cada linha de transferência, o
     menu ⋮ com "Excluir transferência" (os dois lados saem); Importar extrato e Conciliar (aparecem só com Fluxo
-    de caixa completo; por enquanto avisam "Em breve."); Relatórios (para quem vê o Fluxo). Para cada conta com
-    extrato conciliado, a linha "Conferido com o extrato até DD/MM". Quem só visualiza não vê Transferir,
-    Importar, Conciliar nem o menu de excluir.
+    de caixa completo); Relatórios (para quem vê o Fluxo). Para cada conta com extrato conciliado, a linha
+    "Conferido com o extrato até DD/MM" (data da última linha conciliada ou transferência; ignoradas não contam).
+    Quem só visualiza não vê Transferir, Importar, Conciliar nem o menu de excluir.
+    * Importar extrato (janela): escolher a Conta (obrigatória) e o arquivo .ofx baixado do banco (SGML ou XML,
+      acentos em ISO-8859-1/1252 ou UTF-8, valores com vírgula ou ponto). Arquivo que não é OFX mostra "Arquivo não
+      reconhecido como extrato OFX.". Se o número da conta do arquivo (ACCTID) não bate com o Número da conta
+      cadastrado, pergunta "Este extrato parece ser da conta X, e você escolheu Y. Importar mesmo assim?" (Cancelar
+      não importa nada). Só entram as linhas novas (mesmo FITID na mesma conta não entra duas vezes): "N linha(s)
+      nova(s) importada(s); M já estavam no sistema." e abre a tela Conciliar da conta. Grava em sc_fin_extrato
+      (entra no backup) e atualiza o "atualizado em" da conta.
+    * Conciliar (tela cheia, por conta): seletor de Conta e abas Pendentes | Conciliadas | Ignoradas (com a
+      contagem). Cada linha do extrato mostra data, descrição, valor e a melhor sugestão (lançamento em aberto,
+      movimento ainda não conciliado da conta, repasse de cartão pelo líquido ou "N repasses de cartão" do mesmo
+      dia que somam o depósito; mesmo sentido, valor ±R$ 0,01, data ±5 dias). Ações:
+      - Confirmar: lançamento em aberto → baixa na data do extrato, na conta do extrato (mesma rotina da baixa
+        manual; histórico "Conciliado com o extrato de DD/MM"); movimento existente → só liga; repasses → liga aos
+        movimentos do repasse (entrada bruta e taxa).
+      - Escolher outro: lista sugestões, lançamentos em aberto do lado (vencimento até 60 dias), movimentos e
+        repasses da conta (até 31 dias); marcar um ou vários; "Marcado: R$ X de R$ Y (faltam …)"; Confirmar só
+        habilita quando a soma bate (±R$ 0,01).
+      - Criar lançamento: abre o formulário de Lançamentos já com descrição, valor, data (vencimento) e conta,
+        sem Parcelar/Repetir; passa pela checagem de lançamento parecido; ao salvar, dá a baixa e a linha fica
+        conciliada.
+      - É transferência: escolher a outra conta; cria o par de movimentos na data do extrato (não muda Entradas
+        e Saídas de "Todas as contas").
+      - Ignorar: vai para Ignoradas.
+      - Desfazer (Conciliadas e Ignoradas): a linha volta para Pendentes; se a conciliação deu baixa, a baixa é
+        estornada pela rotina de estorno (o lançamento volta em aberto, com a conta prevista de antes); se criou a
+        transferência, ela é excluída; se só ligou a um movimento ou repasse, só desliga. O lançamento criado
+        continua existindo.
+      - Estornar pela tela de Lançamentos ou excluir a transferência pelo Fluxo devolve a linha ligada a ela para
+        Pendentes.
+      Permissões: importar e conciliar = Fluxo de caixa completo; dar baixa (Confirmar com lançamento, Criar
+      lançamento, Desfazer com baixa) exige também completo em Contas a receber (entradas) ou a pagar (saídas).
     * Relatórios (janela): "Entradas e saídas por categoria" (período, regime Caixa, mesma base da DRE),
       "Contas a pagar e a receber por período" (em aberto e pagas, por vencimento, mês a mês) e "Evolução
       mensal do saldo" (12 meses até o mês atual, na conta escolhida na tela). Cada um com PDF, Excel e Imprimir
