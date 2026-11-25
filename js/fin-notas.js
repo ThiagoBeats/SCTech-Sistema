@@ -24,12 +24,6 @@ const _nfBrl = v => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDi
 const _nfDataBr = d => /^\d{4}-\d{2}-\d{2}/.test(String(d || '')) ? String(d).slice(8, 10) + '/' + String(d).slice(5, 7) + '/' + String(d).slice(0, 4) : '';
 const _nfDataHora = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); };
 const _nfRotuloTipo = t => t === 'nfe' ? 'NF-e' : 'NFS-e';
-const _nfNum = s => {
-    let t = String(s == null ? '' : s).trim().replace(/\s/g, '');
-    if (t.indexOf(',') >= 0) t = t.replace(/\./g, '').replace(',', '.');
-    const n = Number(t);
-    return isFinite(n) ? n : 0;
-};
 const _nfPode = () => temAcesso('financeiro.receber', 'completo') || temAcesso('pedidos', 'completo');
 const _nfPodeVer = () => temAcesso('pedidos', 'visualizar') || temAcesso('financeiro.receber', 'visualizar');
 const _nfNotas = () => {
@@ -188,7 +182,7 @@ function _nfItemHtml(i, it) {
     return `<div class="nf-item">
         <input type="text" class="nf-item-desc" aria-label="Descrição" value="${_nfEsc(it.descricao)}">
         <input type="number" class="nf-item-qtd" aria-label="Quantidade" min="0" step="any" value="${_nfEsc(it.quantidade)}">
-        <input type="text" inputmode="decimal" class="nf-item-total" aria-label="Valor total do item" value="${_nfBrl(it.valor_total)}" oninput="_nfSomar()">
+        <input type="text" inputmode="decimal" data-moeda placeholder="R$ 0,00" class="nf-item-total" aria-label="Valor total do item" value="${MascarasCore.formatarMoeda(Number(it.valor_total) || 0)}" oninput="_nfSomar()">
     </div>`;
 }
 
@@ -257,7 +251,7 @@ function _nfTrocarTipo() {
 function _nfItensDoForm() {
     return Array.from(document.querySelectorAll('#nf-itens .nf-item')).map(r => {
         const quantidade = Number(r.querySelector('.nf-item-qtd').value) || 0;
-        const valor_total = _nfNum(r.querySelector('.nf-item-total').value);
+        const valor_total = lerCampoMoeda(r.querySelector('.nf-item-total')) || 0;
         return { descricao: r.querySelector('.nf-item-desc').value.trim(), quantidade, valor_unitario: quantidade ? Math.round(valor_total / quantidade * 100) / 100 : valor_total, valor_total };
     });
 }

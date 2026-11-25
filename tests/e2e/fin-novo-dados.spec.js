@@ -238,7 +238,7 @@ test('backup: exportar e importar traz as categorias e os campos novos; backup a
     await page.evaluate(() => { window.__marca = 1; });
     await page.evaluate(json => importarDados({ target: { files: [new File([json], 'b.json')], value: '' } }), exportado);
     await page.locator('#sc-modal-ok').click();
-    await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
+    await expect.poll(() => page.evaluate(() => window.__marca).catch(() => 'navegando')).toBeUndefined();
     await page.waitForFunction(() => typeof db !== 'undefined');
     expect(await ler(page, 'sc_fin_cat')).toEqual(catAntes);
     expect(await ler(page, 'sc_cr')).toEqual(crsAntes);
@@ -250,7 +250,7 @@ test('backup: exportar e importar traz as categorias e os campos novos; backup a
     await page.evaluate(() => { window.__marca = 1; });
     await page.evaluate(json => importarDados({ target: { files: [new File([json], 'b.json')], value: '' } }), antigo);
     await page.locator('#sc-modal-ok').click();
-    await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
+    await expect.poll(() => page.evaluate(() => window.__marca).catch(() => 'navegando')).toBeUndefined();
     await expect.poll(() => texto(page, 'sc_fin_versao')).toBe('4');
     const crs = await ler(page, 'sc_cr');
     expect(crs.find(c => c.id === 602).categoria_id).toBe('cat_vendas');

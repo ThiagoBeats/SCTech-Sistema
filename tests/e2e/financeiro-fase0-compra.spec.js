@@ -20,7 +20,7 @@ const receber = (page, id) => page.evaluate(i => { atualizarStatusPC(i, 'Recebid
 test('recebido abre o modal com o total do PC', async ({ page }) => {
     await abrir(page, [pc()]);
     await receber(page);
-    await expect(page.locator('#pcp-valor')).toHaveValue('1000.00');
+    await expect(page.locator('#pcp-valor')).toHaveValue('R$ 1.000,00');
 });
 
 test('a vista / prazo / parcelado geram as contas certas', async ({ page }) => {
@@ -112,7 +112,7 @@ test('importar nota do mesmo fornecedor oferece vincular', async ({ page }) => {
 test('valor zerado mostra aviso dentro do modal e nao cria conta', async ({ page }) => {
     await abrir(page, [pc()]);
     await receber(page);
-    await page.locator('#pcp-valor').fill('0');
+    await page.locator('#pcp-valor').fill('0,00');
     await page.locator('#pcp-ok').click();
     await expect(page.locator('#pcp-erro')).toContainText('Informe o valor');
     await expect(page.locator('#pcp-modal')).toBeVisible();

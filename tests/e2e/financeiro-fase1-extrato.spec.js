@@ -119,12 +119,12 @@ test('mesma conta de origem e destino e bloqueado dentro do modal', async ({ pag
     const m = page.locator('#transf-modal');
     await m.locator('#transf-de').selectOption('10');
     await m.locator('#transf-para').selectOption('10');
-    await m.locator('#transf-valor').fill('10');
+    await m.locator('#transf-valor').fill('10,00');
     await m.locator('#transf-ok').click();
     await expect(m).toBeVisible();
     await expect(m.locator('#transf-erro')).toContainText('diferente da origem');
     await m.locator('#transf-para').selectOption('11');
-    await m.locator('#transf-valor').fill('0');
+    await m.locator('#transf-valor').fill('0,00');
     await m.locator('#transf-ok').click();
     await expect(m.locator('#transf-erro')).toContainText('valor');
     await page.keyboard.press('Escape');
@@ -166,7 +166,7 @@ test('transferir 1.000 (so ponto de milhar) move mil reais', async ({ page }) =>
     const m = page.locator('#transf-modal');
     await m.locator('#transf-de').selectOption('10');
     await m.locator('#transf-para').selectOption('11');
-    await m.locator('#transf-valor').fill('1.000');
+    await m.locator('#transf-valor').fill('1.000,00');
     await m.locator('#transf-ok').click();
     await expect(m).toHaveCount(0);
     const movs = (await ler(page, 'sc_mov_fin')).filter(x => x.origem === 'transferencia');

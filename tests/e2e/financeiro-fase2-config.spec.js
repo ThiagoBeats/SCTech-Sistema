@@ -4,7 +4,12 @@ const { test, expect } = require('@playwright/test');
 const { entrar, abrirLancamentos } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
-const ler = (page, k) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), k);
+const ler = async (page, k) => {   // tolera a recarga que a importacao dispara
+    for (let i = 0; i < 20; i++) {
+        try { return await page.evaluate(c => JSON.parse(localStorage.getItem(c)), k); }
+        catch (e) { if (!/context was destroyed|navigation/i.test(e.message)) throw e; await page.waitForLoadState('load'); }
+    }
+};
 const p2 = n => String(n).padStart(2, '0');
 const iso = d => d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
 const importar = (page, dados) => page.evaluate(json => importarDados({ target: { files: [new File([json], 'b.json', { type: 'application/json' })], value: '' } }), JSON.stringify(dados));
@@ -12,17 +17,17 @@ const importar = (page, dados) => page.evaluate(json => importarDados({ target: 
 test('meta padrao e orcamento salvos sem apagar outros campos da empresa', async ({ page }) => {
     await entrar(page, BASE, { sc_empresa: { razao_social: 'CORTINAS X', regime_tributario: 'simples', aliquota_estimada: 6 } });
     await page.goto(BASE + '/empresa.html#preferencias');
-    await page.fill('#emp-meta-padrao', '30.000');
+    await page.fill('#emp-meta-padrao', '30.000,00');
     await page.fill('#orc-fornecedores', '12.000,50');
-    await page.fill('#orc-fixas', '4000');
+    await page.fill('#orc-fixas', '4000,00');
     await page.click('#emp-orcamento-card button:has-text("Salvar")');
     const emp = await ler(page, 'sc_empresa');
     expect(emp.meta_faturamento_padrao).toBe(30000);
     expect(emp.orcamento_padrao).toEqual({ fornecedores: 12000.5, fixas: 4000 });
     expect(emp).toMatchObject({ razao_social: 'CORTINAS X', regime_tributario: 'simples', aliquota_estimada: 6 });
     await page.reload();
-    await expect(page.locator('#emp-meta-padrao')).toHaveValue('30000');
-    await expect(page.locator('#orc-fornecedores')).toHaveValue('12000.5');
+    await expect(page.locator('#emp-meta-padrao')).toHaveValue('R$ 30.000,00');
+    await expect(page.locator('#orc-fornecedores')).toHaveValue('R$ 12.000,50');
     await expect(page.locator('#orc-servicos')).toHaveValue('');
 });
 
@@ -33,7 +38,7 @@ test('conta de imposto tem mes de referencia preenchido com o mes anterior ao ve
     await page.evaluate(() => abrirModalContaPagar());
     await expect(page.locator('#cpm-mes-ref')).toBeHidden();
     await page.fill('#cpm-descricao', 'DAS');
-    await page.fill('#cpm-valor', '500');
+    await page.fill('#cpm-valor', '500,00');
     await page.fill('#cpm-vencimento', '2027-01-20');
     await page.selectOption('#cpm-categoria', 'imposto');
     await expect(page.locator('#cpm-mes-ref')).toBeVisible();
@@ -56,7 +61,7 @@ test.skip('categoria Imposto aparece no grafico de despesas com rotulo', async (
     await entrar(page, BASE, { sc_cp: [{ id: 1, tipo: 'variavel', categoria: 'imposto', descricao: 'DAS', valor: 300, mes_referencia: hoje.slice(0, 7), data_vencimento: hoje, data_pagamento: null, status: 'Pendente' }] });
     await page.goto(BASE + '/financeiro.html');
     await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
-    await expect.poll(() => page.evaluate(() => { const c = Chart.getChart('chart-fin-desp'); return c ? c.data.labels : null; })).toEqual(['Imposto']);
+    await expect.poll(() => page.evaluate(() => { const c = Chart.getChart('chart-fin-desp'); return c ? c.data.labels : null; }).catch(() => 'navegando')).toEqual(['Imposto']);
 });
 
 test('papel Vendedor salvo nao ganha Resultado do mes; Financeiro ganha', async ({ page }) => {
@@ -89,16 +94,14 @@ test('exportar e importar levam meta, orcamento e ajustes', async ({ page }) => 
     expect(arq.fin_orcamento_mes).toEqual(orcMes);
     await page.evaluate(() => { localStorage.removeItem('sc_fin_metas'); localStorage.removeItem('sc_fin_orcamento_mes'); localStorage.removeItem('sc_empresa'); });
     await importar(page, arq);
-    await page.locator('#sc-modal-ok').click();
-    await page.waitForLoadState('load');
+    await Promise.all([page.waitForEvent('load'), page.locator('#sc-modal-ok').click()]);   // a importacao recarrega a pagina depois da limpeza
     await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_metas'))).not.toBeNull();
     expect(await ler(page, 'sc_fin_metas')).toEqual(metas);
     expect(await ler(page, 'sc_fin_orcamento_mes')).toEqual(orcMes);
     expect(await ler(page, 'sc_empresa')).toMatchObject(emp);
     // backup antigo: ajustes voltam ao padrao vazio
     await importar(page, { clientes: [], catalogo: [], pedidos: [] });
-    await page.locator('#sc-modal-ok').click();
-    await page.waitForLoadState('load');
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_metas'))).toBe('{}');
+    await Promise.all([page.waitForEvent('load'), page.locator('#sc-modal-ok').click()]);   // a importacao recarrega a pagina depois da limpeza
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_metas')).catch(() => 'navegando')).toBe('{}');
     expect(await ler(page, 'sc_fin_orcamento_mes')).toEqual({});
 });

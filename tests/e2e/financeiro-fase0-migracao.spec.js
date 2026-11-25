@@ -35,7 +35,7 @@ async function semearDadosAntigos(page) {
 test('abrir o financeiro migra os dados antigos uma vez, com copia de seguranca', async ({ page }) => {
     await semearDadosAntigos(page);
     await page.goto(BASE + '/financeiro.html');
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao')).catch(() => 'navegando')).toBe('1');
 
     const crs = await lerChave(page, 'sc_cr');
     const c602 = crs.find(c => c.id === 602);
@@ -96,7 +96,7 @@ test('arquiteto gravado no campo de vendedor vira comissao de arquiteto, uma so'
     await entrar(page, BASE, { sc_vend: vend, sc_ped: [ped], sc_cr: cr, sc_cp: [] });
     await page.evaluate(() => localStorage.removeItem('sc_fin_migracao'));
     await page.goto(BASE + '/login.html');   // na login o checkAuth nao roda: a migracao precisa acertar sozinha
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao')).catch(() => 'navegando')).toBe('1');
     await page.goto(BASE + '/financeiro.html');
     await expect(page.locator('#fin-resumo-conteudo')).not.toBeEmpty();
     const cps = (await lerChave(page, 'sc_cp')).filter(c => c.categoria === 'comissao');
@@ -114,7 +114,7 @@ test('nova tentativa nao sobrescreve a copia de seguranca que ja existe', async 
     const antiga = JSON.stringify({ criado_em: 1, contas_receber: [{ id: 1 }], contas_pagar: [], pedidos: [] });
     await page.evaluate(b => localStorage.setItem('sc_fin_backup_fase0', b), antiga);
     await page.goto(BASE + '/financeiro.html');
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao')).catch(() => 'navegando')).toBe('1');
     expect((await lerChave(page, 'sc_cr')).find(c => c.id === 602).status, 'migrou mesmo assim').toBe('Pago');
     expect(await page.evaluate(() => localStorage.getItem('sc_fin_backup_fase0'))).toBe(antiga);
 });
@@ -128,8 +128,7 @@ test('importar um backup limpa a marca, a copia e a lista de revisao', async ({ 
         pedidos: [{ id: 26700, clienteNome: 'Ana', status: 'Instalado', financeiro_gerado: true, valor: 200, valor_recebido: 200, ambientes: [] }],
         contas_receber: [{ id: 801, pedido_id: 26700, valor: 200, data_vencimento: '2026-10-01', status: 'Pendente' }] };
     await page.evaluate(json => importarDados({ target: { files: [new File([json], 'b.json', { type: 'application/json' })], value: '' } }), JSON.stringify(backup));
-    await page.locator('#sc-modal-ok').click();
-    await page.waitForLoadState('load');
+    await Promise.all([page.waitForEvent('load'), page.locator('#sc-modal-ok').click()]);   // a importacao recarrega a pagina depois da limpeza
     // Ao recarregar, a migracao roda de novo sobre os dados importados, com copia nova.
     await expect.poll(async () => ((await lerChave(page, 'sc_cr')) || []).find(c => c.id === 801)?.status).toBe('Pago');
     const copia = await lerChave(page, 'sc_fin_backup_fase0');
@@ -142,7 +141,7 @@ test('sem nada para migrar, so grava a marca (sem copia)', async ({ page }) => {
     await entrar(page, BASE, { sc_ped: [], sc_cr: [], sc_cp: [] });
     await page.evaluate(() => localStorage.removeItem('sc_fin_migracao'));
     await page.goto(BASE + '/index.html');
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao')).catch(() => 'navegando')).toBe('1');
     expect(await page.evaluate(() => localStorage.getItem('sc_fin_backup_fase0'))).toBeNull();
 });
 
@@ -169,9 +168,8 @@ test('exportar leva a marca da Fase 0, a empresa e as formas; importar esse arqu
         localStorage.setItem('sc_fin_backup_fase0', '{"velha":true}'); localStorage.setItem('sc_fin_revisar', '[{"pedido_id":1}]');
     });
     await importar(page, arq);
-    await page.locator('#sc-modal-ok').click();
-    await page.waitForLoadState('load');
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
+    await Promise.all([page.waitForEvent('load'), page.locator('#sc-modal-ok').click()]);   // a importacao recarrega a pagina depois da limpeza
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao')).catch(() => 'navegando')).toBe('1');
     await page.goto(BASE + '/financeiro.html');
     await expect(page.locator('#fin-resumo-conteudo')).not.toBeEmpty();
     expect((await lerChave(page, 'sc_cr')).find(c => c.id === 811).status, 'nao baixa de novo').toBe('Pendente');
@@ -185,9 +183,8 @@ test('backup antigo sem empresa nem formas nao apaga as atuais', async ({ page }
     await entrar(page, BASE, { sc_empresa: empresa, sc_ped: [], sc_cr: [], sc_cp: [] });
     await page.goto(BASE + '/index.html');
     await importar(page, { clientes: [], catalogo: [], pedidos: [] });
-    await page.locator('#sc-modal-ok').click();
-    await page.waitForLoadState('load');
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
+    await Promise.all([page.waitForEvent('load'), page.locator('#sc-modal-ok').click()]);   // a importacao recarrega a pagina depois da limpeza
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao')).catch(() => 'navegando')).toBe('1');
     expect(await lerChave(page, 'sc_empresa')).toEqual(empresa);
 });
 
@@ -222,7 +219,7 @@ test('sem espaco para a copia: nao migra, avisa e oferece baixar a copia e corri
     const copia = await lerDownload(dl);
     expect(copia.contas_receber.find(c => c.id === 602).status).toBe('Atrasado');
     expect(copia.fin_fase0, 'a copia e de antes da migracao').toBeUndefined();
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao')).catch(() => 'navegando')).toBe('1');
     await expect(page.locator('#fin-resumo-conteudo')).not.toBeEmpty();
     expect((await lerChave(page, 'sc_cr')).find(c => c.id === 602).status).toBe('Pago');
     expect(await page.evaluate(() => [localStorage.getItem('sc_fin_backup_falhou'), localStorage.getItem('sc_fin_backup_fase0')])).toEqual([null, null]);
@@ -259,7 +256,7 @@ test('erro ao salvar a migracao deixa a marca sem gravar e aparece no aviso', as
     // Com espaco de novo, a proxima abertura migra e o aviso de erro some.
     await page.evaluate(() => sessionStorage.setItem('libera', '1'));
     await page.reload();
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao'))).toBe('1');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_migracao')).catch(() => 'navegando')).toBe('1');
     expect((await lerChave(page, 'sc_cr')).find(c => c.id === 602).status).toBe('Pago');
     await expect(page.locator('#fin-backup')).not.toContainText('Não foi possível salvar');
 });

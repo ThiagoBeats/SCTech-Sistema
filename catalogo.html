@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Cadastro - Catálogo e Preços - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261209a">
+    <link rel="stylesheet" href="css/style.css?v=20261210a">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
@@ -50,11 +50,11 @@
                     </div>
                     <div class="form-group">
                         <label>Custo de entrada (R$/m)</label>
-                        <input type="number" id="cat-custo" placeholder="Ex: 92.90" step="0.01" min="0" oninput="atualizarVendaTecido()">
+                        <input type="text" inputmode="decimal" data-moeda id="cat-custo" placeholder="R$ 0,00" oninput="atualizarVendaTecido()">
                     </div>
                     <div class="form-group">
                         <label>Custo de corte por peça (R$) <span class="info-tag">opcional</span></label>
-                        <input type="number" id="cat-custo-peca" placeholder="Ex: 95.98" step="0.01" min="0">
+                        <input type="text" inputmode="decimal" data-moeda id="cat-custo-peca" placeholder="R$ 0,00">
                     </div>
                     <div class="form-group">
                         <label>Preço de venda</label>
@@ -67,7 +67,7 @@
                     <!-- Preço oculto no cadastro, visível apenas na edição -->
                     <div class="form-group" id="cat-preco-group" style="display:none">
                         <label>Preço de Venda (R$/m) <span class="info-tag">edição</span></label>
-                        <input type="number" id="cat-preco" placeholder="0.00" step="0.01" min="0">
+                        <input type="text" inputmode="decimal" data-moeda id="cat-preco" placeholder="R$ 0,00">
                     </div>
                 </div>
                 <div class="form-group" style="margin-top:8px">
@@ -89,9 +89,9 @@
                     <select id="f-tec-forn" onchange="renderCatalogoTecidos()"><option value="">Todos os fornecedores</option></select>
                     <select id="f-tec-largura" onchange="renderCatalogoTecidos()"><option value="">Todas as larguras</option></select>
                     <span class="cat-f-faixa">R$
-                        <input type="number" id="f-tec-pmin" placeholder="de" step="0.01" min="0" oninput="renderCatalogoTecidos()">
+                        <input type="text" inputmode="decimal" data-moeda id="f-tec-pmin" placeholder="de" oninput="renderCatalogoTecidos()">
                         <span>a</span>
-                        <input type="number" id="f-tec-pmax" placeholder="até" step="0.01" min="0" oninput="renderCatalogoTecidos()">
+                        <input type="text" inputmode="decimal" data-moeda id="f-tec-pmax" placeholder="até" oninput="renderCatalogoTecidos()">
                     </span>
                     <button class="btn btn-outline btn-sm" onclick="limparFiltrosTecidos()">Limpar</button>
                     <span class="cat-f-contagem" id="f-tec-contagem"></span>
@@ -159,7 +159,7 @@
                     </div>
                     <div class="form-group">
                         <label>Custo de entrada (R$)</label>
-                        <input type="number" id="mat-custo" placeholder="Ex: 8.50" step="0.01" min="0" oninput="atualizarVendaMaterial()">
+                        <input type="text" inputmode="decimal" data-moeda id="mat-custo" placeholder="R$ 0,00" oninput="atualizarVendaMaterial()">
                     </div>
                     <div class="form-group">
                         <label>Preço de venda</label>
@@ -172,7 +172,7 @@
                     <!-- Campo de preço: oculto no cadastro, visível apenas na edição -->
                     <div class="form-group" id="mat-preco-group" style="display:none">
                         <label>Preço de Venda (R$) <span class="info-tag">edição</span></label>
-                        <input type="number" id="mat-preco" placeholder="0.00" step="0.01" min="0">
+                        <input type="text" inputmode="decimal" data-moeda id="mat-preco" placeholder="R$ 0,00">
                     </div>
                 </div>
                 <div class="imp-cfg-secao">
@@ -189,9 +189,9 @@
                     <input type="text" id="f-mat-busca" class="cat-f-busca" placeholder="🔍 Nome ou código" oninput="renderMateriais()">
                     <select id="f-mat-forn" onchange="renderMateriais()"><option value="">Todos os fornecedores</option></select>
                     <span class="cat-f-faixa">R$
-                        <input type="number" id="f-mat-pmin" placeholder="de" step="0.01" min="0" oninput="renderMateriais()">
+                        <input type="text" inputmode="decimal" data-moeda id="f-mat-pmin" placeholder="de" oninput="renderMateriais()">
                         <span>a</span>
-                        <input type="number" id="f-mat-pmax" placeholder="até" step="0.01" min="0" oninput="renderMateriais()">
+                        <input type="text" inputmode="decimal" data-moeda id="f-mat-pmax" placeholder="até" oninput="renderMateriais()">
                     </span>
                     <button class="btn btn-outline btn-sm" onclick="limparFiltrosMateriais()">Limpar</button>
                     <span class="cat-f-contagem" id="f-mat-contagem"></span>
@@ -261,7 +261,7 @@
                     </div>
                     <div class="form-group">
                         <label>Preço de custo (R$)</label>
-                        <input type="number" id="kp-custo" placeholder="Ex: 100.00" step="0.01" min="0" oninput="atualizarVendaKitPronto()">
+                        <input type="text" inputmode="decimal" data-moeda id="kp-custo" placeholder="R$ 0,00" oninput="atualizarVendaKitPronto()">
                     </div>
                     <div class="form-group" style="grid-column:span 2">
                         <label>Preço de venda</label>
@@ -297,32 +297,34 @@
             </div>
         </div>
     </main>
-    <script src="js/etiquetas-core.js?v=20261209a"></script>
-    <script src="js/etiquetas-render.js?v=20261209a"></script>
-    <script src="js/cortina-desenho.js?v=20261209a"></script>
-    <script src="js/docs-layout-core.js?v=20261209a"></script>
-    <script src="js/financeiro-core.js?v=20261209a"></script>
-    <script src="js/caixa-core.js?v=20261209a"></script>
-    <script src="js/carrinho-core.js?v=20261209a"></script>
-    <script src="js/resultado-core.js?v=20261209a"></script>
-    <script src="js/fechamento-core.js?v=20261209a"></script>
-    <script src="js/simulador-core.js?v=20261209a"></script>
-    <script src="js/rotas-core.js?v=20261209a"></script>
-    <script src="js/endereco-core.js?v=20261209a"></script>
-    <script src="js/agenda-core.js?v=20261209a"></script>
-    <script src="js/notificacoes.js?v=20261209a"></script>
-    <script src="js/feriados-core.js?v=20261209a"></script>
-    <script src="js/fin-cat-core.js?v=20261209a"></script>
-    <script src="js/dre-core.js?v=20261209a"></script>
-    <script src="js/fluxo-core.js?v=20261209a"></script>
-    <script src="js/conciliacao-core.js?v=20261209a"></script>
-    <script src="js/fiscal-core.js?v=20261209a"></script>
-    <script src="js/fiscal.js?v=20261209a"></script>
-    <script src="js/app.js?v=20261209a"></script>
-    <script src="js/agenda.js?v=20261209a"></script>
-    <script src="js/rotas.js?v=20261209a"></script>
-    <script src="js/compartilhar-doc.js?v=20261209a"></script>
-    <script src="js/importador-core.js?v=20261209a"></script>
-    <script src="js/importador-ui.js?v=20261209a"></script>
+    <script src="js/etiquetas-core.js?v=20261210a"></script>
+    <script src="js/etiquetas-render.js?v=20261210a"></script>
+    <script src="js/cortina-desenho.js?v=20261210a"></script>
+    <script src="js/docs-layout-core.js?v=20261210a"></script>
+    <script src="js/financeiro-core.js?v=20261210a"></script>
+    <script src="js/caixa-core.js?v=20261210a"></script>
+    <script src="js/carrinho-core.js?v=20261210a"></script>
+    <script src="js/resultado-core.js?v=20261210a"></script>
+    <script src="js/fechamento-core.js?v=20261210a"></script>
+    <script src="js/simulador-core.js?v=20261210a"></script>
+    <script src="js/rotas-core.js?v=20261210a"></script>
+    <script src="js/endereco-core.js?v=20261210a"></script>
+    <script src="js/agenda-core.js?v=20261210a"></script>
+    <script src="js/notificacoes.js?v=20261210a"></script>
+    <script src="js/feriados-core.js?v=20261210a"></script>
+    <script src="js/fin-cat-core.js?v=20261210a"></script>
+    <script src="js/dre-core.js?v=20261210a"></script>
+    <script src="js/fluxo-core.js?v=20261210a"></script>
+    <script src="js/conciliacao-core.js?v=20261210a"></script>
+    <script src="js/fiscal-core.js?v=20261210a"></script>
+    <script src="js/fiscal.js?v=20261210a"></script>
+    <script src="js/mascaras-core.js?v=20261210a"></script>
+    <script src="js/mascaras.js?v=20261210a"></script>
+    <script src="js/app.js?v=20261210a"></script>
+    <script src="js/agenda.js?v=20261210a"></script>
+    <script src="js/rotas.js?v=20261210a"></script>
+    <script src="js/compartilhar-doc.js?v=20261210a"></script>
+    <script src="js/importador-core.js?v=20261210a"></script>
+    <script src="js/importador-ui.js?v=20261210a"></script>
 </body>
 </html>

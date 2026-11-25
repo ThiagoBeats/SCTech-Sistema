@@ -829,7 +829,7 @@ function _impPasso3HTML() {
                     <option value="">— sem papel —</option>
                     ${papeis.filter(p => p.valor !== 'ignorar').map(p => `<option value="${p.valor}">${p.rotulo}</option>`).join('')}
                 </select>
-                <input type="text" id="imp-nova-valor" placeholder="Valor para todas as linhas">
+                <input type="text" id="imp-nova-valor" data-sem-maiuscula placeholder="Valor para todas as linhas">
                 <button class="btn btn-sm" onclick="_impAdicionarColuna(${li})">Adicionar</button>
                 <button class="btn btn-outline btn-sm" onclick="_impAlternarNovaColuna(${li})">Cancelar</button>
             </div>` : ''}`;
@@ -1241,7 +1241,7 @@ function _impBlocosDeKitHTML() {
                 <td><input value="${escapeHtml(it.nome)}" style="width:130px;font-size:12px" onchange="_impEditarCampoKit('${def.chave}', ${i}, 'nome', this.value)">${alerta}</td>
                 <td><input value="${escapeHtml(it.medida || '')}" style="width:90px;font-size:12px" onchange="_impEditarCampoKit('${def.chave}', ${i}, 'medida', this.value)"></td>
                 <td><input value="${escapeHtml(it.descricao || '')}" style="width:95px;font-size:12px" onchange="_impEditarCampoKit('${def.chave}', ${i}, 'descricao', this.value)"></td>
-                <td><input type="number" step="0.01" value="${it.preco_custo === null ? '' : it.preco_custo}" style="width:85px;font-size:12px" onchange="_impEditarCampoKit('${def.chave}', ${i}, 'preco_custo', this.value)"></td>
+                <td><input type="text" inputmode="decimal" data-moeda placeholder="R$ 0,00" value="${it.preco_custo === null ? '' : MascarasCore.formatarMoeda(it.preco_custo)}" style="width:85px;font-size:12px" onchange="_impEditarCampoKit('${def.chave}', ${i}, 'preco_custo', this.value)"></td>
                 <td><input type="number" step="1" value="${e.markup === null ? '' : e.markup}" style="width:65px;font-size:12px" onchange="_impEditarCampoKit('${def.chave}', ${i}, 'markup', this.value)"></td>
                 <td>${_impMoeda(venda)}${antes}</td>
             </tr>`;
@@ -1677,7 +1677,7 @@ function _impPasso4HTML() {
                 <td style="font-size:12px;color:var(--muted)">${escapeHtml(it.aba)}</td>
                 <td><input value="${escapeHtml(it.codigo)}" style="width:110px;font-size:12px" onchange="_impEditarCampo('${def.chave}', ${i}, 'codigo', this.value)"></td>
                 <td><input value="${escapeHtml(it.nome)}" style="width:220px;font-size:12px" onchange="_impEditarCampo('${def.chave}', ${i}, 'nome', this.value)">${alerta}</td>
-                <td><input type="number" step="0.01" value="${it.preco_custo === null ? '' : it.preco_custo}" style="width:90px;font-size:12px" onchange="_impEditarCampo('${def.chave}', ${i}, 'preco_custo', this.value)">${_impNotaDosPrecos(it)}</td>
+                <td><input type="text" inputmode="decimal" data-moeda placeholder="R$ 0,00" value="${it.preco_custo === null ? '' : MascarasCore.formatarMoeda(it.preco_custo)}" style="width:90px;font-size:12px" onchange="_impEditarCampo('${def.chave}', ${i}, 'preco_custo', this.value)">${_impNotaDosPrecos(it)}</td>
                 <td><input type="number" step="1" value="${e.markup === null ? '' : e.markup}" style="width:70px;font-size:12px" onchange="_impEditarCampo('${def.chave}', ${i}, 'markup', this.value)"></td>
                 <td>${_impMoeda(venda)}${antes}</td>
             </tr>`;

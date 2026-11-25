@@ -183,7 +183,7 @@ test('Transferir entre contas cria a transferencia e ela aparece na tabela', asy
     await expect(m).toBeVisible();
     await m.locator('#transf-de').selectOption('1');
     await m.locator('#transf-para').selectOption('2');
-    await m.locator('#transf-valor').fill('100');
+    await m.locator('#transf-valor').fill('100,00');
     await m.locator('#transf-ok').click();
     await expect(m).toHaveCount(0);
     const movs = (await ler(page, 'sc_mov_fin')).filter(x => x.origem === 'transferencia' && x.valor === 100);
@@ -204,11 +204,11 @@ test('transferencia: mesma conta nos dois lados e valor zero sao barrados no mod
     const m = page.locator('#transf-modal');
     await m.locator('#transf-de').selectOption('1');
     await m.locator('#transf-para').selectOption('1');
-    await m.locator('#transf-valor').fill('10');
+    await m.locator('#transf-valor').fill('10,00');
     await m.locator('#transf-ok').click();
     await expect(m.locator('#transf-erro')).toContainText('diferente da origem');
     await m.locator('#transf-para').selectOption('2');
-    await m.locator('#transf-valor').fill('0');
+    await m.locator('#transf-valor').fill('0,00');
     await m.locator('#transf-ok').click();
     await expect(m.locator('#transf-erro')).toContainText('valor');
     await page.keyboard.press('Escape');

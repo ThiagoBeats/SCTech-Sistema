@@ -124,8 +124,7 @@ test('backup: exportar e importar mantem a cidade do cliente, da medicao e da in
     expect(dados.pedidos[0].inst_cidade).toBe('Colombo');
     await page.evaluate(() => { localStorage.setItem('sc_cli', '[]'); localStorage.setItem('sc_med', '[]'); localStorage.setItem('sc_ped', '[]'); });
     await page.evaluate(j => importarDados({ target: { files: [new File([j], 'b.json')], value: '' } }), json);
-    await page.locator('#sc-modal-ok').click();
-    await page.waitForLoadState('load');
+    await Promise.all([page.waitForEvent('load'), page.locator('#sc-modal-ok').click()]);   // a importacao recarrega a pagina depois da limpeza
     await expect.poll(async () => (await lerLS(page, 'sc_cli'))[0]?.cidade).toBe('Curitiba');
     expect((await lerLS(page, 'sc_med'))[0].cidade).toBe('Pinhais');
     expect((await lerLS(page, 'sc_ped'))[0].inst_cidade).toBe('Colombo');

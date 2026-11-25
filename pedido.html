@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Novo Pedido - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261209a">
+    <link rel="stylesheet" href="css/style.css?v=20261210a">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
@@ -166,7 +166,7 @@
             <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border)">
                 <div class="form-group" style="margin-bottom:0;min-width:180px">
                     <label>Mão de Obra / Instalação (R$)</label>
-                    <input type="number" id="ped-mao" value="0" step="10" min="0" placeholder="Ex: 150" oninput="atualizarTotalPedido()">
+                    <input type="text" inputmode="decimal" data-moeda id="ped-mao" value="R$ 0,00" placeholder="R$ 0,00" oninput="atualizarTotalPedido()">
                 </div>
             </div>
             <div style="display: flex; justify-content: flex-end; align-items: center; gap: 20px; flex-wrap: wrap;">
@@ -187,7 +187,7 @@
                 </div>
                 <div class="recebido-box">
                     <label style="display:block;font-size:11px;font-weight:700;color:var(--ok-text);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">Valor Recebido (R$)</label>
-                    <input type="number" id="ped-valor-recebido" value="0" step="0.01" min="0" readonly title="Soma das parcelas já recebidas (Financeiro)" style="width:160px;padding:8px 10px;border:1px solid #8FD98D;border-radius:4px;text-align:right;font-size:14px;background:var(--white)">
+                    <input type="text" inputmode="decimal" data-moeda placeholder="R$ 0,00" id="ped-valor-recebido" value="R$ 0,00" readonly title="Soma das parcelas já recebidas (Financeiro)" style="width:160px;padding:8px 10px;border:1px solid #8FD98D;border-radius:4px;text-align:right;font-size:14px;background:var(--white)">
                     <div style="margin-top:6px;font-size:14px;color:var(--primary-text);font-weight:700">Saldo: R$ <span id="ped-saldo">0.00</span></div>
                 </div>
                 <div class="valor-final-box">
@@ -200,37 +200,39 @@
     </main>
     <!-- Galeria em popup (js/galeria-pedido.js) e simulador por cima dela -->
     <div id="sim" class="sim" hidden></div>
-    <script src="js/etiquetas-core.js?v=20261209a"></script>
-    <script src="js/etiquetas-render.js?v=20261209a"></script>
-    <script src="js/cortina-desenho.js?v=20261209a"></script>
-    <script src="js/docs-layout-core.js?v=20261209a"></script>
-    <script src="js/galeria-core.js?v=20261209a"></script>
-    <script src="js/galeria-imagens.js?v=20261209a"></script>
-    <script src="js/financeiro-core.js?v=20261209a"></script>
-    <script src="js/caixa-core.js?v=20261209a"></script>
-    <script src="js/carrinho-core.js?v=20261209a"></script>
-    <script src="js/resultado-core.js?v=20261209a"></script>
-    <script src="js/fechamento-core.js?v=20261209a"></script>
-    <script src="js/simulador-core.js?v=20261209a"></script>
-    <script src="js/rotas-core.js?v=20261209a"></script>
-    <script src="js/endereco-core.js?v=20261209a"></script>
-    <script src="js/agenda-core.js?v=20261209a"></script>
-    <script src="js/notificacoes.js?v=20261209a"></script>
-    <script src="js/feriados-core.js?v=20261209a"></script>
-    <script src="js/fin-cat-core.js?v=20261209a"></script>
-    <script src="js/dre-core.js?v=20261209a"></script>
-    <script src="js/fluxo-core.js?v=20261209a"></script>
-    <script src="js/conciliacao-core.js?v=20261209a"></script>
-    <script src="js/fiscal-core.js?v=20261209a"></script>
-    <script src="js/fiscal.js?v=20261209a"></script>
-    <script src="js/app.js?v=20261209a"></script>
-    <script src="js/agenda.js?v=20261209a"></script>
-    <script src="js/rotas.js?v=20261209a"></script>
-    <script src="js/compartilhar-doc.js?v=20261209a"></script>
-    <script src="js/vendor/three.min.js?v=20261209a"></script>
-    <script src="js/galeria-tela.js?v=20261209a"></script>
-    <script src="js/galeria-simulador.js?v=20261209a"></script>
-    <script src="js/galeria-modelos-render.js?v=20261209a"></script>
-    <script src="js/galeria-pedido.js?v=20261209a"></script>
+    <script src="js/etiquetas-core.js?v=20261210a"></script>
+    <script src="js/etiquetas-render.js?v=20261210a"></script>
+    <script src="js/cortina-desenho.js?v=20261210a"></script>
+    <script src="js/docs-layout-core.js?v=20261210a"></script>
+    <script src="js/galeria-core.js?v=20261210a"></script>
+    <script src="js/galeria-imagens.js?v=20261210a"></script>
+    <script src="js/financeiro-core.js?v=20261210a"></script>
+    <script src="js/caixa-core.js?v=20261210a"></script>
+    <script src="js/carrinho-core.js?v=20261210a"></script>
+    <script src="js/resultado-core.js?v=20261210a"></script>
+    <script src="js/fechamento-core.js?v=20261210a"></script>
+    <script src="js/simulador-core.js?v=20261210a"></script>
+    <script src="js/rotas-core.js?v=20261210a"></script>
+    <script src="js/endereco-core.js?v=20261210a"></script>
+    <script src="js/agenda-core.js?v=20261210a"></script>
+    <script src="js/notificacoes.js?v=20261210a"></script>
+    <script src="js/feriados-core.js?v=20261210a"></script>
+    <script src="js/fin-cat-core.js?v=20261210a"></script>
+    <script src="js/dre-core.js?v=20261210a"></script>
+    <script src="js/fluxo-core.js?v=20261210a"></script>
+    <script src="js/conciliacao-core.js?v=20261210a"></script>
+    <script src="js/fiscal-core.js?v=20261210a"></script>
+    <script src="js/fiscal.js?v=20261210a"></script>
+    <script src="js/mascaras-core.js?v=20261210a"></script>
+    <script src="js/mascaras.js?v=20261210a"></script>
+    <script src="js/app.js?v=20261210a"></script>
+    <script src="js/agenda.js?v=20261210a"></script>
+    <script src="js/rotas.js?v=20261210a"></script>
+    <script src="js/compartilhar-doc.js?v=20261210a"></script>
+    <script src="js/vendor/three.min.js?v=20261210a"></script>
+    <script src="js/galeria-tela.js?v=20261210a"></script>
+    <script src="js/galeria-simulador.js?v=20261210a"></script>
+    <script src="js/galeria-modelos-render.js?v=20261210a"></script>
+    <script src="js/galeria-pedido.js?v=20261210a"></script>
 </body>
 </html>

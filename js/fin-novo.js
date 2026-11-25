@@ -478,7 +478,7 @@ async function abrirNovoLancamento(lado, idEditar, opcoes) {
     const contas = getContasFin().filter(c => c.ativo !== false || (reg && CaixaCore.mesmoId(c.id, reg.conta_id)));
     const peds = db.pedidos.filter(p => normalizarStatus(p.status) !== 'Orçamento' || (reg && reg.pedido_id == p.id));
     const val = x => x == null ? '' : escapeHtml(String(x));
-    const valorTxt = reg ? String(Number(reg.valor).toFixed(2)).replace('.', ',') : pre.valor > 0 ? Number(pre.valor).toFixed(2).replace('.', ',') : '';
+    const valorTxt = reg ? MascarasCore.formatarMoeda(Number(reg.valor)) : pre.valor > 0 ? MascarasCore.formatarMoeda(Number(pre.valor)) : '';
     const o = document.createElement('div');
     o.className = 'modal-overlay';
     o.id = 'lanc-form-overlay';
@@ -493,7 +493,7 @@ async function abrirNovoLancamento(lado, idEditar, opcoes) {
                 </div>
                 <div class="form-group">
                     <label>Valor (R$) <span style="color:#F43927">*</span></label>
-                    <input type="text" inputmode="decimal" id="lf-valor" value="${valorTxt}" placeholder="0,00" ${travaValor ? 'disabled title="Este lançamento não pode mudar de valor"' : ''}>
+                    <input type="text" inputmode="decimal" data-moeda id="lf-valor" value="${valorTxt}" placeholder="R$ 0,00" ${travaValor ? 'disabled title="Este lançamento não pode mudar de valor"' : ''}>
                 </div>
                 <div class="form-group">
                     <label>${pagar ? 'Fornecedor' : 'Cliente'}</label>
@@ -584,7 +584,7 @@ async function salvarLancamento(lado, idEditar) {
     const g = id => { const e = document.getElementById(id); return e ? e.value : ''; };
     const descricao = g('lf-descricao').trim();
     const valorEl = document.getElementById('lf-valor');
-    const valor = valorEl && valorEl.disabled && reg ? Number(reg.valor) : _valorDigitadoBaixa(g('lf-valor'), NaN);
+    const valor = valorEl && valorEl.disabled && reg ? Number(reg.valor) : (lerCampoMoeda('lf-valor') ?? NaN);
     const vencEl = document.getElementById('lf-vencimento');
     const vencimento = vencEl && vencEl.disabled && reg ? reg.data_vencimento : g('lf-vencimento');
     const categoriaId = g('lf-categoria');

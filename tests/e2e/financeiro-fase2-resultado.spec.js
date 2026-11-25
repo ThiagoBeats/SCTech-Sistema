@@ -84,7 +84,7 @@ test.skip('meta: bateu / faltou e ajuste do mes', async ({ page }) => {
     await abrir(page, { sc_cr: CR_M, sc_cp: CP_M, sc_empresa: { meta_faturamento_padrao: 12000 } });
     await expect(page.locator('#res-meta')).toContainText('faltou R$ 2.200,00');
     await page.click('#res-meta-edit');
-    await page.fill('#res-ajuste-valor', '9.000');
+    await page.fill('#res-ajuste-valor', '9.000,00');
     await page.click('#res-ajuste-ok');
     await expect(page.locator('#res-meta')).toContainText('meta R$ 9.000,00');
     await expect(page.locator('#res-meta')).toContainText('bateu a meta');
@@ -114,7 +114,7 @@ test.skip('orcamento com faixas e ajuste do mes', async ({ page }) => {
     await expect(o('servicos')).not.toContainText('perto do limite');
     await expect(o('servicos')).not.toContainText('estourou');
     await o('fornecedores').locator('button').click();
-    await page.fill('#res-ajuste-valor', '4.000');
+    await page.fill('#res-ajuste-valor', '4.000,00');
     await page.click('#res-ajuste-ok');
     await expect(o('fornecedores')).not.toContainText('perto do limite');
     await expect(o('fornecedores')).toContainText('R$ 4.000,00');
@@ -213,17 +213,17 @@ test.skip('limite so deste mes para grupo sem padrao, zero desliga e vazio remov
     await expect(o('servicos')).toHaveCount(0);
     await page.selectOption('#res-orc-grupo', 'servicos');
     await page.click('#res-orc-add-btn');
-    await page.fill('#res-ajuste-valor', '1.000');
+    await page.fill('#res-ajuste-valor', '1.000,00');
     await page.click('#res-ajuste-ok');
     await expect(o('servicos')).toContainText('perto do limite');
     await o('fornecedores').locator('button').click();
-    await page.fill('#res-ajuste-valor', '0');
+    await page.fill('#res-ajuste-valor', '0,00');
     await page.click('#res-ajuste-ok');
     await expect(o('fornecedores')).toHaveCount(0);
     expect((await ler(page, 'sc_fin_orcamento_mes'))[M]).toEqual({ servicos: 1000, fornecedores: 0 });
     await page.selectOption('#res-orc-grupo', 'fornecedores');
     await page.click('#res-orc-add-btn');
-    await expect(page.locator('#res-ajuste-valor')).toHaveValue('0');
+    await expect(page.locator('#res-ajuste-valor')).toHaveValue('R$ 0,00');
     await page.fill('#res-ajuste-valor', '');
     await page.click('#res-ajuste-ok');
     await expect(o('fornecedores')).toHaveCount(1);

@@ -136,8 +136,8 @@ test('filtra tecidos por nome, por codigo, por fornecedor, por preco e por largu
     expect((await nomesTecidos(page))[0]).toContain('VOIL CRISTAL');
 
     await page.selectOption('#f-tec-forn', '');
-    await page.fill('#f-tec-pmin', '60');
-    await page.fill('#f-tec-pmax', '200');
+    await page.fill('#f-tec-pmin', '60,00');
+    await page.fill('#f-tec-pmax', '200,00');
     await expect(linhas).toHaveCount(2);            // 65,00 e 167,30
 
     await page.click('.cat-filtros button:has-text("Limpar")');
@@ -163,7 +163,7 @@ test('filtra materiais por fornecedor e por faixa de preco', async ({ page }) =>
     await expect(linhas).toHaveCount(2);
 
     await page.selectOption('#f-mat-forn', '');
-    await page.fill('#f-mat-pmax', '20');
+    await page.fill('#f-mat-pmax', '20,00');
     await expect(linhas).toHaveCount(2);            // 6,50 e 19,90
     await expect(page.locator('#f-mat-contagem')).toHaveText('2 de 3 material(is)');
 });

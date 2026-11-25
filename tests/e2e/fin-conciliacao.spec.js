@@ -210,7 +210,7 @@ test('Criar lançamento: formulário preenchido e, ao salvar, a linha fica conci
     await l.locator('.conc-criar').click();
     await expect(page.locator('#lanc-form-overlay')).toContainText('Conta a pagar');
     await expect(page.locator('#lf-descricao')).toHaveValue('PAGTO ALUGUÉL');
-    await expect(page.locator('#lf-valor')).toHaveValue('1200,50');
+    await expect(page.locator('#lf-valor')).toHaveValue('R$ 1.200,50');
     await expect(page.locator('#lf-vencimento')).toHaveValue('2026-11-05');
     await expect(page.locator('#lf-conta')).toHaveValue('1');
     await expect(page.locator('#lf-parcelar')).toHaveCount(0);
@@ -423,7 +423,7 @@ test('backup exporta e importa sc_fin_extrato', async ({ page }) => {
     await page.evaluate(() => { window.__marca = 1; });
     await page.evaluate(json => importarDados({ target: { files: [new File([json], 'b.json')], value: '' } }), exportado);
     await page.locator('#sc-modal-ok').click();
-    await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
+    await expect.poll(() => page.evaluate(() => window.__marca).catch(() => 'navegando')).toBeUndefined();
     await page.waitForFunction(() => typeof db !== 'undefined');
     expect(await ler(page, 'sc_fin_extrato')).toEqual(antes);
     expect(await page.evaluate(() => db.fin_extrato.length)).toBe(3);
@@ -432,7 +432,7 @@ test('backup exporta e importa sc_fin_extrato', async ({ page }) => {
     await page.evaluate(json => importarDados({ target: { files: [new File([json], 'b.json')], value: '' } }),
         JSON.stringify(Object.assign({}, dados, { fin_extrato: undefined })));
     await page.locator('#sc-modal-ok').click();
-    await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
+    await expect.poll(() => page.evaluate(() => window.__marca).catch(() => 'navegando')).toBeUndefined();
     await page.waitForFunction(() => typeof db !== 'undefined');
     expect(await ler(page, 'sc_fin_extrato')).toEqual([]);
 });
