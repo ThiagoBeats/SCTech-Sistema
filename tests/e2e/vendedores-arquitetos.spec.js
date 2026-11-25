@@ -19,18 +19,21 @@ const PED = [
       comissao_paga: true, comissao_data_pgto: 1760000000000 },
 ];
 
+// Conta para pagar comissoes (a janela de pagamento exige a conta).
+const CONTAS = [{ id: 1, nome: 'Banco A', tipo: 'banco', saldo_inicial: 0, data_saldo_inicial: '2020-01-01', ativo: true }];
+
 async function abrir(page, url, extras) {
-    await entrar(page, BASE, { sc_vend: VEND, sc_ped: PED, ...(extras || {}) });
+    await entrar(page, BASE, { sc_vend: VEND, sc_ped: PED, sc_contas_fin: CONTAS, ...(extras || {}) });
     await page.goto(BASE + '/' + (url || 'vendedores.html'));
 }
 
 async function confirmarModal(page) {
-    // Pagar comissao abre o modal de baixa (data/forma); as demais confirmacoes usam #sc-modal-ok.
-    const ok = page.locator('#baixa-ok, #sc-modal-ok').first();
+    // Pagar comissao abre a janela de pagamento (conta e data); as demais confirmacoes usam #sc-modal-ok.
+    const ok = page.locator('#com-pag-ok, #sc-modal-ok').first();
     await ok.waitFor({ timeout: 5000 });
-    // A baixa exige escolher o meio de cada linha.
-    const meios = page.locator('#baixa-modal .baixa-meio');
-    for (let i = 0, n = await meios.count(); i < n; i++) await meios.nth(i).selectOption({ index: 1 });
+    // O pagamento exige escolher a conta.
+    const conta = page.locator('#com-pag-conta');
+    if (await conta.count()) await conta.selectOption({ index: 1 });
     await ok.click();
     await page.waitForTimeout(400);
 }
@@ -45,12 +48,13 @@ test('o menu lateral se chama Vendedores/Arquitetos', async ({ page }) => {
     await expect(page.locator('.header h2')).toHaveText('Vendedores/Arquitetos');
 });
 
-test('ha as abas Vendedores e Arquitetos, e dentro delas Comissoes e Historico', async ({ page }) => {
+test('ha as abas Vendedores e Arquitetos, e dentro delas Cadastro e Comissoes', async ({ page }) => {
     await abrir(page);
     await expect(page.locator('.vend-tipo-btn')).toHaveText(['👤 Vendedores', '📐 Arquitetos']);
     const subs = await page.locator('.vend-tab-btn').allInnerTexts();
-    expect(subs.join(' ')).toContain('Comissões Pendentes');
-    expect(subs.join(' ')).toContain('Histórico de Pagamentos');
+    expect(subs.join(' ')).toContain('Cadastro');
+    expect(subs.join(' ')).toContain('Comissões');
+    expect(subs.join(' ')).not.toContain('Histórico de Pagamentos');
 });
 
 // --- Cadastro ---------------------------------------------------------------
@@ -110,42 +114,42 @@ test('editar um arquiteto nao o transforma em vendedor', async ({ page }) => {
 
 // --- Comissoes --------------------------------------------------------------
 
-test('comissoes pendentes mostram so as do tipo da aba', async ({ page }) => {
+test('a tela de comissoes mostra vendedores e arquitetos, com cartao de cada um', async ({ page }) => {
     await abrir(page);
-    await page.click('.vend-tab-btn[data-tab="pendentes"]');
-    await expect(page.locator('#tb-comissoes-pendentes')).toContainText('Ana');
-    await expect(page.locator('#tb-comissoes-pendentes')).not.toContainText('Studio M');
-    await expect(page.locator('#total-comissoes-pendentes')).toHaveText('R$ 50.00');
-
-    await page.click('.vend-tipo-btn[data-tipo="arquiteto"]');
-    await expect(page.locator('#tb-comissoes-pendentes')).toContainText('Studio M');
-    await expect(page.locator('#tb-comissoes-pendentes')).not.toContainText('Ana');
-    await expect(page.locator('#total-comissoes-pendentes')).toHaveText('R$ 200.00');
-    await expect(page.locator('#tab-vend-pendentes .vend-col-nome')).toHaveText('Arquiteto');
+    await page.click('.vend-tab-btn[data-tab="comissoes"]');
+    await expect(page.locator('#tb-comissoes')).toContainText('Ana');
+    await expect(page.locator('#tb-comissoes')).toContainText('Studio M');
+    await expect(page.locator('.com-cartao', { hasText: 'Ana' }).locator('.com-apagar')).toHaveText('R$ 50,00');
+    await expect(page.locator('.com-cartao', { hasText: 'Studio M' }).locator('.com-apagar')).toHaveText('R$ 200,00');
+    await expect(page.locator('.com-cartao', { hasText: 'Studio M' }).locator('.com-pago')).toHaveText('R$ 50,00');
+    await page.selectOption('#com-filtro-vend', '1');
+    await expect(page.locator('#tb-comissoes')).toContainText('Ana');
+    await expect(page.locator('#tb-comissoes')).not.toContainText('Studio M');
 });
 
-test('o filtro da aba lista so os cadastros daquele tipo', async ({ page }) => {
+test('o filtro de vendedor da tela de comissoes lista vendedores e arquitetos', async ({ page }) => {
     await abrir(page, 'vendedores.html?tipo=arquiteto');
-    const opcoes = await page.locator('#filtro-vend-pendente option').allInnerTexts();
-    expect(opcoes).toEqual(['Todos os arquitetos', 'Studio M']);
+    await page.click('.vend-tab-btn[data-tab="comissoes"]');
+    const opcoes = await page.locator('#com-filtro-vend option').allInnerTexts();
+    expect(opcoes).toEqual(['Todos', 'Ana', 'Bruno', 'Studio M (arquiteto)']);
 });
 
-test('Pagar Todas na aba Arquitetos nao paga comissao de vendedor', async ({ page }) => {
+test('Pagar todos os pendentes do arquiteto nao paga comissao de vendedor', async ({ page }) => {
     await abrir(page, 'vendedores.html?tipo=arquiteto');
-    await page.click('.vend-tab-btn[data-tab="pendentes"]');
-    await page.click('button:has-text("Pagar Todas")');
+    await page.click('.vend-tab-btn[data-tab="comissoes"]');
+    await page.click('button:has-text("Pagar todos os pendentes de Studio M")');
     await confirmarModal(page);
     const peds = await page.evaluate(() => JSON.parse(localStorage.getItem('sc_ped')));
     expect(peds.find(p => p.id === 26002).arq_comissao_paga, 'a do arquiteto foi paga').toBe(true);
     expect(peds.find(p => p.id === 26001).comissao_paga, 'a da vendedora, nao').toBeFalsy();
 });
 
-test('o historico mostra so os pagamentos do tipo da aba', async ({ page }) => {
+test('o pagamento ja feito aparece como Paga, com a data, na linha do arquiteto', async ({ page }) => {
     await abrir(page);
-    await page.click('.vend-tab-btn[data-tab="historico"]');
-    await expect(page.locator('#tb-hist-comissoes')).toContainText('Nenhum pagamento registrado');
-    await page.click('.vend-tipo-btn[data-tipo="arquiteto"]');
-    await expect(page.locator('#tb-hist-comissoes')).toContainText('Studio M');
+    await page.click('.vend-tab-btn[data-tab="comissoes"]');
+    await expect(page.locator('#tb-comissoes tr[data-ped="26001"]')).not.toContainText('Paga');
+    await expect(page.locator('#tb-comissoes tr[data-ped="26003"]')).toContainText('Studio M');
+    await expect(page.locator('#tb-comissoes tr[data-ped="26003"]')).toContainText('Paga');
 });
 
 // --- Pedido -----------------------------------------------------------------
@@ -258,15 +262,17 @@ test('pedido com os dois aparece nas duas abas, e pagar um nao paga o outro', as
     const ambos = { id: 26009, clienteNome: 'Cli Ambos', status: 'Instalado', valor: 1000,
         vendedor_id: 2, vendedor_nome: 'Bruno', comissao_pct: 4, comissao_valor: 40,
         arq_id: 3, arq_nome: 'Studio M', arq_comissao_pct: 10, arq_comissao_valor: 100 };
-    await abrir(page, 'vendedores.html?tipo=arquiteto&aba=pendentes', { sc_ped: [ambos] });
-    await expect(page.locator('#tb-comissoes-pendentes')).toContainText('R$ 100.00');
-    await page.click('#tb-comissoes-pendentes button:has-text("Pagar")');
+    await abrir(page, 'vendedores.html?tipo=arquiteto&aba=comissoes', { sc_ped: [ambos] });
+    await expect(page.locator('#tb-comissoes tr[data-papel="arquiteto"]')).toContainText('R$ 100,00');
+    await page.locator('#tb-comissoes tr[data-papel="arquiteto"] .com-sel').check();
+    await page.click('#com-btn-pagar');
     await confirmarModal(page);
     const p = (await page.evaluate(() => JSON.parse(localStorage.getItem('sc_ped'))))[0];
     expect(p.arq_comissao_paga).toBe(true);
     expect(p.comissao_paga, 'a do vendedor continua pendente').toBeFalsy();
-    await page.click('.vend-tipo-btn[data-tipo="vendedor"]');
-    await expect(page.locator('#tb-comissoes-pendentes')).toContainText('R$ 40.00');
+    await expect(page.locator('#tb-comissoes tr[data-papel="vendedor"]')).toContainText('R$ 40,00');
+    await expect(page.locator('#tb-comissoes tr[data-papel="vendedor"]')).toContainText('Pendente');
+    await expect(page.locator('#tb-comissoes tr[data-papel="arquiteto"]')).toContainText('Paga');
 });
 
 // --- A aba nao se perde ao salvar --------------------------------------------
@@ -281,12 +287,13 @@ test('cadastrar um arquiteto continua na aba Arquitetos', async ({ page }) => {
     await expect(page.locator('#tb-vendedores')).toContainText('Ateliê Sul');
 });
 
-test('pagar na aba Comissoes Pendentes volta para ela', async ({ page }) => {
+test('pagar na aba Comissoes volta para ela', async ({ page }) => {
     await abrir(page, 'vendedores.html?tipo=arquiteto');
-    await page.click('.vend-tab-btn[data-tab="pendentes"]');
-    await page.click('#tb-comissoes-pendentes button:has-text("Pagar")');
+    await page.click('.vend-tab-btn[data-tab="comissoes"]');
+    await page.locator('#tb-comissoes .com-sel').first().check();
+    await page.click('#com-btn-pagar');
     await confirmarModal(page);
     await page.waitForTimeout(1200);
-    await expect(page.locator('.vend-tab-btn.active')).toHaveAttribute('data-tab', 'pendentes');
+    await expect(page.locator('.vend-tab-btn.active')).toHaveAttribute('data-tab', 'comissoes');
     await expect(page.locator('.vend-tipo-btn.active')).toHaveAttribute('data-tipo', 'arquiteto');
 });

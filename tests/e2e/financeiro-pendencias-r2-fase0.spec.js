@@ -29,19 +29,19 @@ test('confirmar pagamento com tudo pago: cancelar deixa o pedido como esta', asy
     expect((await lerChave(page, 'sc_ped'))[0].status).toBe('Aguardando Financeiro');
 });
 
-test('comissao: a forma comeca em branco e e obrigatoria ao pagar', async ({ page }) => {
-    const cp = { id: 701, pedido_id: 26500, descricao: 'Comissão', credor_nome: 'Bruno', valor: 50, categoria: 'comissao', papel_comissao: 'vendedor',
-        data_vencimento: '2026-10-20', data_pagamento: null, status: 'Pendente', tipo: 'variavel' };
+test('comissao: a conta comeca em branco e e obrigatoria ao pagar', async ({ page }) => {
     await entrar(page, BASE, { sc_cli: CLI, sc_vend: [{ id: 2, nome: 'Bruno', comissao_pct: 5, tipo: 'vendedor' }],
+        sc_contas_fin: [{ id: 1, nome: 'Banco A', tipo: 'banco', saldo_inicial: 0, data_saldo_inicial: '2026-01-01', ativo: true }],
         sc_formas_pag: [{ nome: '50% entrada + 50% na instalação', desconto: 0, entrada: 50 }],
-        sc_ped: [ped({ status: 'Instalado', valor_recebido: 1000, vendedor_id: 2, vendedor_nome: 'Bruno', comissao_valor: 50, comissao_pct: 5 })], sc_cp: [cp] });
-    await page.goto(BASE + '/vendedores.html?aba=pendentes');
-    await page.locator('#tb-comissoes-pendentes button', { hasText: 'Pagar' }).click();
-    const meio = page.locator('#baixa-modal .baixa-meio');
-    await expect(meio).toHaveValue('');
-    await page.locator('#baixa-ok').click();
-    await expect(page.locator('#baixa-modal .baixa-erro')).toContainText('Escolha');
-    expect((await lerChave(page, 'sc_cp'))[0].status).toBe('Pendente');
+        sc_ped: [ped({ status: 'Instalado', valor_recebido: 1000, vendedor_id: 2, vendedor_nome: 'Bruno', comissao_valor: 50, comissao_pct: 5, comissao_status: 'pendente' })] });
+    await page.goto(BASE + '/vendedores.html?aba=comissoes');
+    await page.locator('#tb-comissoes .com-sel').first().check();
+    await page.locator('#com-btn-pagar').click();
+    await expect(page.locator('#com-pag-conta')).toHaveValue('');
+    await page.locator('#com-pag-ok').click();
+    await expect(page.locator('#com-pag-erro')).toContainText('Escolha a conta');
+    expect((await lerChave(page, 'sc_ped'))[0].comissao_status).toBe('pendente');
+    expect((await lerChave(page, 'sc_mov_fin')) || []).toHaveLength(0);
 });
 
 test('sem permissao de contas a pagar a janela de gerar conta do pedido de compra nem abre', async ({ page }) => {

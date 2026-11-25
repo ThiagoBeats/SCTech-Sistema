@@ -10,6 +10,7 @@
     }
     const fin = () => dep('FinCatCore', './fin-cat-core.js');
     const res = () => dep('ResultadoCore', './resultado-core.js');
+    const fcore = () => dep('FinanceiroCore', './financeiro-core.js');
 
     const num = v => (v === '' || v == null ? 0 : Number(v) || 0);
     function arredondar(v) {
@@ -55,10 +56,24 @@
                 if (cp.status !== 'Pago' || !dentro(cp.data_pagamento)) return;
                 itens.push({ tipo: 'cp', reg: cp, data: dia10(cp.data_pagamento), valor: num(cp.valor) });
             });
+            // Pagamento de comissao registrado no pedido: so o movimento (origem 'comissao'), pela data dele.
+            (p.movimentos || []).forEach(m => {
+                if (!m || m.origem !== 'comissao' || m.sentido !== 'saida' || !dentro(m.data)) return;
+                itens.push({ tipo: 'comissao', reg: Object.assign({ categoria_id: 'cat_comissoes' }, m), data: dia10(m.data), valor: num(m.valor) });
+            });
         } else if (ok) {
             const comp = r => r.data_competencia || r.data_vencimento || r.data_pagamento;
             crs.forEach(cr => { if (cr.status !== 'Cancelado' && dentro(comp(cr))) itens.push({ tipo: 'cr', reg: cr, data: dia10(comp(cr)), valor: num(cr.valor) }); });
             cps.forEach(cp => { if (cp.status !== 'Cancelado' && dentro(comp(cp))) itens.push({ tipo: 'cp', reg: cp, data: dia10(comp(cp)), valor: num(cp.valor) }); });
+            // Comissao do pedido (pendente ou paga; nao a registrada): no mes em que o pedido foi instalado.
+            const FC = fcore();
+            (p.pedidos || []).forEach(ped => {
+                const di = ped && FC.dataLocalISO(ped.data_instalado);
+                if (!di || !dentro(di)) return;
+                FC.comissoesContaveis(ped, cps).forEach(c => {
+                    itens.push({ tipo: 'comissao', reg: { id: ped.id + ':' + c.papel, categoria_id: 'cat_comissoes', descricao: 'Comissão — Pedido #' + String(ped.id) }, data: di, valor: c.valor });
+                });
+            });
         }
 
         const soma = { receitas: 0, custos: 0, despesas: 0, investimento: 0, financiamento: 0 };
@@ -72,7 +87,7 @@
             soma[cat.grupo] += v;
             porCategoria[cat.id] = (porCategoria[cat.id] || 0) + v;
             if (cat.subgrupo_id) porSubgrupo[cat.subgrupo_id] = (porSubgrupo[cat.subgrupo_id] || 0) + v;
-            (lancamentos[cat.id] = lancamentos[cat.id] || []).push({ tipo: i.tipo, id: i.reg.id, data: i.data, valor: i.valor });
+            (lancamentos[cat.id] = lancamentos[cat.id] || []).push(Object.assign({ tipo: i.tipo, id: i.reg.id, data: i.data, valor: i.valor }, i.tipo === 'comissao' ? { descricao: i.reg.descricao || 'Comissão' } : {}));
         });
         Object.keys(porCategoria).forEach(k => { porCategoria[k] = arredondar(porCategoria[k]); });
         Object.keys(porSubgrupo).forEach(k => { porSubgrupo[k] = arredondar(porSubgrupo[k]); });

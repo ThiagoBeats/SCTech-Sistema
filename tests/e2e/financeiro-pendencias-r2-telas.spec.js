@@ -1,6 +1,6 @@
 // Pendencias R2, tarefa 2: telas e textos das Fases 1, 2 e 3 do Financeiro.
 const { test, expect } = require('@playwright/test');
-const { entrar, abrirLancamentos, acaoLanc } = require('./ajuda.js');
+const { entrar, abrirLancamentos, acaoLanc, acaoMenu } = require('./ajuda.js');
 
 const BASE = process.env.BASE || 'http://localhost:8131';
 const ler = (page, k) => page.evaluate(c => JSON.parse(localStorage.getItem(c)), k);
@@ -131,17 +131,17 @@ test('comissao antiga paga sem conta a pagar ganha Estornar e volta a pendente',
             ambientes: [], forma_pagamento: 'PIX', data_instalado: new Date('2026-10-20T12:00:00').getTime(),
             vendedor_id: 2, vendedor_nome: 'Bruno', comissao_pct: 5, comissao_valor: 50, comissao_paga: true, comissao_data_pgto: new Date('2026-10-25T12:00:00').getTime() }]
     });
-    await page.goto(BASE + '/vendedores.html?aba=historico');
-    const btn = page.locator('#tb-hist-comissoes button', { hasText: 'Estornar' });
-    await expect(btn).toBeVisible();
-    await btn.click();
+    await page.goto(BASE + '/vendedores.html?aba=comissoes');
+    await expect(page.locator('#tb-comissoes tr[data-status="paga"]')).toBeVisible();
+    await acaoMenu(page, page.locator('#tb-comissoes tr[data-status="paga"]'), 'Desfazer pagamento');
     await expect(page.locator('#sc-modal-msg')).toContainText('A comissão volta a ficar pendente.');
     await page.locator('#sc-modal-ok').click();
     await expect.poll(async () => (await ler(page, 'sc_ped'))[0].comissao_paga).toBe(false);
     const ped = (await ler(page, 'sc_ped'))[0];
     expect(ped.comissao_data_pgto).toBeNull();
-    await page.goto(BASE + '/vendedores.html?aba=pendentes');
-    await expect(page.locator('#tb-comissoes-pendentes')).toContainText('#26400');
+    await page.goto(BASE + '/vendedores.html?aba=comissoes');
+    await expect(page.locator('#tb-comissoes')).toContainText('#26400');
+    await expect(page.locator('#tb-comissoes')).toContainText('Pendente');
 });
 
 // ---- Fase 2: "Imposto" numa lista so ----

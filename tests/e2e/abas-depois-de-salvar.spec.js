@@ -42,9 +42,9 @@ test('vindo do menu, a tela abre na aba padrao (nao na ultima usada)', async ({ 
 test('vendedores: salvar mantém a aba e o tipo', async ({ page }) => {
     await entrar(page, BASE, {});
     await page.goto(BASE + '/vendedores.html');
-    await page.evaluate(() => { mostrarTipoVendedores('arquiteto'); mostrarTabVendedores('historico'); });
+    await page.evaluate(() => { mostrarTipoVendedores('arquiteto'); mostrarTabVendedores('comissoes'); });
     await Promise.all([page.waitForEvent('load'), page.evaluate(() => salvarERecarregar('ok'))]);
-    await expect(page.locator('#tab-vend-historico')).toHaveClass(/active/);
+    await expect(page.locator('#tab-vend-comissoes')).toHaveClass(/active/);
     await expect.poll(() => page.evaluate(() => _tipoVend)).toBe('arquiteto');
 });
 

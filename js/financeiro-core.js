@@ -133,7 +133,8 @@
         const cps = _doPedido(contasPagar, ped.id).filter(_naoCancelado);
         const soma = l => l.reduce((s, c) => s + (Number(c.valor) || 0), 0);
         const ehComissao = c => c.categoria === 'comissao' || c.categoria === 'comissao_rt';
-        const comissoes = arredondar(soma(cps.filter(ehComissao)));
+        // Comissao do pedido (pendente/paga) soma com a que ainda for conta a pagar (paga antes da mudanca).
+        const comissoes = arredondar(soma(cps.filter(ehComissao)) + comissoesContaveis(ped, contasPagar).reduce((s, c) => s + c.valor, 0));
         const custos_vinculados = arredondar(soma(cps.filter(c => !ehComissao(c) && c.categoria !== 'tecido')));
         const lucro = arredondar(receita - custo_material - custos_vinculados - comissoes);
         const margem_pct = receita > 0 ? Math.round(lucro / receita * 1000) / 10 : 0;
@@ -286,10 +287,202 @@
         return plano;
     }
 
+    // ---- Comissao como registro do pedido (registrada -> pendente -> paga) ----
+    // Campos extras por papel: status, movimento do pagamento, conta e historico.
+    const CAMPOS_COMISSAO_REG = {
+        vendedor:  { status: 'comissao_status',     mov: 'comissao_mov_id',     conta: 'comissao_conta_id',     hist: 'comissao_historico' },
+        arquiteto: { status: 'arq_comissao_status', mov: 'arq_comissao_mov_id', conta: 'arq_comissao_conta_id', hist: 'arq_comissao_historico' }
+    };
+    const STATUS_COMISSAO = ['registrada', 'pendente', 'paga'];
+    const _instalado = s => s === 'Instalado' || s === 'Faturado';   // 'Faturado' e o nome antigo
+    const ETAPAS_APROVADAS = ['Medição', 'Produção', 'Aguardando Tecido', 'Na Costura', 'Pronto p/ Instalação', 'Aguardando Financeiro', 'Aguardando Pagamento', 'Instalado', 'Faturado'];
+    const _aprovado = s => ETAPAS_APROVADAS.includes(s);   // status desconhecido = ainda nao aprovado
+
+    // O pedido tem comissao neste papel: valor > 0 e alguem (id ou nome) a receber.
+    function temComissao(ped, papel) {
+        const c = CAMPOS_COMISSAO[papel];
+        return !!ped && !!c && (Number(ped[c.valor]) || 0) > 0 && !!(ped[c.id] || ped[c.nome]);
+    }
+
+    // Status que a comissao deve ter agora: paga fica paga; senao pendente no Instalado,
+    // registrada nas etapas aprovadas, e nada em Orcamento (ainda nao aprovado).
+    // Com `contasPagar`: enquanto houver conta de comissao em aberto do papel (comissao antiga, com baixa parcial)
+    // a situacao e 'em_cp' (Em Contas a Pagar): nao se paga por Vendedores; conta toda paga = 'paga'.
+    function statusEsperadoComissao(ped, papel, contasPagar) {
+        if (!temComissao(ped, papel)) return null;
+        const c = CAMPOS_COMISSAO[papel], r = CAMPOS_COMISSAO_REG[papel];
+        const cps = (contasPagar || []).filter(cp => cp && cp.pedido_id == ped.id && cp.status !== 'Cancelado' && papelDaContaComissao(cp) === papel);
+        if (cps.some(cp => cp.status !== 'Pago')) return 'em_cp';
+        if (ped[c.paga] || ped[r.status] === 'paga' || cps.length) return 'paga';
+        if (_instalado(ped.status)) return 'pendente';
+        return _aprovado(ped.status) ? 'registrada' : null;
+    }
+
+    // Poe o status certo em cada comissao do pedido. Devolve as mudancas [{papel, de, para}].
+    // `historico(papel, de, para)` (opcional) devolve a linha {em, por, porNome, acao, detalhe} a anotar.
+    function sincronizarStatusComissoes(ped, historico, contasPagar) {
+        const mudou = [];
+        Object.keys(CAMPOS_COMISSAO).forEach(papel => {
+            const r = CAMPOS_COMISSAO_REG[papel];
+            const de = ped[r.status] || null;
+            const para = statusEsperadoComissao(ped, papel, contasPagar);
+            if (de === para) return;
+            if (para === 'paga' && !ped[CAMPOS_COMISSAO[papel].paga]) ped[CAMPOS_COMISSAO[papel].paga] = true;
+            if (para === null) delete ped[r.status]; else ped[r.status] = para;
+            if (historico && para) {
+                const h = historico(papel, de, para);
+                if (h) { if (!Array.isArray(ped[r.hist])) ped[r.hist] = []; ped[r.hist].push(h); }
+            }
+            mudou.push({ papel, de, para });
+        });
+        return mudou;
+    }
+
+    // Conta a pagar de comissao (a de hoje, com papel, ou a antiga 'comissao_rt' = arquiteto).
+    function papelDaContaComissao(cp) {
+        if (!cp) return null;
+        if (cp.papel_comissao) return cp.papel_comissao;
+        return cp.categoria === 'comissao_rt' ? 'arquiteto' : null;
+    }
+
+    // Comissoes do pedido que contam como custo/despesa: pendentes e pagas (nao as registradas), e so as que
+    // nao tem conta a pagar propria (a comissao paga antes desta mudanca continua como conta paga).
+    function comissoesContaveis(ped, contasPagar) {
+        const out = [];
+        Object.keys(CAMPOS_COMISSAO).forEach(papel => {
+            if (!temComissao(ped, papel)) return;
+            const status = ped[CAMPOS_COMISSAO_REG[papel].status];
+            if (status !== 'pendente' && status !== 'paga') return;
+            const temCP = (contasPagar || []).some(cp => cp && cp.pedido_id == ped.id && cp.status !== 'Cancelado' && papelDaContaComissao(cp) === papel);
+            if (temCP) return;
+            out.push({ papel, status, valor: arredondar(ped[CAMPOS_COMISSAO[papel].valor]) });
+        });
+        return out;
+    }
+
+    // Comissoes pendentes que ainda vao sair do caixa (previsao): [{ pedidoId, papel, nome, valor }].
+    // Fora as que tem conta a pagar propria (a previsao ja conta a conta).
+    function comissoesPendentesPrevistas(pedidos, contasPagar, vendedores) {
+        const out = [];
+        (pedidos || []).forEach(ped => {
+            Object.keys(CAMPOS_COMISSAO).forEach(papel => {
+                if (!temComissao(ped, papel)) return;
+                const c = CAMPOS_COMISSAO[papel], r = CAMPOS_COMISSAO_REG[papel];
+                if ((ped[r.status] || statusEsperadoComissao(ped, papel)) !== 'pendente') return;
+                if ((contasPagar || []).some(cp => cp && cp.pedido_id == ped.id && cp.status !== 'Cancelado' && papelDaContaComissao(cp) === papel)) return;
+                const v = ped[c.id] != null && ped[c.id] !== '' ? (vendedores || []).find(x => String(x.id) === String(ped[c.id])) : null;
+                out.push({ pedidoId: ped.id, papel, nome: (v && v.nome) || ped[c.nome] || '', valor: arredondar(ped[c.valor]) });
+            });
+        });
+        return out;
+    }
+
+    // Linhas da tela de comissoes: uma por comissao do pedido (papel). `mes` 'AAAA-MM' (data de instalacao).
+    function linhasComissoes(pedidos, vendedores, opcoes) {
+        const { vendedorId, mes, contasPagar } = opcoes || {};
+        const out = [];
+        (pedidos || []).forEach(p => {
+            Object.keys(CAMPOS_COMISSAO).forEach(papel => {
+                if (!temComissao(p, papel)) return;
+                const c = CAMPOS_COMISSAO[papel], r = CAMPOS_COMISSAO_REG[papel];
+                const status = p[r.status] || statusEsperadoComissao(p, papel, contasPagar);
+                if (!status) return;
+                const id = p[c.id] != null && p[c.id] !== '' ? p[c.id] : null;
+                if (vendedorId != null && vendedorId !== '' && String(id) !== String(vendedorId)) return;
+                const data = dataLocalISO(p.data_instalado);
+                if (mes && !(data && data.slice(0, 7) === mes)) return;
+                const v = id != null ? (vendedores || []).find(x => String(x.id) === String(id)) : null;
+                out.push({
+                    pedidoId: p.id, papel, vendedorId: id, nome: (v && v.nome) || p[c.nome] || '', data, clienteNome: p.clienteNome || '',
+                    valorPedido: Number(p.valor) || 0, pct: Number(p[c.pct]) || 0, valor: arredondar(p[c.valor]), status,
+                    pagoEm: status === 'paga' ? dataLocalISO(p[c.data]) : null
+                });
+            });
+        });
+        return out;
+    }
+
+    // Cartoes: Acumulado = pendente + paga; A pagar = pendente; Pago = paga. Geral e por vendedor.
+    function totaisComissoes(linhas) {
+        // aPagar inclui o que esta em Contas a Pagar; pagavel = so o pendente (o que Vendedores paga).
+        const zero = () => ({ acumulado: 0, aPagar: 0, pago: 0, pagavel: 0 });
+        const soma = (t, l) => {
+            if (l.status === 'pendente') { t.aPagar += l.valor; t.pagavel += l.valor; t.acumulado += l.valor; }
+            else if (l.status === 'em_cp') { t.aPagar += l.valor; t.acumulado += l.valor; }
+            else if (l.status === 'paga') { t.pago += l.valor; t.acumulado += l.valor; }
+        };
+        const geral = zero(), porVendedor = {};
+        (linhas || []).forEach(l => {
+            soma(geral, l);
+            const k = String(l.vendedorId != null ? l.vendedorId : 'nome:' + l.nome);
+            if (!porVendedor[k]) porVendedor[k] = Object.assign(zero(), { vendedorId: l.vendedorId, nome: l.nome });
+            soma(porVendedor[k], l);
+        });
+        [geral].concat(Object.values(porVendedor)).forEach(t => { ['acumulado', 'aPagar', 'pago', 'pagavel'].forEach(k => { t[k] = arredondar(t[k]); }); });
+        return { geral, porVendedor };
+    }
+
+    const MOTIVO_COMISSAO_V2 = 'Comissão passou a ser registro do pedido';
+
+    // Plano da migracao unica `sc_comissao_v2`: so le os dados, quem aplica e o app.
+    // { removerCP: [ids de contas em aberto], pedidos: [{ id, set: {campos} }] }.
+    // CP em aberto sai (o pedido fica pendente/registrada); CP paga continua e o pedido fica pago.
+    // Pedido sem os campos da comissao (RT antigo so como conta) ganha valor/nome da conta.
+    function planoMigracaoComissao({ pedidos, contas_pagar, movimentos }) {
+        const plano = { removerCP: [], pedidos: [] };
+        const cps = (contas_pagar || []).filter(Boolean);
+        const doPapel = (ped, papel) => cps.filter(cp => cp.pedido_id == ped.id && papelDaContaComissao(cp) === papel && cp.status !== 'Cancelado');
+        (pedidos || []).forEach(ped => {
+            const set = {};
+            Object.keys(CAMPOS_COMISSAO).forEach(papel => {
+                const c = CAMPOS_COMISSAO[papel], r = CAMPOS_COMISSAO_REG[papel];
+                const contas = doPapel(ped, papel);
+                // So sai a conta totalmente em aberto: com baixa parcial (movimento 'cp') fica como esta.
+                const comMov = cp => (movimentos || []).some(m => m && m.origem === 'cp' && String(m.origem_id) === String(cp.id));
+                const abertas = contas.filter(cp => cp.status !== 'Pago' && !comMov(cp));
+                const pagas = contas.filter(cp => cp.status === 'Pago');
+                abertas.forEach(cp => plano.removerCP.push(cp.id));
+                let ref = ped;
+                if (!temComissao(ped, papel) && contas.length) {
+                    const cp = contas[0];
+                    const total = arredondar(contas.reduce((s, x) => s + (Number(x.valor) || 0), 0));
+                    set[c.valor] = total;
+                    set[c.nome] = cp.credor_nome || ped[c.nome] || '';
+                    if (!ped[c.id] && cp.vendedor_id != null) set[c.id] = cp.vendedor_id;
+                    if (!(Number(ped[c.pct]) > 0)) set[c.pct] = Number(ped.rt_pct) || 0;
+                    ref = Object.assign({}, ped, set);
+                }
+                if (!temComissao(ref, papel)) return;
+                const jaPaga = !!ped[c.paga] || pagas.length > 0;
+                // Conta de comissao que ficou em aberto (baixa parcial): a comissao fica em Contas a Pagar.
+                const restaAberta = contas.some(cp => cp.status !== 'Pago' && comMov(cp));
+                const novo = restaAberta ? 'em_cp' : jaPaga ? 'paga' : (_instalado(ped.status) ? 'pendente' : (_aprovado(ped.status) ? 'registrada' : null));
+                // Sem conta nenhuma ligada e ja com status: nada a fazer (rodar de novo nao muda).
+                if (!contas.length && ped[r.status]) return;
+                if (novo === null) return;
+                if (ped[r.status] !== novo) set[r.status] = novo;
+                if (novo === 'paga') {
+                    if (!ped[c.paga]) set[c.paga] = true;
+                    const cp = pagas[0];
+                    if (cp) {
+                        if (!ped[c.data] && cp.data_pagamento) set[c.data] = new Date(cp.data_pagamento + 'T12:00:00').getTime();
+                        if (cp.conta_id != null && ped[r.conta] == null) set[r.conta] = cp.conta_id;
+                        const mv = (movimentos || []).find(m => m && m.origem === 'cp' && String(m.origem_id) === String(cp.id));
+                        if (mv && ped[r.mov] == null) set[r.mov] = mv.id;
+                    }
+                }
+            });
+            if (Object.keys(set).length) plano.pedidos.push({ id: ped.id, set });
+        });
+        return plano;
+    }
+
     const api = {
         CAMPOS_COMISSAO, arredondar, somarDias, entradaPctDoNome, planejarParcelas, totalRecebido, saldoEmAberto,
         tecidosDoPedido, custoSnapshotPedido, resultadoPedido, contasComissaoDoPedido, parcelasCompra, acharContaDuplicadaNota,
-        dataLocalISO, planoMigracaoFase0, somarMesesData
+        dataLocalISO, planoMigracaoFase0, somarMesesData,
+        CAMPOS_COMISSAO_REG, STATUS_COMISSAO, MOTIVO_COMISSAO_V2, temComissao, statusEsperadoComissao, sincronizarStatusComissoes, papelDaContaComissao,
+        comissoesContaveis, comissoesPendentesPrevistas, linhasComissoes, totaisComissoes, planoMigracaoComissao
     };
 
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

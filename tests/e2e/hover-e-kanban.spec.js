@@ -46,7 +46,7 @@ test('elementos com hover animam em 150 ms', async ({ page }) => {
         const out = {};
         const mk = (nome, html, sel) => {
             const w = document.createElement('div'); w.innerHTML = html; document.body.appendChild(w);
-            const el = w.querySelector(sel); out[nome] = getComputedStyle(el).transitionDuration; w.remove();
+            const el = w.querySelector(sel); const cs = getComputedStyle(el); out[nome] = { d: cs.transitionDuration, p: cs.transitionProperty }; w.remove();
         };
         mk('btn', '<button class="btn">x</button>', 'button');
         mk('btn-outline', '<button class="btn btn-outline">x</button>', 'button');
@@ -59,8 +59,14 @@ test('elementos com hover animam em 150 ms', async ({ page }) => {
         mk('kanban-card', '<div class="kanban-card">x</div>', 'div');
         return out;
     });
-    for (const [nome, d] of Object.entries(dur)) {
-        const lista = d.split(',').map(x => x.trim());
-        expect(lista.every(x => x === '0.15s'), `${nome}: ${d}`).toBe(true);
+    // Unica excecao: a abertura da barra lateral (.nav-item) leva 0.2s so nas propriedades de tamanho/espacamento.
+    const EXPANSAO = /^(width|max-width|padding(-.+)?|margin(-.+)?|opacity)$/;
+    for (const [nome, { d, p }] of Object.entries(dur)) {
+        const duracoes = d.split(',').map(x => x.trim());
+        const props = p.split(',').map(x => x.trim());
+        duracoes.forEach((x, i) => {
+            const ok = x === '0.15s' || (nome === 'nav-item' && x === '0.2s' && EXPANSAO.test(props[i % props.length]));
+            expect(ok, `${nome}: ${props[i % props.length]} ${x}`).toBe(true);
+        });
     }
 });

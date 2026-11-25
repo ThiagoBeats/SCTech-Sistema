@@ -123,7 +123,7 @@
     }
 
     // Saidas de caixa: CPs pagas com data_pagamento aceita por `dentro`, exceto imposto (vem de impostoDoMes).
-    function itensSaida(dentro, contasPagar, categorias) {
+    function itensSaida(dentro, contasPagar, categorias, movimentos) {
         const itens = [];
         const soCaixa = idsSoCaixa(categorias);
         (contasPagar || []).forEach(cp => {
@@ -131,6 +131,11 @@
             if (cp.categoria_id != null && soCaixa.has(String(cp.categoria_id))) return;
             if (!dentro(cp.data_pagamento)) return;
             itens.push({ data: cp.data_pagamento, valor: num(cp.valor), grupo: grupoDaCategoria(cp.categoria), cp_id: cp.id });
+        });
+        // Comissao paga pelo pedido: so o movimento (origem 'comissao'), como saida do grupo Comissoes.
+        (movimentos || []).forEach(m => {
+            if (!m || m.origem !== 'comissao' || m.sentido !== 'saida' || !dentro(m.data)) return;
+            itens.push({ data: m.data, valor: num(m.valor), grupo: 'comissoes', mov_id: m.id });
         });
         return itens;
     }
@@ -143,8 +148,8 @@
         return { total: arredondar(total), porGrupo };
     }
 
-    function saidasDoMes({ mes, contasPagar, ateData, categorias }) {
-        return somarPorGrupo(itensSaida(d => noMes(d, mes, ateData), contasPagar, categorias));
+    function saidasDoMes({ mes, contasPagar, ateData, categorias, movimentos }) {
+        return somarPorGrupo(itensSaida(d => noMes(d, mes, ateData), contasPagar, categorias, movimentos));
     }
 
     // Mes de referencia da guia; guia sem o campo usa o mes anterior ao vencimento (mesmo padrao do formulario).
@@ -168,7 +173,7 @@
 
     function resultadoDoMes({ mes, contasReceber, contasPagar, movimentos, aliquota, ateData, contas, categorias }) {
         const entradas = entradasDoMes({ mes, contasReceber, movimentos, ateData, contas, contasPagar, categorias }).total;
-        const sai = saidasDoMes({ mes, contasPagar, ateData, categorias });
+        const sai = saidasDoMes({ mes, contasPagar, ateData, categorias, movimentos });
         const taxas = sai.porGrupo.taxas;
         const faturamento = arredondar(entradas - taxas);
         const imposto = impostoDoMes({ mes, contasPagar, faturamento, aliquota });
@@ -189,7 +194,7 @@
         const dentro = d => !!d && String(d) >= de && String(d) <= ate;
         const ok = !!de && !!ate && de <= ate;
         const itensE = ok ? itensEntrada(dentro, contasReceber, movimentos, contas, false, contasPagar, categorias) : [];
-        const itensS = ok ? itensSaida(dentro, contasPagar, categorias) : [];
+        const itensS = ok ? itensSaida(dentro, contasPagar, categorias, movimentos) : [];
         const entradas = arredondar(itensE.reduce((s, i) => s + i.valor, 0));
         const sai = somarPorGrupo(itensS);
         const porMes = {};

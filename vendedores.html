@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Vendedores/Arquitetos - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261208a">
+    <link rel="stylesheet" href="css/style.css?v=20261209a">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
@@ -22,8 +22,7 @@
 
         <div class="tab-nav vend-sub-nav">
             <button class="tab-btn vend-tab-btn active" data-tab="lista"     onclick="mostrarTabVendedores('lista')">📋 Cadastro</button>
-            <button class="tab-btn vend-tab-btn"        data-tab="pendentes" onclick="mostrarTabVendedores('pendentes')">⏳ Comissões Pendentes</button>
-            <button class="tab-btn vend-tab-btn"        data-tab="historico" onclick="mostrarTabVendedores('historico')">✅ Histórico de Pagamentos</button>
+            <button class="tab-btn vend-tab-btn"        data-tab="comissoes" onclick="mostrarTabVendedores('comissoes')">💰 Comissões</button>
         </div>
 
         <!-- TAB: VENDEDORES -->
@@ -73,85 +72,71 @@
             </div>
         </div>
 
-        <!-- TAB: COMISSÕES PENDENTES -->
-        <div id="tab-vend-pendentes" class="tab-panel">
+        <!-- TAB: COMISSÕES (registro do pedido: registrada, pendente, paga) -->
+        <div id="tab-vend-comissoes" class="tab-panel">
             <div class="card">
-                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px">
-                    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-                        <select id="filtro-vend-pendente" onchange="renderComissoesPendentes()" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;min-width:180px">
-                            <option value="">Todos</option>
-                        </select>
+                <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+                    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+                        <div>
+                            <label style="display:block;font-size:12px;margin-bottom:4px">Vendedor</label>
+                            <select id="com-filtro-vend" onchange="renderComissoes()" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;min-width:180px"></select>
+                        </div>
+                        <div>
+                            <label style="display:block;font-size:12px;margin-bottom:4px">Mês</label>
+                            <select id="com-filtro-mes" onchange="renderComissoes()" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;min-width:180px"></select>
+                        </div>
                     </div>
                     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-                        <span style="font-size:14px;color:var(--text-soft)">Total pendente: <strong id="total-comissoes-pendentes" style="color:#F43927">R$ 0,00</strong></span>
-                        <button class="btn btn-success" onclick="pagarTodasFiltradas()">✓ Pagar Todas (filtradas)</button>
+                        <span id="com-sel-resumo" style="font-size:14px;color:var(--text-soft)"></span>
+                        <button class="btn btn-success" id="com-btn-pagar" onclick="registrarPagamentoComissoesSelecionadas()" disabled>Registrar pagamento</button>
                     </div>
                 </div>
+                <div id="com-cartoes" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px"></div>
                 <table>
                     <thead>
                         <tr>
+                            <th style="width:30px"><input type="checkbox" id="com-sel-todos" onchange="comSelecionarTodos(this.checked)" title="Selecionar os pendentes"></th>
+                            <th>Data</th>
                             <th>Pedido</th>
                             <th>Cliente</th>
-                            <th class="vend-col-nome">Vendedor</th>
-                            <th>Valor Pedido</th>
+                            <th>Vendedor</th>
+                            <th>Valor do pedido</th>
+                            <th>%</th>
                             <th>Comissão</th>
-                            <th style="width:100px">Ação</th>
+                            <th>Status</th>
+                            <th>Pago em</th>
+                            <th class="td-acoes"></th>
                         </tr>
                     </thead>
-                    <tbody id="tb-comissoes-pendentes"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- TAB: HISTÓRICO DE PAGAMENTOS -->
-        <div id="tab-vend-historico" class="tab-panel">
-            <div class="card">
-                <div style="margin-bottom:14px">
-                    <select id="filtro-vend-hist" onchange="renderHistoricoComissoes()" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;min-width:180px">
-                        <option value="">Todos</option>
-                    </select>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Data Pgto</th>
-                            <th>Pedido</th>
-                            <th>Cliente</th>
-                            <th class="vend-col-nome">Vendedor</th>
-                            <th>Valor Pedido</th>
-                            <th>Comissão Paga</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody id="tb-hist-comissoes"></tbody>
+                    <tbody id="tb-comissoes"></tbody>
                 </table>
             </div>
         </div>
     </main>
-    <script src="js/etiquetas-core.js?v=20261208a"></script>
-    <script src="js/etiquetas-render.js?v=20261208a"></script>
-    <script src="js/cortina-desenho.js?v=20261208a"></script>
-    <script src="js/docs-layout-core.js?v=20261208a"></script>
-    <script src="js/financeiro-core.js?v=20261208a"></script>
-    <script src="js/caixa-core.js?v=20261208a"></script>
-    <script src="js/carrinho-core.js?v=20261208a"></script>
-    <script src="js/resultado-core.js?v=20261208a"></script>
-    <script src="js/fechamento-core.js?v=20261208a"></script>
-    <script src="js/simulador-core.js?v=20261208a"></script>
-    <script src="js/rotas-core.js?v=20261208a"></script>
-    <script src="js/endereco-core.js?v=20261208a"></script>
-    <script src="js/agenda-core.js?v=20261208a"></script>
-    <script src="js/notificacoes.js?v=20261208a"></script>
-    <script src="js/feriados-core.js?v=20261208a"></script>
-    <script src="js/fin-cat-core.js?v=20261208a"></script>
-    <script src="js/dre-core.js?v=20261208a"></script>
-    <script src="js/fluxo-core.js?v=20261208a"></script>
-    <script src="js/conciliacao-core.js?v=20261208a"></script>
-    <script src="js/fiscal-core.js?v=20261208a"></script>
-    <script src="js/fiscal.js?v=20261208a"></script>
-    <script src="js/app.js?v=20261208a"></script>
-    <script src="js/agenda.js?v=20261208a"></script>
-    <script src="js/rotas.js?v=20261208a"></script>
-    <script src="js/compartilhar-doc.js?v=20261208a"></script>
+    <script src="js/etiquetas-core.js?v=20261209a"></script>
+    <script src="js/etiquetas-render.js?v=20261209a"></script>
+    <script src="js/cortina-desenho.js?v=20261209a"></script>
+    <script src="js/docs-layout-core.js?v=20261209a"></script>
+    <script src="js/financeiro-core.js?v=20261209a"></script>
+    <script src="js/caixa-core.js?v=20261209a"></script>
+    <script src="js/carrinho-core.js?v=20261209a"></script>
+    <script src="js/resultado-core.js?v=20261209a"></script>
+    <script src="js/fechamento-core.js?v=20261209a"></script>
+    <script src="js/simulador-core.js?v=20261209a"></script>
+    <script src="js/rotas-core.js?v=20261209a"></script>
+    <script src="js/endereco-core.js?v=20261209a"></script>
+    <script src="js/agenda-core.js?v=20261209a"></script>
+    <script src="js/notificacoes.js?v=20261209a"></script>
+    <script src="js/feriados-core.js?v=20261209a"></script>
+    <script src="js/fin-cat-core.js?v=20261209a"></script>
+    <script src="js/dre-core.js?v=20261209a"></script>
+    <script src="js/fluxo-core.js?v=20261209a"></script>
+    <script src="js/conciliacao-core.js?v=20261209a"></script>
+    <script src="js/fiscal-core.js?v=20261209a"></script>
+    <script src="js/fiscal.js?v=20261209a"></script>
+    <script src="js/app.js?v=20261209a"></script>
+    <script src="js/agenda.js?v=20261209a"></script>
+    <script src="js/rotas.js?v=20261209a"></script>
+    <script src="js/compartilhar-doc.js?v=20261209a"></script>
 </body>
 </html>

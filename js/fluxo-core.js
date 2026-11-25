@@ -11,6 +11,7 @@
     }
     const caixa = () => dep('CaixaCore', './caixa-core.js');
     const fin = () => dep('FinCatCore', './fin-cat-core.js');
+    const fcore = () => dep('FinanceiroCore', './financeiro-core.js');
 
     const num = v => (v === '' || v == null ? 0 : Number(v) || 0);
     function arredondar(v) {
@@ -73,7 +74,8 @@
         };
 
         // Origem do movimento: lancamento (CR/CP) ou nada (transferencia/ajuste).
-        const regDe = m => (m.origem === 'cr' ? porCr : m.origem === 'cp' ? porCp : new Map()).get(String(m.origem_id));
+        // Pagamento de comissao: o proprio movimento faz o papel do lancamento (categoria Comissoes).
+        const regDe = m => (m.origem === 'comissao' ? Object.assign({ categoria_id: 'cat_comissoes' }, m) : (m.origem === 'cr' ? porCr : m.origem === 'cp' ? porCp : new Map()).get(String(m.origem_id)));
         const evento = (m, previsto) => {
             const transf = m.origem === 'transferencia';
             let ent = m.sentido === 'entrada' ? num(m.valor) : 0, sai = m.sentido === 'entrada' ? 0 : num(m.valor);
@@ -123,6 +125,17 @@
             const crsUso = crs.filter(cr => casaCategoria(cr, 'cr') && daConta(cr, meioDe(cr)));
             const cpsUso = cps.filter(cp => casaCategoria(cp, 'cp') && daConta(cp, null));
             const fixasUso = (p.despesasFixas || []).filter(df => df && casaCategoria(df, 'cp') && daConta(df, null));
+            // Comissoes pendentes: saida prevista no ultimo dia do mes atual (conta nao definida: so sem filtro de conta).
+            if (contaId == null && (catId == null || catId === 'cat_comissoes')) {
+                const ano = Number(hoje.slice(0, 4)), mes = Number(hoje.slice(5, 7));
+                const dataCom = iso(ano, mes, ultimoDia(ano, mes));
+                if (dataCom >= iniPrev && dataCom <= ate) {
+                    fcore().comissoesPendentesPrevistas(p.pedidos, cps, p.vendedores).forEach(c => {
+                        out.previsto.push({ data: dataCom, ent: 0, sai: c.valor, ab: 0, previsto: true, mov: null, transferencia: false,
+                            lanc: { tipo: 'comissao', descricao: 'Comissão ' + c.nome + ' — Pedido #' + c.pedidoId, pessoa: '', conta_id: null } });
+                    });
+                }
+            }
             C.lancamentosPrevistos({ hoje, limite: ate, movimentos: [], contasReceber: crsUso, contasPagar: cpsUso, despesasFixas: fixasUso, contas, meios: p.meios, comOrigem: true })
                 .forEach(l => {
                     if (l.data < iniPrev || l.data > ate) return;
@@ -206,7 +219,7 @@
         if (!periodoOk(col)) return [];
         let saldo = saldoInicialDe(p, col);
         const linhas = [{ data: col.de, descricao: 'Saldo inicial', conta_id: col.contaId, entrada: 0, saida: 0, saldo, origem: 'saldo_inicial', origem_id: null, grupo_id: null, previsto: false, transferencia: false }];
-        const rotuloOrigem = { cr: 'Recebimento', cp: 'Pagamento', transferencia: 'Transferência', ajuste: 'Ajuste de saldo' };
+        const rotuloOrigem = { cr: 'Recebimento', cp: 'Pagamento', comissao: 'Comissão', transferencia: 'Transferência', ajuste: 'Ajuste de saldo' };
         const ordenar = evs => evs.map((e, i) => [e, i]).sort((a, b) => (a[0].data < b[0].data ? -1 : a[0].data > b[0].data ? 1 : a[1] - b[1])).map(x => x[0]);
         ordenar(col.realizado).concat(ordenar(col.previsto)).forEach(e => {
             saldo = arredondar(saldo + efeito(e));
@@ -256,7 +269,7 @@
             const vazio = { nome: '', grupo: null, subgrupo_id: null, natureza: 'dre', especial: null };
             if (m.origem === 'transferencia') return somar(sentido, 'transferencia', Object.assign({}, vazio, { nome: 'Transferências', especial: 'transferencia' }), valor);
             if (m.origem === 'ajuste') return somar(sentido, 'ajuste', Object.assign({}, vazio, { nome: 'Ajustes de saldo', especial: 'ajuste' }), valor);
-            if (e.reg && (m.origem === 'cr' || m.origem === 'cp')) {
+            if (e.reg && (m.origem === 'cr' || m.origem === 'cp' || m.origem === 'comissao')) {
                 const c = porId.get(String(categoriaDe(e.reg, m.origem, porId)));
                 if (c) return somar(sentido, 'cat:' + c.id, { nome: c.nome, grupo: c.grupo || null, subgrupo_id: c.subgrupo_id || null, natureza: c.natureza || 'dre', especial: null, id: c.id }, valor);
             }

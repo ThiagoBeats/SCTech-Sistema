@@ -50,23 +50,30 @@ test('comissao paga perde a marca de pedido cancelado ao chegar de novo em Insta
     expect(cps.find(c => c.id === 701).pedido_cancelado).toBeUndefined();
 });
 
-test('comissao RT antiga pendente aparece e e paga em Vendedores (aba Arquitetos)', async ({ page }) => {
+test('comissao RT antiga pendente (migrada para o pedido) aparece e e paga em Vendedores (aba Arquitetos)', async ({ page }) => {
     const rt = { id: 801, pedido_id: 26500, descricao: 'RT Studio', credor_nome: 'Studio M', valor: 70, categoria: 'comissao_rt',
         data_vencimento: '2026-10-20', data_pagamento: null, status: 'Pendente', tipo: 'variavel' };
     await entrar(page, BASE, { sc_cli: CLI, sc_vend: [{ id: 3, nome: 'Studio M', comissao_pct: 7, tipo: 'arquiteto' }],
+        sc_contas_fin: [{ id: 1, nome: 'Banco A', tipo: 'banco', saldo_inicial: 0, data_saldo_inicial: '2026-01-01', ativo: true }],
         sc_ped: [ped({ status: 'Instalado', valor_recebido: 1000, arquiteto_nome: 'Studio M', rt_pct: 7 })], sc_cp: [rt] });
+    // A migracao das comissoes leva a RT (so conta) para o pedido; a conta em aberto sai do Financeiro.
+    await page.evaluate(() => localStorage.removeItem('sc_comissao_v2'));
     await page.goto(BASE + '/vendedores.html');
     await page.locator('.vend-tipo-btn[data-tipo="arquiteto"]').click();
-    await page.locator('.vend-tab-btn[data-tab="pendentes"]').click();
-    const linha = page.locator('#tb-comissoes-pendentes tr');
+    await page.locator('.vend-tab-btn[data-tab="comissoes"]').click();
+    const linha = page.locator('#tb-comissoes tr');
     await expect(linha).toHaveCount(1);
     await expect(linha).toContainText('Studio M');
-    await expect(linha).toContainText('70.00');
-    await linha.locator('button', { hasText: 'Pagar' }).click();
-    const meios = page.locator('#baixa-modal .baixa-meio');
-    for (let i = 0, n = await meios.count(); i < n; i++) await meios.nth(i).selectOption({ index: 1 });
-    await page.locator('#baixa-ok').click();
-    await expect.poll(async () => (await lerChave(page, 'sc_cp'))[0].status).toBe('Pago');
+    await expect(linha).toContainText('R$ 70,00');
+    await expect(linha).toContainText('Pendente');
+    expect(await lerChave(page, 'sc_cp')).toHaveLength(0);
+    await linha.locator('.com-sel').check();
+    await page.locator('#com-btn-pagar').click();
+    await page.locator('#com-pag-conta').selectOption('1');
+    await page.locator('#com-pag-ok').click();
+    await expect.poll(async () => ((await lerChave(page, 'sc_mov_fin')) || []).length).toBe(1);
+    expect((await lerChave(page, 'sc_mov_fin'))[0]).toMatchObject({ origem: 'comissao', papel: 'arquiteto', valor: 70 });
+    expect((await lerChave(page, 'sc_ped'))[0]).toMatchObject({ arq_comissao_status: 'paga', arq_comissao_valor: 70, arq_nome: 'Studio M' });
 });
 
 test('excluir pedido de compra com conta paga: bloqueia', async ({ page }) => {
