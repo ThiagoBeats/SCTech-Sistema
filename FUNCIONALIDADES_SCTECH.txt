@@ -27,7 +27,17 @@ Tecnologia:
       acentos compostos (´ + a = Á) e mantém o cursor.
     * Moeda (campos com data-moeda): digita-se só números e o campo mostra
       R$ 1.250,00; colar "1250,50" ou "1.250,50" funciona. Valores gravados
-      continuam sendo números.
+      continuam sendo números. Todos os campos de dinheiro do sistema usam a
+      máscara (custo, preço e filtros de preço do Catálogo e do Estoque, mão de
+      obra e valor recebido do Pedido, valor do lançamento, da conta a pagar,
+      da despesa fixa, da transferência, da baixa e da entrada de estoque, meta
+      e orçamento, saldo inicial das contas, saldo do extrato no fechamento,
+      simulador de compra, itens da nota fiscal e preço de custo da conferência
+      do importador). Digitar 0 mostra R$ 0,00; apagar esvazia o campo. Saldo
+      inicial e saldo do extrato aceitam valor negativo (-R$ 12,50). Porcentagens
+      (margem, desconto, entrada, alíquota, taxas) e quantidades continuam
+      como números comuns. O teste tests/mascaras-lint.test.js falha se
+      surgir um campo de dinheiro sem a máscara.
 
 Módulos (telas):
   1. Login
