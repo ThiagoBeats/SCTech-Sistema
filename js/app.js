@@ -3742,6 +3742,11 @@ async function excluirPedido(id) {
         await showAlert('Este pedido já tem recebimento registrado e não pode ser excluído.\n\nPrimeiro estorne os recebimentos em Financeiro > A Receber; depois exclua o pedido.', '⚠️');
         return;
     }
+    const pedExc = db.pedidos.find(p => p.id == id);
+    if (pedExc && (pedExc.comissao_status === 'paga' || pedExc.arq_comissao_status === 'paga')) {
+        await showAlert('Este pedido tem comissão paga. Desfaça o pagamento em Vendedores › Comissões antes de excluir.', '⚠️');
+        return;
+    }
     const nCr = (db.contas_receber || []).filter(cr => cr.pedido_id == id && finAberta(cr)).length;
     const nCp = (db.contas_pagar || []).filter(cp => cp.pedido_id == id && _ehComissaoDoPedido(cp) && finAberta(cp)).length;
     const nContas = nCr + nCp;
@@ -9244,7 +9249,7 @@ function renderComissoes() {
             <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span>Acumulado</span><strong class="com-acumulado">${_finBrl(t.acumulado)}</strong></div>
             <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span>A pagar</span><strong class="com-apagar" style="color:#F43927">${_finBrl(t.aPagar)}</strong></div>
             <div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span>Pago</span><strong class="com-pago" style="color:var(--ok-text)">${_finBrl(t.pago)}</strong></div>
-            ${pode && t.pagavel > 0 ? `<button class="btn btn-sm btn-success" style="margin-top:8px;width:100%" onclick="pagarTodosPendentesComissao('${escapeHtml(chave)}')">Pagar todos os pendentes de ${escapeHtml(t.nome || '—')}</button>` : ''}
+            ${pode && t.pagavel > 0 ? `<button class="btn btn-sm btn-success com-pagar-todos" style="margin-top:8px;width:100%">Pagar todos os pendentes de ${escapeHtml(t.nome || '—')}</button>` : ''}
         </div>`;
     }).join('');
     document.getElementById('com-sel-todos').style.visibility = pode ? 'visible' : 'hidden';
@@ -9291,6 +9296,12 @@ function comSelecionarTodos(marcado) {
     document.querySelectorAll('#tb-comissoes .com-sel').forEach(cb => { cb.checked = marcado; });
     _comAtualizarSelecao();
 }
+
+// A chave do cartao fica no data-vend (nunca dentro de um onclick: o nome e texto livre).
+document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('.com-pagar-todos');
+    if (b) pagarTodosPendentesComissao(b.closest('.com-cartao').dataset.vend);
+});
 
 function abrirPedidoDaComissao(pedidoId) { editarPedido(pedidoId); }
 
@@ -15498,6 +15509,21 @@ function gerarComissoesPedido(ped) {
     sincronizarComissoesPedido(ped);
 }
 
+// Linha de extrato conciliada cujo movimento sumiu volta a pendente (sem gravar; quem chama grava sc_fin_extrato).
+// Igual a rotina do Fluxo, mas vale em qualquer tela (fin-fluxo.js nao carrega em todas).
+function _desligarExtratoSumido() {
+    if (!Array.isArray(db.fin_extrato) || typeof ConciliacaoCore === 'undefined') return [];
+    const iv = ConciliacaoCore.indiceVinculos({ movimentos: db.movimentos_fin || [], contasReceber: db.contas_receber || [], contasPagar: db.contas_pagar || [] });
+    const ids = [];
+    db.fin_extrato.forEach(l => {
+        if (!ConciliacaoCore.linhaOrfa(l, iv)) return;
+        l.situacao = 'pendente'; l.mov_id = null;
+        ['mov_ids', 'vinculos', 'conc_desc', 'conc_em', 'conc_por', 'transf_grupo', 'criado', 'datas_antes'].forEach(k => { delete l[k]; });
+        ids.push(l.id);
+    });
+    return ids;
+}
+
 function _permiteGerirComissoes() { return temAcesso('vendedores', 'completo') || temAcesso('financeiro.pagar', 'completo'); }
 
 // Paga comissoes pendentes: um movimento de saida por comissao (origem 'comissao', categoria Comissoes) na conta
@@ -15577,7 +15603,7 @@ function desfazerPagamentoComissao({ pedidoId, papel } = {}) {
     sincronizarComissoesPedido(ped);
     if (!Array.isArray(ped[r.hist])) ped[r.hist] = [];
     ped[r.hist].push(Object.assign({ acao: 'pagamento_desfeito', detalhe: `Pagamento de ${_finBrl(ped[c.valor])}${dataPgto ? ' em ' + _finDataBR(dataPgto) : ''} desfeito`, em: new Date().toISOString() }, _finQuem()));
-    if (typeof _ccDesligarSumidos === 'function') _ccDesligarSumidos();
+    _desligarExtratoSumido();
     if (!_gravarChaves(['sc_ped', 'sc_mov_fin', 'sc_contas_fin', 'sc_cp', 'sc_fin_excluidos', 'sc_fin_extrato'], { silencioso: true })) {
         Object.keys(ped).forEach(k => { delete ped[k]; }); Object.assign(ped, antesD.ped);
         db.movimentos_fin = antesD.movs;
@@ -15614,6 +15640,12 @@ function abrirModalPagarComissoes({ titulo, itens }) {
             <div class="sc-modal-btns"><button class="btn btn-outline" id="com-pag-cancel">Cancelar</button><button class="btn btn-success" id="com-pag-ok">Registrar pagamento</button></div>
         </div>`;
         document.body.appendChild(o);
+        if (!contas.length) {
+            const e0 = o.querySelector('#com-pag-erro');
+            e0.textContent = 'Cadastre uma conta em Configurar Empresa para registrar o pagamento.';
+            e0.style.display = 'block';
+            o.querySelector('#com-pag-ok').disabled = true;
+        }
         const fechar = v => { o.remove(); resolve(v); };
         const erro = t => { const e = o.querySelector('#com-pag-erro'); e.textContent = t; e.style.display = 'block'; };
         o.querySelector('#com-pag-cancel').onclick = () => fechar(null);
@@ -15695,7 +15727,7 @@ async function estornarCP(id) {
     }
     if (!await showConfirm('Estornar este pagamento? A conta volta a ficar em aberto.', '↩', 'Estornar', 'Cancelar')) return;
     _estornarCPDados(cp);
-    if (typeof _ccDesligarSumidos === 'function') _ccDesligarSumidos();
+    _desligarExtratoSumido();
     salvarERecarregar('Pagamento estornado.');
 }
 
@@ -15762,7 +15794,7 @@ async function estornarCR(id) {
     }
     if (!await showConfirm(msg, '↩', 'Estornar', 'Cancelar')) return;
     _estornarCRDados(cr);
-    if (typeof _ccDesligarSumidos === 'function') _ccDesligarSumidos();
+    _desligarExtratoSumido();
     salvarERecarregar('Recebimento estornado.');
 }
 
@@ -18215,7 +18247,7 @@ async function excluirTransferencia(grupoId) {
     lados.forEach(m => _finContaTocada(m.conta_id));
     db.movimentos_fin = db.movimentos_fin.filter(m => !lados.includes(m));
     // Linha de extrato que estava ligada a esta transferencia volta a ficar pendente.
-    if (typeof _ccDesligarSumidos === 'function') _ccDesligarSumidos();
+    _desligarExtratoSumido();
     syncDB();
     if (typeof renderFinFluxo === 'function') renderFinFluxo();
 }

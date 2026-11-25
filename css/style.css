@@ -212,7 +212,7 @@ button.nav-item { border: none; background: none; font-family: inherit; text-ali
 
 /* Sem movimento: a largura final aparece direto */
 @media (prefers-reduced-motion: reduce) {
-    .sidebar, .nav-item, .nav-item .nav-text, .sidebar-pin,
+    .sidebar, .nav-item, .nav-item .nav-text, .nav-selo, .sidebar-rodape .sidebar-sair, .sidebar-pin,
     html[data-sidebar="collapsed"] .sidebar:not(:hover) .sidebar-pin { transition: none; }
 }
 
@@ -2729,13 +2729,15 @@ html[data-theme="dark"] .menu-enviar-icone { background: rgba(201, 247, 117, 0.1
 /* ── Carrinhos: botão "Abrir carrinhos", lista e bolinha no menu ──── */
 .nav-item { position: relative; }
 .nav-selo {
-    margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
+    position: absolute; top: 13px; left: calc(100% - 16px); transform: translateX(-100%);
+    transition: left .2s cubic-bezier(.2, .8, .2, 1), top .2s cubic-bezier(.2, .8, .2, 1), transform .2s cubic-bezier(.2, .8, .2, 1);
+    margin: 0; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
     background: #F43927; color: #fff; font-size: 11px; font-weight: 800; line-height: 20px; text-align: center;
     box-shadow: 0 0 0 2px var(--white);
 }
 .nav-selo[hidden] { display: none; }
 html[data-sidebar="collapsed"] .sidebar:not(:hover) .nav-selo {
-    position: absolute; top: 4px; left: 32px; margin: 0; min-width: 16px; height: 16px; line-height: 16px; font-size: 10px; padding: 0 4px;
+    top: 4px; left: 32px; transform: none; margin: 0; min-width: 16px; height: 16px; line-height: 16px; font-size: 10px; padding: 0 4px;
 }
 .btn-abrir-carrinhos {
     position: relative; display: inline-flex; align-items: center; gap: 10px;
@@ -3051,8 +3053,10 @@ html[data-theme="dark"] .ag-pend { background-image: repeating-linear-gradient(1
 .ag-fora-lista .ag-chip { width: auto; max-width: 260px; }
 
 /* ── Hover: todos os efeitos duram 150 ms ──────────────────────────── */
-.sidebar-rodape .sidebar-sair, .logo-popup-logout { transition: background-color .15s ease, color .15s ease; }
+.logo-popup-logout { transition: background-color .15s ease, color .15s ease; }
+.sidebar-rodape .sidebar-sair { transition: background-color .15s ease, color .15s ease, box-shadow .15s ease, padding .2s cubic-bezier(.2, .8, .2, 1); }
 .btn-outline, .btn-danger { transition: background-color .15s ease, color .15s ease, border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+@media (prefers-reduced-motion: reduce) { .nav-selo, .sidebar-rodape .sidebar-sair { transition: none; } }
 td { transition: background-color .15s ease; }
 .pcp-modo-btn, .th-sort, .th-sort-mat, .alertas-toggle, .fin-meta-edit-btn, .agd-item, .agd-ir, .agd-slot-livre, .agd-hpick-livre,
 .galped-fechar, .hoje-conta, .menu-enviar-item, .sino-btn, .sino-item, .ag-fechar, .ag-prof, .ag-slot-ok, .consulta-sug-item,
@@ -3066,7 +3070,8 @@ td { transition: background-color .15s ease; }
 .kanban-card, .imp-celula, .kit-celula, .etq-chip, .etq-el, .dl-paleta { transition: border-color .15s ease; }
 .btn-ver-senha { transition: opacity .15s ease; }
 .link-galeria { transition: transform .15s ease; }
-.est-tec-linha > td { transition: background-color .15s ease; }
+.est-tec-linha > @media (prefers-reduced-motion: reduce) { .nav-selo, .sidebar-rodape .sidebar-sair { transition: none; } }
+td { transition: background-color .15s ease; }
 .carrinhos-lista-item { transition: border-color .15s ease, background-color .15s ease; }
 
 /* ── Cards com profundidade 3D (sombra em camadas + realce no topo) ── */

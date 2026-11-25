@@ -178,3 +178,51 @@ test('sem permissao nao ve os botoes de pagar nem selecionar', async ({ page }) 
     await expect(page.locator('#tb-comissoes .btn-kebab')).toHaveCount(0);
     await expect(cartao(page, 'Bruno').locator('.com-apagar')).toHaveText('R$ 130,00');
 });
+
+test('pagar todos funciona com nome com apostrofo e sem id de vendedor (sem codigo no onclick)', async ({ page }) => {
+    const peds = [ped(26710, { data_instalado: dia('2026-11-10'), vendedor_id: null, vendedor_nome: "D'Ávila", comissao_valor: 40, comissao_status: 'pendente' })];
+    await abrir(page, { sc_ped: peds });
+    const botao = cartao(page, "D'Ávila").locator('button', { hasText: "Pagar todos os pendentes de D'Ávila" });
+    await expect(botao).toHaveCount(1);
+    expect(await botao.getAttribute('onclick')).toBeNull();
+    await botao.click();
+    await expect(page.locator('#com-pag-modal')).toContainText('R$ 40,00');
+    await pagarNoModal(page, '1');
+    await expect.poll(async () => ((await ler(page, 'sc_mov_fin')) || []).length).toBe(1);
+    expect((await ler(page, 'sc_ped'))[0].comissao_status).toBe('paga');
+});
+
+test('desfazer pagamento solta a linha de extrato conciliada com a saida (sem o Fluxo carregado)', async ({ page }) => {
+    await abrir(page);
+    await linha(page, 26702).locator('.com-sel').check();
+    await page.locator('#com-btn-pagar').click();
+    await pagarNoModal(page, '1', '2026-11-20');
+    await expect.poll(async () => ((await ler(page, 'sc_mov_fin')) || []).length).toBe(1);
+    const mov = (await ler(page, 'sc_mov_fin'))[0];
+    expect(await page.evaluate(() => typeof _ccDesligarSumidos)).toBe('undefined');
+    await page.evaluate(m => {
+        localStorage.setItem('sc_fin_extrato', JSON.stringify([{ id: 1, conta_id: 1, fitid: 'x1', data: '2026-11-20', valor: -80, descricao: 'COMISSAO', situacao: 'conciliado', mov_id: m.id }]));
+    }, mov);
+    await page.reload();
+    await acaoMenu(page, linha(page, 26702), 'Desfazer pagamento');
+    await page.locator('#sc-modal-ok').click();
+    await expect.poll(async () => ((await ler(page, 'sc_mov_fin')) || []).length).toBe(0);
+    await expect.poll(async () => (await ler(page, 'sc_fin_extrato'))[0].situacao).toBe('pendente');
+    expect((await ler(page, 'sc_fin_extrato'))[0].mov_id).toBeNull();
+});
+
+test('nao exclui pedido com comissao paga', async ({ page }) => {
+    await abrir(page);
+    await page.evaluate(() => { excluirPedido(26703); });
+    await expect(page.locator('#sc-modal-msg')).toHaveText('Este pedido tem comissão paga. Desfaça o pagamento em Vendedores › Comissões antes de excluir.');
+    await page.locator('#sc-modal-ok').click();
+    expect((await ler(page, 'sc_ped')).some(p => p.id === 26703)).toBe(true);
+});
+
+test('sem conta ativa a janela de pagamento orienta a cadastrar e bloqueia o botao', async ({ page }) => {
+    await abrir(page, { sc_contas_fin: [{ id: 1, nome: 'Velha', tipo: 'banco', saldo_inicial: 0, data_saldo_inicial: '2026-10-01', ativo: false }] });
+    await linha(page, 26702).locator('.com-sel').check();
+    await page.locator('#com-btn-pagar').click();
+    await expect(page.locator('#com-pag-erro')).toHaveText('Cadastre uma conta em Configurar Empresa para registrar o pagamento.');
+    await expect(page.locator('#com-pag-ok')).toBeDisabled();
+});
