@@ -12,12 +12,10 @@ test('fechamentos entram no backup e voltam na importacao', async ({ page }) => 
     await page.goto(BASE + '/index.html');
     expect(await page.evaluate(() => _dadosExportacao(false).fechamentos_fin)).toEqual([{ id: 'fech-2026-10', mes: '2026-10' }]);
     await importar(page, { clientes: [], catalogo: [], pedidos: [] });
-    await page.locator('#sc-modal-ok').click();
-    await page.waitForLoadState('load');
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_fech'))).toBe('[]');
+    await Promise.all([page.waitForEvent('load'), page.locator('#sc-modal-ok').click()]);   // a importacao recarrega a pagina depois da limpeza
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_fech')).catch(() => 'navegando')).toBe('[]');
     await importar(page, { clientes: [], catalogo: [], pedidos: [], fechamentos_fin: [{ id: 'fech-2026-10', mes: '2026-10' }] });
-    await page.locator('#sc-modal-ok').click();
-    await page.waitForLoadState('load');
+    await Promise.all([page.waitForEvent('load'), page.locator('#sc-modal-ok').click()]);   // a importacao recarrega a pagina depois da limpeza
     await expect.poll(async () => (await ler(page, 'sc_fin_fech') || []).length).toBe(1);
 });
 

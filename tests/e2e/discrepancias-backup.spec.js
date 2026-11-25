@@ -36,7 +36,7 @@ test('exportar, limpar e importar: o usuario extra entra e os numeros nao repete
     await page.goto(BASE + '/index.html');
     await importar(page, backup);
     await page.waitForURL(/index\.html/);
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_ped'))).toContain(String(ID1));
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_ped')).catch(() => 'navegando')).toContain(String(ID1));
 
     // a sessao de quem importou continua valida
     await page.goto(BASE + '/index.html');
@@ -66,7 +66,7 @@ test('backup antigo (sem usuarios nem contador): importa, usuarios ficam e numer
         pedidos: [{ id: ID1, status: 'Orçamento', itens: [] }, { id: parseInt(YY + '002'), status: 'Orçamento', itens: [] }],
         pedidos_compra: [{ id: ID1, itens: [] }, { id: parseInt(YY + '005'), itens: [] }],
     });
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('sc_ped') || '[]').length)).toBe(2);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('sc_ped') || '[]').length).catch(() => 'navegando')).toBe(2);
     await page.goto(BASE + '/index.html');
     expect(await page.evaluate(() => getUsuarioLogado().email)).toBe('teste@sctech.local');
     const nums = await page.evaluate(() => [gerarNumeroPedido(), gerarNumeroPedidoCompra()]);
@@ -91,8 +91,8 @@ test('layout dos documentos, agenda e alertas voltam depois de exportar, limpar 
     await entrar(page, BASE, {});
     await page.goto(BASE + '/index.html');
     await importar(page, backup);
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_agd_cfg'))).toBe(CFG.sc_agd_cfg);
-    expect(await page.evaluate(() => [localStorage.getItem('sc_doc_layouts'), localStorage.getItem('sc_alertas_cfg')]))
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_agd_cfg')).catch(() => 'navegando')).toBe(CFG.sc_agd_cfg);
+    expect(await avaliarEstavel(page, () => [localStorage.getItem('sc_doc_layouts'), localStorage.getItem('sc_alertas_cfg')]))
         .toEqual([CFG.sc_doc_layouts, CFG.sc_alertas_cfg]);
 });
 
@@ -101,13 +101,25 @@ test('backup antigo (sem config_ls) nao apaga as configuracoes atuais', async ({
     await page.goto(BASE + '/index.html');
     await page.evaluate(cfg => Object.entries(cfg).forEach(([k, v]) => localStorage.setItem(k, v)), CFG);
     await importar(page, { clientes: [], catalogo: [], pedidos: [{ id: ID1, status: 'Orçamento', itens: [] }] });
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('sc_ped') || '[]').length)).toBe(1);
-    expect(await page.evaluate(() => ['sc_doc_layouts', 'sc_agd_cfg', 'sc_alertas_cfg'].map(k => localStorage.getItem(k))))
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('sc_ped') || '[]').length).catch(() => 'navegando')).toBe(1);
+    expect(await avaliarEstavel(page, () => ['sc_doc_layouts', 'sc_agd_cfg', 'sc_alertas_cfg'].map(k => localStorage.getItem(k))))
         .toEqual([CFG.sc_doc_layouts, CFG.sc_agd_cfg, CFG.sc_alertas_cfg]);
 });
 
+// page.evaluate que tolera a recarga que a importacao dispara depois de gravar.
+const avaliarEstavel = async (page, fn) => {
+    for (let i = 0; i < 20; i++) {
+        try { return await page.evaluate(fn); }
+        catch (e) { if (!/context was destroyed|navigation/i.test(e.message)) throw e; await page.waitForLoadState('load'); }
+    }
+};
 const U = (id, email, extra) => Object.assign({ id, nome: email, email, papel_id: 1, ativo: true, permissoes_extras: {}, senha_hash: 'x' }, extra || {});
-const usuariosPapeis = page => page.evaluate(() => ({ u: JSON.parse(localStorage.getItem('sc_usr')), p: JSON.parse(localStorage.getItem('sc_pap')), s: sessionStorage.getItem('sc_user') }));
+const usuariosPapeis = async page => {   // tolera a recarga que a importacao dispara depois de gravar
+    for (let i = 0; i < 20; i++) {
+        try { return await page.evaluate(() => ({ u: JSON.parse(localStorage.getItem('sc_usr')), p: JSON.parse(localStorage.getItem('sc_pap')), s: sessionStorage.getItem('sc_user') })); }
+        catch (e) { if (!/context was destroyed|navigation/i.test(e.message)) throw e; await page.waitForLoadState('load'); }
+    }
+};
 const base = { clientes: [], catalogo: [], pedidos: [] };
 
 test('backup de outra instalacao: a sessao antiga nao vira outro usuario, vai para o login', async ({ page }) => {
@@ -123,7 +135,7 @@ test('backup sem administrador ativo: quem importou (inativo no arquivo) vira ad
     await page.goto(BASE + '/index.html');
     await importar(page, Object.assign({}, base, { usuarios: [U(5, 'teste@sctech.local', { ativo: false, papel_id: 3 }), U(6, 'v@x.com', { papel_id: 3 })] }));
     await page.waitForURL(/index\.html/);
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_usr'))).toContain('"v@x.com"');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_usr')).catch(() => 'navegando')).toContain('"v@x.com"');
     const r = await usuariosPapeis(page);
     const eu = r.u.find(x => x.email === 'teste@sctech.local');
     expect(eu.ativo).toBe(true);
@@ -138,7 +150,7 @@ test('backup sem o importador e sem papel Administrador: importador entra como a
         usuarios: [U(1, 'v@x.com', { papel_id: 3 })],
         papeis: [{ id: 3, nome: 'Vendedor/Atendimento', permissoes: {} }],
     }));
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_usr'))).toContain('"v@x.com"');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_usr')).catch(() => 'navegando')).toContain('"v@x.com"');
     const r = await usuariosPapeis(page);
     const eu = r.u.find(x => x.email === 'teste@sctech.local');
     expect(eu.id).not.toBe(1);
@@ -151,7 +163,7 @@ test('usuarios sem papeis no arquivo: todo usuario fica com um papel que existe'
     await entrar(page, BASE, {});
     await page.goto(BASE + '/index.html');
     await importar(page, Object.assign({}, base, { usuarios: [U(1, 'teste@sctech.local'), U(2, 'a@x.com', { papel_id: 99 }), U(3, 'b@x.com', { papel_id: 6 })] }));
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_usr'))).toContain('"a@x.com"');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_usr')).catch(() => 'navegando')).toContain('"a@x.com"');
     const r = await usuariosPapeis(page);
     r.u.forEach(u => expect(r.p.some(p => p.id === u.papel_id), u.email).toBe(true));
     expect(r.u.find(u => u.email === 'a@x.com').papel_id).toBe(3);
@@ -183,7 +195,7 @@ test('Gerente importa backup com usuarios: usuarios e papeis ficam, ninguem vira
     await expect(page.locator('#sc-modal-msg')).toHaveText('Dados importados. Usuários e acessos não foram importados: só o Administrador importa usuários.');
     await page.locator('#sc-modal-ok').click();
     await page.waitForURL(/index\.html/);
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_cli'))).toContain('Cliente do backup');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_cli')).catch(() => 'navegando')).toContain('Cliente do backup');
     const r = await usuariosPapeis(page);
     expect(r.u).toEqual(antes.u);
     expect(r.p).toEqual(antes.p);

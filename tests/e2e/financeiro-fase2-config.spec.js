@@ -61,7 +61,7 @@ test.skip('categoria Imposto aparece no grafico de despesas com rotulo', async (
     await entrar(page, BASE, { sc_cp: [{ id: 1, tipo: 'variavel', categoria: 'imposto', descricao: 'DAS', valor: 300, mes_referencia: hoje.slice(0, 7), data_vencimento: hoje, data_pagamento: null, status: 'Pendente' }] });
     await page.goto(BASE + '/financeiro.html');
     await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
-    await expect.poll(() => page.evaluate(() => { const c = Chart.getChart('chart-fin-desp'); return c ? c.data.labels : null; })).toEqual(['Imposto']);
+    await expect.poll(() => page.evaluate(() => { const c = Chart.getChart('chart-fin-desp'); return c ? c.data.labels : null; }).catch(() => 'navegando')).toEqual(['Imposto']);
 });
 
 test('papel Vendedor salvo nao ganha Resultado do mes; Financeiro ganha', async ({ page }) => {
@@ -94,16 +94,14 @@ test('exportar e importar levam meta, orcamento e ajustes', async ({ page }) => 
     expect(arq.fin_orcamento_mes).toEqual(orcMes);
     await page.evaluate(() => { localStorage.removeItem('sc_fin_metas'); localStorage.removeItem('sc_fin_orcamento_mes'); localStorage.removeItem('sc_empresa'); });
     await importar(page, arq);
-    await page.locator('#sc-modal-ok').click();
-    await page.waitForLoadState('load');
+    await Promise.all([page.waitForEvent('load'), page.locator('#sc-modal-ok').click()]);   // a importacao recarrega a pagina depois da limpeza
     await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_metas'))).not.toBeNull();
     expect(await ler(page, 'sc_fin_metas')).toEqual(metas);
     expect(await ler(page, 'sc_fin_orcamento_mes')).toEqual(orcMes);
     expect(await ler(page, 'sc_empresa')).toMatchObject(emp);
     // backup antigo: ajustes voltam ao padrao vazio
     await importar(page, { clientes: [], catalogo: [], pedidos: [] });
-    await page.locator('#sc-modal-ok').click();
-    await page.waitForLoadState('load');
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_metas'))).toBe('{}');
+    await Promise.all([page.waitForEvent('load'), page.locator('#sc-modal-ok').click()]);   // a importacao recarrega a pagina depois da limpeza
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('sc_fin_metas')).catch(() => 'navegando')).toBe('{}');
     expect(await ler(page, 'sc_fin_orcamento_mes')).toEqual({});
 });
