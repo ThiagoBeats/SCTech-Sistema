@@ -3175,6 +3175,16 @@ html[data-theme="dark"] .dre-liquido td.dre-neg { color: #FF8A7A; }
 .dre-tabela td.dre-desfav { color: var(--danger-text, var(--danger)); font-weight: 600; }
 html[data-theme="dark"] .dre-tabela td.dre-fav { color: #8FE08C; }
 html[data-theme="dark"] .dre-tabela td.dre-desfav { color: #FF8A7A; }
+/* Coluna RESULTADO: as linhas usam <th>; o estilo geral de <th> (fundo escuro, texto branco, cantos
+   arredondados) nao vale aqui. Seletores com tbody para vencer tambem o th do tema escuro. */
+.dre-tabela tbody th, html[data-theme="dark"] .dre-tabela tbody th { color: var(--dark); background: var(--white); border-radius: 0; letter-spacing: normal; font-size: 13px; padding: 7px 10px; }
+.dre-tabela tbody tr.dre-grupo th, html[data-theme="dark"] .dre-tabela tbody tr.dre-grupo th { background: var(--surface-2); }
+.dre-tabela tbody tr.dre-calculada th, html[data-theme="dark"] .dre-tabela tbody tr.dre-calculada th { background: var(--surface-3); }
+.dre-tabela tbody tr.dre-percentual th, .dre-tabela tbody tr.dre-percentual td { color: #5F6368; font-size: 12px; }
+html[data-theme="dark"] .dre-tabela tbody tr.dre-percentual th, html[data-theme="dark"] .dre-tabela tbody tr.dre-percentual td { color: var(--muted); font-size: 12px; }
+.dre-tabela tbody tr.dre-liquido th { background: var(--ok-bg); color: var(--ok-text); font-size: 14px; }
+html[data-theme="dark"] .dre-tabela tbody tr.dre-liquido th { background: #16301F; color: #8FE08C; font-size: 14px; }
+.dre-tabela thead th { border-radius: 0; }
 
 /* ── FLUXO DE CAIXA (Financeiro novo) ──────────────────────────── */
 #fin-fluxo-conteudo { min-width: 0; }
