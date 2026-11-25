@@ -12,7 +12,7 @@ const RAIZ = path.join(__dirname, '..');
 
 // Trechos que indicam dinheiro no id/name/class do campo.
 const PADRAO_DINHEIRO = new RegExp([
-    'valor', 'pre[cç]o', 'custo', 'saldo', 'desconto', 'mao[-_]?obra', 'recebido', 'limite', 'meta', 'total',
+    'valor', 'pre[cç]o', 'custo', 'saldo', 'desconto', 'mao[-_]?obra', 'recebido', 'limite', 'meta', 'total', 'frete', 'juros', 'multa',
     'extrato', 'pmin', 'pmax', '(^|[-_\\s])orc([-_\\s]|$)'
 ].join('|'), 'i');
 
@@ -79,7 +79,9 @@ test('input com data-moeda e type="text" inputmode="decimal"', () => {
         for (const inp of inputsDe(arq)) {
             if (!/\sdata-moeda(\s|=|>|\/)/.test(inp.tag)) continue;
             total++;
-            if (atributo(inp.tag, 'type') !== 'text' || atributo(inp.tag, 'inputmode') !== 'decimal') {
+            // Campo que aceita negativo usa o teclado comum (o teclado decimal do iPhone nao tem "-").
+            const modo = /data-moeda-neg/.test(inp.tag) ? 'text' : 'decimal';
+            if (atributo(inp.tag, 'type') !== 'text' || atributo(inp.tag, 'inputmode') !== modo) {
                 errados.push(`${inp.arquivo}:${inp.linha}  ${inp.tag.slice(0, 140)}`);
             }
         }

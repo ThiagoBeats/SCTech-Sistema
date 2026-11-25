@@ -931,7 +931,7 @@ function renderContasCfg() {
                         ${TIPOS_CONTA_CFG.map(([v, l]) => `<option value="${v}"${c.tipo === v ? ' selected' : ''}>${l}</option>`).join('')}
                     </select></div>
                 <div class="form-group" style="margin:0"><label>Saldo inicial (R$)</label>
-                    <input type="text" inputmode="decimal" data-moeda data-moeda-neg placeholder="R$ 0,00" class="conta-saldo" value="${escapeHtml(_saldoRascunhoTxt(c.saldo))}"
+                    <input type="text" inputmode="text" data-moeda data-moeda-neg placeholder="R$ 0,00" class="conta-saldo" value="${escapeHtml(_saldoRascunhoTxt(c.saldo))}"
                         oninput="_contasRascunho[${i}].saldo = this.value"></div>
                 <div class="form-group" style="margin:0"><label>Data do saldo</label>
                     <input type="date" class="conta-data" value="${escapeHtml(c.data)}"
@@ -17605,7 +17605,7 @@ function abrirFechamentoMes(mes) {
     function passo1() {
         const corpo = linhas.length ? `<div class="fech-tabela-wrap"><table class="fech-tabela"><thead><tr><th>Conta</th><th style="text-align:right">Esperado</th><th>Saldo no extrato</th><th>Diferença</th></tr></thead><tbody>${linhas.map((l, i) => `
             <tr data-conta="${escapeHtml(String(l.conta_id))}" data-i="${i}"><td>${escapeHtml(l.nome || '')}</td><td style="text-align:right">${_resBrl(l.esperado)}</td>
-                <td><input type="text" inputmode="decimal" data-moeda data-moeda-neg class="fech-extrato" value="${escapeHtml(l.texto)}" placeholder="não conferida" aria-label="Saldo no extrato de ${escapeHtml(l.nome || '')}"></td>
+                <td><input type="text" inputmode="text" data-moeda data-moeda-neg class="fech-extrato" value="${escapeHtml(l.texto)}" placeholder="não conferida" aria-label="Saldo no extrato de ${escapeHtml(l.nome || '')}"></td>
                 <td><div class="fech-dif"></div><div class="fech-acao" style="display:none">
                     <label><input type="radio" name="fech-acao-${i}" value="ajuste"${l.acao === 'ajuste' ? ' checked' : ''}> Lançar ajuste</label>
                     <label><input type="radio" name="fech-acao-${i}" value="anotado"${l.acao !== 'ajuste' ? ' checked' : ''}> Deixar anotado</label>
