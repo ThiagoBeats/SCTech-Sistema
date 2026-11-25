@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CompNfse xmlns="http://www.abrasf.org.br/nfse.xsd">
+  <Nfse>
+    <InfNfse>
+      <Numero>456</Numero>
+      <CodigoVerificacao>ABCD1234</CodigoVerificacao>
+      <DataEmissao>2026-11-22T14:05:00</DataEmissao>
+      <IdentificacaoRps><Numero>10</Numero><Serie>A1</Serie><Tipo>1</Tipo></IdentificacaoRps>
+      <Servico>
+        <Valores><ValorServicos>3450.00</ValorServicos></Valores>
+        <Discriminacao>Instalacao de cortinas</Discriminacao>
+      </Servico>
+      <ValoresNfse><ValorLiquidoNfse>3450.00</ValorLiquidoNfse></ValoresNfse>
+      <PrestadorServico>
+        <IdentificacaoPrestador><Cnpj>12345678000195</Cnpj><InscricaoMunicipal>1234</InscricaoMunicipal></IdentificacaoPrestador>
+        <RazaoSocial>Cortinas Exemplo Ltda</RazaoSocial>
+      </PrestadorServico>
+      <TomadorServico>
+        <IdentificacaoTomador><CpfCnpj><Cpf>12345678909</Cpf></CpfCnpj></IdentificacaoTomador>
+        <RazaoSocial>Maria da Silva</RazaoSocial>
+      </TomadorServico>
+    </InfNfse>
+  </Nfse>
+</CompNfse>
