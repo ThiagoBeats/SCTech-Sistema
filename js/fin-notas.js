@@ -559,7 +559,9 @@ async function verPdfNota(notaId) {
     else {
         let bytes = null;
         try { bytes = await NfArquivos.ler(n.id); } catch (e) { bytes = null; }
-        if (bytes && _nfEhPdf(bytes)) blob = new Blob([bytes], { type: 'application/pdf' });
+        // PDF marcado na nota mas ausente neste navegador (ex.: backup importado sem o arquivo).
+        if (!bytes || !bytes.byteLength) { showAlert('O PDF desta nota não está guardado neste navegador. Anexe o PDF de novo.', '📄'); return; }
+        if (_nfEhPdf(bytes)) blob = new Blob([bytes], { type: 'application/pdf' });
     }
     if (!blob) { showAlert(NF_MSG_NAO_PDF, '⚠️'); return; }
     const url = URL.createObjectURL(blob);
