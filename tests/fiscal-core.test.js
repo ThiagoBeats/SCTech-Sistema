@@ -138,3 +138,29 @@ test('tipoPadrao', () => {
     assert.strictEqual(F.tipoPadrao({}), 'nfse');
     assert.strictEqual(F.tipoPadrao(null), 'nfse');
 });
+
+test('lerXmlNota: valor com virgula decimal', () => {
+    const com = v => fx('nfse-abrasf.xml').replace(/3450\.00/g, v);
+    for (const v of ['3450,00', '3.450,00', '3450.00']) assert.strictEqual(F.lerXmlNota(com(v)).nota.valor, 3450, v);
+    assert.strictEqual(F.lerXmlNota(com('1.234,56')).nota.valor, 1234.56);
+});
+
+test('lerXmlNota: evento de cancelamento de NFS-e nacional', () => {
+    const ev = '<?xml version="1.0"?><evento xmlns="http://www.sped.fazenda.gov.br/nfse"><infPedReg Id="PRE3550308221234567800019500001000000000000072101101"><chNFSe>35503082212345678000195000000000000726112345678901</chNFSe><e101101><xDesc>Cancelamento de NFS-e</xDesc></e101101></infPedReg></evento>';
+    const r = F.lerXmlNota(ev);
+    assert.deepStrictEqual(r.nota.tipo, 'nfse');
+    assert.strictEqual(r.nota.cancelada, true);
+    assert.strictEqual(r.nota.chave, '35503082212345678000195000000000000726112345678901');
+});
+
+test('lerXmlNota: data dd/mm/aaaa da ABRASF', () => {
+    assert.strictEqual(F.lerXmlNota(fx('nfse-abrasf.xml').replace('2026-11-22T14:05:00', '22/11/2026 14:05')).nota.data_emissao, '2026-11-22');
+    assert.strictEqual(F.lerXmlNota(fx('nfse-abrasf.xml').replace('2026-11-22T14:05:00', '22/11/2026')).nota.data_emissao, '2026-11-22');
+});
+
+test('lerXmlNota: DOCTYPE com subconjunto interno e ">" em atributo', () => {
+    const x = fx('nfse-abrasf.xml').replace('?>', '?><!DOCTYPE CompNfse [ <!ELEMENT CompNfse ANY> ]>').replace('<Nfse>', '<Nfse nota="a>b">');
+    const r = F.lerXmlNota(x);
+    assert.strictEqual(r.ok, true);
+    assert.strictEqual(r.nota.numero, '456');
+});

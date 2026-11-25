@@ -32,11 +32,11 @@
     // Devolve a raiz { nome, attrs, filhos, texto } ou null se o XML estiver mal formado.
     function parsear(texto) {
         let s = String(texto == null ? '' : texto).replace(/^﻿/, '');
-        s = s.replace(/<\?[\s\S]*?\?>/g, '').replace(/<!--[\s\S]*?-->/g, '').replace(/<!DOCTYPE[^>]*>/gi, '');
+        s = s.replace(/<\?[\s\S]*?\?>/g, '').replace(/<!--[\s\S]*?-->/g, '').replace(/<!DOCTYPE[^>\[]*(\[[\s\S]*?\])?\s*>/gi, '');
         s = s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, (m, c) => c.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
         const raizNo = { nome: '#raiz', attrs: {}, filhos: [], texto: '' };
         const pilha = [raizNo];
-        const re = /<([^>]*)>|([^<]+)/g;
+        const re = /<((?:[^>"']|"[^"]*"|'[^']*')*)>|([^<]+)/g;
         let m;
         while ((m = re.exec(s))) {
             const topo = pilha[pilha.length - 1];
@@ -81,8 +81,19 @@
     }
     const txt = (no, ...nomes) => { const n = no ? achar(no, ...nomes) : null; return n ? entidades(n.texto).trim() : ''; };
     const primeiro = (...vs) => { for (const v of vs) if (v) return v; return ''; };
-    const dia = s => { const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(s || '').trim()); return m ? m[1] : ''; };
-    const num = s => { const n = Number(String(s || '').trim()); return isFinite(n) ? n : 0; };
+    const dia = s => {
+        const t = String(s || '').trim();
+        let m = /^(\d{4}-\d{2}-\d{2})/.exec(t);
+        if (m) return m[1];
+        m = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(t);
+        return m ? m[3] + '-' + m[2] + '-' + m[1] : '';
+    };
+    const num = s => {
+        let t = String(s || '').trim().replace(/\s/g, '');
+        if (t.indexOf(',') >= 0) t = t.replace(/\./g, '').replace(',', '.');
+        const n = Number(t);
+        return isFinite(n) ? n : 0;
+    };
     const semPrefixo = (id, p) => String(id || '').replace(new RegExp('^' + p), '');
 
     function base(tipo, o) {
@@ -95,7 +106,7 @@
     // ---------- leitura da nota ----------
     function lerXmlNota(texto) {
         const t = String(texto == null ? '' : texto);
-        const marcas = /infNFe|infNFSe|InfNfse|procEventoNFe|CompNfse/i.test(t);
+        const marcas = /infNFe|infNFSe|InfNfse|procEventoNFe|CompNfse|infPedReg/i.test(t);
         if (!/^\s*﻿?\s*</.test(t)) return { ok: false, motivo: 'nao_e_nota' };
         const raizNo = parsear(t);
         if (!raizNo) return { ok: false, motivo: marcas ? 'xml_invalido' : 'nao_e_nota' };
@@ -103,6 +114,10 @@
         const evento = achar(raizNo, 'infEvento');
         if (evento && txt(evento, 'tpEvento') === '110111') {
             return { ok: true, nota: base('nfe', { chave: txt(evento, 'chNFe'), cancelada: true }) };
+        }
+        const regNac = achar(raizNo, 'infPedReg');
+        if (regNac && /e101101|101101/.test(t)) {
+            return { ok: true, nota: base('nfse', { chave: txt(regNac, 'chNFSe'), cancelada: true }) };
         }
         const nfe = achar(raizNo, 'infNFe');
         if (nfe) {
