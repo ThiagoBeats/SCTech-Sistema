@@ -3297,3 +3297,11 @@ html[data-theme="dark"] .nf-aviso-manual { color: #F5F6F8; }
     .nf-overlay { padding: 10px; }
     .nf-box .modal-body { padding: 16px; }
 }
+.nf-filtros { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 12px; }
+.nf-filtros .form-group { margin: 0; min-width: 0; }
+.nf-filtros .nf-busca { flex: 1 1 180px; }
+.nf-lista-tabela { overflow-x: auto; max-width: 100%; }
+.nf-clicavel { cursor: pointer; }
+.nf-clicavel:hover { background: var(--bg); }
+.nf-lista-rodape { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px; color: var(--dark); }
+.nf-selo-lanc { white-space: nowrap; }

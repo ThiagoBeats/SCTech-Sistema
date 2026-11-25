@@ -1311,6 +1311,11 @@ Na janela do carrinho:
       o XML do evento de cancelamento; a nota não some, fica com o selo Cancelada e o evento no Histórico.
     * Permissões: emitir, anexar PDF e cancelar = Contas a receber completo ou Pedidos completo; ver = quem vê o pedido.
     * Guardado em sc_nf (também no backup); sem espaço no navegador mostra a mensagem de espaço cheio e não grava.
+    * Consulta no financeiro: em Lançamentos > Contas a receber, o botão "🧾 Notas fiscais" abre a lista de todas as notas
+      (Número, Tipo, Cliente, Pedido, Data, Valor, Status) com filtros de período de emissão (padrão: mês atual), status,
+      tipo e busca por número ou cliente; mostra o total só das notas autorizadas do filtro; clicar numa nota abre a janela
+      do pedido; Excel da lista filtrada. A conta a receber de um pedido com nota ganha o selo "NF nº X".
+      Quem só visualiza Contas a receber vê a lista, sem o botão Cancelar nota.
   - DRE — Resultado da empresa: tabela do ano (Jan a Dez + Total), Regime Caixa | Competência e seletor de Ano.
     Começa recolhida (grupos e linhas calculadas); o + abre os filhos diretos do grupo (subgrupos abrem de novo).
     Receitas, Custos, Margem de contribuição (+ % margem), Despesas (variáveis, fixas, outras), Resultado

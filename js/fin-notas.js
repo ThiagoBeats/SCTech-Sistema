@@ -553,3 +553,82 @@ function abrirHistoricoNota(notaId) {
     </div>`).join('');
     _nfJanela('nf-historico', `Histórico da nota${n.numero ? ' nº ' + _nfEsc(n.numero) : ''}`, linhas || '<p class="nf-vazio">Sem eventos.</p>', 520);
 }
+
+// ---------- consulta no financeiro (Lancamentos > Contas a receber > Notas fiscais) ----------
+function abrirListaNotas() {
+    if (!_nfPodeVer()) return;
+    const hoje = typeof hojeLocal === 'function' ? hojeLocal() : new Date().toISOString().slice(0, 10);
+    const de = hoje.slice(0, 8) + '01';
+    const ate = hoje.slice(0, 8) + String(new Date(Number(hoje.slice(0, 4)), Number(hoje.slice(5, 7)), 0).getDate()).padStart(2, '0');
+    const sel = (id, ops) => `<select id="${id}" onchange="_nfListaFiltrar()">${ops.map(o => `<option value="${o[0]}">${o[1]}</option>`).join('')}</select>`;
+    const o = _nfJanela('nf-lista-janela', 'Notas fiscais', `
+        <div class="nf-filtros">
+            <div class="form-group"><label for="nfl-de">De</label><input type="date" id="nfl-de" value="${de}" onchange="_nfListaFiltrar()"></div>
+            <div class="form-group"><label for="nfl-ate">Até</label><input type="date" id="nfl-ate" value="${ate}" onchange="_nfListaFiltrar()"></div>
+            <div class="form-group"><label for="nfl-status">Status</label>${sel('nfl-status', [['', 'Todos'], ['autorizada', 'Autorizada'], ['cancelada', 'Cancelada'], ['rascunho', 'Rascunho'], ['processando', 'Processando'], ['rejeitada', 'Rejeitada']])}</div>
+            <div class="form-group"><label for="nfl-tipo">Tipo</label>${sel('nfl-tipo', [['', 'Todos'], ['nfse', 'NFS-e'], ['nfe', 'NF-e']])}</div>
+            <div class="form-group nf-busca"><label for="nfl-busca">Buscar</label><input type="text" id="nfl-busca" placeholder="Número ou cliente…" oninput="_nfListaFiltrar()"></div>
+        </div>
+        <div class="nf-lista-tabela"><table class="data-table"><thead><tr><th>Número</th><th>Tipo</th><th>Cliente</th><th>Pedido</th><th>Data</th><th style="text-align:right">Valor</th><th>Status</th></tr></thead><tbody id="nfl-tbody"></tbody></table></div>
+        <div class="nf-lista-rodape"><span id="nfl-total"></span><button type="button" class="btn btn-outline btn-sm" id="nfl-excel" onclick="exportarListaNotasExcel()">Excel</button></div>`, 980);
+    if (o) _nfListaFiltrar();
+}
+
+function _nfNomeCliente(n) {
+    const c = (db.clientes || []).find(x => String(x.id) === String(n.cliente_id));
+    if (c) return c.nome || '';
+    const p = (db.pedidos || []).find(x => String(x.id) === String(n.pedido_id));
+    return p ? (p.clienteNome || '') : '';
+}
+
+function _nfListaFiltradas() {
+    const v = id => { const e = document.getElementById(id); return e ? e.value : ''; };
+    const de = v('nfl-de'), ate = v('nfl-ate'), st = v('nfl-status'), tp = v('nfl-tipo');
+    const q = v('nfl-busca').trim().toLowerCase();
+    return _nfNotas().filter(n => {
+        const d = String(n.data_emissao || '').slice(0, 10);
+        if (de && d < de) return false;
+        if (ate && d > ate) return false;
+        if (st && n.status !== st) return false;
+        if (tp && n.tipo !== tp) return false;
+        if (q && !(String(n.numero || '').toLowerCase().includes(q) || _nfNomeCliente(n).toLowerCase().includes(q))) return false;
+        return true;
+    }).sort((a, b) => String(b.data_emissao || '').localeCompare(String(a.data_emissao || '')) || String(b.numero || '').localeCompare(String(a.numero || '')));
+}
+
+function _nfListaFiltrar() {
+    const tb = document.getElementById('nfl-tbody');
+    if (!tb) return;
+    const lista = _nfListaFiltradas();
+    tb.innerHTML = lista.length ? lista.map(n => {
+        const [rot, cls] = NF_STATUS[n.status] || [n.status, 'fin-badge-gray'];
+        const ped = (db.pedidos || []).some(p => String(p.id) === String(n.pedido_id));
+        return `<tr class="nf-lista-linha${ped ? ' nf-clicavel' : ''}" data-nota="${_nfEsc(n.id)}" ${ped ? `onclick="abrirNotasDoPedido(${_nfEsc(JSON.stringify(n.pedido_id))})" title="Abrir as notas do pedido"` : ''}>
+            <td>${_nfEsc(n.numero || '—')}</td><td>${_nfRotuloTipo(n.tipo)}</td><td>${_nfEsc(_nfNomeCliente(n)) || '—'}</td>
+            <td>#${_nfEsc(formatPedidoId(n.pedido_id))}</td><td>${_nfEsc(_nfDataBr(n.data_emissao))}</td>
+            <td style="text-align:right;white-space:nowrap">R$ ${_nfBrl(n.valor)}</td><td><span class="fin-badge ${cls}">${_nfEsc(rot)}</span></td></tr>`;
+    }).join('') : '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">Nenhuma nota fiscal encontrada.</td></tr>';
+    const aut = lista.filter(n => n.status === 'autorizada');
+    const tot = aut.reduce((s, n) => s + (Number(n.valor) || 0), 0);
+    document.getElementById('nfl-total').innerHTML = `Total das autorizadas: <strong>R$ ${_nfBrl(tot)}</strong> · ${aut.length} ${aut.length === 1 ? 'nota' : 'notas'}`;
+}
+
+async function exportarListaNotasExcel() {
+    const lista = _nfListaFiltradas();
+    const v = id => (document.getElementById(id) || {}).value || '';
+    const emp = getEmpresa();
+    const aoa = [[emp.nome_fantasia || emp.razao_social || 'SCTech'], ['Notas fiscais'], ['Período: ' + _nfDataBr(v('nfl-de')) + ' a ' + _nfDataBr(v('nfl-ate'))], [],
+        ['Número', 'Tipo', 'Cliente', 'Pedido', 'Data', 'Valor', 'Status']]
+        .concat(lista.map(n => [n.numero || '', _nfRotuloTipo(n.tipo), _nfNomeCliente(n), '#' + formatPedidoId(n.pedido_id), _nfDataBr(n.data_emissao), Number(n.valor) || 0, (NF_STATUS[n.status] || [n.status])[0]]));
+    const total = lista.filter(n => n.status === 'autorizada').reduce((s, n) => s + (Number(n.valor) || 0), 0);
+    aoa.push([], ['Total das autorizadas', '', '', '', '', total]);
+    await _dreBaixarExcel('Notas_fiscais_' + v('nfl-de') + '_a_' + v('nfl-ate') + '.xlsx', 'Notas fiscais', aoa);
+}
+
+// Selo "NF nº X" da conta a receber de um pedido com nota (so notas nao canceladas).
+function notasSeloPedido(pedidoId) {
+    if (pedidoId == null || pedidoId === '' || !_nfPodeVer()) return '';
+    const ns = _nfNotas().filter(n => String(n.pedido_id) === String(pedidoId) && n.status !== 'cancelada' && n.numero);
+    if (!ns.length) return '';
+    return ` <span class="fin-badge fin-badge-blue nf-selo-lanc" title="Notas fiscais do pedido">NF nº ${_nfEsc(ns.map(n => n.numero).join(', '))}</span>`;
+}
