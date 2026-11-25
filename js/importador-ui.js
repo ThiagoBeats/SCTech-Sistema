@@ -829,7 +829,7 @@ function _impPasso3HTML() {
                     <option value="">— sem papel —</option>
                     ${papeis.filter(p => p.valor !== 'ignorar').map(p => `<option value="${p.valor}">${p.rotulo}</option>`).join('')}
                 </select>
-                <input type="text" id="imp-nova-valor" placeholder="Valor para todas as linhas">
+                <input type="text" id="imp-nova-valor" data-sem-maiuscula placeholder="Valor para todas as linhas">
                 <button class="btn btn-sm" onclick="_impAdicionarColuna(${li})">Adicionar</button>
                 <button class="btn btn-outline btn-sm" onclick="_impAlternarNovaColuna(${li})">Cancelar</button>
             </div>` : ''}`;

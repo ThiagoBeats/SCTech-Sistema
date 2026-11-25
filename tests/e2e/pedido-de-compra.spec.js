@@ -190,7 +190,7 @@ test('clicar no numero abre o pedido para editar', async ({ page }) => {
     await expect(page.locator('#pc-btn-cancelar-edicao')).toBeVisible();
     expect(await page.inputValue('#pc-fornecedor')).toBe('7');
     expect(await page.inputValue('#pc-busca-cnpj'), 'o CNPJ vem junto').toBe('11.222.333/0001-44');
-    expect(await page.inputValue('#pc-obs')).toBe('entregar ate sexta');
+    expect(await page.inputValue('#pc-obs')).toBe('Entregar ate sexta');
     expect((await page.locator('#tb-pc-draft').innerText())).toContain('TRILHO');
 });
 

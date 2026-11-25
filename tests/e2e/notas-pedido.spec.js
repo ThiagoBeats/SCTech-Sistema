@@ -610,7 +610,7 @@ test('provedor com servidor: emitir recebe referencia e pedido_id, rascunho vira
     await page.locator('#nf-cancel-ok').click();
     await expect(page.locator('#nf-cancel-msg')).toContainText('não foi confirmado');
     expect((await notas(page))[0].status).toBe('processando');
-    expect((await page.evaluate(() => window.__chamadas))[1]).toEqual(['cancelar', 'SRV-1', 'teste']);
+    expect((await page.evaluate(() => window.__chamadas))[1]).toEqual(['cancelar', 'SRV-1', 'Teste']);
     // processando: segue processando com evento; cancelada: cancela
     await page.evaluate(() => { window.__respCancel = 'cancelada'; });
     await page.locator('#nf-cancel-ok').click();

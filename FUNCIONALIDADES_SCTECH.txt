@@ -18,6 +18,16 @@ Tecnologia:
     gráficos funcionam sem internet
   - Autenticação: sessionStorage com credencial hardcoded
   - Compatível com: Chrome, Firefox, Edge, Safari (versões modernas)
+  - Máscaras globais (js/mascaras-core.js + js/mascaras.js, em todas as telas):
+    * Maiúscula automática: nos campos de texto livre (nome, endereço,
+      observações, descrições) a primeira letra e a primeira letra depois de
+      ". ", "? " e "! " viram maiúscula ao digitar. Não mexe em e-mail, senha,
+      telefone, CEP, CPF/CNPJ, códigos, busca e filtros (nem em campos com
+      data-sem-maiuscula). Vale também para janelas criadas depois; respeita
+      acentos compostos (´ + a = Á) e mantém o cursor.
+    * Moeda (campos com data-moeda): digita-se só números e o campo mostra
+      R$ 1.250,00; colar "1250,50" ou "1.250,50" funciona. Valores gravados
+      continuam sendo números.
 
 Módulos (telas):
   1. Login

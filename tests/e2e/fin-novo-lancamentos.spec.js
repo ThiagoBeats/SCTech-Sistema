@@ -393,7 +393,7 @@ test('lancamento gerado pelo sistema nao deixa mudar valor e o pedido segue into
     await expect(page.locator('#lf-pedido')).toHaveCount(0);
     await page.fill('#lf-obs', 'obs nova');
     await page.locator('#lf-salvar').click();
-    await expect.poll(async () => (await ler(page, 'sc_cr')).find(c => c.id === 6).observacoes).toBe('obs nova');
+    await expect.poll(async () => (await ler(page, 'sc_cr')).find(c => c.id === 6).observacoes).toBe('Obs nova');
     expect((await ler(page, 'sc_cr')).find(c => c.id === 6).pedido_id).toBe(26300);
 });
 

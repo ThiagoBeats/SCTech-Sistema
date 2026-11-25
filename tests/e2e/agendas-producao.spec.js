@@ -143,10 +143,10 @@ test('medicoes: editar corrige o registro sem criar outro', async ({ page }) => 
     await page.click('.agd-modal button:has-text("Editar")');
     await page.fill('#agdf-end-rua', 'Av. das Palmeiras, 1001');
     await page.click('#agdf-salvar');
-    await expect(page.locator('#med-pend-lista')).toContainText('Av. das Palmeiras, 1001');
+    await expect(page.locator('#med-pend-lista')).toContainText('Av. Das Palmeiras, 1001');
     const med = await lerMed(page);
     expect(med.length).toBe(6);
-    expect(med.find(m => m.id === 2).endereco).toBe('Av. das Palmeiras, 1001');
+    expect(med.find(m => m.id === 2).endereco).toBe('Av. Das Palmeiras, 1001');
 });
 
 test('medicoes: editar exige endereco e data', async ({ page }) => {

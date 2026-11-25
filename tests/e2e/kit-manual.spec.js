@@ -193,7 +193,7 @@ test('o kit pronto salvo fica igual a um kit importado', async ({ page }) => {
     expect(k.tipo).toBe('pronto');
     expect(k.referencia).toBe('5501');
     expect(k.medida).toBe('1,00 a 1,50 m');
-    expect(k.descricao).toBe('inclui suportes');
+    expect(k.descricao).toBe('Inclui suportes');
     expect(k.preco_custo).toBe(100);
     expect(k.preco).toBe(150);
     expect(k.estoque_atual).toBe(0);
