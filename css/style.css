@@ -3175,3 +3175,73 @@ html[data-theme="dark"] .dre-liquido td.dre-neg { color: #FF8A7A; }
 .dre-tabela td.dre-desfav { color: var(--danger-text, var(--danger)); font-weight: 600; }
 html[data-theme="dark"] .dre-tabela td.dre-fav { color: #8FE08C; }
 html[data-theme="dark"] .dre-tabela td.dre-desfav { color: #FF8A7A; }
+
+/* ── FLUXO DE CAIXA (Financeiro novo) ──────────────────────────── */
+#fin-fluxo-conteudo { min-width: 0; }
+.fluxo-topo-card { margin-bottom: 16px; }
+.fluxo-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; }
+.fluxo-kpis .res-kpi-valor { white-space: nowrap; }
+.fluxo-kpis.fluxo-kpis-cat { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.fluxo-ent { color: var(--ok-text); }
+.fluxo-sai { color: var(--danger-text, var(--danger)); }
+.fluxo-conferido { margin: -4px 0 16px; font-size: 13px; color: var(--muted); }
+.fluxo-conferido-linha strong { color: var(--dark); }
+.fluxo-card { margin-bottom: 16px; min-width: 0; }
+.fluxo-card h3 { margin: 0; color: var(--primary); }
+.fluxo-grafico { position: relative; height: 280px; }
+.fluxo-tabela { width: 100%; font-size: 13px; }
+.fluxo-tabela .fluxo-num { text-align: right; white-space: nowrap; }
+.fluxo-tabela td.fluxo-ent, .fluxo-tabela td.fluxo-sai { font-weight: 600; }
+.fluxo-tabela .fluxo-acoes { width: 36px; text-align: right; }
+.fluxo-saldo-inicial td { background: var(--surface-2); }
+.fluxo-previsto td { color: var(--muted); }
+.fluxo-previsto td.fluxo-ent, .fluxo-previsto td.fluxo-sai { color: var(--muted); }
+.fluxo-clicavel { cursor: pointer; }
+.fluxo-clicavel:hover td, .fluxo-clicavel:focus td { background: var(--surface-2); }
+.fluxo-selo { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 8px; vertical-align: middle; white-space: nowrap; }
+.fluxo-selo-prev { background: var(--surface-3, #F1F1F1); color: var(--muted); border: 1px solid var(--border); }
+.fluxo-selo-transf { background: var(--warn-bg); color: var(--dark); }
+.fluxo-rel-tabela { min-width: 520px; }
+.fluxo-rel-tabela th[scope="row"] { text-align: left; font-weight: inherit; background: transparent; color: inherit; border-radius: 0; }
+.fluxo-rel-forte th, .fluxo-rel-forte td { font-weight: 700; background: var(--surface-2); }
+.fluxo-rel-semi th, .fluxo-rel-semi td { font-weight: 600; }
+.fluxo-rel-vazio th { color: var(--muted); font-style: italic; }
+.fluxo-rel-seg { flex-wrap: wrap; }
+@media (max-width: 900px) { .fluxo-kpis, .fluxo-kpis.fluxo-kpis-cat { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) {
+    .fluxo-kpis .res-kpi-valor { font-size: 17px; }
+    .fluxo-grafico { height: 220px; }
+    .fluxo-tabela th:nth-child(3), .fluxo-tabela td:nth-child(3) { display: none; }
+    .fluxo-rel-seg .dre-seg-btn { flex: 1 1 100%; text-align: left; }
+}
+/* Conciliar extrato (dentro do Fluxo de caixa) */
+.lanc-barra .form-group.conc-grupo-abas { flex: 0 1 auto; }
+.conc-abas { flex-wrap: wrap; }
+.conc-resumo { margin: 0 0 12px; font-weight: 600; color: var(--dark); }
+.conc-lista { display: flex; flex-direction: column; gap: 10px; }
+.conc-linha { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--white); min-width: 0; }
+.conc-linha-topo { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; font-size: 14px; }
+.conc-data { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.conc-desc { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; font-weight: 600; color: var(--dark); }
+.conc-valor { white-space: nowrap; font-weight: 700; }
+.conc-sug { margin-top: 6px; font-size: 13px; color: var(--dark); overflow-wrap: anywhere; }
+.conc-sem { color: var(--muted); font-style: italic; }
+.conc-acoes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.conc-escolher { margin-top: 10px; padding: 10px; border-radius: 6px; background: var(--surface-2); }
+.conc-cands { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow: auto; }
+.conc-cand { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; padding: 6px; border-radius: 4px; cursor: pointer; background: var(--white); border: 1px solid var(--border); }
+.conc-cand-trava { opacity: .6; cursor: not-allowed; }
+.conc-cand-tipo { font-size: 11px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.conc-cand-desc { flex: 1 1 140px; min-width: 0; overflow-wrap: anywhere; }
+.conc-cand-valor { white-space: nowrap; }
+.conc-escolher-rodape { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; }
+#conc-soma { flex: 1 1 180px; color: var(--muted); }
+.conc-imps { margin: 0 0 12px; font-size: 13px; }
+.conc-imps summary { cursor: pointer; font-weight: 600; color: var(--dark); }
+.conc-imp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.conc-imp-desc { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; color: var(--dark); }
+.conc-imp-acoes { display: flex; flex-wrap: wrap; gap: 6px; }
+#conc-soma.conc-soma-ok { color: var(--ok-text); font-weight: 600; }
+@media (max-width: 600px) {
+    .conc-acoes .btn { flex: 1 1 40%; min-width: 0; width: auto; }
+}

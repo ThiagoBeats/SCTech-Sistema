@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Financeiro - SCTech</title>
     <link rel="icon" href="images/logo.png">
-    <link rel="stylesheet" href="css/style.css?v=20261206a">
+    <link rel="stylesheet" href="css/style.css?v=20261207a">
     <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('sc_tema')||'light');document.documentElement.setAttribute('data-sidebar',localStorage.getItem('sc_sidebar')||'expanded')</script>
 </head>
 <body>
@@ -427,35 +427,9 @@
                 </table>
             </div>
         </div>
-        <!-- TAB: FLUXO DE CAIXA (provisorio: o Extrato de sempre, ate o Fluxo novo) -->
+        <!-- TAB: FLUXO DE CAIXA (montado por js/fin-fluxo.js) -->
         <div id="fin-fluxo" class="fin-panel">
-            <p id="fin-fluxo-aviso" style="font-size:12px;color:var(--muted,#8F8F8F);margin:0 0 10px">Versão provisória: o novo Fluxo de caixa chega na próxima atualização.</p>
-            <div class="card">
-                <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
-                    <div class="form-group" style="flex:1;min-width:160px;margin-bottom:0">
-                        <label for="extrato-conta">Conta</label>
-                        <select id="extrato-conta" onchange="renderExtrato({ contaId: this.value })"></select>
-                    </div>
-                    <div class="form-group" style="min-width:150px;margin-bottom:0">
-                        <label for="extrato-mes">Mês</label>
-                        <input type="month" id="extrato-mes" onchange="if (this.value) renderExtrato({ mes: this.value })">
-                    </div>
-                    <button class="btn btn-success" id="extrato-btn-transferir" onclick="abrirModalTransferencia()" style="display:none">⇄ Transferir</button>
-                </div>
-                <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:12px;font-size:14px">
-                    <div><span id="extrato-lbl-inicio" style="color:#888">Saldo no início</span><br><strong id="extrato-saldo-inicio"></strong></div>
-                    <div><span id="extrato-lbl-fim" style="color:#888">Saldo no fim</span><br><strong id="extrato-saldo-fim"></strong></div>
-                </div>
-                <table>
-                    <thead><tr>
-                        <th>Data</th><th>Descrição</th><th>Conta</th>
-                        <th style="text-align:right">Entrou</th>
-                        <th style="text-align:right">Saiu</th>
-                        <th></th>
-                    </tr></thead>
-                    <tbody id="extrato-linhas"></tbody>
-                </table>
-            </div>
+            <div id="fin-fluxo-conteudo"></div>
         </div>
 
         <!-- TAB: DRE -->
@@ -463,29 +437,32 @@
             <div class="card" id="fin-dre-conteudo"></div>
         </div>
     </main>
-    <script src="js/vendor/chart.umd.min.js?v=20261206a"></script>
-    <script src="js/etiquetas-core.js?v=20261206a"></script>
-    <script src="js/etiquetas-render.js?v=20261206a"></script>
-    <script src="js/cortina-desenho.js?v=20261206a"></script>
-    <script src="js/docs-layout-core.js?v=20261206a"></script>
-    <script src="js/financeiro-core.js?v=20261206a"></script>
-    <script src="js/caixa-core.js?v=20261206a"></script>
-    <script src="js/carrinho-core.js?v=20261206a"></script>
-    <script src="js/resultado-core.js?v=20261206a"></script>
-    <script src="js/fechamento-core.js?v=20261206a"></script>
-    <script src="js/simulador-core.js?v=20261206a"></script>
-    <script src="js/rotas-core.js?v=20261206a"></script>
-    <script src="js/endereco-core.js?v=20261206a"></script>
-    <script src="js/agenda-core.js?v=20261206a"></script>
-    <script src="js/notificacoes.js?v=20261206a"></script>
-    <script src="js/feriados-core.js?v=20261206a"></script>
-    <script src="js/fin-cat-core.js?v=20261206a"></script>
-    <script src="js/dre-core.js?v=20261206a"></script>
-    <script src="js/app.js?v=20261206a"></script>
-    <script src="js/fin-novo.js?v=20261206a"></script>
-    <script src="js/fin-dre.js?v=20261206a"></script>
-    <script src="js/agenda.js?v=20261206a"></script>
-    <script src="js/rotas.js?v=20261206a"></script>
-    <script src="js/compartilhar-doc.js?v=20261206a"></script>
+    <script src="js/vendor/chart.umd.min.js?v=20261207a"></script>
+    <script src="js/etiquetas-core.js?v=20261207a"></script>
+    <script src="js/etiquetas-render.js?v=20261207a"></script>
+    <script src="js/cortina-desenho.js?v=20261207a"></script>
+    <script src="js/docs-layout-core.js?v=20261207a"></script>
+    <script src="js/financeiro-core.js?v=20261207a"></script>
+    <script src="js/caixa-core.js?v=20261207a"></script>
+    <script src="js/carrinho-core.js?v=20261207a"></script>
+    <script src="js/resultado-core.js?v=20261207a"></script>
+    <script src="js/fechamento-core.js?v=20261207a"></script>
+    <script src="js/simulador-core.js?v=20261207a"></script>
+    <script src="js/rotas-core.js?v=20261207a"></script>
+    <script src="js/endereco-core.js?v=20261207a"></script>
+    <script src="js/agenda-core.js?v=20261207a"></script>
+    <script src="js/notificacoes.js?v=20261207a"></script>
+    <script src="js/feriados-core.js?v=20261207a"></script>
+    <script src="js/fin-cat-core.js?v=20261207a"></script>
+    <script src="js/dre-core.js?v=20261207a"></script>
+    <script src="js/fluxo-core.js?v=20261207a"></script>
+    <script src="js/conciliacao-core.js?v=20261207a"></script>
+    <script src="js/app.js?v=20261207a"></script>
+    <script src="js/fin-novo.js?v=20261207a"></script>
+    <script src="js/fin-dre.js?v=20261207a"></script>
+    <script src="js/fin-fluxo.js?v=20261207a"></script>
+    <script src="js/agenda.js?v=20261207a"></script>
+    <script src="js/rotas.js?v=20261207a"></script>
+    <script src="js/compartilhar-doc.js?v=20261207a"></script>
 </body>
 </html>

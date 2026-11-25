@@ -1214,7 +1214,7 @@ Na janela do carrinho:
 4 abas: Resumo | Lançamentos | Fluxo de caixa | DRE
   - Resumo: cartão "Minhas contas" (uma linha por conta ativa: selo redondo com a sigla e a cor do banco, nome,
     "Conta corrente · Ag 0001 · CC 12345-6", saldo de hoje, etiqueta "Manual" e "Atualizado em DD/MM" ou "Sem
-    movimentos"; linha "Saldo total"; botão "+ Conectar conta", que abre o cadastro de conta em Configurar Empresa
+    movimentos"; conta com abertura marcada para depois de hoje mostra R$ 0,00 até o dia da abertura; linha "Saldo total"; botão "+ Conectar conta", que abre o cadastro de conta em Configurar Empresa
     com a nota de que a conexão automática com o banco (Open Finance) chega com o servidor). Indicadores Lucro
     líquido, Margem líquida, Ticket médio e Receita, com Período (Este mês, Mês passado, Trimestre, Ano,
     Personalizado) e Regime (Caixa ou Competência), comparados ao período anterior ("↑ 12%" verde, "↓ 8%"
@@ -1224,7 +1224,71 @@ Na janela do carrinho:
     linha destacada. Calculado na hora: some ao pagar, receber ou cancelar.
   - Cadastro de conta (Configurar Empresa › Preferências › Contas): campos novos Banco (lista dos mais comuns +
     Outro), Agência, Número da conta e Tipo da conta (corrente, poupança, caixa, cartão).
-  - Fluxo de caixa mostra o Extrato de sempre (versão provisória).
+  - Fluxo de caixa (substitui o Extrato provisório): filtros Período (padrão: mês atual), Ver por Dia | Semana |
+    Mês (padrão Dia), Conta (Todas ou uma; as desativadas aparecem com "(desativada)" e só elas mostram o próprio
+    histórico) e Categoria. Com uma categoria escolhida, os cartões são Entradas, Saídas e "Resultado da categoria"
+    (sem saldo). Sem categoria, quatro cartões: Saldo inicial, Entradas, Saídas e Saldo final; quando o período passa
+    de hoje, "Previsto até DD/MM: R$ X" abaixo do Saldo final (contas em aberto pelo vencimento, de hoje em
+    diante; repasses de cartão e recorrências do mês entram). Gráfico de linhas (Saldo, Entradas, Saídas) com a
+    parte prevista tracejada, legenda e tema escuro legível. Tabela "Movimentações do período": Saldo inicial no
+    topo e depois Data, Descrição, Conta, Entrada, Saída e Saldo; linhas previstas em cinza com o selo "Previsto", com a pessoa e a descrição do lançamento e a conta prevista (quando há),
+    e clicar nelas abre o lançamento como nas realizadas;
+    transferências com o selo "Transferência". Com "Todas as contas" a transferência não entra em Entradas nem em
+    Saídas (nunca é receita ou despesa); com uma conta escolhida conta como entrada ou saída dela. Clicar numa
+    linha de recebimento ou pagamento abre o lançamento em Lançamentos (se a pessoa vê aquele lado). Avisos: o
+    período inválido, os recebimentos sem conta do período e a conta ainda não aberta no período ("conta aberta
+    em DD/MM/AAAA"). Botões: Transferir entre contas (a janela de sempre) e, em cada linha de transferência, o
+    menu ⋮ com "Excluir transferência" (os dois lados saem); Importar extrato e Conciliar (aparecem só com Fluxo
+    de caixa completo); Relatórios (para quem vê o Fluxo). Para cada conta com extrato conciliado, a linha
+    "Conferido com o extrato até DD/MM" (a última data conciliada sem nenhuma linha pendente da conta até ela;
+    ignoradas não contam).
+    Quem só visualiza não vê Transferir, Importar, Conciliar nem o menu de excluir.
+    * Importar extrato (janela): escolher a Conta (obrigatória) e o arquivo .ofx baixado do banco (SGML ou XML,
+      acentos em ISO-8859-1/1252 ou UTF-8, valores com vírgula ou ponto). Arquivo que não é OFX mostra "Arquivo não
+      reconhecido como extrato OFX.". Se o número da conta do arquivo (ACCTID) não bate com o Número da conta
+      cadastrado, pergunta "Este extrato parece ser da conta X, e você escolheu Y. Importar mesmo assim?" (Cancelar
+      não importa nada). Só entram as linhas novas (mesmo FITID na mesma conta não entra duas vezes): "N linha(s)
+      nova(s) importada(s); M já estavam no sistema." e abre a tela Conciliar da conta. Grava em sc_fin_extrato
+      (entra no backup) e atualiza o "atualizado em" da conta.
+    * Conciliar (tela cheia, por conta): seletor de Conta e abas Pendentes | Conciliadas | Ignoradas (com a
+      contagem). Cada linha do extrato mostra data, descrição, valor e a melhor sugestão (lançamento em aberto,
+      movimento ainda não conciliado da conta, repasse de cartão pelo líquido ou "N repasses de cartão" do mesmo
+      dia que somam o depósito; mesmo sentido, valor ±R$ 0,01, data ±5 dias). Ações:
+      - Confirmar: lançamento em aberto → baixa na data do extrato, na conta do extrato (mesma rotina da baixa
+        manual; histórico "Conciliado com o extrato de DD/MM"); movimento existente → só liga; repasses → liga aos
+        movimentos do repasse (entrada bruta e taxa).
+      - Escolher outro: lista sugestões, lançamentos em aberto do lado (vencimento até 60 dias), movimentos e
+        repasses da conta (até 31 dias); marcar um ou vários; "Marcado: R$ X de R$ Y (faltam …)"; Confirmar só
+        habilita quando a soma bate (±R$ 0,01). Um repasse e o movimento que já o representa não podem ser marcados
+        juntos.
+      - Criar lançamento: abre o formulário de Lançamentos já com descrição, valor, data (vencimento) e conta,
+        sem Parcelar/Repetir; passa pela checagem de lançamento parecido; ao salvar, dá a baixa e a linha fica
+        conciliada.
+      - É transferência: escolher a outra conta. Se já existe nesta conta o lado de uma transferência com o mesmo
+        sentido e valor, a ±5 dias, ainda não ligado a outra linha (registrada pelo extrato da outra conta ou à
+        mão), liga a ela: "Ligada à transferência de DD/MM já registrada." (sem outro par). Senão cria o par de
+        movimentos na data do extrato (não muda Entradas e Saídas de "Todas as contas").
+      - Ignorar: vai para Ignoradas.
+      - Importações desta conta (lista recolhível): arquivo, data e hora, linhas e pendentes de cada importação;
+        "Ignorar todas as pendentes desta importação" e "Excluir esta importação" (só quando nenhuma linha dela está
+        conciliada; pede confirmação; o arquivo pode ser importado de novo). O arquivo e a hora ficam uma vez por
+        importação (sc_fin_extrato_imp, também no backup).
+      - Repasse de cartão ou movimento "a cair" (data depois de hoje) que o banco já depositou: ao conciliar, o
+        movimento (e a taxa do mesmo repasse) passa para a data do extrato; o Desfazer volta a data.
+      - Só as linhas afetadas são redesenhadas depois de cada ação (a própria e as de mesmo valor).
+      - Desfazer (Conciliadas e Ignoradas): a linha volta para Pendentes; se a conciliação deu baixa, a baixa é
+        estornada pela rotina de estorno (o lançamento volta em aberto, com a conta prevista de antes); se criou a
+        transferência, ela é excluída; se só ligou a um movimento ou repasse, só desliga. O lançamento criado
+        continua existindo.
+      - Estornar pela tela de Lançamentos ou excluir a transferência pelo Fluxo devolve a linha ligada a ela para
+        Pendentes.
+      Permissões: importar e conciliar = Fluxo de caixa completo; dar baixa (Confirmar com lançamento, Criar
+      lançamento, Desfazer com baixa) exige também completo em Contas a receber (entradas) ou a pagar (saídas).
+    * Relatórios (janela): "Entradas e saídas por categoria" (período, regime Caixa, mesma base da DRE),
+      "Contas a pagar e a receber por período" (em aberto e pagas, por vencimento, mês a mês) e "Evolução
+      mensal do saldo" (12 meses até o mês atual, na conta escolhida na tela). Cada um com PDF, Excel e Imprimir
+      (documento claro, paisagem).
+    * O alerta "falta de caixa" do sino continua levando a esta aba.
   - DRE — Resultado da empresa: tabela do ano (Jan a Dez + Total), Regime Caixa | Competência e seletor de Ano.
     Começa recolhida (grupos e linhas calculadas); o + abre os filhos diretos do grupo (subgrupos abrem de novo).
     Receitas, Custos, Margem de contribuição (+ % margem), Despesas (variáveis, fixas, outras), Resultado
@@ -1265,7 +1329,7 @@ Na janela do carrinho:
     * "Abrir pedido" leva à lista de Pedidos já buscando o número do pedido (pedidos.html?busca=).
     * A janela "Lançar Conta a Pagar" antiga continua só para importar nota/boleto (revisão dos campos lidos).
   - As telas antigas (Hoje, Visão Geral, Resultado do mês e fechamento, Simular compra, DRE por Pedido,
-    Extrato) estão desligadas: continuam no código (FIN_RECURSOS_ANTIGOS em app.js, tudo false) e as
+    Extrato) estão desligadas (o Extrato foi trocado pelo Fluxo de caixa novo): continuam no código (FIN_RECURSOS_ANTIGOS em app.js, tudo false) e as
     seções abaixo que falam delas descrevem o que existe quando forem religadas. Os alertas de meta e
     tendência de faturamento ficam desligados junto com elas.
   - Permissões do Financeiro: Resumo, Contas a receber, Contas a pagar, Recorrências, Fluxo de caixa e DRE.

@@ -327,3 +327,28 @@ test('ocorrencia de despesa fixa cancelada nao soma, mas tambem nao volta como e
     const l = C.lancamentosPrevistos({ hoje, limite: '2026-12-31', movimentos: [], contasReceber: [], contasPagar: [canc], despesasFixas: [df], contas: [], meios: [] });
     assert.deepStrictEqual(l, []);
 });
+
+test('saldosHoje: conta com abertura marcada para depois de hoje ainda vale 0 (igual ao Fluxo)', () => {
+    const a = { id: 1, nome: 'A', saldo_inicial: 1000, data_saldo_inicial: '2026-11-28', ativo: true };
+    const b = { id: 2, nome: 'B', saldo_inicial: 10, data_saldo_inicial: '2026-10-01', ativo: true };
+    const s = C.saldosHoje([a, b], [{ conta_id: 1, data: '2026-11-30', sentido: 'entrada', valor: 5 }], '2026-11-25');
+    assert.strictEqual(s.total, 10);
+    assert.deepStrictEqual(s.contas.map(c => [c.id, c.saldo, c.a_cair]), [[1, 0, 5], [2, 10, 0]]);
+    assert.strictEqual(C.saldosHoje([a], [], '2026-11-28').total, 1000);
+});
+
+test('lancamentosPrevistos com comOrigem: cada item diz de que lancamento veio (sem comOrigem nada muda)', () => {
+    const maq = { id: 3, tipo: 'maquininha', saldo_inicial: 0, data_saldo_inicial: '2026-01-01' };
+    const meios = [{ id: 9, tipo: 'cartao_credito', conta_id: 3 }];
+    const p = { hoje: '2026-11-14', limite: '2026-12-31', contas: [maq], meios, movimentos: [],
+        contasReceber: [{ id: 1, cliente_nome: 'Ana', descricao: 'Venda', status: 'Pendente', valor: 100, data_vencimento: '2026-11-20', conta_id: 5 },
+            { id: 2, cliente_nome: 'Bia', descricao: 'Cartao', status: 'Pendente', valor: 100, data_vencimento: '2026-11-20', meio_previsto: { meio_id: 9, vezes: 1 } }],
+        contasPagar: [{ id: 3, credor_nome: 'Locador', descricao: 'Aluguel', status: 'Pendente', valor: 50, data_vencimento: '2026-11-22' }],
+        despesasFixas: [] };
+    assert.ok(C.lancamentosPrevistos(p).every(x => !('origem' in x)));
+    const l = C.lancamentosPrevistos(Object.assign({ comOrigem: true }, p));
+    assert.deepStrictEqual(l.map(x => x.origem), [
+        { tipo: 'cr', id: 1, descricao: 'Venda', pessoa: 'Ana', conta_id: 5 },
+        { tipo: 'cr', id: 2, descricao: 'Cartao', pessoa: 'Bia', conta_id: 3 },
+        { tipo: 'cp', id: 3, descricao: 'Aluguel', pessoa: 'Locador', conta_id: null }]);
+});

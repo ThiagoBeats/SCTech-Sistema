@@ -266,21 +266,21 @@ test('cobranca: so visualizar nao ve Cobrar e a funcao recusa, sem abrir nada', 
 });
 
 // ============ Fase 1: excluir transferencia sem permissao ============
-test('excluir transferencia sem permissao completa do Extrato: sem botao, a funcao recusa e os dois lados ficam', async ({ page }) => {
+test('excluir transferencia sem permissao completa do Fluxo de caixa: sem menu, a funcao recusa e os dois lados ficam', async ({ page }) => {
     const mov = (id, conta, sentido, descricao) => ({ id, conta_id: conta, data: HOJE, sentido, valor: 40, origem: 'transferencia', origem_id: null, grupo_id: 777, descricao });
     const movs = [mov(20, 10, 'saida', 'Transferência para Banco'), mov(21, 11, 'entrada', 'Transferência de Caixa')];
     await entrar(page, BASE, { sc_contas_fin: CONTAS, sc_mov_fin: movs });
     await soVisualizar(page, 'financeiro.fluxo');
     await page.goto(BASE + '/financeiro.html');
     await page.locator('.fin-tab-btn[data-tab="fluxo"]').click();
-    await expect(page.locator('#extrato-linhas .extrato-linha')).toHaveCount(2);
-    await expect(page.locator('#extrato-linhas .extrato-excluir')).toHaveCount(0);
+    await expect(page.locator('#fluxo-linhas .fluxo-linha')).toHaveCount(3);   // saldo inicial + os dois lados
+    await expect(page.locator('#fluxo-linhas .btn-acoes')).toHaveCount(0);
     await page.evaluate(() => { excluirTransferencia(777); });
     await expect(page.locator('#sc-modal-msg')).toContainText('permissão');
     await page.locator('#sc-modal-ok').click();
     await expect(page.locator('#sc-modal-overlay')).toBeHidden();
     expect(await lerChave(page, 'sc_mov_fin')).toEqual(movs);
-    await expect(page.locator('#extrato-linhas .extrato-linha')).toHaveCount(2);
+    await expect(page.locator('#fluxo-linhas .fluxo-linha')).toHaveCount(3);
 });
 
 // ============ Fase 2 e 3: Resultado do mes (clock em 05/11/2026, outubro fechavel) ============
