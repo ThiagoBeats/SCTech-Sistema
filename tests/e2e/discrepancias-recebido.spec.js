@@ -33,10 +33,10 @@ test('recebido: janela vem preenchida com os itens do pedido', async ({ page }) 
     await expect(modal.locator('.pcent-metros')).toHaveValue('10');
     await expect(modal.locator('.pcent-lote')).toHaveValue('TH01-A');
     const linhasTec = modal.locator('.pcent-linha[data-tipo="tecido"]');
-    await expect(linhasTec.locator('.pcent-custo')).toHaveValue('92');
+    await expect(linhasTec.locator('.pcent-custo')).toHaveValue('R$ 92,00');
     await expect(linhasTec.locator('.pcent-margem')).toHaveValue('50');
     await expect(modal.locator('.pcent-linha[data-tipo="material"] .pcent-qtd')).toHaveValue('2');
-    await expect(modal.locator('.pcent-linha[data-tipo="material"] .pcent-custo')).toHaveValue('40');
+    await expect(modal.locator('.pcent-linha[data-tipo="material"] .pcent-custo')).toHaveValue('R$ 40,00');
     await expect(modal.locator('#pcent-data')).toHaveValue(hojeLocal());
     await expect(modal.locator('.pcent-sem')).toContainText('sem cadastro — lance à mão');
 });

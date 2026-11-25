@@ -230,13 +230,13 @@ test.skip('passo a passo nao fecha pelo fundo nem pelo Esc; Cancelar pergunta se
     await modal(page).click({ position: { x: 5, y: 5 } });
     await page.keyboard.press('Escape');
     await expect(modal(page)).toBeVisible();
-    await expect(modal(page).locator('.fech-extrato').first()).toHaveValue('1.280,00');
+    await expect(modal(page).locator('.fech-extrato').first()).toHaveValue('R$ 1.280,00');
     // Cancelar com algo digitado: pergunta; "Continuar fechando" mantem.
     await modal(page).getByRole('button', { name: 'Cancelar' }).click();
     await expect(page.locator('#sc-modal-msg')).toHaveText('Cancelar o fechamento? O que você digitou será perdido.');
     await page.click('#sc-modal-cancel');
     await expect(modal(page)).toBeVisible();
-    await expect(modal(page).locator('.fech-extrato').first()).toHaveValue('1.280,00');
+    await expect(modal(page).locator('.fech-extrato').first()).toHaveValue('R$ 1.280,00');
     // No passo 3 tambem ha Cancelar; confirmando, fecha.
     await continuar(page).click();
     await continuar(page).click();
@@ -256,7 +256,7 @@ test.skip('extrato negativo com milhar: "-1.500" e "−1.500" valem -1500', asyn
     await irPara(page, '2026-10');
     await page.click('#fech-btn-fechar');
     const linha = modal(page).locator('tr[data-conta="10"]');
-    await linha.locator('.fech-extrato').fill('-1.500');
+    await linha.locator('.fech-extrato').fill('-1.500,00');
     await expect(linha.locator('.fech-dif')).toHaveText('−R$ 2.800,00');
     await linha.locator('.fech-extrato').fill('\u22121.500');
     await expect(linha.locator('.fech-dif')).toHaveText('−R$ 2.800,00');

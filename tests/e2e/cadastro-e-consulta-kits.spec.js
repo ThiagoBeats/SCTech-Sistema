@@ -181,8 +181,8 @@ async function cadastrarTecido(page, dados) {
     await page.fill('#cat-largura', '1.40');
     await page.fill('#cat-min', '10');
     if (dados.qtd !== undefined) await page.fill('#cat-qtd', String(dados.qtd));
-    await page.fill('#cat-custo', String(dados.custo));
-    if (dados.peca !== undefined) await page.fill('#cat-custo-peca', String(dados.peca));
+    await page.fill('#cat-custo', Number(dados.custo).toFixed(2).replace('.', ','));
+    if (dados.peca !== undefined) await page.fill('#cat-custo-peca', Number(dados.peca).toFixed(2).replace('.', ','));
     if (dados.estoque) await page.click(`input[name="cat-cfg-estoque"][value="${dados.estoque}"]`);
     if (dados.margem === 'item') await page.click('input[name="cat-cfg-margem"][value="item"]');
     else await page.fill('#cat-markup', String(dados.markup ?? 80));
@@ -237,7 +237,7 @@ test('margem total em branco barra o cadastro do tecido', async ({ page }) => {
     await abrir(page, 'catalogo.html', {});
     await page.fill('#cat-ref', '0005');
     await page.fill('#cat-nome', 'SEM MARGEM INFORMADA');
-    await page.fill('#cat-custo', '50');
+    await page.fill('#cat-custo', '50,00');
     await page.click('button:has-text("Salvar no Catálogo")');
     await expect(page.locator('#sc-modal-msg')).toContainText('Informe a margem total');
     await page.click('#sc-modal-ok');
@@ -261,7 +261,7 @@ test('material grava quantidade e custo na unidade escolhida', async ({ page }) 
     await page.selectOption('#mat-unidade', 'm');
     await page.fill('#mat-min', '20');
     await page.fill('#mat-qtd', '50');
-    await page.fill('#mat-custo', '30');
+    await page.fill('#mat-custo', '30,00');
     await page.fill('#mat-markup', '60');
     await expect(page.locator('#mat-venda'), 'a venda aparece na unidade escolhida').toHaveText('R$ 48.00/m');
     await page.click('button:has-text("Cadastrar Material")');
@@ -280,7 +280,7 @@ test('material marcado como infinito entra com a marca', async ({ page }) => {
     await page.click('button[data-tab="cat-materiais"]');
     await page.fill('#mat-ref', 'PT-02');
     await page.fill('#mat-nome', 'PONTEIRA');
-    await page.fill('#mat-custo', '5');
+    await page.fill('#mat-custo', '5,00');
     await page.fill('#mat-markup', '50');
     await page.click('input[name="mat-cfg-estoque"][value="infinito"]');
     await page.click('button:has-text("Cadastrar Material")');
@@ -301,7 +301,7 @@ test('o kit tem unidade un, quantidade de entrada e estoque minimo', async ({ pa
     await page.fill('#kp-nome', 'KIT TRILHO');
     await page.fill('#kp-qtd', '10');
     await page.fill('#kp-min', '2');
-    await page.fill('#kp-custo', '126');
+    await page.fill('#kp-custo', '126,00');
     await page.fill('#kp-markup', '50');
     await page.click('button:has-text("Salvar Kit Pronto")');
     await page.waitForFunction(() => typeof db !== 'undefined' && db.kits.length === 1);

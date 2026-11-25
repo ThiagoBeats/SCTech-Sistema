@@ -161,7 +161,7 @@ test('escolher o tecido pelo nome preenche a referencia com o codigo', async ({ 
     await page.locator('#est-tecido-sug .consulta-sug-item').first().click();
 
     expect(await page.inputValue('#est-lote'), 'o codigo do tecido deveria ter sido preenchido').toBe('0001');
-    expect(await page.inputValue('#est-preco-custo')).toBe('92.94');
+    expect(await page.inputValue('#est-preco-custo')).toBe('R$ 92,94');
     expect(await page.inputValue('#est-markup')).toBe('80');
 });
 

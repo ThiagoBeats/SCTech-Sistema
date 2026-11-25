@@ -186,7 +186,7 @@ async function abrirTransf(page) {
 test('transferencia: destino comeca vazio e e obrigatorio', async ({ page }) => {
     const m = await abrirTransf(page);
     expect(await m.locator('#transf-para').inputValue()).toBe('');
-    await m.locator('#transf-valor').fill('10');
+    await m.locator('#transf-valor').fill('10,00');
     await m.locator('#transf-ok').click();
     await expect(m.locator('#transf-erro')).toHaveText('Escolha a conta de destino.');
     expect((await ler(page, 'sc_mov_fin')) || []).toHaveLength(0);
@@ -196,7 +196,7 @@ test('transferencia: destino igual a origem e recusado', async ({ page }) => {
     const m = await abrirTransf(page);
     await m.locator('#transf-de').selectOption('10');
     await m.locator('#transf-para').selectOption('10');
-    await m.locator('#transf-valor').fill('10');
+    await m.locator('#transf-valor').fill('10,00');
     await m.locator('#transf-ok').click();
     await expect(m.locator('#transf-erro')).toHaveText('Escolha uma conta de destino diferente da origem.');
 });
@@ -206,7 +206,7 @@ test('transferencia: data depois de hoje e recusada', async ({ page }) => {
     await expect(m.locator('#transf-data')).toHaveAttribute('max', HOJE);
     await m.locator('#transf-de').selectOption('10');
     await m.locator('#transf-para').selectOption('11');
-    await m.locator('#transf-valor').fill('10');
+    await m.locator('#transf-valor').fill('10,00');
     await m.locator('#transf-data').fill(AMANHA);
     await m.locator('#transf-ok').click();
     await expect(m.locator('#transf-erro')).toHaveText('A data não pode ser depois de hoje.');

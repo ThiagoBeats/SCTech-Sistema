@@ -119,7 +119,7 @@ test('os quatro cartoes aparecem e a venda e calculada ao vivo', async ({ page }
     expect(titulos).toEqual(['Definir margem total', 'Definir margem depois', 'Estoque infinito', 'Ajustar estoque']);
 
     await expect(page.locator('#kp-venda')).toHaveText('—');
-    await page.fill('#kp-custo', '100');
+    await page.fill('#kp-custo', '100,00');
     await page.fill('#kp-markup', '50');
     await expect(page.locator('#kp-venda')).toHaveText('R$ 150.00');
 
@@ -129,7 +129,7 @@ test('os quatro cartoes aparecem e a venda e calculada ao vivo', async ({ page }
 
 test('escolher "margem depois" tira o campo e deixa a venda igual ao custo', async ({ page }) => {
     await abrirKitsDoCatalogo(page);
-    await page.fill('#kp-custo', '100');
+    await page.fill('#kp-custo', '100,00');
     await page.fill('#kp-markup', '50');
     await expect(page.locator('#kp-venda')).toHaveText('R$ 150.00');
 
@@ -157,7 +157,7 @@ test('codigo, nome, custo e margem sao cobrados', async ({ page }) => {
     await expect(page.locator('#sc-modal-msg')).toContainText('Informe o preço de custo');
     await page.click('#sc-modal-ok');
 
-    await page.fill('#kp-custo', '100');
+    await page.fill('#kp-custo', '100,00');
     await page.click('button:has-text("Salvar Kit Pronto")');
     await expect(page.locator('#sc-modal-msg')).toContainText('Informe a margem total');
     await page.click('#sc-modal-ok');
@@ -169,7 +169,7 @@ test('codigo de kit pronto tambem nao pode repetir', async ({ page }) => {
     await abrirKitsDoCatalogo(page, { cat: TECIDOS, mat: MATERIAIS });
     await page.fill('#kp-ref', '0001');
     await page.fill('#kp-nome', 'KIT QUALQUER');
-    await page.fill('#kp-custo', '100');
+    await page.fill('#kp-custo', '100,00');
     await page.fill('#kp-markup', '50');
     await page.click('button:has-text("Salvar Kit Pronto")');
 
@@ -184,7 +184,7 @@ test('o kit pronto salvo fica igual a um kit importado', async ({ page }) => {
     await page.fill('#kp-nome', 'KIT TRILHO SUICO');
     await page.fill('#kp-medida', '1,00 a 1,50 m');
     await page.fill('#kp-desc', 'inclui suportes');
-    await page.fill('#kp-custo', '100');
+    await page.fill('#kp-custo', '100,00');
     await page.fill('#kp-markup', '50');
     await page.click('button:has-text("Salvar Kit Pronto")');
 
@@ -209,7 +209,7 @@ test('o cartao de estoque infinito vale no kit criado a mao', async ({ page }) =
     await abrirKitsDoCatalogo(page);
     await page.fill('#kp-ref', '5502');
     await page.fill('#kp-nome', 'KIT INFINITO');
-    await page.fill('#kp-custo', '80');
+    await page.fill('#kp-custo', '80,00');
     await page.fill('#kp-markup', '25');
     await page.click('input[name="kp-cfg-estoque"][value="infinito"]');
     await page.click('button:has-text("Salvar Kit Pronto")');
@@ -224,7 +224,7 @@ test('o kit criado a mao entra no pedido como uma linha so', async ({ page }) =>
     await page.fill('#kp-ref', '5501');
     await page.fill('#kp-nome', 'KIT TRILHO SUICO');
     await page.fill('#kp-medida', '1,00 a 1,50 m');
-    await page.fill('#kp-custo', '100');
+    await page.fill('#kp-custo', '100,00');
     await page.fill('#kp-markup', '50');
     await page.click('button:has-text("Salvar Kit Pronto")');
     await page.waitForFunction(() => typeof db !== 'undefined' && db.kits.length === 1);

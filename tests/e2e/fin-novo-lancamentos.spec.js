@@ -239,7 +239,7 @@ test('Repetir todo mes cria a recorrencia e ela aparece em Recorrencias', async 
     await abrir(page, { sc_df: [] }, 'pagar');
     await page.locator('#lanc-novo').click();
     await page.fill('#lf-descricao', 'Internet da loja');
-    await page.fill('#lf-valor', '150');
+    await page.fill('#lf-valor', '150,00');
     await page.selectOption('#lf-categoria', 'cat_contas');
     await page.fill('#lf-vencimento', '2026-11-30');
     await page.check('#lf-repetir');
@@ -344,7 +344,7 @@ test('Repetir todo mes com vencimento dia 31: sem duplicar em janeiro e gera 28/
     await abrirLancamentos(page, 'pagar');
     await page.locator('#lanc-novo').click();
     await page.fill('#lf-descricao', 'Contador');
-    await page.fill('#lf-valor', '300');
+    await page.fill('#lf-valor', '300,00');
     await page.selectOption('#lf-categoria', 'cat_contas');
     await page.fill('#lf-vencimento', '2027-01-31');
     await page.check('#lf-repetir');
@@ -376,7 +376,7 @@ test('competencia padrao de imposto e o dia 1 do mes de referencia', async ({ pa
     await abrir(page, null, 'pagar');
     await page.locator('#lanc-novo').click();
     await page.fill('#lf-descricao', 'DAS');
-    await page.fill('#lf-valor', '500');
+    await page.fill('#lf-valor', '500,00');
     await page.selectOption('#lf-categoria', 'cat_impostos');
     await page.fill('#lf-vencimento', '2026-12-20');
     await expect(page.locator('#lf-competencia')).toHaveValue('2026-11-01');

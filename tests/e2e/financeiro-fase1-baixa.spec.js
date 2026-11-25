@@ -133,7 +133,7 @@ test('parcial: paga 1000 de 3000 deixa parcela de 2000 aberta com mesmo vencimen
     const modal = await receber(page);
     const linha = modal.locator('.baixa-linha').first();
     await expect(linha.locator('.baixa-meio')).toHaveValue('22');
-    await linha.locator('.baixa-valor').fill('1.000');   // ponto de milhar
+    await linha.locator('.baixa-valor').fill('1.000,00');   // ponto de milhar
     await expect(modal.locator('#baixa-total')).toContainText('1.000,00');
     await linha.locator('.baixa-meio').selectOption({ label: 'Dinheiro' });
     await modal.locator('#baixa-ok').click();
@@ -229,15 +229,15 @@ test('valor maior que a parcela mostra erro dentro do modal', async ({ page }) =
     await abrirReceber(page, { sc_cr: [cr()] });
     const modal = await receber(page);
     const linha = modal.locator('.baixa-linha').first();
-    await linha.locator('.baixa-valor').fill('3500');
+    await linha.locator('.baixa-valor').fill('3500,00');
     await modal.locator('#baixa-ok').click();
     await expect(modal).toBeVisible();
     await expect(linha.locator('.baixa-erro')).toContainText('não pode passar de R$ 3.000,00');
     await expect(page.locator('#sc-modal-msg')).toHaveCount(0);
     expect((await ler(page, 'sc_cr'))[0].status).toBe('Pendente');
-    await linha.locator('.baixa-valor').fill('0');
+    await linha.locator('.baixa-valor').fill('0,00');
     await expect(linha.locator('.baixa-erro')).toContainText('maior que zero');
-    await linha.locator('.baixa-valor').fill('3000');
+    await linha.locator('.baixa-valor').fill('3000,00');
     await expect(linha.locator('.baixa-erro')).toBeHidden();
     await modal.locator('#baixa-ok').click();
     await expect.poll(async () => (await ler(page, 'sc_cr'))[0].status).toBe('Pago');

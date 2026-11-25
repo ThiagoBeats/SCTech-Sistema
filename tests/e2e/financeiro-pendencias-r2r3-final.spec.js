@@ -15,7 +15,7 @@ test.skip('Visao Geral: sem ajuste no mes, o campo da meta sugere a meta padrao'
     await entrar(page, BASE, { sc_empresa: { meta_faturamento_padrao: 50000 } });
     await page.goto(BASE + '/financeiro.html');
     await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
-    await expect(page.locator('#fin-meta-valor')).toHaveAttribute('placeholder', '50.000');
+    await expect(page.locator('#fin-meta-valor')).toHaveAttribute('placeholder', 'R$ 50.000,00');
     await expect(page.locator('#fin-meta-valor')).toHaveValue('');
 });
 
@@ -24,7 +24,7 @@ test.skip('Visao Geral: sem meta padrao o campo da meta continua com "Ex: 15000"
     await entrar(page, BASE, {});
     await page.goto(BASE + '/financeiro.html');
     await page.locator('.fin-tab-btn[data-tab="dashboard"]').click();
-    await expect(page.locator('#fin-meta-valor')).toHaveAttribute('placeholder', 'Ex: 15000');
+    await expect(page.locator('#fin-meta-valor')).toHaveAttribute('placeholder', 'R$ 0,00');
 });
 
 // ---- 2. Confirmar pagamento do pedido sem nada marcado ----

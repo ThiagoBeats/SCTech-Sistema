@@ -80,7 +80,7 @@ test('clicar numa sugestao preenche o campo e dispara o preenchimento automatico
     await expect(page.locator('#est-tecido-sug')).not.toHaveClass(/aberta/);
     // o autofill de sempre continua: lote com o codigo e custo do tecido
     expect(await page.inputValue('#est-lote')).toBe('C-001');
-    expect(await page.inputValue('#est-preco-custo')).toBe('92');
+    expect(await page.inputValue('#est-preco-custo')).toBe('R$ 92,00');
 });
 
 test('mexer no texto depois de escolher limpa o item escolhido', async ({ page }) => {
@@ -216,7 +216,7 @@ test('tecido salvo como infinito nao guarda minimo', async ({ page }) => {
     await semear(page, 'catalogo.html');
     await page.fill('#cat-ref', 'NOVO-1');
     await page.fill('#cat-nome', 'TECIDO SEM CONTROLE');
-    await page.fill('#cat-custo', '50');
+    await page.fill('#cat-custo', '50,00');
     await page.fill('#cat-markup', '20');
     await page.fill('#cat-min', '99');          // digitado antes de marcar infinito
     await page.click('input[name="cat-cfg-estoque"][value="infinito"]');

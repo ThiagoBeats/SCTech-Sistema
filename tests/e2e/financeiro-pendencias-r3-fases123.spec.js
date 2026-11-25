@@ -315,14 +315,14 @@ test.skip('Escape fecha a janela de ajuste da meta sem salvar o que foi digitado
     await page.click('#res-meta-edit');
     await expect(ajusteModal(page)).toBeVisible();
     await expect(page.locator('#res-ajuste-valor')).toBeFocused();
-    await page.fill('#res-ajuste-valor', '9.000');
+    await page.fill('#res-ajuste-valor', '9.000,00');
     await page.keyboard.press('Escape');
     await expect(ajusteModal(page)).toHaveCount(0);
     expect(await brutas(page, ['sc_fin_metas'])).toEqual(antes);
     // Reabre vazio (nada ficou da vez anterior) e Salvar ainda funciona.
     await page.click('#res-meta-edit');
     await expect(page.locator('#res-ajuste-valor')).toHaveValue('');
-    await page.fill('#res-ajuste-valor', '9.000');
+    await page.fill('#res-ajuste-valor', '9.000,00');
     await page.click('#res-ajuste-ok');
     await expect(ajusteModal(page)).toHaveCount(0);
     expect((await lerChave(page, 'sc_fin_metas'))['2026-10']).toBe(9000);
@@ -340,7 +340,7 @@ test.skip('Escape com um aviso ou uma pergunta por cima da janela de ajuste fech
     await page.keyboard.press('Escape');
     await expect(page.locator('#sc-modal-overlay')).toBeHidden();
     await expect(ajusteModal(page)).toBeVisible();
-    await expect(page.locator('#res-ajuste-valor')).toHaveValue('1.234,50');
+    await expect(page.locator('#res-ajuste-valor')).toHaveValue('R$ 1.234,50');
     // Pergunta por cima.
     await page.evaluate(() => { window.__resp = 'pendente'; showConfirm('Pergunta de teste').then(r => { window.__resp = r; }); });
     await expect(page.locator('#sc-modal-msg')).toHaveText('Pergunta de teste');
@@ -359,7 +359,7 @@ test.skip('abrir o limite com a janela da meta aberta troca uma pela outra (nunc
     await abrirResultado(page);
     await page.click('#res-meta-edit');
     await expect(ajusteModal(page).locator('h3')).toHaveText('Meta de faturamento deste mês');
-    await page.fill('#res-ajuste-valor', '7.000');
+    await page.fill('#res-ajuste-valor', '7.000,00');
     await page.evaluate(() => ajustarOrcamentoMes(_resMesAtual, 'fornecedores'));
     await expect(ajusteModal(page).locator('h3')).toHaveText('Limite de Fornecedores e materiais neste mês');
     await expect(ajusteModal(page)).toHaveCount(1);
@@ -379,7 +379,7 @@ test.skip('Escape com o passo a passo do fechamento aberto fecha so a janela de 
     await page.keyboard.press('Escape');
     await expect(ajusteModal(page)).toHaveCount(0);
     await expect(fechModal(page)).toBeVisible();
-    await expect(fechModal(page).locator('.fech-extrato').first()).toHaveValue('1.280,00');
+    await expect(fechModal(page).locator('.fech-extrato').first()).toHaveValue('R$ 1.280,00');
     // O Escape sozinho continua sem fechar o fechamento.
     await page.keyboard.press('Escape');
     await expect(fechModal(page)).toBeVisible();
@@ -449,7 +449,7 @@ test.skip('Lançar no A Pagar: duplo clique e chamadas juntas abrem uma pergunta
     await page.goto(BASE + '/financeiro.html');
     await page.locator('.fin-tab-btn[data-tab="simulador"]').click();
     await page.fill('#sim-desc', 'Máquina');
-    await page.fill('#sim-valor', '500');
+    await page.fill('#sim-valor', '500,00');
     await page.getByRole('button', { name: 'Simular', exact: true }).click();
     await expect(page.locator('#sim-titulo')).toHaveText('Cabe');
     await page.evaluate(() => {

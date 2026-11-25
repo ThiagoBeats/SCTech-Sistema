@@ -210,7 +210,7 @@ test('Criar lançamento: formulário preenchido e, ao salvar, a linha fica conci
     await l.locator('.conc-criar').click();
     await expect(page.locator('#lanc-form-overlay')).toContainText('Conta a pagar');
     await expect(page.locator('#lf-descricao')).toHaveValue('PAGTO ALUGUÉL');
-    await expect(page.locator('#lf-valor')).toHaveValue('1200,50');
+    await expect(page.locator('#lf-valor')).toHaveValue('R$ 1.200,50');
     await expect(page.locator('#lf-vencimento')).toHaveValue('2026-11-05');
     await expect(page.locator('#lf-conta')).toHaveValue('1');
     await expect(page.locator('#lf-parcelar')).toHaveCount(0);

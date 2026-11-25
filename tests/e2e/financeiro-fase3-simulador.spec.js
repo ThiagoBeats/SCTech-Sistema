@@ -31,13 +31,14 @@ async function abrirSimulador(page, extras, antes) {
 }
 async function simular(page, { desc = 'Máquina', valor, forma = 'avista', parcelas, entrada, data, primeira, ganho }) {
     await page.fill('#sim-desc', desc);
-    await page.fill('#sim-valor', valor);
+    const m = v => (v === '' || v.includes(',')) ? v : v + ',00';   // a mascara trata digitos como centavos
+    await page.fill('#sim-valor', m(valor));
     await page.locator(`input[name="sim-forma"][value="${forma}"]`).check();
     if (parcelas != null) await page.fill('#sim-parcelas', parcelas);
-    if (entrada != null) await page.fill('#sim-entrada', entrada);
+    if (entrada != null) await page.fill('#sim-entrada', m(entrada));
     if (data != null) await page.fill('#sim-data', data);
     if (primeira != null) await page.fill('#sim-primeira', primeira);
-    if (ganho != null) await page.fill('#sim-ganho', ganho);
+    if (ganho != null) await page.fill('#sim-ganho', m(ganho));
     await page.getByRole('button', { name: 'Simular', exact: true }).click();
 }
 // [funcao, argumento] para page.evaluate (a funcao vai serializada, sem closure).
@@ -239,10 +240,10 @@ test.skip('Lançar usa descrição, categoria e credor do formulário na hora de
 test.skip('mudar valor, forma, parcelas, datas ou ganho depois de simular apaga o resultado e o Lançar', async ({ page }) => {
     await abrirSimulador(page);
     const muda = [
-        async () => page.fill('#sim-valor', '600'),
+        async () => page.fill('#sim-valor', '600,00'),
         async () => page.locator('input[name="sim-forma"][value="parcelado"]').check(),
         async () => page.fill('#sim-data', '2026-11-15'),
-        async () => page.fill('#sim-ganho', '10')
+        async () => page.fill('#sim-ganho', '10,00')
     ];
     for (const m of muda) {
         await simular(page, { valor: '500' });
@@ -292,7 +293,7 @@ test.skip('1ª parcela segue a data da compra até ser editada; antes da compra 
     await expect(page.locator('#sim-primeira')).toHaveValue('2026-11-25');
     await page.fill('#sim-primeira', '2026-11-21');
     await page.fill('#sim-desc', 'Máquina');
-    await page.fill('#sim-valor', '1000');
+    await page.fill('#sim-valor', '1000,00');
     await page.fill('#sim-parcelas', '3');
     await page.getByRole('button', { name: 'Simular', exact: true }).click();
     await expect(page.locator('#sim-erro')).toHaveText('A 1ª parcela não pode ser antes da data da compra.');

@@ -187,7 +187,7 @@ test.skip('meta padrao aparece como sugestao no ajuste do mes', async ({ page })
     await page.goto(BASE + '/financeiro.html');
     await page.locator('.fin-tab-btn[data-tab="resultado"]').click();
     await page.click('#res-meta-edit');
-    await expect(page.locator('#res-ajuste-valor')).toHaveAttribute('placeholder', '30.000');
+    await expect(page.locator('#res-ajuste-valor')).toHaveAttribute('placeholder', 'R$ 30.000,00');
     await expect(page.locator('#res-ajuste-valor')).toHaveValue('');
 });
 
