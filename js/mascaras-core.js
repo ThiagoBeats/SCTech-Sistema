@@ -6,8 +6,10 @@
     function milhar(s) { return s.replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
 
     // Digitos tratados como centavos: "" -> "", "5" -> "R$ 0,05", "125000" -> "R$ 1.250,00".
-    function formatarMoedaDigitos(digitos) {
+    // `max` (opcional) limita a quantidade de digitos considerados (os primeiros).
+    function formatarMoedaDigitos(digitos, max) {
         let d = String(digitos == null ? '' : digitos).replace(/\D/g, '').replace(/^0+/, '');
+        if (max > 0) d = d.slice(0, max);
         if (d === '') return '';
         while (d.length < 3) d = '0' + d;
         return 'R$ ' + milhar(d.slice(0, -2)) + ',' + d.slice(-2);

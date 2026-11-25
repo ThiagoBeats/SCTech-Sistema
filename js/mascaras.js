@@ -2,7 +2,7 @@
 // Mascaras globais por delegacao no document: valem para campos criados depois, sem registro.
 //  - [data-moeda]: mascara de moeda brasileira (digitos viram centavos).
 //  - maiuscula automatica nos campos de texto livre (ver MascarasCore.aceitaMaiuscula).
-//    So age quando o usuario INSERE texto (beforeinput insertText/insertReplacementText): troca o trecho
+//    So age quando o usuario INSERE texto (beforeinput insertText; autocorrecao/insertReplacementText fica como o navegador fez): troca o trecho
 //    digitado pela versao com maiuscula via execCommand('insertText'), o que preserva o desfazer (Ctrl+Z).
 //    Nunca age em apagar, desfazer/refazer, colar nem em valor definido por codigo.
 //    Durante a composicao (IME, acento morto) nao mexe; no compositionend troca so o trecho confirmado,
@@ -27,14 +27,21 @@
         const v = el.value;
         const colou = e && (!e.isTrusted || /^insertFrom/.test(e.inputType || '') || (e.data && e.data.length > 1));
         let novo;
+        novo = '';
         if (colou && /[.,]/.test(v) && M.lerMoeda(v) !== null) novo = M.formatarMoeda(M.lerMoeda(v));
-        else novo = M.formatarMoedaDigitos(v.replace(/\D/g, '').slice(0, MAX_DIGITOS_MOEDA));
+        if (novo === '') novo = M.formatarMoedaDigitos(v, MAX_DIGITOS_MOEDA);
         if (novo !== v) el.value = novo;
         fim(el);
     }
 
     // Substitui [ini, fimSel) por texto, mantendo o desfazer; sem execCommand usa setRangeText e avisa com um input.
+    let trocando = false;
     function trocar(el, ini, fimSel, texto) {
+        if (trocando) return;
+        trocando = true;
+        try { trocarSemGuarda(el, ini, fimSel, texto); } finally { trocando = false; }
+    }
+    function trocarSemGuarda(el, ini, fimSel, texto) {
         el.setSelectionRange(ini, fimSel);
         let ok = false;
         try { ok = document.execCommand('insertText', false, texto); } catch (e) { ok = false; }
@@ -48,7 +55,7 @@
         const el = e.target;
         if (!ehCampoTexto(el) || ehMoeda(el)) return;
         if (!e.isTrusted || e.isComposing) return;
-        if (e.inputType !== 'insertText' && e.inputType !== 'insertReplacementText') return;
+        if (e.inputType !== 'insertText') return;
         if (typeof e.data !== 'string' || e.data === '') return;
         if (!M.aceitaMaiuscula(descreve(el))) return;
         let ini, fimSel;
@@ -70,6 +77,7 @@
         const ini = fimSel - e.data.length;
         if (ini < 0 || el.value.slice(ini, fimSel) !== e.data) return;
         const novo = M.inserirCapitalizado(el.value.slice(0, ini), e.data);
+        if (novo.length !== e.data.length) return;
         let k = 0;
         while (k < novo.length && novo[k] === e.data[k]) k++;
         if (k >= novo.length) return;

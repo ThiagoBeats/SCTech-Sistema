@@ -87,3 +87,10 @@ test('inserirCapitalizado, exclusoes extras e lerMoeda sem zero a esquerda', () 
     assert.strictEqual(M.lerMoeda('0.500'), 0.5);
     assert.strictEqual(M.formatarMoeda(1e21), '');
 });
+
+test('formatarMoedaDigitos com limite de digitos', () => {
+    assert.strictEqual(M.formatarMoedaDigitos('1234567890123456', 12), 'R$ 1.234.567.890,12');
+    assert.strictEqual(M.formatarMoedaDigitos('125000', 12), 'R$ 1.250,00');
+    assert.strictEqual(M.formatarMoedaDigitos('999999999999', 12), 'R$ 9.999.999.999,99');
+    assert.strictEqual(M.formatarMoedaDigitos('9999999999999', 12), 'R$ 9.999.999.999,99');
+});
