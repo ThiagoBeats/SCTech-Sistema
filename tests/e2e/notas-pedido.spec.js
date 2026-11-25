@@ -626,3 +626,95 @@ test('provedor manual devolve manual: emitir-agora desfaz o rascunho e segue o f
     await expect(page.locator('#nf-msg-xml')).toHaveText(/Emita esta nota no sistema/);
     expect(await notas(page)).toEqual([]);
 });
+
+test('N1: PDF que nao da para ler no backup avisa; a importacao nao apaga o PDF local dessa nota', async ({ page }) => {
+    await abrir(page, { sc_nf: [NOTA({ tem_pdf: true, pdf_nome: 'x.pdf', pdf_tamanho: 9 })] });
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.evaluate(() => { exportarDados(); })]);
+    const json = require('fs').readFileSync(await dl.path(), 'utf8');
+    await expect(page.locator('#sc-modal-msg')).toHaveText('1 PDF(s) não puderam ser incluídos no backup.');
+    await page.locator('#sc-modal-ok').click();
+    expect(JSON.parse(json).notas_fiscais[0]).toMatchObject({ tem_pdf: true, pdf_no_backup: false });
+    // o PDF existe so aqui: a importacao deste arquivo nao pode apaga-lo
+    await page.evaluate(async () => { await NfArquivos.gravar(501, new TextEncoder().encode('%PDF-1.4 local')); });
+    await page.evaluate(() => { window.__marca = 1; });
+    await page.evaluate(j => importarDados({ target: { files: [new File([j], 'b.json')], value: '' } }), json);
+    await page.locator('#sc-modal-ok').click();
+    await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
+    await page.waitForFunction(() => typeof db !== 'undefined');
+    expect(await idbBytes(page, 501)).not.toBeNull();
+    expect((await notas(page))[0]).toMatchObject({ tem_pdf: true });
+});
+
+test('N1: importar apaga o PDF local de nota que o backup diz que nao tem PDF', async ({ page }) => {
+    await abrir(page, { sc_nf: [NOTA()] });
+    await page.evaluate(async () => { await NfArquivos.gravar(501, new TextEncoder().encode('%PDF-1.4 local')); });
+    const json = JSON.stringify({ clientes: [], catalogo: [], pedidos: PEDIDOS_JS(), notas_fiscais: [{ id: 501, pedido_id: 26401, status: 'autorizada', tem_pdf: false, eventos: [] }] });
+    await page.evaluate(() => { window.__marca = 1; });
+    await page.evaluate(j => importarDados({ target: { files: [new File([j], 'b.json')], value: '' } }), json);
+    await page.locator('#sc-modal-ok').click();
+    await expect.poll(() => page.evaluate(() => window.__marca)).toBeUndefined();
+    await page.waitForFunction(() => typeof db !== 'undefined');
+    await expect.poll(() => idbBytes(page, 501)).toBeNull();
+});
+const PEDIDOS_JS = () => PEDIDOS();
+
+test('N2: importar com falha ao guardar o PDF marca tem_pdf false e avisa', async ({ page }) => {
+    await page.addInitScript(() => { IDBObjectStore.prototype.put = function () { throw new DOMException('cheio', 'QuotaExceededError'); }; });
+    await abrir(page);
+    const b64 = Buffer.from('%PDF-1.4 x').toString('base64');
+    const json = JSON.stringify({ clientes: [], catalogo: [], pedidos: PEDIDOS(), notas_fiscais: [NOTA({ pdf: 'data:application/pdf;base64,' + b64, pdf_nome: 'a.pdf' })] });
+    await page.evaluate(j => importarDados({ target: { files: [new File([j], 'b.json')], value: '' } }), json);
+    await page.locator('#sc-modal-ok').click();
+    await expect(page.locator('#sc-modal-msg')).toHaveText('1 PDF(s) não puderam ser guardados neste navegador.');
+    expect((await notas(page))[0]).toMatchObject({ tem_pdf: false });
+});
+
+test('N3: Remover PDF so apaga o arquivo depois de salvar a nota', async ({ page }) => {
+    await page.addInitScript(() => {
+        const orig = Storage.prototype.setItem;
+        Storage.prototype.setItem = function (k, v) { if (k === 'sc_nf' && window.__cheio) throw new DOMException('cheio', 'QuotaExceededError'); return orig.call(this, k, v); };
+    });
+    await abrir(page);
+    await emitir(page, 26401);
+    await page.setInputFiles('#nf-xml', FIX('nfse-abrasf.xml'));
+    await page.setInputFiles('#nf-pdf', PDF_PEQ);
+    await expect.poll(() => page.evaluate(() => _nfEst && !!_nfEst.pdfBytes)).toBe(true);
+    await page.locator('#nf-salvar').click();
+    await expect(page.locator('#nf-janela .nf-linha')).toHaveCount(1);
+    const id = (await notas(page))[0].id;
+    await page.evaluate(() => { window.__cheio = true; });
+    await page.locator('#nf-janela').getByRole('button', { name: 'Remover PDF' }).click();
+    await page.locator('#sc-modal-ok').click();
+    await expect(page.locator('#sc-modal-msg')).toHaveText(MSG_ESPACO);
+    expect(await idbBytes(page, id)).not.toBeNull();
+    expect((await notas(page))[0].tem_pdf).toBe(true);
+});
+
+test('N4: Emitir agora repetido reaproveita o rascunho; janela fechada durante a chamada ainda grava a resposta', async ({ page }) => {
+    await abrir(page);
+    await page.evaluate(() => {
+        window.__refs = [];
+        window.__n = 0;
+        Fiscal.provedor = { nome: 'falso', emitir: async d => { window.__refs.push(d.referencia); window.__n++; await new Promise(r => setTimeout(r, 300)); return window.__n === 1 ? { status: 'erro', mensagem: 'fora do ar' } : { status: 'processando', servidor_id: 'S9' }; }, cancelar: async () => ({ status: 'manual' }) };
+    });
+    await emitir(page, 26401);
+    await page.locator('#nf-emitir-agora').click();
+    await expect(page.locator('#nf-msg-xml')).toHaveText('fora do ar');
+    await page.locator('#nf-emitir-agora').click();
+    await page.evaluate(() => _nfFechar('nf-emitir'));   // fecha a janela durante a segunda chamada
+    await expect.poll(async () => ((await notas(page))[0] || {}).status).toBe('processando');
+    const refs = await page.evaluate(() => window.__refs);
+    expect(refs).toHaveLength(2);
+    expect(refs[0]).toBe(refs[1]);
+    const nf = await notas(page);
+    expect(nf).toHaveLength(1);
+    expect(nf[0]).toMatchObject({ servidor_id: 'S9', id: refs[0] });
+});
+
+test('N5: moverStatus para tras ate Orcamento recusa com nota ativa', async ({ page }) => {
+    await abrir(page, { sc_nf: [NOTA()] });
+    await page.evaluate(() => { moverStatus(26401, -1); });
+    await expect(page.locator('#sc-modal-msg')).toHaveText('Este pedido tem nota fiscal emitida. Cancele a nota antes de voltar para Orçamento.');
+    await page.locator('#sc-modal-ok').click();
+    expect(await page.evaluate(() => db.pedidos.find(p => p.id === 26401).status)).toBe('Medição');
+});

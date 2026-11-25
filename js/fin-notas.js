@@ -478,8 +478,11 @@ async function _nfEmitirAgora() {
     if (!ped) return;
     const dados = _nfDadosAtuais();
     const lista = _nfNotas();
+    // Repetir "Emitir agora" reaproveita o rascunho do pedido (mesma referencia) em vez de criar outra nota.
     let reg = est.refId != null ? _nfPorId(est.refId) : null;
-    if (!reg || reg.status !== 'rascunho') {
+    if (!reg || reg.status !== 'rascunho') reg = lista.find(n => n && n.pedido_id == ped.id && n.status === 'rascunho' && n.origem === 'servidor') || null;
+    if (reg) est.refId = reg.id;
+    if (!reg) {
         reg = {
             id: _nfNovoId(), pedido_id: ped.id, tipo: dados.tipo, numero: '', serie: '', chave: null, codigo_verificacao: null,
             data_emissao: hojeLocal(), valor: dados.valor_total, cliente_id: ped.clienteId == null ? null : ped.clienteId,
@@ -496,7 +499,7 @@ async function _nfEmitirAgora() {
     let res;
     try { res = await Fiscal.provedor.emitir(Object.assign({}, dados, { referencia: reg.id, pedido_id: ped.id, cliente_id: reg.cliente_id })); }
     catch (e) { res = { status: 'erro', mensagem: 'Não foi possível falar com o provedor de notas.' }; }
-    if (_nfEst !== est) return;
+    // Janela fechada durante a chamada: a resposta do provedor vale do mesmo jeito para a nota guardada.
     const st = res && res.status;
     const grava = () => _nfGravar(() => {});
     if (st === 'manual') {
@@ -528,8 +531,7 @@ async function _nfEmitirAgora() {
         reg.eventos.push(_nfEvento('rejeitada', (res && res.mensagem) || 'Nota rejeitada.'));
     }
     grava();
-    _nfFechar('nf-emitir');
-    _nfEst = null;
+    if (_nfEst === est) { _nfFechar('nf-emitir'); _nfEst = null; }
     _nfRenderLista(ped.id);
 }
 
@@ -628,11 +630,12 @@ async function removerPdfNota(notaId) {
     if (!await exigirPermissao_nf()) return;
     if (!await showConfirm('Remover o PDF desta nota? O XML e os dados da nota continuam guardados.', '🗑️', 'Remover', 'Cancelar')) return;
     const antes = { tem: n.tem_pdf, nome: n.pdf_nome, tam: n.pdf_tamanho, pdf: n.pdf, ev: n.eventos.length };
-    try { await NfArquivos.apagar(n.id); } catch (e) { /* sem IndexedDB: tira so a marca */ }
     n.tem_pdf = false; n.pdf_tamanho = 0; delete n.pdf;
     n.eventos.push(_nfEvento('pdf', 'PDF removido' + (antes.nome ? ' (' + antes.nome + ')' : '')));
     n.pdf_nome = '';
     if (!_nfGravar(() => { n.tem_pdf = antes.tem; n.pdf_nome = antes.nome; n.pdf_tamanho = antes.tam; if (antes.pdf !== undefined) n.pdf = antes.pdf; n.eventos.length = antes.ev; })) return;
+    // So depois de salvar a nota e que o arquivo sai do IndexedDB.
+    try { await NfArquivos.apagar(n.id); } catch (e) { /* sem IndexedDB: a marca ja saiu */ }
     _nfRenderLista(n.pedido_id);
     toast('PDF removido.', 'success');
 }

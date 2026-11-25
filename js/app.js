@@ -4021,6 +4021,10 @@ async function moverStatus(id, direcao) {
     const idx    = STATUS_PIPELINE.indexOf(normalizarStatus(ped.status));
     const novoIdx = idx + direcao;
     if (novoIdx < 0 || novoIdx >= STATUS_PIPELINE.length) return;
+    if (STATUS_PIPELINE[novoIdx] === 'Orçamento' && _pedidoTemNotaAtiva(ped.id)) {
+        await showAlert('Este pedido tem nota fiscal emitida. Cancele a nota antes de voltar para Orçamento.', '⚠️');
+        return;
+    }
 
     // ── Aguardando Tecido → Na Costura: verificar e baixar tecidos
     if (STATUS_PIPELINE[novoIdx] === 'Na Costura' && !ped.baixa_tecido_realizada && !ped.baixa_realizada) {
@@ -8673,6 +8677,8 @@ async function exportarDados() {
     if (typeof NfArquivos !== 'undefined') { try { dados.notas_fiscais = await NfArquivos.paraBackup(dados.notas_fiscais); } catch (e) { /* segue sem os PDFs */ } }
     _baixarJSON(dados, `sctech_backup_${hojeLocal()}.json`);
     toast('Backup exportado com sucesso!');
+    const semPdf = typeof NfArquivos !== 'undefined' ? NfArquivos.falhasBackup || 0 : 0;
+    if (semPdf) await showAlert(`${semPdf} PDF(s) não puderam ser incluídos no backup.`, '⚠️');
 }
 function importarDados(event) {
     const file = event.target.files[0];
@@ -8813,10 +8819,15 @@ function importarDados(event) {
             }
             // Gravou: o que era dos dados anteriores (copia, revisao e avisos) sai.
             ['sc_fin_backup_fase0', 'sc_fin_revisar', 'sc_fin_backup_falhou', 'sc_fin_migracao_erro', CHAVE_FIN_BACKUP_V3, CHAVE_FIN_V4_FALHOU, CHAVE_FIN_V4_ERRO].forEach(k => localStorage.removeItem(k));
-            // Sem PDFs no arquivo, so limpa os antigos (sem esperar, para a recarga nao atrasar).
-            if (typeof NfArquivos !== 'undefined' && !pdfsNotas.length) NfArquivos.limpar().catch(() => {});
-            else if (typeof NfArquivos !== 'undefined' && !await NfArquivos.gravarVarios(pdfsNotas)) {
-                await showAlert('Dados importados, mas o navegador não deixou guardar os PDFs das notas fiscais. As notas continuam com o XML.', '⚠️');
+            // Sem PDFs a guardar nem a manter, so limpa os antigos (sem esperar, para a recarga nao atrasar).
+            if (typeof NfArquivos !== 'undefined' && !pdfsNotas.length && !(pdfsNotas.manter || []).length) NfArquivos.limpar().catch(() => {});
+            else if (typeof NfArquivos !== 'undefined') {
+                const falhas = await NfArquivos.gravarVarios(pdfsNotas, pdfsNotas.manter);
+                if (falhas.length) {
+                    db.notas_fiscais.forEach(n => { if (falhas.some(id => String(id) === String(n.id))) { n.tem_pdf = false; n.pdf_nome = ''; delete n.pdf_tamanho; } });
+                    _gravarChaves(['sc_nf'], { silencioso: true });
+                    await showAlert(`${falhas.length} PDF(s) não puderam ser guardados neste navegador.`, '⚠️');
+                }
             }
             if (sessaoNova) sessionStorage.setItem('sc_user', JSON.stringify(sessaoNova));
             else if (encerrarSessao) sessionStorage.removeItem('sc_user');

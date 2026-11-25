@@ -111,25 +111,38 @@
         ler: id => transacao('readonly', s => s.get(String(id))).then(r => (r ? new Uint8Array(r) : null)),
         apagar: id => transacao('readwrite', s => s.delete(String(id))).then(() => true),
         limpar: () => transacao('readwrite', s => s.clear()).then(() => true),
-        gravarVarios(lista) {
-            return NfArquivos.limpar().then(() => Promise.all((lista || []).map(x => NfArquivos.gravar(x.id, x.bytes)))).then(() => true, () => false);
+        // Apaga os PDFs que nao estao em `manter` (ids) e grava a lista. Devolve os ids que nao puderam ser gravados.
+        async gravarVarios(lista, manter) {
+            const ficam = new Set((manter || []).map(String));
+            try {
+                const chaves = await transacao('readonly', s => s.getAllKeys());
+                for (const k of chaves || []) if (!ficam.has(String(k))) { try { await NfArquivos.apagar(k); } catch (e) { /* segue */ } }
+            } catch (e) { /* sem como limpar: segue gravando */ }
+            const falhas = [];
+            for (const x of lista || []) { try { await NfArquivos.gravar(x.id, x.bytes); } catch (e) { falhas.push(x.id); } }
+            return falhas;
         },
         ehPdf, paraBase64, deBase64,
         // Backup: copia das notas com cada PDF em dataURL (le do IndexedDB; sem ele, a nota segue sem o PDF).
+        // Nota cujo PDF nao pode ser lido sai marcada com pdf_no_backup:false (a importacao nao apaga o PDF local dela);
+        // NfArquivos.falhasBackup guarda quantas foram.
         async paraBackup(notas) {
+            NfArquivos.falhasBackup = 0;
             return Promise.all((notas || []).map(async n => {
                 const c = Object.assign({}, n);
                 if (n && n.tem_pdf && typeof n.pdf !== 'string') {
                     let bytes = null;
                     try { bytes = await NfArquivos.ler(n.id); } catch (e) { bytes = null; }
                     if (bytes && ehPdf(bytes)) c.pdf = 'data:application/pdf;base64,' + paraBase64(bytes);
+                    else { c.pdf_no_backup = false; NfArquivos.falhasBackup++; }
                 }
                 return c;
             }));
         },
         // Importacao: tira os PDFs inline (backup novo ou antigo) das notas e devolve [{ id, bytes }] para gravar; normaliza as notas.
         separarDoBackup(notas) {
-            const lista = [];
+            const lista = [], manter = [];
+            lista.manter = manter;
             (notas || []).forEach(n => {
                 if (!n || typeof n !== 'object') return;
                 if (!Array.isArray(n.eventos)) n.eventos = [];
@@ -138,7 +151,10 @@
                 const m = typeof n.pdf === 'string' ? DATA_PDF.exec(n.pdf) : null;
                 if (m) { try { bytes = deBase64(m[1]); } catch (e) { bytes = null; } }
                 delete n.pdf;
+                const mantem = n.tem_pdf === true && n.pdf_no_backup === false;   // o backup diz que tinha PDF, mas nao o incluiu
+                delete n.pdf_no_backup;
                 if (bytes && ehPdf(bytes)) { lista.push({ id: n.id, bytes }); n.tem_pdf = true; n.pdf_tamanho = bytes.length; }
+                else if (mantem) manter.push(n.id);
                 else { n.tem_pdf = false; n.pdf_nome = ''; delete n.pdf_tamanho; }
             });
             return lista;
