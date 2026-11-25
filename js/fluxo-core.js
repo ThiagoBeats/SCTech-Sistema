@@ -123,10 +123,10 @@
             const crsUso = crs.filter(cr => casaCategoria(cr, 'cr') && daConta(cr, meioDe(cr)));
             const cpsUso = cps.filter(cp => casaCategoria(cp, 'cp') && daConta(cp, null));
             const fixasUso = (p.despesasFixas || []).filter(df => df && casaCategoria(df, 'cp') && daConta(df, null));
-            C.lancamentosPrevistos({ hoje, limite: ate, movimentos: [], contasReceber: crsUso, contasPagar: cpsUso, despesasFixas: fixasUso, contas, meios: p.meios })
+            C.lancamentosPrevistos({ hoje, limite: ate, movimentos: [], contasReceber: crsUso, contasPagar: cpsUso, despesasFixas: fixasUso, contas, meios: p.meios, comOrigem: true })
                 .forEach(l => {
                     if (l.data < iniPrev || l.data > ate) return;
-                    out.previsto.push({ data: l.data, ent: l.sentido === 'entrada' ? num(l.valor) : 0, sai: l.sentido === 'entrada' ? 0 : num(l.valor), ab: 0, previsto: true, mov: null, transferencia: false });
+                    out.previsto.push({ data: l.data, ent: l.sentido === 'entrada' ? num(l.valor) : 0, sai: l.sentido === 'entrada' ? 0 : num(l.valor), ab: 0, previsto: true, mov: null, transferencia: false, lanc: l.origem || null });
                 });
         }
         return out;
@@ -214,11 +214,16 @@
             const base = { data: e.data, entrada: e.ent, saida: e.sai, saldo, previsto: e.previsto, transferencia: !!e.transferencia };
             if (m) {
                 const descricao = m.descricao || (e.reg && (e.reg.descricao || e.reg.fornecedor || e.reg.cliente)) || rotuloOrigem[m.origem] || 'Movimento';
-                linhas.push(Object.assign(base, { descricao, conta_id: m.conta_id, origem: e.previsto ? 'previsto' : m.origem, origem_id: m.origem_id != null ? m.origem_id : null, grupo_id: m.grupo_id != null ? m.grupo_id : null }));
+                linhas.push(Object.assign(base, { descricao, conta_id: m.conta_id, origem: e.previsto && m.origem !== 'cr' && m.origem !== 'cp' ? 'previsto' : m.origem, origem_id: m.origem_id != null ? m.origem_id : null, grupo_id: m.grupo_id != null ? m.grupo_id : null }));
             } else if (e.abertura) {
                 linhas.push(Object.assign(base, { descricao: 'Abertura da conta ' + (e.abertura.nome || ''), conta_id: e.abertura.id, origem: 'abertura', origem_id: null, grupo_id: null }));
             } else {
-                linhas.push(Object.assign(base, { descricao: e.ent > 0 ? 'A receber (previsto)' : 'A pagar (previsto)', conta_id: null, origem: 'previsto', origem_id: null, grupo_id: null }));
+                // Previsto de um lancamento: pessoa e descricao dele, conta prevista (se houver) e abre o lancamento (cr/cp).
+                const lc = e.lanc;
+                const generico = e.ent > 0 ? 'A receber (previsto)' : 'A pagar (previsto)';
+                const descricao = lc ? ([lc.pessoa, lc.descricao].filter(Boolean).join(' - ') || generico) : generico;
+                const abre = lc && (lc.tipo === 'cr' || lc.tipo === 'cp');
+                linhas.push(Object.assign(base, { descricao, conta_id: lc && lc.conta_id != null ? lc.conta_id : null, origem: abre ? lc.tipo : 'previsto', origem_id: abre ? lc.id : null, grupo_id: null }));
             }
         });
         return linhas;

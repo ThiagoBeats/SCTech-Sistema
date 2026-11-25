@@ -75,7 +75,8 @@
     function saldosHoje(contas, movimentos, hoje) {
         let total = 0;
         const lista = (contas || []).filter(c => c.ativo !== false).map(c => {
-            const saldo = saldoConta(c, movimentos, hoje);
+            // Conta com abertura marcada para depois de hoje ainda nao existe: saldo 0 hoje (igual ao Fluxo).
+            const saldo = saldoContaAte(c, movimentos, hoje);
             let aCair = 0;
             (movimentos || []).forEach(m => {
                 if (!mesmoId(m.conta_id, c.id) || m.data <= hoje) return;
@@ -159,9 +160,16 @@
     // ativas (cartao a cair, ja com a taxa), contas a receber em aberto (no cartao previsto, cada repasse na sua data
     // pelo liquido), contas a pagar em aberto e despesas fixas antigas. Atrasados caem em hoje.
     // Devolve [{ data, valor, sentido, atrasado }] (a previsao semanal e o grafico de fluxo agrupam).
-    function lancamentosPrevistos({ hoje, limite, movimentos, contasReceber, contasPagar, despesasFixas, contas, meios }) {
+    // comOrigem: cada item ganha `origem: { tipo: 'cr'|'cp'|'df', id, descricao, pessoa, conta_id }` (o Fluxo mostra e abre).
+    function lancamentosPrevistos({ hoje, limite, movimentos, contasReceber, contasPagar, despesasFixas, contas, meios, comOrigem }) {
         const out = [];
-        const lanca = (data, valor, sentido, atrasado) => out.push({ data, valor: Number(valor) || 0, sentido, atrasado: !!atrasado });
+        const lanca = (data, valor, sentido, atrasado, origem) => {
+            const it = { data, valor: Number(valor) || 0, sentido, atrasado: !!atrasado };
+            if (comOrigem && origem) it.origem = origem;
+            out.push(it);
+        };
+        const orig = (tipo, reg, contaId) => ({ tipo, id: reg.id, descricao: reg.descricao || '', pessoa: (tipo === 'cr' ? reg.cliente_nome : reg.credor_nome) || '',
+            conta_id: contaId != null ? contaId : (reg.conta_id != null && reg.conta_id !== '' ? reg.conta_id : null) });
         const inativa = id => (contas || []).some(c => mesmoId(c.id, id) && c.ativo === false);
         (movimentos || []).forEach(m => { if (m.data > hoje && !inativa(m.conta_id)) lanca(m.data, m.valor, m.sentido, false); });
         // Sem data de vencimento nao ha como prever: fica fora (a tela mostra "sem vencimento").
@@ -173,12 +181,12 @@
             if (meio && (meio.tipo === 'cartao_credito' || meio.tipo === 'cartao_debito')) {
                 const conta = (contas || []).find(c => mesmoId(c.id, meio.conta_id));
                 repassesCartao({ valor: Number(cr.valor) || 0, data, conta, tipo: meio.tipo === 'cartao_debito' ? 'debito' : 'credito', vezes: mp.vezes, antecipar: !!mp.antecipar })
-                    .forEach(r => lanca(r.data, r.liquido, 'entrada', atrasado && r.data <= somarDias(hoje, 6)));
+                    .forEach(r => lanca(r.data, r.liquido, 'entrada', atrasado && r.data <= somarDias(hoje, 6), orig('cr', cr, meio.conta_id != null ? meio.conta_id : null)));
             } else {
-                lanca(data, cr.valor, 'entrada', atrasado);
+                lanca(data, cr.valor, 'entrada', atrasado, orig('cr', cr));
             }
         });
-        (contasPagar || []).filter(cp => aberto(cp) && dataValida(cp.data_vencimento)).forEach(cp => lanca(maxData(cp.data_vencimento, hoje), cp.valor, 'saida', cp.data_vencimento < hoje));
+        (contasPagar || []).filter(cp => aberto(cp) && dataValida(cp.data_vencimento)).forEach(cp => lanca(maxData(cp.data_vencimento, hoje), cp.valor, 'saida', cp.data_vencimento < hoje, orig('cp', cp)));
         // Com periodicidade, as ocorrencias ja viram CP pre-gerados; so as antigas (sem periodicidade) sao projetadas por mes.
         // A fixa que ja tem conta a pagar no mes (gerada dela ou a mesma lancada a mao) nao entra de novo:
         // mesma regra do Resultado (ResultadoCore.fixasCobertasNoMes, uma conta cobre no maximo uma fixa).
@@ -193,7 +201,7 @@
         };
         antigas.forEach(df => {
             ocorrenciasFixa(df, hoje.slice(0, 8) + '01', limite).forEach(data => {
-                if (!coberta(df, data.slice(0, 7))) lanca(maxData(data, hoje), df.valor, 'saida', data < hoje);
+                if (!coberta(df, data.slice(0, 7))) lanca(maxData(data, hoje), df.valor, 'saida', data < hoje, orig('df', df));
             });
         });
         return out;

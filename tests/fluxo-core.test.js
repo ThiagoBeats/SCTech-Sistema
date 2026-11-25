@@ -180,3 +180,11 @@ test('porCategoria: fecha com resumo, inclui so caixa, ajuste e (com conta) tran
     assert.strictEqual(pa.linhas.find(l => l.especial === 'transferencia').valor, 300);
     assert.strictEqual(pa.linhas.find(l => l.especial === 'transferencia').sentido, 'saida');
 });
+
+test('movimentacoes: linha prevista traz pessoa, descricao, conta prevista e o lancamento de origem', () => {
+    const p = base();
+    p.contasReceber[1] = Object.assign({}, p.contasReceber[1], { cliente_nome: 'Bia', descricao: 'Venda Bia', conta_id: 2 });
+    const prev = FluxoCore.movimentacoes(p).filter(l => l.previsto);
+    assert.strictEqual(prev.length, 1);
+    assert.deepStrictEqual([prev[0].descricao, prev[0].conta_id, prev[0].origem, prev[0].origem_id], ['Bia - Venda Bia', 2, 'cr', 2]);
+});

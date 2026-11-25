@@ -147,3 +147,78 @@ test('sugestoes: jaUsados filtra movimento, lancamento e repasse por chave', () 
     const cp = { id: 'cp1', valor: 200, data_vencimento: '2026-11-04', status: 'Pendente' };
     assert.deepStrictEqual(C.sugestoes(linha(-200), { contaId: 'c1', contasPagar: [cp], jaUsados: new Set(['cp:cp1']) }), []);
 });
+
+// ---------- desempenho (entrega 3, revisao final) ----------
+function massa() {
+    const dia = i => '2026-' + String(1 + (i % 11)).padStart(2, '0') + '-' + String(1 + (i % 28)).padStart(2, '0');
+    const movimentos = [], contasReceber = [], contasPagar = [];
+    for (let i = 0; i < 5000; i++) movimentos.push({ id: i, conta_id: 1 + (i % 3), data: dia(i), sentido: i % 2 ? 'saida' : 'entrada', valor: 10 + (i % 700) + (i % 7) / 100, origem: 'cr', origem_id: i });
+    for (let i = 0; i < 2500; i++) contasReceber.push({ id: i, valor: 20 + (i % 500), status: i % 4 ? 'Pendente' : 'Pago', data_vencimento: dia(i + 3), cliente_nome: 'C' + i });
+    for (let i = 0; i < 2500; i++) contasPagar.push({ id: i, valor: 30 + (i % 400), status: 'Pendente', data_vencimento: dia(i + 5), credor_nome: 'F' + i });
+    const linhas = [];
+    for (let i = 0; i < 2000; i++) linhas.push({ id: i, conta_id: 1, fitid: 'f' + i, data: dia(i * 3), valor: (i % 2 ? -1 : 1) * (10 + (i % 700) + (i % 7) / 100), situacao: i % 3 ? 'pendente' : 'conciliado', mov_ids: i % 3 ? undefined : [i * 2, 99999 + i] });
+    return { movimentos, contasReceber, contasPagar, linhas };
+}
+
+test('sugestoes: 2.000 linhas x 5.000 movimentos (e 5.000 lancamentos) em menos de 1,5 s, mesmo resultado da busca linha a linha', () => {
+    const m = massa();
+    const ctx = { contaId: 1, movimentos: m.movimentos, contasReceber: m.contasReceber, contasPagar: m.contasPagar, repasses: [], jaUsados: new Set() };
+    const t0 = Date.now();
+    const res = m.linhas.map(l => C.sugestoes(l, ctx));
+    const ms = Date.now() - t0;
+    assert.ok(ms < 1500, 'demorou ' + ms + ' ms');
+    // Conferencia por forca bruta numa amostra: os mesmos ids, na mesma ordem.
+    const cent = v => Math.round(Math.abs(v) * 100);
+    const dist = (a, b) => Math.abs(Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10)) - Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8, 10))) / 86400000;
+    [0, 1, 7, 500, 1999].forEach(i => {
+        const l = m.linhas[i];
+        const sentido = l.valor > 0 ? 'entrada' : 'saida';
+        const movs = m.movimentos.filter(x => x.conta_id === 1 && x.sentido === sentido && Math.abs(cent(x.valor) - cent(l.valor)) <= 1 && dist(x.data, l.data) <= 5).map(x => x.id);
+        const lancs = (l.valor > 0 ? m.contasReceber : m.contasPagar).filter(x => x.status !== 'Pago' && Math.abs(cent(x.valor) - cent(l.valor)) <= 1 && dist(x.data_vencimento, l.data) <= 5).map(x => x.id);
+        const got = res[i];
+        assert.deepStrictEqual(got.filter(s => s.tipo === 'movimento').map(s => s.ids[0]).sort((a, b) => a - b), movs.sort((a, b) => a - b));
+        assert.deepStrictEqual(got.filter(s => s.tipo === 'lancamento').map(s => s.ids[0]).sort((a, b) => a - b), lancs.sort((a, b) => a - b));
+    });
+});
+
+test('sugestoes: o indice e refeito quando a lista de movimentos muda', () => {
+    const ctx = { contaId: 1, movimentos: [], contasReceber: [], contasPagar: [], repasses: [], jaUsados: new Set() };
+    const linha = { data: '2026-11-05', valor: 50 };
+    assert.strictEqual(C.sugestoes(linha, ctx).length, 0);
+    ctx.movimentos = [{ id: 1, conta_id: 1, data: '2026-11-05', sentido: 'entrada', valor: 50 }];
+    assert.strictEqual(C.sugestoes(linha, ctx).length, 1);
+});
+
+test('linhaOrfa e conferidos: movimento sumido, baixa sem movimento, pendente antes, ignorada nao conta', () => {
+    const iv = C.indiceVinculos({ movimentos: [{ id: 1 }, { id: 2 }], contasReceber: [{ id: 7, status: 'Pago' }, { id: 8, status: 'Pendente' }], contasPagar: [] });
+    assert.strictEqual(C.linhaOrfa({ situacao: 'conciliado', mov_ids: [1, 2] }, iv), false);
+    assert.strictEqual(C.linhaOrfa({ situacao: 'conciliado', mov_ids: [1, 3] }, iv), true);
+    assert.strictEqual(C.linhaOrfa({ situacao: 'conciliado', mov_ids: [], vinculos: [{ t: 'cr', id: 7, baixa: true }] }, iv), false);
+    assert.strictEqual(C.linhaOrfa({ situacao: 'conciliado', mov_ids: [], vinculos: [{ t: 'cr', id: 8, baixa: true }] }, iv), true);
+    assert.strictEqual(C.linhaOrfa({ situacao: 'pendente' }, iv), false);
+    const linhas = [
+        { conta_id: 1, data: '2026-11-03', situacao: 'conciliado', mov_ids: [1] },
+        { conta_id: 1, data: '2026-11-04', situacao: 'ignorado' },
+        { conta_id: 1, data: '2026-11-05', situacao: 'transferencia', mov_ids: [2] },
+        { conta_id: 1, data: '2026-11-06', situacao: 'pendente' },
+        { conta_id: 1, data: '2026-11-08', situacao: 'conciliado', mov_ids: [1] },
+        { conta_id: 2, data: '2026-11-02', situacao: 'conciliado', mov_ids: [9] },
+        { conta_id: 3, data: '2026-11-02', situacao: 'pendente' }
+    ];
+    const r = C.conferidos(linhas, iv);
+    assert.strictEqual(r.get('1'), '2026-11-05');
+    assert.strictEqual(r.has('2'), false, 'orfa conta como pendente');
+    assert.strictEqual(r.has('3'), false);
+});
+
+test('conferidos: 3.200 linhas x 5.000 movimentos em menos de 1,5 s', () => {
+    const m = massa();
+    const linhas = [];
+    for (let i = 0; i < 3200; i++) linhas.push({ id: i, conta_id: 1 + (i % 3), data: '2026-' + String(1 + (i % 11)).padStart(2, '0') + '-10', situacao: i % 16 ? 'conciliado' : 'pendente', mov_ids: [i, i + 1, 20000 + (i % 50)] });
+    const t0 = Date.now();
+    const iv = C.indiceVinculos({ movimentos: m.movimentos, contasReceber: m.contasReceber, contasPagar: m.contasPagar });
+    C.conferidos(linhas, iv);
+    linhas.forEach(l => C.linhaOrfa(l, iv));
+    const ms = Date.now() - t0;
+    assert.ok(ms < 1500, 'demorou ' + ms + ' ms');
+});

@@ -1214,7 +1214,7 @@ Na janela do carrinho:
 4 abas: Resumo | Lançamentos | Fluxo de caixa | DRE
   - Resumo: cartão "Minhas contas" (uma linha por conta ativa: selo redondo com a sigla e a cor do banco, nome,
     "Conta corrente · Ag 0001 · CC 12345-6", saldo de hoje, etiqueta "Manual" e "Atualizado em DD/MM" ou "Sem
-    movimentos"; linha "Saldo total"; botão "+ Conectar conta", que abre o cadastro de conta em Configurar Empresa
+    movimentos"; conta com abertura marcada para depois de hoje mostra R$ 0,00 até o dia da abertura; linha "Saldo total"; botão "+ Conectar conta", que abre o cadastro de conta em Configurar Empresa
     com a nota de que a conexão automática com o banco (Open Finance) chega com o servidor). Indicadores Lucro
     líquido, Margem líquida, Ticket médio e Receita, com Período (Este mês, Mês passado, Trimestre, Ano,
     Personalizado) e Regime (Caixa ou Competência), comparados ao período anterior ("↑ 12%" verde, "↓ 8%"
@@ -1226,11 +1226,13 @@ Na janela do carrinho:
     Outro), Agência, Número da conta e Tipo da conta (corrente, poupança, caixa, cartão).
   - Fluxo de caixa (substitui o Extrato provisório): filtros Período (padrão: mês atual), Ver por Dia | Semana |
     Mês (padrão Dia), Conta (Todas ou uma; as desativadas aparecem com "(desativada)" e só elas mostram o próprio
-    histórico) e Categoria. Quatro cartões: Saldo inicial, Entradas, Saídas e Saldo final; quando o período passa
+    histórico) e Categoria. Com uma categoria escolhida, os cartões são Entradas, Saídas e "Resultado da categoria"
+    (sem saldo). Sem categoria, quatro cartões: Saldo inicial, Entradas, Saídas e Saldo final; quando o período passa
     de hoje, "Previsto até DD/MM: R$ X" abaixo do Saldo final (contas em aberto pelo vencimento, de hoje em
     diante; repasses de cartão e recorrências do mês entram). Gráfico de linhas (Saldo, Entradas, Saídas) com a
     parte prevista tracejada, legenda e tema escuro legível. Tabela "Movimentações do período": Saldo inicial no
-    topo e depois Data, Descrição, Conta, Entrada, Saída e Saldo; linhas previstas em cinza com o selo "Previsto";
+    topo e depois Data, Descrição, Conta, Entrada, Saída e Saldo; linhas previstas em cinza com o selo "Previsto", com a pessoa e a descrição do lançamento e a conta prevista (quando há),
+    e clicar nelas abre o lançamento como nas realizadas;
     transferências com o selo "Transferência". Com "Todas as contas" a transferência não entra em Entradas nem em
     Saídas (nunca é receita ou despesa); com uma conta escolhida conta como entrada ou saída dela. Clicar numa
     linha de recebimento ou pagamento abre o lançamento em Lançamentos (se a pessoa vê aquele lado). Avisos: o
@@ -1267,6 +1269,13 @@ Na janela do carrinho:
         mão), liga a ela: "Ligada à transferência de DD/MM já registrada." (sem outro par). Senão cria o par de
         movimentos na data do extrato (não muda Entradas e Saídas de "Todas as contas").
       - Ignorar: vai para Ignoradas.
+      - Importações desta conta (lista recolhível): arquivo, data e hora, linhas e pendentes de cada importação;
+        "Ignorar todas as pendentes desta importação" e "Excluir esta importação" (só quando nenhuma linha dela está
+        conciliada; pede confirmação; o arquivo pode ser importado de novo). O arquivo e a hora ficam uma vez por
+        importação (sc_fin_extrato_imp, também no backup).
+      - Repasse de cartão ou movimento "a cair" (data depois de hoje) que o banco já depositou: ao conciliar, o
+        movimento (e a taxa do mesmo repasse) passa para a data do extrato; o Desfazer volta a data.
+      - Só as linhas afetadas são redesenhadas depois de cada ação (a própria e as de mesmo valor).
       - Desfazer (Conciliadas e Ignoradas): a linha volta para Pendentes; se a conciliação deu baixa, a baixa é
         estornada pela rotina de estorno (o lançamento volta em aberto, com a conta prevista de antes); se criou a
         transferência, ela é excluída; se só ligou a um movimento ou repasse, só desliga. O lançamento criado

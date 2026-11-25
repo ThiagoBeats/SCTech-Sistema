@@ -103,6 +103,86 @@
         return (linhas || []).filter(l => !ja.has(String(l.fitid)));
     }
 
+    // ---------- indice (para nao varrer tudo a cada linha) ----------
+    // Por contexto (guardado nele, recalculado se as listas mudarem): movimentos por conta|sentido|centavos,
+    // lancamentos por centavos e repasses por conta. Cada item guarda a posicao original (a ordem de sempre).
+    function indice(ctx) {
+        const chave = [ctx.movimentos, ctx.contasReceber, ctx.contasPagar, ctx.repasses];
+        if (ctx.__idx && ctx.__idx.chave.every((x, i) => x === chave[i])) return ctx.__idx;
+        const agrupar = (lista, chaveDe) => {
+            const m = new Map();
+            (lista || []).forEach((x, i) => {
+                if (!x) return;
+                const k = chaveDe(x);
+                let a = m.get(k);
+                if (!a) m.set(k, (a = []));
+                a.push({ x, i });
+            });
+            return m;
+        };
+        const idx = {
+            chave,
+            movs: agrupar(ctx.movimentos, m => String(m.conta_id) + '|' + m.sentido + '|' + cent(m.valor)),
+            cr: agrupar(ctx.contasReceber, l => '' + cent(l.valor)),
+            cp: agrupar(ctx.contasPagar, l => '' + cent(l.valor)),
+            reps: new Map()
+        };
+        (ctx.repasses || []).forEach(r => {
+            if (!r) return;
+            const k = String(r.contaId);
+            if (!idx.reps.has(k)) idx.reps.set(k, []);
+            idx.reps.get(k).push(r);
+        });
+        try { Object.defineProperty(ctx, '__idx', { value: idx, configurable: true, writable: true, enumerable: false }); } catch (e) { /* objeto travado: sem cache */ }
+        return idx;
+    }
+    // Itens com valor a ±1 centavo, na ordem original.
+    function perto(mapa, prefixo, c0) {
+        const out = [];
+        for (let d = -TOLERANCIA_CENT; d <= TOLERANCIA_CENT; d++) (mapa.get(prefixo + (c0 + d)) || []).forEach(e => out.push(e));
+        return out.sort((a, b) => a.i - b.i).map(e => e.x);
+    }
+
+    // ---------- linhas orfas e "conferido ate" ----------
+    // Indice do que existe: ids de movimentos e lancamentos pagos ('cr:ID'/'cp:ID'), montado uma vez por tela.
+    function indiceVinculos(p) {
+        p = p || {};
+        const movIds = new Set((p.movimentos || []).filter(Boolean).map(m => String(m.id)));
+        const pagos = new Set();
+        (p.contasReceber || []).forEach(x => { if (x && x.status === 'Pago') pagos.add('cr:' + x.id); });
+        (p.contasPagar || []).forEach(x => { if (x && x.status === 'Pago') pagos.add('cp:' + x.id); });
+        return { movIds, pagos };
+    }
+    const conciliada = l => !!l && (l.situacao === 'conciliado' || l.situacao === 'transferencia');
+    // Linha conciliada cujo movimento (algum) sumiu, ou, sem movimento, cuja baixa nao esta mais paga.
+    function linhaOrfa(l, iv) {
+        if (!conciliada(l)) return false;
+        const ids = Array.isArray(l.mov_ids) ? l.mov_ids : (l.mov_id != null ? [l.mov_id] : []);
+        if (ids.length) return ids.some(id => !iv.movIds.has(String(id)));
+        return (l.vinculos || []).filter(v => v && v.baixa).some(v => !iv.pagos.has(v.t + ':' + v.id));
+    }
+    // "Conferido ate" por conta: a ultima data D de linha conciliada (nao orfa) sem nenhuma linha pendente (ou orfa)
+    // da conta com data ate D. Devolve Map(String(contaId) -> 'AAAA-MM-DD').
+    function conferidos(linhas, iv) {
+        const porConta = new Map();
+        (linhas || []).forEach(l => {
+            if (!l || !l.data) return;
+            const k = String(l.conta_id);
+            let c = porConta.get(k);
+            if (!c) porConta.set(k, (c = { pend: null, feitas: [] }));
+            const d = dia10(l.data);
+            const orfa = linhaOrfa(l, iv);
+            if (l.situacao === 'pendente' || orfa) { if (!c.pend || d < c.pend) c.pend = d; } else if (conciliada(l)) c.feitas.push(d);
+        });
+        const out = new Map();
+        porConta.forEach((c, k) => {
+            let melhor = null;
+            c.feitas.forEach(d => { if ((!c.pend || d < c.pend) && (!melhor || d > melhor)) melhor = d; });
+            if (melhor) out.set(k, melhor);
+        });
+        return out;
+    }
+
     // ---------- sugestoes ----------
     // repasses: [{ crId, data, liquido, contaId }] — um por repasse de cartao ainda nao recebido, ja com o LIQUIDO
     // (CaixaCore.repassesCartao -> { data, bruto, taxa, liquido }) e a conta que recebe.
@@ -117,15 +197,17 @@
         const jaUsados = ctx.jaUsados || new Set();
         const usado = (...chaves) => chaves.some(c => jaUsados.has(c));
         const out = [];
+        const idx = indice(ctx);
+        const c0 = cent(alvo);
 
-        (ctx.movimentos || []).forEach(m => {
+        perto(idx.movs, String(ctx.contaId) + '|' + sentido + '|', c0).forEach(m => {
             if (!m || String(m.conta_id) !== String(ctx.contaId) || m.sentido !== sentido || usado('mov:' + m.id, m.id)) return;
             const dist = distancia(dia10(m.data), linha.data);
             if (!iguais(m.valor, alvo) || dist > JANELA_DIAS) return;
             out.push({ tipo: 'movimento', ids: [m.id], descricao: m.descricao || m.origem || 'Movimento', valor: alvo, data: dia10(m.data), distanciaDias: dist });
         });
 
-        ((entrada ? ctx.contasReceber : ctx.contasPagar) || []).forEach(l => {
+        perto(entrada ? idx.cr : idx.cp, '', c0).forEach(l => {
             if (!l || l.status === 'Cancelado' || l.status === 'Pago' || usado((entrada ? 'cr:' : 'cp:') + l.id)) return;
             const dist = distancia(dia10(l.data_vencimento), linha.data);
             if (!iguais(l.valor, alvo) || dist > JANELA_DIAS) return;
@@ -134,7 +216,7 @@
         });
 
         if (entrada) {
-            const reps = (ctx.repasses || []).filter(r => r && String(r.contaId) === String(ctx.contaId) && !usado('rep:' + r.crId + ':' + dia10(r.data)));
+            const reps = (idx.reps.get(String(ctx.contaId)) || []).filter(r => !usado('rep:' + r.crId + ':' + dia10(r.data)));
             let achou = false;
             reps.forEach(r => {
                 const dist = distancia(dia10(r.data), linha.data);
@@ -158,7 +240,7 @@
         return out.sort((a, b) => (ORDEM_TIPO[a.tipo] - ORDEM_TIPO[b.tipo]) || (a.distanciaDias - b.distanciaDias));
     }
 
-    const api = { lerOfx, decodificar, novasLinhas, sugestoes, ERRO_OFX };
+    const api = { lerOfx, decodificar, novasLinhas, sugestoes, indiceVinculos, linhaOrfa, conferidos, ERRO_OFX };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (raiz) raiz.ConciliacaoCore = api;
 

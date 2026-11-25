@@ -319,6 +319,7 @@ let db = {
     fin_excluidos:   JSON.parse(localStorage.getItem('sc_fin_excluidos')) || [],
     // Linhas de extrato bancario importadas (OFX) e o que cada uma conciliou.
     fin_extrato:     JSON.parse(localStorage.getItem('sc_fin_extrato')) || [],
+    fin_extrato_imp: JSON.parse(localStorage.getItem('sc_fin_extrato_imp')) || [],
     medicoes:       JSON.parse(localStorage.getItem('sc_med'))  || [],
     agenda_eventos:  JSON.parse(localStorage.getItem('sc_agd_ev')) || [],
     rotas:           JSON.parse(localStorage.getItem('sc_rotas')) || [],
@@ -331,7 +332,7 @@ let db = {
 const _DB_CHAVE_CAMPO = {
     sc_cli: 'clientes', sc_cat: 'catalogo', sc_ped: 'pedidos', sc_est: 'estoque', sc_mat: 'materiais',
     sc_mov: 'movimentos', sc_cr: 'contas_receber', sc_cp: 'contas_pagar', sc_mov_fin: 'movimentos_fin', sc_med: 'medicoes', sc_agd_ev: 'agenda_eventos', sc_usr: 'usuarios', sc_pap: 'papeis',
-    sc_fin_cat: 'fin_categorias', sc_fin_excluidos: 'fin_excluidos', sc_fin_extrato: 'fin_extrato',
+    sc_fin_cat: 'fin_categorias', sc_fin_excluidos: 'fin_excluidos', sc_fin_extrato: 'fin_extrato', sc_fin_extrato_imp: 'fin_extrato_imp',
 };
 // Texto de cada chave como esta aba leu ou gravou por ultimo. Reler so troca o array
 // quando o texto gravado mudou (outra aba gravou): um fluxo no meio de uma confirmacao
@@ -466,6 +467,7 @@ function _dbPares() {
         ...(db.fin_categorias ? [['sc_fin_cat', db.fin_categorias]] : []),
         ['sc_fin_excluidos', db.fin_excluidos || []],
         ['sc_fin_extrato', db.fin_extrato || []],
+        ['sc_fin_extrato_imp', db.fin_extrato_imp || []],
         ['sc_med', db.medicoes],
         ['sc_rotas', db.rotas || []],
         ['sc_agd_ev', db.agenda_eventos || []],
@@ -4973,7 +4975,7 @@ Notif.registrar('aceite-respostas', () => {
 
 // Outra aba gravou: traz para a memoria o que os alertas leem.
 // So troca o array quando o texto gravado mudou (ver _dbRecarregarChave).
-const _NOTIF_CHAVES_DB = ['sc_ped', 'sc_med', 'sc_cat', 'sc_mat', 'sc_est', 'sc_mov', 'sc_cr', 'sc_cp', 'sc_mov_fin', 'sc_usr', 'sc_pap', 'sc_agd_ev', 'sc_fin_cat', 'sc_fin_excluidos', 'sc_fin_extrato'];
+const _NOTIF_CHAVES_DB = ['sc_ped', 'sc_med', 'sc_cat', 'sc_mat', 'sc_est', 'sc_mov', 'sc_cr', 'sc_cp', 'sc_mov_fin', 'sc_usr', 'sc_pap', 'sc_agd_ev', 'sc_fin_cat', 'sc_fin_excluidos', 'sc_fin_extrato', 'sc_fin_extrato_imp'];
 function _notifRecarregarDB(chave) {
     if (_NOTIF_CHAVES_DB.includes(chave)) _dbRecarregarChave(chave);
 }
@@ -8614,7 +8616,7 @@ function _dadosExportacao(marcaFase0) {
         medicoes: db.medicoes, rotas: db.rotas || [], agenda_eventos: db.agenda_eventos || [],
         fin_metas: _lerObjetoLS('sc_fin_metas'), fin_orcamento_mes: _lerObjetoLS('sc_fin_orcamento_mes'),
         // Financeiro novo: categorias da DRE, excluidos e a versao dos dados (backup sem ela passa pela migracao v4).
-        fin_categorias: db.fin_categorias, fin_excluidos: db.fin_excluidos || [], fin_extrato: db.fin_extrato || [], fin_versao: localStorage.getItem(CHAVE_FIN_VERSAO),
+        fin_categorias: db.fin_categorias, fin_excluidos: db.fin_excluidos || [], fin_extrato: db.fin_extrato || [], fin_extrato_imp: db.fin_extrato_imp || [], fin_versao: localStorage.getItem(CHAVE_FIN_VERSAO),
         empresa: getEmpresa(), formas_pag: getFormasPagamentoCfg(),
         import_perfis: db.import_perfis || [],
         config_ls: _configsLS(),
@@ -8675,6 +8677,7 @@ function importarDados(event) {
             db.fin_categorias = catOk(dados.fin_categorias) ? dados.fin_categorias : FinCatCore.categoriasPadrao();
             db.fin_excluidos  = Array.isArray(dados.fin_excluidos) ? dados.fin_excluidos : [];
             db.fin_extrato    = Array.isArray(dados.fin_extrato) ? dados.fin_extrato : [];
+            db.fin_extrato_imp = Array.isArray(dados.fin_extrato_imp) ? dados.fin_extrato_imp : [];
             // Tudo numa gravacao so (dados, marca da Fase 0, metas, orcamentos, empresa e
             // planos): se faltar espaco no meio, o que ja foi gravado volta ao anterior e a
             // migracao nunca roda sobre dados misturados.

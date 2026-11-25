@@ -3181,6 +3181,7 @@ html[data-theme="dark"] .dre-tabela td.dre-desfav { color: #FF8A7A; }
 .fluxo-topo-card { margin-bottom: 16px; }
 .fluxo-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; }
 .fluxo-kpis .res-kpi-valor { white-space: nowrap; }
+.fluxo-kpis.fluxo-kpis-cat { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .fluxo-ent { color: var(--ok-text); }
 .fluxo-sai { color: var(--danger-text, var(--danger)); }
 .fluxo-conferido { margin: -4px 0 16px; font-size: 13px; color: var(--muted); }
@@ -3206,7 +3207,7 @@ html[data-theme="dark"] .dre-tabela td.dre-desfav { color: #FF8A7A; }
 .fluxo-rel-semi th, .fluxo-rel-semi td { font-weight: 600; }
 .fluxo-rel-vazio th { color: var(--muted); font-style: italic; }
 .fluxo-rel-seg { flex-wrap: wrap; }
-@media (max-width: 900px) { .fluxo-kpis { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 900px) { .fluxo-kpis, .fluxo-kpis.fluxo-kpis-cat { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 600px) {
     .fluxo-kpis .res-kpi-valor { font-size: 17px; }
     .fluxo-grafico { height: 220px; }
@@ -3235,6 +3236,11 @@ html[data-theme="dark"] .dre-tabela td.dre-desfav { color: #FF8A7A; }
 .conc-cand-valor { white-space: nowrap; }
 .conc-escolher-rodape { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; }
 #conc-soma { flex: 1 1 180px; color: var(--muted); }
+.conc-imps { margin: 0 0 12px; font-size: 13px; }
+.conc-imps summary { cursor: pointer; font-weight: 600; color: var(--dark); }
+.conc-imp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.conc-imp-desc { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; color: var(--dark); }
+.conc-imp-acoes { display: flex; flex-wrap: wrap; gap: 6px; }
 #conc-soma.conc-soma-ok { color: var(--ok-text); font-weight: 600; }
 @media (max-width: 600px) {
     .conc-acoes .btn { flex: 1 1 40%; min-width: 0; width: auto; }

@@ -100,6 +100,10 @@ test('filtrando por categoria: so o aluguel', async ({ page }) => {
     await page.locator('#fluxo-categoria').selectOption('cat_aluguel');
     await expect(valor(page, 'saidas')).toHaveText('R$ 200,00');
     await expect(valor(page, 'entradas')).toHaveText('R$ 0,00');
+    // Sem saldo com categoria: Entradas, Saidas e Resultado da categoria.
+    await expect(page.locator('#fluxo-kpi-resultado .res-kpi-rotulo')).toHaveText('Resultado da categoria');
+    await expect(valor(page, 'resultado')).toHaveText('R$ -200,00');
+    await expect(page.locator('#fluxo-kpi-inicial, #fluxo-kpi-final, #fluxo-previsto')).toHaveCount(0);
     await expect(linhas(page)).toHaveCount(2);
     await expect(linhas(page).nth(1)).toContainText('Aluguel de novembro');
 });
@@ -153,13 +157,23 @@ test('clicar numa linha de recebimento abre Lancamentos com a linha destacada', 
     await expect(page.locator('#tb-contas-receber tr.lanc-destaque')).toContainText('Ana');
 });
 
-test('clicar numa linha de pagamento abre o lado A pagar; transferencia e previsto nao abrem nada', async ({ page }) => {
+test('clicar numa linha de pagamento abre o lado A pagar; transferencia nao abre nada', async ({ page }) => {
     await abrir(page);
     await page.locator('#fluxo-linhas tr.fluxo-transferencia').first().locator('td').first().click();
-    await page.locator('#fluxo-linhas tr.fluxo-previsto td').first().click();
     await expect(page.locator('#fin-fluxo')).toBeVisible();
     await linhas(page).filter({ hasText: 'Aluguel de novembro' }).click();
     await expect(page.locator('#tb-contas-pagar tr.lanc-destaque')).toContainText('Aluguel de novembro');
+});
+
+test('linha prevista mostra a pessoa, a descricao e a conta prevista e abre o lancamento', async ({ page }) => {
+    const crs = CR.map(c => (c.id === 2 ? Object.assign({}, c, { conta_id: 2 }) : c));
+    await abrir(page, Object.assign({}, DADOS, { sc_cr: crs }));
+    const prev = page.locator('#fluxo-linhas tr.fluxo-previsto');
+    await expect(prev).toContainText('Bia - Venda Bia');
+    await expect(prev.locator('td').nth(2)).toHaveText('B');
+    await prev.locator('td').first().click();
+    await expect(page.locator('#fin-lancamentos')).toBeVisible();
+    await expect(page.locator('#tb-contas-receber tr.lanc-destaque')).toContainText('Bia');
 });
 
 test('Transferir entre contas cria a transferencia e ela aparece na tabela', async ({ page }) => {

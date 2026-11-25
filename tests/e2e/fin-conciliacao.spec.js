@@ -75,10 +75,13 @@ test('importar o OFX do Itaú: 3 linhas novas; de novo (SGML ou XML), nada dupli
     await expect(linha(page, 'CRED PIX JOÃO DA SILVA')).toContainText('+ R$ 2.500,00');
     const ext = await ler(page, 'sc_fin_extrato');
     expect(ext).toHaveLength(3);
-    expect(ext.map(l => [l.conta_id, l.fitid, l.data, l.valor, l.situacao, l.mov_id, l.arquivo])).toEqual([
-        [1, '202611050001', '2026-11-05', -1200.5, 'pendente', null, 'extrato-sgml.ofx'],
-        [1, '202611060002', '2026-11-06', 2500, 'pendente', null, 'extrato-sgml.ofx'],
-        [1, '202611090003', '2026-11-09', -89.9, 'pendente', null, 'extrato-sgml.ofx']]);
+    // Arquivo e hora ficam uma vez na importacao; cada linha guarda so o id dela.
+    const imps = await ler(page, 'sc_fin_extrato_imp');
+    expect(imps.map(i => [i.conta_id, i.arquivo, i.linhas])).toEqual([[1, 'extrato-sgml.ofx', 3]]);
+    expect(ext.map(l => [l.conta_id, l.fitid, l.data, l.valor, l.situacao, l.mov_id, l.imp, 'arquivo' in l])).toEqual([
+        [1, '202611050001', '2026-11-05', -1200.5, 'pendente', null, imps[0].id, false],
+        [1, '202611060002', '2026-11-06', 2500, 'pendente', null, imps[0].id, false],
+        [1, '202611090003', '2026-11-09', -89.9, 'pendente', null, imps[0].id, false]]);
     await importar(page, 1, FIX_SGML);
     await expect(page.locator('#conc-resumo')).toHaveText('0 linha(s) nova(s) importada(s); 3 já estavam no sistema.');
     await importar(page, 1, FIX_XML);
@@ -89,6 +92,7 @@ test('importar o OFX do Itaú: 3 linhas novas; de novo (SGML ou XML), nada dupli
     await importar(page, 3, FIX_XML);
     await expect(page.locator('#conc-resumo')).toHaveText('3 linha(s) nova(s) importada(s); 0 já estavam no sistema.');
     expect(await ler(page, 'sc_fin_extrato')).toHaveLength(6);
+    expect(await ler(page, 'sc_fin_extrato_imp')).toHaveLength(2);
 });
 
 test('extrato de outra conta: pergunta antes; Cancelar não importa, Importar segue', async ({ page }) => {
@@ -443,4 +447,188 @@ test('tela Conciliar em 390px sem rolagem horizontal e no tema escuro', async ({
     const largura = await page.evaluate(() => { const o = document.getElementById('conc-overlay'); return [o.scrollWidth, o.clientWidth, document.documentElement.scrollWidth]; });
     expect(largura[0]).toBeLessThanOrEqual(largura[1]);
     expect(largura[2]).toBeLessThanOrEqual(390);
+});
+
+// ---------- revisao final da entrega 3 ----------
+test('É transferência: não liga à transferência de mesmo valor que foi para uma terceira conta', async ({ page }) => {
+    const manual = [
+        { id: 300, conta_id: 1, data: '2026-11-10', sentido: 'saida', valor: 1000, origem: 'transferencia', origem_id: null, grupo_id: 'tm', descricao: 'Transferência para Maquininha' },
+        { id: 301, conta_id: 3, data: '2026-11-10', sentido: 'entrada', valor: 1000, origem: 'transferencia', origem_id: null, grupo_id: 'tm', descricao: 'Transferência de Itaú' }];
+    await abrir(page, Object.assign({}, DADOS, { sc_mov_fin: MOVS.concat(manual) }));
+    await importar(page, 1, ofx('56789-0', [['20261112', -1000, 'T12', 'TED PARA BRADESCO'], ['20261110', -1000, 'T10', 'TED PARA MAQUININHA']]));
+    await linha(page, 'TED PARA BRADESCO').locator('.conc-transf').click();
+    await page.locator('#conc-transf-conta').selectOption('2');
+    await page.locator('#conc-transf-ok').click();
+    await expect(page.locator('.sc-toast').last()).toHaveText('Transferência registrada.');
+    const tr = (await ler(page, 'sc_mov_fin')).filter(m => m.origem === 'transferencia');
+    expect(tr).toHaveLength(4);
+    const novo = tr.find(m => m.conta_id === 2);
+    expect([novo.sentido, novo.valor, novo.data]).toEqual(['entrada', 1000, '2026-11-12']);
+    expect((await extrato(page, 'T12')).mov_ids).not.toContain(300);
+    // A linha de 10/11 para a Maquininha liga a transferencia que ja existia (sem outro par).
+    await linha(page, 'TED PARA MAQUININHA').locator('.conc-transf').click();
+    await page.locator('#conc-transf-conta').selectOption('3');
+    await page.locator('#conc-transf-ok').click();
+    await expect(page.locator('.sc-toast').last()).toHaveText('Ligada à transferência de 10/11 já registrada.');
+    expect((await ler(page, 'sc_mov_fin')).filter(m => m.origem === 'transferencia')).toHaveLength(4);
+    expect((await extrato(page, 'T10')).mov_ids).toEqual([300]);
+    await page.locator('#conc-fechar').click();
+    for (const [c, v] of [['1', 'R$ -1.000,00'], ['2', 'R$ 1.000,00'], ['3', 'R$ 1.100,00']]) {
+        await page.locator('#fluxo-conta').selectOption(c);
+        await expect(kpi(page, 'final')).toHaveText(v);
+    }
+});
+
+test('depois de Confirmar, a outra linha de mesmo valor perde a sugestão usada sem redesenhar as demais', async ({ page }) => {
+    await abrir(page);
+    await importar(page, 1, ofx('56789-0', [['20261105', 500, 'A1', 'PIX ANA UM'], ['20261106', 500, 'A2', 'PIX ANA DOIS'], ['20261108', 700, 'B1', 'DEPOSITO']]));
+    await expect(linha(page, 'PIX ANA DOIS').locator('.conc-sug')).toContainText('Ana - Venda Ana');
+    await page.evaluate(() => { document.querySelector('#conc-lista .conc-linha:last-child').dataset.marca = '1'; });
+    await linha(page, 'PIX ANA UM').locator('.conc-confirmar').click();
+    await expect(page.locator('#conc-aba-pendente')).toHaveText('Pendentes (2)');
+    await expect(linha(page, 'PIX ANA DOIS').locator('.conc-sug')).toHaveText('Nenhuma sugestão automática.');
+    expect(await page.evaluate(() => document.querySelector('#conc-lista .conc-linha[data-marca]').textContent.includes('DEPOSITO'))).toBe(true);
+});
+
+test('importações: ignorar todas as pendentes de uma importação e excluir a importação (só sem conciliada)', async ({ page }) => {
+    await abrir(page);
+    await importar(page, 1, ITAU, 'itau-nov.ofx');
+    const abrirImps = () => page.evaluate(() => { document.getElementById('conc-imps').open = true; });
+    await expect(page.locator('#conc-resumo')).toContainText('5 linha(s)');
+    await abrirImps();
+    await expect(page.locator('#conc-imps .conc-imp')).toContainText('itau-nov.ofx');
+    await expect(page.locator('#conc-imps .conc-imp')).toContainText('5 linha(s), 5 pendente(s)');
+    await linha(page, 'CRED PIX ANA').locator('.conc-confirmar').click();
+    await expect(page.locator('#conc-imps .conc-imp-excluir')).toHaveCount(0);
+    await page.locator('#conc-imps .conc-imp-ignorar').click();
+    await expect(page.locator('#sc-modal-msg')).toHaveText('Ignorar as 4 linha(s) pendentes desta importação?');
+    await page.locator('#sc-modal-ok').click();
+    await expect(page.locator('#conc-aba-ignorado')).toHaveText('Ignoradas (4)');
+    await expect(page.locator('#conc-aba-pendente')).toHaveText('Pendentes (0)');
+    await page.locator('#conc-aba-conciliado').click();
+    await linha(page, 'CRED PIX ANA').locator('.conc-desfazer').click();
+    await page.locator('#sc-modal-ok').click();
+    await expect(page.locator('#conc-aba-conciliado')).toHaveText('Conciliadas (0)');
+    await abrirImps();
+    await page.locator('#conc-imps .conc-imp-excluir').click();
+    await expect(page.locator('#sc-modal-msg')).toContainText('Excluir esta importação? As 5 linha(s) dela saem da conciliação');
+    await page.locator('#sc-modal-ok').click();
+    await expect.poll(async () => (await ler(page, 'sc_fin_extrato')).length).toBe(0);
+    expect(await ler(page, 'sc_fin_extrato_imp')).toEqual([]);
+    await importar(page, 1, ITAU);
+    await expect(page.locator('#conc-resumo')).toHaveText('5 linha(s) nova(s) importada(s); 0 já estavam no sistema.');
+});
+
+test('linha antiga (arquivo e hora na própria linha) continua agrupada por importação', async ({ page }) => {
+    const antigas = [1, 2].map(i => ({ id: i, conta_id: 1, fitid: 'v' + i, data: '2026-11-0' + i, valor: -10 * i, descricao: 'ANTIGA ' + i,
+        importado_em: '2026-11-15T13:00:00.000Z', arquivo: 'velho.ofx', situacao: 'pendente', mov_id: null }));
+    await abrir(page, Object.assign({}, DADOS, { sc_fin_extrato: antigas }));
+    await page.locator('#fluxo-btn-conciliar').click();
+    await page.evaluate(() => { document.getElementById('conc-imps').open = true; });
+    await expect(page.locator('#conc-imps .conc-imp')).toContainText('velho.ofx');
+    await expect(page.locator('#conc-imps .conc-imp')).toContainText('2 linha(s), 2 pendente(s)');
+    await page.locator('#conc-imps .conc-imp-excluir').click();
+    await page.locator('#sc-modal-ok').click();
+    await expect.poll(async () => (await ler(page, 'sc_fin_extrato')).length).toBe(0);
+});
+
+test('repasse "a cair" que o banco já depositou passa para a data do extrato; Desfazer volta a data', async ({ page }) => {
+    const gil = cr(23, 'Gil', 51, '2026-11-19', { status: 'Pago', data_pagamento: '2026-11-19', conta_id: 3, cartao: { tipo: 'debito', vezes: 1, antecipar: false } });
+    const taxa = { id: 33, tipo: 'variavel', categoria: 'taxa_cartao', descricao: 'Taxa de cartão', credor_nome: 'Maquininha', valor: 1, data_vencimento: '2026-11-23',
+        data_pagamento: '2026-11-23', status: 'Pago', conta_id: 3, origem_cr_id: 23, categoria_id: 'cat_taxas', historico: hist };
+    const movs = [{ id: 110, conta_id: 3, data: '2026-11-23', sentido: 'entrada', valor: 51, origem: 'cr', origem_id: 23, grupo_id: 'g23', descricao: 'Venda Gil (cartão)' },
+        { id: 111, conta_id: 3, data: '2026-11-23', sentido: 'saida', valor: 1, origem: 'cp', origem_id: 33, grupo_id: 'g23', descricao: 'Taxa de cartão' }];
+    await abrir(page, Object.assign({}, DADOS, { sc_cr: DADOS.sc_cr.concat([gil]), sc_cp: TAXAS.concat([taxa]), sc_mov_fin: MOVS.concat(movs) }));
+    await importar(page, 3, ofx('99999', [['20261120', 50, 'G50', 'CREDITO CARTAO GIL']]));
+    const l = linha(page, 'CREDITO CARTAO GIL');
+    await expect(l.locator('.conc-sug')).toContainText('Repasse de cartão');
+    await l.locator('.conc-confirmar').click();
+    await expect(page.locator('#conc-aba-conciliado')).toHaveText('Conciliadas (1)');
+    const datas = async () => {
+        const m = await ler(page, 'sc_mov_fin');
+        const cp = (await ler(page, 'sc_cp')).find(x => x.id === 33);
+        return [m.find(x => x.id === 110).data, m.find(x => x.id === 111).data, cp.data_pagamento, cp.data_vencimento];
+    };
+    expect(await datas()).toEqual(['2026-11-20', '2026-11-20', '2026-11-20', '2026-11-20']);
+    await page.locator('#conc-aba-conciliado').click();
+    await linha(page, 'CREDITO CARTAO GIL').locator('.conc-desfazer').click();
+    await page.locator('#sc-modal-ok').click();
+    await expect(page.locator('#conc-aba-conciliado')).toHaveText('Conciliadas (0)');
+    expect(await datas()).toEqual(['2026-11-23', '2026-11-23', '2026-11-23', '2026-11-23']);
+});
+
+test('Criar lançamento com o valor mudado: salva o lançamento e avisa que a linha continua pendente', async ({ page }) => {
+    await abrir(page);
+    await importar(page, 1, ITAU);
+    await linha(page, 'PAGTO ALUGUÉL').locator('.conc-criar').click();
+    await page.fill('#lf-valor', '1000,00');
+    await page.fill('#lf-pessoa', 'Locador');
+    await page.locator('#lf-salvar').click();
+    await expect(page.locator('#sc-modal-msg')).toHaveText('O lançamento foi salvo, mas o valor não bate com o extrato; a linha continua pendente.');
+    await page.locator('#sc-modal-ok').click();
+    const cp = (await ler(page, 'sc_cp')).find(x => x.descricao === 'PAGTO ALUGUÉL');
+    expect([cp.valor, cp.data_pagamento]).toEqual([1000, null]);
+    expect((await extrato(page, 'L1200')).situacao).toBe('pendente');
+});
+
+test('2.000 linhas pendentes: a tela Conciliar desenha em pouco tempo', async ({ page }) => {
+    await abrir(page);
+    const ms = await page.evaluate(() => {
+        const movs = [];
+        for (let i = 0; i < 5000; i++) movs.push({ id: 10000 + i, conta_id: 1 + (i % 3), data: '2026-' + String(1 + (i % 10)).padStart(2, '0') + '-' + String(1 + (i % 28)).padStart(2, '0'), sentido: i % 2 ? 'saida' : 'entrada', valor: 10 + (i % 700), origem: 'ajuste', origem_id: null });
+        db.movimentos_fin = db.movimentos_fin.concat(movs);
+        db.fin_extrato = [];
+        for (let i = 0; i < 2000; i++) db.fin_extrato.push({ id: i + 1, conta_id: 1, fitid: 'p' + i, data: '2026-' + String(1 + (i % 10)).padStart(2, '0') + '-15', valor: (i % 2 ? -1 : 1) * (10 + (i % 700)), descricao: 'LINHA ' + i, situacao: 'pendente', mov_id: null });
+        const t0 = performance.now();
+        abrirConciliacao(1);
+        return performance.now() - t0;
+    });
+    await expect(page.locator('#conc-lista .conc-linha')).toHaveCount(2000);
+    console.log('Conciliar com 2.000 linhas: ' + Math.round(ms) + ' ms');
+    expect(ms).toBeLessThan(3000);
+});
+
+// Paridade (mes semeado, hoje 20/11, todas as contas):
+// - Resumo "Saldo total" = Fluxo "Saldo final" com o periodo 01/11 a 20/11 (a conta que so abre em 28/11 fica fora dos dois);
+// - Fluxo "Entradas" (01/11 a 20/11) menos as entradas de ajuste de saldo e de categorias "so caixa" (aporte) = DRE caixa,
+//   linha Receitas, coluna Nov (aberturas de conta nao entram nas Entradas; transferencias nao entram com todas as contas).
+test('paridade Resumo x Fluxo x DRE (caixa) num mês semeado', async ({ page }) => {
+    const contas = [
+        { id: 1, nome: 'A', tipo: 'banco', saldo_inicial: 1000, data_saldo_inicial: '2026-10-01', ativo: true },
+        { id: 2, nome: 'B', tipo: 'banco', saldo_inicial: 0, data_saldo_inicial: '2026-10-01', ativo: true },
+        { id: 4, nome: 'Futura', tipo: 'banco', saldo_inicial: 500, data_saldo_inicial: '2026-11-28', ativo: true }
+    ];
+    const crs = [
+        cr(1, 'Ana', 500, '2026-11-05', { status: 'Pago', data_pagamento: '2026-11-05', conta_id: 1, categoria_id: 'cat_vendas' }),
+        cr(2, 'Bia', 300, '2026-11-06', { status: 'Pago', data_pagamento: '2026-11-06', conta_id: 2, categoria_id: 'cat_vendas' }),
+        cr(3, 'Sócio', 2000, '2026-11-07', { status: 'Pago', data_pagamento: '2026-11-07', conta_id: 1, categoria_id: 'cat_aporte' })
+    ];
+    const cps = [{ id: 1, tipo: 'variavel', categoria: 'aluguel', credor_nome: 'Locador', descricao: 'Aluguel', valor: 200, status: 'Pago', data_vencimento: '2026-11-10',
+        data_pagamento: '2026-11-10', categoria_id: 'cat_aluguel', conta_id: 1, historico: hist }];
+    const movs = [
+        { id: 1, conta_id: 1, data: '2026-11-05', sentido: 'entrada', valor: 500, origem: 'cr', origem_id: 1 },
+        { id: 2, conta_id: 2, data: '2026-11-06', sentido: 'entrada', valor: 300, origem: 'cr', origem_id: 2 },
+        { id: 3, conta_id: 1, data: '2026-11-07', sentido: 'entrada', valor: 2000, origem: 'cr', origem_id: 3 },
+        { id: 4, conta_id: 1, data: '2026-11-10', sentido: 'saida', valor: 200, origem: 'cp', origem_id: 1 },
+        { id: 5, conta_id: 1, data: '2026-11-11', sentido: 'saida', valor: 100, origem: 'transferencia', grupo_id: 't', origem_id: null },
+        { id: 6, conta_id: 2, data: '2026-11-11', sentido: 'entrada', valor: 100, origem: 'transferencia', grupo_id: 't', origem_id: null },
+        { id: 7, conta_id: 2, data: '2026-11-12', sentido: 'entrada', valor: 50, origem: 'ajuste', origem_id: null, descricao: 'Ajuste de saldo' },
+        { id: 8, conta_id: 1, data: '2026-11-25', sentido: 'entrada', valor: 999, origem: 'ajuste', origem_id: null, descricao: 'Futuro' }
+    ];
+    await abrir(page, { sc_contas_fin: contas, sc_cr: crs, sc_cp: cps, sc_mov_fin: movs });
+    const brl = t => Number(String(t).replace(/[^\d,-]/g, '').replace(',', '.'));
+    await page.fill('#fluxo-ate', '2026-11-20');
+    await page.locator('#fluxo-ate').dispatchEvent('change');
+    const fluxoFinal = brl(await kpi(page, 'final').textContent());
+    const fluxoEntradas = brl(await kpi(page, 'entradas').textContent());
+    expect(fluxoFinal).toBe(3650);
+    expect(fluxoEntradas).toBe(2850);
+    await page.locator('.fin-tab-btn[data-tab="resumo"]').click();
+    expect(brl(await page.locator('#res-saldo-total').textContent())).toBe(fluxoFinal);
+    await page.locator('.fin-tab-btn[data-tab="dre"]').click();
+    await expect(page.locator('#dre-tabela')).toBeVisible();
+    const receitasNov = brl(await page.locator('#dre-tabela tr[data-chave="receitas"] td').nth(10).textContent());
+    const ajustes = 50, soCaixa = 2000;
+    expect(fluxoEntradas - ajustes - soCaixa).toBe(receitasNov);
+    expect(receitasNov).toBe(800);
 });
