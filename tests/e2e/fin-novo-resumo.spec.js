@@ -28,6 +28,7 @@ const CP = [
 const PED = [{ id: 26300, clienteId: 7, clienteNome: 'Bia', status: 'Aprovado', data_aprovacao: '2026-11-05', financeiro_gerado: true, valor: 2000, ambientes: [] }];
 
 async function abrir(page, extras) {
+    await page.context().route(/cdn.jsdelivr.net|brasilapi.com.br/, r => r.abort());
     await page.clock.setFixedTime(HOJE);
     await entrar(page, BASE, { sc_contas_fin: CONTAS, sc_mov_fin: MOVS, sc_cr: CR, sc_cp: CP, sc_ped: PED, ...(extras || {}) });
     await page.goto(BASE + '/financeiro.html');
@@ -59,7 +60,8 @@ test('+ Conectar conta abre o cadastro de conta com a nota do Open Finance; salv
     await expect(page.locator('#emp-conectar-nota')).toHaveText('A conexão automática com o banco (Open Finance) chega quando o sistema rodar no servidor da empresa.');
     const nova = page.locator('#emp-contas .conta-linha').last();
     await nova.locator('.conta-nome').fill('Itaú da loja');
-    await nova.locator('.conta-banco-sel').selectOption('341');
+    await nova.locator('.conta-banco-sel').fill('Itaú');
+    await nova.locator('.conta-banco-sel').press('Enter');
     await nova.locator('.conta-agencia').fill('1234');
     await nova.locator('.conta-numero').fill('98765-0');
     await expect(nova.locator('.conta-tipo-conta')).toHaveValue('corrente');

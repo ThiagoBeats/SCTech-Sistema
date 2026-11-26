@@ -3140,7 +3140,7 @@ Geração de Documentos (PDF/impressão):
   - Estilo @media print aplicado (oculta sidebar, ajusta layout)
   - Cabeçalho com logo e dados da empresa em todos os documentos gerados
 
-BANCOS (base de instituições e logos) - em construção (parte 1)
+BANCOS (base de instituições e logos)
   - js/bancos-base.js: lista das instituições financeiras do Brasil (BrasilAPI, ~470, ISPB, código COMPE, nome e nome completo),
     guardada no sistema para funcionar sem internet; "node tools/atualizar-bancos.js" gera de novo.
   - js/bancos-core.js (BancosCore): busca por nome/código sem acento (código exato primeiro, depois início do nome, depois palavras) e
@@ -3149,6 +3149,12 @@ BANCOS (base de instituições e logos) - em construção (parte 1)
   - Logos de ~53 instituições (por código COMPE) carregadas do CDN jsDelivr (repositório rzmt/logos-bancos-br, fixado em commit); sem
     internet ou sem logo, vale o selo atual. Os arquivos não foram copiados porque o aviso do repositório diz que as marcas não estão
     cobertas pela licença MIT.
+  - Configurar Empresa > Contas: o campo Banco virou busca (mesmo lugar e tamanho): digite nome ou código, a lista mostra logo, nome e
+    código; setas, Enter e Esc funcionam e clicar fora fecha (volta ao banco escolhido). Grava o código (ou ispb:<ISPB> quando a
+    instituição não tem código) e o nome; contas antigas continuam mostrando o banco salvo. Agência e Número da conta ganham a máscara
+    do banco enquanto se digita e são refeitas ao trocar de banco. Uma vez a cada 30 dias, com internet, a lista é atualizada pela
+    BrasilAPI (cache no navegador); sem internet ou com erro, segue com a lista do sistema, sem aviso.
+  - Financeiro > Resumo > Minhas contas: o selo redondo mostra a logo do banco quando houver (senão sigla e cor).
 
 ================================================================================
                               FIM DO DOCUMENTO
