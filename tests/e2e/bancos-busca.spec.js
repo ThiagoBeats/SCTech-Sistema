@@ -250,14 +250,14 @@ test('cache envenenado: codigo invalido e descartado, nada de HTML nem de logo d
     expect(await page.evaluate(() => bancoInfo('ispb:11111111', 'X').logo)).toBeNull();
 });
 
-test('Tab com a lista aberta fecha sem escolher e mantem o texto digitado', async ({ page }) => {
+test('Tab com a lista aberta fecha sem escolher e volta ao nome do banco guardado', async ({ page }) => {
     await abrir(page);
     const campo = linha(page, 0).locator('.conta-banco-sel');
     await campo.fill('nubank');
     await expect(campo).toHaveAttribute('aria-expanded', 'true');
     await campo.press('Tab');
     await expect(campo).toHaveAttribute('aria-expanded', 'false');
-    await expect(campo).toHaveValue('nubank');
+    await expect(campo).toHaveValue('Itaú');
     await salvar(page);
     await expect.poll(async () => (await ler(page, 'sc_contas_fin'))[0].banco).toBe('341');
 });

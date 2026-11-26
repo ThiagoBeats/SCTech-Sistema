@@ -1123,13 +1123,11 @@ function _bancoComboLigar(box) {
         _bancoComboBuscar(t.i, t.inp.value);
     });
     box.addEventListener('focusin', ev => { const t = alvo(ev); if (t && t.inp.value) { try { t.inp.select(); } catch (e) { /* ignora */ } } });
-    // Tab com a lista aberta: fecha sem escolher e mantem o texto digitado.
-    let tabManter = false;
-    box.addEventListener('focusout', ev => { const t = alvo(ev); if (t) { _bancoComboFechar(t.i, !tabManter); tabManter = false; } });
+    // Perder o foco (Tab ou clique fora) sem escolher: fecha e volta ao nome do banco guardado (texto e banco nunca divergem).
+    box.addEventListener('focusout', ev => { const t = alvo(ev); if (t) _bancoComboFechar(t.i, true); });
     box.addEventListener('keydown', ev => {
         const t = alvo(ev); if (!t) return;
         const aberto = _bancoCombo.i === t.i;
-        if (ev.key === 'Tab') { tabManter = aberto; return; }
         if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
             ev.preventDefault();
             if (!aberto) { if (t.inp.value.trim()) _bancoComboBuscar(t.i, t.inp.value); return; }
