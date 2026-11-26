@@ -3153,6 +3153,8 @@ td { transition: background-color .15s ease; }
 .dre-seg-btn { background: transparent; border: 0; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600; color: var(--dark); cursor: pointer; }
 .dre-seg-btn + .dre-seg-btn { border-left: 1px solid var(--border-strong); }
 .dre-seg-btn.active { background: var(--primary); color: #fff; }
+.dre-seg-igual { display: inline-grid; grid-template-columns: repeat(3, 1fr); }
+.dre-seg-igual .dre-seg-btn { min-width: 76px; padding-left: 18px; padding-right: 18px; text-align: center; white-space: nowrap; }
 .dre-quadro { overflow: auto; max-height: 70vh; max-width: 100%; border: 1px solid var(--border); border-radius: 12px; }
 .dre-tabela { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 980px; font-size: 13px; color: var(--dark); }
 .dre-tabela th, .dre-tabela td { padding: 7px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; background: var(--white); }
@@ -3324,3 +3326,25 @@ html[data-theme="dark"] .nf-aviso-manual { color: #F5F6F8; }
 .nf-selo-lanc { white-space: nowrap; }
 .nf-espaco { margin: 12px 0 0; font-size: 12px; color: var(--muted); }
 .nf-pag { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; margin-top: 10px; font-size: 13px; color: var(--dark); }
+
+/* Banco com busca e logo (Configurar Empresa > contas) e selo do Resumo */
+.selo-logo { background: #fff !important; border: 1px solid var(--border); box-sizing: border-box; padding: 5px; }
+.selo-logo img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.banco-combo { position: relative; display: flex; flex-direction: column; }
+.banco-combo input { width: 100%; box-sizing: border-box; }
+.banco-combo input.tem-logo { padding-left: 42px; }
+.banco-combo-logo { position: absolute; left: 10px; top: 0; height: 100%; display: flex; align-items: center; pointer-events: none; }
+.banco-selo-mini { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 7px; font-weight: 800; overflow: hidden; box-sizing: border-box; }
+.banco-selo-mini.selo-logo { padding: 3px; border-radius: 6px; }
+.banco-combo-lista { position: absolute; left: 0; right: 0; top: 100%; margin: 2px 0 0; padding: 4px; list-style: none; z-index: 60; max-height: 280px; overflow-y: auto; min-width: 220px;
+    background: var(--white); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.16); }
+.banco-combo-lista[hidden] { display: none; }
+.banco-combo-op { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--dark); }
+.banco-combo-op.ativo, .banco-combo-op:hover { background: rgba(0, 93, 59, 0.1); }
+.banco-combo-nome { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.banco-combo-cod { flex: 0 0 auto; font-size: 12px; color: var(--muted); }
+.banco-combo-vazio { padding: 8px; font-size: 13px; color: var(--muted); }
+html[data-theme="dark"] .banco-combo-lista { background: #1D1F23; border-color: #32353B; }
+html[data-theme="dark"] .banco-combo-op { color: #F1F1F1; }
+html[data-theme="dark"] .banco-combo-op.ativo, html[data-theme="dark"] .banco-combo-op:hover { background: rgba(201, 247, 117, 0.12); }
+.res-selo.selo-logo { border-radius: 12px; }

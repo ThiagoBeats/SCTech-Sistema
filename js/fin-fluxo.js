@@ -96,7 +96,7 @@ function renderFinFluxo() {
         <div class="lanc-barra dre-barra">
             <div class="form-group"><label for="fluxo-de">Período de</label><input type="date" id="fluxo-de" value="${escapeHtml(finFluxo.de)}" onchange="finFluxoMudar('de', this.value)"></div>
             <div class="form-group"><label for="fluxo-ate">até</label><input type="date" id="fluxo-ate" value="${escapeHtml(finFluxo.ate)}" onchange="finFluxoMudar('ate', this.value)"></div>
-            <div class="form-group"><label>Ver por</label><div class="dre-seg" role="group" aria-label="Ver por">${seg('dia', 'Dia')}${seg('semana', 'Semana')}${seg('mes', 'Mês')}</div></div>
+            <div class="form-group"><label>Ver por</label><div class="dre-seg dre-seg-igual" role="group" aria-label="Ver por">${seg('dia', 'Dia')}${seg('semana', 'Semana')}${seg('mes', 'Mês')}</div></div>
             <div class="form-group"><label for="fluxo-conta">Conta</label><select id="fluxo-conta" onchange="finFluxoMudar('contaId', this.value)">${opcConta}</select></div>
             <div class="form-group"><label for="fluxo-categoria">Categoria</label><select id="fluxo-categoria" onchange="finFluxoMudar('categoriaId', this.value)">${_fxOpcoesCategoria()}</select></div>
         </div></div>${corpo}`;

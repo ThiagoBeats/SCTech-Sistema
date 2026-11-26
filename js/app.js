@@ -896,7 +896,7 @@ function _contaParaRascunho(c) {
     const r = { id: c.id, nome: c.nome || '', tipo: c.tipo, ativo: c.ativo !== false,
         saldo: MascarasCore.formatarMoeda(c.saldo_inicial == null ? 0 : c.saldo_inicial),
         data: c.data_saldo_inicial || hojeLocal(),
-        banco: c.banco == null ? '' : String(c.banco), agencia: c.agencia || '', numero_conta: c.numero_conta || '',
+        banco: c.banco == null ? '' : String(c.banco), banco_nome: c.banco_nome || '', agencia: c.agencia || '', numero_conta: c.numero_conta || '',
         tipo_conta: c.tipo_conta || _finTipoContaPadrao(c.tipo) };
     if (c.tipo === 'maquininha') {
         r.cartao = {};
@@ -916,10 +916,251 @@ function _saldoRascunhoNum(t) {
     return v === null ? NaN : v;
 }
 
+// ── Bancos: busca com logo, cache de 30 dias da BrasilAPI, selo (logo ou sigla) ──
+const BANCOS_CACHE_CHAVE = 'sc_bancos_cache';
+const BANCOS_CACHE_MS = 30 * 24 * 3600 * 1000;
+const BANCO_OUTRO = { ispb: null, codigo: '000', nome: 'Outro', nomeCompleto: 'Outro banco ou instituição' };
+let _bancosLista = null;
+let _bancosRefrescou = false;
+
+// Codigo COMPE valido: exatamente 3 digitos (qualquer outra coisa vinda da rede/cache e descartada).
+const _codigoBancoOk = c => typeof c === 'string' && /^\d{3}$/.test(c);
+function _bancoDoCacheOk(b) {
+    return !!b && typeof b === 'object' && typeof b.ispb === 'string' && /^\d{8}$/.test(b.ispb)
+        && (b.codigo === null || _codigoBancoOk(b.codigo)) && typeof b.nome === 'string' && b.nome.trim() !== '' && typeof b.nomeCompleto === 'string';
+}
+function _bancosCacheLer() {
+    try {
+        const c = JSON.parse(localStorage.getItem(BANCOS_CACHE_CHAVE));
+        return c && typeof c.em === 'number' && Array.isArray(c.lista) ? { em: c.em, lista: c.lista.filter(_bancoDoCacheOk) } : null;
+    } catch (e) { return null; }
+}
+// Valor guardado na conta para uma instituicao da lista: o codigo COMPE quando e valido e unico ('000' e o "Outro"); senao ispb:<ISPB>.
+function bancoValorDe(item) {
+    if (!item.ispb) return item.codigo;
+    const unico = _codigoBancoOk(item.codigo) && item.codigo !== '000' && bancosLista().filter(b => b.codigo === item.codigo).length === 1;
+    return unico ? item.codigo : 'ispb:' + item.ispb;
+}
+
+// Base do arquivo + instituicoes novas que so o cache conhece (nomes populares da base prevalecem).
+function bancosLista() {
+    if (_bancosLista) return _bancosLista;
+    const base = typeof BANCOS_BASE !== 'undefined' ? BANCOS_BASE : [];
+    const ispbs = new Set(base.map(b => b.ispb));
+    const c = _bancosCacheLer();
+    const extras = c ? c.lista.filter(b => b && b.ispb && !ispbs.has(b.ispb)) : [];
+    _bancosLista = base.concat(extras, [BANCO_OUTRO]);
+    return _bancosLista;
+}
+
+// Uma vez a cada 30 dias, com internet, atualiza a lista pela BrasilAPI. Falha de rede: silencio (segue com a base).
+async function atualizarBancosSeVelho() {
+    if (_bancosRefrescou) return;
+    _bancosRefrescou = true;
+    try {
+        const c = _bancosCacheLer();
+        if (c && Date.now() - c.em < BANCOS_CACHE_MS) return;
+        const r = await fetch('https://brasilapi.com.br/api/banks/v1');
+        if (!r.ok) return;
+        const arr = await r.json();
+        if (!Array.isArray(arr)) return;
+        const lista = arr.filter(b => b && b.ispb != null).map(b => ({
+            ispb: String(b.ispb).padStart(8, '0'),
+            codigo: b.code == null ? null : String(b.code).padStart(3, '0'),
+            nome: String(b.name || b.fullName || '').trim(),
+            nomeCompleto: String(b.fullName || b.name || '').trim()
+        })).filter(_bancoDoCacheOk);
+        if (!lista.length) return;
+        localStorage.setItem(BANCOS_CACHE_CHAVE, JSON.stringify({ em: Date.now(), lista }));
+        _bancosLista = null;
+    } catch (e) { /* sem internet: usa a base do arquivo */ }
+}
+
+// valor guardado na conta ('341', 'ispb:00000000', '' ) -> dados para exibir (nome, selo, logo).
+function bancoInfo(valor, nomeSalvo) {
+    const v = String(valor == null ? '' : valor);
+    if (!v) return null;
+    const lista = bancosLista();
+    const ispb = v.startsWith('ispb:') ? v.slice(5) : null;
+    // '000' e sempre o "Outro" (as entradas B3 da base tambem tem codigo 000 e so se escolhem por ispb:).
+    const item = ispb ? lista.find(b => b.ispb === ispb) : (v === '000' ? null : lista.find(b => b.codigo === v));
+    const fin = ispb ? null : FIN_BANCOS.find(b => b.codigo === v);
+    const nome = (item && item.nome) || (fin && fin.nome) || nomeSalvo || (ispb ? 'Instituição' : 'Banco ' + v);
+    const codigo = ispb ? ((item && _codigoBancoOk(item.codigo) && item.codigo !== '000' && item.codigo) || null) : v;
+    const iniciais = nome.split(/[^A-Za-zÀ-ÿ0-9]+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+    return {
+        valor: v, codigo, ispb: ispb || (item && item.ispb) || null, nome,
+        sigla: fin ? fin.sigla : iniciais, cor: fin ? fin.cor : '#8F8F8F', texto: fin ? fin.texto : '#FFFFFF',
+        logo: (_codigoBancoOk(codigo) && typeof BANCOS_LOGOS !== 'undefined' && Object.prototype.hasOwnProperty.call(BANCOS_LOGOS, codigo) && BANCOS_LOGOS[codigo]) || null
+    };
+}
+
+// Selo do banco: logo (CDN) quando houver; senao (ou se a imagem falhar) sigla colorida.
+function bancoSeloHtml(info, classe) {
+    const cor = info ? info.cor : '#8F8F8F', txt = info ? info.texto : '#FFFFFF';
+    const sigla = info ? info.sigla : '?';
+    const titulo = escapeHtml(info ? info.nome : 'Banco não informado');
+    if (info && info.logo) {
+        return `<span class="${classe} selo-logo" title="${titulo}"><img src="${escapeHtml(info.logo)}" alt="" loading="lazy" data-cor="${escapeHtml(cor)}" data-texto="${escapeHtml(txt)}" data-sigla="${escapeHtml(sigla)}" onerror="_bancoLogoFalhou(this)"></span>`;
+    }
+    return `<span class="${classe}" style="background:${cor};color:${txt}" title="${titulo}">${escapeHtml(sigla)}</span>`;
+}
+function _bancoLogoFalhou(img) {
+    const w = img.parentNode;
+    if (!w) return;
+    w.classList.remove('selo-logo');
+    w.style.background = img.dataset.cor;
+    w.style.color = img.dataset.texto;
+    w.textContent = img.dataset.sigla;
+}
+
+// ── Campo Banco com busca (combobox) ──
+const _bancoCombo = { i: null, itens: [], ativo: -1 };
+
+function _bancoComboEls(i) {
+    const w = document.querySelector(`#emp-contas .banco-combo[data-i="${i}"]`);
+    return w ? { w, inp: w.querySelector('input'), ul: w.querySelector('ul'), logo: w.querySelector('.banco-combo-logo') } : null;
+}
+function bancoComboHtml(i, c) {
+    const info = bancoInfo(c.banco, c.banco_nome);
+    return `<div class="banco-combo" data-i="${i}">
+        <span class="banco-combo-logo">${info ? bancoSeloHtml(info, 'banco-selo-mini') : ''}</span>
+        <input type="text" class="conta-banco-sel${info ? ' tem-logo' : ''}" role="combobox" aria-label="Banco" aria-autocomplete="list" aria-expanded="false" aria-controls="bc-lista-${i}"
+            autocomplete="off" data-sem-maiuscula placeholder="Buscar banco" value="${escapeHtml(info ? info.nome : '')}">
+        <ul class="banco-combo-lista" id="bc-lista-${i}" role="listbox" hidden></ul></div>`;
+}
+function _bancoComboAtualizaLogo(i) {
+    const e = _bancoComboEls(i); if (!e) return;
+    const c = _contasRascunho[i];
+    const info = bancoInfo(c.banco, c.banco_nome);
+    e.logo.innerHTML = info ? bancoSeloHtml(info, 'banco-selo-mini') : '';
+    e.inp.classList.toggle('tem-logo', !!info);
+    e.inp.value = info ? info.nome : '';
+}
+function _bancoComboFechar(i, reverter) {
+    const e = _bancoComboEls(i); if (!e) return;
+    e.ul.hidden = true; e.ul.innerHTML = '';
+    e.inp.setAttribute('aria-expanded', 'false'); e.inp.removeAttribute('aria-activedescendant');
+    _bancoCombo.i = null; _bancoCombo.itens = []; _bancoCombo.ativo = -1;
+    if (reverter) _bancoComboAtualizaLogo(i);
+}
+function _bancoComboDesenhar(i) {
+    const e = _bancoComboEls(i); if (!e) return;
+    const { itens, ativo } = _bancoCombo;
+    if (!itens.length) {
+        e.ul.innerHTML = '<li class="banco-combo-vazio" role="presentation">Nenhum banco encontrado</li>';
+    } else {
+        e.ul.innerHTML = itens.map((b, k) => {
+            const info = bancoInfo(bancoValorDe(b), b.nome);
+            const cod = _codigoBancoOk(b.codigo) && b.codigo !== '000' || !b.ispb ? b.codigo : '';
+            return `<li role="option" id="bc-${i}-${k}" data-k="${k}" aria-selected="${k === ativo}" class="banco-combo-op${k === ativo ? ' ativo' : ''}">
+                ${bancoSeloHtml(info, 'banco-selo-mini')}<span class="banco-combo-nome">${escapeHtml(b.nome)}</span><span class="banco-combo-cod">${escapeHtml(cod || '')}</span></li>`;
+        }).join('');
+    }
+    e.ul.hidden = false;
+    e.inp.setAttribute('aria-expanded', 'true');
+    if (ativo >= 0) e.inp.setAttribute('aria-activedescendant', `bc-${i}-${ativo}`); else e.inp.removeAttribute('aria-activedescendant');
+    const a = e.ul.querySelector('.ativo'); if (a && a.scrollIntoView) a.scrollIntoView({ block: 'nearest' });
+}
+function _bancoComboBuscar(i, termo) {
+    _bancoCombo.i = i;
+    _bancoCombo.itens = BancosCore.buscar(bancosLista(), termo, 8);
+    _bancoCombo.ativo = _bancoCombo.itens.length ? 0 : -1;
+    _bancoComboDesenhar(i);
+}
+function _bancoComboEscolher(i, item) {
+    const c = _contasRascunho[i];
+    c.banco = bancoValorDe(item);
+    c.banco_nome = item.nome;
+    _bancoComboFechar(i, false);
+    _bancoComboAtualizaLogo(i);
+    _reformatarAgenciaConta(i);
+}
+function _codigoParaMascara(c) { return /^\d{3}$/.test(String(c.banco || '')) ? c.banco : ''; }
+function _reformatarAgenciaConta(i) {
+    const c = _contasRascunho[i], cod = _codigoParaMascara(c);
+    const box = document.querySelectorAll('#emp-contas .conta-linha')[i];
+    if (!box) return;
+    const ag = box.querySelector('.conta-agencia'), nu = box.querySelector('.conta-numero');
+    if (ag) { ag.value = BancosCore.mascararAgencia(ag.value, cod); c.agencia = ag.value; }
+    if (nu) { nu.value = BancosCore.mascararConta(nu.value, cod); c.numero_conta = nu.value; }
+}
+// Mascara enquanto digita, mantendo o cursor depois do mesmo numero de caracteres validos.
+function mascararCampoBanco(i, campo, el) {
+    const c = _contasRascunho[i], cod = _codigoParaMascara(c);
+    const fn = campo === 'agencia' ? BancosCore.mascararAgencia : BancosCore.mascararConta;
+    const conta = s => s.replace(/[^0-9A-Za-z]/g, '').length;
+    let pos = null;
+    try { if (document.activeElement === el && el.selectionStart != null) pos = conta(el.value.slice(0, el.selectionStart)); } catch (e) { pos = null; }
+    const novo = fn(el.value, cod);
+    if (novo !== el.value) {
+        el.value = novo;
+        if (pos != null) {
+            let k = 0, n = 0;
+            while (k < novo.length && n < pos) { if (/[0-9A-Za-z]/.test(novo[k])) n++; k++; }
+            try { el.setSelectionRange(k, k); } catch (e) { /* ignora */ }
+        }
+    }
+    if (campo === 'agencia') c.agencia = el.value; else c.numero_conta = el.value;
+}
+function _bancoComboLigar(box) {
+    if (box._bancoLigado) return;
+    box._bancoLigado = true;
+    const alvo = ev => {
+        const inp = ev.target && ev.target.closest ? ev.target.closest('.banco-combo input') : null;
+        return inp ? { inp, i: Number(inp.closest('.banco-combo').dataset.i) } : null;
+    };
+    box.addEventListener('input', ev => {
+        const t = alvo(ev); if (!t) return;
+        const c = _contasRascunho[t.i];
+        if (!t.inp.value.trim()) {
+            c.banco = ''; c.banco_nome = '';
+            _bancoComboFechar(t.i, false);
+            const e = _bancoComboEls(t.i); e.logo.innerHTML = ''; e.inp.classList.remove('tem-logo');
+            _reformatarAgenciaConta(t.i);
+            return;
+        }
+        _bancoComboBuscar(t.i, t.inp.value);
+    });
+    box.addEventListener('focusin', ev => { const t = alvo(ev); if (t && t.inp.value) { try { t.inp.select(); } catch (e) { /* ignora */ } } });
+    // Perder o foco (Tab ou clique fora) sem escolher: fecha e volta ao nome do banco guardado (texto e banco nunca divergem).
+    box.addEventListener('focusout', ev => { const t = alvo(ev); if (t) _bancoComboFechar(t.i, true); });
+    box.addEventListener('keydown', ev => {
+        const t = alvo(ev); if (!t) return;
+        const aberto = _bancoCombo.i === t.i;
+        if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+            ev.preventDefault();
+            if (!aberto) { if (t.inp.value.trim()) _bancoComboBuscar(t.i, t.inp.value); return; }
+            const n = _bancoCombo.itens.length; if (!n) return;
+            _bancoCombo.ativo = (_bancoCombo.ativo + (ev.key === 'ArrowDown' ? 1 : n - 1)) % n;
+            _bancoComboDesenhar(t.i);
+        } else if (ev.key === 'Enter') {
+            if (!aberto) return;
+            ev.preventDefault();
+            const it = _bancoCombo.itens[_bancoCombo.ativo];
+            if (it) _bancoComboEscolher(t.i, it);
+        } else if (ev.key === 'Escape' && aberto) {
+            ev.preventDefault(); ev.stopPropagation();
+            _bancoComboFechar(t.i, true);
+        }
+    });
+    // mousedown (nao click): escolhe antes do campo perder o foco
+    box.addEventListener('mousedown', ev => {
+        const li = ev.target.closest ? ev.target.closest('.banco-combo-op') : null;
+        if (!li) return;
+        ev.preventDefault();
+        const i = Number(li.closest('.banco-combo').dataset.i);
+        const it = _bancoCombo.itens[Number(li.dataset.k)];
+        if (it) _bancoComboEscolher(i, it);
+    });
+}
+
 function renderContasCfg() {
     const box = document.getElementById('emp-contas');
     if (!box) return;
     if (!_contasRascunho) _contasRascunho = getContasFin().map(_contaParaRascunho);
+    _bancoComboLigar(box);
+    atualizarBancosSeVelho();
     box.innerHTML = _contasRascunho.map((c, i) => `
         <div class="conta-linha" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
             <div class="grid" style="display:grid;grid-template-columns:2fr 1.5fr 1fr 1fr auto;gap:8px;align-items:end">
@@ -940,16 +1181,13 @@ function renderContasCfg() {
             </div>
             <div class="grid conta-banco" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:8px">
                 <div class="form-group" style="margin:0"><label>Banco</label>
-                    <select class="conta-banco-sel" onchange="_contasRascunho[${i}].banco = this.value">
-                        <option value="">Não informado</option>
-                        ${FIN_BANCOS.map(b => `<option value="${b.codigo}"${c.banco === b.codigo ? ' selected' : ''}>${b.codigo === '000' ? 'Outro' : b.codigo + ' · ' + escapeHtml(b.nome)}</option>`).join('')}
-                    </select></div>
+                    ${bancoComboHtml(i, c)}</div>
                 <div class="form-group" style="margin:0"><label>Agência</label>
-                    <input type="text" class="conta-agencia" value="${escapeHtml(c.agencia)}" maxlength="10" placeholder="0001"
-                        oninput="_contasRascunho[${i}].agencia = this.value"></div>
+                    <input type="text" class="conta-agencia" value="${escapeHtml(c.agencia)}" maxlength="10" placeholder="0001" data-sem-maiuscula
+                        oninput="mascararCampoBanco(${i}, 'agencia', this)"></div>
                 <div class="form-group" style="margin:0"><label>Número da conta</label>
-                    <input type="text" class="conta-numero" value="${escapeHtml(c.numero_conta)}" maxlength="20" placeholder="12345-6"
-                        oninput="_contasRascunho[${i}].numero_conta = this.value"></div>
+                    <input type="text" class="conta-numero" value="${escapeHtml(c.numero_conta)}" maxlength="20" placeholder="12345-6" data-sem-maiuscula
+                        oninput="mascararCampoBanco(${i}, 'numero_conta', this)"></div>
                 <div class="form-group" style="margin:0"><label>Tipo da conta</label>
                     <select class="conta-tipo-conta" onchange="_contasRascunho[${i}].tipo_conta = this.value">
                         ${TIPOS_CONTA_BANCARIA.map(([v, l]) => `<option value="${v}"${c.tipo_conta === v ? ' selected' : ''}>${l}</option>`).join('')}
@@ -1085,6 +1323,7 @@ async function salvarContasCfg() {
             if (antiga && antiga[k] !== undefined) conta[k] = antiga[k];
         });
         conta.banco = c.banco ? String(c.banco) : null;
+        if (conta.banco && c.banco_nome) conta.banco_nome = c.banco_nome;
         conta.agencia = (c.agencia || '').trim();
         conta.numero_conta = (c.numero_conta || '').trim();
         if (c.tipo_conta) conta.tipo_conta = c.tipo_conta;

@@ -32,10 +32,8 @@ function _finResIntervalo(hoje) {
 }
 
 function _finSeloBanco(c) {
-    const b = FIN_BANCOS.find(x => x.codigo === String(c.banco == null ? '' : c.banco));
-    const sigla = b ? b.sigla : (String(c.nome || '?').trim().slice(0, 2).toUpperCase() || '?');
-    const cor = b ? b.cor : '#8F8F8F', texto = b ? b.texto : '#FFFFFF';
-    return `<span class="res-selo" style="background:${cor};color:${texto}" title="${escapeHtml(b ? b.nome : 'Banco não informado')}">${escapeHtml(sigla)}</span>`;
+    const info = bancoInfo(c.banco, c.banco_nome) || { nome: 'Banco não informado', sigla: String(c.nome || '?').trim().slice(0, 2).toUpperCase() || '?', cor: '#8F8F8F', texto: '#FFFFFF', logo: null };
+    return bancoSeloHtml(info, 'res-selo');
 }
 
 function _finDescricaoConta(c) {
