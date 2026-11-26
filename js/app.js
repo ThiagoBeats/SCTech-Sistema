@@ -923,11 +923,23 @@ const BANCO_OUTRO = { ispb: null, codigo: '000', nome: 'Outro', nomeCompleto: 'O
 let _bancosLista = null;
 let _bancosRefrescou = false;
 
+// Codigo COMPE valido: exatamente 3 digitos (qualquer outra coisa vinda da rede/cache e descartada).
+const _codigoBancoOk = c => typeof c === 'string' && /^\d{3}$/.test(c);
+function _bancoDoCacheOk(b) {
+    return !!b && typeof b === 'object' && typeof b.ispb === 'string' && /^\d{8}$/.test(b.ispb)
+        && (b.codigo === null || _codigoBancoOk(b.codigo)) && typeof b.nome === 'string' && b.nome.trim() !== '' && typeof b.nomeCompleto === 'string';
+}
 function _bancosCacheLer() {
     try {
         const c = JSON.parse(localStorage.getItem(BANCOS_CACHE_CHAVE));
-        return c && typeof c.em === 'number' && Array.isArray(c.lista) ? c : null;
+        return c && typeof c.em === 'number' && Array.isArray(c.lista) ? { em: c.em, lista: c.lista.filter(_bancoDoCacheOk) } : null;
     } catch (e) { return null; }
+}
+// Valor guardado na conta para uma instituicao da lista: o codigo COMPE quando e valido e unico ('000' e o "Outro"); senao ispb:<ISPB>.
+function bancoValorDe(item) {
+    if (!item.ispb) return item.codigo;
+    const unico = _codigoBancoOk(item.codigo) && item.codigo !== '000' && bancosLista().filter(b => b.codigo === item.codigo).length === 1;
+    return unico ? item.codigo : 'ispb:' + item.ispb;
 }
 
 // Base do arquivo + instituicoes novas que so o cache conhece (nomes populares da base prevalecem).
@@ -952,12 +964,12 @@ async function atualizarBancosSeVelho() {
         if (!r.ok) return;
         const arr = await r.json();
         if (!Array.isArray(arr)) return;
-        const lista = arr.filter(b => b && b.ispb).map(b => ({
+        const lista = arr.filter(b => b && b.ispb != null).map(b => ({
             ispb: String(b.ispb).padStart(8, '0'),
             codigo: b.code == null ? null : String(b.code).padStart(3, '0'),
             nome: String(b.name || b.fullName || '').trim(),
             nomeCompleto: String(b.fullName || b.name || '').trim()
-        })).filter(b => b.nome);
+        })).filter(_bancoDoCacheOk);
         if (!lista.length) return;
         localStorage.setItem(BANCOS_CACHE_CHAVE, JSON.stringify({ em: Date.now(), lista }));
         _bancosLista = null;
@@ -970,15 +982,16 @@ function bancoInfo(valor, nomeSalvo) {
     if (!v) return null;
     const lista = bancosLista();
     const ispb = v.startsWith('ispb:') ? v.slice(5) : null;
-    const item = ispb ? lista.find(b => b.ispb === ispb) : lista.find(b => b.codigo === v);
+    // '000' e sempre o "Outro" (as entradas B3 da base tambem tem codigo 000 e so se escolhem por ispb:).
+    const item = ispb ? lista.find(b => b.ispb === ispb) : (v === '000' ? null : lista.find(b => b.codigo === v));
     const fin = ispb ? null : FIN_BANCOS.find(b => b.codigo === v);
     const nome = (item && item.nome) || (fin && fin.nome) || nomeSalvo || (ispb ? 'Instituição' : 'Banco ' + v);
-    const codigo = ispb ? ((item && item.codigo) || null) : v;
+    const codigo = ispb ? ((item && _codigoBancoOk(item.codigo) && item.codigo !== '000' && item.codigo) || null) : v;
     const iniciais = nome.split(/[^A-Za-zÀ-ÿ0-9]+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
     return {
         valor: v, codigo, ispb: ispb || (item && item.ispb) || null, nome,
         sigla: fin ? fin.sigla : iniciais, cor: fin ? fin.cor : '#8F8F8F', texto: fin ? fin.texto : '#FFFFFF',
-        logo: (codigo && typeof BANCOS_LOGOS !== 'undefined' && BANCOS_LOGOS[codigo]) || null
+        logo: (_codigoBancoOk(codigo) && typeof BANCOS_LOGOS !== 'undefined' && Object.prototype.hasOwnProperty.call(BANCOS_LOGOS, codigo) && BANCOS_LOGOS[codigo]) || null
     };
 }
 
@@ -988,7 +1001,7 @@ function bancoSeloHtml(info, classe) {
     const sigla = info ? info.sigla : '?';
     const titulo = escapeHtml(info ? info.nome : 'Banco não informado');
     if (info && info.logo) {
-        return `<span class="${classe} selo-logo" title="${titulo}"><img src="${escapeHtml(info.logo)}" alt="" loading="lazy" data-cor="${cor}" data-texto="${txt}" data-sigla="${escapeHtml(sigla)}" onerror="_bancoLogoFalhou(this)"></span>`;
+        return `<span class="${classe} selo-logo" title="${titulo}"><img src="${escapeHtml(info.logo)}" alt="" loading="lazy" data-cor="${escapeHtml(cor)}" data-texto="${escapeHtml(txt)}" data-sigla="${escapeHtml(sigla)}" onerror="_bancoLogoFalhou(this)"></span>`;
     }
     return `<span class="${classe}" style="background:${cor};color:${txt}" title="${titulo}">${escapeHtml(sigla)}</span>`;
 }
@@ -1038,9 +1051,10 @@ function _bancoComboDesenhar(i) {
         e.ul.innerHTML = '<li class="banco-combo-vazio" role="presentation">Nenhum banco encontrado</li>';
     } else {
         e.ul.innerHTML = itens.map((b, k) => {
-            const info = bancoInfo(b.codigo || ('ispb:' + b.ispb), b.nome);
+            const info = bancoInfo(bancoValorDe(b), b.nome);
+            const cod = _codigoBancoOk(b.codigo) && b.codigo !== '000' || !b.ispb ? b.codigo : '';
             return `<li role="option" id="bc-${i}-${k}" data-k="${k}" aria-selected="${k === ativo}" class="banco-combo-op${k === ativo ? ' ativo' : ''}">
-                ${bancoSeloHtml(info, 'banco-selo-mini')}<span class="banco-combo-nome">${escapeHtml(b.nome)}</span><span class="banco-combo-cod">${b.codigo || ''}</span></li>`;
+                ${bancoSeloHtml(info, 'banco-selo-mini')}<span class="banco-combo-nome">${escapeHtml(b.nome)}</span><span class="banco-combo-cod">${escapeHtml(cod || '')}</span></li>`;
         }).join('');
     }
     e.ul.hidden = false;
@@ -1056,7 +1070,7 @@ function _bancoComboBuscar(i, termo) {
 }
 function _bancoComboEscolher(i, item) {
     const c = _contasRascunho[i];
-    c.banco = item.codigo || ('ispb:' + item.ispb);
+    c.banco = bancoValorDe(item);
     c.banco_nome = item.nome;
     _bancoComboFechar(i, false);
     _bancoComboAtualizaLogo(i);
@@ -1109,10 +1123,13 @@ function _bancoComboLigar(box) {
         _bancoComboBuscar(t.i, t.inp.value);
     });
     box.addEventListener('focusin', ev => { const t = alvo(ev); if (t && t.inp.value) { try { t.inp.select(); } catch (e) { /* ignora */ } } });
-    box.addEventListener('focusout', ev => { const t = alvo(ev); if (t) _bancoComboFechar(t.i, true); });
+    // Tab com a lista aberta: fecha sem escolher e mantem o texto digitado.
+    let tabManter = false;
+    box.addEventListener('focusout', ev => { const t = alvo(ev); if (t) { _bancoComboFechar(t.i, !tabManter); tabManter = false; } });
     box.addEventListener('keydown', ev => {
         const t = alvo(ev); if (!t) return;
         const aberto = _bancoCombo.i === t.i;
+        if (ev.key === 'Tab') { tabManter = aberto; return; }
         if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
             ev.preventDefault();
             if (!aberto) { if (t.inp.value.trim()) _bancoComboBuscar(t.i, t.inp.value); return; }

@@ -213,3 +213,62 @@ for (const [tema, largura] of [['dark', 1280], ['light', 390]]) {
         if (tema === 'dark') expect(cor).toBe('rgb(29, 31, 35)'); else expect(cor).not.toBe('rgb(29, 31, 35)');
     });
 }
+
+test('codigo 000 e sempre "Outro"; as entradas B3 (mesmo codigo) sao guardadas como ispb:<ISPB>', async ({ page }) => {
+    await abrir(page, { contas: [{ ...CONTAS[0], banco: '000' }] });
+    const campo = linha(page, 0).locator('.conta-banco-sel');
+    await expect(campo).toHaveValue('Outro');
+    await campo.fill('Balcão B3');
+    await campo.press('Enter');
+    await expect(campo).toHaveValue('Balcão B3');
+    await campo.fill('outro');
+    await campo.press('Enter');
+    await expect(campo).toHaveValue('Outro');
+    await campo.fill('Câmbio B3');
+    await campo.press('Enter');
+    await salvar(page);
+    await expect.poll(async () => (await ler(page, 'sc_contas_fin'))[0].banco).toBe('ispb:60934221');
+    await page.reload();
+    await expect(linha(page, 0).locator('.conta-banco-sel')).toHaveValue('Câmbio B3');
+});
+
+test('cache envenenado: codigo invalido e descartado, nada de HTML nem de logo do prototype', async ({ page }) => {
+    const ruim = { em: HOJE.getTime(), lista: [
+        { ispb: '11111111', codigo: '<img src=x onerror=window.__xss=1>', nome: 'Ruim Um', nomeCompleto: 'Ruim Um' },
+        { ispb: '22222222', codigo: 'constructor', nome: 'Ruim Dois', nomeCompleto: 'Ruim Dois' },
+        { ispb: '33333333', codigo: '997', nome: 'Bom Tres', nomeCompleto: 'Bom Tres' },
+    ] };
+    await abrir(page, { extras: { sc_bancos_cache: ruim } });
+    const campo = linha(page, 0).locator('.conta-banco-sel');
+    await campo.fill('Ruim');
+    await expect(linha(page, 0).locator('.banco-combo-vazio')).toBeVisible();
+    await campo.fill('Bom Tres');
+    await expect(linha(page, 0).locator('[role=option]').first()).toContainText('997');
+    expect(await page.evaluate(() => window.__xss)).toBeUndefined();
+    // conta salva com codigo invalido nao vira logo nem quebra a tela
+    expect(await page.evaluate(() => bancoInfo('constructor', 'X').logo)).toBeNull();
+    expect(await page.evaluate(() => bancoInfo('ispb:11111111', 'X').logo)).toBeNull();
+});
+
+test('Tab com a lista aberta fecha sem escolher e mantem o texto digitado', async ({ page }) => {
+    await abrir(page);
+    const campo = linha(page, 0).locator('.conta-banco-sel');
+    await campo.fill('nubank');
+    await expect(campo).toHaveAttribute('aria-expanded', 'true');
+    await campo.press('Tab');
+    await expect(campo).toHaveAttribute('aria-expanded', 'false');
+    await expect(campo).toHaveValue('nubank');
+    await salvar(page);
+    await expect.poll(async () => (await ler(page, 'sc_contas_fin'))[0].banco).toBe('341');
+});
+
+test('conta curta ja mostra o hifen do DV e Caixa usa operacao de 3 digitos com 12 no total', async ({ page }) => {
+    await abrir(page);
+    const l = linha(page, 0), campo = l.locator('.conta-banco-sel'), cc = l.locator('.conta-numero');
+    await campo.fill('Banco do Brasil'); await campo.press('Enter');
+    await cc.fill(''); await cc.pressSequentially('12345');
+    await expect(cc).toHaveValue('1234-5');
+    await campo.fill('Caixa'); await campo.press('Enter');
+    await cc.fill(''); await cc.pressSequentially('001000123456');
+    await expect(cc).toHaveValue('001 00012345-6');
+});

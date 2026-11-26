@@ -66,39 +66,40 @@
         return JSON.parse(JSON.stringify(f));
     }
 
+    // Digitos e as letras do DV (so valem como ULTIMO caractere: X/P em qualquer outro lugar sao descartadas).
     function limpar(texto, letras) {
         const re = new RegExp('[^0-9' + (letras || '') + ']', 'g');
-        return String(texto == null ? '' : texto).toUpperCase().replace(re, '');
+        const s = String(texto == null ? '' : texto).toUpperCase().replace(re, '');
+        return s.slice(0, -1).replace(/[^0-9]/g, '') + s.slice(-1);
     }
 
-    // Poe "-" antes do DV. `corpo` fixo (digitos) ou variavel (min..digitos: o DV e o ultimo caractere
-    // assim que passa do minimo). Nunca descarta caracteres: o excedente fica depois do "-".
-    function comDv(s, spec) {
-        if (!spec.dv) return s;
-        let n;
-        if (spec.min) {
-            if (s.length <= spec.min) return s;
-            n = Math.min(s.length - 1, spec.digitos);
-        } else {
-            n = spec.digitos;
-            if (s.length <= n) return s;
-        }
+    // Agencia: corpo de `digitos`, DV opcional depois do "-" (so quando passa do corpo). Nunca descarta digitos.
+    function comDvAgencia(s, spec) {
+        if (!spec.dv || s.length <= spec.digitos) return s;
+        return s.slice(0, spec.digitos) + '-' + s.slice(spec.digitos);
+    }
+    // Conta: a partir de 2 caracteres o ultimo e o DV; passando do corpo (digitos), o excedente fica depois do "-".
+    function comDvConta(s, spec) {
+        if (!spec.dv || s.length < 2) return s;
+        const n = Math.min(s.length - 1, spec.digitos);
         return s.slice(0, n) + '-' + s.slice(n);
     }
 
     function mascararAgencia(texto, codigo) {
         const spec = formatoDoBanco(codigo).agencia;
-        return comDv(limpar(texto, 'X'), spec);
+        return comDvAgencia(limpar(texto, 'X'), spec);
     }
 
     function mascararConta(texto, codigo) {
         const spec = formatoDoBanco(codigo).conta;
         const s = limpar(texto, spec.letras);
         if (spec.operacao) {
-            if (s.length <= spec.operacao) return s;
-            return s.slice(0, spec.operacao) + ' ' + comDv(s.slice(spec.operacao), spec);
+            // Caixa: operacao de 3 digitos quando o total e 12 (op 3 + conta 8 + DV); 4 digitos com 13 ou mais; menos: generico.
+            const op = s.length === 12 ? 3 : (s.length >= 13 ? spec.operacao : 0);
+            if (!op) return comDvConta(s, GENERICO.conta);
+            return s.slice(0, op) + ' ' + comDvConta(s.slice(op), spec);
         }
-        return comDv(s, spec);
+        return comDvConta(s, spec);
     }
 
     const api = { buscar, formatoDoBanco, mascararAgencia, mascararConta };

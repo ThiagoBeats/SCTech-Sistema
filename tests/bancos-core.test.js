@@ -53,7 +53,19 @@ test('mascararConta por banco', () => {
     assert.strictEqual(B.mascararConta('1234567', '999'), '123456-7');
     assert.strictEqual(B.mascararConta('1234567p', '237'), '1234567-P');
     assert.strictEqual(B.mascararConta('12345678', '260'), '1234567-8');
-    assert.strictEqual(B.mascararConta('123', '001'), '123');
+    assert.strictEqual(B.mascararConta('123', '001'), '12-3');
+    assert.strictEqual(B.mascararConta('12345', '001'), '1234-5');
+    assert.strictEqual(B.mascararConta('1234567', '077'), '123456-7');
+    assert.strictEqual(B.mascararConta('1', '001'), '1');
+    // Caixa: operacao de 3 digitos com 12 no total, de 4 com 13 ou mais, menos que isso: generico
+    assert.strictEqual(B.mascararConta('001000123456', '104'), '001 00012345-6');
+    assert.strictEqual(B.mascararConta('1288000123456', '104'), '1288 00012345-6');
+    assert.strictEqual(B.mascararConta('00100012', '104'), '0010001-2');
+    // X/P so como ultimo caractere (DV)
+    assert.strictEqual(B.mascararConta('12X345678', '001'), '1234567-8');
+    assert.strictEqual(B.mascararAgencia('X123', '001'), '123');
+    assert.strictEqual(B.mascararAgencia('1234x', '001'), '1234-X');
+    assert.strictEqual(B.mascararConta('1234P', '237'), '1234-P');
 });
 
 test('mascara nunca perde digitos e e idempotente', () => {
